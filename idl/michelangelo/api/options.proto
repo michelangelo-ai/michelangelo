@@ -1,0 +1,336 @@
+// Copyright (c) 2022 Uber Technologies, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// This file defines the protobuf message option that annonates a
+// declarative Michelangelo API resource similar to K8s CRD resource.
+
+syntax = "proto3";
+
+// Source: github.com/michelangelo-ai/michelangelo/api
+package michelangelo.api;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/michelangelo-ai/michelangelo/api;apipb";
+option java_multiple_files = true;
+option java_outer_classname = "OptionsProto";
+option java_package = "com.github.michelangelo-ai.michelangelo.api";
+
+extend google.protobuf.MessageOptions {
+  ResourceListDescriptor resource_list = 1055;
+  ResourceDescriptor resource = 1056;
+  repeated IndexDescriptor index = 1057;
+  // no_default indicate that, for each field in the message, user has to specify a non-default value.
+  bool no_default = 1058;
+  repeated RelationshipDescriptor relationship = 1059;
+}
+
+// An annotation that describes an API resource definition
+// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md
+// A message having this option is treated as a CRD
+//
+// Example:
+// message Project {
+//  // Indicates a CRD type. All the options are set to default values.
+//  option (github.com.michelangelo-ai.michelangelo.api.resource) = {};
+//
+//  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+//  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+//
+//  // Spec of the desired behavior of the Project.
+//  ProjectSpec spec = 3;
+//
+//  // Most recently observed status of the Project.
+//  ProjectStatus status = 4;
+// }
+//
+// message ProjectList {
+//  option (github.com.michelangelo-ai.michelangelo.api.resource_list) = {};
+//
+//  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+//  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+//
+//  // A list of Project
+//  repeated Project items = 3;
+// }
+//
+// All the field names (type_meta, metadata, spec, status, items) are fixed.
+// Spec / Status / List types must be named as <CRD_message_name>Spec, <CRD_message_name>Status,
+// and <CRD_message_name>List
+message ResourceDescriptor {
+  // name is the plural name of the resource.
+  // If not specified, the default plural name is the proto message name in lower case + "s"
+  string name = 1;
+
+  // ShortName specifies aliases for this CRD.
+  //
+  // Short names are often used when people have work with your resource
+  // over and over again.  For instance, "rs" for "replicaset" or
+  // "crd" for customresourcedefinition.
+  repeated string short_names = 2;
+
+  // Categories specifies which group aliases this resource is part of.
+  //
+  // Group aliases are used to work with groups of resources at once.
+  // The most common one is "all" which covers about a third of the base
+  // resources in Kubernetes, and is generally used for "user-facing" resources.
+  repeated string categories = 3;
+
+  // Singular overrides the singular form of your resource.
+  //
+  // The singular form is otherwise defaulted off the plural (name).
+  string singular = 4;
+
+  // Scope overrides the scope of the CRD (Cluster vs Namespaced).
+  //
+  // Scope defaults to "Namespaced".  Cluster-scoped ("Cluster") resources
+  // don't exist in namespaces.
+  string scope = 5;
+
+  // Immutable indicates the objects of this type
+  // 1) can never trigger any controllers
+  // 2) spec / status cannot be changed after creation
+  // Objects of an immutable type will be stored in metadata storage only.
+  bool immutable = 101;
+}
+
+// An annotation for CRD list message
+// A CRD list message type is named as <CRD_message_name>List
+// For example, the ProjectList is the list of Project message
+message ResourceListDescriptor {
+
+}
+
+// IndexDescriptor describes the indexes based on an indexed field on a CRD.
+// User can use this annotation to mark multiple indexes in a CRD. The Unified API framework will automatically
+// create indexes in the metadata storage to speed up list / search performance.  The supported indexable fields
+// is a predefined set.  It is either an indexable primitive type field (e.g. string, int32/int64, etc.) or
+// an indexable message type field (e.g. ResourceIdentifier).  Check the development guide for supported indexable
+// field types and the comment below for the detailed schematic of the option fields. After the indexes are built,
+// user can use the field selector in the ListOptions to list with the indexed field.
+//
+// Example:
+//    message SampleModel {
+//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//        path: "spec.owner_email",
+//        key:  "email",
+//      };
+//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//        path: "spec.sample_msg.id",
+//        key:  "msg_id",
+//      };
+//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//        path: "spec.description",
+//        key:  "description",
+//        type_override: "VARCHAR(768)"
+//      };
+//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//        path: "spec.sample_msg.src_pipeline_run",
+//        key:  "src_pipeline_run",
+//      };
+//      ...
+//      SampleModelSpec spec = 3;
+//      ...
+//    }
+//
+//    message SampleModelSpec {
+//      string owner_email = 1;
+//      SampleMsg sample_msg = 2;
+//      ResourceIdentifier src_pipeline_run = 3;
+//    }
+//
+//    message SampleMsg {
+//      int32  id = 1;
+//      string name = 2;
+//      int32  size = 3;
+//    }
+//
+// Example field selector:
+//    "spec.owner_email=michelangelo.uber.com"
+//    "spec.sample_msg.src_pipeline_run.namespace=project01,spec.sample_msg.src_pipeline_run.name=model02"
+
+message IndexDescriptor {
+  // "path" is a required field that locates the indexed field from the top level CRD object.
+  string path = 1;
+
+  // "key" is a required field that uniquely identify an index in a CRD.  It is used as the column name of
+  // the indexed field in the metadata storage.
+  string key = 2;
+
+  // "type_override" is an optional field that user could specify to override the default index SQL data type.
+  string type_override = 3;
+}
+
+// RelationshipDescriptor describes the relationship between the top level CRD (i.e. the subject CRD) and its resource
+// identifier CRD (i.e. the object CRD). User can use this annotation to mark the relationship. The Unified API
+// framework will automatically create an edge and save all edges as a relationship graph. To add a relationship,
+// user needs to provide the path to locate the resource identifier field (i.e. the object CRD)
+//
+// Example:
+//    message SampleModel {
+//      option (github.com.michelangelo-ai.michelangelo.api.relationship) = {
+//        path: "spec.feature_store_features",
+//      };
+//
+//      ...
+//      SampleModelSpec spec = 3;
+//      ...
+//      }
+//
+//      message SampleModelSpec {
+//        string owner_email = 1;
+//        ResourceIdentifier feature_store_features = 2;
+//      }
+//    }
+
+message RelationshipDescriptor {
+    // "path" is a required field that locates the resource identifier field from the top level CRD object.
+    string path = 1;
+}
+
+extend google.protobuf.FileOptions {
+  GroupInfo group_info = 5730;
+}
+
+// Kubernetes API group info
+// Only one file in each protobuf package should contain this annotation
+// https://kubernetes.io/docs/concepts/overview/kubernetes-api/#api-groups-and-versioning
+message GroupInfo {
+  // K8s API group name
+  string name = 1;
+  // K8s API group version
+  string version = 2;
+}
+
+extend google.protobuf.FieldOptions {
+  repeated Validation validation = 5770;
+  // An annotation that describes a resource reference, see
+  // [ResourceReference][].
+  ResourceReference resource_reference = 5771;
+  // An annotation indicates that a field is a blob field and will be stored externally.
+  // Unless otherwise specified, a light-weight copy of the message, in which the blob fields are set to nil or empty,
+  // will be returned by list API; the full message with all blob fields content will be returned by get API.
+  bool external_storage = 5772;
+  // The `sensitive` annotation is used to designate data fields as sensitive.
+  // This means that these fields contain information that should only be visible
+  // to authorized users.
+  bool sensitive = 5773;
+}
+
+// Identifier of a resource.
+message ResourceIdentifier {
+
+  // If empty, referring to the same namespace as the current resource.
+  string namespace = 1;
+
+  string name = 2;
+}
+
+// Validation specifies validation rules on a field.
+message Validation {
+  // min specifies the minimum value this field can have.
+  // This validation may be applied to integer, floating point, and enum (as integer) fields.
+  string min = 1;
+  // max specifies the maximum value this field can have.
+  // This validation may be applied to integer, floating point, and enum (as integer) fields.
+  string max = 2;
+  // max_items specifies the maximum items this field can contain.
+  // This validation may be applied to repeated and map fields.
+  string max_items = 3;
+  // min_items specifies the minimum items this field can contain.
+  // This validation may be applied to repeated and map fields.
+  string min_items = 4;
+  // unique_items indicates that each item in this list must be unique.
+  // This validation may only be applied to repeated fields.
+  bool unique_items = 5;
+  // min_items specifies the minimum length of this field.
+  // This validation may be applied to string or bytes fields.
+  string max_length = 6;
+  // max_items specifies the maximum length of this field.
+  // This validation may be applied to string or bytes fields.
+  string min_length = 7;
+  // pattern specifies a RE2 regular expression that the input string must matches.
+  // https://github.com/google/re2/wiki/Syntax
+  // This validation may only be applied to string fields.
+  string pattern = 8;
+  // pattern specifies a RE2 regular expression that the input string must NOT matches.
+  // https://github.com/google/re2/wiki/Syntax
+  // This validation may only be applied to string fields.
+  string not_pattern = 9;
+  // in the specified list.
+  // This validation may be applied to numeric fields, string fields, or enum (as integer) fields.
+  repeated string in = 10;
+  // not in the specified list
+  // This validation may be applied to numeric fields, string fields, or enum (as integer) fields.
+  repeated string not_in = 11;
+
+  oneof optional_required {
+    // optional indicates this field may have default value when no_default is true on message level.
+    bool optional = 101;
+    // required indicates this field may not have default value when no_default is false on message level.
+    bool required = 102;
+  }
+  // excl_max indicates the max is exclusive (< rather than <=)
+  bool excl_max = 103;
+  // excl_min indicates the min is exclusive (> rather than >=)
+  bool excl_min = 104;
+  // msg overrides the default error message
+  string msg = 201;
+
+  // string must be a valid uuid (RFC 4122)
+  bool uuid = 301;
+  // string must be a valid email (RFC 1034)
+  bool email = 302;
+  // string must be a valid uri (RFC 3986)
+  bool uri = 303;
+  // string must be a valid IPv4 address
+  bool ipv4 = 304;
+  // string must be a valid IPv6 address
+  bool ipv6 = 305;
+  // string must be a valid IP address (either IPv4 or IPv6)
+  bool ip = 306;
+  // string must be a valid RFC 1123 host name
+  bool hostname = 307;
+  // string must be a valid host name or a valid IP address
+  bool host_address = 308;
+
+  // validation rules for each item in a list (repeated)
+  Validation items  = 401;
+  // validation rules for each key in a map
+  Validation keys   = 402;
+  // validation rules for each value in a map
+  Validation values = 403;
+}
+
+extend google.protobuf.OneofOptions {
+  // requires one field in this oneof must be set
+  bool required = 7180;
+  // indicates this oneof is not required, when no_default is set at message level
+  bool optional = 7181;
+}
+
+// Defines a proto annotation that describes a string field that refers to an API resource.
+message ResourceReference {
+
+  // The resource type that the annotated field references.
+  //
+  // Example:
+  //
+  //     message Model {
+  //       ResourceIdentifier performance_report = 1 [(github.com.michelangelo-ai.michelangelo.api.resource_reference) = {
+  //         type: "michelangelo.uber.com/EvaluationReport"
+  //       }];
+  //     }
+  string type = 1;
+}
