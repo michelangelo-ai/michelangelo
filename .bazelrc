@@ -1,2 +1,2 @@
-build --disk_cache=~/.bazelcache
+build --disk_cache=~/.cache/bazel/disk_cache
 build --test_output errors
