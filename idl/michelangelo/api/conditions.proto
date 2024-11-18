@@ -17,7 +17,7 @@ syntax = "proto3";
 // Source: github.com/michelangelo-ai/michelangelo/api
 package michelangelo.api;
 
-option go_package = "github.com/michelangelo-ai/michelangelo/api;apipb";
+option go_package = "apipb";
 option java_outer_classname = "ConditionsProto";
 option java_multiple_files = true;
 option java_package = "com.github.michelangelo-ai.michelangelo.api";
