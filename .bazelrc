@@ -1,0 +1,2 @@
+build --disk_cache=~/.bazelcache
+build --test_output errors
