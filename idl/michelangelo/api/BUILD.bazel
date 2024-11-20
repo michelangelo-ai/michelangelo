@@ -1,0 +1,16 @@
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "apipb_proto",
+    srcs = [
+        "conditions.proto",
+        "list.proto",
+        "options.proto",
+    ],
+    strip_import_prefix = "/idl",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:descriptor_proto",
+    ],
+)
