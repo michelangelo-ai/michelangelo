@@ -1,0 +1,29 @@
+# gazelle:exclude .git/
+# gazelle:exclude build/
+# gazelle:proto default
+# gazelle:go_naming_convention go_default_library
+# gazelle:go_naming_convention_external go_default_library
+
+load("@bazel_gazelle//:def.bzl", "DEFAULT_LANGUAGES", "gazelle", "gazelle_binary")
+load("@rules_python_gazelle_plugin//:def.bzl", "GAZELLE_PYTHON_RUNTIME_DEPS")
+
+gazelle_binary(
+    name = "gazelle_bin",
+    languages = DEFAULT_LANGUAGES + ["@rules_python_gazelle_plugin//python"],
+)
+
+gazelle(
+    name = "gazelle",
+    data = GAZELLE_PYTHON_RUNTIME_DEPS,
+    gazelle = ":gazelle_bin",
+)
+
+gazelle(
+    name = "gazelle-update-repos",
+    args = [
+        "-from_file=go/go.mod",
+        "-to_macro=third_party/automatic_repos.bzl%go_repositories",
+        "-prune",
+    ],
+    command = "update-repos",
+)

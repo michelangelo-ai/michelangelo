@@ -1,0 +1,2 @@
+# gazelle:prefix github.com/uber/michelangelo/go
+# gazelle:resolve go go github.com/uber/michelangelo/api //idl/github.com/uber/michelangelo/api:go_default_library
