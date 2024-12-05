@@ -1,5 +1,7 @@
 # gazelle:exclude .git/
+# gazelle:exclude pkg/
 # gazelle:exclude build/
+# gazelle:exclude tools/bazelisk.py
 # gazelle:proto default
 # gazelle:go_naming_convention go_default_library
 # gazelle:go_naming_convention_external go_default_library
