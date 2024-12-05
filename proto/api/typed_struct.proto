@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package michelangelo.api;
+
+option go_package = "michelangelo/api;apipb";
+option java_outer_classname = "TypedStructProto";
+option java_multiple_files = true;
+option java_package = "com.michelangelo.api";
+
+import "google/protobuf/struct.proto";
+
+// Copied from https://github.com/cncf/udpa/blob/main/udpa/type/v1/typed_struct.proto
+// Blog: https://blog.envoyproxy.io/dynamic-extensibility-and-protocol-buffers-dcd0bf0b8801
+// A TypedStruct contains an arbitrary JSON serialized protocol buffer message with a URL that
+// describes the type of the serialized message. This is very similar to google.protobuf.Any,
+// instead of having protocol buffer binary, this employs google.protobuf.Struct as value.
+//
+// This message is intended to be embedded inside Any, so it shouldn't be directly referred
+// from other messages.
+message TypedStruct {
+  // A URL that uniquely identifies the type of the serialize protocol buffer message.
+  // This has same semantics and format described in google.protobuf.Any:
+  // https://github.com/protocolbuffers/protobuf/blob/master/src/google/protobuf/any.proto
+  string type_url = 1;
+
+  // A JSON representation of the above specified type.
+  google.protobuf.Struct value = 2;
+}

@@ -8,6 +8,7 @@ proto_library(
         "conditions.proto",
         "list.proto",
         "options.proto",
+        "typed_struct.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
@@ -15,6 +16,7 @@ proto_library(
     deps = [
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:descriptor_proto",
+        "@com_google_protobuf//:struct_proto",
     ],
 )
 
