@@ -19,3 +19,13 @@ go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(
     version = "1.23.3",
 )
+
+###########################################
+############# Third-party DEPENDENCIES ####
+###########################################
+go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
+go_deps.from_file(go_mod = "//go:go.mod")
+use_repo(
+    go_deps,
+    "io_k8s_apimachinery",
+)

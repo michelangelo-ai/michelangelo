@@ -1,1 +1,16 @@
+<<<<<<< HEAD
 # gazelle:prefix github.com/michelangelo-ai/michelangelo/go
+=======
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+# gazelle:prefix michelangelo/go
+# gazelle:resolve go go michelangelo/api //idl/michelangelo/api:go_default_library
+
+go_library(
+    name = "go_default_library",
+    srcs = ["unused.go"],
+    importpath = "michelangelo/go",
+    visibility = ["//visibility:public"],
+    deps = ["@io_k8s_apimachinery//:go_default_library"],
+)
+>>>>>>> c3e4cb6 (Add io_k8s_apimachinery repo manually)
