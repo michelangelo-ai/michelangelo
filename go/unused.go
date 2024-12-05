@@ -1,5 +1,5 @@
 package unused
 
 import (
-	_ "k8s.io/apimachinery"
+	_ "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
