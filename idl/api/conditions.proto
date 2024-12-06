@@ -1,18 +1,14 @@
 syntax = "proto3";
 
-// Source: github.com/michelangelo-ai/michelangelo/api
 package michelangelo.api;
-
-option go_package = "apipb";
-option java_outer_classname = "ConditionsProto";
-option java_multiple_files = true;
-option java_package = "com.github.michelangelo-ai.michelangelo.api";
 
 import "google/protobuf/any.proto";
 
+option go_package = "github.com/michelangelo-ai/michelangelo/api/apipb";
+
 // Defines a condition that can be used to determine the status of a resource.
 message Condition {
-  // Required: a human readable camel-case string that is a positive indicator 
+  // Required: a human readable camel-case string that is a positive indicator
   // (meaning that a CONDITION_STATUS_TRUE should always refer to a 'healthy' condition) of a condition.
   // For example, a condition called 'contains_failed_instances' would not be satisfactory
   // because it is a negative indicator, and because it is snake case.

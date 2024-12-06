@@ -1,14 +1,10 @@
 syntax = "proto3";
 
-// Source: github.com/michelangelo-ai/michelangelo/api
 package michelangelo.api;
 
 import "google/protobuf/any.proto";
 
-option go_package = "apipb";
-option java_outer_classname = "ListProto";
-option java_multiple_files = true;
-option java_package = "com.github.michelangelo-ai.michelangelo.api";
+option go_package = "github.com/michelangelo-ai/michelangelo/api/apipb";
 
 enum SortOrder {
     // Invalid sort order

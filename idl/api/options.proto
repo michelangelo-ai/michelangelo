@@ -1,14 +1,10 @@
 syntax = "proto3";
 
-// Source: github.com/michelangelo-ai/michelangelo/api
 package michelangelo.api;
 
 import "google/protobuf/descriptor.proto";
 
-option go_package = "apipb";
-option java_multiple_files = true;
-option java_outer_classname = "OptionsProto";
-option java_package = "com.github.michelangelo-ai.michelangelo.api";
+option go_package = "github.com/michelangelo-ai/michelangelo/api/apipb";
 
 extend google.protobuf.MessageOptions {
   ResourceListDescriptor resource_list = 1055;
@@ -26,7 +22,7 @@ extend google.protobuf.MessageOptions {
 // Example:
 // message Project {
 //  // Indicates a CRD type. All the options are set to default values.
-//  option (github.com.michelangelo-ai.michelangelo.api.resource) = {};
+//  option (michelangelo.api.resource) = {};
 //
 //  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
 //  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
@@ -39,7 +35,7 @@ extend google.protobuf.MessageOptions {
 // }
 //
 // message ProjectList {
-//  option (github.com.michelangelo-ai.michelangelo.api.resource_list) = {};
+//  option (michelangelo.api.resource_list) = {};
 //
 //  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
 //  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
@@ -105,20 +101,20 @@ message ResourceListDescriptor {
 //
 // Example:
 //    message SampleModel {
-//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//      option (michelangelo.api.index) = {
 //        path: "spec.owner_email",
 //        key:  "email",
 //      };
-//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//      option (michelangelo.api.index) = {
 //        path: "spec.sample_msg.id",
 //        key:  "msg_id",
 //      };
-//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//      option (michelangelo.api.index) = {
 //        path: "spec.description",
 //        key:  "description",
 //        type_override: "VARCHAR(768)"
 //      };
-//      option (github.com.michelangelo-ai.michelangelo.api.index) = {
+//      option (michelangelo.api.index) = {
 //        path: "spec.sample_msg.src_pipeline_run",
 //        key:  "src_pipeline_run",
 //      };
@@ -140,7 +136,7 @@ message ResourceListDescriptor {
 //    }
 //
 // Example field selector:
-//    "spec.owner_email=michelangelo.uber.com"
+//    "spec.owner_email=michelangelo@uber.com"
 //    "spec.sample_msg.src_pipeline_run.namespace=project01,spec.sample_msg.src_pipeline_run.name=model02"
 
 message IndexDescriptor {
@@ -162,7 +158,7 @@ message IndexDescriptor {
 //
 // Example:
 //    message SampleModel {
-//      option (github.com.michelangelo-ai.michelangelo.api.relationship) = {
+//      option (michelangelo.api.relationship) = {
 //        path: "spec.feature_store_features",
 //      };
 //
@@ -311,7 +307,7 @@ message ResourceReference {
   // Example:
   //
   //     message Model {
-  //       ResourceIdentifier performance_report = 1 [(github.com.michelangelo-ai.michelangelo.api.resource_reference) = {
+  //       ResourceIdentifier performance_report = 1 [(michelangelo.api.resource_reference) = {
   //         type: "michelangelo.uber.com/EvaluationReport"
   //       }];
   //     }
