@@ -1,3 +1,4 @@
+# gazelle:prefix github.com/michelangelo-ai/michelangelo/apipb
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
@@ -19,7 +20,7 @@ proto_library(
 go_proto_library(
     name = "apipb_go_proto",
     compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/api/apipb",
+    importpath = "github.com/michelangelo-ai/michelangelo/apipb",
     proto = ":apipb_proto",
     visibility = ["//visibility:public"],
 )
@@ -27,6 +28,14 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":apipb_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/api/apipb",
+    importpath = "github.com/michelangelo-ai/michelangelo/apipb",
+    visibility = ["//visibility:public"],
+)
+
+go_proto_library(
+    name = "michelangelo_api_go_proto",
+    compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/apipb",
+    proto = ":apipb_proto",
     visibility = ["//visibility:public"],
 )
