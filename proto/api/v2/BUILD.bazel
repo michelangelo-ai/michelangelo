@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
 proto_library(
-    name = "v2pb_proto",
+    name = "v2_proto",
     srcs = [
         "git.proto",
         "project.proto",
@@ -18,10 +18,10 @@ proto_library(
 )
 
 go_proto_library(
-    name = "v2pb_go_proto",
+    name = "v2_go_proto",
     compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
-    importpath = "michelangelo/api/v2",
-    proto = ":v2pb_proto",
+    importpath = "api/v2",
+    proto = ":v2_proto",
     visibility = ["//visibility:public"],
     deps = [
         "//api:go_default_library",
@@ -32,7 +32,7 @@ go_proto_library(
 
 go_library(
     name = "go_default_library",
-    embed = [":v2pb_go_proto"],
-    importpath = "michelangelo/api/v2",
+    embed = [":v2_go_proto"],
+    importpath = "api/v2",
     visibility = ["//visibility:public"],
 )

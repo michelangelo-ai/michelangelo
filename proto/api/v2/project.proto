@@ -4,10 +4,7 @@ syntax = "proto3";
 
 package michelangelo.api.v2;
 
-option go_package = "michelangelo/api/v2;v2pb";
-option java_multiple_files = true;
-option java_outer_classname = "ProjectProto";
-option java_package = "com.michelangelo.api.v2";
+option go_package = "api/v2";
 
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
