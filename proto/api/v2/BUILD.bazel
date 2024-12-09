@@ -8,10 +8,10 @@ proto_library(
         "git.proto",
         "project.proto",
     ],
+    strip_import_prefix = "/proto",
     visibility = ["//visibility:public"],
     deps = [
-        "//api:api_proto",
-        "//api/v2:v2_proto",
+        "//proto/api:api_proto",
         "@com_google_protobuf//:timestamp_proto",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
@@ -24,8 +24,7 @@ go_proto_library(
     proto = ":v2_proto",
     visibility = ["//visibility:public"],
     deps = [
-        "//api:go_default_library",
-        "//api/v2:go_default_library",
+        "//proto/api:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )
