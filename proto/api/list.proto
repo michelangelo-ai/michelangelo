@@ -1,0 +1,99 @@
+syntax = "proto3";
+
+package michelangelo.api;
+
+import "google/protobuf/any.proto";
+
+option go_package = "api";
+
+enum SortOrder {
+    // Invalid sort order
+    SORT_ORDER_INVALID = 0;
+    // Sort by ascending order
+    SORT_ORDER_ASC = 1;
+    // Sort by descending order
+    SORT_ORDER_DESC = 2;
+}
+
+// Defines the list output order
+message OrderBy {
+    // The field used for sorting the list output.
+    // The available sorting fields are either a base field or an indexed field in a CRD.
+    // Base field is indexed by default for every CRD, and it is one of the following fields:
+    //   metadata.namespace, metadata.name, metadata.creation_timestamp, metadata.update_timestamp.
+    // Indexed field is a CRD field that is annotated with michelangelo.api.index option.
+    string field = 1;
+    // The direction to sort the list output
+    SortOrder dir = 2;
+}
+
+/**
+ *  Pagination arguments used to return results from
+ *  [offset, offset + limit)
+ */
+message PaginationSpec {
+  // Offset of the query for pagination
+  int32 offset = 1;
+
+  // Limit per page of the query for pagination
+  int32 limit = 2;
+}
+
+/**
+ *  LogicalOperator used on CriterionOperation level to perform a logic operation among criterions
+*/
+enum LogicalOperator {
+  LOGICAL_OPERATOR_AND = 0;
+  LOGICAL_OPERATOR_OR = 1;
+}
+
+/**
+ *  CriterionOperator used on Criterion level to perform a criteria operation on each field
+*/
+enum CriterionOperator {
+  CRITERION_OPERATOR_INVALID = 0;
+  CRITERION_OPERATOR_EQUAL = 1;
+  CRITERION_OPERATOR_NOT_EQUAL = 2;
+  CRITERION_OPERATOR_GREATER_THAN = 3;
+  CRITERION_OPERATOR_GREATER_THAN_OR_EQAUL_TO = 4;
+  CRITERION_OPERATOR_LESS_THAN = 5;
+  CRITERION_OPERATOR_LESS_THAN_OR_EQUAL_TO = 6;
+  CRITERION_OPERATOR_IN = 7;
+  CRITERION_OPERATOR_NOT_IN = 8;
+  CRITERION_OPERATOR_LIKE = 9;
+  CRITERION_OPERATOR_IS_NULL = 10;
+  CRITERION_OPERATOR_IS_NOT_NULL = 11;
+}
+
+message Criterion {
+  string field_name = 1;
+  google.protobuf.Any match_value = 2;
+  CriterionOperator operator = 3;
+}
+
+message CriterionOperation {
+  repeated Criterion criterion = 1;
+  LogicalOperator logical_operator = 2;
+  // This field will be majorly used to support nested operations
+  // Use case includes MA Studio search scenario where the OR condition filters will be in sub_operations
+  // The AND condition filters will be in the repeated criterions
+  repeated CriterionOperation sub_operations = 3;
+}
+
+// Defines the list options extension
+message ListOptionsExt {
+    // A list of fields used to sort the list result
+    repeated OrderBy order_by = 1;
+
+    // Operation defines the filters and their values user needs to query
+    // This field will be majorly used by Gallery2.0 to support queries not supported
+    // by FieldSelector and LabelSelector in ListOption
+    CriterionOperation operation = 2;
+
+    // Pagination information for a list operation
+    PaginationSpec pagination = 3;
+
+    // A list of field names that need to be removed in returned result
+    // Specify the path of the field such as spec.legacy_model_spec.training_job_id
+    repeated string returned_field_skip_list = 4;
+}
