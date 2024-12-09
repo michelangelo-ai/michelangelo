@@ -9,7 +9,7 @@ option java_multiple_files = true;
 option java_outer_classname = "GitProto";
 option java_package = "com.michelangelo.api.v2";
 
-import "michelangelo/api/options.proto";
+import "api/options.proto";
 
 // Defines the Git Commit Info
 message CommitInfo {

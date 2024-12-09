@@ -11,8 +11,8 @@ option java_package = "com.michelangelo.api.v2";
 
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "michelangelo/api/options.proto";
-import "michelangelo/api/v2/git.proto";
+import "api/options.proto";
+import "api/v2/git.proto";
 
 // Defines the owner information for a project
 message OwnerInfo {
@@ -108,14 +108,6 @@ message ProjectSpec {
   // Type info of the project.
   ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
 
-  // Legacy Michelangelo project id in v1 Thrift API.
-  string v1_project_id = 1000 [(michelangelo.api.validation) = {optional: true}];
-
-  // Artifact name in uBuild like `ml-code-boston-housing`
-  string ubuild_artifact_name = 1001 [
-    (michelangelo.api.validation) = {pattern: "ml-code-[a-z0-9-]+", msg: "must start with 'ml-code-' and only contains lower case alphanumeric or dash"},
-    (michelangelo.api.validation) = {max_length: "64"}
-  ];
 }
 
 // Describes the state of a project resource.
