@@ -12,14 +12,12 @@ option java_package = "com.michelangelo.api.v2";
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-// import "michelangelo/api/v2beta1/job_specs.proto";
-// import "michelangelo/api/v2beta1/git.proto";
-// import "michelangelo/api/v2beta1/uown.proto";
+import "michelangelo/api/v2/git.proto";
 
 // Defines the owner information for a project
 message OwnerInfo {
   // Owning team UUID such as an uOwn asset UUID.
-  string owning_team = 1 [(github.com.uber.michelangelo.api.validation) = {uuid: true}];
+  string owning_team = 1 [(michelangelo.api.validation) = {uuid: true}];
 
   // List of owners (LDAP name) who can mutate this project.
   repeated string owners = 2;
@@ -77,7 +75,7 @@ message ProjectTypeInfo {
 // Defines the spec of a ML project such as description, tier, owner,
 // default job configurations, etc.
 message ProjectSpec {
-  option (github.com.uber.michelangelo.api.no_default) = true;
+  option (michelangelo.api.no_default) = true;
 
   // Description of the project.
   string description = 1;
@@ -86,7 +84,7 @@ message ProjectSpec {
   OwnerInfo owner = 2;
 
   // The tier of the project.
-  int32 tier = 3 [(github.com.uber.michelangelo.api.validation) = {min: "1", max: "4"}];
+  int32 tier = 3 [(michelangelo.api.validation) = {min: "1", max: "4"}];
 
   // GIT repo where the project artifacts are checked in, such as:
   // `gitolite@code.uber.internal:data/ml-code`
@@ -96,27 +94,27 @@ message ProjectSpec {
   string root_dir = 5;
 
   // Default job specs for Spark and Ray.
-  JobSpecs job_defaults = 6 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  // JobSpecs job_defaults = 6 [(michelangelo.api.validation) = {optional: true}];
 
   // Commit Info of the project.
-  CommitInfo commit = 7 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  CommitInfo commit = 7 [(michelangelo.api.validation) = {optional: true}];
 
   // Supporting links and documentations for the project.
-  map<string, string> supporting_links = 8 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  map<string, string> supporting_links = 8 [(michelangelo.api.validation) = {optional: true}];
 
   // Retention Config for entities in the project
-  RetentionConfig retention_config = 9 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  RetentionConfig retention_config = 9 [(michelangelo.api.validation) = {optional: true}];
 
   // Type info of the project.
-  ProjectTypeInfo type_info = 10 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
 
   // Legacy Michelangelo project id in v1 Thrift API.
-  string v1_project_id = 1000 [(github.com.uber.michelangelo.api.validation) = {optional: true}];
+  string v1_project_id = 1000 [(michelangelo.api.validation) = {optional: true}];
 
   // Artifact name in uBuild like `ml-code-boston-housing`
   string ubuild_artifact_name = 1001 [
-    (github.com.uber.michelangelo.api.validation) = {pattern: "ml-code-[a-z0-9-]+", msg: "must start with 'ml-code-' and only contains lower case alphanumeric or dash"},
-    (github.com.uber.michelangelo.api.validation) = {max_length: "64"}
+    (michelangelo.api.validation) = {pattern: "ml-code-[a-z0-9-]+", msg: "must start with 'ml-code-' and only contains lower case alphanumeric or dash"},
+    (michelangelo.api.validation) = {max_length: "64"}
   ];
 }
 
@@ -182,9 +180,6 @@ message ProjectStatus {
 
   // timestamp of last status update
   google.protobuf.Timestamp last_update_time = 4;
-
-  // project uOwn asset
-  UOwnAsset project_uown_asset = 5;
 }
 
 // Defines a ML Project for a specific ML use case. All models within
@@ -192,10 +187,10 @@ message ProjectStatus {
 // type for regression or classification, (c) the same metrics to
 // measure the quality.
 message Project {
-  option (github.com.uber.michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {};
 
   // index fields
-  option (github.com.uber.michelangelo.api.index) = {
+  option (michelangelo.api.index) = {
     path: "spec.tier",
     key: "tier",
   };
@@ -212,7 +207,7 @@ message Project {
 
 // A list of Project objects.
 message ProjectList {
-  option (github.com.uber.michelangelo.api.resource_list) = {};
+  option (michelangelo.api.resource_list) = {};
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
   k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;

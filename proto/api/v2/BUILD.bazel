@@ -4,7 +4,10 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 
 proto_library(
     name = "v2pb_proto",
-    srcs = ["project.proto"],
+    srcs = [
+        "git.proto",
+        "project.proto",
+    ],
     strip_import_prefix = "/idl",
     visibility = ["//visibility:public"],
     deps = [

@@ -11,6 +11,6 @@ go_library(
     srcs = ["unused.go"],
     importpath = "michelangelo/go",
     visibility = ["//visibility:public"],
-    deps = ["@io_k8s_apimachinery//:go_default_library"],
+    deps = ["@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library"],
 )
 >>>>>>> c3e4cb6 (Add io_k8s_apimachinery repo manually)
