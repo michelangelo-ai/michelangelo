@@ -9,6 +9,7 @@ proto_library(
         "list.proto",
         "options.proto",
     ],
+    import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
     visibility = ["//visibility:public"],
     deps = [
