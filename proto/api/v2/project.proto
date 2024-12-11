@@ -1,0 +1,206 @@
+// This file defines the Project related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "google/protobuf/timestamp.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/git.proto";
+
+// Defines the owner information for a project
+message OwnerInfo {
+  // Owning team UUID such as an uOwn asset UUID.
+  string owning_team = 1 [(michelangelo.api.validation) = {uuid: true}];
+
+  // List of owners (LDAP name) who can mutate this project.
+  repeated string owners = 2;
+
+  // List of owner LDAP groups whose members can mutate this project.
+  repeated string owner_groups = 3;
+}
+
+// Describes the notification control.
+enum NotificationControl {
+  // Default Notification
+  NOTIFICATION_CONTROL_INVALID = 0;
+
+  // Send to project owner and user team
+  NOTIFICATION_CONTROL_PROJECT_OWNER_AND_USER_TEAM = 1;
+
+  // Only send to project owner
+  NOTIFICATION_CONTROL_PROJECT_OWNER_ONLY = 2;
+
+  // No Notification
+  NOTIFICATION_CONTROL_NOTIFICATION_OFF = 3;
+
+}
+
+// Define the value and unit of SLA
+message Retention {
+  // Retention setting in days
+  int32 retention_in_days = 1;
+}
+
+// Defines the Retention Config for different entities.
+// Details for the retention policy: https://docs.google.com/document/d/1S3zWqy71iDHrtrojwKlalYijnxvRMrXCZt-3nquxwqE/edit
+message RetentionConfig {
+  // Retention policy for online deployment.
+  Retention online_deployment_retention = 1;
+
+  // Retention for offline deployment
+  Retention offline_deployment_retention = 2;
+
+  // Retention for endpoint
+  Retention endpoint_retention = 3;
+
+  // Retention for model
+  Retention model_retention = 4;
+
+  NotificationControl notification_control = 10;
+}
+
+// Define the type of the project.
+message ProjectTypeInfo {
+  bool is_core_ml = 1;
+  bool is_generative_ai = 2;
+}
+
+// Defines the spec of a ML project such as description, tier, owner,
+// default job configurations, etc.
+message ProjectSpec {
+  option (michelangelo.api.no_default) = true;
+
+  // Description of the project.
+  string description = 1;
+
+  // Owner information of the project.
+  OwnerInfo owner = 2;
+
+  // The tier of the project.
+  int32 tier = 3 [(michelangelo.api.validation) = {min: "1", max: "4"}];
+
+  // GIT repo where the project artifacts are checked in, such as:
+  // `gitolite@code.uber.internal:data/ml-code`
+  string git_repo = 4;
+
+  // Project root directory in the GIT repo such as `ml-code`
+  string root_dir = 5;
+
+  // Default job specs for Spark and Ray.
+  // JobSpecs job_defaults = 6 [(michelangelo.api.validation) = {optional: true}];
+
+  // Commit Info of the project.
+  CommitInfo commit = 7 [(michelangelo.api.validation) = {optional: true}];
+
+  // Supporting links and documentations for the project.
+  map<string, string> supporting_links = 8 [(michelangelo.api.validation) = {optional: true}];
+
+  // Retention Config for entities in the project
+  RetentionConfig retention_config = 9 [(michelangelo.api.validation) = {optional: true}];
+
+  // Type info of the project.
+  ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
+
+}
+
+// Describes the state of a project resource.
+enum ProjectState {
+  // The project is newly added into the system, but not it's not yet
+  // valid to use
+  PROJECT_STATE_INVALID = 0;
+
+  // The project is provisioning various type of resources
+  PROJECT_STATE_PROVISIONING = 1;
+
+  // The project is waiting for resources to be fully provisioned
+  PROJECT_STATE_PROVISION_PENDING = 2;
+
+  // The project is ready to use.
+  PROJECT_STATE_READY = 3;
+
+  // The project has build errors.
+  PROJECT_STATE_ERROR = 4;
+}
+
+// Describes different phases of a project, similar to software
+// application lifecycle
+enum ProjectPhase {
+  // default project phase is invalid
+  PROJECT_PHASE_INVALID= 0;
+
+  // a project is in DEVELOPMENT phase after it's successfully
+  // provisioned (i.e. project state is READY)
+  PROJECT_PHASE_DEVELOPMENT = 1;
+
+  // If a project is READY and in DEVELOPMENT phase, user can promote
+  // it to STAGING phase TODO: only server as a label for users. there
+  // is no side effect of marking a project as STAGING. This may
+  // change in the future (e.g. forbid users from deleting/changing
+  // pipeline from staging project)
+  PROJECT_PHASE_STAGING = 2;
+
+  // If a project is READY and in STAGING phase, user can promote it
+  // to PRODUCTION phase TODO: only server as a label for users. there
+  // is no side effect of marking a project as PRODUCTION. This may
+  // change in the future (e.g. forbid users from deleting
+  // models/artifacts from a production project)
+  PROJECT_PHASE_PRODUCTION = 3;
+
+  // user can mark a project as DECOMMISSION. users are not able to
+  // create new pipeline or pipeline run from a decommissioned project
+  PROJECT_PHASE_DECOMMISSION = 4;
+}
+
+
+// Defines the status of a ML project
+message ProjectStatus {
+  // project state
+  ProjectState state = 1;
+
+  // project phases. similar to software application lifecycle
+  ProjectPhase phase = 2;
+
+  // human readable error message. reason should be set only if state is PROJECT_STATE_ERROR
+  string error_message = 3;
+
+  // timestamp of last status update
+  google.protobuf.Timestamp last_update_time = 4;
+}
+
+// Defines a ML Project for a specific ML use case. All models within
+// a project should have: (a) the same uOwn asset group, (b) the same
+// type for regression or classification, (c) the same metrics to
+// measure the quality.
+message Project {
+  option (michelangelo.api.resource) = {};
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "spec.tier",
+    key: "tier",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Project.
+  ProjectSpec spec = 3;
+
+  // Most recently observed status of the Project.
+  ProjectStatus status = 4;
+}
+
+// A list of Project objects.
+message ProjectList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Project
+  repeated Project items = 3;
+}

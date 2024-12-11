@@ -1,0 +1,22 @@
+// This file defines the Git related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "michelangelo/api/options.proto";
+
+// Defines the Git Commit Info
+message CommitInfo {
+
+  // GIT reference of a resource, in either short/long
+  // SHA1 hash format, or branch/HEAD. See
+  // https://git-scm.com/book/en/v2/Git-Internals-Git-References for
+  // details.
+  string git_ref = 1 [(michelangelo.api.validation) = {required: true}];
+
+  // Git branch name
+  string branch = 2 [(michelangelo.api.validation) = {required: true}];
+}
