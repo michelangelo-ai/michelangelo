@@ -6,7 +6,7 @@ package michelangelo.api.v2;
 
 option go_package = "api/v2";
 
-import "api/options.proto";
+import "michelangelo/api/options.proto";
 
 // Defines the Git Commit Info
 message CommitInfo {

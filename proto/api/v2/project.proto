@@ -8,8 +8,8 @@ option go_package = "api/v2";
 
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "api/options.proto";
-import "api/v2/git.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/git.proto";
 
 // Defines the owner information for a project
 message OwnerInfo {
