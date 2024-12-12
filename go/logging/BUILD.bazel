@@ -1,0 +1,42 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "audit_log_struct.go",
+        "audit_logger.go",
+        "constants.go",
+        "helper_logger.go",
+        "noop_logr_sink.go",
+        "service_logger.go",
+        "unified_logger.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/logging",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+        "@com_github_opentracing_opentracing_go//:go_default_library",
+        "@com_github_uber_jaeger_client_go//:go_default_library",
+        "@org_golang_google_grpc//metadata:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zapcore:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "service_logger_test.go",
+        "unified_logger_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_opentracing_opentracing_go//:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_uber_jaeger_client_go//:go_default_library",
+        "@com_github_uber_tchannel_go//thrift:go_default_library",
+        "@org_golang_google_grpc//metadata:go_default_library",
+    ],
+)
