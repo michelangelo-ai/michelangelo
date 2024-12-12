@@ -15,14 +15,11 @@
 package apiutil_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
 
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestNameConversion(t *testing.T) {
