@@ -72,23 +72,22 @@ var K8sStatusReasonToGrpcError = map[metav1.StatusReason]codes.Code{
 
 // GetGrpcStatusCode translates Kubernetes error to GRPC status code
 func GetGrpcStatusCode(err error) codes.Code {
-	if err != nil {
-		if statusErr, ok := err.(*apiErrors.StatusError); ok {
-			if statusErr == nil {
-				return codes.OK
-			}
-
-			grpcErrCode, found := K8sStatusReasonToGrpcError[statusErr.Status().Reason]
-			if found == false {
-				grpcErrCode = codes.Unknown
-			}
-			return grpcErrCode
+	if err == nil {
+		return codes.OK
+	}
+	if statusErr, ok := err.(*apiErrors.StatusError); ok {
+		if statusErr == nil {
+			return codes.OK
 		}
 
-		return codes.Unknown
+		grpcErrCode, found := K8sStatusReasonToGrpcError[statusErr.Status().Reason]
+		if found == false {
+			grpcErrCode = codes.Unknown
+		}
+		return grpcErrCode
 	}
 
-	return codes.OK
+	return codes.Unknown
 }
 
 // K8sError2GrpcError converts K8s error to GRPC error
