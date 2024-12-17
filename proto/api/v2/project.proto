@@ -88,6 +88,9 @@ message ProjectSpec {
   // Project root directory in the GIT repo such as `ml-code`
   string root_dir = 5;
 
+  // Default job specs for Spark and Ray.
+  // JobSpecs job_defaults = 6 [(michelangelo.api.validation) = {optional: true}];
+
   // Commit Info of the project.
   CommitInfo commit = 7 [(michelangelo.api.validation) = {optional: true}];
 
