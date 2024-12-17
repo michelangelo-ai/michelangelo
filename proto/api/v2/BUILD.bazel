@@ -22,22 +22,3 @@ proto_library(
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )
-
-go_proto_library(
-    name = "v2_go_proto",
-    compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
-    importpath = "api/v2",
-    proto = ":v2_proto",
-    visibility = ["//visibility:public"],
-    deps = [
-        "//proto/api:go_default_library",
-        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
-    ],
-)
-
-go_library(
-    name = "go_default_library",
-    embed = [":v2_go_proto"],
-    importpath = "api/v2",
-    visibility = ["//visibility:public"],
-)
