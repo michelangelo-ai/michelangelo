@@ -1,0 +1,134 @@
+// This file defines the Ray Job in Michelangelo API
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/job.proto";
+import "michelangelo/api/v2/pod.proto";
+import "michelangelo/api/v2/user.proto";
+
+// Specification for the head/driver in a Ray job
+message HeadSpec {
+  // Pod spec for the Ray head
+  PodSpec pod = 1;
+}
+
+// Specification for the workers in a Ray job
+message WorkerSpec {
+  // Pod spec for the Ray worker instances
+  PodSpec pod = 1;
+
+  // Minimum number of worker instances
+  int32 min_instances = 2;
+
+  // Maximum number of worker instances
+  int32 max_instances = 3;
+
+  // Node type for a worker in a heterogeneous cluster
+  string node_type = 4;
+
+  // Ray object store memory will be allocated based on this
+  // ratio of the overall worker memory
+  double object_store_memory_ratio = 5;
+}
+
+// Specification for a Ray job
+message RayJobSpec {
+
+  // User initiating the ray job workload
+  UserInfo user = 1;
+
+  // Affinity for the clusters and other jobs
+  Affinity affinity = 2;
+
+  // Ray head specification
+  HeadSpec head = 3;
+
+  // Ray worker specification
+  WorkerSpec worker = 4;
+
+  // User-specified Ray configurations
+  map<string, string> ray_conf = 5;
+
+  // Termination spec
+  TerminationSpec termination = 6;
+
+  // Scheduling spec
+  SchedulingSpec scheduling = 7;
+
+  // Ray worker specification. This field is introduced to
+  // support clusters that have a heterogeneous set of workers.
+  // Eventually we should deprecate the worker field above because
+  // it can be represent by this field.
+  repeated WorkerSpec workers = 8;
+}
+
+// Information on the head node
+message RayHeadNodeInfo  {
+  // Name of the pod
+  string name = 1;
+
+  // Namespace of the pod
+  string namespace = 2;
+
+  // Ip address of the pod
+  string ip = 3;
+
+  // Port for clients to connect
+  int32 client_port = 4;
+
+  // Dashboard port for the ray cluster
+  int32 dashboard_port = 5;
+}
+
+// Defines the status of a Ray job
+message RayJobStatus {
+  // Information on the head node
+  RayHeadNodeInfo head_node = 1;
+
+  // Conditions that describe states
+  repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 2;
+
+  // TODO Mark this as reserved after removing the usage
+  // Cluster Assignment
+  ClusterAssignment cluster_assignment = 3;
+
+  // Assignment info
+  AssignmentInfo assignment = 4;
+
+  // Scheduling info
+  SchedulingInfo scheduling_info = 5;
+
+  // Ray Job's url to view ray job specific details
+  string job_url = 7;
+}
+
+// RayJob is refer to a Ray job.
+message RayJob {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Ray job.
+  RayJobSpec spec = 3;
+
+  // Most recently observed status of the Ray job.
+  RayJobStatus status = 4;
+}
+
+// A list of Ray job objects.
+message RayJobList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Ray jobs
+  repeated RayJob items = 3;
+}

@@ -1,0 +1,16 @@
+// This file defines the User related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+// Defines actor information.
+message UserInfo {
+
+  // LDAP of user.
+  string name = 1;
+
+  string proxy_user = 2;
+}

@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+
+// @Deprecated - use ResourceAffinity instead
+// ClusterAffinity provides cluster affinity
+message ClusterAffinity {
+  // cluster selector
+  k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector cluster_selector = 1;
+}
+
+// ResourceAffinity provides affinity on how
+// resources should be selected. It can include
+// their type, the region they're, if they're
+// experimental resources etc.
+message ResourceAffinity {
+  // resource selector
+  k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector selector = 1;
+}
+
+// Affinity for job
+message Affinity {
+  // TODO Mark this as reserved after removing usage
+  // Cluster affinity
+  ClusterAffinity cluster_affinity = 1;
+
+  // Resource affinity
+  ResourceAffinity resource_affinity = 2;
+
+  // TODO: Add inter-job and anti-affinity
+}
+
+// AssignmentInfo provides assignment
+// related status
+message AssignmentInfo {
+  // Qualified name of the resource pool
+  string resource_pool = 1;
+
+  // Name of the assigned cluster. The cluster
+  // object is defined in cluster.proto
+  string cluster = 2;
+
+  // @Deprecated
+  // Job's url to view job specific details
+  string job_url = 3 [deprecated = true];
+}
+
+// @Deprecated - use AssignmentInfo instead
+// ClusterAssignment provides cluster assignment
+// related status
+message ClusterAssignment {
+  // cluster name of the assigned cluster
+  string cluster = 1;
+}
+
+// TerminationType of a job
+enum TerminationType {
+  // invalid
+  TERMINATION_TYPE_INVALID = 0;
+
+  // succeeded
+  TERMINATION_TYPE_SUCCEEDED = 1;
+
+  // failed
+  TERMINATION_TYPE_FAILED = 2;
+}
+
+// TerminationSpec provides job termination
+// related information
+message TerminationSpec {
+  // TerminationType i.e. succeeded vs failed
+  TerminationType type = 1;
+
+  // Reason for termination if not successful
+  string reason = 2;
+}
+
+// SchedulingSpec provides job scheduling
+// related information
+message SchedulingSpec {
+  // Set to true if a job is preemptible. Preemptible jobs
+  // may use the elastic resources from other resource
+  // pools. These are subject to preemption when the
+  // demand in the other pools rise.
+  bool preemptible = 1;
+
+  // TODO: Add priority related information
+}
+
+message SchedulingInfo {
+  // last scheduling attempt
+  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_attempt_time = 1;
+
+  // number of attempts at scheduling
+  int32 num_attempts = 2;
+}
