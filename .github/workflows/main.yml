@@ -12,9 +12,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # # Checkout the repository
-      # - name: Checkout Repository
-      #   uses: actions/checkout@v3
+      # Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
 
       # # Set up Java (Bazel requires Java)
       # - name: Set up JDK 11
@@ -29,4 +29,4 @@ jobs:
 
       # Run Bazel tests
       - name: Run Bazel Test
-        run: bazel test ...
+        run: ./tools/bazel test ...
