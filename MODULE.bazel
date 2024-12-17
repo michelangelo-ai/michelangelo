@@ -29,8 +29,23 @@ use_repo(
     go_deps,
     "com_github_michelangelo_ai_michelangelo_proto",
     "com_github_stretchr_testify",
+    "io_k8s_api",
     "io_k8s_apimachinery",
     "io_k8s_sigs_controller_runtime",
     "org_golang_google_grpc",
     "org_uber_go_yarpc",
+)
+
+go_deps.gazelle_override(
+    directives = [
+        "gazelle:proto default",
+        "gazelle:proto_import_prefix k8s.io/api",
+        "gazelle:go_generate_proto false",
+        "gazelle:resolve proto k8s.io/apimachinery/pkg/api/resource/generated.proto @io_k8s_apimachinery//pkg/api/resource:resource_proto",
+        "gazelle:resolve proto k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto @io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
+        "gazelle:resolve proto k8s.io/apimachinery/pkg/runtime/generated.proto @io_k8s_apimachinery//pkg/runtime:runtime_proto",
+        "gazelle:resolve proto k8s.io/apimachinery/pkg/runtime/schema/generated.proto @io_k8s_apimachinery//pkg/runtime/schema:schema_proto",
+        "gazelle:resolve proto k8s.io/apimachinery/pkg/util/intstr/generated.proto @io_k8s_apimachinery//pkg/util/intstr:intstr_proto",
+    ],
+    path = "k8s.io/api",
 )

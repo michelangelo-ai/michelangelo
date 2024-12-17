@@ -3,6 +3,8 @@ syntax = "proto3";
 package michelangelo.api;
 
 import "google/protobuf/any.proto";
+// TODO: proof of concept only. Please delete this after other proto files import this proto
+import "k8s.io/api/core/v1/generated.proto"; 
 
 option go_package = "api";
 

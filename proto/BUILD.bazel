@@ -19,3 +19,6 @@
 
 # gazelle:resolve proto gogoproto/gogo.proto @com_github_gogo_protobuf//gogoproto:gogoproto_proto
 # gazelle:resolve proto go gogoproto/gogo.proto @com_github_gogo_protobuf//gogoproto:go_default_library
+
+# gazelle:resolve proto k8s.io/api/core/v1/generated.proto @io_k8s_api//core/v1:v1_proto
+# gazelle:resolve proto go k8s.io/api/core/v1/generated.proto @io_k8s_api//core/v1:core
