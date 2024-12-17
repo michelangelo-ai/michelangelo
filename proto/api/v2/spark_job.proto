@@ -1,0 +1,133 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/v2/job.proto";
+import "michelangelo/api/v2/pod.proto";
+import "michelangelo/api/v2/user.proto";
+
+// Specification for the driver in a Spark job
+message DriverSpec {
+  // Pod spec for the Spark driver
+  PodSpec pod = 1;
+}
+
+// Specification for the executors in a Spark job
+message ExecutorSpec {
+  // Pod spec for the Spark executors
+  PodSpec pod = 1;
+
+  // Number of executor instances
+  int32 instances = 2;
+}
+
+// Specification for a Spark job (application)
+message SparkJobSpec {
+  // User initiating the spark job workload.
+  // Used to map to the command-line flag “–proxy-user” in spark-submit.
+  UserInfo user = 1;
+
+  // Affinity for the clusters and other jobs
+  Affinity affinity = 2;
+
+  // Spark driver specification
+  DriverSpec driver = 3;
+
+  // Spark executor specification
+  ExecutorSpec executor = 4;
+
+  // User-specified Spark configuration properties as they would use
+  // the "--conf" option in spark-submit.
+  map<string, string> spark_conf = 5;
+
+  // Fully qualified main class name for
+  // java or scala application
+  string main_class = 6;
+
+  // Main application file e.g. jar or
+  // python file
+  string main_application_file = 7;
+
+  // List of arguments to be passed to the application.
+  repeated string main_args = 9;
+
+  // Dependencies specifies all possible types of dependencies of a Spark application.
+  Dependencies deps = 10;
+
+  // Termination spec
+  TerminationSpec termination = 11;
+
+  // Scheduling spec
+  SchedulingSpec scheduling = 12;
+
+  // Spark version specify the version of spark to use
+  string spark_version = 13;
+}
+
+// Dependencies specifies all possible types of dependencies of a Spark application.
+message Dependencies {
+  // Jars is a list of JAR files the Spark application depends on.
+  repeated string jars = 1;
+
+  // Files is a list of files the Spark application depends on.
+  repeated string files = 2;
+
+  // PyFiles is a list of Python files the Spark application depends on.
+  repeated string py_files = 3;
+}
+
+// Defines the status of a Spark job
+message SparkJobStatus {
+  // Deprecated - use status_conditions instead
+  // Conditions that describe states
+  repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
+
+  // TODO Mark this as reserved after removing the usage
+  // Cluster Assignment
+  ClusterAssignment cluster_assignment = 2;
+
+  // Assignment info
+  AssignmentInfo assignment = 3;
+
+  // Scheduling info
+  SchedulingInfo scheduling_info = 4;
+
+  // Conditions that describe states
+  repeated Condition status_conditions = 6;
+
+  // Spark Job's url to view spark job specific details
+  string job_url = 7;
+
+  // Spark application id
+  string application_id = 8;
+}
+
+// SparkJob refers to a Spark job.
+message SparkJob {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Spark job.
+  SparkJobSpec spec = 3;
+
+  // Most recently observed status of the Spark job.
+  SparkJobStatus status = 4;
+}
+
+// A list of Spark job objects.
+message SparkJobList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Spark jobs
+  repeated SparkJob items = 3;
+}

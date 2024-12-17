@@ -6,7 +6,12 @@ proto_library(
     name = "v2_proto",
     srcs = [
         "git.proto",
+        "job.proto",
+        "pod.proto",
         "project.proto",
+        "ray_job.proto",
+        "spark_job.proto",
+        "user.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",

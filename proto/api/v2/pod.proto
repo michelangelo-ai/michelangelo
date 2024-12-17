@@ -1,0 +1,68 @@
+// This file defines the Pod related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "michelangelo/api/options.proto";
+
+// Resource requirements of a Kubernetes Pod or Peloton task
+// This proto is shared among project, pipeline and job. Default value is legitimate for input validation.
+// TODO: Replace with K8s Quantity in ResourceRequirements
+message ResourceSpec {
+  // CPU limit in number of CPU cores
+  int32 cpu = 1 [(michelangelo.api.validation) = {min: "0"}];
+
+  // Memory limit such as 32G
+  string memory = 2;
+
+  // Disk size limit such as 100G
+  string disk_size = 3;
+
+  // GPU limit in number of GPUs
+  int32 gpu = 4 [(michelangelo.api.validation) = {min: "0"}];
+
+  // File descriptor limit in number of open file descriptors
+  int32 file_descriptors = 5 [(michelangelo.api.validation) = {min: "0"}];
+
+  // GPU sku identifier. Mandatory for
+  // cloud workloads
+  string gpu_sku = 6;
+}
+
+// Environment represents an environment variable present in a Pod.
+message Environment {
+  // Name of the environment variable.
+  string name = 1;
+
+  // Value of the environment variable.
+  string value = 2;
+}
+
+// Specification for the Pod in a Spark or Horovod job.
+message PodSpec {
+  // Optional name of the Pod
+  string name = 1;
+
+  // Resource requirement of the Pod
+  ResourceSpec resource = 2;
+
+  // Custom docker image name
+  string image = 3;
+
+  // Environment variables
+  repeated Environment env = 4;
+
+  // Security token used to read/write to secure HDFS.
+  // TODO: replace this with K8s or Peloton Secrets
+  string hdfs_delegation_token = 5;
+
+  // Custom module to run on Pod initialization
+  string on_init = 6;
+
+  // Optional command for the container.
+  // The container image's ENTRYPOINT is used if this is not provided.
+  repeated string command = 7;
+}
