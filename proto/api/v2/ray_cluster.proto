@@ -11,7 +11,7 @@ import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/user.proto";
 
-// Specification for Ray head node
+// Specification for Ray cluster head node
 message RayHeadSpec {
   // Kubernetes service type for the head service
   string service_type = 1;
@@ -70,7 +70,7 @@ message RayClusterSpec {
   bool kill = 7;
 }
 
-// Describes the state of a dashboard.
+// Describes the state of a ray cluster.
 enum RayClusterState {
   // The cluster state is invalid.
   RAY_CLUSTER_STATE_INVALID = 0;
@@ -97,6 +97,7 @@ enum RayClusterState {
   RAY_CLUSTER_STATE_UNKNOWN = 7;
 }
 
+// Specification for the endpoints
 message Endpoints {
   // Endpoint for client communication with the Ray cluster
   string client = 1;
@@ -114,6 +115,7 @@ message Endpoints {
   string serve = 5;
 }
 
+// Specification for the head/driver in a Ray cluster
 message Head {
   // IP and port for accessing the Ray head node
   string port_ip = 1;
