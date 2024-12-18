@@ -1,0 +1,161 @@
+// This file defines the Ray Cluster in Michelangelo API
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "api/v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/pod.proto";
+import "michelangelo/api/v2/user.proto";
+
+message RayHeadSpec {
+  // Kubernetes service type for the head service
+  string service_type = 1;
+
+  // Pod spec for the Ray head
+  PodSpec pod = 2;
+
+  // Ray start parameters for the head node
+  map<string, string> ray_start_params = 3;
+}
+
+// Specification for the workers in a Ray job
+message RayWorkerSpec {
+  // Pod spec for the Ray worker instances
+  PodSpec pod = 1;
+
+  // Minimum number of worker instances
+  int32 min_instances = 2;
+
+  // Maximum number of worker instances
+  int32 max_instances = 3;
+
+  // Node type for a worker in a heterogeneous cluster
+  string node_type = 4;
+
+  // Ray object store memory will be allocated based on this
+  // ratio of the overall worker memory
+  double object_store_memory_ratio = 5;
+
+  // Ray start parameters for the head node
+  map<string, string> ray_start_params = 6;
+}
+
+// Specification for a Ray cluster
+message RayClusterSpec {
+
+  // User initiating the ray job workload
+  UserInfo user = 1;
+
+  // Ray version for the cluster
+  string ray_version = 2;
+
+  // Ray head specification
+  RayHeadSpec head = 3;
+
+  repeated RayWorkerSpec workers = 4;
+
+  // Additional Ray cluster-wide configurations
+  map<string, string> ray_conf = 5;
+
+  // Enable or disable in-tree autoscaling
+  bool enable_in_tree_autoscaling = 6;
+
+  // True if this is a kill request.
+  bool kill = 7;
+}
+
+// Describes the state of a dashboard.
+enum RayClusterState {
+  // The dashboard state is invalid.
+  RAY_CLUSTER_STATE_INVALID = 0;
+
+  RAY_CLUSTER_STATE_CREATING = 1;
+
+  RAY_CLUSTER_STATE_PROVISIONING = 2;
+
+  RAY_CLUSTER_STATE_READY = 3;
+
+  RAY_CLUSTER_STATE_TERMINATING = 4;
+
+  RAY_CLUSTER_STATE_TERMINATED = 5;
+
+  RAY_CLUSTER_STATE_FAILED = 6;
+
+  RAY_CLUSTER_STATE_UNKNOWN = 7;
+}
+
+message Endpoints {
+  string client = 1;
+
+  string dashboard = 2;
+
+  string metrics = 3;
+
+  string redis = 4;
+
+  string serve = 5;
+}
+
+message Head {
+  string port_ip = 1;
+
+  string service_ip = 2;
+}
+
+// Defines the status of a Ray cluster
+message RayClusterStatus {
+
+  // state of the ray cluster
+  RayClusterState state = 1;
+
+  // generated ray cluster in ray operator
+  string cluster_id = 2;
+
+  // Observed number of worker replicas available in the cluster
+  int32 available_worker_replicas = 3;
+
+  // Desired number of worker replicas across all groups
+  int32 desired_worker_replicas = 4;
+
+  // Minimum number of worker replicas across all groups
+  int32 min_worker_replicas = 5;
+
+  // Maximum number of worker replicas across all groups
+  int32 max_worker_replicas = 6;
+
+  Endpoints endpoints = 7;
+
+  Head head = 8;
+
+  // Last update time for the cluster status
+  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 9;
+}
+
+// RayCluster refers to a Ray cluster.
+message RayCluster {
+  option (github.com.uber.michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Ray cluster.
+  RayClusterSpec spec = 3;
+
+  // Most recently observed status of the Ray cluster.
+  RayClusterStatus status = 4;
+}
+
+// A list of Ray cluster objects.
+message RayClusterList {
+  option (github.com.uber.michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Ray clusters
+  repeated RayCluster items = 3;
+}
