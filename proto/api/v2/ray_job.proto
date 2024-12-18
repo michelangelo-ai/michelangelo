@@ -22,6 +22,13 @@ message RayJobSpec {
   map<string, string> ray_conf = 2;
 
   // Entrypoint script or command to start the Ray job
+  // This field specifies the main executable or script that initiates the Ray job.
+  // Examples can include the path to a Python script, a shell command, or any executable.
+  // The entrypoint is critical for defining the task logic and orchestration.
+  // For instance, if running a distributed training job, the entrypoint might be
+  // a script that initializes the Ray cluster and launches training tasks.
+  // It should be ensured that the entrypoint script is compatible with the environment
+  // and dependencies provided in the job configuration.
   string entrypoint = 3;
 
   // Unique identifier for the Ray job
@@ -38,22 +45,22 @@ message RayJobSpec {
 // Enum representing the various states of a Ray job
 enum RayJobState {
   // The state is invalid (used as a default value)
-  RAY_JOB_V2_STATE_INVALID = 0;
+  RAY_JOB_STATE_INVALID = 0;
 
   // The job is currently being initialized
-  RAY_JOB_V2_STATE_INITIALIZING = 1;
+  RAY_JOB_STATE_INITIALIZING = 1;
 
   // The job is actively running
-  RAY_JOB_V2_STATE_RUNNING = 2;
+  RAY_JOB_STATE_RUNNING = 2;
 
   // The job completed successfully
-  RAY_JOB_V2_STATE_SUCCEEDED = 3;
+  RAY_JOB_STATE_SUCCEEDED = 3;
 
   // The job failed to complete
-  RAY_JOB_V2_STATE_FAILED = 4;
+  RAY_JOB_STATE_FAILED = 4;
 
   // The job was terminated or killed
-  RAY_JOB_V2_STATE_KILLED = 5;
+  RAY_JOB_STATE_KILLED = 5;
 }
 
 // Defines the status of a Ray job
