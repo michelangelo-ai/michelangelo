@@ -64,7 +64,7 @@ enum RayJobState {
 }
 
 // Defines the status of a Ray job
-message RayJobV2Status {
+message RayJobStatus {
   // Current state of the Ray job
   RayJobState state = 1;
 
