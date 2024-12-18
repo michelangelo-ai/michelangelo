@@ -11,6 +11,7 @@ import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/user.proto";
 
+// Specification for Ray head node
 message RayHeadSpec {
   // Kubernetes service type for the head service
   string service_type = 1;
@@ -22,7 +23,7 @@ message RayHeadSpec {
   map<string, string> ray_start_params = 3;
 }
 
-// Specification for the workers in a Ray job
+// Specification for the workers in a Ray cluster
 message RayWorkerSpec {
   // Pod spec for the Ray worker instances
   PodSpec pod = 1;
@@ -47,7 +48,7 @@ message RayWorkerSpec {
 // Specification for a Ray cluster
 message RayClusterSpec {
 
-  // User initiating the ray job workload
+  // User initiating the ray cluster workload
   UserInfo user = 1;
 
   // Ray version for the cluster
