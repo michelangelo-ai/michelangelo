@@ -15,16 +15,19 @@ import "michelangelo/api/v2/user.proto";
 // Specification for a Ray job
 message RayJobSpec {
 
-  // User initiating the ray job workload
+  // Information about the user initiating the Ray job workload
   UserInfo user = 1;
 
-  // User-specified Ray configurations
+  // Key-value pairs specifying user-defined Ray configurations
   map<string, string> ray_conf = 2;
 
+  // Entrypoint script or command to start the Ray job
   string entrypoint = 3;
 
-  string jobId = 4;
+  // Unique identifier for the Ray job
+  string job_id = 4;
 
+  // Reference to the Ray cluster where the job will be executed
   michelangelo.api.ResourceIdentifier cluster = 5 [
     (michelangelo.api.resource_reference) = {
       type: "michelangelo.uber.com/RayCluster"
@@ -32,62 +35,79 @@ message RayJobSpec {
   ];
 }
 
-// Describes the state of a dashboard.
+// Enum representing the various states of a Ray job
 enum RayJobState {
-  // The dashboard state is invalid.
+  // The state is invalid (used as a default value)
   RAY_JOB_V2_STATE_INVALID = 0;
 
+  // The job is currently being initialized
   RAY_JOB_V2_STATE_INITIALIZING = 1;
 
+  // The job is actively running
   RAY_JOB_V2_STATE_RUNNING = 2;
 
+  // The job completed successfully
   RAY_JOB_V2_STATE_SUCCEEDED = 3;
 
+  // The job failed to complete
   RAY_JOB_V2_STATE_FAILED = 4;
 
+  // The job was terminated or killed
   RAY_JOB_V2_STATE_KILLED = 5;
 }
 
 // Defines the status of a Ray job
 message RayJobV2Status {
+  // Current state of the Ray job
   RayJobState state = 1;
 
+  // Unique identifier for the Ray job
   string job_id = 2;
 
-  string jobStatus = 3;
+  // Status message providing additional information about the job
+  string job_status = 3;
 
+  // Additional message describing the current state or issues
   string message = 4;
 
-  string rayClusterStatus = 5;
+  // Status of the associated Ray cluster
+  string ray_cluster_status = 5;
 
-  string dashboardURL = 6;
+  // URL to access the Ray job's dashboard
+  string dashboard_url = 6;
 
-  string jobDeploymentStatus = 7;
+  // Deployment status of the Ray job
+  string job_deployment_status = 7;
 
-  string rayClusterName = 8;
+  // Name of the Ray cluster running the job
+  string ray_cluster_name = 8;
 }
 
-// RayJob is refer to a Ray job.
+// Represents a Ray job and its specifications
 message RayJob {
+  // Annotation for Michelangelo resource identification
   option (michelangelo.api.resource) = {};
 
+  // Kubernetes metadata for the Ray job
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
   k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
 
-  // Spec of the desired behavior of the Ray job.
+  // Specification for the desired behavior of the Ray job
   RayJobSpec spec = 3;
 
-  // Most recently observed status of the Ray job.
+  // Most recently observed status of the Ray job
   RayJobStatus status = 4;
 }
 
-// A list of Ray job objects.
+// A collection of Ray job objects
 message RayJobList {
+  // Annotation for Michelangelo resource list identification
   option (michelangelo.api.resource_list) = {};
 
+  // Kubernetes metadata for the Ray job list
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
   k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
 
-  // A list of Ray jobs
+  // List of Ray job objects
   repeated RayJob items = 3;
 }

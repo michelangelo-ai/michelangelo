@@ -40,7 +40,7 @@ message RayWorkerSpec {
   // ratio of the overall worker memory
   double object_store_memory_ratio = 5;
 
-  // Ray start parameters for the head node
+  // Ray start parameters for the worker nodes
   map<string, string> ray_start_params = 6;
 }
 
@@ -56,6 +56,7 @@ message RayClusterSpec {
   // Ray head specification
   RayHeadSpec head = 3;
 
+  // Specifications for the worker groups in the cluster
   repeated RayWorkerSpec workers = 4;
 
   // Additional Ray cluster-wide configurations
@@ -64,55 +65,69 @@ message RayClusterSpec {
   // Enable or disable in-tree autoscaling
   bool enable_in_tree_autoscaling = 6;
 
-  // True if this is a kill request.
+  // True if this is a kill request, used to terminate the cluster
   bool kill = 7;
 }
 
 // Describes the state of a dashboard.
 enum RayClusterState {
-  // The dashboard state is invalid.
+  // The cluster state is invalid.
   RAY_CLUSTER_STATE_INVALID = 0;
 
+  // The cluster is in the process of being created.
   RAY_CLUSTER_STATE_CREATING = 1;
 
+  // The cluster is being provisioned.
   RAY_CLUSTER_STATE_PROVISIONING = 2;
 
+  // The cluster is ready for use.
   RAY_CLUSTER_STATE_READY = 3;
 
+  // The cluster is being terminated.
   RAY_CLUSTER_STATE_TERMINATING = 4;
 
+  // The cluster has been terminated.
   RAY_CLUSTER_STATE_TERMINATED = 5;
 
+  // The cluster creation or operation failed.
   RAY_CLUSTER_STATE_FAILED = 6;
 
+  // The cluster state is unknown.
   RAY_CLUSTER_STATE_UNKNOWN = 7;
 }
 
 message Endpoints {
+  // Endpoint for client communication with the Ray cluster
   string client = 1;
 
+  // Endpoint for accessing the Ray dashboard
   string dashboard = 2;
 
+  // Endpoint for accessing metrics from the Ray cluster
   string metrics = 3;
 
+  // Endpoint for accessing the Redis server in the Ray cluster
   string redis = 4;
 
+  // Endpoint for Ray Serve (model serving functionality)
   string serve = 5;
 }
 
 message Head {
+  // IP and port for accessing the Ray head node
   string port_ip = 1;
 
+  // IP address of the head service
   string service_ip = 2;
 }
 
 // Defines the status of a Ray cluster
 message RayClusterStatus {
 
-  // state of the ray cluster
+  // Current state of the Ray cluster
   RayClusterState state = 1;
 
-  // generated ray cluster in ray operator
+  // Unique identifier for the generated Ray cluster in the Ray operator
   string cluster_id = 2;
 
   // Observed number of worker replicas available in the cluster
@@ -127,8 +142,10 @@ message RayClusterStatus {
   // Maximum number of worker replicas across all groups
   int32 max_worker_replicas = 6;
 
+  // Endpoints to access the cluster services
   Endpoints endpoints = 7;
 
+  // Details about the Ray head node
   Head head = 8;
 
   // Last update time for the cluster status
@@ -139,7 +156,10 @@ message RayClusterStatus {
 message RayCluster {
   option (github.com.uber.michelangelo.api.resource) = {};
 
+  // Type metadata for the Ray cluster
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+
+  // Metadata for the Ray cluster object
   k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
 
   // Spec of the desired behavior of the Ray cluster.
@@ -153,7 +173,10 @@ message RayCluster {
 message RayClusterList {
   option (github.com.uber.michelangelo.api.resource_list) = {};
 
+  // Type metadata for the list of Ray clusters
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+
+  // Metadata for the list of Ray cluster objects
   k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
 
   // A list of Ray clusters
