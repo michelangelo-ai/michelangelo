@@ -1,0 +1,53 @@
+apiVersion: ray.io/v1alpha1
+kind: RayCluster
+metadata:
+  name: ray-cluster
+spec:
+  headGroupSpec:
+    rayStartParams:
+      block: "true"
+      dashboard-host: 0.0.0.0
+    serviceType: ClusterIP
+    template:
+      spec:
+        containers:
+          - envFrom:
+              - configMapRef:
+                  name: michelangelo-config
+            image: rayproject/ray:2.3.1-py310-cpu
+            name: head
+            volumeMounts:
+              - mountPath: /tmp/ray
+                name: log-volume
+        volumes:
+          - emptyDir: { }
+            name: log-volume
+  workerGroupSpecs:
+    - groupName: worker-group
+      maxReplicas: 3
+      minReplicas: 1
+      rayStartParams:
+        block: "true"
+      replicas: 1
+      template:
+        spec:
+          containers:
+            - envFrom:
+                - configMapRef:
+                    name: michelangelo-config
+              image: rayproject/ray:2.3.1-py310-cpu
+              name: worker
+              volumeMounts:
+                - mountPath: /tmp/ray
+                  name: log-volume
+          initContainers:
+            - command:
+                - sh
+                - -c
+                - until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local;
+                  do echo waiting for K8s Service $RAY_IP; sleep 2; done
+              image: busybox:1.28
+              name: init
+          volumes:
+            - emptyDir: { }
+              name: log-volume

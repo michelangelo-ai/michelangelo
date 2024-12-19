@@ -1,0 +1,11 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-config
+data:
+  MA_FILE_SYSTEM: s3://default
+  MA_FILE_SYSTEM_S3_SCHEME: http
+  MA_FILE_SYSTEM_S3_ENDPOINT: localhost:9090
+  MA_FILE_SYSTEM_S3_ACCESS_KEY: minioadmin
+  MA_FILE_SYSTEM_S3_SECRET_KEY: minioadmin
