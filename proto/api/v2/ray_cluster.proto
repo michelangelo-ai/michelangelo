@@ -99,24 +99,59 @@ enum RayClusterState {
 }
 
 // Specification for the endpoints
+//
+// The `Endpoints` message defines a structured way to provide
+// access points to different services within a Ray cluster. These endpoints
+// are critical for cluster operations, enabling communication, monitoring, and
+// serving functionality. Each field corresponds to a specific service
+// and serves as an interface for external and internal tools to interact
+// with the cluster components.
+//
+// This specification is designed to be extensible and aligns with
+// the requirements of the Ray operator specification, ensuring that
+// all necessary endpoints for cluster management are included.
 message Endpoints {
-  // Endpoint for client communication with the Ray cluster
+  // Endpoint for client communication with the Ray cluster.
+  // This endpoint allows clients to connect and interact with the Ray cluster.
+  // It is typically used for submitting tasks, retrieving results, and managing jobs.
+  // Example: "ray://<cluster-ip>:<client-port>" to facilitate task distribution.
   string client = 1;
 
-  // Endpoint for accessing the Ray dashboard
+  // Endpoint for accessing the Ray dashboard.
+  // The dashboard provides a web-based interface to monitor cluster state, visualize tasks, and access logs.
+  // It is commonly used by developers and operators for debugging and performance monitoring.
+  // Example: "http://<cluster-ip>:<dashboard-port>" to view cluster status.
   string dashboard = 2;
 
-  // Endpoint for accessing metrics from the Ray cluster
+  // Endpoint for accessing metrics from the Ray cluster.
+  // Metrics include operational details such as resource utilization, task throughput, and system health.
+  // This endpoint integrates with monitoring tools for real-time analytics.
+  // Example: Prometheus or Grafana can scrape this endpoint for visualization and alerts.
   string metrics = 3;
 
-  // Endpoint for accessing the Redis server in the Ray cluster
+  // Endpoint for accessing the Redis server in the Ray cluster.
+  // Redis is used internally by Ray for cluster metadata storage and task scheduling.
+  // This endpoint allows direct access for debugging or administrative purposes.
+  // Example: "redis://<cluster-ip>:<redis-port>" for metadata inspection.
   string redis = 4;
 
-  // Endpoint for Ray Serve (model serving functionality)
+  // Endpoint for Ray Serve (model serving functionality).
+  // Ray Serve enables scalable model deployment and inference.
+  // This endpoint is used to expose APIs for serving machine learning models hosted on the cluster.
+  // Example: "http://<cluster-ip>:<serve-port>" for RESTful API access to deployed models.
   string serve = 5;
 }
 
-// Information on the head node
+// Specification for RayHeadNodeInfo
+//
+// The `RayHeadNodeInfo` message provides critical details about the head node
+// of a Ray cluster. The head node acts as the central coordinator for the
+// cluster, managing worker nodes and facilitating communication among them.
+//
+// This information is essential for understanding the cluster topology,
+// diagnosing connectivity issues, and interacting with the cluster's core
+// components. Each field encapsulates a specific aspect of the head node's
+// configuration and its operational parameters.
 message RayHeadNodeInfo  {
   // Name of the pod.
   // This is the unique identifier for the head node's pod within the Kubernetes cluster.
@@ -147,7 +182,16 @@ message RayHeadNodeInfo  {
   int32 jupyter_notebook_port = 6;
 }
 
-// Information on the pod errors
+// Specification for PodErrors
+//
+// The `PodErrors` message provides detailed information about errors encountered
+// by pods within a Kubernetes-managed Ray cluster. Errors in pods can significantly
+// impact the performance and availability of the cluster. Understanding and resolving
+// these errors is crucial for maintaining cluster stability and operational integrity.
+//
+// Each field in this message captures a specific aspect of the error, enabling detailed
+// diagnostics and facilitating faster resolution. These fields are derived from Kubernetes
+// events and system-level error messages.
 message PodErrors {
   // Name of the failed pod.
   // Identifies the specific pod within the cluster that encountered an error.
