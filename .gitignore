@@ -9,3 +9,4 @@
 MODULE.bazel.lock
 
 /pkg/**
+.DS_Store
