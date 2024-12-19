@@ -72,6 +72,13 @@ message RayJobStatus {
   string job_id = 2;
 
   // Status message providing additional information about the job
+  // Examples of job status:
+  // - SUCCEEDED: Indicates the job has successfully completed all tasks.
+  // - FAILED: Indicates the job encountered an error or issue and could not complete.
+  // - STOPPED: Indicates the job was intentionally halted by a user or system.
+  // - RUNNING: Indicates the job is currently in progress and tasks are being executed.
+  // This field provides a textual representation of the current job state for debugging
+  // and monitoring purposes.
   string job_status = 3;
 
   // Additional message describing the current state or issues
@@ -83,7 +90,18 @@ message RayJobStatus {
   // URL to access the Ray job's dashboard
   string dashboard_url = 6;
 
-  // Deployment status of the Ray job
+  // Deployment status of the Ray job.
+  // Examples of job_deployment_status values:
+  //   - "Pending": The job is created but not yet started, waiting for resources or prerequisites.
+  //   - "Running": The job is actively executing tasks.
+  //   - "Succeeded": The job has completed successfully without errors.
+  //   - "Failed": The job terminated prematurely due to an error.
+  //   - "Terminating": The job is in the process of being shut down.
+  //   - "Cancelled": The job was manually stopped before completion.
+  //   - "Scaling": Resources are being adjusted to meet the job's demands.
+  //   - "Initializing": The job is setting up dependencies or preparing resources.
+  //   - "ResourcePending": The job is waiting for sufficient resources to execute.
+  //   - "Error: <specific_error>": A custom error message, such as "Error: Insufficient Memory".
   string job_deployment_status = 7;
 
   // Name of the Ray cluster running the job

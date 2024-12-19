@@ -9,6 +9,7 @@ option go_package = "api/v2";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/pod.proto";
+import "michelangelo/api/v2/job.proto";
 import "michelangelo/api/v2/user.proto";
 
 // Specification for Ray cluster head node
@@ -37,8 +38,8 @@ message RayWorkerSpec {
   // Node type for a worker in a heterogeneous cluster
   string node_type = 4;
 
-  // Ray object store memory will be allocated based on this
-  // ratio of the overall worker memory
+  // Ray object store memory will be allocated based on this ratio of the overall worker memory.
+  // This ratio is specified as an entrypoint parameter to configure the memory allocated for the object store during worker node startup.
   double object_store_memory_ratio = 5;
 
   // Ray start parameters for the worker nodes
@@ -63,11 +64,11 @@ message RayClusterSpec {
   // Additional Ray cluster-wide configurations
   map<string, string> ray_conf = 5;
 
-  // Enable or disable in-tree autoscaling
-  bool enable_in_tree_autoscaling = 6;
+  // Termination spec
+  TerminationSpec termination = 6;
 
-  // True if this is a kill request, used to terminate the cluster
-  bool kill = 7;
+  // Scheduling spec
+  SchedulingSpec scheduling = 7;
 }
 
 // Describes the state of a ray cluster.
@@ -115,45 +116,150 @@ message Endpoints {
   string serve = 5;
 }
 
-// Specification for the head/driver in a Ray cluster
-message Head {
-  // IP and port for accessing the Ray head node
-  string port_ip = 1;
+// Information on the head node
+message RayHeadNodeInfo  {
+  // Name of the pod.
+  // This is the unique identifier for the head node's pod within the Kubernetes cluster.
+  string name = 1;
 
-  // IP address of the head service
-  string service_ip = 2;
+  // Namespace of the pod.
+  // Specifies the Kubernetes namespace where the head node's pod is deployed.
+  // Namespaces allow logical separation of resources within a Kubernetes cluster.
+  string namespace = 2;
+
+  // IP address of the pod.
+  // This is the internal cluster IP assigned to the head node's pod, used for inter-node communication.
+  string ip = 3;
+
+  // Port for clients to connect.
+  // This port is used by external clients to connect to the Ray cluster's head node.
+  // It serves as the primary entry point for submitting jobs and managing cluster state.
+  int32 client_port = 4;
+
+  // Dashboard port for the Ray cluster.
+  // Provides a web-based interface to monitor and manage the Ray cluster.
+  // The dashboard displays metrics, logs, and node details for operational insights.
+  int32 dashboard_port = 5;
+
+  // Jupyter Notebook port for the Ray cluster.
+  // This port is used if a Jupyter Notebook server is running on the head node.
+  // While optional, it allows users to interactively develop and run Ray-based applications.
+  int32 jupyter_notebook_port = 6;
+}
+
+// Information on the pod errors
+message PodErrors {
+  // Name of the failed pod.
+  // Identifies the specific pod within the cluster that encountered an error.
+  string name = 1;
+
+  // Name of the failed container.
+  // Specifies the container within the pod that failed. Pods can have multiple containers, each serving different purposes.
+  string container_name = 2;
+
+  // Exit code of the failed container in the pod.
+  // Indicates the status code returned by the container's process upon failure.
+  // Non-zero exit codes usually signify an error or abnormal termination.
+  int32 exit_code = 3;
+
+  // Reason for the failure.
+  // Provides a brief description of why the container or pod failed.
+  // This is often derived from Kubernetes events and can include reasons like "OOMKilled" or "CrashLoopBackOff".
+  string reason = 4;
+
+  // Message describing the failure.
+  // Offers additional details about the error, including system-level messages or logs.
+  // This field is useful for debugging and determining the root cause of the failure.
+  string message = 5;
 }
 
 // Defines the status of a Ray cluster
-message RayClusterStatus {
+message RayJobStatus {
 
-  // Current state of the Ray cluster
+  // Current state of the Ray cluster.
+  // This field reflects the operational state of the cluster, such as "Running", "Pending", or "Failed".
+  // It is updated based on the observed state transitions in the Ray cluster managed by the Kubernetes operator.
   RayClusterState state = 1;
 
-  // Unique identifier for the generated Ray cluster in the Ray operator
+  // Unique identifier for the generated Ray cluster in the Ray operator.
+  // This ID is critical for associating jobs with specific Ray clusters in Kubernetes.
+  // It ensures the operator can track and manage individual clusters efficiently.
   string cluster_id = 2;
 
-  // Observed number of worker replicas available in the cluster
+  // Observed number of worker replicas available in the cluster.
+  // This value is dynamically updated based on the current state of the cluster.
+  // It reflects the actual number of active worker nodes currently running and available to handle tasks.
   int32 available_worker_replicas = 3;
 
-  // Desired number of worker replicas across all groups
+  // Desired number of worker replicas across all groups.
+  // This value is derived from the desired specifications set in WorkerGroupSpec in raycluster_types.go.
+  // It represents the target number of workers defined during cluster creation or scaling operations.
   int32 desired_worker_replicas = 4;
 
-  // Minimum number of worker replicas across all groups
+  // Minimum number of worker replicas across all groups.
+  // It aligns with the minimum configuration provided in the cluster spec.
+  // This value ensures the cluster maintains a baseline number of workers to meet operational requirements.
   int32 min_worker_replicas = 5;
 
-  // Maximum number of worker replicas across all groups
+  // Maximum number of worker replicas across all groups.
+  // It reflects the upper limit for scaling workers, often specified in autoscaling configurations.
+  // This value prevents over-provisioning and helps control resource costs.
   int32 max_worker_replicas = 6;
 
-  // Endpoints to access the cluster services
+  // Endpoints to access the cluster services.
+  // These endpoints include the head service and potentially other ingress points for the cluster.
+  // They are used for communication with the head node and accessing cluster-level APIs.
   Endpoints endpoints = 7;
 
-  // Details about the Ray head node
-  Head head = 8;
-
-  // Last update time for the cluster status
+  // Last update time for the cluster status.
+  // This timestamp is managed by Kubernetes and helps track the most recent changes to the cluster.
+  // It provides a snapshot of when the cluster's status was last refreshed.
   k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 9;
+
+  // Information on the head node.
+  // The head node is critical for coordinating worker nodes and running the Ray scheduler.
+  // This field includes details about the pod running the head node, such as its IP address and health status.
+  RayHeadNodeInfo head_node = 10;
+
+  // Cluster assignment details.
+  // This field is marked for deprecation and should be removed in the future.
+  // It currently provides metadata about the logical grouping of clusters, but its usage is being phased out.
+  // TODO: Mark this as reserved after removing the usage.
+  ClusterAssignment cluster_assignment = 11;
+
+  // Assignment information.
+  // Provides additional metadata about how the cluster is allocated for specific workloads.
+  // This field helps map resources to their intended tasks or tenants within a shared environment.
+  // For example, it can include priority levels, tenant-specific resource limits, or job-specific constraints.
+  // These details ensure efficient resource utilization and prevent conflicts in multi-tenant environments.
+  AssignmentInfo assignment = 12;
+
+  // Scheduling information.
+  // Contains data on how resources are allocated and scheduled within the cluster.
+  // This includes policies for distributing tasks and managing resource contention.
+  // Scheduling policies can be defined to prioritize critical jobs, balance workloads, or meet SLAs (Service Level Agreements).
+  // It also includes the scheduling status of each worker group, indicating readiness or pending states.
+  SchedulingInfo scheduling_info = 13;
+
+  // Conditions that describe the states.
+  // These conditions detail specific events or issues affecting the cluster.
+  // Examples include "PodsPending" or "AutoScalingInProgress" to indicate operational status.
+  repeated Condition status_conditions = 14;
+
+  // URL to view job-specific details.
+  // This field is used for debugging and monitoring purposes, offering a direct link to job metadata.
+  // It provides an entry point to view logs, metrics, and other details for a given Ray job.
+  string job_url = 15;
+
+  // Information on pod errors in the Ray cluster.
+  // Collected from pod events, this information is essential for diagnosing issues, though the presence of errors
+  // does not necessarily mean the cluster is unhealthy.
+  // Examples include issues like "ContainerImagePullBackOff" or "CrashLoopBackOff" that may require intervention.
+  // Each error entry provides detailed context, such as error type, associated pod name, and timestamps of occurrences.
+  // This information aids in root cause analysis and accelerates resolution of cluster failures.
+  repeated PodErrors pod_errors = 16;
 }
+
 
 // RayCluster refers to a Ray cluster.
 message RayCluster {
