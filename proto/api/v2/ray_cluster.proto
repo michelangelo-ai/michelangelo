@@ -98,50 +98,6 @@ enum RayClusterState {
   RAY_CLUSTER_STATE_UNKNOWN = 7;
 }
 
-// Specification for the endpoints
-//
-// The `Endpoints` message defines a structured way to provide
-// access points to different services within a Ray cluster. These endpoints
-// are critical for cluster operations, enabling communication, monitoring, and
-// serving functionality. Each field corresponds to a specific service
-// and serves as an interface for external and internal tools to interact
-// with the cluster components.
-//
-// This specification is designed to be extensible and aligns with
-// the requirements of the Ray operator specification, ensuring that
-// all necessary endpoints for cluster management are included.
-message Endpoints {
-  // Endpoint for client communication with the Ray cluster.
-  // This endpoint allows clients to connect and interact with the Ray cluster.
-  // It is typically used for submitting tasks, retrieving results, and managing jobs.
-  // Example: "ray://<cluster-ip>:<client-port>" to facilitate task distribution.
-  string client = 1;
-
-  // Endpoint for accessing the Ray dashboard.
-  // The dashboard provides a web-based interface to monitor cluster state, visualize tasks, and access logs.
-  // It is commonly used by developers and operators for debugging and performance monitoring.
-  // Example: "http://<cluster-ip>:<dashboard-port>" to view cluster status.
-  string dashboard = 2;
-
-  // Endpoint for accessing metrics from the Ray cluster.
-  // Metrics include operational details such as resource utilization, task throughput, and system health.
-  // This endpoint integrates with monitoring tools for real-time analytics.
-  // Example: Prometheus or Grafana can scrape this endpoint for visualization and alerts.
-  string metrics = 3;
-
-  // Endpoint for accessing the Redis server in the Ray cluster.
-  // Redis is used internally by Ray for cluster metadata storage and task scheduling.
-  // This endpoint allows direct access for debugging or administrative purposes.
-  // Example: "redis://<cluster-ip>:<redis-port>" for metadata inspection.
-  string redis = 4;
-
-  // Endpoint for Ray Serve (model serving functionality).
-  // Ray Serve enables scalable model deployment and inference.
-  // This endpoint is used to expose APIs for serving machine learning models hosted on the cluster.
-  // Example: "http://<cluster-ip>:<serve-port>" for RESTful API access to deployed models.
-  string serve = 5;
-}
-
 // Specification for RayHeadNodeInfo
 //
 // The `RayHeadNodeInfo` message provides critical details about the head node
@@ -171,15 +127,10 @@ message RayHeadNodeInfo  {
   // It serves as the primary entry point for submitting jobs and managing cluster state.
   int32 client_port = 4;
 
-  // Dashboard port for the Ray cluster.
-  // Provides a web-based interface to monitor and manage the Ray cluster.
-  // The dashboard displays metrics, logs, and node details for operational insights.
-  int32 dashboard_port = 5;
-
   // Jupyter Notebook port for the Ray cluster.
   // This port is used if a Jupyter Notebook server is running on the head node.
   // While optional, it allows users to interactively develop and run Ray-based applications.
-  int32 jupyter_notebook_port = 6;
+  int32 jupyter_notebook_port = 5;
 }
 
 // Specification for PodErrors
@@ -250,50 +201,45 @@ message RayJobStatus {
   // This value prevents over-provisioning and helps control resource costs.
   int32 max_worker_replicas = 6;
 
-  // Endpoints to access the cluster services.
-  // These endpoints include the head service and potentially other ingress points for the cluster.
-  // They are used for communication with the head node and accessing cluster-level APIs.
-  Endpoints endpoints = 7;
-
   // Last update time for the cluster status.
   // This timestamp is managed by Kubernetes and helps track the most recent changes to the cluster.
   // It provides a snapshot of when the cluster's status was last refreshed.
-  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 9;
+  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 8;
 
   // Information on the head node.
   // The head node is critical for coordinating worker nodes and running the Ray scheduler.
   // This field includes details about the pod running the head node, such as its IP address and health status.
-  RayHeadNodeInfo head_node = 10;
+  RayHeadNodeInfo head_node = 9;
 
   // Cluster assignment details.
   // This field is marked for deprecation and should be removed in the future.
   // It currently provides metadata about the logical grouping of clusters, but its usage is being phased out.
   // TODO: Mark this as reserved after removing the usage.
-  ClusterAssignment cluster_assignment = 11;
+  ClusterAssignment cluster_assignment = 10;
 
   // Assignment information.
   // Provides additional metadata about how the cluster is allocated for specific workloads.
   // This field helps map resources to their intended tasks or tenants within a shared environment.
   // For example, it can include priority levels, tenant-specific resource limits, or job-specific constraints.
   // These details ensure efficient resource utilization and prevent conflicts in multi-tenant environments.
-  AssignmentInfo assignment = 12;
+  AssignmentInfo assignment = 11;
 
   // Scheduling information.
   // Contains data on how resources are allocated and scheduled within the cluster.
   // This includes policies for distributing tasks and managing resource contention.
   // Scheduling policies can be defined to prioritize critical jobs, balance workloads, or meet SLAs (Service Level Agreements).
   // It also includes the scheduling status of each worker group, indicating readiness or pending states.
-  SchedulingInfo scheduling_info = 13;
+  SchedulingInfo scheduling_info = 12;
 
   // Conditions that describe the states.
   // These conditions detail specific events or issues affecting the cluster.
   // Examples include "PodsPending" or "AutoScalingInProgress" to indicate operational status.
-  repeated Condition status_conditions = 14;
+  repeated Condition status_conditions = 13;
 
   // URL to view job-specific details.
   // This field is used for debugging and monitoring purposes, offering a direct link to job metadata.
   // It provides an entry point to view logs, metrics, and other details for a given Ray job.
-  string job_url = 15;
+  string job_url = 14;
 
   // Information on pod errors in the Ray cluster.
   // Collected from pod events, this information is essential for diagnosing issues, though the presence of errors
@@ -301,7 +247,7 @@ message RayJobStatus {
   // Examples include issues like "ContainerImagePullBackOff" or "CrashLoopBackOff" that may require intervention.
   // Each error entry provides detailed context, such as error type, associated pod name, and timestamps of occurrences.
   // This information aids in root cause analysis and accelerates resolution of cluster failures.
-  repeated PodErrors pod_errors = 16;
+  repeated PodErrors pod_errors = 15;
 }
 
 
