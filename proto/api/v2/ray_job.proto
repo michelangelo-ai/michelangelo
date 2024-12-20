@@ -28,11 +28,16 @@ message RayJobSpec {
   // and dependencies provided in the job configuration.
   string entrypoint = 2;
 
+
+  // Ray object store memory will be allocated based on this ratio of the overall worker memory.
+  // This ratio is specified as an entrypoint parameter to configure the memory allocated for the object store during worker node startup.
+  double object_store_memory_ratio = 3;
+
   // Unique identifier for the Ray job
-  string job_id = 3;
+  string job_id = 4;
 
   // Reference to the Ray cluster where the job will be executed
-  michelangelo.api.ResourceIdentifier cluster = 4 [
+  michelangelo.api.ResourceIdentifier cluster = 5 [
     (michelangelo.api.resource_reference) = {
       type: "michelangelo.uber.com/RayCluster"
     }

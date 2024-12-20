@@ -38,12 +38,8 @@ message RayWorkerSpec {
   // Node type for a worker in a heterogeneous cluster
   string node_type = 4;
 
-  // Ray object store memory will be allocated based on this ratio of the overall worker memory.
-  // This ratio is specified as an entrypoint parameter to configure the memory allocated for the object store during worker node startup.
-  double object_store_memory_ratio = 5;
-
   // Ray start parameters for the worker nodes
-  map<string, string> ray_start_params = 6;
+  map<string, string> ray_start_params = 5;
 }
 
 // Specification for a Ray cluster
@@ -76,8 +72,8 @@ enum RayClusterState {
   // The cluster state is invalid.
   RAY_CLUSTER_STATE_INVALID = 0;
 
-  // The cluster is in the process of being created.
-  RAY_CLUSTER_STATE_CREATING = 1;
+  // The cluster is in the process of being launched.
+  RAY_CLUSTER_STATE_LAUNCHED = 1;
 
   // The cluster is being provisioned.
   RAY_CLUSTER_STATE_PROVISIONING = 2;
