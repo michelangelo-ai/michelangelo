@@ -18,9 +18,6 @@ message RayJobSpec {
   // Information about the user initiating the Ray job workload
   UserInfo user = 1;
 
-  // Key-value pairs specifying user-defined Ray configurations
-  map<string, string> ray_conf = 2;
-
   // Entrypoint script or command to start the Ray job
   // This field specifies the main executable or script that initiates the Ray job.
   // Examples can include the path to a Python script, a shell command, or any executable.
@@ -29,13 +26,13 @@ message RayJobSpec {
   // a script that initializes the Ray cluster and launches training tasks.
   // It should be ensured that the entrypoint script is compatible with the environment
   // and dependencies provided in the job configuration.
-  string entrypoint = 3;
+  string entrypoint = 2;
 
   // Unique identifier for the Ray job
-  string job_id = 4;
+  string job_id = 3;
 
   // Reference to the Ray cluster where the job will be executed
-  michelangelo.api.ResourceIdentifier cluster = 5 [
+  michelangelo.api.ResourceIdentifier cluster = 4 [
     (michelangelo.api.resource_reference) = {
       type: "michelangelo.uber.com/RayCluster"
     }
