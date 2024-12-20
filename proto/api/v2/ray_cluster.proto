@@ -172,70 +172,65 @@ message RayJobStatus {
   // It is updated based on the observed state transitions in the Ray cluster managed by the Kubernetes operator.
   RayClusterState state = 1;
 
-  // Unique identifier for the generated Ray cluster in the Ray operator.
-  // This ID is critical for associating jobs with specific Ray clusters in Kubernetes.
-  // It ensures the operator can track and manage individual clusters efficiently.
-  string cluster_id = 2;
-
   // Observed number of worker replicas available in the cluster.
   // This value is dynamically updated based on the current state of the cluster.
   // It reflects the actual number of active worker nodes currently running and available to handle tasks.
-  int32 available_worker_replicas = 3;
+  int32 available_worker_replicas = 2;
 
   // Desired number of worker replicas across all groups.
   // This value is derived from the desired specifications set in WorkerGroupSpec in raycluster_types.go.
   // It represents the target number of workers defined during cluster creation or scaling operations.
-  int32 desired_worker_replicas = 4;
+  int32 desired_worker_replicas = 3;
 
   // Minimum number of worker replicas across all groups.
   // It aligns with the minimum configuration provided in the cluster spec.
   // This value ensures the cluster maintains a baseline number of workers to meet operational requirements.
-  int32 min_worker_replicas = 5;
+  int32 min_worker_replicas = 4;
 
   // Maximum number of worker replicas across all groups.
   // It reflects the upper limit for scaling workers, often specified in autoscaling configurations.
   // This value prevents over-provisioning and helps control resource costs.
-  int32 max_worker_replicas = 6;
+  int32 max_worker_replicas = 5;
 
   // Last update time for the cluster status.
   // This timestamp is managed by Kubernetes and helps track the most recent changes to the cluster.
   // It provides a snapshot of when the cluster's status was last refreshed.
-  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 8;
+  k8s.io.apimachinery.pkg.apis.meta.v1.Time last_update_time = 6;
 
   // Information on the head node.
   // The head node is critical for coordinating worker nodes and running the Ray scheduler.
   // This field includes details about the pod running the head node, such as its IP address and health status.
-  RayHeadNodeInfo head_node = 9;
+  RayHeadNodeInfo head_node = 7;
 
   // Cluster assignment details.
   // This field is marked for deprecation and should be removed in the future.
   // It currently provides metadata about the logical grouping of clusters, but its usage is being phased out.
   // TODO: Mark this as reserved after removing the usage.
-  ClusterAssignment cluster_assignment = 10;
+  ClusterAssignment cluster_assignment = 8;
 
   // Assignment information.
   // Provides additional metadata about how the cluster is allocated for specific workloads.
   // This field helps map resources to their intended tasks or tenants within a shared environment.
   // For example, it can include priority levels, tenant-specific resource limits, or job-specific constraints.
   // These details ensure efficient resource utilization and prevent conflicts in multi-tenant environments.
-  AssignmentInfo assignment = 11;
+  AssignmentInfo assignment = 9;
 
   // Scheduling information.
   // Contains data on how resources are allocated and scheduled within the cluster.
   // This includes policies for distributing tasks and managing resource contention.
   // Scheduling policies can be defined to prioritize critical jobs, balance workloads, or meet SLAs (Service Level Agreements).
   // It also includes the scheduling status of each worker group, indicating readiness or pending states.
-  SchedulingInfo scheduling_info = 12;
+  SchedulingInfo scheduling_info = 10;
 
   // Conditions that describe the states.
   // These conditions detail specific events or issues affecting the cluster.
   // Examples include "PodsPending" or "AutoScalingInProgress" to indicate operational status.
-  repeated Condition status_conditions = 13;
+  repeated Condition status_conditions = 11;
 
   // URL to view job-specific details.
   // This field is used for debugging and monitoring purposes, offering a direct link to job metadata.
   // It provides an entry point to view logs, metrics, and other details for a given Ray job.
-  string job_url = 14;
+  string job_url = 12;
 
   // Information on pod errors in the Ray cluster.
   // Collected from pod events, this information is essential for diagnosing issues, though the presence of errors
@@ -243,7 +238,7 @@ message RayJobStatus {
   // Examples include issues like "ContainerImagePullBackOff" or "CrashLoopBackOff" that may require intervention.
   // Each error entry provides detailed context, such as error type, associated pod name, and timestamps of occurrences.
   // This information aids in root cause analysis and accelerates resolution of cluster failures.
-  repeated PodErrors pod_errors = 15;
+  repeated PodErrors pod_errors = 13;
 }
 
 
