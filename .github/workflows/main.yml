@@ -16,9 +16,21 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # Cache Bazel outputs
+      - name: Cache Bazel Outputs
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/bazel
+            bazel-out
+          key: ${{ runner.os }}-bazel-${{ hashFiles('WORKSPACE', '**/BUILD.bazel') }}
+          restore-keys: |
+            ${{ runner.os }}-bazel-
+
       # Run Bazel tests
       - name: Run Bazel Test
-        run: ./tools/bazel test ...
+        run: ./tools/bazel test --jobs=HOST_CPUS --remote_cache=http://remote-cache-server ...
+
 
   python-build:
     runs-on: ubuntu-latest
