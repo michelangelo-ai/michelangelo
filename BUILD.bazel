@@ -1,5 +1,6 @@
 # gazelle:exclude .git/
 # gazelle:exclude pkg/
+# gazelle:exclude python/
 # gazelle:exclude build/
 # gazelle:exclude tools/bazelisk.py
 # gazelle:proto default
