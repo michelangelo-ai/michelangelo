@@ -29,7 +29,7 @@ jobs:
 
       # Run Bazel tests
       - name: Run Bazel Test
-        run: ./tools/bazel test --jobs=HOST_CPUS --remote_cache=http://remote-cache-server ...
+        run: ./tools/bazel test
 
 
   python-build:
