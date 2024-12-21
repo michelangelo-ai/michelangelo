@@ -1,0 +1,25 @@
+[tool.poetry]
+name = "michelangelo"
+version = "0.1.0"
+description = "todo"
+authors = ["todo <todo@uber.com>"]
+readme = "README.md"
+
+
+[tool.poetry.dependencies]
+python = "^3.9.0"
+fsspec = "^2024.10.0"
+
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.10.0"
+pytest = "^8.3.4"
+
+
+[tool.poetry.scripts]
+ma = 'michelangelo.cli:main'
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
