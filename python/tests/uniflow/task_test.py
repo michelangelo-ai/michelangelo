@@ -1,5 +1,5 @@
 import unittest
-from michelangelo.task import task
+from michelangelo.uniflow.task import task
 
 
 @task(config="test")

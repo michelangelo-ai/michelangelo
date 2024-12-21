@@ -3,12 +3,12 @@ name: Bazel Test
 # Trigger the workflow on push and pull request events for the main branch
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-  build:
+  bazel-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -19,3 +19,22 @@ jobs:
       # Run Bazel tests
       - name: Run Bazel Test
         run: ./tools/bazel test ...
+
+  python-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install Poetry and Run Tests
+        run: |
+          pip install poetry
+          cd python
+          poetry install
+          poetry run pytest

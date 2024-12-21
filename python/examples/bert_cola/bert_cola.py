@@ -1,7 +1,7 @@
-import michelangelo as ma
+import michelangelo.uniflow as uniflow
 
 
-@ma.task(config="test")
+@uniflow.task(config="test")
 def load_data():
     return [1, 2, 3]
 
