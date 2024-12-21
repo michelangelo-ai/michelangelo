@@ -36,7 +36,7 @@ INFO
 
 function deploy_ray_cluster {
   set -x
-  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v0.4.0&timeout=120s"
+  kubectl create -k "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.2.2&timeout=120s"
   kubectl -n ray-system wait --for=condition=available --timeout=300s --all deployments
 
   kubectl apply -f "$DIR/ray-cluster.yaml"
