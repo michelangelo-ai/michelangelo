@@ -86,9 +86,6 @@ message RayJobStatus {
   // Additional message describing the current state or issues
   string message = 4;
 
-  // Status of the associated Ray cluster
-  string ray_cluster_status = 5;
-
   // URL to access the Ray job's dashboard
   string dashboard_url = 6;
 
