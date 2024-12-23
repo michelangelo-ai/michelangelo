@@ -1,11 +1,5 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
-# gazelle:prefix github.com/michelangelo-ai/michelangelo/go
-# gazelle:resolve go go github.com/michelangelo-ai/michelangelo/proto/api //proto/api:go_default_library
-# gazelle:resolve go go github.com/michelangelo-ai/michelangelo/proto/api/v2 //proto/api/v2:go_default_library
-# gazelle:resolve go go github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/record //proto/test/kubeproto/record:go_default_library
-# gazelle:resolve go go github.com/michelangelo-ai/michelangelo/proto/test/kubeproto //proto/test/kubeproto:go_default_library
-
 go_library(
     name = "go_default_library",
     srcs = ["tools.go"],
