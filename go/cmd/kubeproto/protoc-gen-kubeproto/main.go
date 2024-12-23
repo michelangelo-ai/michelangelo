@@ -40,8 +40,8 @@ var logger = log.New(os.Stderr, "", 0)
 const _testProtoImportPath = "michelangelo/tools/kubeproto/unittest/pb"
 
 // Call gogo proto to generate go code from protobuf
-// This function is the equivalent for protoc-gen-gogoslick command
-// https://github.com/gogo/protobuf/blob/master/protoc-gen-gogoslick/main.go
+// The options are chosen to make the generated go code to be compatible
+// with k8s "k8s.io/apimachinery/pkg/apis/meta/v1" library (e.g. no Equal function)
 func gogoproto(reqData []byte) *plugingo.CodeGeneratorResponse {
 	g := generator.New()
 
