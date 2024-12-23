@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package michelangelo.api.v2;
 
-option go_package = "api/v2";
+option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 
