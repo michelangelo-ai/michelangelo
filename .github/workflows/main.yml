@@ -56,12 +56,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Install Gazelle
-        run: |
-          go install github.com/bazelbuild/bazel-gazelle/cmd/gazelle@latest
-          echo "$HOME/go/bin" >> $GITHUB_PATH
+      # Cache Bazel outputs to speed up tools/gazelle command
+      - name: Cache Bazel Outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+          key: bazel_cache_root
+          restore-keys: |
+            bazel_cache_root
 
       - name: Run Gazelle
         run: |
-          gazelle
+          tools/gazelle
           git diff --exit-code || (echo "BUILD.bazel files are not up to date. Please run gazelle before commit." && exit 1)
