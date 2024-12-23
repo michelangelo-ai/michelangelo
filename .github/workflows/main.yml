@@ -18,14 +18,14 @@ jobs:
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cache/bazel
-            bazel-out
-          key: ${{ runner.os }}-bazel-${{ hashFiles('WORKSPACE', '**/BUILD.bazel') }}
-          restore-keys: |
-            ${{ runner.os }}-bazel-
+        key: bazel_cache_root
+        restore-keys: |
+          bazel_cache_root
+          ${{ runner.os }}-bazel-
 
       # Run Bazel tests
       - name: Run Bazel Test
