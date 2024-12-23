@@ -22,10 +22,10 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-        key: bazel_cache_root
-        restore-keys: |
-          bazel_cache_root
-          ${{ runner.os }}-bazel-
+          key: bazel_cache_root
+          restore-keys: |
+            bazel_cache_root
+            ${{ runner.os }}-bazel-
 
       # Run Bazel tests
       - name: Run Bazel Test
