@@ -6,6 +6,7 @@
 # gazelle:proto default
 # gazelle:go_naming_convention go_default_library
 # gazelle:go_naming_convention_external go_default_library
+# gazelle:prefix github.com/michelangelo-ai/michelangelo
 
 load("@bazel_gazelle//:def.bzl", "DEFAULT_LANGUAGES", "gazelle", "gazelle_binary")
 load("@rules_python_gazelle_plugin//:def.bzl", "GAZELLE_PYTHON_RUNTIME_DEPS")

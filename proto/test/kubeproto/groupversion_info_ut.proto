@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+option (michelangelo.api.group_info) = {
+  name: "michelangelo.api";
+  version: "v2";
+};

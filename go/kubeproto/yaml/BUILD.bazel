@@ -1,0 +1,47 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "json_schemas.go",
+        "kubeyaml.go",
+    ],
+    embedsrcs = ["k8s/meta_v1/label_selector.yaml"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/kubeproto/pboptions:go_default_library",
+        "//go/kubeproto/util:go_default_library",
+        "@com_github_gobuffalo_flect//:go_default_library",
+        "@com_github_gogo_protobuf//protoc-gen-gogo/generator:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_sigs_yaml//:go_default_library",
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
+        "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
+        "@org_golang_google_protobuf//types/pluginpb:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["kubeyaml_test.go"],
+    embed = [":go_default_library"],
+    embedsrcs = [
+        "test/project.yaml",
+        "test/testobject.yaml",
+    ],
+    deps = [
+        "//go/kubeproto/pboptions:go_default_library",
+        "//go/kubeproto/util:go_default_library",
+        "//proto/test/kubeproto/protocreq:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
+        "@org_golang_google_protobuf//types/pluginpb:go_default_library",
+    ],
+)

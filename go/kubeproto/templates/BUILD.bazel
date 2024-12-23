@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["templates.go"],
+    embedsrcs = [
+        "crd.tmpl",
+        "crd_list.tmpl",
+        "group_version.tmpl",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/templates",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["templates_test.go"],
+    embed = [":go_default_library"],
+    embedsrcs = ["test/group_version_test.txt"],
+    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
+)

@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.protocreq;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "protocreq";
+
+message Metadata {
+  option (michelangelo.api.no_default) = true;
+
+  // Name of the ML project.
+  string name = 1;
+
+  // Project ID of the corresponding Michelangelo project.
+  string project_id = 2;
+}
+
+// Defines the spec of a ML project such as metadata, default job
+// configurations, etc.
+message ProjectSpec {
+  option (michelangelo.api.no_default) = true;
+  // Metadata of the ML project
+  Metadata meta = 1;
+}
+
+// Defines the status of a ML project
+message ProjectStatus {
+}
+
+// test1
+
+// test2
+// test3
+
+// Defines a ML Project for a specific ML use case. All models within
+// a project should have: (a) the same uOwn asset group, (b) the same
+// type for regression or classification, (c) the same metrics to
+// measure the quality.
+// Test: It's ok to contain "`" in the comment
+message Project {
+  option (michelangelo.api.resource) = {
+    name: "projects-plural";
+    singular: "project-singular";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Project.
+  ProjectSpec spec = 3;
+
+  // Most recently observed status of the Project.
+  ProjectStatus status = 4;
+}
+
+// A list of Project objects.
+message ProjectList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Project
+  repeated Project items = 3;
+}

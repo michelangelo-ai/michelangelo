@@ -3,12 +3,17 @@ module github.com/michelangelo-ai/michelangelo/go
 go 1.23.2
 
 require (
+	github.com/dave/dst v0.27.3
+	github.com/gobuffalo/flect v1.0.3
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/yarpc v1.75.3
 	google.golang.org/grpc v1.67.1
+	google.golang.org/protobuf v1.35.2
 	k8s.io/api v0.32.0
+	k8s.io/apiextensions-apiserver v0.31.0
 	k8s.io/apimachinery v0.32.0
 	sigs.k8s.io/controller-runtime v0.19.3
+	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
@@ -52,16 +57,14 @@ require (
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
-	google.golang.org/protobuf v1.35.2 // indirect
 	honnef.co/go/tools v0.4.3 // indirect
 	k8s.io/client-go v0.32.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
-	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/gogo/protobuf v1.3.2 // indirect
+	github.com/gogo/protobuf v1.3.2
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/michelangelo-ai/michelangelo/proto v0.0.0

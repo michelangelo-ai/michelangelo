@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["options.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
+        "@org_golang_google_protobuf//types/dynamicpb:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["options_test.go"],
+    deps = [
+        ":go_default_library",
+        "//go/kubeproto/util:go_default_library",
+        "//proto/test/kubeproto/protocreq:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
+        "@org_golang_google_protobuf//types/pluginpb:go_default_library",
+    ],
+)

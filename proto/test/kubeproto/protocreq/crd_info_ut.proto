@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.protocreq;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "protocreq";
+
+// Defines the spec of a ML trained model.
+message TestCRDSpec {
+}
+
+message TestCRDStatus {
+}
+
+message TestCRD {
+  option (michelangelo.api.resource) = {
+    // Set the plural name.
+    name: "TestCRDs";
+
+    // Set scope to cluster.
+    scope: "Cluster";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Trained Model.
+  TestCRDSpec spec = 3;
+
+  // Most recently observed status of the Trained Model.
+  TestCRDStatus status = 4;
+}
+
+// A list of Model objects.
+message TestCRDList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Models
+  repeated TestCRD items = 3;
+}
