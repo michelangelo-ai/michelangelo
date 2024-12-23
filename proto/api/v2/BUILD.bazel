@@ -12,6 +12,7 @@ proto_library(
         "job.proto",
         "pod.proto",
         "project.proto",
+        "ray_cluster.proto",
         "ray_job.proto",
         "spark_job.proto",
         "user.proto",
