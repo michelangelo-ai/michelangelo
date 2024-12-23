@@ -3,7 +3,7 @@ name: Bazel Test
 # Trigger the workflow on push and pull request events for the main branch
 on:
   push:
-    branches: ['*']
+    branches: ['main']
   pull_request:
     branches: [main]
 
