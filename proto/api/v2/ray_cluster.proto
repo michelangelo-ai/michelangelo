@@ -8,6 +8,7 @@ option go_package = "api/v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
+import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/job.proto";
 import "michelangelo/api/v2/user.proto";
@@ -165,7 +166,7 @@ message PodErrors {
 }
 
 // Defines the status of a Ray cluster
-message RayJobStatus {
+message RayClusterStatus {
 
   // Current state of the Ray cluster.
   // This field reflects the operational state of the cluster, such as "Running", "Pending", or "Failed".
