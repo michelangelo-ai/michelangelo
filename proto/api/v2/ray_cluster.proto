@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package michelangelo.api.v2;
 
-option go_package = "api/v2";
+option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
@@ -225,7 +225,7 @@ message RayClusterStatus {
 
 // RayCluster refers to a Ray cluster.
 message RayCluster {
-  option (github.com.uber.michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {};
 
   // Type metadata for the Ray cluster
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
@@ -242,7 +242,7 @@ message RayCluster {
 
 // A list of Ray cluster objects.
 message RayClusterList {
-  option (github.com.uber.michelangelo.api.resource_list) = {};
+  option (michelangelo.api.resource_list) = {};
 
   // Type metadata for the list of Ray clusters
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
