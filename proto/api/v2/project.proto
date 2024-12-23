@@ -4,14 +4,14 @@ syntax = "proto3";
 
 package michelangelo.api.v2;
 
-option go_package = "api/v2";
+option go_package = "v2";
 
 import "google/protobuf/timestamp.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/git.proto";
 
-// Defines the owner information for a project. 
+// Defines the owner information for a project.
 message OwnerInfo {
   // Owning team UUID such as an uOwn asset UUID.
   string owning_team = 1 [(michelangelo.api.validation) = {uuid: true}];
@@ -136,12 +136,12 @@ enum ProjectPhase {
 
   // If a project is READY and in DEVELOPMENT phase, user can promote
   // it to STAGING phase TODO: only server as a label for users. there
-  // is no side effect of marking a project as STAGING. 
+  // is no side effect of marking a project as STAGING.
   PROJECT_PHASE_STAGING = 2;
 
   // If a project is READY and in STAGING phase, user can promote it
   // to PRODUCTION phase TODO: only server as a label for users. there
-  // is no side effect of marking a project as PRODUCTION. 
+  // is no side effect of marking a project as PRODUCTION.
   PROJECT_PHASE_PRODUCTION = 3;
 
   // user can mark a project as DECOMMISSION. users are not able to
@@ -165,7 +165,7 @@ message ProjectStatus {
   google.protobuf.Timestamp last_update_time = 4;
 }
 
-// Defines a ML Project for a specific ML use case. 
+// Defines a ML Project for a specific ML use case.
 message Project {
   option (michelangelo.api.resource) = {};
 

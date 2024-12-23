@@ -4,7 +4,7 @@ syntax = "proto3";
 
 package michelangelo.api.v2;
 
-option go_package = "api/v2";
+option go_package = "v2";
 
 // Defines actor information.
 message UserInfo {

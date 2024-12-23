@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "v2";
+
+option (michelangelo.api.group_info) = {
+  name: "michelangelo.api";
+  version: "v2";
+};
