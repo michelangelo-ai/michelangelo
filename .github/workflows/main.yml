@@ -49,3 +49,15 @@ jobs:
           cd python
           poetry install
           poetry run pytest
+
+  gazelle-check:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Run Gazelle
+      run: |
+        gazelle
+        git diff --exit-code || (echo "BUILD.bazel files are not up to date. Please run gazelle before commit." && exit 1)
