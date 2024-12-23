@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.protocreq;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "protocreq";
+
+message TestMessage1 {
+  option (michelangelo.api.resource) = {};
+}
+
+message TestMessage2 {
+}
+
+message TestMessage3 {
+  option (michelangelo.api.resource_list) = {};
+}
+
+message TestMessage4 {
+  option (michelangelo.api.resource) = {
+    name: "pluralname";
+    singular: "sigularname";
+  };
+
+  TestMessage4Spec spec = 1;
+  TestMessage4Status status = 2;
+}
+
+message TestMessage4Spec {
+  string test_string_field = 1 [
+    (michelangelo.api.validation) = {pattern: "ml-code-[a-z0-9-]+", msg: "must start with 'ml-code-' and only contains lower case alphanumeric or dash"},
+    (michelangelo.api.validation) = {max_length: "32"}
+  ];
+  int32 test_int_field = 2;
+}
+
+message TestMessage4Status {
+
+}

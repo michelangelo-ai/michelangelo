@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.protocreq;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "protocreq";
+
+message M1 {
+  string a = 1;
+  bool b = 2;
+}
+
+message M2 {
+
+}
+
+message Test {
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  M1 spec = 3;
+
+  M2 status = 4;
+}
+
+message TestList {
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  repeated Test items = 3;
+}

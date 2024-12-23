@@ -1,0 +1,43 @@
+load("@io_bazel_rules_go//proto:compiler.bzl", "go_proto_compiler")
+load(
+    "@io_bazel_rules_go//proto/wkt:well_known_types.bzl",
+    "GOGO_WELL_KNOWN_TYPE_REMAPS",
+    "WELL_KNOWN_TYPE_RULES",
+)
+
+# This protobuf compiler generates go code for k8s CRDs defined in protobuf files
+go_proto_compiler(
+    name = "go_kubeproto",
+    options = GOGO_WELL_KNOWN_TYPE_REMAPS,
+    plugin = "//go/cmd/kubeproto/protoc-gen-kubeproto:protoc-gen-kubeproto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/kubeproto/util:go_default_library",
+        "@com_github_gogo_protobuf//gogoproto:go_default_library",
+        "@com_github_gogo_protobuf//jsonpb:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//sortkeys:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/scheme:go_default_library",
+    ] + WELL_KNOWN_TYPE_RULES.values(),
+)
+
+# This "compiler" records protoc requests in go files for proto compiler unit tests
+go_proto_compiler(
+    name = "go_kubeproto_unittest",
+    options = GOGO_WELL_KNOWN_TYPE_REMAPS,
+    plugin = "//go/cmd/kubeproto/protoc-gen-unittest:protoc-gen-unittest",
+    suffix = ".pb.record.go",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_gogo_protobuf//gogoproto:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//protoc-gen-gogo/descriptor:go_default_library",
+        "@com_github_gogo_protobuf//sortkeys:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+    ] + WELL_KNOWN_TYPE_RULES.values(),
+)

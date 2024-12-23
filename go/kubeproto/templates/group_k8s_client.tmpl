@@ -1,0 +1,48 @@
+import (
+	rest "k8s.io/client-go/rest"
+	scheme "k8s.io/client-go/kubernetes/scheme"
+	serializer "k8s.io/apimachinery/pkg/runtime/serializer"
+	sync "sync"
+	"go.uber.org/zap"
+
+)
+
+var (
+	lock  = &sync.Mutex{}
+	k8sClient *K8sClient
+	logger *zap.SugaredLogger
+)
+
+type K8sClient struct {
+	RestClient rest.Interface
+}
+
+func GetK8sClient(c *rest.Config) (*K8sClient, error) {
+	lock.Lock()
+	defer lock.Unlock()
+
+
+
+	if k8sClient != nil {
+		return k8sClient, nil
+	}
+
+	AddToScheme(scheme.Scheme)
+	config := *c
+	setConfigDefaults(&config)
+	client, err := rest.RESTClientFor(&config)
+	if err != nil {
+		logger.Errorw("Failed to get k8s client.", "request config", c, "Error", err)
+		return nil, err
+	}
+	k8sClient = &K8sClient{client}
+	return k8sClient, nil
+}
+
+func setConfigDefaults(config *rest.Config) {
+	gv := GroupVersion
+	config.GroupVersion = &gv
+	config.APIPath = "/apis"
+	config.NegotiatedSerializer = serializer.NewCodecFactory(scheme.Scheme)
+	config.UserAgent = rest.DefaultKubernetesUserAgent()
+}

@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/duration.proto";
+
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto";
+
+// Defines the spec of a TestObject.
+message TestObjectSpec {
+  // Testing nested message.
+  DataSchema input_schema = 2;
+
+  // Testing oneof. Note that oneof can not be repeated.
+  oneof test_field1 {
+    // string in oneof
+    string f1_str = 3;
+    // integer in oneof
+    int32 f1_int = 4;
+  }
+
+  oneof test_field2 {
+    // double in oneof
+    double f2_double = 5;
+    // sub message in oneof
+    TestMsg f2_msg = 6;
+  }
+
+  enum ClusterType {
+    // Invalid cluster type
+    CLUSTER_TYPE_INVALID = 0;
+
+    // Peloton cluster type
+    CLUSTER_TYPE_PELOTON = 1;
+  }
+
+  // Testing nested enum
+  ClusterType nested_enum = 7;
+
+  // Testing map 01
+  map<string, int32> map_int = 8;
+
+  // Testing map 02
+  map<string, string> map_string = 9;
+
+  // Testing map of non-primitive type
+  map<string, Params> map_non_primitive = 15;
+
+  // Testing byte array
+  bytes byte_array = 10;
+
+  // Testing Any
+  google.protobuf.Any any = 11 [(michelangelo.api.external_storage) = true];
+
+  // Testing Timestamp
+  google.protobuf.Timestamp time = 12;
+
+  // Testing Struct
+  google.protobuf.Struct struct = 13;
+
+  // Testing string
+  string description = 14;
+
+  // Testing duration
+  google.protobuf.Duration duration = 16;
+
+  TestMsg msg = 17;
+
+  TestMsg3 msg_3 = 18;
+}
+
+message TestMsg {
+  int32 num = 1;
+  string name = 2;
+  string project_id = 3;
+  repeated TestMsg nested_test_msg = 4;
+  TestMsg2 test_msg_2 = 5;
+}
+
+message TestMsg2 {
+  string name = 1;
+  TestMsg test_msg = 2;
+}
+
+message TestMsg3 {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestMsg3Spec spec = 3;
+
+  TestMsg3Status status = 4;
+}
+
+message TestMsg3Spec {
+  google.protobuf.Any any = 1 [(michelangelo.api.external_storage) = true];
+}
+
+message TestMsg3Status {
+  google.protobuf.Any any = 1 [(michelangelo.api.external_storage) = true];
+}
+
+message Params {
+  int32 num = 1;
+  string name = 2;
+  map<string, string> str_map = 3;
+}
+
+message DataSchema {
+  // Testing repeated field.
+  repeated DataSchemaItem schema_items = 1;
+  // Testing nested blob field.
+  bytes metadata = 2 [(michelangelo.api.external_storage) = true];
+}
+
+enum DataType {
+  DATA_TYPE_INVALID = 0;
+  DATA_TYPE_UNKNOWN = 1;
+  DATA_TYPE_NUMERIC = 2;
+  DATA_TYPE_ARRAY = 3;
+  DATA_TYPE_BOOLEAN = 4;
+  DATA_TYPE_DATE = 5;
+}
+
+message DataSchemaItem {
+  // Testing string value.
+  string string_value = 1;
+
+  // Testing int32 value.
+  int32 int32_value = 2;
+
+  // Testing int64 value.
+  int64 int64_value = 3;
+
+  // Testing float value.
+  float float_value = 4;
+
+  // Testing double value.
+  double double_value = 5;
+
+  // Testing bool value.
+  bool bool_value = 6;
+
+  // Testing enum.
+  DataType data_type = 7;
+}
+
+// Defines the status of a TestObject.
+message TestObjectStatus {
+}
+
+// Define TestObject.
+message TestObject {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+    immutable: true;
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestObjectSpec spec = 3;
+
+  TestObjectStatus status = 4;
+}
+
+// A list of TestObject objects.
+message TestObjectList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of TestObjects
+  repeated TestObject items = 3;
+}

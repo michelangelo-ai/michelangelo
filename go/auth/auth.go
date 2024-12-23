@@ -20,12 +20,12 @@ import "context"
 type Action string
 
 const (
-	Create Action = "Create"
-	Get = "Get"
-	Update = "Update"
-	Delete = "Delete"
-	DeleteCollection = "DeleteCollection"
-	List = "List"
+	Create           Action = "Create"
+	Get                     = "Get"
+	Update                  = "Update"
+	Delete                  = "Delete"
+	DeleteCollection        = "DeleteCollection"
+	List                    = "List"
 )
 
 // Auth interface for auth

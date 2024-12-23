@@ -1,0 +1,363 @@
+{{.DetachedComments}}
+{{.Comments}}type {{.Name}} struct {
+	metav1.TypeMeta   `protobuf:"bytes,1,opt,name=type_meta,json=typeMeta,proto3,embedded=type_meta" json:",inline"`
+	metav1.ObjectMeta `protobuf:"bytes,2,opt,name=metadata,proto3,embedded=metadata" json:"metadata,omitempty"`
+	// Spec of the desired behavior of the {{.Name}}.
+	Spec {{.Name}}Spec `protobuf:"bytes,3,opt,name=spec,proto3" json:"spec,omitempty"`
+	// Most recently observed status of the {{.Name}}.
+	Status {{.Name}}Status `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`
+}
+
+func (m *{{.Name}}) GetTypeMeta() *metav1.TypeMeta {
+	return &m.TypeMeta
+}
+
+func (m *{{.Name}}) GetMetadata() *metav1.ObjectMeta {
+	return &m.ObjectMeta
+}
+
+func (m *{{.Name}}) GetSpec() {{.Name}}Spec {
+	if m != nil {
+		return m.Spec
+	}
+	return {{.Name}}Spec{}
+}
+
+func (m *{{.Name}}) GetStatus() {{.Name}}Status {
+	if m != nil {
+		return m.Status
+	}
+	return {{.Name}}Status{}
+}
+
+func (m *{{.Name}}) MarshalToSizedBuffer(dAtA []byte) (int, error) {
+	i := len(dAtA)
+	_ = i
+	var l int
+	_ = l
+	{
+		size, err := m.Status.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint{{.FileName}}(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x22
+	{
+		size, err := m.Spec.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint{{.FileName}}(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x1a
+	{
+		size, err := m.ObjectMeta.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint{{.FileName}}(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0x12
+	{
+		size, err := m.TypeMeta.MarshalToSizedBuffer(dAtA[:i])
+		if err != nil {
+			return 0, err
+		}
+		i -= size
+		i = encodeVarint{{.FileName}}(dAtA, i, uint64(size))
+	}
+	i--
+	dAtA[i] = 0xa
+	return len(dAtA) - i, nil
+}
+
+func (m *{{.Name}}) Size() (n int) {
+	if m == nil {
+		return 0
+	}
+	var l int
+	_ = l
+	l = m.TypeMeta.Size()
+	n += 1 + l + sov{{.FileName}}(uint64(l))
+	l = m.ObjectMeta.Size()
+	n += 1 + l + sov{{.FileName}}(uint64(l))
+	l = m.Spec.Size()
+	n += 1 + l + sov{{.FileName}}(uint64(l))
+	l = m.Status.Size()
+	n += 1 + l + sov{{.FileName}}(uint64(l))
+	return n
+}
+
+func (this *{{.Name}}) String() string {
+	if this == nil {
+		return "nil"
+	}
+	s := strings.Join([]string{`&{{.Name}}{`,
+		`TypeMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.TypeMeta), "TypeMeta", "metav1.TypeMeta", 1), `&`, ``, 1) + `,`,
+		`ObjectMeta:` + strings.Replace(strings.Replace(fmt.Sprintf("%v", this.ObjectMeta), "ObjectMeta", "metav1.ObjectMeta", 1), `&`, ``, 1) + `,`,
+		`Spec:` + strings.Replace(strings.Replace(this.Spec.String(), "{{.Name}}Spec", "{{.Name}}Spec", 1), `&`, ``, 1) + `,`,
+		`Status:` + strings.Replace(strings.Replace(this.Status.String(), "{{.Name}}Status", "{{.Name}}Status", 1), `&`, ``, 1) + `,`,
+		`}`,
+	}, "")
+	return s
+}
+
+func (m *{{.Name}}) Unmarshal(dAtA []byte) error {
+	l := len(dAtA)
+	iNdEx := 0
+	for iNdEx < l {
+		preIndex := iNdEx
+		var wire uint64
+		for shift := uint(0); ; shift += 7 {
+			if shift >= 64 {
+				return ErrIntOverflow{{.FileName}}
+			}
+			if iNdEx >= l {
+				return io.ErrUnexpectedEOF
+			}
+			b := dAtA[iNdEx]
+			iNdEx++
+			wire |= uint64(b&0x7F) << shift
+			if b < 0x80 {
+				break
+			}
+		}
+		fieldNum := int32(wire >> 3)
+		wireType := int(wire & 0x7)
+		if wireType == 4 {
+			return fmt.Errorf("proto: {{.Name}}: wiretype end group for non-group")
+		}
+		if fieldNum <= 0 {
+			return fmt.Errorf("proto: {{.Name}}: illegal tag %d (wire type %d)", fieldNum, wire)
+		}
+		switch fieldNum {
+		case 1:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field TypeMeta", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow{{.FileName}}
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.TypeMeta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field ObjectMeta", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow{{.FileName}}
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.ObjectMeta.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 3:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Spec", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow{{.FileName}}
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Spec.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field Status", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow{{.FileName}}
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			if err := m.Status.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		default:
+			iNdEx = preIndex
+			skippy, err := skip{{.FileName}}(dAtA[iNdEx:])
+			if err != nil {
+				return err
+			}
+			if skippy < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if (iNdEx + skippy) < 0 {
+				return ErrInvalidLength{{.FileName}}
+			}
+			if (iNdEx + skippy) > l {
+				return io.ErrUnexpectedEOF
+			}
+			iNdEx += skippy
+		}
+	}
+
+	if iNdEx > l {
+		return io.ErrUnexpectedEOF
+	}
+	return nil
+}
+
+/* As gogo proto's jsonpb library does not support marshal and unmarshal for
+   inline field (TypeMeta), we work around this by implementing the
+   marshal and unmarshal functions for Spec and Status respectively. */
+func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
+	var buf bytes.Buffer
+	err := (&jsonpb.Marshaler{
+	  EnumsAsInts: false,
+	  EmitDefaults: false,
+	  OrigName: false,
+	  AnyResolver: &util.GenericResolver{},
+	}).Marshal(&buf, m)
+	return buf.Bytes(), err
+}
+
+func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
+	return (&jsonpb.Unmarshaler{
+	  AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
+	  AnyResolver: &util.GenericResolver{},
+	}).Unmarshal(bytes.NewReader(b), m)
+}
+
+func (m *{{.Name}}Status) MarshalJSON() ([]byte,error) {
+	var buf bytes.Buffer
+	err := (&jsonpb.Marshaler{
+	  EnumsAsInts: false,
+	  EmitDefaults: false,
+	  OrigName: false,
+	  AnyResolver: &util.GenericResolver{},
+	}).Marshal(&buf, m)
+	return buf.Bytes(), err
+}
+
+func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
+	return (&jsonpb.Unmarshaler{
+	  AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
+	  AnyResolver: &util.GenericResolver{},
+	}).Unmarshal(bytes.NewReader(b), m)
+}
+
+func (in *{{.Name}}) DeepCopy() *{{.Name}} {
+	if in == nil {
+		return nil
+	}
+	out := new({{.Name}})
+	in.DeepCopyInto(out)
+	return out
+}
+
+func (in *{{.Name}}) DeepCopyObject() k8sruntime.Object {
+	if c := in.DeepCopy(); c != nil {
+		return c
+	}
+	return nil
+}
+
+func (in *{{.Name}}) DeepCopyInto(out *{{.Name}}) {
+	*out = *in
+	out.TypeMeta = in.TypeMeta
+	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
+	out.Spec = *proto.Clone(&in.Spec).(*{{.Name}}Spec)
+	out.Status = *proto.Clone(&in.Status).(*{{.Name}}Status)
+}
+
+func init() {
+	SchemeBuilder.Register(&{{.Name}}{})
+}
