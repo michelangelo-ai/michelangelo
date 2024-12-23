@@ -16,9 +16,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v3
 
+      # Cache Bazel outputs
+      - name: Cache Bazel Outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/bazel
+          key: bazel_cache_root
+          restore-keys: |
+            bazel_cache_root
+
       # Run Bazel tests
       - name: Run Bazel Test
         run: ./tools/bazel test ...
+
 
   python-build:
     runs-on: ubuntu-latest
