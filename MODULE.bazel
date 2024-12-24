@@ -20,6 +20,11 @@ go_sdk.download(
     version = "1.23.3",
 )
 
+go_sdk.nogo(
+    includes = ["@//:__subpackages__"],
+    nogo = "//:default_nogo",
+)
+
 ###########################################
 ############# Third-party DEPENDENCIES ####
 ###########################################
