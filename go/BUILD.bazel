@@ -10,6 +10,6 @@ go_library(
         "@com_github_google_uuid//:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@org_golang_google_genproto//protobuf/api:go_default_library",
-        "@org_golang_x_tools//cmd/goimports:go_default_library",
+        "@org_golang_x_tools//go/packages:go_default_library",
     ],
 )
