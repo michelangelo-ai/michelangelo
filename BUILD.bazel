@@ -9,6 +9,7 @@
 # gazelle:prefix github.com/michelangelo-ai/michelangelo
 
 load("@bazel_gazelle//:def.bzl", "DEFAULT_LANGUAGES", "gazelle", "gazelle_binary")
+load("@io_bazel_rules_go//go:def.bzl", "TOOLS_NOGO", "nogo")
 load("@rules_python_gazelle_plugin//:def.bzl", "GAZELLE_PYTHON_RUNTIME_DEPS")
 
 gazelle_binary(
@@ -32,10 +33,8 @@ gazelle(
     command = "update-repos",
 )
 
-load("@io_bazel_rules_go//go:def.bzl", "nogo", "TOOLS_NOGO")
-
 nogo(
     name = "default_nogo",
-    deps = TOOLS_NOGO,
     visibility = ["//visibility:public"],
+    deps = TOOLS_NOGO,
 )
