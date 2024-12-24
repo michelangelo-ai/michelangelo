@@ -7,6 +7,8 @@ go_library(
         "crd.tmpl",
         "crd_list.tmpl",
         "group_version.tmpl",
+        "crd_svc.tmpl",
+        "group_k8s_client.tmpl",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/templates",
     visibility = ["//visibility:public"],

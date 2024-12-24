@@ -1,0 +1,722 @@
+func New{{.KindName}}ServiceHandler(client *K8sClient, handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) {{.KindName}}ServiceYARPCServer {
+	return &{{.LowerKindName}}ServiceHandler{client: client, apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.UAPIYARPCMetricScopeKey), auth: auth, auditLogEmitter: auditLog}
+}
+
+type {{.LowerKindName}}ServiceHandler struct {
+	client *K8sClient
+	apiHandler api.Handler
+	MetricsScope tally.Scope
+	auth authapi.Auth
+	auditLogEmitter logging.AuditLog
+}
+
+// Emit{{.KindName}}WriteMetric allows developer to emit metrics when they Create and Update each CRD object
+// This metric emitter will emit metrics after the Create/Update API call completed.
+var Emit{{.KindName}}WriteMetric func(context.Context, tally.Scope, *{{.KindName}}, error, api.Handler) = nil
+
+// {{.KindName}}ApiHook allows API developers to hook the standard CRUD methods,
+// before the request is sent to K8s API server, or before the response is returned to the client.
+var {{.KindName}}ApiHook interface {
+	// BeforeCreate is called before a Create{{.KindName}}Request is sent to the K8s API server.
+	//
+	// This method can be used to validate or modify the Create{{.KindName}}Request, before it's sent to the k8s API
+	// server. If this method returns an error, the Create{{.KindName}}Request will not be sent to the K8s API server
+	// and the error is returned to the gRPC client.
+	//
+	// API developer may use this method to store some fields of {{.KindName}} into another storage system, instead of
+	// K8s / ETCD. In the modified Create{{.KindName}}Request, those fields may be set to nil or empty or the key / uri
+	// of the actual data. If eventually K8s fails to create the {{.KindName}}, it's the API developer's responsibility
+	// to remove the orphan data (e.g. with a garbage collection job).
+	BeforeCreate(context.Context, *Create{{.KindName}}Request) error
+
+	// BeforeUpdate is called before a Update{{.KindName}}Request is sent to the K8s API server.
+	//
+	// This method can be used to validate or modify the Update{{.KindName}}Request, before it's sent to the k8s API
+	// server. If this method returns an error, the Update{{.KindName}}Request will not be sent to the K8s API server
+	// and the error is returned to the gRPC client.
+	//
+	// API developer may use this method to store some fields of {{.KindName}} into another storage system, instead of
+	// K8s / ETCD. In the modified Update{{.KindName}}Request, those fields may be set to nil or empty or the key / uri
+	// of the actual data.  If eventually K8s fails to update the {{.KindName}}, it's the API developer's responsibility
+	// to remove the orphan data (e.g. with a garbage collection job).
+	BeforeUpdate(context.Context, *Update{{.KindName}}Request) error
+
+	// OnGetSuccess is called after a successful K8s get, before the result is returned to the client.
+	//
+	// API developer may use the method to retrieve the data that was stored in another storage system (by BeforeCreate
+	// and BeforeUpdate), and fill back to the original fields in {{.KindName}}.
+	//
+	// If this method returns an error, the Get{{.KindName}} gRPC call will return the error to the client.
+	OnGetSuccess(context.Context, *{{.KindName}}) error
+
+	// BeforeDelete is called before a Delete{{.KindName}}Request is sent to the K8s API server.
+	//
+	// This method can be used to validate or modify the Delete{{.KindName}}Request, before it's sent to the k8s API
+	// server. If this method returns an error, the Delete{{.KindName}}Request will not be sent to the K8s API server
+	// and the error is returned to the gRPC client.
+	BeforeDelete(context.Context, *Delete{{.KindName}}Request) error
+
+	// OnDeleteSuccess is called after a successful K8s delete, before the result is returned to the client.
+	//
+	// API developer may use this method to delete the data stored in another storage system. Since the {{.KindName}}
+	// is already successfully deleted in K8s, even if the data in the other storage system cannot be removed, the gRPC
+	// call Delete{{.KindName}} still returns success (error = nil). It's the API developer's responsibility to remove
+	// the orphan data (e.g. with a garbage collection job).
+	OnDeleteSuccess(context.Context, *Delete{{.KindName}}Request)
+
+	// BeforeDeleteCollection is called before a Delete{{.KindName}}CollectionRequest is sent to the K8s API server.
+	//
+    // This method can be used to validate or modify the Delete{{.KindName}}CollectionRequest, before it's sent to the k8s API
+	// server. If this method returns an error, the Delete{{.KindName}}CollectionRequest will not be sent to the K8s API server
+	// and the error is returned to the gRPC client.
+	BeforeDeleteCollection(context.Context, *Delete{{.KindName}}CollectionRequest) error
+
+	// OnDeleteCollectionSuccess is called after a successful K8s delete, before the result is returned to the client.
+	//
+	// API developer may use this method to delete the data stored in another storage system. Since the collection of
+	// {{.KindName}} is already successfully deleted in K8s, even if the data in the other storage system cannot be
+	// removed, the gRPC call Delete{{.KindName}} still returns success (error = nil). It's the API developer's
+	// responsibility to remove the orphan data (e.g. with a garbage collection job).
+	OnDeleteCollectionSuccess(context.Context, *Delete{{.KindName}}CollectionRequest)
+
+
+} = nil
+
+func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+
+	// Add MA UUID to Annotation
+	annotation := request.{{.KindName}}.GetAnnotations()
+	if annotation == nil {
+		annotation = make(map[string]string)
+	}
+	annotation[logging.MaUUIDKey] = maUUID
+	request.{{.KindName}}.SetAnnotations(annotation)
+
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("Create{{.KindName}} Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"Create{{.KindName}}",
+		logging.ProjectTag: 	   	request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityTag: 	   		request.{{.KindName}}.ObjectMeta.Name,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	if Emit{{.KindName}}WriteMetric != nil {
+		defer Emit{{.KindName}}WriteMetric(ctx, metric, request.{{.KindName}}, err, c.apiHandler)
+	}
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForCreate(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthenticated").Inc(1)
+		}
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.{{.KindName}}.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Create, "{{.KindName}}")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthorized").Inc(1)
+		}
+		return nil, err
+	}
+
+	createOptions := &metav1.CreateOptions{}
+	if request.CreateOptions != nil {
+		createOptions = request.CreateOptions
+	}
+
+	if {{.KindName}}ApiHook != nil {
+		if err = api.Validate(request.{{.KindName}}); err != nil {
+			if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+			}
+			return nil, err
+		}
+		if err = {{.KindName}}ApiHook.BeforeCreate(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeCreate Validation", "error", err, "api_msg_tag", "Create{{.KindName}}")
+			if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+			}
+			return nil, err
+		}
+
+	}
+
+
+	err = c.apiHandler.Create(ctx, request.{{.KindName}}, createOptions)
+
+	if err != nil {
+		logger.Error(err, "API Handler failed to create {{.KindName}}", "error", err, "api_msg_tag", "Create{{.KindName}}")
+		if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+		}
+		return nil, err
+	}
+
+	logger.Info("Create{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Create{{.KindName}}")
+
+	if Emit{{.KindName}}WriteMetric == nil {
+		metric.Counter("success").Inc(1)
+	}
+	return &Create{{.KindName}}Response{ {{.KindName}}: request.{{.KindName}}}, err
+}
+
+func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("Get{{.KindName}} Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"Get{{.KindName}}",
+		logging.ProjectTag: 	   	request.Namespace,
+		logging.EntityTag: 	   		request.Name,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	getOptions := &metav1.GetOptions{}
+	if request.GetOptions != nil {
+		getOptions = request.GetOptions
+	}
+
+	result := &{{.KindName}}{}
+	err = c.apiHandler.Get(ctx, request.Namespace, request.Name, getOptions, result)
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForGet(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	if err != nil {
+		logger.Error(err, "Cannot get {{.KindName}} request info from k8s/ETCD", "error", err, "api_msg_tag", "Get{{.KindName}}")
+		metric.Counter("fail").Inc(1)
+		return nil, err
+	}
+
+	// There's a bug in k8s client's Get() method where TypeMeta is not returned
+	// https://github.com/kubernetes-sigs/controller-runtime/issues/1517
+	// Therefore fill it manually
+	result.APIVersion = "michelangelo.uber.com/v2beta1"
+	result.Kind = "{{.KindName}}"
+
+	if {{.KindName}}ApiHook != nil {
+		if err = {{.KindName}}ApiHook.OnGetSuccess(ctx, result); err != nil {
+			logger.Error(err, "Error in OnGetSuccess call after successful k8s Get", "error", err, "api_msg_tag", "Get{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+
+	}
+
+	logger.Info("Get{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Get{{.KindName}}")
+
+	metric.Counter("success").Inc(1)
+
+	// Michelangelo Unifed API currently doesn't use ManagedFields, so we need to remove it from the response
+	result.ManagedFields = nil
+	return &Get{{.KindName}}Response{ {{.KindName}}: result}, nil
+}
+
+func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+
+	// Add MA UUID to Annotation
+	annotation := request.{{.KindName}}.GetAnnotations()
+	if annotation == nil {
+		annotation = make(map[string]string)
+	}
+	annotation[logging.MaUUIDKey] = maUUID
+	request.{{.KindName}}.SetAnnotations(annotation)
+
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("Update{{.KindName}} Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"Update{{.KindName}}",
+		logging.ProjectTag: 	   	request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityTag: 	   		request.{{.KindName}}.ObjectMeta.Name,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	if Emit{{.KindName}}WriteMetric != nil {
+		defer Emit{{.KindName}}WriteMetric(ctx, metric, request.{{.KindName}}, err, c.apiHandler)
+	}
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForUpdate(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthenticated").Inc(1)
+		}
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.{{.KindName}}.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Update, "{{.KindName}}")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthorized").Inc(1)
+		}
+		return nil, err
+	}
+
+	updateOptions := &metav1.UpdateOptions{}
+	if request.UpdateOptions != nil {
+		updateOptions = request.UpdateOptions
+	}
+
+	if {{.KindName}}ApiHook != nil {
+		if err = api.Validate(request.{{.KindName}}); err != nil {
+			if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+			}
+			return nil, err
+		}
+		if err = {{.KindName}}ApiHook.BeforeUpdate(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeUpdate Validation", "error", err, "api_msg_tag", "Update{{.KindName}}")
+			if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+			}
+			return nil, err
+		}
+
+	}
+
+	err = c.apiHandler.Update(ctx, request.{{.KindName}}, updateOptions)
+
+	if err != nil {
+		logger.Error(err, "API Handler failed to update {{.KindName}}", "error", err, "api_msg_tag", "Update{{.KindName}}")
+		if Emit{{.KindName}}WriteMetric == nil {
+				metric.Counter("fail").Inc(1)
+		}
+		return nil, err
+	}
+
+	logger.Info("Update{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Update{{.KindName}}")
+
+	if Emit{{.KindName}}WriteMetric == nil {
+		metric.Counter("success").Inc(1)
+	}
+	return &Update{{.KindName}}Response{ {{.KindName}}: request.{{.KindName}}}, err
+}
+
+func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("Delete{{.KindName}} Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"Delete{{.KindName}}",
+		logging.ProjectTag: 	   	request.Namespace,
+		logging.EntityTag: 	   		request.Name,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDelete(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthenticated").Inc(1)
+		}
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.Delete, "{{.KindName}}")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthorized").Inc(1)
+		}
+		return nil, err
+	}
+
+	deleteOptions := &metav1.DeleteOptions{}
+	if request.DeleteOptions != nil {
+		deleteOptions = request.DeleteOptions
+	}
+
+	deleteObj := &{{.KindName}}{
+		ObjectMeta: metav1.ObjectMeta{Namespace: request.Namespace, Name: request.Name}}
+
+	// Add MA UUID to Annotation
+	annotation := deleteObj.GetAnnotations()
+	if annotation == nil {
+		annotation = make(map[string]string)
+		deleteObj.SetAnnotations(annotation)
+	}
+	annotation[logging.MaUUIDKey] = maUUID
+
+	if {{.KindName}}ApiHook != nil {
+		if err = {{.KindName}}ApiHook.BeforeDelete(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeDelete Validation", "error", err, "api_msg_tag", "Delete{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+
+	}
+
+	err = c.apiHandler.Delete(ctx, deleteObj, deleteOptions)
+
+	if err != nil {
+		logger.Error(err, "Cannot delete {{.KindName}} from either ETCD or MySQL", "error", err, "api_msg_tag", "Delete{{.KindName}}")
+		metric.Counter("fail").Inc(1)
+		return nil, err
+	}
+
+	if {{.KindName}}ApiHook != nil {
+		{{.KindName}}ApiHook.OnDeleteSuccess(ctx, request)
+	}
+
+	logger.Info("Delete{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}")
+
+	metric.Counter("success").Inc(1)
+	return &Delete{{.KindName}}Response{}, nil
+}
+
+func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("Delete{{.KindName}}Collection Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"Delete{{.KindName}}Collection",
+		logging.ProjectTag: 	   	request.Namespace,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDeleteCollection(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	// Authentication
+	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
+	if !userAuthenticated {
+		logger.Error(err, "User is not authenticated")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthenticated").Inc(1)
+		}
+		return nil, err
+	}
+
+	// Authorization
+	projectName := request.Namespace
+	userAuthorized, err := c.auth.UserAuthorized(ctx, projectName, authapi.DeleteCollection, "{{.KindName}}")
+
+	if !userAuthorized {
+		logger.Error(err, "User is not authorized")
+		if Emit{{.KindName}}WriteMetric == nil {
+			metric.Counter("unauthorized").Inc(1)
+		}
+		return nil, err
+	}
+
+	deleteOptions := &metav1.DeleteOptions{}
+	if request.DeleteOptions != nil {
+		deleteOptions = request.DeleteOptions
+	}
+
+	listOptions := &metav1.ListOptions{}
+	if request.ListOptions != nil {
+		listOptions = request.ListOptions
+	}
+
+	if {{.KindName}}ApiHook != nil {
+		if err = {{.KindName}}ApiHook.BeforeDeleteCollection(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeDeleteCollection Validation", "error", err, "api_msg_tag", "Delete{{.KindName}}Collection")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+
+	}
+
+	err = c.apiHandler.DeleteCollection(ctx, &{{.KindName}}{}, request.Namespace, deleteOptions, listOptions)
+
+	if err != nil {
+		logger.Error(err, "API Handler failed to Delete {{.KindName}} Collection", "error", err, "api_msg_tag", "Delete{{.KindName}}Collection")
+		metric.Counter("fail").Inc(1)
+		return nil, err
+	}
+
+	if {{.KindName}}ApiHook != nil {
+		{{.KindName}}ApiHook.OnDeleteCollectionSuccess(ctx, request)
+	}
+
+	logger.Info("Delete{{.KindName}}Collection Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}Collection")
+
+	metric.Counter("success").Inc(1)
+	return &Delete{{.KindName}}CollectionResponse{}, nil
+}
+
+func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
+
+	logger := logging.GetLogrLoggerOrPanic()
+	maUUID := logging.GetMaUUID(ctx)
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+
+	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger.Info("List{{.KindName}} Request Called")
+
+	actor := logging.GetActor(ctx)
+
+	metric := c.MetricsScope.Tagged(map[string]string{
+		logging.YAPRCTypeTag:      	"List{{.KindName}}",
+		logging.ProjectTag: 	   	request.Namespace,
+		logging.YARPCActorTag:		actor,
+		logging.YARPCSourceTag:     logging.GetSource(ctx),
+	})
+
+	result := &{{.KindName}}List{}
+	listOptions := &metav1.ListOptions{}
+	if request.ListOptions != nil {
+		listOptions = request.ListOptions
+	}
+	listOptionsExt := &apipb.ListOptionsExt{}
+	if request.ListOptionsExt != nil {
+		listOptionsExt = request.ListOptionsExt
+	}
+	err = c.apiHandler.List(ctx, request.Namespace, listOptions, listOptionsExt, result)
+
+	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForList(
+												ctx,
+												request,
+												resp,
+												err,
+												maUUID,
+												),
+				)
+
+	if err != nil {
+		logger.Error(err, "API Handler failed to List {{.KindName}}", "error", err, "api_msg_tag", "List{{.KindName}}")
+		metric.Counter("fail").Inc(1)
+		return nil, err
+	}
+
+	logger.Info("List{{.KindName}} Request Successfully Completed.", "api_msg_tag", "List{{.KindName}}")
+
+	metric.Counter("success").Inc(1)
+
+	// Michelangelo Unifed API currently doesn't use ManagedFields, so we need to remove it from the response
+	for _, item := range result.Items {
+		item.ManagedFields = nil
+	}
+
+	resp = &List{{.KindName}}Response{ {{.KindName}}List: result}
+	return resp, err
+}
+
+func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	userEmail := logging.GetActor(ctx)
+	requestJSON := logging.MarshalAndTruncateRequest(request)
+	responseJSON := logging.MarshalAndTruncateRequest(response)
+	source := logging.GetSource(ctx)
+	errMsg := ""
+	if grpcErr != nil {
+		errMsg = grpcErr.Error()
+	}
+
+	event := &logging.UAPIAuditLogEvent{
+		Namespace:  &requestNamespace,
+		EntityType: &entityType,
+		EntityName: &requestName,
+		Procedure:  &procedure,
+		UserEmail:  &userEmail,
+		Source: 	&source,
+		Request:    &requestJSON,
+		Response:   &responseJSON,
+		Error:      &errMsg,
+		MAUUID:     &maUUID,
+	}
+
+	return event
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCreate(ctx context.Context, request *Create{{.KindName}}Request, response *Create{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
+	requestName := request.{{.KindName}}.ObjectMeta.Name
+	entityType := "{{.KindName}}"
+	procedure := "Create{{.KindName}}"
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(ctx context.Context, request *Get{{.KindName}}Request, response *Get{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.Namespace
+	requestName := request.Name
+	entityType := "{{.KindName}}"
+	procedure := "Get{{.KindName}}"
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpdate(ctx context.Context, request *Update{{.KindName}}Request, response *Update{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
+	requestName := request.{{.KindName}}.ObjectMeta.Name
+	entityType := "{{.KindName}}"
+	procedure := "Update{{.KindName}}"
+
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+
+	preCRD := ""
+	getOptions := &metav1.GetOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "{{.KindName}}",
+		},
+	}
+
+	result := &{{.KindName}}{}
+	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
+
+	if err == nil {
+		preCRD = logging.MarshalAndTruncateRequest(result)
+	}
+
+	event.PreCRD = &preCRD
+
+	return event
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDelete(ctx context.Context, request *Delete{{.KindName}}Request, response *Delete{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.Namespace
+	requestName := request.Name
+	entityType := "{{.KindName}}"
+	procedure := "Delete{{.KindName}}"
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+
+	preCRD := ""
+	getOptions := &metav1.GetOptions{
+		TypeMeta: metav1.TypeMeta{
+			Kind: "{{.KindName}}",
+		},
+	}
+
+	result := &{{.KindName}}{}
+	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
+
+	if err == nil {
+		preCRD = logging.MarshalAndTruncateRequest(result)
+	}
+
+	event.PreCRD = &preCRD
+
+	return event
+
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDeleteCollection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest, response *Delete{{.KindName}}CollectionResponse, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.Namespace
+	requestName := ""
+	entityType := "{{.KindName}}"
+	procedure := "Delete{{.KindName}}Collection"
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+}
+
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList(ctx context.Context, request *List{{.KindName}}Request, response *List{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+	requestNamespace := request.Namespace
+	requestName := ""
+	entityType := "{{.KindName}}"
+	procedure := "List{{.KindName}}"
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+
+	responseList := ""
+	if grpcErr != nil {
+		for _, item := range response.Get{{.KindName}}List().GetItems() {
+			responseList = responseList + item.GetName() + ","
+		}
+	}
+
+	event.Response = &responseList
+
+	return event
+}
+
+
+var {{.KindName}}SvcModule = fx.Provide(
+	New{{.KindName}}ServiceHandler,
+	NewFx{{.KindName}}ServiceYARPCProcedures(),
+)
