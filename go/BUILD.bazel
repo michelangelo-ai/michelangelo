@@ -5,5 +5,9 @@ go_library(
     srcs = ["tools.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go",
     visibility = ["//visibility:public"],
-    deps = ["@io_k8s_api//core/v1:go_default_library"],
+    deps = [
+        "@com_github_golang_protobuf//ptypes/any:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@org_golang_google_genproto//protobuf/api:go_default_library",
+    ],
 )
