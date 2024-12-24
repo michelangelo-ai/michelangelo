@@ -31,3 +31,11 @@ gazelle(
     ],
     command = "update-repos",
 )
+
+load("@io_bazel_rules_go//go:def.bzl", "nogo", "TOOLS_NOGO")
+
+nogo(
+    name = "default_nogo",
+    deps = TOOLS_NOGO,
+    visibility = ["//visibility:public"],
+)
