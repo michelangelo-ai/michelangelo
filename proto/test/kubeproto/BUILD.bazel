@@ -1,4 +1,4 @@
-# gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto
+# gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_validation
 
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
@@ -9,6 +9,7 @@ proto_library(
     srcs = [
         "groupversion_info_ut.proto",
         "testobject.proto",
+        "validation_ut.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
@@ -25,7 +26,10 @@ proto_library(
 
 go_proto_library(
     name = "kubeproto_go_proto",
-    compilers = ["//bazel/rules/proto:go_kubeproto"],
+    compilers = [
+        "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_validation",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto",
     proto = ":kubeproto_proto",
     visibility = ["//visibility:public"],
