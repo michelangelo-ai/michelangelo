@@ -49,14 +49,14 @@ jobs:
           poetry install
           poetry run pytest
 
-  gazelle-check:
+  dirty-check:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      # Cache Bazel outputs to speed up tools/gazelle command
+      # Cache Bazel outputs to speed up Bazel commands
       - name: Cache Bazel Outputs
         uses: actions/cache@v4
         with:
@@ -70,3 +70,8 @@ jobs:
         run: |
           tools/gazelle
           git diff --exit-code || (echo "BUILD.bazel files are not up to date. Please run gazelle before commit." && exit 1)
+
+      - name: Check Go dependencies
+        run: |
+          cd go && tools/go mod tidy
+          git diff --exit-code || (echo "go.mod or go.sum files are not up to date. Please run go mod tidy before commit." && exit 1)
