@@ -54,7 +54,7 @@ func main() {
 		g.P("import b64 \"encoding/base64\"")
 		data := b64.StdEncoding.EncodeToString(reqData)
 		g.P("var data = `", data, "`")
-		g.P("func GetData() []byte {")
+		g.P("func GetProtocReqData() []byte {")
 		g.P("  d, _ := b64.StdEncoding.DecodeString(data)")
 		g.P("  return d")
 		g.P("}")

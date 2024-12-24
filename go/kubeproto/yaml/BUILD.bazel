@@ -36,7 +36,7 @@ go_test(
     deps = [
         "//go/kubeproto/pboptions:go_default_library",
         "//go/kubeproto/util:go_default_library",
-        "//proto/test/kubeproto/protocreq:go_default_library",
+        "//proto/test/kubeproto:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
