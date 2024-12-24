@@ -4,7 +4,7 @@ load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
 proto_library(
-    name = "record_proto",
+    name = "protocreq_proto",
     srcs = [
         "crd_info_ut.proto",
         "gogoproto_ut.proto",
@@ -12,6 +12,7 @@ proto_library(
         "options_ut.proto",
         "project_ut.proto",
         "testobject.proto",
+        "validation_ut.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
@@ -27,10 +28,10 @@ proto_library(
 )
 
 go_proto_library(
-    name = "record_go_proto",
+    name = "protocreq_go_proto",
     compilers = ["//bazel/rules/proto:go_kubeproto_unittest"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/record",
-    proto = ":record_proto",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq",
+    proto = ":protocreq_proto",
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:go_default_library",
@@ -43,16 +44,4 @@ go_library(
     embed = [":protocreq_go_proto"],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq",
     visibility = ["//visibility:public"],
-)
-
-go_proto_library(
-    name = "protocreq_go_proto",
-    compilers = ["//bazel/rules/proto:go_kubeproto_unittest"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq",
-    proto = ":record_proto",
-    visibility = ["//visibility:public"],
-    deps = [
-        "//proto/api:go_default_library",
-        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
-    ],
 )

@@ -31,6 +31,7 @@ use_repo(
     "com_github_gobuffalo_flect",
     "com_github_gogo_protobuf",
     "com_github_golang_protobuf",
+    "com_github_google_uuid",
     "com_github_michelangelo_ai_michelangelo_proto",
     "com_github_stretchr_testify",
     "io_k8s_api",

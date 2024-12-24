@@ -5,6 +5,7 @@ go 1.23.2
 require (
 	github.com/dave/dst v0.27.3
 	github.com/gobuffalo/flect v1.0.3
+	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/yarpc v1.75.3
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
@@ -35,7 +36,6 @@ require (
 	github.com/google/gnostic-models v0.6.8 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.6.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
