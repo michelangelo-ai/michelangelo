@@ -7,6 +7,7 @@ require (
 	github.com/gobuffalo/flect v1.0.3
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.67.1
@@ -17,6 +18,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.19.3
 	sigs.k8s.io/yaml v1.4.0
 )
+
+require go.uber.org/dig v1.17.1 // indirect
 
 require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
