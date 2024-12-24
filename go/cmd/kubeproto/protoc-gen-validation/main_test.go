@@ -11,14 +11,13 @@ import (
 	"github.com/dave/dst/decorator"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
-	"github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/types/pluginpb"
 )
 
 func TestGen(t *testing.T) {
-	data := protocreq.GetData()
+	data := testpb.GetProtocReqData()
 	resp := generate(data)
 
 	var validationUTFile *pluginpb.CodeGeneratorResponse_File

@@ -65,7 +65,10 @@ message TestObjectSpec {
   google.protobuf.Struct struct = 13;
 
   // Testing string
-  string description = 14;
+  string description = 14 [
+    (michelangelo.api.validation) = {pattern: "\\S+( \\S+)*"},
+    (michelangelo.api.validation) = {min_length: "1", max_length: "255"}
+  ];
 
   // Testing duration
   google.protobuf.Duration duration = 16;

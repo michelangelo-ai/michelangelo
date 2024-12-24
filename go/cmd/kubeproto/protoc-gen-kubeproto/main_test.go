@@ -9,7 +9,6 @@ import (
 	"time"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
-	protocreq "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -23,19 +22,6 @@ type goFileInfo struct {
 	imports []string
 	structs map[string]*dst.StructType
 }
-
-const (
-	sampleString                    = "sample message"
-	sampleLongString                = "sample message with a long string"
-	sampleInt32               int32 = 886
-	sampleInt64               int64 = 9876543210
-	sampleInt32Count          int32 = 1234
-	sampleBool                bool  = true
-	sampleResourceIDNamespace       = "project01"
-	sampleResourceIDName            = "resource01"
-	sampleUserName                  = "Raffaello"
-	sampleProxyUser                 = "Raphael"
-)
 
 func getImports(file *dst.File) []string {
 	var imports []string
@@ -67,18 +53,6 @@ func getStructs(file *dst.File) map[string]*dst.StructType {
 	return structs
 }
 
-func getSampleTestTimestamp() *types.Timestamp {
-	pbTimestamp, err := types.TimestampProto(time.Date(2022, 01, 01, 01, 0, 0, 0, time.UTC))
-	if err != nil {
-		return pbTimestamp
-	}
-	return nil
-}
-
-func getSampleDeletionTimestamp() *v1.Time {
-	return &v1.Time{Time: time.Date(2022, 01, 01, 01, 0, 0, 0, time.UTC)}
-}
-
 func parse(gofile string) goFileInfo {
 	dst, _ := decorator.Parse(gofile)
 	file := goFileInfo{}
@@ -88,7 +62,7 @@ func parse(gofile string) goFileInfo {
 }
 
 func TestGen(t *testing.T) {
-	data := protocreq.GetData()
+	data := testpb.GetProtocReqData()
 	resp := generate(data)
 
 	var projectFile *plugin_go.CodeGeneratorResponse_File
@@ -142,7 +116,7 @@ var expectedCRDDescription = `
 // If the generated go code is changed (i.e. a newer version of gogoproto generates different go code),
 // we may have to update our CRD template
 func TestGogoOutput(t *testing.T) {
-	data := protocreq.GetData()
+	data := testpb.GetProtocReqData()
 	resp := gogoproto(data)
 
 	gocode := ""

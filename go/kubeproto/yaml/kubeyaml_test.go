@@ -7,7 +7,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	protocreq "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq"
+	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
@@ -17,7 +17,7 @@ import (
 )
 
 func readInput(t *testing.T) (*protogen.Plugin, *protoregistry.Types) {
-	reqData := protocreq.GetData()
+	reqData := testpb.GetProtocReqData()
 
 	req := &pluginpb.CodeGeneratorRequest{}
 	err := proto.Unmarshal(reqData, req)
@@ -100,7 +100,7 @@ func TestYamlGen(t *testing.T) {
 		"testobject.pb.yaml": testObjectYAML,
 	}
 
-	data := protocreq.GetData()
+	data := testpb.GetProtocReqData()
 	resp := GenerateYaml(data)
 	tested := 0
 	for _, f := range resp.GetFile() {

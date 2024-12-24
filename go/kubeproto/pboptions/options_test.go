@@ -1,10 +1,11 @@
 package pboptions_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
-	protocreq "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/protocreq"
+	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
@@ -17,7 +18,7 @@ import (
 )
 
 func TestOptions(t *testing.T) {
-	data := protocreq.GetData()
+	data := testpb.GetProtocReqData()
 
 	var req pluginpb.CodeGeneratorRequest
 	golangproto.Unmarshal(data, &req)
@@ -37,7 +38,7 @@ func TestOptions(t *testing.T) {
 		if !f.Generate {
 			continue
 		}
-		if strings.HasSuffix(f.Proto.GetName(), "/options_ut.proto") {
+		if strings.HasSuffix(f.Proto.GetName(), "/testobject.proto") {
 			testFile = f
 		}
 		if strings.HasSuffix(f.Proto.GetName(), "/groupversion_info_ut.proto") {
@@ -49,26 +50,43 @@ func TestOptions(t *testing.T) {
 	options, _ := pboptions.ReadOptions(extTypes, testFile.Proto.Options)
 	assert.Equal(t, "", options.String("group_info.name"))
 	assert.Equal(t, "", options.String("gropu_info.version"))
-	assert.Equal(t, 6, len(testFile.Messages))
-	options, _ = pboptions.ReadOptions(extTypes, testFile.Messages[0].Desc.Options().(*descriptorpb.MessageOptions))
+
+	messages := make(map[string]*protogen.Message)
+	for _, m := range testFile.Messages {
+		messages[string(m.Desc.Name())] = m
+	}
+	options, _ = pboptions.ReadOptions(extTypes, messages["TestMsg3"].Desc.Options().(*descriptorpb.MessageOptions))
 	assert.True(t, options.Bool("has_resource"))
-	options, _ = pboptions.ReadOptions(extTypes, testFile.Messages[1].Desc.Options().(*descriptorpb.MessageOptions))
+	options, _ = pboptions.ReadOptions(extTypes, messages["TestMsg2"].Desc.Options().(*descriptorpb.MessageOptions))
 	assert.False(t, options.Bool("has_resource"))
-	options, _ = pboptions.ReadOptions(extTypes, testFile.Messages[2].Desc.Options().(*descriptorpb.MessageOptions))
+	options, _ = pboptions.ReadOptions(extTypes, messages["TestObjectList"].Desc.Options().(*descriptorpb.MessageOptions))
 	assert.False(t, options.Bool("has_resource"))
 	assert.True(t, options.Bool("has_resource_list"))
-	options, _ = pboptions.ReadOptions(extTypes, testFile.Messages[3].Desc.Options().(*descriptorpb.MessageOptions))
+	options, _ = pboptions.ReadOptions(extTypes, messages["TestObject"].Desc.Options().(*descriptorpb.MessageOptions))
 	assert.True(t, options.Bool("has_resource"))
-	options, _ = pboptions.ReadOptions(extTypes, testFile.Messages[4].Fields[0].Desc.Options().(*descriptorpb.FieldOptions))
-	assert.True(t, options.Bool("has_validation[0]"))
+	for i, f := range messages["TestObjectSpec"].Fields {
+		fmt.Println(i, f.Desc.Name())
+	}
+	fmt.Println()
+	options, _ = pboptions.ReadOptions(extTypes, getFieldByName(messages["TestObjectSpec"], "description").Desc.Options().(*descriptorpb.FieldOptions))
 	assert.Equal(t, int64(2), options.Int64("len(validation)"))
-	assert.Equal(t, "ml-code-[a-z0-9-]+", options.String("validation[0].pattern"))
-	assert.Equal(t, "must start with 'ml-code-' and only contains lower case alphanumeric or dash", options.String("validation[0].msg"))
+	assert.True(t, options.Bool("has_validation[0]"))
+	assert.Equal(t, "\\S+( \\S+)*", options.String("validation[0].pattern"))
 	assert.True(t, options.Bool("has_validation[1]"))
-	assert.Equal(t, "32", options.String("validation[1].max_length"))
+	assert.Equal(t, "1", options.String("validation[1].min_length"))
+	assert.Equal(t, "255", options.String("validation[1].max_length"))
 
 	assert.True(t, groupInfoFile != nil)
 	options, _ = pboptions.ReadOptions(extTypes, groupInfoFile.Proto.Options)
 	assert.Equal(t, "michelangelo.api", options.String("group_info.name"))
 	assert.Equal(t, "v2", options.String("group_info.version"))
+}
+
+func getFieldByName(m *protogen.Message, name string) *protogen.Field {
+	for _, f := range m.Fields {
+		if string(f.Desc.Name()) == name {
+			return f
+		}
+	}
+	return nil
 }

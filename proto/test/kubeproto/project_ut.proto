@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package michelangelo.test.kubeproto.protocreq;
+package michelangelo.test.kubeproto;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 
-option go_package = "protocreq";
+option go_package = "kubeproto";
 
 message Metadata {
   option (michelangelo.api.no_default) = true;
