@@ -10,6 +10,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
+	golang.org/x/tools v0.26.0
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.2
@@ -76,7 +77,6 @@ require (
 	golang.org/x/term v0.26.0 // indirect
 	golang.org/x/text v0.20.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
-	golang.org/x/tools v0.26.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241209162323-e6fa225c2576 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect

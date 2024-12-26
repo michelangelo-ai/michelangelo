@@ -75,3 +75,8 @@ jobs:
         run: |
           cd go && ../tools/go mod tidy
           git diff --exit-code || (echo "go.mod or go.sum files are not up to date. Please run go mod tidy before commit." && exit 1)
+
+      - name: Format Go files
+        run: |
+          tools/goimports -w go
+          git diff --exit-code || (echo "Go files are not formatted. Please run goimports before commit." && exit 1)

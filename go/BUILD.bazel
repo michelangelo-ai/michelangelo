@@ -15,6 +15,7 @@ go_library(
         "@io_k8s_client_go//kubernetes/scheme:go_default_library",
         "@io_k8s_client_go//rest:go_default_library",
         "@org_golang_google_genproto//protobuf/api:go_default_library",
+        "@org_golang_x_tools//go/packages:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
