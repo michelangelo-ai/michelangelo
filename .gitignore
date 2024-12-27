@@ -10,3 +10,8 @@ MODULE.bazel.lock
 
 /pkg/**
 .DS_Store
+
+# ignore GoLand project files
+.idea
+# ignore go vendor directory
+/go/vendor
