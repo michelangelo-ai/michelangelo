@@ -5,6 +5,25 @@ load(
     "WELL_KNOWN_TYPE_RULES",
 )
 
+go_proto_compiler(
+    name = "go_yarpc",
+    plugin = "@org_uber_go_yarpc//encoding/protobuf/protoc-gen-yarpc-go",
+    suffix = ".pb.yarpc.go",
+    valid_archive = False,
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_gogo_protobuf//jsonpb:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_golang_protobuf//proto:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_yarpc//api/transport:go_default_library",
+        "@org_uber_go_yarpc//api/x/restriction:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
+    ],
+)
+
 # This protobuf compiler generates go code for k8s CRDs defined in protobuf files
 go_proto_compiler(
     name = "go_kubeproto",
@@ -23,6 +42,29 @@ go_proto_compiler(
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/scheme:go_default_library",
+    ] + WELL_KNOWN_TYPE_RULES.values(),
+)
+
+# generates gRPC service code (e.g. CRUD functions) for k8s CRDs defined in protobuf files
+go_proto_compiler(
+    name = "go_kubeyarpc",
+    plugin = "//go/cmd/kubeproto/protoc-gen-kubeyarpc:protoc-gen-kubeyarpc",
+    suffix = ".pb.kubeyarpc.go",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/api:go_default_library",
+        "//go/auth:go_default_library",
+        "//go/logging:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/serializer:go_default_library",
+        "@io_k8s_client_go//kubernetes/scheme:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/scheme:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ] + WELL_KNOWN_TYPE_RULES.values(),
 )
 

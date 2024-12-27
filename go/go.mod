@@ -5,8 +5,10 @@ go 1.23.2
 require (
 	github.com/dave/dst v0.27.3
 	github.com/gobuffalo/flect v1.0.3
+	github.com/gogo/status v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
 	golang.org/x/tools v0.26.0
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
@@ -17,6 +19,11 @@ require (
 	k8s.io/apimachinery v0.32.0
 	sigs.k8s.io/controller-runtime v0.19.3
 	sigs.k8s.io/yaml v1.4.0
+)
+
+require (
+	github.com/gogo/googleapis v1.4.1 // indirect
+	go.uber.org/dig v1.17.1 // indirect
 )
 
 require (
@@ -52,14 +59,14 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
-	github.com/uber-go/tally v3.5.8+incompatible // indirect
+	github.com/uber-go/tally v3.5.8+incompatible
 	github.com/uber/tchannel-go v1.34.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/net/metrics v1.4.0 // indirect
 	go.uber.org/thriftrw v1.32.0 // indirect
-	go.uber.org/zap v1.27.0 // indirect
+	go.uber.org/zap v1.27.0
 	golang.org/x/exp/typeparams v0.0.0-20221208152030-732eee02a75a // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.21.0 // indirect
@@ -74,7 +81,7 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.4.3 // indirect
-	k8s.io/client-go v0.32.0 // indirect
+	k8s.io/client-go v0.32.0
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect

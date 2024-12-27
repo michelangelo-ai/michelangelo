@@ -72,3 +72,31 @@ var CRDImports = `
 	"github.com/gogo/protobuf/jsonpb"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 `
+
+// GroupK8sClient template for group k8s client
+//
+//go:embed group_k8s_client.tmpl
+var GroupK8sClient string
+
+// CrdSvcHandlerImports imports of CRD YARPC handlers
+var CrdSvcHandlerImports = `
+import (
+	"context"
+
+	"go.uber.org/fx"
+
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	authapi "github.com/michelangelo-ai/michelangelo/go/auth"
+	"github.com/michelangelo-ai/michelangelo/go/logging"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/uber-go/tally"
+)
+`
+
+//go:embed crd_svc.tmpl
+var crdSvcTmpl string
+
+// CrdSvcHandler template of CRD YARPC handler
+var CrdSvcHandler = template.Must(template.New("crdsvc").Parse(crdSvcTmpl))

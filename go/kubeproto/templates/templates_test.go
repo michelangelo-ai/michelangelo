@@ -59,4 +59,24 @@ func TestTemplates(t *testing.T) {
 	"github.com/gogo/protobuf/jsonpb"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 `, CRDImports)
+
+	buf.Reset()
+	crdSvcHandlerInfo := struct {
+		KindName      string
+		LowerKindName string
+	}{"TestName", "LowerTestName"}
+
+	CrdSvcHandler.Execute(&buf, crdSvcHandlerInfo)
+	crdSvcHandlerCode := buf.String()
+	assert.Contains(t, crdSvcHandlerCode, "TestName")
+	assert.Contains(t, crdSvcHandlerCode, "LowerTestName")
+	assert.Contains(t, crdSvcHandlerCode, "CreateTestName")
+	assert.Contains(t, crdSvcHandlerCode, "GetTestName")
+	assert.Contains(t, crdSvcHandlerCode, "UpdateTestName")
+	assert.Contains(t, crdSvcHandlerCode, "DeleteTestName")
+	assert.Contains(t, crdSvcHandlerCode, "DeleteTestNameCollection")
+	assert.Contains(t, crdSvcHandlerCode, "ListTestName")
+	assert.NotContains(t, crdSvcHandlerCode, "LogYARPCAudit")
+	assert.NotContains(t, crdSvcHandlerCode, "UnifiedLogInfo")
+	assert.NotContains(t, crdSvcHandlerCode, "UnifiedLogError")
 }
