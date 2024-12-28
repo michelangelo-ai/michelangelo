@@ -8,6 +8,10 @@ It's also a great way for users to quickly try the platform and check out its in
 
 ### Prerequisites
 
+Please install the following software before using the sandbox:
+
+- Docker: https://docs.docker.com/get-started/get-docker/
+- kubectl: https://kubernetes.io/docs/tasks/tools/#kubectl
 - k3d: https://k3d.io
 
 ### Install
