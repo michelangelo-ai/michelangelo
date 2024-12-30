@@ -1,8 +1,8 @@
 import sys
 import argparse
 import logging
-from .sandbox import sandbox
-from .config import config
+from michelangelo.cli.sandbox import sandbox
+from michelangelo.cli.config import config
 
 
 def main(args=None):
