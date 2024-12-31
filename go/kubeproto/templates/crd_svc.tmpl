@@ -1,5 +1,5 @@
 func New{{.KindName}}ServiceHandler(client *K8sClient, handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) {{.KindName}}ServiceYARPCServer {
-	return &{{.LowerKindName}}ServiceHandler{client: client, apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.UAPIYARPCMetricScopeKey), auth: auth, auditLogEmitter: auditLog}
+	return &{{.LowerKindName}}ServiceHandler{client: client, apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.MichelangeloAPIScopeName), auth: auth, auditLogEmitter: auditLog}
 }
 
 type {{.LowerKindName}}ServiceHandler struct {
@@ -83,31 +83,17 @@ var {{.KindName}}ApiHook interface {
 } = nil
 
 func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
-
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
 
-	// Add MA UUID to Annotation
-	annotation := request.{{.KindName}}.GetAnnotations()
-	if annotation == nil {
-		annotation = make(map[string]string)
-	}
-	annotation[logging.MaUUIDKey] = maUUID
-	request.{{.KindName}}.SetAnnotations(annotation)
+	requestJSON := logging.MarshalToString(request)
 
-	requestJSON := logging.MarshalAndTruncateRequest(request)
-
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Create{{.KindName}} Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"Create{{.KindName}}",
-		logging.ProjectTag: 	   	request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityTag: 	   		request.{{.KindName}}.ObjectMeta.Name,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"Create{{.KindName}}",
+		logging.NamespaceTag:     	   	request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityNameTag:   	   	request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	if Emit{{.KindName}}WriteMetric != nil {
@@ -119,7 +105,6 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -187,22 +172,16 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 }
 
 func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
-
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
-	requestJSON := logging.MarshalAndTruncateRequest(request)
+	requestJSON := logging.MarshalToString(request)
 
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Get{{.KindName}} Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"Get{{.KindName}}",
-		logging.ProjectTag: 	   	request.Namespace,
-		logging.EntityTag: 	   		request.Name,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"Get{{.KindName}}",
+		logging.NamespaceTag:     	   	request.Namespace,
+		logging.EntityNameTag:   	   	request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -218,7 +197,6 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, 
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -253,31 +231,16 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, 
 }
 
 func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
-
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
+	requestJSON := logging.MarshalToString(request)
 
-	// Add MA UUID to Annotation
-	annotation := request.{{.KindName}}.GetAnnotations()
-	if annotation == nil {
-		annotation = make(map[string]string)
-	}
-	annotation[logging.MaUUIDKey] = maUUID
-	request.{{.KindName}}.SetAnnotations(annotation)
-
-	requestJSON := logging.MarshalAndTruncateRequest(request)
-
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Update{{.KindName}} Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"Update{{.KindName}}",
-		logging.ProjectTag: 	   	request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityTag: 	   		request.{{.KindName}}.ObjectMeta.Name,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"Update{{.KindName}}",
+		logging.NamespaceTag:     	   	request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityNameTag:   	   	request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	if Emit{{.KindName}}WriteMetric != nil {
@@ -289,7 +252,6 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -356,22 +318,16 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 }
 
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
-
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
-	requestJSON := logging.MarshalAndTruncateRequest(request)
+	requestJSON := logging.MarshalToString(request)
 
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Delete{{.KindName}} Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"Delete{{.KindName}}",
-		logging.ProjectTag: 	   	request.Namespace,
-		logging.EntityTag: 	   		request.Name,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"Delete{{.KindName}}",
+		logging.NamespaceTag:     	   	request.Namespace,
+		logging.EntityNameTag:  	   	request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDelete(
@@ -379,7 +335,6 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -413,14 +368,6 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 	deleteObj := &{{.KindName}}{
 		ObjectMeta: metav1.ObjectMeta{Namespace: request.Namespace, Name: request.Name}}
 
-	// Add MA UUID to Annotation
-	annotation := deleteObj.GetAnnotations()
-	if annotation == nil {
-		annotation = make(map[string]string)
-		deleteObj.SetAnnotations(annotation)
-	}
-	annotation[logging.MaUUIDKey] = maUUID
-
 	if {{.KindName}}ApiHook != nil {
 		if err = {{.KindName}}ApiHook.BeforeDelete(ctx, request); err != nil {
 			logger.Error(err, "Error in BeforeDelete Validation", "error", err, "api_msg_tag", "Delete{{.KindName}}")
@@ -449,21 +396,15 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 }
 
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
-
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
-	requestJSON := logging.MarshalAndTruncateRequest(request)
+	requestJSON := logging.MarshalToString(request)
 
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Delete{{.KindName}}Collection Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"Delete{{.KindName}}Collection",
-		logging.ProjectTag: 	   	request.Namespace,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"Delete{{.KindName}}Collection",
+		logging.NamespaceTag:     	   	request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDeleteCollection(
@@ -471,7 +412,6 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -537,19 +477,14 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	maUUID := logging.GetMaUUID(ctx)
-	requestJSON := logging.MarshalAndTruncateRequest(request)
+	requestJSON := logging.MarshalToString(request)
 
-	logger = logger.WithValues(logging.MaUUIDKey, maUUID, "request", requestJSON, "context", ctx, logging.UnifiedLogKey, true)
+	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("List{{.KindName}} Request Called")
 
-	actor := logging.GetActor(ctx)
-
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.YAPRCTypeTag:      	"List{{.KindName}}",
-		logging.ProjectTag: 	   	request.Namespace,
-		logging.YARPCActorTag:		actor,
-		logging.YARPCSourceTag:     logging.GetSource(ctx),
+		logging.APIProcedureTag:      	"List{{.KindName}}",
+		logging.NamespaceTag:      	   	request.Namespace,
 	})
 
 	result := &{{.KindName}}List{}
@@ -568,7 +503,6 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context,
 												request,
 												resp,
 												err,
-												maUUID,
 												),
 				)
 
@@ -591,56 +525,51 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context,
 	return resp, err
 }
 
-func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
-	userEmail := logging.GetActor(ctx)
-	requestJSON := logging.MarshalAndTruncateRequest(request)
-	responseJSON := logging.MarshalAndTruncateRequest(response)
-	source := logging.GetSource(ctx)
+func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error) *logging.AuditLogEvent {
+	requestJSON := logging.MarshalToString(request)
+	responseJSON := logging.MarshalToString(response)
 	errMsg := ""
 	if grpcErr != nil {
 		errMsg = grpcErr.Error()
 	}
 
-	event := &logging.UAPIAuditLogEvent{
-		Namespace:  &requestNamespace,
-		EntityType: &entityType,
-		EntityName: &requestName,
-		Procedure:  &procedure,
-		UserEmail:  &userEmail,
-		Source: 	&source,
-		Request:    &requestJSON,
-		Response:   &responseJSON,
-		Error:      &errMsg,
-		MAUUID:     &maUUID,
+	event := &logging.AuditLogEvent{
+		Namespace:  requestNamespace,
+		EntityType: entityType,
+		EntityName: requestName,
+		Procedure:  procedure,
+		Request:    requestJSON,
+		Response:   responseJSON,
+		Error:      errMsg,
 	}
 
 	return event
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCreate(ctx context.Context, request *Create{{.KindName}}Request, response *Create{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCreate(ctx context.Context, request *Create{{.KindName}}Request, response *Create{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
 	requestName := request.{{.KindName}}.ObjectMeta.Name
 	entityType := "{{.KindName}}"
 	procedure := "Create{{.KindName}}"
-	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(ctx context.Context, request *Get{{.KindName}}Request, response *Get{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(ctx context.Context, request *Get{{.KindName}}Request, response *Get{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := request.Name
 	entityType := "{{.KindName}}"
 	procedure := "Get{{.KindName}}"
-	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpdate(ctx context.Context, request *Update{{.KindName}}Request, response *Update{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpdate(ctx context.Context, request *Update{{.KindName}}Request, response *Update{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
 	requestName := request.{{.KindName}}.ObjectMeta.Name
 	entityType := "{{.KindName}}"
 	procedure := "Update{{.KindName}}"
 
-	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 
 	preCRD := ""
 	getOptions := &metav1.GetOptions{
@@ -653,20 +582,20 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpda
 	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
 
 	if err == nil {
-		preCRD = logging.MarshalAndTruncateRequest(result)
+		preCRD = logging.MarshalToString(result)
 	}
 
-	event.PreCRD = &preCRD
+	event.PreCRD = preCRD
 
 	return event
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDelete(ctx context.Context, request *Delete{{.KindName}}Request, response *Delete{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDelete(ctx context.Context, request *Delete{{.KindName}}Request, response *Delete{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := request.Name
 	entityType := "{{.KindName}}"
 	procedure := "Delete{{.KindName}}"
-	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 
 	preCRD := ""
 	getOptions := &metav1.GetOptions{
@@ -679,29 +608,29 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDele
 	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
 
 	if err == nil {
-		preCRD = logging.MarshalAndTruncateRequest(result)
+		preCRD = logging.MarshalToString(result)
 	}
 
-	event.PreCRD = &preCRD
+	event.PreCRD = preCRD
 
 	return event
 
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDeleteCollection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest, response *Delete{{.KindName}}CollectionResponse, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDeleteCollection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest, response *Delete{{.KindName}}CollectionResponse, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := ""
 	entityType := "{{.KindName}}"
 	procedure := "Delete{{.KindName}}Collection"
-	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList(ctx context.Context, request *List{{.KindName}}Request, response *List{{.KindName}}Response, grpcErr error, maUUID string) *logging.UAPIAuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList(ctx context.Context, request *List{{.KindName}}Request, response *List{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := ""
 	entityType := "{{.KindName}}"
 	procedure := "List{{.KindName}}"
-	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr, maUUID)
+	event := c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 
 	responseList := ""
 	if grpcErr != nil {
@@ -710,7 +639,7 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList
 		}
 	}
 
-	event.Response = &responseList
+	event.Response = responseList
 
 	return event
 }
