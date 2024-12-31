@@ -4,7 +4,7 @@ import logging
 from michelangelo.cli.sandbox import sandbox
 
 description = """
-The Michelangelo CLI is a unified tool that provides access to Michelangelo services through the terminal.
+The Michelangelo CLI is a tool that provides access to Michelangelo services through the terminal.
 """
 
 
