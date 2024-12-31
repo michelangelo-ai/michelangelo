@@ -1,8 +1,8 @@
-Sandbox is a lightweight Michelangelo cluster for development and testing.
-It's also a great way for users to quickly try the platform and check out its interface.
+Sandbox is a lightweight version of the Michelangelo cluster, designed specifically for development and testing. 
+It also serves as an excellent tool for users to quickly explore the platform and familiarize themselves with its interface.
 
-> Note: The sandbox deployment is not suitable for production environments. 
-> For instructions on how to create a production-ready Michelangelo deployment, checkout the Deployment Guide.
+> Note: The Sandbox deployment is intended for development and testing purposes only and is not suitable for production environments.
+> For guidance on creating a production-ready Michelangelo deployment, please refer to the Deployment Guide.
 
 ## User Guide
 
