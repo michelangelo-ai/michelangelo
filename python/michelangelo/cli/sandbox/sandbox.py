@@ -5,7 +5,12 @@ import time
 import uuid
 from pathlib import Path
 
-description = "Sandbox CLI"
+short_description = "Manage the sandbox cluster."
+
+description = """
+Sandbox is a lite Michelangelo cluster designed for local development and testing.
+This tool helps you create a sandbox cluster on your machine.
+"""
 
 _dir = Path(__file__).parent
 
@@ -22,10 +27,10 @@ _cadence_domain = "default"
 def init_arguments(p: argparse.ArgumentParser):
     sp = p.add_subparsers(dest="action", required=True)
 
-    _ = sp.add_parser("create")
-    _ = sp.add_parser("delete")
-    _ = sp.add_parser("start")
-    _ = sp.add_parser("stop")
+    _ = sp.add_parser("create", help="Create and start the cluster.")
+    _ = sp.add_parser("delete", help="Delete the cluster.")
+    _ = sp.add_parser("start", help="Start the cluster.")
+    _ = sp.add_parser("stop", help="Stop the cluster.")
 
 
 def main(args=None):
@@ -102,10 +107,10 @@ def _kube_create(path: Path):
 
 
 def _kube_run(
-        image: str,
-        command: list[str],
-        env: dict[str, str] = None,
-        retry_attempts: int = 0,
+    image: str,
+    command: list[str],
+    env: dict[str, str] = None,
+    retry_attempts: int = 0,
 ):
     assert image
     assert command
@@ -132,9 +137,9 @@ def _kube_run(
 
 
 def _exec(
-        *args,
-        retry_attempts: int = 0,
-        retry_delay_seconds: int = 5,
+    *args,
+    retry_attempts: int = 0,
+    retry_delay_seconds: int = 5,
 ) -> int:
     for i in range(retry_attempts + 1):
         try:

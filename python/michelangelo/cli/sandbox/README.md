@@ -1,4 +1,4 @@
-The Sandbox makes it easy to create a lightweight Michelangelo cluster in docker, e.g. for local development.
+Sandbox is a lightweight Michelangelo cluster for development and testing.
 It's also a great way for users to quickly try the platform and check out its interface.
 
 > Note: The sandbox deployment is not suitable for production environments. 
@@ -8,11 +8,11 @@ It's also a great way for users to quickly try the platform and check out its in
 
 ### Prerequisites
 
-Please install the following software before using the sandbox:
+Please install the following software before proceeding:
 
-- Docker: https://docs.docker.com/get-started/get-docker/
-- kubectl: https://kubernetes.io/docs/tasks/tools/#kubectl
-- k3d: https://k3d.io
+- [Docker](https://docs.docker.com/get-started/get-docker)
+- [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)
+- [k3d](https://k3d.io)
 
 ### Install
 
