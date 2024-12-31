@@ -3,7 +3,7 @@
 set -e
 
 if [ "$#" -ne 1 ]; then
-    echo "Generate gRPC service definition for a CRD type."
+    echo "Generates the gRPC service definition for a specified CRD type."
     echo "$0 <Crd name>"
     echo "Example: $0 Model"
     exit
