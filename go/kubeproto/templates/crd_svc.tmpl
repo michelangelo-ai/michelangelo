@@ -3,10 +3,10 @@ func New{{.KindName}}ServiceHandler(client *K8sClient, handler api.Handler, metr
 }
 
 type {{.LowerKindName}}ServiceHandler struct {
-	client *K8sClient
-	apiHandler api.Handler
-	MetricsScope tally.Scope
-	auth authapi.Auth
+	client          *K8sClient
+	apiHandler      api.Handler
+	MetricsScope    tally.Scope
+	auth            authapi.Auth
 	auditLogEmitter logging.AuditLog
 }
 
@@ -91,9 +91,9 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 	logger.Info("Create{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"Create{{.KindName}}",
-		logging.NamespaceTag:     	   	request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityNameTag:   	   	request.{{.KindName}}.ObjectMeta.Name,
+		logging.APIProcedureTag: "Create{{.KindName}}",
+		logging.NamespaceTag:    request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	if Emit{{.KindName}}WriteMetric != nil {
@@ -179,9 +179,9 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, 
 	logger.Info("Get{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"Get{{.KindName}}",
-		logging.NamespaceTag:     	   	request.Namespace,
-		logging.EntityNameTag:   	   	request.Name,
+		logging.APIProcedureTag: "Get{{.KindName}}",
+		logging.NamespaceTag:    request.Namespace,
+		logging.EntityNameTag:   request.Name,
 	})
 
 	getOptions := &metav1.GetOptions{}
@@ -238,9 +238,9 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 	logger.Info("Update{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"Update{{.KindName}}",
-		logging.NamespaceTag:     	   	request.{{.KindName}}.ObjectMeta.Namespace,
-		logging.EntityNameTag:   	   	request.{{.KindName}}.ObjectMeta.Name,
+		logging.APIProcedureTag: "Update{{.KindName}}",
+		logging.NamespaceTag:    request.{{.KindName}}.ObjectMeta.Namespace,
+		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
 
 	if Emit{{.KindName}}WriteMetric != nil {
@@ -325,9 +325,9 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 	logger.Info("Delete{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"Delete{{.KindName}}",
-		logging.NamespaceTag:     	   	request.Namespace,
-		logging.EntityNameTag:  	   	request.Name,
+		logging.APIProcedureTag: "Delete{{.KindName}}",
+		logging.NamespaceTag:    request.Namespace,
+		logging.EntityNameTag:   request.Name,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDelete(
@@ -403,8 +403,8 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 	logger.Info("Delete{{.KindName}}Collection Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"Delete{{.KindName}}Collection",
-		logging.NamespaceTag:     	   	request.Namespace,
+		logging.APIProcedureTag: "Delete{{.KindName}}Collection",
+		logging.NamespaceTag:    request.Namespace,
 	})
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForDeleteCollection(
@@ -483,8 +483,8 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context,
 	logger.Info("List{{.KindName}} Request Called")
 
 	metric := c.MetricsScope.Tagged(map[string]string{
-		logging.APIProcedureTag:      	"List{{.KindName}}",
-		logging.NamespaceTag:      	   	request.Namespace,
+		logging.APIProcedureTag: "List{{.KindName}}",
+		logging.NamespaceTag:    request.Namespace,
 	})
 
 	result := &{{.KindName}}List{}
