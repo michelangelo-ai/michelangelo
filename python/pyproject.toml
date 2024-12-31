@@ -17,7 +17,11 @@ pytest = "^8.3.4"
 
 
 [tool.poetry.scripts]
-ma = 'michelangelo.cli:main'
+ma = 'michelangelo.cli.cli:main'
+
+
+[tool.black]
+line-length = 120
 
 
 [build-system]
