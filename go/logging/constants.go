@@ -1,7 +1,7 @@
 package logging
 
-// MichelangeloAPIScopeName is the metrics sub-scope name for all Michelangelo API calls
-const MichelangeloAPIScopeName = "ma_api"
+// MichelangeloAPIScopeName is the sub-scope name for Michelangelo API metrics
+const MichelangeloAPIScopeName = "api"
 
 // APIProcedureTag is the metrics tag key for yarpc procedure name
 const APIProcedureTag = "api_procedure"
