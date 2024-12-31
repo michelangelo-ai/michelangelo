@@ -19,7 +19,7 @@ fi
 
 echo "CRD name: ${CRD}"
 SNAKE_CRD="$(echo "${CRD}" | sed -r 's/([A-Z])/_\1/g' | sed 's/^_//' | tr '[:upper:]' '[:lower:]')"
-echo "CRD name snake case: ${SNAKE_CRD}"
+echo "CRD name in snake_case: ${SNAKE_CRD}"
 
 PROTO_PATH="${WORKSPACE_ROOT}/proto/api/v2"
 OUTPUT="${PROTO_PATH}/${SNAKE_CRD}_svc.proto"
