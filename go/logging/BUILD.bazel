@@ -1,11 +1,25 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
     srcs = [
         "audit_log_struct.go",
         "audit_logger.go",
+        "constants.go",
+        "utils.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/logging",
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["utils_test.go"],
+    embed = [":go_default_library"],
+    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
 )
