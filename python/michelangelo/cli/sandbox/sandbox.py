@@ -8,8 +8,8 @@ from pathlib import Path
 short_description = "Manage the sandbox cluster."
 
 description = """
-Sandbox is a lite Michelangelo cluster designed for local development and testing.
-This tool helps you create a sandbox cluster on your machine.
+Michelangelo Sandbox is a lightweight version of the Michelangelo platform, tailored for local development and testing.
+This tool helps you create and manage a sandbox cluster directly on your machine.
 """
 
 _dir = Path(__file__).parent
