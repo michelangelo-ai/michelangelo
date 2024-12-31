@@ -41,4 +41,4 @@ sed "s/CRDCamelName/${CRD}/g" "${SCRIPT_DIR}/grpc-svc-gen.tmpl" \
     | sed "s/crd_snake_name/${SNAKE_CRD}/g" \
     >> "${OUTPUT}"
 
-echo "gRPC service definition written to: ${OUTPUT}"
+echo "The gRPC service definition for the specified CRD type has been successfully written to: ${OUTPUT}"
