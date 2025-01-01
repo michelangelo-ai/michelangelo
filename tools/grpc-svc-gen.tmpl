@@ -1,0 +1,117 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/list.proto";
+import "michelangelo/api/v2/crd_snake_name.proto";
+
+// Request message for CRDCamelNameService.Create method.
+message CreateCRDCamelNameRequest {
+  // The metadata and spec of the CRDCamelName to be created.
+  CRDCamelName crd_snake_name = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions create_options = 2;
+}
+
+// Response message for CRDCamelNameService.Create method.
+message CreateCRDCamelNameResponse {
+  // The created CRDCamelName
+  CRDCamelName crd_snake_name = 1;
+}
+
+// Request message for CRDCamelNameService.Get method.
+message GetCRDCamelNameRequest {
+  // Name of the CRDCamelName
+  string name = 1;
+  // object name and auth scope
+  string namespace = 2;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions get_options = 3;
+}
+
+// Response message for CRDCamelNameService.Get method.
+message GetCRDCamelNameResponse {
+  // The requested CRDCamelName.
+  CRDCamelName crd_snake_name = 1;
+}
+
+// Request message for CRDCamelNameService.Update method.
+message UpdateCRDCamelNameRequest {
+  // The metadata and spec of the CRDCamelName to be updated.
+  CRDCamelName crd_snake_name = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.UpdateOptions update_options = 2;
+}
+
+// Response message for CRDCamelNameService.Update method.
+message UpdateCRDCamelNameResponse {
+  // The updated CRDCamelName
+  CRDCamelName crd_snake_name = 1;
+}
+
+// Request message for CRDCamelNameService.Delete method.
+message DeleteCRDCamelNameRequest {
+  // Name of the CRDCamelName
+  string name = 1;
+  // object name and auth scope
+  string namespace = 2;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions delete_options = 3;
+}
+
+// Response message for CRDCamelNameService.Delete method.
+message DeleteCRDCamelNameResponse {
+}
+
+// Request message for CRDCamelNameService.DeleteCollection method.
+message DeleteCRDCamelNameCollectionRequest {
+  // object name and auth scope
+  string namespace = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.DeleteOptions delete_options = 2;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions list_options = 3;
+}
+
+// Response message for CRDCamelNameService.DeleteCollection method.
+message DeleteCRDCamelNameCollectionResponse {
+}
+
+// Request message for CRDCamelNameService.List method.
+message ListCRDCamelNameRequest {
+  string namespace = 1;
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListOptions list_options = 2;
+
+  michelangelo.api.ListOptionsExt list_options_ext = 3;
+}
+
+// Response message for CRDCamelNameService.List method.
+message ListCRDCamelNameResponse {
+  CRDCamelNameList crd_snake_name_list = 1;
+}
+
+// CRDCamelName Service defines the CRDCamelName related methods, such as CRUD and list.
+service CRDCamelNameService {
+  // Create a new CRDCamelName with the given spec.
+  rpc CreateCRDCamelName(CreateCRDCamelNameRequest) returns (CreateCRDCamelNameResponse);
+
+  // Get the specified CRDCamelName.
+  rpc GetCRDCamelName(GetCRDCamelNameRequest) returns (GetCRDCamelNameResponse);
+
+  // Update a CRDCamelName with the given spec.
+  rpc UpdateCRDCamelName(UpdateCRDCamelNameRequest) returns (UpdateCRDCamelNameResponse);
+
+  // Delete a CRDCamelName.
+  rpc DeleteCRDCamelName(DeleteCRDCamelNameRequest) returns (DeleteCRDCamelNameResponse);
+
+  // Delete collection of CRDCamelName.
+  rpc DeleteCRDCamelNameCollection(DeleteCRDCamelNameCollectionRequest) returns (DeleteCRDCamelNameCollectionResponse);
+
+  // List objects of type CRDCamelName.
+  // Watch and list all namespaces are not supported
+  rpc ListCRDCamelName(ListCRDCamelNameRequest) returns (ListCRDCamelNameResponse);
+}

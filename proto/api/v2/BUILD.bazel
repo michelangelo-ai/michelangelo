@@ -1,4 +1,5 @@
 # gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto
+# gazelle:go_grpc_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_yarpc,//bazel/rules/proto:go_kubeyarpc,//bazel/rules/proto:go_validation
 
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
@@ -12,9 +13,13 @@ proto_library(
         "job.proto",
         "pod.proto",
         "project.proto",
+        "project_svc.proto",
         "ray_cluster.proto",
+        "ray_cluster_svc.proto",
         "ray_job.proto",
+        "ray_job_svc.proto",
         "spark_job.proto",
+        "spark_job_svc.proto",
         "user.proto",
     ],
     import_prefix = "michelangelo",
@@ -29,7 +34,12 @@ proto_library(
 
 go_proto_library(
     name = "v2_go_proto",
-    compilers = ["//bazel/rules/proto:go_kubeproto"],
+    compilers = [
+        "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_yarpc",
+        "//bazel/rules/proto:go_kubeyarpc",
+        "//bazel/rules/proto:go_validation",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2",
     proto = ":v2_proto",
     visibility = ["//visibility:public"],
