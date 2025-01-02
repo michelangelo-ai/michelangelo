@@ -1,7 +1,7 @@
 package main
 
 import (
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "proto/api/v2"
 
 	"github.com/go-logr/logr"
 
