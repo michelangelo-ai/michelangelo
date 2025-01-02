@@ -1,7 +1,7 @@
 package main
 
 import (
-	v2beta1pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "v2"
 
 	"github.com/go-logr/logr"
 
@@ -16,13 +16,13 @@ import (
 //
 // Usually, the returned Scheme struct includes kubernetes standard scheme defined by the
 // k8s.io/client-go/kubernetes/scheme, as well as a number of custom schemes containing CRDs,
-// e.g. michelangelo/api/v2beta1
+// e.g. api/v2
 func scheme() (*runtime.Scheme, error) {
 	scheme := runtime.NewScheme()
 	if err := kubescheme.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
-	if err := v2beta1pb.AddToScheme(scheme); err != nil {
+	if err := v2pb.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil
