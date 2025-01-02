@@ -13,7 +13,9 @@ import (
 )
 
 var (
-	// Module Provides and starts kubernetes controller manager as configured by the Config
+	// Module provides and starts the Kubernetes Controller Manager as configured by the Config.
+	// It uses Fx for dependency injection to initialize configurations, create the manager,
+	// and set up the lifecycle hooks for the application.
 	Module = fx.Options(
 		fx.Provide(newConfig),
 		fx.Provide(create),
@@ -24,17 +26,26 @@ var (
 type (
 	params struct {
 		fx.In
-		Config Config
-		Scheme *runtime.Scheme
+		Config Config			// Configuration parameters for the controller manager.
+		Scheme *runtime.Scheme	// Kubernetes runtime scheme used by the manager.
 	}
 
 	result struct {
 		fx.Out
-		Manager manager.Manager
-		Client  client.Client
+		Manager manager.Manager	// Initialized Kubernetes controller manager.
+		Client  client.Client	// Kubernetes client for interacting with the cluster.
 	}
 )
 
+// create initializes and configures a new Kubernetes controller manager based on the provided parameters.
+// It retrieves the Kubernetes REST configuration, creates a manager instance, and configures it with the specified options.
+//
+// Params:
+//   p (params): Struct containing Config and Scheme.
+//
+// Returns:
+//   result: Struct containing the initialized Manager and Client.
+//   error: Error if the manager creation fails.
 func create(p params) (result, error) {
 
 	restConf, err := ctrl.GetConfig()
@@ -60,6 +71,15 @@ func create(p params) (result, error) {
 	}, nil
 }
 
+// start sets up a lifecycle hook to start the Kubernetes controller manager.
+// The manager is started in a separate goroutine and listens for termination signals.
+//
+// Params:
+//   lc (fx.Lifecycle): Lifecycle hook to manage application startup and shutdown.
+//   mgr (manager.Manager): Initialized Kubernetes controller manager.
+//
+// Returns:
+//   error: Error if lifecycle setup fails.
 func start(lc fx.Lifecycle, mgr manager.Manager) error {
 	lc.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
@@ -70,6 +90,11 @@ func start(lc fx.Lifecycle, mgr manager.Manager) error {
 	return nil
 }
 
+// _start starts the Kubernetes controller manager and handles runtime errors.
+// If the manager fails to start, it logs the error and exits the application.
+//
+// Params:
+//   mgr (manager.Manager): Kubernetes controller manager to be started.
 func _start(mgr manager.Manager) {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		// TODO: handle error properly. Exit app? Propagate to the parent thread?
