@@ -1,11 +1,10 @@
 package main
 
 import (
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-
 	"github.com/go-logr/logr"
 
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
