@@ -34,3 +34,15 @@ The last step will create a `.venv` directory if it doesn't already exist.
 This directory contains a Python virtual environment with all the dependencies installed.
 You can activate this virtual environment and use it like any other Python virtual environment, 
 or you can run commands via the Poetry CLI, e.g., `poetry run python`, `poetry run pytest`, etc.
+
+
+
+### Package Build
+
+- Assume all development environment config is ready. (Poetry is installed)
+
+```
+poetry build
+```
+
+It will leverage the `poetry` configuration in [pyproject.toml] file (`tool.poetry` section)
