@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "pymichelangelo"
+name = "michelangelo"
 version = "0.1.0"
 description = "Python Michelangelo package"
 authors = ["todo <todo@uber.com>"]
 readme = "README.md"
-exclude = ["michelangelo/"]    # TODO: temporary exclude all codes in package building
+exclude = ["michelangelo"]    # TODO: temporary exclude all codes in package building
 
 
 [tool.poetry.dependencies]
