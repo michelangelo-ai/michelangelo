@@ -2,7 +2,7 @@
 name = "michelangelo"
 version = "0.1.0"
 description = "Michelangelo is an end-to-end model lifecycle management system at large scale"
-authors = ["todo <todo@uber.com>"]
+authors = ["Michelangelo Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
 exclude = ["michelangelo"]    # TODO: temporary exclude all codes in package building
 
