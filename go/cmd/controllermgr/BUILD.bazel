@@ -9,6 +9,9 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//go/controllermgr:go_default_library",
+        "//go/base/config:go_default_library",
+        "//go/base/env:go_default_library",
+        "//go/base/logging:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
@@ -26,4 +29,17 @@ go_binary(
         "CONFIG_DIR": "$(location :config)",
     },
     visibility = ["//visibility:public"],
+)
+
+pkg_tar(
+    name = "tar",
+    srcs = [":controllermgr"],
+    files = {file: file for file in glob(["config/*.yaml"])},
+)
+
+oci_image(
+    name = "image",
+    base = "@distroless_base",
+    entrypoint = ["/controllermgr"],
+    tars = [":tar"],
 )
