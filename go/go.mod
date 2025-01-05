@@ -9,6 +9,7 @@ require (
 	github.com/gogo/status v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
 	golang.org/x/tools v0.26.0
@@ -24,7 +25,12 @@ require (
 
 require (
 	github.com/gogo/googleapis v1.4.1 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	go.uber.org/dig v1.17.1 // indirect
+	golang.org/x/exp v0.0.0-20230515195305-f3d0a9c9a5cc // indirect
+	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (

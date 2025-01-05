@@ -1,0 +1,19 @@
+controllermgr:
+  metricsBindAddress: ${METRICS_ADDRESS::8080}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
+  leaderElection: false
+  leaderElectionID: decaf1259.michelangelo.uber.com
+  port: 9443
+
+controllers:
+  pipelineRun:
+    cadenceTaskList: default
+
+cadence:
+  host: ${CADENCE_HOST:127.0.0.1:7833}
+  transport: ${CADENCE_TRANSPORT:grpc}
+  workers:
+    - domain: default
+      taskList: default
+  client:
+    domain: default
