@@ -27,6 +27,14 @@ go_sdk.nogo(
 ###########################################
 ############# Third-party DEPENDENCIES ####
 ###########################################
+oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
+oci.pull(
+    name = "distroless_base",
+    digest = "sha256:0530d193888bcd7bd0376c8b34178ea03ddb0b2b18caf265135b6d3a393c8d05",
+    image = "gcr.io/distroless/base",
+)
+use_repo(oci, "distroless_base")
+
 go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//go:go.mod")
 use_repo(
