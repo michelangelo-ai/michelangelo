@@ -2,9 +2,10 @@ package util
 
 import (
 	"fmt"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"regexp"
 	"strings"
+
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 
 	"github.com/dave/dst"
 	gogoproto "github.com/gogo/protobuf/proto"
