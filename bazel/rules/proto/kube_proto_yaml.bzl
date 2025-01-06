@@ -5,7 +5,7 @@ yaml files from protocol buffer definitions.
 
 This tool is for testing and debugging purposes only. The same yaml schemas are embedded in the go code generated
 by protoc-gen-kubeproto (go_kubeproto compiler). The CRD schemas are registered / updated automatically by go code
-in Michelangelo API server.
+in Michelangelo API server. Therefore, Michelangleo users never need to manually generate and apply CRD yaml files.
 """
 
 load("@rules_proto//proto:defs.bzl", "ProtoInfo")
