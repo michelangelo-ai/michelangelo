@@ -10,7 +10,7 @@ in Michelangelo API server. Therefore, Michelangleo users never need to manually
 
 load("@rules_proto//proto:defs.bzl", "ProtoInfo")
 load(
-    "@grpc//bazel:protobuf.bzl",
+    ":protobuf.bzl",
     "declare_out_files",
     "get_include_directory",
     "get_out_dir",
@@ -48,7 +48,7 @@ def _proto_gen_impl(context):
         outputs = out_files,
         executable = context.executable._protoc,
         arguments = arguments,
-        mnemonic = "ProtocInvocation",
+        mnemonic = "K8sCRDYamlGeneration",
     )
 
     return [
@@ -63,13 +63,13 @@ kube_proto_yaml = rule(
             providers = [ProtoInfo],
         ),
         "_protoc": attr.label(
-            cfg = "host",
+            cfg = "exec",
             executable = True,
             default = Label("@com_google_protobuf//:protoc"),
             providers = ["files_to_run"],
         ),
         "_kubeyaml_plugin": attr.label(
-            cfg = "host",
+            cfg = "exec",
             allow_files = True,
             executable = True,
             default = Label("//go/cmd/kubeproto/protoc-gen-kubeyaml:protoc-gen-kubeyaml"),

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"os"
 
@@ -14,8 +15,16 @@ import (
 // by protoc-gen-kubeproto (go_kubeproto compiler). The CRD schemas are registered / updated automatically by go code
 // in Michelangelo API server. Therefore, Michelangleo users never need to manually generate and apply CRD yaml files.
 func main() {
-	reqData, _ := io.ReadAll(os.Stdin)
+	reqData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to read protoc request from stdin: %v\n", err)
+		os.Exit(1)
+	}
 	resp := yaml.GenerateYaml(reqData)
-	out, _ := proto.Marshal(resp)
+	out, err := proto.Marshal(resp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to marshal response: %v\n", err)
+		os.Exit(1)
+	}
 	os.Stdout.Write(out)
 }
