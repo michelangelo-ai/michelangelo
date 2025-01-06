@@ -11,6 +11,7 @@ bazel_dep(name = "rules_pkg", version = "1.0.1")
 bazel_dep(name = "rules_oci", version = "2.0.1")
 bazel_dep(name = "rules_proto", version = "7.0.2")
 bazel_dep(name = "protobuf", version = "29.0-rc3", repo_name = "com_google_protobuf")
+bazel_dep(name = "grpc", version = "1.69.0")
 
 ###########################################
 ########### Toolchain Registrations #######

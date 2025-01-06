@@ -2,10 +2,9 @@ package util
 
 import (
 	"fmt"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"regexp"
 	"strings"
-
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 
 	"github.com/dave/dst"
 	gogoproto "github.com/gogo/protobuf/proto"
@@ -41,13 +40,28 @@ func ReplaceImportPath(req *pluginpb.CodeGeneratorRequest) {
 }
 
 // GetPluginAndExtensions generates protogen plugin and extensions given the data.
-func GetPluginAndExtensions(data []byte) (*protogen.Plugin, *protoregistry.Types, error) {
+//
+// When overrideGoPackageOpt is set, it sets the go_package option to the protobuf package. This is useful when the
+// caller is a protoc plugin that generates code for languages (e.g. yaml, sql) other than Go. We are using
+// "google.golang.org/protobuf/compiler/protogen" to parse protobuf code. Since this library is a protobuf to Go
+// compiler, it will fail if the go_package option is not set properly. However, when generating code for other
+// languages, we shouldn't require the go_package option. So, we set the go_package option to the protobuf package,
+// which is always a "valid" value for go_package, to make the library happy.
+func GetPluginAndExtensions(data []byte, overrideGoPackageOpt bool) (*protogen.Plugin, *protoregistry.Types, error) {
 	req := &pluginpb.CodeGeneratorRequest{}
 	err := proto.Unmarshal(data, req)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal input from protoc %v", err)
 	}
 	ReplaceImportPath(req)
+
+	if overrideGoPackageOpt {
+		for _, protoFile := range req.GetProtoFile() {
+			protoPackage := protoFile.Package
+			packageStr := strings.ReplaceAll(*protoPackage, ".", "/")
+			protoFile.Options.GoPackage = &packageStr
+		}
+	}
 
 	// initialize protobuf generator
 	gen, err := protogen.Options{}.New(req)
