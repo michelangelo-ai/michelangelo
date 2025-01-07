@@ -30,8 +30,12 @@ go_sdk.nogo(
 oci = use_extension("@rules_oci//oci:extensions.bzl", "oci")
 oci.pull(
     name = "distroless_base",
-    digest = "sha256:0530d193888bcd7bd0376c8b34178ea03ddb0b2b18caf265135b6d3a393c8d05",
+    digest = "sha256:ccaef5ee2f1850270d453fdf700a5392534f8d1a8ca2acda391fbb6a06b81c86",
     image = "gcr.io/distroless/base",
+    platforms = [
+            "linux/amd64",
+            "linux/arm64",
+        ],
 )
 use_repo(oci, "distroless_base")
 
