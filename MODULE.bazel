@@ -33,11 +33,11 @@ oci.pull(
     digest = "sha256:ccaef5ee2f1850270d453fdf700a5392534f8d1a8ca2acda391fbb6a06b81c86",
     image = "gcr.io/distroless/base",
     platforms = [
-            "linux/amd64",
-            "linux/arm64",
-        ],
+        "linux/amd64",
+        "linux/arm64",
+    ],
 )
-use_repo(oci, "distroless_base")
+use_repo(oci, "distroless_base", "distroless_base_linux_amd64", "distroless_base_linux_arm64")
 
 go_deps = use_extension("@bazel_gazelle//:extensions.bzl", "go_deps")
 go_deps.from_file(go_mod = "//go:go.mod")
