@@ -2,13 +2,16 @@ package main
 
 import (
 	"github.com/go-logr/logr"
-
-	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/config"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/logging"
+	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // scheme provides a Kubernetes runtime.Scheme object.
@@ -41,6 +44,9 @@ func scheme() (*runtime.Scheme, error) {
 //   - fx.Option: A collection of FX options defining the application's modules and configurations.
 func options() fx.Option {
 	return fx.Options(
+		env.Module,
+		config.Module,
+		logging.Module,
 		fx.Provide(scheme),
 		controllermgr.Module,
 		fx.Invoke(func(logger logr.Logger) {
