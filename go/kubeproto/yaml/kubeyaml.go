@@ -508,14 +508,14 @@ func LoadGroupInfo(gen *protogen.Plugin, extTypes *protoregistry.Types, mustHave
 
 // GenerateYaml generates CRD yaml files for the protoc request.
 func GenerateYaml(reqData []byte) *pluginpb.CodeGeneratorResponse {
-	gen, extTypes, err := util.GetPluginAndExtensions(reqData)
+	gen, extTypes, err := util.GetPluginAndExtensions(reqData, true)
 	if err != nil {
 		logger.Panic(err)
 	}
 	gInfo := LoadGroupInfo(gen, extTypes, true)
 
 	for _, f := range gen.Files {
-		// Skip the proto file that don't need to generate go code,
+		// Skip the proto file that don't need to generate yaml files,
 		// such as imported proto files.
 		if !f.Generate {
 			continue

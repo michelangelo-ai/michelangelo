@@ -741,7 +741,7 @@ func indent(s string) string {
 }
 
 func generate(reqData []byte) *pluginpb.CodeGeneratorResponse {
-	gen, extTypes, err := util.GetPluginAndExtensions(reqData)
+	gen, extTypes, err := util.GetPluginAndExtensions(reqData, false)
 	if err != nil {
 		logger.Panic(err)
 	}

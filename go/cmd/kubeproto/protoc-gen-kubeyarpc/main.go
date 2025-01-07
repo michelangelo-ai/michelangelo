@@ -76,7 +76,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 }
 
 func generate(reqData []byte) *pluginpb.CodeGeneratorResponse {
-	gen, extTypes, err := util.GetPluginAndExtensions(reqData)
+	gen, extTypes, err := util.GetPluginAndExtensions(reqData, false)
 	if err != nil {
 		logger.Panic(err)
 	}
