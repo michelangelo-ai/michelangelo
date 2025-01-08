@@ -8,7 +8,7 @@ const (
 
 type (
 	Config struct {
-		CadenceTaskList string `yaml:"cadenceTaskList"`
+
 	}
 )
 

@@ -2,7 +2,11 @@ package raycluster
 
 import (
 	"go.uber.org/fx"
+	"k8s.io/client-go/kubernetes"
+	restclient "k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 )
 
 var (
@@ -16,9 +20,12 @@ var (
 func register(
 	conf Config,
 	mgr manager.Manager,
+	restClient restclient.Config,
 ) error {
-	return (&Controller{
-		Client:          mgr.GetClient(),
-		Scheme:          mgr.GetScheme(),
+	clientset, _ := kubernetes.NewForConfig(&restClient)
+	client := clientset.RESTClient()
+	return (&Reconciler{
+		env:           env.New().Environment,
+		k8sRestClient: client,
 	}).Register(mgr)
 }
