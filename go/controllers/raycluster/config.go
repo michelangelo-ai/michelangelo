@@ -1,6 +1,8 @@
 package raycluster
 
-import "go.uber.org/config"
+import (
+	"go.uber.org/config"
+)
 
 const (
 	configKey = "controllers.rayCluster"
@@ -8,7 +10,8 @@ const (
 
 type (
 	Config struct {
-
+		QPS              float32       `yaml:"k8s_qps"`
+		Burst            int           `yaml:"k8s_burst"`
 	}
 )
 
