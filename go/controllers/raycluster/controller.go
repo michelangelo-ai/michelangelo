@@ -72,14 +72,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, fmt.Errorf("unable to reconcile %w", err)
 	}
 	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
-		logger.Info("Updating status")
 		err = r.Status().Update(ctx, &rayCluster)
 		if err != nil {
 			logger.Error(err, "failed to update status")
 			return result, nil
 		}
-	} else {
-		logger.Info("Nothing changed")
 	}
 
 	logger.Info("Reconcile finished")
