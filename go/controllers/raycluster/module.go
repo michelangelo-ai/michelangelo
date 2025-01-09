@@ -1,7 +1,7 @@
 package raycluster
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	e "github.com/michelangelo-ai/michelangelo/go/base/env"
 
 	"go.uber.org/fx"
 	"k8s.io/client-go/kubernetes"
@@ -23,7 +23,8 @@ func register(
 	clientset, _ := kubernetes.NewForConfig(mgr.GetConfig())
 	client := clientset.RESTClient()
 	return (&Reconciler{
-		env:           env.New().Environment,
+		Client:          mgr.GetClient(),
+		env:           e.New().Environment,
 		k8sRestClient: client,
 	}).Register(mgr)
 }

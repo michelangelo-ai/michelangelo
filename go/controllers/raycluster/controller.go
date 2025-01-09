@@ -5,11 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	e "github.com/michelangelo-ai/michelangelo/go/base/env"
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
 
 	"github.com/go-logr/logr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -30,7 +29,7 @@ const (
 type Reconciler struct {
 	client.Client
 
-	env     env.Context
+	env     e.Context
 
 	k8sRestClient      restclient.Interface
 }
@@ -51,12 +50,11 @@ const _apiVersion = "ray.io/v1"
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	ctx, cancel := context.WithTimeout(ctx, _requestTimeout*time.Second)
 	logger := log.FromContext(ctx)
-	logger.Info("reconcile")
 	defer cancel()
 
-	logger.Info("Reconciling ray cluster v2")
+	logger.Info(fmt.Sprintf("Reconciling ray cluster %s", req.NamespacedName))
 
-	// retrieve the dashboard
+	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
 		// TODO when the ray cluster is not found, means it has been deleted
@@ -74,11 +72,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{}, fmt.Errorf("unable to reconcile %w", err)
 	}
 	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
-		err = r.Update(ctx, &rayCluster, &client.UpdateOptions{})
+		logger.Info("Updating status")
+		err = r.Status().Update(ctx, &rayCluster)
 		if err != nil {
+			logger.Error(err, "failed to update status")
 			return result, nil
 		}
+	} else {
+		logger.Info("Nothing changed")
 	}
+
+	logger.Info("Reconcile finished")
 
 	return result, nil
 }
@@ -173,7 +177,7 @@ StateMachine:
 			return ctrl.Result{}, nil
 		}
 	default:
-		if rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
+		if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			return ctrl.Result{}, nil
 		}
@@ -202,12 +206,6 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 					"spec": map[string]interface{}{
 						"containers": []map[string]interface{}{
 							convertPodSpecToJSON(cluster.Spec.Head.Pod),
-						},
-						"volumes": []map[string]interface{}{
-							{
-								"name": "log-volume",
-								"emptyDir": map[string]interface{}{},
-							},
 						},
 					},
 				},
