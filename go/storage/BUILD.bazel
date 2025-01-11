@@ -1,0 +1,31 @@
+# gazelle:exclude mocks.go
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "blob_storage.go",
+        "metadata_storage.go",
+        "storage_config.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/storage",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+    ],
+)
+
+gomock(
+    name = "storage_gomock_library",
+    out = "mocks.go",
+    interfaces = [
+        "MetadataStorage",
+        "BlobStorage",
+    ],
+    library = ":go_default_library",
+    package = "storagemock",
+    self_package = "mock/github.com/michelangelo-ai/michelangelo/go/storage/storagemock",
+)
