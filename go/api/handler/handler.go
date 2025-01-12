@@ -43,14 +43,14 @@ const (
 type Params struct {
 	fx.In
 
-	Manager       ctrl.Manager `optional:"true"`
-	K8sRestConfig *rest.Config
-	Scheme        *runtime.Scheme
-	StorageConfig storage.MetadataStorageConfig
-	StorageClient storage.MetadataStorage
-	BlobStorage   storage.BlobStorage
-	Logger        logr.Logger
-	Metrics       tally.Scope
+	Manager         ctrl.Manager `optional:"true"`
+	K8sRestConfig   *rest.Config
+	Scheme          *runtime.Scheme
+	StorageConfig   storage.MetadataStorageConfig
+	MetadataStorage storage.MetadataStorage
+	BlobStorage     storage.BlobStorage
+	Logger          logr.Logger
+	Metrics         tally.Scope
 }
 
 func newAPIServerHandler(params Params) (api.Handler, error) {
@@ -87,7 +87,7 @@ func newK8sOnlyFactory(params Params) Factory {
 }
 
 func newK8sAndMetadataStorageFactory(params Params) Factory {
-	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.StorageClient,
+	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.MetadataStorage,
 		BlobStorage: params.BlobStorage, Logger: params.Logger,
 		Metrics: params.Metrics}
 }
@@ -101,11 +101,6 @@ func (f *factoryImpl) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, er
 		blobStorage: f.BlobStorage, logger: f.Logger, metrics: f.Metrics}
 	return &handler, nil
 }
-
-type timeSource func() time.Time
-
-// TimeSource is the source for timeSource
-var TimeSource timeSource = time.Now
 
 // apiHandler is an api.Handler that abstracts the API operations from the underlying systems (i.e. k8s/ETCD + MetadataStorage).
 type apiHandler struct {
@@ -194,6 +189,10 @@ func (handler *apiHandler) Get(
 			log.Info("Find object in ETCD")
 			return nil
 		}
+	}
+	// if the k8s client error is not "not found", return the error
+	if statusErr, ok := err.(*apiErrors.StatusError); !ok || statusErr.Status().Reason != metav1.StatusReasonNotFound {
+		return surfaceGrpcError(err, "get", namespace, name)
 	}
 
 	// If the object does not exist in K8s/ETCD, get from metadata storage.
@@ -317,7 +316,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
 
-	// When we enable ingester, we mark DeletingAnnotation and ingester will handle the deletion.
+	// When metadata storage is enabled, we only mark DeletingAnnotation here. The ingester will handle the deletion.
 	tmpObj, ok := obj.DeepCopyObject().(ctrlRTClient.Object)
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
@@ -337,7 +336,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 			//    later.
 			if tmpObj.GetDeletionTimestamp() != nil {
 				log.Info("Deleting an immutable object with deletion timestamp != nil - deleting from metadata storage")
-				return deleteObjectFromMetadataStorage(ctx, tmpObj, handler)
+				return deleteObjectFromMetadataStorage(ctx, log, tmpObj, handler)
 			}
 
 			log.Info("Deleting an immutable object w/o deletion timestamp")
@@ -361,13 +360,15 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	if statusErr, ok := err.(*apiErrors.StatusError); ok {
 		if statusErr.Status().Reason == metav1.StatusReasonNotFound && handler.metadataStorage != nil {
 			log.Info("Object does not exist in ETCD - deleting from metadata storage")
-			return deleteObjectFromMetadataStorage(ctx, obj, handler)
+			return deleteObjectFromMetadataStorage(ctx, log, obj, handler)
 		}
 	}
 	return err
 }
 
 // List implements api.Handler.List
+// When metadata storage is enabled, this function only returns objects that are already ingested into metadata storage.
+// ListOptionsExt is only supported when metadata storage is enabled.
 // Returns nil if successful, otherwise a gRPC status error is returned.
 func (handler *apiHandler) List(ctx context.Context, namespace string, opts *metav1.ListOptions,
 	listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
@@ -381,8 +382,10 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 
 	if storage.EnableMetadataStorage(&handler.conf) {
 		return handler.metadataStorageList(ctx, namespace, opts, listOptionsExt, list)
+	} else if listOptionsExt != nil {
+		return status.Errorf(codes.Unimplemented,
+			"ListOptionsExt is not supported, when Metadata Storage is not enabled.")
 	}
-	// TODO: error if listOptionsExt is not empty
 
 	parsedListOptions, err := getCRTListOptions(namespace, opts)
 	if err != nil {
@@ -409,6 +412,8 @@ func (handler *apiHandler) metadataStorageList(ctx context.Context, namespace st
 }
 
 // DeleteCollection implements api.Handler.DeleteCollection
+// When metadata storage is enabled, this function only list and delete the objects that are already ingested into
+// metadata storage.
 // Returns nil if successful, otherwise a gRPC status error is returned.
 func (handler *apiHandler) DeleteCollection(
 	ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions,
@@ -471,7 +476,7 @@ func (handler *apiHandler) DeleteCollection(
 	}
 
 	for _, item := range items {
-		err := handler.Delete(ctx, item.(ctrlRTClient.Object), deleteOpts)
+		err = handler.Delete(ctx, item.(ctrlRTClient.Object), deleteOpts)
 		if err != nil {
 			return err
 		}
@@ -484,12 +489,12 @@ func isDeletedImmutableObject(obj ctrlRTClient.Object) bool {
 	return apiutil.IsImmutable(obj) && obj.GetDeletionTimestamp() != nil
 }
 
-func deleteObjectFromMetadataStorage(ctx context.Context, obj ctrlRTClient.Object, handler *apiHandler) error {
+func deleteObjectFromMetadataStorage(ctx context.Context, log logr.Logger, obj ctrlRTClient.Object, handler *apiHandler) error {
 	typeMeta, err := apiutil.GetObjectTypeMetafromObject(obj, scheme.Scheme)
 	if err != nil {
 		return fmt.Errorf("cannot get object type meta %v", err)
 	}
-	err = handleDelete(ctx, typeMeta, obj, handler.metadataStorage, handler.blobStorage)
+	err = handleDelete(ctx, log, typeMeta, obj, handler.metadataStorage, handler.blobStorage)
 	if err != nil {
 		return surfaceGrpcError(err, "delete", obj.GetNamespace(), obj.GetName())
 	}
@@ -565,7 +570,7 @@ func (handler *apiHandler) hasSpecChange(ctx context.Context, objForUpdate ctrlR
 }
 
 func setUpdateTimestamp(obj ctrlRTClient.Object, hasSpecChange bool) {
-	t := strconv.FormatInt(TimeSource().UnixMicro(), 10)
+	t := strconv.FormatInt(time.Now().UnixMicro(), 10)
 	labels := obj.GetLabels()
 	if labels == nil {
 		labels = map[string]string{}
@@ -622,8 +627,28 @@ func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage 
 	panic("not implemented")
 }
 
-// HandleDelete deletes the object in metadataStorage and blobStorage.
-func handleDelete(ctx context.Context, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
+// HandleDelete deletes the object in metadata storage and blob storage.
+// 1. Gets the object currently stored in metadataStorage, to retrieve the annotations
+// 2. Deletes the object in metadataStorage
+// 3. Deletes the object in blob storage
+func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
 	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
-	panic("not implemented")
+	if handler.IsObjectInteresting(object) {
+		// TODO: if blob annotations are already available, this Get is not needed
+		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)
+		if err := metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+			return err
+		}
+
+		if getErr == nil {
+			// Failed to delete in blob storage is not a critical failure, as orphan blobs can be deleted by garbage
+			// collector. So, do not return error.
+			err := handler.DeleteFromBlobStorage(ctx, object)
+			log.Error(err, "Failed to delete object in blob storage", "uid", object.GetUID())
+		}
+
+		return nil
+	}
+
+	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
 }

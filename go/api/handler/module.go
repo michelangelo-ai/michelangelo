@@ -1,18 +1,13 @@
 package handler
 
 import (
-	"time"
-
 	"github.com/go-logr/zapr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/kubernetes/scheme"
-
-	"github.com/michelangelo-ai/michelangelo/go/api"
-	"github.com/michelangelo-ai/michelangelo/go/storage"
 
 	"go.uber.org/fx"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -28,8 +23,6 @@ var CtrlMgrModule = fx.Options(
 
 // NewFakeAPIHandler creates an API handler with the provided k8s client.  This is used for unit test only.
 func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
-	// Overwrite TimeSource to produce deterministic result for unit test
-	TimeSource = func() time.Time { return time.UnixMicro(0) }
 	return &apiHandler{
 		k8sClient: k8sClient,
 		conf: storage.MetadataStorageConfig{
@@ -47,13 +40,4 @@ type Result struct {
 	Scheme       *runtime.Scheme
 	GroupVersion runtime.GroupVersioner
 	IndexMaps    []map[schema.GroupVersionKind]map[string]string `group:"indexMaps,flatten"`
-}
-
-// GetCRDScheme provides the CRD scheme related dependencies
-func GetCRDScheme() (Result, error) {
-	return Result{
-		Scheme:       scheme.Scheme,
-		GroupVersion: v2pb.GroupVersion,
-		IndexMaps:    []map[schema.GroupVersionKind]map[string]string{v2pb.IndexesPathToKeyMap},
-	}, nil
 }
