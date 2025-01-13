@@ -60,6 +60,16 @@ func IsImmutable(object client.Object) bool {
 	return checkAnnotation(object, api.ImmutableAnnotation)
 }
 
+// MarkImmutable is used to mark the ImmutableAnnotation.
+func MarkImmutable(object client.Object) {
+	annotations := object.GetAnnotations()
+	if annotations == nil {
+		annotations = make(map[string]string)
+		object.SetAnnotations(annotations)
+	}
+	annotations[api.ImmutableAnnotation] = "true"
+}
+
 func checkAnnotation(object client.Object, key string) bool {
 	if object == nil {
 		return false

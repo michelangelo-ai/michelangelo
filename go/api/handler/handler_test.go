@@ -237,8 +237,7 @@ func TestK8sOnly(t *testing.T) {
 		},
 	}, listJobs)
 	assert.Error(t, err)
-	s, _ := status.FromError(err)
-	assert.Equal(t, codes.Unimplemented, s.Code())
+	checkGrpcStatusCode(t, codes.Unimplemented, err)
 
 	// Delete Collection
 	err = handler.DeleteCollection(context.Background(), &v2pb.RayJob{}, "project01", &metav1.DeleteOptions{}, &metav1.ListOptions{})
