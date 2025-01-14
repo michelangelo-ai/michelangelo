@@ -170,7 +170,7 @@ StateMachine:
 		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
 	case v2pb.RAY_CLUSTER_STATE_READY:
 		log.Info("cluster is ready, we do nothing but continue requeue until the job finishes and received termination signal")
-		if rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
+		if  rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			return ctrl.Result{}, nil
 		}
@@ -193,15 +193,13 @@ func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) er
 			APIVersion: _apiVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			GenerateName:               fmt.Sprintf("rc-%s-", cluster.Name),
+			Name:               cluster.Name,
 			Namespace:                  cluster.Namespace,
 		},
 		Spec:       v1.RayClusterSpec{
 			EnableInTreeAutoscaling: nil,
 			HeadGroupSpec:           v1.HeadGroupSpec{
-				ServiceType:    "",
-				HeadService:    nil,
-				EnableIngress:  nil,
+				ServiceType:    corev1.ServiceType(cluster.Spec.Head.ServiceType),
 				RayStartParams: cluster.Spec.Head.RayStartParams,
 				Template:       corev1.PodTemplateSpec{
 					Spec:       corev1.PodSpec{
@@ -211,11 +209,12 @@ func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) er
 					},
 				},
 			},
-			RayVersion:       "2.3.1",
+			RayVersion:       cluster.Spec.RayVersion,
 			WorkerGroupSpecs: convertWorkerGroupSpecsToWorkerSpec(cluster.Name, cluster.Spec.Workers),
 		},
 	}
 	createdRayCluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Create(context.TODO(), rayV1Cluster, metav1.CreateOptions{})
+	log.Info(fmt.Sprintf("ray cluster %s/%s created", createdRayCluster.Namespace, createdRayCluster.Name))
 	if err != nil {
 		log.Error(err, "Failed to submit RayCluster")
 		return err
@@ -299,11 +298,10 @@ func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 	return corev1.Container{
 		Name:                     pod.Name,
 		Image:                    pod.Image,
-		ImagePullPolicy: "Never",
+		//ImagePullPolicy: "Never",
 		Command:                  pod.Command,
 		EnvFrom:                  []corev1.EnvFromSource{
 			{
-				Prefix:       "",
 				ConfigMapRef: &corev1.ConfigMapEnvSource{
 					LocalObjectReference: corev1.LocalObjectReference{
 						Name: "michelangelo-config",
@@ -313,12 +311,12 @@ func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 		},
 		Env:                      convertEnvVar(pod.Env),
 		Resources:                convertResource(pod.Resource),
-		VolumeMounts:             []corev1.VolumeMount{
-			{
-				Name:              "log-volume",
-				MountPath:         "mountPath",
-			},
-		},
+		//VolumeMounts:             []corev1.VolumeMount{
+		//	{
+		//		Name:              "log-volume",
+		//		MountPath:         "/tmp/ray",
+		//	},
+		//},
 	}
 }
 

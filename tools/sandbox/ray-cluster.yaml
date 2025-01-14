@@ -8,11 +8,11 @@ spec:
   head:
     serviceType: "ClusterIP"
     pod:
-      name: rayHeadPod
+      name: head
       resource:
         cpu: 1
         memory: "2Gi"
-      image: rayproject/ray:2.2.0
+      image: rayproject/ray:2.3.1-py310-cpu
       env:
         - name: RAY_HEAD_ENV
           value: "true"
@@ -29,17 +29,16 @@ spec:
         - "--num-gpus=0"
     rayStartParams:
       dashboard-host: "0.0.0.0"
-      num-cpus: "2"
-      num-gpus: "0"
+      block: "true"
   workers:
-    - minInstances: 2
-      maxInstances: 5
+    - minInstances: 1
+      maxInstances: 1
       pod:
-        name: rayWorkerPod
+        name: worker
         resource:
-          cpu: 2
-          memory: "4Gi"
-        image: rayproject/ray:2.2.0
+          cpu: 1
+          memory: "1Gi"
+        image: rayproject/ray:2.3.1-py310-cpu
         env:
           - name: RAY_WORKER_ENV
             value: "true"
@@ -50,10 +49,5 @@ spec:
         command:
           - "ray"
           - "start"
-          - "--address=ray://ray-head-service:6379"
-          - "--num-cpus=4"
-          - "--num-gpus=0"
       rayStartParams:
-        address: "ray://ray-head-service:6379"
-        num-cpus: "4"
-        num-gpus: "0"
+        block: "true"
