@@ -7,12 +7,12 @@ if [ $# -lt 1 ]; then
 fi
 
 if [ -z "$GOPACKAGE" ]; then
-    echo "Error: GOPACKAGE is not set or is empty."
+    echo "Error: GOPACKAGE is not set or is empty. This environment variable should be set by go generate."
     exit 1
 fi
 
 if [ -z "$GOFILE" ]; then
-    echo "Error: GOFILE is not set or is empty."
+    echo "Error: GOFILE is not set or is empty. This environment variable should be set by go generate."
     exit 1
 fi
 
