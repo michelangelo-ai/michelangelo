@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "pymichelangelo"
+name = "michelangelo-ai"
 version = "0.1.0"
 description = "Michelangelo is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo Team <michelangelo-oss-group@uber.com>"]
