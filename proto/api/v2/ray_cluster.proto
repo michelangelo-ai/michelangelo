@@ -73,26 +73,23 @@ enum RayClusterState {
   // The cluster state is invalid.
   RAY_CLUSTER_STATE_INVALID = 0;
 
-  // The cluster is in the process of being launched.
-  RAY_CLUSTER_STATE_LAUNCHED = 1;
-
   // The cluster is being provisioned.
-  RAY_CLUSTER_STATE_PROVISIONING = 2;
+  RAY_CLUSTER_STATE_PROVISIONING = 1;
 
   // The cluster is ready for use.
-  RAY_CLUSTER_STATE_READY = 3;
+  RAY_CLUSTER_STATE_READY = 2;
 
   // The cluster is being terminated.
-  RAY_CLUSTER_STATE_TERMINATING = 4;
+  RAY_CLUSTER_STATE_TERMINATING = 3;
 
   // The cluster has been terminated.
-  RAY_CLUSTER_STATE_TERMINATED = 5;
+  RAY_CLUSTER_STATE_TERMINATED = 4;
 
   // The cluster creation or operation failed.
-  RAY_CLUSTER_STATE_FAILED = 6;
+  RAY_CLUSTER_STATE_FAILED = 5;
 
   // The cluster state is unknown.
-  RAY_CLUSTER_STATE_UNKNOWN = 7;
+  RAY_CLUSTER_STATE_UNKNOWN = 6;
 }
 
 // Specification for RayHeadNodeInfo

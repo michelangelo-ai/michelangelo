@@ -27,6 +27,10 @@ spec:
         - "--dashboard-host=0.0.0.0"
         - "--num-cpus=2"
         - "--num-gpus=0"
+    rayStartParams:
+      dashboard-host: "0.0.0.0"
+      num-cpus: "2"
+      num-gpus: "0"
   workers:
     - minInstances: 2
       maxInstances: 5
@@ -49,3 +53,7 @@ spec:
           - "--address=ray://ray-head-service:6379"
           - "--num-cpus=4"
           - "--num-gpus=0"
+      rayStartParams:
+        address: "ray://ray-head-service:6379"
+        num-cpus: "4"
+        num-gpus: "0"
