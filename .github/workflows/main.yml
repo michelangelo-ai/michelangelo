@@ -28,8 +28,7 @@ jobs:
 
       - name: Run go generate
         run: |
-          source ./.envrc
-          cd go && go generate ./...
+          export PATH=$(pwd)/tools:${PATH} && cd go && go generate ./...
 
       # Run Bazel tests
       - name: Run Bazel Test
@@ -73,8 +72,7 @@ jobs:
 
       - name: Run go generate
         run: |
-          source ./.envrc
-          cd go && go generate ./...
+          export PATH=$(pwd)/tools:${PATH} && cd go && go generate ./...
 
       - name: Run Gazelle
         run: |
