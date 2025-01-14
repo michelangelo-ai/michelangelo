@@ -6,11 +6,11 @@ if [ $# -lt 1 ]; then
     exit 1
 fi
 
-if [ -z "GOPACKAGE" ]; then
+if [ -z "$GOPACKAGE" ]; then
     echo "Error: GOPACKAGE is not set or is empty. GOPACKAGE environment variable has to be set by //go:generate."
 fi
 
-if [ -z "GOFILE" ]; then
+if [ -z "$GOFILE" ]; then
     echo "Error: GOFILE is not set or is empty. GOFILE environment variable has to be set by //go:generate."
 fi
 

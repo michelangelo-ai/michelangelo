@@ -28,6 +28,7 @@ jobs:
 
       - name: Run go generate
         run: |
+          ./.envrc
           cd go && go generate ./...
 
       # Run Bazel tests
@@ -72,6 +73,7 @@ jobs:
 
       - name: Run go generate
         run: |
+          ./.envrc
           cd go && go generate ./...
 
       - name: Run Gazelle
