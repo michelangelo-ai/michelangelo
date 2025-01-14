@@ -51,21 +51,14 @@ const _apiVersion = "ray.io/v1"
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	ctx, cancel := context.WithTimeout(ctx, _requestTimeout*time.Second)
 	logger := log.FromContext(ctx)
-	defer cancel()
-
 	logger.Info(fmt.Sprintf("Reconciling ray cluster %s", req.NamespacedName))
 
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
-		// TODO when the ray cluster is not found, means it has been deleted
-		// we also need to delete the evaluation report as well
-		if IsNotFoundError(err) {
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, err
+		// Resource not found (resource deleted)
+		return ctrl.Result{}, nil
 	}
 
 	originalRayCluster := rayCluster.DeepCopy()
@@ -82,7 +75,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	logger.Info("Reconcile finished")
+	logger.Info(fmt.Sprintf("Reconcile finished, re-queue after %v", result.RequeueAfter))
 
 	return result, nil
 }
@@ -99,55 +92,47 @@ func (r *Reconciler) reconcile(
 	log logr.Logger,
 	rayCluster *v2pb.RayCluster,
 ) (ctrl.Result, error) {
+	shouldBeTerminated := rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID
+	status, reason, err := r.getClusterStatus(log, rayCluster)
 
+	res := ctrl.Result{}
 	// Here we check the state, take an action and then transition to next state.
-	// Only terminal state SUCCEED, FAILED and KILLED remove request from queue by returning empty ctrl.Result{}
+	// Only terminal state TERMINATED, FAILED remove request from queue by returning empty ctrl.Result{}
 	// For non-terminal state, we should always requeue because we don't have a watch on the dashboard state.
-StateMachine:
-	switch rayCluster.Status.State {
-	case v2pb.RAY_CLUSTER_STATE_INVALID:
-		log.Info(rayCluster.Status.State.String())
-		err := r.createCluster(log, rayCluster)
-		if err != nil {
-			log.Error(err, "failed to create cluster")
+	if reason != nil {
+		podError := &v2pb.PodErrors{
+			ContainerName: rayCluster.Status.HeadNode.Name,
+			ExitCode:      0,
+			Reason:        *reason,
+		}
+		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
+	}
+	if err != nil {
+		if IsNotFoundError(err) && !shouldBeTerminated {
+			log.Info(rayCluster.Status.State.String())
+			err = r.createCluster(log, rayCluster)
+			if err != nil {
+				log.Error(err, "failed to create cluster")
+				res.RequeueAfter = time.Second * 20
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			}
+			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
+		} else if IsNotFoundError(err) && shouldBeTerminated {
+			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
+		} else {
+			res.RequeueAfter = time.Second * 20
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			return ctrl.Result{}, nil
 		}
-		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
-	case v2pb.RAY_CLUSTER_STATE_PROVISIONING:
-		log.Info(rayCluster.Status.State.String())
-		if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-			return ctrl.Result{}, nil
-		}
-		status, reason, err := r.getClusterStatus(log, rayCluster)
-		if err != nil {
-			errMsg := err.Error()
-			if strings.Contains(errMsg, "not found") {
-				log.Info("Resource not found, marking as terminated.")
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-				return ctrl.Result{}, nil
+	} else if status != nil {
+		if shouldBeTerminated {
+			err := r.deleteClusterStatus(log, rayCluster)
+			if err != nil {
+				res.RequeueAfter = time.Second * 20
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			} else {
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			}
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			if reason != nil {
-				podError := &v2pb.PodErrors{
-					ContainerName: rayCluster.Status.HeadNode.Name,
-					ExitCode:      0,
-					Reason:        *reason,
-				}
-				rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
-			}
-			break StateMachine
-		}
-		if reason != nil {
-			podError := &v2pb.PodErrors{
-				ContainerName: rayCluster.Status.HeadNode.Name,
-				ExitCode:      0,
-				Reason:        *reason,
-			}
-			rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
-		}
-		if status != nil && r.isTerminatedState(*status) {
+		} else if r.isTerminatedState(*status) {
 			if *status == "failed" {
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			} else if *status == "terminated" {
@@ -155,35 +140,96 @@ StateMachine:
 			} else if *status == "unknown" {
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_UNKNOWN
 			}
-			return ctrl.Result{}, nil
 		} else if *status == "ready" {
+			log.Info("cluster is ready, we continue to re-queue until receiving termination signal")
+			res.RequeueAfter = time.Second * 20
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
-		}
-	case v2pb.RAY_CLUSTER_STATE_TERMINATING:
-		log.Info(rayCluster.Status.State.String())
-		err := r.deleteClusterStatus(log, rayCluster)
-		if err != nil {
+		} else {
+			res.RequeueAfter = time.Second * 20
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			break StateMachine
 		}
-		// we check it back to provioning for checking the status
-		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
-	case v2pb.RAY_CLUSTER_STATE_READY:
-		log.Info("cluster is ready, we do nothing but continue requeue until the job finishes and received termination signal")
-		if  rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-			return ctrl.Result{}, nil
-		}
-	default:
-		log.Info(rayCluster.Status.State.String())
-		if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-			return ctrl.Result{}, nil
-		}
-		return ctrl.Result{}, nil
+	} else {
+		res.RequeueAfter = time.Second * 20
 	}
-
-	return ctrl.Result{RequeueAfter: time.Second * _requeueAfterSeconds}, nil
+	return res, nil
+	//
+	//case v2pb.RAY_CLUSTER_STATE_PROVISIONING:
+	//	log.Info(rayCluster.Status.State.String())
+	//	if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
+	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
+	//		return ctrl.Result{}, nil
+	//	}
+	//	status, reason, err := r.getClusterStatus(log, rayCluster)
+	//	if err != nil {
+	//		if IsNotFoundError(err) {
+	//			log.Info("Resource not found, marking as terminated.")
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
+	//			return ctrl.Result{}, nil
+	//		}
+	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+	//		if reason != nil {
+	//			podError := &v2pb.PodErrors{
+	//				ContainerName: rayCluster.Status.HeadNode.Name,
+	//				ExitCode:      0,
+	//				Reason:        *reason,
+	//			}
+	//			rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
+	//		}
+	//		break
+	//	}
+	//	if reason != nil {
+	//		podError := &v2pb.PodErrors{
+	//			ContainerName: rayCluster.Status.HeadNode.Name,
+	//			ExitCode:      0,
+	//			Reason:        *reason,
+	//		}
+	//		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
+	//	}
+	//	if status != nil && r.isTerminatedState(*status) {
+	//		if *status == "failed" {
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+	//		} else if *status == "terminated" {
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
+	//		} else if *status == "unknown" {
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_UNKNOWN
+	//		}
+	//		return ctrl.Result{}, nil
+	//	} else if *status == "ready" {
+	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+	//	}
+	//	break
+	//case v2pb.RAY_CLUSTER_STATE_TERMINATING:
+	//	log.Info(rayCluster.Status.State.String())
+	//	err := r.deleteClusterStatus(log, rayCluster)
+	//	if err != nil {
+	//		if IsNotFoundError(err) {
+	//			log.Info("Resource not found, marking as terminated.")
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
+	//		} else {
+	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+	//		}
+	//		break
+	//	}
+	//	// we check it back to provioning for checking the status
+	//	rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
+	//case v2pb.RAY_CLUSTER_STATE_READY:
+	//	log.Info("cluster is ready, we do nothing but continue requeue until the job finishes and received termination signal")
+	//	if  rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
+	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
+	//		return ctrl.Result{}, nil
+	//	}
+	//case v2pb.RAY_CLUSTER_STATE_TERMINATED:
+	//	return ctrl.Result{}, nil
+	//default:
+	//	log.Info(rayCluster.Status.State.String())
+	//	if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
+	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
+	//		return ctrl.Result{}, nil
+	//	}
+	//	return ctrl.Result{}, nil
+	//}
+	//
+	//return ctrl.Result{RequeueAfter: time.Second * _requeueAfterSeconds}, nil
 }
 
 func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) error {
@@ -238,9 +284,8 @@ func (r *Reconciler) getClusterStatus(log logr.Logger, cluster *v2pb.RayCluster)
 
 func (r *Reconciler) deleteClusterStatus(log logr.Logger, cluster *v2pb.RayCluster) error {
 	err := r.rayV1Client.RayClusters(cluster.Namespace).Delete(context.TODO(), cluster.Name, metav1.DeleteOptions{})
-
 	if err != nil {
-		log.Error(err, "Failed to get RayCluster status: %v")
+		log.Error(err, "Failed to delete RayCluster: %v")
 		return err
 	}
 	return nil
@@ -343,7 +388,9 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 
 // IsNotFoundError checks if the error is not found error
 func IsNotFoundError(err error) bool {
-	if e, ok := status.FromError(err); ok {
+	if strings.Contains(err.Error(), "not found") {
+		return true
+	} else if e, ok := status.FromError(err); ok {
 		return e.Code() == codes.NotFound
 	}
 	return false

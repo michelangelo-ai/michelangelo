@@ -5,6 +5,9 @@ metadata:
   namespace: default
 spec:
   rayVersion: "2.2.0"
+#  termination:
+#    type: TERMINATION_TYPE_FAILED
+#    reason: "killed by user"
   head:
     serviceType: "ClusterIP"
     pod:
@@ -20,13 +23,6 @@ spec:
           value: "false"
       hdfsDelegationToken: ""
       onInit: "/bin/bash -c echo 'Initializing Ray Head'"
-      command:
-        - "ray"
-        - "start"
-        - "--head"
-        - "--dashboard-host=0.0.0.0"
-        - "--num-cpus=2"
-        - "--num-gpus=0"
     rayStartParams:
       dashboard-host: "0.0.0.0"
       block: "true"
@@ -46,8 +42,5 @@ spec:
             value: "false"
         hdfsDelegationToken: ""
         onInit: "/bin/bash -c echo 'Initializing Ray Worker'"
-        command:
-          - "ray"
-          - "start"
       rayStartParams:
         block: "true"
