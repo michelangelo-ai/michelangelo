@@ -1,3 +1,4 @@
+//go:generate mamockgen Handler
 package api
 
 import (
