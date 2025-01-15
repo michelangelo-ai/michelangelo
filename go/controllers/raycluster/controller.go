@@ -27,7 +27,7 @@ const (
 	_requeueAfterSeconds = time.Second * 10
 )
 
-// Reconciler reconciles a Ray CRD object
+// Reconciler reconciles a Ray Cluster object
 type Reconciler struct {
 	client.Client
 
@@ -40,13 +40,6 @@ const _apiVersion = "ray.io/v1"
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the RayCluster object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("Reconciling ray cluster %s", req.NamespacedName))
@@ -93,9 +86,7 @@ func (r *Reconciler) reconcile(
 	status, reason, err := r.getClusterStatus(log, rayCluster)
 
 	res := ctrl.Result{}
-	// Here we check the state, take an action and then transition to next state.
-	// Only terminal state TERMINATED, FAILED remove request from queue by returning empty ctrl.Result{}
-	// For non-terminal state, we should always requeue because we don't have a watch on the dashboard state.
+
 	if reason != nil {
 		podError := &v2pb.PodErrors{
 			ContainerName: rayCluster.Status.HeadNode.Name,
