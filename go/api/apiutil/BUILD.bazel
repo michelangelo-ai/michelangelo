@@ -6,9 +6,9 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/apiutil",
     visibility = ["//visibility:public"],
     deps = [
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@org_golang_google_grpc//codes:go_default_library",
         "@org_golang_google_grpc//status:go_default_library",
-        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
     ],
 )
 
