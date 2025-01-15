@@ -1,11 +1,12 @@
 package apiutil
 
 import (
+	"regexp"
+	"strings"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"regexp"
-	"strings"
 )
 
 var matchFirstCap = regexp.MustCompile("(.)([A-Z][a-z]+)")

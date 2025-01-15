@@ -29,7 +29,7 @@ const (
 // Reconciler reconciles a Ray Cluster object
 type Reconciler struct {
 	client.Client
-	env env.Context
+	env         env.Context
 	rayV1Client *rayv1.RayV1Client
 }
 
@@ -70,7 +70,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	shouldBeTerminated := rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID
 	status, reason, err := r.getClusterStatus(ctx, logger, rayCluster.Namespace, rayCluster.Name)
-
 
 	if reason != nil {
 		podError := &v2pb.PodErrors{
@@ -136,7 +135,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 
-	logger.Info("Reconcile finished, re-queue after", "requeueAfter",  res.RequeueAfter)
+	logger.Info("Reconcile finished, re-queue after", "requeueAfter", res.RequeueAfter)
 
 	return res, nil
 }
@@ -252,8 +251,8 @@ func convertEnvVar(environments []*v2pb.Environment) []corev1.EnvVar {
 
 func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 	return corev1.Container{
-		Name:  pod.Name,
-		Image: pod.Image,
+		Name:    pod.Name,
+		Image:   pod.Image,
 		Command: pod.Command,
 		EnvFrom: []corev1.EnvFromSource{
 			{
@@ -289,5 +288,3 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 	}
 	return workerGroupSpecsJson
 }
-
-
