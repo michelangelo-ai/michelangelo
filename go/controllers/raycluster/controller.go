@@ -24,8 +24,7 @@ import (
 )
 
 const (
-	_requestTimeout      = 60
-	_requeueAfterSeconds = 10
+	_requeueAfterSeconds = time.Second * 10
 )
 
 // Reconciler reconciles a Ray CRD object
@@ -37,7 +36,6 @@ type Reconciler struct {
 	rayV1Client      *rayv1.RayV1Client
 }
 
-const _controllerName = "raycluster"
 const _apiVersion = "ray.io/v1"
 
 
@@ -114,7 +112,7 @@ func (r *Reconciler) reconcile(
 			err = r.createCluster(log, rayCluster)
 			if err != nil {
 				log.Error(err, "failed to create cluster")
-				res.RequeueAfter = time.Second * 20
+				res.RequeueAfter = _requeueAfterSeconds
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			}
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
@@ -122,7 +120,7 @@ func (r *Reconciler) reconcile(
 			log.Info("cluster is terminated")
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {
-			res.RequeueAfter = time.Second * 20
+			res.RequeueAfter = _requeueAfterSeconds
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else if status != nil {
@@ -130,7 +128,7 @@ func (r *Reconciler) reconcile(
 		if shouldBeTerminated {
 			err := r.deleteClusterStatus(log, rayCluster)
 			if err != nil {
-				res.RequeueAfter = time.Second * 20
+				res.RequeueAfter = _requeueAfterSeconds
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			} else {
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
@@ -145,94 +143,16 @@ func (r *Reconciler) reconcile(
 			}
 		} else if *status == "ready" {
 			log.Info("cluster is ready, we continue to re-queue until receiving termination signal")
-			res.RequeueAfter = time.Second * 20
+			res.RequeueAfter = _requeueAfterSeconds
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
 		} else {
-			res.RequeueAfter = time.Second * 20
+			res.RequeueAfter = _requeueAfterSeconds
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else {
-		res.RequeueAfter = time.Second * 20
+		res.RequeueAfter = _requeueAfterSeconds
 	}
 	return res, nil
-	//
-	//case v2pb.RAY_CLUSTER_STATE_PROVISIONING:
-	//	log.Info(rayCluster.Status.State.String())
-	//	if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-	//		return ctrl.Result{}, nil
-	//	}
-	//	status, reason, err := r.getClusterStatus(log, rayCluster)
-	//	if err != nil {
-	//		if IsNotFoundError(err) {
-	//			log.Info("Resource not found, marking as terminated.")
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-	//			return ctrl.Result{}, nil
-	//		}
-	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-	//		if reason != nil {
-	//			podError := &v2pb.PodErrors{
-	//				ContainerName: rayCluster.Status.HeadNode.Name,
-	//				ExitCode:      0,
-	//				Reason:        *reason,
-	//			}
-	//			rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
-	//		}
-	//		break
-	//	}
-	//	if reason != nil {
-	//		podError := &v2pb.PodErrors{
-	//			ContainerName: rayCluster.Status.HeadNode.Name,
-	//			ExitCode:      0,
-	//			Reason:        *reason,
-	//		}
-	//		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
-	//	}
-	//	if status != nil && r.isTerminatedState(*status) {
-	//		if *status == "failed" {
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-	//		} else if *status == "terminated" {
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-	//		} else if *status == "unknown" {
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_UNKNOWN
-	//		}
-	//		return ctrl.Result{}, nil
-	//	} else if *status == "ready" {
-	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
-	//	}
-	//	break
-	//case v2pb.RAY_CLUSTER_STATE_TERMINATING:
-	//	log.Info(rayCluster.Status.State.String())
-	//	err := r.deleteClusterStatus(log, rayCluster)
-	//	if err != nil {
-	//		if IsNotFoundError(err) {
-	//			log.Info("Resource not found, marking as terminated.")
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-	//		} else {
-	//			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-	//		}
-	//		break
-	//	}
-	//	// we check it back to provioning for checking the status
-	//	rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
-	//case v2pb.RAY_CLUSTER_STATE_READY:
-	//	log.Info("cluster is ready, we do nothing but continue requeue until the job finishes and received termination signal")
-	//	if  rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-	//		return ctrl.Result{}, nil
-	//	}
-	//case v2pb.RAY_CLUSTER_STATE_TERMINATED:
-	//	return ctrl.Result{}, nil
-	//default:
-	//	log.Info(rayCluster.Status.State.String())
-	//	if rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID {
-	//		rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
-	//		return ctrl.Result{}, nil
-	//	}
-	//	return ctrl.Result{}, nil
-	//}
-	//
-	//return ctrl.Result{RequeueAfter: time.Second * _requeueAfterSeconds}, nil
 }
 
 func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) error {
