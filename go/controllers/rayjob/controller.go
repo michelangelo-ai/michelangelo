@@ -3,13 +3,14 @@ package rayjob
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	"github.com/go-logr/logr"
 	e "github.com/michelangelo-ai/michelangelo/go/base/env"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -33,7 +34,6 @@ type Reconciler struct {
 
 const _controllerName = "rayv2"
 const _apiVersion = "ray.io/v1"
-
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -141,20 +141,20 @@ func (r *Reconciler) reconcile(
 
 func (r *Reconciler) createJob(log logr.Logger, job *v2pb.RayJob, cluster *v2pb.RayCluster) error {
 	rayJob := &v1.RayJob{
-		TypeMeta:   metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "RayJob",
 			APIVersion: _apiVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:                       job.Name,
-			Namespace:                  job.Namespace,
+			Name:      job.Name,
+			Namespace: job.Namespace,
 		},
-		Spec:       v1.RayJobSpec{
-			ClusterSelector:          map[string]string {
+		Spec: v1.RayJobSpec{
+			ClusterSelector: map[string]string{
 				"ray.io/cluster":      cluster.Name,
 				"rayClusterNamespace": cluster.Namespace,
 			},
-			Entrypoint:               job.Spec.Entrypoint,
+			Entrypoint: job.Spec.Entrypoint,
 		},
 	}
 
