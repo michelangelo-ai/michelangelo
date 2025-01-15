@@ -186,7 +186,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 	rayV1Cluster, err := r.rayV1Client.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	// Fetch the status of the RayCluster
 	if err != nil {
-		log.Error(err, "Failed to get RayCluster status: %v")
+		log.Error(err, "Failed to get RayCluster status", "namespace", namespace, "name", name)
 		return nil, nil, err
 	}
 
@@ -196,7 +196,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespace string, name string) error {
 	err := r.rayV1Client.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		log.Error(err, "Failed to delete RayCluster: %v")
+		log.Error(err, "Failed to delete RayCluster: ", "namespace", namespace, "name", name)
 		return err
 	}
 	return nil
