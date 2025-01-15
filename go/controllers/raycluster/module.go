@@ -22,8 +22,8 @@ func register(
 ) error {
 	rayClient, _ := rayv1.NewForConfig(mgr.GetConfig())
 	return (&Reconciler{
-		Client:          mgr.GetClient(),
-		env:           e.New().Environment,
+		Client:      mgr.GetClient(),
+		env:         e.New().Environment,
 		rayV1Client: rayClient,
 	}).Register(mgr)
 }

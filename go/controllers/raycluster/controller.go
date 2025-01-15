@@ -31,13 +31,12 @@ const (
 type Reconciler struct {
 	client.Client
 
-	env     e.Context
+	env e.Context
 
-	rayV1Client      *rayv1.RayV1Client
+	rayV1Client *rayv1.RayV1Client
 }
 
 const _apiVersion = "ray.io/v1"
-
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -157,22 +156,22 @@ func (r *Reconciler) reconcile(
 
 func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) error {
 	rayV1Cluster := &v1.RayCluster{
-		TypeMeta:   metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "RayCluster",
 			APIVersion: _apiVersion,
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:               cluster.Name,
-			Namespace:                  cluster.Namespace,
+			Name:      cluster.Name,
+			Namespace: cluster.Namespace,
 		},
-		Spec:       v1.RayClusterSpec{
+		Spec: v1.RayClusterSpec{
 			EnableInTreeAutoscaling: nil,
-			HeadGroupSpec:           v1.HeadGroupSpec{
+			HeadGroupSpec: v1.HeadGroupSpec{
 				ServiceType:    corev1.ServiceType(cluster.Spec.Head.ServiceType),
 				RayStartParams: cluster.Spec.Head.RayStartParams,
-				Template:       corev1.PodTemplateSpec{
-					Spec:       corev1.PodSpec{
-						Containers:                    []corev1.Container{
+				Template: corev1.PodTemplateSpec{
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
 							convertPodSpecToContainer(cluster.Spec.Head.Pod),
 						},
 					},
@@ -225,12 +224,12 @@ func (r *Reconciler) isTerminatedState(status v1.ClusterState) bool {
 
 func convertResource(resourceSpec *v2pb.ResourceSpec) corev1.ResourceRequirements {
 	requestedResource := corev1.ResourceRequirements{
-		Limits:   corev1.ResourceList{
-			corev1.ResourceCPU: resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
 			corev1.ResourceMemory: resource.MustParse(resourceSpec.Memory),
 		},
 		Requests: corev1.ResourceList{
-			corev1.ResourceCPU: resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
+			corev1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
 			corev1.ResourceMemory: resource.MustParse(resourceSpec.Memory),
 		},
 	}
@@ -254,8 +253,8 @@ func convertEnvVar(environments []*v2pb.Environment) []corev1.EnvVar {
 	envVars := make([]corev1.EnvVar, 0)
 	for _, env := range environments {
 		newEnv := corev1.EnvVar{
-			Name:      env.Name,
-			Value:     env.Value,
+			Name:  env.Name,
+			Value: env.Value,
 		}
 		envVars = append(envVars, newEnv)
 	}
@@ -264,11 +263,11 @@ func convertEnvVar(environments []*v2pb.Environment) []corev1.EnvVar {
 
 func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 	return corev1.Container{
-		Name:                     pod.Name,
-		Image:                    pod.Image,
+		Name:  pod.Name,
+		Image: pod.Image,
 		//ImagePullPolicy: "Never",
-		Command:                  pod.Command,
-		EnvFrom:                  []corev1.EnvFromSource{
+		Command: pod.Command,
+		EnvFrom: []corev1.EnvFromSource{
 			{
 				ConfigMapRef: &corev1.ConfigMapEnvSource{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -277,8 +276,8 @@ func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 				},
 			},
 		},
-		Env:                      convertEnvVar(pod.Env),
-		Resources:                convertResource(pod.Resource),
+		Env:       convertEnvVar(pod.Env),
+		Resources: convertResource(pod.Resource),
 		//VolumeMounts:             []corev1.VolumeMount{
 		//	{
 		//		Name:              "log-volume",
@@ -293,7 +292,7 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 	workerGroupSpecsJson := make([]v1.WorkerGroupSpec, len(workers))
 	for i, workerGroup := range workers {
 		workerGroupMap := v1.WorkerGroupSpec{
-			GroupName: fmt.Sprintf("wg-%v", clusterName),
+			GroupName:      fmt.Sprintf("wg-%v", clusterName),
 			Replicas:       &workerGroup.MinInstances,
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,

@@ -10,8 +10,8 @@ const (
 
 type (
 	Config struct {
-		QPS              float32       `yaml:"k8s_qps"`
-		Burst            int           `yaml:"k8s_burst"`
+		QPS   float32 `yaml:"k8s_qps"`
+		Burst int     `yaml:"k8s_burst"`
 	}
 )
 
