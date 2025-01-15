@@ -108,8 +108,9 @@ func (r *Reconciler) reconcile(
 		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
 	}
 	if err != nil {
+		log.Error(err, "error for getting ray cluster")
 		if IsNotFoundError(err) && !shouldBeTerminated {
-			log.Info(rayCluster.Status.State.String())
+			log.Info("creating new ray cluster")
 			err = r.createCluster(log, rayCluster)
 			if err != nil {
 				log.Error(err, "failed to create cluster")
@@ -118,12 +119,14 @@ func (r *Reconciler) reconcile(
 			}
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
 		} else if IsNotFoundError(err) && shouldBeTerminated {
+			log.Info("cluster is terminated")
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {
 			res.RequeueAfter = time.Second * 20
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else if status != nil {
+		log.Info(fmt.Sprintf("get ray cluster with status %s", *status))
 		if shouldBeTerminated {
 			err := r.deleteClusterStatus(log, rayCluster)
 			if err != nil {
@@ -272,7 +275,7 @@ func (r *Reconciler) createCluster(log logr.Logger, cluster *v2pb.RayCluster) er
 }
 
 func (r *Reconciler) getClusterStatus(log logr.Logger, cluster *v2pb.RayCluster) (*v1.ClusterState, *string, error) {
-	rayV1Cluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Get(context.TODO(), cluster.Status.HeadNode.Name, metav1.GetOptions{})
+	rayV1Cluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Get(context.TODO(), cluster.Name, metav1.GetOptions{})
 	// Fetch the status of the RayCluster
 	if err != nil {
 		log.Error(err, "Failed to get RayCluster status: %v")
