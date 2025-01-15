@@ -9,7 +9,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"github.com/uber-go/tally"
@@ -126,7 +126,7 @@ type apiHandler struct {
 func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
-	if typeMeta, err := apiutil.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "Create", obj.GetNamespace(), obj.GetName(), kind)
@@ -172,7 +172,7 @@ func (handler *apiHandler) Get(
 	ctx context.Context, namespace string, name string, opts *metav1.GetOptions, obj ctrlRTClient.Object) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
-	if typeMeta, err := apiutil.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "Get", namespace, name, kind)
@@ -293,7 +293,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	opts *metav1.DeleteOptions) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
-	if typeMeta, err := apiutil.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "Delete", obj.GetNamespace(), obj.GetName(), kind)
@@ -324,7 +324,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	err = handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: objMeta.GetNamespace(), Name: objMeta.GetName()}, tmpObj)
 	if err == nil {
 		// Object exists in K8s/ETCD
-		if apiutil.IsImmutable(tmpObj) {
+		if utils.IsImmutable(tmpObj) {
 			// If the obj is immutable, it means we're deleting an immutable object within its grace period
 			// There are two cases:
 			// 1. The object has deletion time stamp: It means the object is already synced to metadata storage by the
@@ -374,7 +374,7 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 	listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	start := time.Now()
 	kind := list.GetObjectKind().GroupVersionKind().Kind
-	if typeMeta, err := apiutil.GetObjectTypeMetaFromList(list, scheme.Scheme); err == nil {
+	if typeMeta, err := utils.GetObjectTypeMetaFromList(list, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "List", namespace, "", kind)
@@ -399,7 +399,7 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 func (handler *apiHandler) metadataStorageList(ctx context.Context, namespace string, opts *metav1.ListOptions,
 	listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	listResponse := &storage.ListResponse{}
-	typeMeta, err := apiutil.GetObjectTypeMetaFromList(list, scheme.Scheme)
+	typeMeta, err := utils.GetObjectTypeMetaFromList(list, scheme.Scheme)
 	if err != nil {
 		return err
 	}
@@ -420,7 +420,7 @@ func (handler *apiHandler) DeleteCollection(
 	listOpts *metav1.ListOptions) error {
 	start := time.Now()
 	kind := objType.GetObjectKind().GroupVersionKind().Kind
-	if typeMeta, err := apiutil.GetObjectTypeMetafromObject(objType, scheme.Scheme); err == nil {
+	if typeMeta, err := utils.GetObjectTypeMetafromObject(objType, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "DeleteCollection", namespace, "", kind)
@@ -486,11 +486,11 @@ func (handler *apiHandler) DeleteCollection(
 }
 
 func isDeletedImmutableObject(obj ctrlRTClient.Object) bool {
-	return apiutil.IsImmutable(obj) && obj.GetDeletionTimestamp() != nil
+	return utils.IsImmutable(obj) && obj.GetDeletionTimestamp() != nil
 }
 
 func deleteObjectFromMetadataStorage(ctx context.Context, log logr.Logger, obj ctrlRTClient.Object, handler *apiHandler) error {
-	typeMeta, err := apiutil.GetObjectTypeMetafromObject(obj, scheme.Scheme)
+	typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme)
 	if err != nil {
 		return fmt.Errorf("cannot get object type meta %v", err)
 	}
@@ -544,7 +544,7 @@ func surfaceGrpcError(err error, apiAction string, namespace string, name string
 func initLogger(ctx context.Context, log logr.Logger, action string, namespace string, name string,
 	kind string) (logr.Logger, map[string]string) {
 	initLog := log.WithValues("action", action, "namespace", namespace, "name", name, "kind", kind)
-	headers := apiutil.GetHeaders(ctx)
+	headers := utils.GetHeaders(ctx)
 	return initLog, headers
 }
 

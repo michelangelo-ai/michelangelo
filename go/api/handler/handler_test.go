@@ -12,7 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"github.com/michelangelo-ai/michelangelo/go/storage/storagemocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -421,7 +421,7 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	j3 := v2pb.RayJob{}
 	err = handler.Get(context.Background(), job3.Namespace, job3.Name, nil, &j3)
 	assert.NoError(t, err)
-	assert.True(t, apiutil.IsDeleting(&j3))
+	assert.True(t, utils.IsDeleting(&j3))
 }
 
 func TestNewAPIServerHandler(t *testing.T) {
