@@ -74,7 +74,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	if reason != nil {
 		podError := &v2pb.PodErrors{
-			ContainerName: rayCluster.Status.HeadNode.Name,
+			ContainerName: rayCluster.Name,
 			ExitCode:      0,
 			Reason:        *reason,
 		}
