@@ -7,8 +7,8 @@ controllermgr:
 
 controllers:
   rayCluster:
-    k8s_qps: 300
-    k8s_burst: 600
+    k8sQps: 300
+    k8sBurst: 600
 
 cadence:
   host: ${CADENCE_HOST:127.0.0.1:7833}
