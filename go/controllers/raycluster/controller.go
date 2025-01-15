@@ -37,53 +37,40 @@ type Reconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	logger.Info(fmt.Sprintf("Reconciling ray cluster %s", req.NamespacedName))
+	logger.Info("Reconciling ray cluster ", "namespacedName", req.NamespacedName)
 
+	res := ctrl.Result{}
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
 		// Resource not found (resource deleted)
 		if apiutil.IsNotFoundError(err) {
+			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)
+			if err != nil {
+				if apiutil.IsNotFoundError(err) {
+					// cluster is deleted or terminated, exit
+					return ctrl.Result{}, nil
+				}
+				return ctrl.Result{}, err
+			}
+			err = r.deleteCluster(ctx, logger, req.Namespace, req.Name)
+			if err != nil {
+				res.RequeueAfter = requeueAfter
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			} else {
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
+			}
 			return ctrl.Result{}, nil
 		}
+		res.RequeueAfter = requeueAfter
 		return ctrl.Result{}, err
 	}
 
 	originalRayCluster := rayCluster.DeepCopy()
 
-	result, err := r.reconcile(ctx, logger, &rayCluster)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("unable to reconcile %w", err)
-	}
-	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
-		err = r.Status().Update(ctx, &rayCluster)
-		if err != nil {
-			logger.Error(err, "failed to update status")
-			return result, nil
-		}
-	}
-
-	logger.Info(fmt.Sprintf("Reconcile finished, re-queue after %v", result.RequeueAfter))
-
-	return result, nil
-}
-
-func (r *Reconciler) Register(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&v2pb.RayCluster{}).
-		Complete(r)
-}
-
-// reconcile launches the cluster if it is not already launched
-func (r *Reconciler) reconcile(
-	ctx context.Context,
-	log logr.Logger,
-	rayCluster *v2pb.RayCluster,
-) (ctrl.Result, error) {
 	shouldBeTerminated := rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID
-	status, reason, err := r.getClusterStatus(ctx, log, rayCluster)
+	status, reason, err := r.getClusterStatus(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 
-	res := ctrl.Result{}
 
 	if reason != nil {
 		podError := &v2pb.PodErrors{
@@ -94,27 +81,27 @@ func (r *Reconciler) reconcile(
 		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
 	}
 	if err != nil {
-		log.Error(err, "error for getting ray cluster")
+		logger.Error(err, "error for getting ray cluster")
 		if apiutil.IsNotFoundError(err) && !shouldBeTerminated {
-			log.Info("creating new ray cluster")
-			err = r.createCluster(ctx, log, rayCluster)
+			logger.Info("creating new ray cluster")
+			err = r.createCluster(ctx, logger, &rayCluster)
 			if err != nil {
-				log.Error(err, "failed to create cluster")
+				logger.Error(err, "failed to create cluster")
 				res.RequeueAfter = requeueAfter
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			}
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
 		} else if apiutil.IsNotFoundError(err) && shouldBeTerminated {
-			log.Info("cluster is terminated")
+			logger.Info("cluster is terminated")
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {
 			res.RequeueAfter = requeueAfter
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else if status != nil {
-		log.Info(fmt.Sprintf("get ray cluster with status %s", *status))
+		logger.Info("get ray cluster with status ", "status", *status)
 		if shouldBeTerminated {
-			err := r.deleteCluster(ctx, log, rayCluster)
+			err = r.deleteCluster(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 			if err != nil {
 				res.RequeueAfter = requeueAfter
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
@@ -130,7 +117,7 @@ func (r *Reconciler) reconcile(
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_UNKNOWN
 			}
 		} else if *status == "ready" {
-			log.Info("cluster is ready, we continue to re-queue until receiving termination signal")
+			logger.Info("cluster is ready, we continue to re-queue until receiving termination signal")
 			res.RequeueAfter = requeueAfter
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
 		} else {
@@ -140,7 +127,24 @@ func (r *Reconciler) reconcile(
 	} else {
 		res.RequeueAfter = requeueAfter
 	}
+
+	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
+		err = r.Status().Update(ctx, &rayCluster)
+		if err != nil {
+			logger.Error(err, "failed to update status")
+			return res, nil
+		}
+	}
+
+	logger.Info("Reconcile finished, re-queue after", "requeueAfter",  res.RequeueAfter)
+
 	return res, nil
+}
+
+func (r *Reconciler) Register(mgr ctrl.Manager) error {
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&v2pb.RayCluster{}).
+		Complete(r)
 }
 
 func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster *v2pb.RayCluster) error {
@@ -167,7 +171,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 		},
 	}
 	createdRayCluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Create(ctx, rayV1Cluster, metav1.CreateOptions{})
-	log.Info(fmt.Sprintf("ray cluster %s/%s created", createdRayCluster.Namespace, createdRayCluster.Name))
+	log.Info("ray cluster created", "namespace", createdRayCluster.Namespace, "name", createdRayCluster.Name)
 	if err != nil {
 		log.Error(err, "Failed to submit RayCluster")
 		return err
@@ -178,8 +182,8 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 	return nil
 }
 
-func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, cluster *v2pb.RayCluster) (*v1.ClusterState, *string, error) {
-	rayV1Cluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Get(ctx, cluster.Name, metav1.GetOptions{})
+func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, namespace string, name string) (*v1.ClusterState, *string, error) {
+	rayV1Cluster, err := r.rayV1Client.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	// Fetch the status of the RayCluster
 	if err != nil {
 		log.Error(err, "Failed to get RayCluster status: %v")
@@ -189,8 +193,8 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, clus
 	return &rayV1Cluster.Status.State, &rayV1Cluster.Status.Reason, nil
 }
 
-func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, cluster *v2pb.RayCluster) error {
-	err := r.rayV1Client.RayClusters(cluster.Namespace).Delete(ctx, cluster.Name, metav1.DeleteOptions{})
+func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespace string, name string) error {
+	err := r.rayV1Client.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		log.Error(err, "Failed to delete RayCluster: %v")
 		return err
