@@ -58,7 +58,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				res.RequeueAfter = requeueAfter
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			} else {
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
+				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 			}
 			return ctrl.Result{}, nil
 		}
