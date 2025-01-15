@@ -19,8 +19,7 @@ import (
 )
 
 const (
-	_requestTimeout      = 60
-	_requeueAfterSeconds = 10
+	_requeueAfterSeconds = 20
 )
 
 // Reconciler reconciles a Ray Job object
@@ -41,7 +40,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger := log.FromContext(ctx)
 	logger.Info(fmt.Sprintf("Reconciling ray job %s", req.NamespacedName))
 
-	// retrieve the ray cluster
+	// retrieve the ray job
 	var rayJob v2pb.RayJob
 	if err := r.Get(ctx, req.NamespacedName, &rayJob); err != nil {
 		// Resource not found (resource deleted)
@@ -73,7 +72,6 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// reconcileJob launches the job if it is not already launched
 func (r *Reconciler) reconcile(
 	ctx context.Context,
 	log logr.Logger,
@@ -105,7 +103,7 @@ func (r *Reconciler) reconcile(
 		log.Error(err, "error to get ray job")
 		err := r.createJob(log, rayJob, rayCluster)
 		if err != nil {
-			log.Error(err, "Failed to create the ray job in ray operator")
+			log.Error(err, "failed to create the ray job in ray operator")
 			rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 			rayJob.Status.Message = fmt.Sprintf("failed to create the ray job in cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
 			return res, nil
@@ -170,9 +168,9 @@ func (r *Reconciler) createJob(log logr.Logger, job *v2pb.RayJob, cluster *v2pb.
 
 func (r *Reconciler) getJobStatus(log logr.Logger, rayJob *v2pb.RayJob) (*v1.JobStatus, *v1.JobFailedReason, error) {
 	rayV1Job, err := r.rayV1Client.RayJobs(rayJob.Namespace).Get(context.TODO(), rayJob.Name, metav1.GetOptions{})
-	// Fetch the status of the RayCluster
+	// Fetch the status of the RayJob
 	if err != nil {
-		log.Error(err, "Failed to get RayCluster status: %v")
+		log.Error(err, "Failed to get RayJob status: %v")
 		return nil, nil, err
 	}
 
