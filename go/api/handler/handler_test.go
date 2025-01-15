@@ -14,7 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	"github.com/michelangelo-ai/michelangelo/go/storage/storagemock"
+	"github.com/michelangelo-ai/michelangelo/go/storage/storagemocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -280,10 +280,10 @@ var (
 	}
 )
 
-func setupMocks(t *testing.T) (*storagemock.MockMetadataStorage, *storagemock.MockBlobStorage) {
+func setupMocks(t *testing.T) (*storagemocks.MockMetadataStorage, *storagemocks.MockBlobStorage) {
 	ctrl := gomock.NewController(t)
-	mockMetadataStorage := storagemock.NewMockMetadataStorage(ctrl)
-	mockBlobStorage := storagemock.NewMockBlobStorage(ctrl)
+	mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+	mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
 	mockBlobStorage.EXPECT().IsObjectInteresting(gomock.Any()).Return(true).AnyTimes()
 
 	for _, obj := range jobsInMetadataStorage {

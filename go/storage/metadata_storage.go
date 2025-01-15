@@ -1,3 +1,4 @@
+//go:generate mamockgen MetadataStorage
 package storage
 
 import (

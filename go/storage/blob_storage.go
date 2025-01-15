@@ -1,3 +1,4 @@
+//go:generate mamockgen BlobStorage
 package storage
 
 import (

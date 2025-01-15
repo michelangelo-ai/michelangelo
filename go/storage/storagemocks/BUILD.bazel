@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "blob_storage_mocks.go",
+        "metadata_storage_mocks.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/storage/storagemocks",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/storage:go_default_library",
+        "//proto/api:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+    ],
+)

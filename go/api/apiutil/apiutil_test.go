@@ -2,6 +2,8 @@ package apiutil
 
 import (
 	"context"
+	"testing"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -10,7 +12,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/client-go/kubernetes/scheme"
-	"testing"
 )
 
 func TestTypeMetaConversion(t *testing.T) {

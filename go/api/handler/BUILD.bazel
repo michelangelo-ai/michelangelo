@@ -44,7 +44,7 @@ go_test(
         "//go/api:go_default_library",
         "//go/api/apiutil:go_default_library",
         "//go/storage:go_default_library",
-        "//go/storage/storagemock:go_default_library",
+        "//go/storage/storagemocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
