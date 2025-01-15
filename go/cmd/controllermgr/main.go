@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
@@ -51,6 +52,7 @@ func options() fx.Option {
 		logging.Module,
 		fx.Provide(scheme),
 		raycluster.Module,
+		rayjob.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger logr.Logger) {
 			ctrl.SetLogger(logger)

@@ -69,7 +69,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v2pb.RayCluster{}).
+		For(&v2pb.RayJob{}).
 		Complete(r)
 }
 
@@ -112,24 +112,28 @@ func (r *Reconciler) reconcile(
 		}
 		rayJob.Status.State = v2pb.RAY_JOB_STATE_INITIALIZING
 		res.RequeueAfter = _requeueAfterSeconds
-	} else {
-		if status != nil && r.isTerminatedState(*status) {
-			if rayJob.Status.JobStatus == "SUCCEEDED" {
+	} else if status != nil {
+		if r.isTerminatedState(*status) {
+			log.Info(fmt.Sprintf("job finished with status %s", *status))
+			rayJob.Status.JobStatus = string(*status)
+			if *status == "SUCCEEDED" {
 				rayJob.Status.State = v2pb.RAY_JOB_STATE_SUCCEEDED
-			} else if rayJob.Status.JobStatus == "FAILED" {
+			} else if *status == "FAILED" {
 				rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
-			} else if rayJob.Status.JobStatus == "STOPPED" {
+			} else if *status == "STOPPED" {
 				rayJob.Status.State = v2pb.RAY_JOB_STATE_KILLED
 			}
 			if jobFailedReason != nil {
 				rayJob.Status.Message = string(*jobFailedReason)
 			}
-		} else if status != nil {
+		} else {
+			log.Info("job is running")
 			rayJob.Status.State = v2pb.RAY_JOB_STATE_RUNNING
 			res.RequeueAfter = _requeueAfterSeconds
-		} else {
-			res.RequeueAfter = _requeueAfterSeconds
 		}
+	} else {
+		log.Info("unknown status, re-queuing")
+		res.RequeueAfter = _requeueAfterSeconds
 	}
 
 	return res, nil
@@ -161,7 +165,6 @@ func (r *Reconciler) createJob(log logr.Logger, job *v2pb.RayJob, cluster *v2pb.
 		return err
 	}
 
-	job.Status.JobStatus = "JOB_CREATED"
 	return nil
 }
 
