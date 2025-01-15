@@ -269,12 +269,6 @@ func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
 		},
 		Env:       convertEnvVar(pod.Env),
 		Resources: convertResource(pod.Resource),
-		//VolumeMounts:             []corev1.VolumeMount{
-		//	{
-		//		Name:              "log-volume",
-		//		MountPath:         "/tmp/ray",
-		//	},
-		//},
 	}
 }
 
