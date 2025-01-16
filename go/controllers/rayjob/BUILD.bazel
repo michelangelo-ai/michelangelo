@@ -9,9 +9,9 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/controllers/rayjob",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/controllers/raycluster:go_default_library",
         "//go/api/apiutil:go_default_library",
         "//go/base/env:go_default_library",
+        "//go/controllers/raycluster:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
@@ -22,7 +22,6 @@ go_library(
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/log:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
-        "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
     ],
 )
