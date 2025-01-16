@@ -14,7 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -43,7 +43,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	var rayJob v2pb.RayJob
 	if err := r.Get(ctx, req.NamespacedName, &rayJob); err != nil {
 		// Resource not found (resource deleted)
-		if apiutil.IsNotFoundError(err) {
+		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
 		}
 		res.RequeueAfter = requeueAfter
@@ -113,7 +113,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	if !reflect.DeepEqual(originalRayJob, rayJob) {
-		// TODO mark the job immutable when reach to final state
+		if r.isRayJobTerminatedState(rayJob.Status.State) {
+			utils.MarkImmutable(&rayJob)
+		}
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
 			logger.Error(err, "failed to update status")
@@ -180,6 +182,16 @@ func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJo
 
 func (r *Reconciler) isTerminatedState(status v1.JobStatus) bool {
 	for _, state := range []v1.JobStatus{v1.JobStatusSucceeded, v1.JobStatusFailed, v1.JobStatusStopped} {
+		if status == state {
+			// Return OK. The job submission has reached a terminal status.
+			return true
+		}
+	}
+	return false
+}
+
+func (r *Reconciler) isRayJobTerminatedState(status v2pb.RayJobState) bool {
+	for _, state := range []v2pb.RayJobState{v2pb.RAY_JOB_STATE_FAILED, v2pb.RAY_JOB_STATE_SUCCEEDED, v2pb.RAY_JOB_STATE_KILLED} {
 		if status == state {
 			// Return OK. The job submission has reached a terminal status.
 			return true
