@@ -193,6 +193,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 }
 
 func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespace string, name string) error {
+	// TODO make sure all jobs are terminated before deleting the cluster
 	err := r.rayV1Client.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		log.Error(err, "Failed to delete RayCluster: ", "namespace", namespace, "name", name)
