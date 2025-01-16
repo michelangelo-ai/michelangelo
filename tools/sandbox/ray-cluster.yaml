@@ -5,9 +5,9 @@ metadata:
   namespace: default
 spec:
   rayVersion: "2.2.0"
-  termination:
-    type: TERMINATION_TYPE_SUCCEEDED
-    reason: "job succeeded"
+#  termination:
+#    type: TERMINATION_TYPE_SUCCEEDED
+#    reason: "job succeeded"
   head:
     serviceType: "ClusterIP"
     pod:
