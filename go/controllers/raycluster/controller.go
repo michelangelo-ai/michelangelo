@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/michelangelo-ai/michelangelo/go/api/apiutil"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
@@ -44,10 +44,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
 		// Resource not found (resource deleted)
-		if apiutil.IsNotFoundError(err) {
+		if utils.IsNotFoundError(err) {
 			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)
 			if err != nil {
-				if apiutil.IsNotFoundError(err) {
+				if utils.IsNotFoundError(err) {
 					// cluster is deleted or terminated, exit
 					return ctrl.Result{}, nil
 				}
@@ -81,7 +81,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	if err != nil {
 		logger.Error(err, "error for getting ray cluster")
-		if apiutil.IsNotFoundError(err) && !shouldBeTerminated {
+		if utils.IsNotFoundError(err) && !shouldBeTerminated {
 			logger.Info("creating new ray cluster")
 			err = r.createCluster(ctx, logger, &rayCluster)
 			if err != nil {
@@ -90,7 +90,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			}
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
-		} else if apiutil.IsNotFoundError(err) && shouldBeTerminated {
+		} else if utils.IsNotFoundError(err) && shouldBeTerminated {
 			logger.Info("cluster is terminated")
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {

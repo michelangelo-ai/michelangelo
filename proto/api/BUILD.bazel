@@ -17,7 +17,6 @@ proto_library(
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:descriptor_proto",
         "@com_google_protobuf//:struct_proto",
-        "@io_k8s_api//core/v1:v1_proto",
     ],
 )
 
@@ -27,7 +26,6 @@ go_proto_library(
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api",
     proto = ":api_proto",
     visibility = ["//visibility:public"],
-    deps = ["@io_k8s_api//core/v1:core"],
 )
 
 go_library(

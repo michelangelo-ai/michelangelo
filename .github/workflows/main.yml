@@ -26,10 +26,6 @@ jobs:
           restore-keys: |
             bazel_cache_root
 
-      - name: Run go generate
-        run: |
-          export PATH=$(pwd)/tools:${PATH} && cd go && go generate ./...
-
       # Run Bazel tests
       - name: Run Bazel Test
         run: ./tools/bazel test ...
@@ -69,10 +65,6 @@ jobs:
           key: bazel_cache_root
           restore-keys: |
             bazel_cache_root
-
-      - name: Run go generate
-        run: |
-          export PATH=$(pwd)/tools:${PATH} && cd go && go generate ./...
 
       - name: Run Gazelle
         run: |

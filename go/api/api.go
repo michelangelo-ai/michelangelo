@@ -10,10 +10,14 @@ import (
 )
 
 const (
+	/////////////////////////// K8s Finalizers ///////////////////////////
+
 	// IngesterFinalizer is used as the pre-delete hook for ingester controller.
 	// If Ingester finalizer is presented in a CRD object, ingester shall check if
 	// all the pre-delete actions are completed before removing this finalizer.
 	IngesterFinalizer = "michelangelo/Ingester"
+
+	/////////////////////////// K8s Annotations ///////////////////////////
 
 	// DeletingAnnotation is used to mark a CRD object is pending on deletion.
 	// If this annotation is "true", ingester will delete this CRD in both k8s/ETCD and MySQL.
@@ -24,6 +28,16 @@ const (
 	// this CRD ojbect from k8s/ETCD and only the annotation and label of the immutable CRD
 	// object can be changed in MySQL later on.
 	ImmutableAnnotation = "michelangelo/Immutable"
+
+	/////////////////////////// K8s Labels ///////////////////////////
+
+	// SpecUpdateTimestampLabel is used to record the last time the spec of the object is updated.
+	// The time is stored in Unix microseconds.
+	SpecUpdateTimestampLabel = "michelangelo/SpecUpdateTimestamp"
+
+	// UpdateTimestampLabel is used to record the last time the object is updated.
+	// The time is stored in Unix microseconds.
+	UpdateTimestampLabel = "michelangelo/UpdateTimestamp"
 )
 
 // DefaultContextTimeout defines the default timeout for the context
