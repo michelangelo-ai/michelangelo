@@ -11,9 +11,9 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/logging"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
+	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
 	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
 )
 
 // scheme provides a Kubernetes runtime.Scheme object.

@@ -26,7 +26,7 @@ const (
 // Reconciler reconciles a Ray Job object
 type Reconciler struct {
 	client.Client
-	env env.Context
+	env         env.Context
 	rayV1Client *rayv1.RayV1Client
 }
 
