@@ -1,53 +1,46 @@
-apiVersion: ray.io/v1
+apiVersion: michelangelo.api/v2
 kind: RayCluster
 metadata:
-  name: ray-cluster
+  name: ray-cluster-v2
+  namespace: default
 spec:
-  headGroupSpec:
+  rayVersion: "2.2.0"
+#  termination:
+#    type: TERMINATION_TYPE_FAILED
+#    reason: "killed by user"
+  head:
+    serviceType: "ClusterIP"
+    pod:
+      name: head
+      resource:
+        cpu: 1
+        memory: "2Gi"
+      image: rayproject/ray:2.3.1-py310-cpu
+      env:
+        - name: RAY_HEAD_ENV
+          value: "true"
+        - name: DEBUG
+          value: "false"
+      hdfsDelegationToken: ""
+      onInit: "/bin/bash -c echo 'Initializing Ray Head'"
     rayStartParams:
+      dashboard-host: "0.0.0.0"
       block: "true"
-      dashboard-host: 0.0.0.0
-    serviceType: ClusterIP
-    template:
-      spec:
-        containers:
-          - envFrom:
-              - configMapRef:
-                  name: michelangelo-config
-            image: rayproject/ray:2.3.1-py310-cpu
-            name: head
-            volumeMounts:
-              - mountPath: /tmp/ray
-                name: log-volume
-        volumes:
-          - emptyDir: { }
-            name: log-volume
-  workerGroupSpecs:
-    - groupName: worker-group
-      maxReplicas: 3
-      minReplicas: 1
+  workers:
+    - minInstances: 1
+      maxInstances: 1
+      pod:
+        name: worker
+        resource:
+          cpu: 1
+          memory: "1Gi"
+        image: rayproject/ray:2.3.1-py310-cpu
+        env:
+          - name: RAY_WORKER_ENV
+            value: "true"
+          - name: DEBUG
+            value: "false"
+        hdfsDelegationToken: ""
+        onInit: "/bin/bash -c echo 'Initializing Ray Worker'"
       rayStartParams:
         block: "true"
-      replicas: 1
-      template:
-        spec:
-          containers:
-            - envFrom:
-                - configMapRef:
-                    name: michelangelo-config
-              image: rayproject/ray:2.3.1-py310-cpu
-              name: worker
-              volumeMounts:
-                - mountPath: /tmp/ray
-                  name: log-volume
-          initContainers:
-            - command:
-                - sh
-                - -c
-                - until nslookup $RAY_IP.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local;
-                  do echo waiting for K8s Service $RAY_IP; sleep 2; done
-              image: busybox:1.28
-              name: init
-          volumes:
-            - emptyDir: { }
-              name: log-volume

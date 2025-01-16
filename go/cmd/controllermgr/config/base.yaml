@@ -6,8 +6,9 @@ controllermgr:
   port: 9443
 
 controllers:
-  pipelineRun:
-    cadenceTaskList: default
+  rayCluster:
+    k8sQps: 300
+    k8sBurst: 600
 
 cadence:
   host: ${CADENCE_HOST:127.0.0.1:7833}
