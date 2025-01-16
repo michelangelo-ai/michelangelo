@@ -87,6 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 					rayJob.Status.State = v2pb.RAY_JOB_STATE_INITIALIZING
 					res.RequeueAfter = requeueAfter
 				} else if status != nil {
+					// if the job has created, we keep checking the status to see if it reaches the final state
 					if r.isTerminatedState(*status) {
 						logger.Info("job finished with status", "status", *status)
 						rayJob.Status.JobStatus = string(*status)
@@ -101,18 +102,22 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 							rayJob.Status.Message = string(*jobFailedReason)
 						}
 					} else {
+						// job is still running, wait
 						logger.Info("job is running")
 						rayJob.Status.State = v2pb.RAY_JOB_STATE_RUNNING
 						res.RequeueAfter = requeueAfter
 					}
 				} else {
+					// invalid status, we requeue
 					logger.Info("unknown status, re-queuing")
 					res.RequeueAfter = requeueAfter
 				}
 			}
 		}
 	}
+
 	if !reflect.DeepEqual(originalRayJob, rayJob) {
+		// update the resource in ETCD
 		if r.isRayJobTerminatedState(rayJob.Status.State) {
 			utils.MarkImmutable(&rayJob)
 		}
