@@ -357,13 +357,15 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 
 	// Get a non-existing job
 	getModeltmp := &v2pb.RayJob{}
-	nonexistentErr := errors.New("failed to get object. Namespace: default, Name: nonexistent")
+	nonexistentErr := status.Errorf(codes.NotFound, "RayJob namespace=nonexistent AND name=nonexistent not found")
 	mockMetadataStorage.EXPECT().
 		GetByName(gomock.Any(), "default", "nonexistent", gomock.Any()).
 		Return(nonexistentErr).Times(1)
 
 	err = handler.Get(context.Background(), "default", "nonexistent", nil, getModeltmp)
-	assert.Equal(t, nonexistentErr, err)
+	grpcStatus := status.Convert(err)
+	assert.Equal(t, codes.NotFound, grpcStatus.Code())
+	assert.ErrorContains(t, err, nonexistentErr.Error())
 
 	// When metadata storage is enabled, List() only returns objects from metadata storage and blob fields are not set
 	jobList := &v2pb.RayJobList{}
