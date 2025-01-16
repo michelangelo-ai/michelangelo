@@ -126,71 +126,6 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-func (r *Reconciler) reconcile(
-	ctx context.Context,
-	log logr.Logger,
-	rayJob *v2pb.RayJob,
-) (ctrl.Result, error) {
-	res := ctrl.Result{}
-
-	if rayJob.Spec.Cluster == nil {
-		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
-		rayJob.Status.Message = "cluster is not set"
-		return res, nil
-	}
-
-	rayCluster := &v2pb.RayCluster{}
-
-	err := r.Get(ctx, types.NamespacedName{
-		Namespace: rayJob.Spec.Cluster.Namespace,
-		Name:      rayJob.Spec.Cluster.Name,
-	}, rayCluster)
-	if err != nil {
-		log.Error(err, "error to get cluster")
-		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
-		rayJob.Status.Message = "cluster is not found"
-		return res, err
-	}
-
-	status, jobFailedReason, err := r.getJobStatus(ctx, log, rayJob)
-	if err != nil {
-		log.Error(err, "error to get ray job")
-		err := r.createJob(ctx, log, rayJob, rayCluster)
-		if err != nil {
-			log.Error(err, "failed to create the ray job in ray operator")
-			rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
-			rayJob.Status.Message = fmt.Sprintf("failed to create the ray job in cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
-			return res, nil
-		}
-		rayJob.Status.State = v2pb.RAY_JOB_STATE_INITIALIZING
-		res.RequeueAfter = requeueAfter
-	} else if status != nil {
-		if r.isTerminatedState(*status) {
-			log.Info("job finished with status", "status", *status)
-			rayJob.Status.JobStatus = string(*status)
-			if *status == "SUCCEEDED" {
-				rayJob.Status.State = v2pb.RAY_JOB_STATE_SUCCEEDED
-			} else if *status == "FAILED" {
-				rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
-			} else if *status == "STOPPED" {
-				rayJob.Status.State = v2pb.RAY_JOB_STATE_KILLED
-			}
-			if jobFailedReason != nil {
-				rayJob.Status.Message = string(*jobFailedReason)
-			}
-		} else {
-			log.Info("job is running")
-			rayJob.Status.State = v2pb.RAY_JOB_STATE_RUNNING
-			res.RequeueAfter = requeueAfter
-		}
-	} else {
-		log.Info("unknown status, re-queuing")
-		res.RequeueAfter = requeueAfter
-	}
-
-	return res, nil
-}
-
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.RayJob, cluster *v2pb.RayCluster) error {
 	rayJob := &v1.RayJob{
 		TypeMeta: metav1.TypeMeta{
@@ -224,7 +159,7 @@ func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJo
 	rayV1Job, err := r.rayV1Client.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
-		logger.Error(err, "Failed to get RayJob status: %v")
+		logger.Error(err, "failed to get RayJob status: %v")
 		return nil, nil, err
 	}
 
