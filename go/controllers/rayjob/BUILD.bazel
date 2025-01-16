@@ -9,7 +9,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/controllers/rayjob",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api/apiutil:go_default_library",
+        "//go/api/utils:go_default_library",
         "//go/base/env:go_default_library",
         "//go/controllers/raycluster:go_default_library",
         "//proto/api/v2:go_default_library",
