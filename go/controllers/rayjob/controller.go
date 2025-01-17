@@ -82,7 +82,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 						logger.Error(err, "failed to create the ray job in ray operator")
 						rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 						rayJob.Status.Message = fmt.Sprintf("failed to create the ray job in cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
-						return res, nil
 					}
 					rayJob.Status.State = v2pb.RAY_JOB_STATE_INITIALIZING
 					res.RequeueAfter = requeueAfter
