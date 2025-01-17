@@ -47,6 +47,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			return ctrl.Result{}, nil
 		}
 		res.RequeueAfter = requeueAfter
+		return res, nil
 	}
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
