@@ -11,9 +11,9 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/logging"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-
 	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
+	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // scheme provides a Kubernetes runtime.Scheme object.
@@ -51,6 +51,7 @@ func options() fx.Option {
 		logging.Module,
 		fx.Provide(scheme),
 		raycluster.Module,
+		rayjob.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger logr.Logger) {
 			ctrl.SetLogger(logger)

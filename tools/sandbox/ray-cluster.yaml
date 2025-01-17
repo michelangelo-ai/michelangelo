@@ -8,6 +8,9 @@ spec:
 #  termination:
 #    type: TERMINATION_TYPE_FAILED
 #    reason: "killed by user"
+#  termination:
+#    type: TERMINATION_TYPE_SUCCEEDED
+#    reason: "job succeeded"
   head:
     serviceType: "ClusterIP"
     pod:
