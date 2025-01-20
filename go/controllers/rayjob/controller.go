@@ -43,7 +43,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// retrieve the ray job
 	var rayJob v2pb.RayJob
 	if err := r.Get(ctx, req.NamespacedName, &rayJob); err != nil {
-		print("failed to get ray job, existing")
+		print("failed to get ray job, it could be deleted")
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
