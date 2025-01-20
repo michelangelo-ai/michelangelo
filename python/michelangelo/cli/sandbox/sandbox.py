@@ -61,10 +61,13 @@ def _create(ns: argparse.Namespace):
 
     _exec(*args)
 
-    for f in ["mysql.yaml", "cadence.yaml"]:
+    for f in ["boot.yaml", "mysql.yaml", "cadence.yaml"]:
         _kube_create(_dir / "resources" / f)
 
-    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=300s")
+    _exec("kubectl", "create", "-k", "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.2.2")
+
+    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready")
+    _exec("kubectl", "-n", "ray-system", "wait", "--all", "deployments", "--for=condition=available")
 
     links = []
 
