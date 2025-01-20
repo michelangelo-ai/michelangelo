@@ -31,6 +31,6 @@ func register(
 	return (&Reconciler{
 		Client:      mgr.GetClient(),
 		env:         env,
-		rayV1Client: rayClient,
+		RayV1Interface: rayClient,
 	}).Register(mgr)
 }

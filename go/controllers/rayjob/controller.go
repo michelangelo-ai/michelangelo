@@ -21,42 +21,47 @@ import (
 
 const (
 	requeueAfter = 20
+	apiVersion = "ray.io/v1"
 )
 
 // Reconciler reconciles a Ray Job object
 type Reconciler struct {
 	client.Client
+	rayv1.RayV1Interface
 	env         env.Context
-	rayV1Client *rayv1.RayV1Client
 }
 
-const apiVersion = "ray.io/v1"
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+	print(fmt.Sprintf("reconciling %s " ,req.NamespacedName))
 	logger.Info("Reconciling ray job", "namespacedName", req.NamespacedName)
 	res := ctrl.Result{}
 
 	// retrieve the ray job
 	var rayJob v2pb.RayJob
 	if err := r.Get(ctx, req.NamespacedName, &rayJob); err != nil {
+		print("failed to get ray job, existing")
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
 		}
 		res.RequeueAfter = requeueAfter
-		return res, nil
+		return res, err
 	}
+	print("got ray job")
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
 
 	if rayJob.Spec.Cluster == nil {
+		print("no cluster")
 		// when cluster is not provided, exit with failed state
 		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 		rayJob.Status.Message = "cluster is not set"
 	} else {
+		print("got cluster in spec")
 		// get ray cluster entity for further processing
 		rayCluster := &v2pb.RayCluster{}
 
@@ -65,10 +70,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Name:      rayJob.Spec.Cluster.Name,
 		}, rayCluster)
 		if err != nil {
-			// failed to fetch cluster entity, retry
-			logger.Error(err, "error to get cluster")
-			res.RequeueAfter = requeueAfter
+			if utils.IsNotFoundError(err) {
+				rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
+				rayJob.Status.Message = fmt.Sprintf("failed to find cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
+			} else {
+				// failed to fetch cluster entity, requeue
+				logger.Error(err, "error to get cluster, requeue")
+				res.RequeueAfter = requeueAfter
+			}
 		} else {
+			print("get cluster entity")
 			if rayCluster.Status.State != v2pb.RAY_CLUSTER_STATE_READY {
 				// If cluster is not in ready state, we wait until it's ready
 				logger.Info("cluster is not ready, waiting")
@@ -117,15 +128,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !reflect.DeepEqual(originalRayJob, rayJob) {
+		print(fmt.Sprintf("------updating object status to %s\n", rayJob.Status.State))
 		// update the resource in ETCD
 		if r.isRayJobTerminatedState(rayJob.Status.State) {
 			utils.MarkImmutable(&rayJob)
 		}
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
+			print("failed to update object")
+			print(err.Error())
 			logger.Error(err, "failed to update status")
-			return res, nil
+			res.RequeueAfter = requeueAfter
+			return res, err
 		}
+		print("updated object")
 	}
 
 	logger.Info("reconcile finished, re-queue after ", "requeueAfter", res.RequeueAfter)
@@ -158,7 +174,7 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 		},
 	}
 
-	createdRayJob, err := r.rayV1Client.RayJobs(cluster.Namespace).Create(ctx, rayJob, metav1.CreateOptions{})
+	createdRayJob, err := r.RayJobs(cluster.Namespace).Create(ctx, rayJob, metav1.CreateOptions{})
 	job.Status.JobId = createdRayJob.Status.JobId
 	job.Status.DashboardUrl = createdRayJob.Status.DashboardURL
 	job.Status.JobDeploymentStatus = string(createdRayJob.Status.JobDeploymentStatus)
@@ -172,7 +188,7 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 }
 
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) (*v1.JobStatus, *v1.JobFailedReason, error) {
-	rayV1Job, err := r.rayV1Client.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
+	rayV1Job, err := r.RayV1Interface.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
 		logger.Error(err, "failed to get RayJob status: %v")

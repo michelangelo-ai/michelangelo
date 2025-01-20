@@ -191,7 +191,7 @@ func (handler *apiHandler) Get(
 		}
 	}
 	// if the k8s client error is not "not found", return the error
-	if !apiErrors.IsNotFound(err) {
+	if statusErr, ok := err.(*apiErrors.StatusError); !ok || statusErr.Status().Reason != metav1.StatusReasonNotFound {
 		return surfaceGrpcError(err, "get", namespace, name)
 	}
 
@@ -242,10 +242,14 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	})
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
-	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
-		err = handleUpdate(ctx, tmpObj, handler.metadataStorage, true, nil, handler.blobStorage)
-		if err != nil {
-			return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
+	if statusErr, ok := err.(*apiErrors.StatusError); ok {
+		if statusErr.Status().Reason == metav1.StatusReasonNotFound {
+			if storage.EnableMetadataStorage(&handler.conf) {
+				err = handleUpdate(ctx, tmpObj, handler.metadataStorage, true, nil, handler.blobStorage)
+				if err != nil {
+					return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
+				}
+			}
 		}
 	}
 
@@ -353,9 +357,11 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	}
 
 	// If the object does not exist in K8s/ETCD, delete it in metadata storage.
-	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
-		log.Info("Object does not exist in ETCD - deleting from metadata storage")
-		return deleteObjectFromMetadataStorage(ctx, log, obj, handler)
+	if statusErr, ok := err.(*apiErrors.StatusError); ok {
+		if statusErr.Status().Reason == metav1.StatusReasonNotFound && handler.metadataStorage != nil {
+			log.Info("Object does not exist in ETCD - deleting from metadata storage")
+			return deleteObjectFromMetadataStorage(ctx, log, obj, handler)
+		}
 	}
 	return err
 }
@@ -522,21 +528,17 @@ func getCRTListOptions(namespace string, opts *metav1.ListOptions) (*ctrlRTClien
 }
 
 func surfaceGrpcError(err error, apiAction string, namespace string, name string) error {
-	if err == nil {
-		return nil
-	}
-	errMsg := fmt.Sprintf("failed to %v API object. namespace: %v, name: %v", apiAction, namespace, name)
+	if statusErr, ok := err.(*apiErrors.StatusError); ok {
+		grpcErrCode, found := api.K8sStatusReasonToGrpcError[statusErr.Status().Reason]
+		if found == false {
+			grpcErrCode = codes.Unknown
+		}
 
-	// k8s errors
-	if _, ok := err.(apiErrors.APIStatus); ok {
-		return api.K8sError2GrpcError(err, errMsg)
+		return status.Errorf(grpcErrCode, "failed to %v API object. namespace: %v, name: %v. %v",
+			apiAction, namespace, name, statusErr.Error())
 	}
 
-	// other errors
-	// if err is a grpc status error, status.Convert() keeps the original error code
-	// otherwise, the error code is set to Unknown
-	s := status.Convert(err)
-	return status.Errorf(s.Code(), "%v: %v", errMsg, err)
+	return err
 }
 
 func initLogger(ctx context.Context, log logr.Logger, action string, namespace string, name string,
