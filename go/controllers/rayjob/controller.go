@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/go-logr/logr"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -20,7 +21,7 @@ import (
 )
 
 const (
-	requeueAfter = 20
+	requeueAfter = time.Second * 10
 	apiVersion = "ray.io/v1"
 )
 
@@ -70,6 +71,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Name:      rayJob.Spec.Cluster.Name,
 		}, rayCluster)
 		if err != nil {
+			print("failed to get cluster \n")
+			print(err.Error())
 			if utils.IsNotFoundError(err) {
 				rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 				rayJob.Status.Message = fmt.Sprintf("failed to find cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
@@ -83,8 +86,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			if rayCluster.Status.State != v2pb.RAY_CLUSTER_STATE_READY {
 				// If cluster is not in ready state, we wait until it's ready
 				logger.Info("cluster is not ready, waiting")
+				rayJob.Status.Message = fmt.Sprintf("cluster %s/%s is not ready", rayCluster.Namespace, rayCluster.Name)
 				res.RequeueAfter = requeueAfter
 			} else {
+				print("checking status\n")
 				// we start checking to see if the job has created by checking job status
 				status, jobFailedReason, jobErr := r.getJobStatus(ctx, logger, &rayJob)
 				if jobErr != nil {
@@ -188,9 +193,11 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 }
 
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) (*v1.JobStatus, *v1.JobFailedReason, error) {
-	rayV1Job, err := r.RayV1Interface.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
+	rayV1Job, err := r.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
+		print("failed to get ray job status\n")
+		print(err.Error())
 		logger.Error(err, "failed to get RayJob status: %v")
 		return nil, nil, err
 	}

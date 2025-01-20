@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	k8stesting "k8s.io/client-go/testing"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -75,7 +76,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectedMessage: "cluster is not set",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, res.RequeueAfter, requeueAfter)
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 		},
 		{
@@ -101,11 +102,11 @@ func TestReconciler_Reconcile(t *testing.T) {
 			expectedMessage: "failed to find cluster",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, res.RequeueAfter, requeueAfter)
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 		},
 		{
-			name: "Successful reconciliation",
+			name: "cluster is not ready",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
 				rayJob := &v2pb.RayJob{
@@ -131,11 +132,48 @@ func TestReconciler_Reconcile(t *testing.T) {
 				objects = append(objects, cluster)
 				return objects
 			},
-			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
+			expectedState:   v2pb.RAY_JOB_STATE_INVALID,
+			expectedMessage: "cluster default/existing-cluster is not ready",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+		},
+		{
+			name: "cluster is ready",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayJobName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+				}
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "existing-cluster",
+						Namespace: testNamespace,
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, rayJob)
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, res.RequeueAfter, time.Duration(0))
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
 		},
 	}
@@ -146,7 +184,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 			objects := tc.setup()
 			fakeClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(objects...).Build()
 			// Set up a fake RayV1 client.
-			fakeRayV1Client := &rayv1fake.FakeRayV1{}
+			fakeRayV1Client := &rayv1fake.FakeRayV1{
+				Fake: &k8stesting.Fake{},
+			}
 			fakeClientWrapper := NewFakeClientWrapper(fakeClient)
 
 			r := &Reconciler{
