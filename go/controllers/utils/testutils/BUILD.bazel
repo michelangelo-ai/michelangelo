@@ -1,0 +1,12 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["fake_client_wrapper.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+    ],
+)
