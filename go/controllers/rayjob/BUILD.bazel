@@ -4,7 +4,6 @@ go_library(
     name = "go_default_library",
     srcs = [
         "controller.go",
-        "controller_test_util.go",
         "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/controllers/rayjob",
@@ -32,6 +31,7 @@ go_test(
     srcs = ["controller_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/controllers/utils/testutils:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
