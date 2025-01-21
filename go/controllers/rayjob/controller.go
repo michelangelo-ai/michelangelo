@@ -22,16 +22,15 @@ import (
 
 const (
 	requeueAfter = time.Second * 10
-	apiVersion = "ray.io/v1"
+	apiVersion   = "ray.io/v1"
 )
 
 // Reconciler reconciles a Ray Job object
 type Reconciler struct {
 	client.Client
 	rayv1.RayV1Interface
-	env         env.Context
+	env env.Context
 }
-
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

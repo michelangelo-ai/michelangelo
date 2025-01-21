@@ -2,9 +2,10 @@ package rayjob
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -34,7 +35,6 @@ func TestReconciler_Reconcile(t *testing.T) {
 	kubescheme.AddToScheme(scheme)
 	v2pb.AddToScheme(scheme)
 
-
 	// Test cases
 	tests := []struct {
 		name            string
@@ -42,8 +42,8 @@ func TestReconciler_Reconcile(t *testing.T) {
 		expectedState   v2pb.RayJobState
 		expectedMessage string
 		errorAssertion  require.ErrorAssertionFunc
-		postCheck         func(res ctrl.Result)
-		rayIOSetup		*v1.RayJob
+		postCheck       func(res ctrl.Result)
+		rayIOSetup      *v1.RayJob
 	}{
 		{
 			name: "No ray job",
@@ -225,7 +225,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				},
 				Spec: v1.RayJobSpec{
 					ClusterSelector: map[string]string{
-						"ray.io/cluster": "existing-cluster",
+						"ray.io/cluster":      "existing-cluster",
 						"rayClusterNamespace": testNamespace,
 					},
 				},
@@ -248,7 +248,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			fakeClientWrapper := NewFakeClientWrapper(fakeClient)
 
 			r := &Reconciler{
-				Client:      fakeClientWrapper,
+				Client:         fakeClientWrapper,
 				RayV1Interface: fakeRayV1Client,
 			}
 
