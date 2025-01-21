@@ -37,14 +37,12 @@ type Reconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
-	print(fmt.Sprintf("reconciling %s " ,req.NamespacedName))
 	logger.Info("Reconciling ray job", "namespacedName", req.NamespacedName)
 	res := ctrl.Result{}
 
 	// retrieve the ray job
 	var rayJob v2pb.RayJob
 	if err := r.Get(ctx, req.NamespacedName, &rayJob); err != nil {
-		print("failed to get ray job, it could be deleted")
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			return ctrl.Result{}, nil
@@ -52,17 +50,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		res.RequeueAfter = requeueAfter
 		return res, err
 	}
-	print("got ray job")
 	// original copy of ray job to determine if we need to update the status
 	originalRayJob := rayJob.DeepCopy()
 
 	if rayJob.Spec.Cluster == nil {
-		print("no cluster")
 		// when cluster is not provided, exit with failed state
 		rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 		rayJob.Status.Message = "cluster is not set"
 	} else {
-		print("got cluster in spec")
 		// get ray cluster entity for further processing
 		rayCluster := &v2pb.RayCluster{}
 
@@ -71,8 +66,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			Name:      rayJob.Spec.Cluster.Name,
 		}, rayCluster)
 		if err != nil {
-			print("failed to get cluster \n")
-			print(err.Error())
 			if utils.IsNotFoundError(err) {
 				rayJob.Status.State = v2pb.RAY_JOB_STATE_FAILED
 				rayJob.Status.Message = fmt.Sprintf("failed to find cluster %s/%s", rayCluster.Namespace, rayCluster.Name)
@@ -82,14 +75,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				res.RequeueAfter = requeueAfter
 			}
 		} else {
-			print("get cluster entity")
 			if rayCluster.Status.State != v2pb.RAY_CLUSTER_STATE_READY {
 				// If cluster is not in ready state, we wait until it's ready
 				logger.Info("cluster is not ready, waiting")
 				rayJob.Status.Message = fmt.Sprintf("cluster %s/%s is not ready", rayCluster.Namespace, rayCluster.Name)
 				res.RequeueAfter = requeueAfter
 			} else {
-				print("checking status\n")
 				// we start checking to see if the job has created by checking job status
 				status, jobFailedReason, jobErr := r.getJobStatus(ctx, logger, &rayJob)
 				if jobErr != nil {
@@ -133,20 +124,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !reflect.DeepEqual(originalRayJob, rayJob) {
-		print(fmt.Sprintf("------updating object status to %s\n", rayJob.Status.State))
 		// update the resource in ETCD
 		if r.isRayJobTerminatedState(rayJob.Status.State) {
 			utils.MarkImmutable(&rayJob)
 		}
 		err := r.Status().Update(ctx, &rayJob)
 		if err != nil {
-			print("failed to update object")
-			print(err.Error())
 			logger.Error(err, "failed to update status")
 			res.RequeueAfter = requeueAfter
 			return res, err
 		}
-		print("updated object")
 	}
 
 	logger.Info("reconcile finished, re-queue after ", "requeueAfter", res.RequeueAfter)
@@ -196,8 +183,6 @@ func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJo
 	rayV1Job, err := r.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
-		print("failed to get ray job status\n")
-		print(err.Error())
 		logger.Error(err, "failed to get RayJob status: %v")
 		return nil, nil, err
 	}

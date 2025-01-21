@@ -8,6 +8,7 @@ import (
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1fake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1/fake"
 	"github.com/stretchr/testify/assert"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,6 +43,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 		expectedMessage string
 		errorAssertion  require.ErrorAssertionFunc
 		postCheck         func(res ctrl.Result)
+		rayIOSetup		*v1.RayJob
 	}{
 		{
 			name: "No ray job",
@@ -176,6 +178,62 @@ func TestReconciler_Reconcile(t *testing.T) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
 		},
+		{
+			name: "job succeeded",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				rayJob := &v2pb.RayJob{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayJobName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayJobSpec{
+						Cluster: &apipb.ResourceIdentifier{
+							Name:      "existing-cluster",
+							Namespace: testNamespace,
+						},
+						Entrypoint: "echo Hello World",
+					},
+				}
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "existing-cluster",
+						Namespace: testNamespace,
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, rayJob)
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
+			expectedMessage: "",
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, requeueAfter, res.RequeueAfter)
+			},
+			rayIOSetup: &v1.RayJob{
+				TypeMeta: metav1.TypeMeta{
+					Kind:       "RayJob",
+					APIVersion: apiVersion,
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rayJobName,
+					Namespace: testNamespace,
+				},
+				Spec: v1.RayJobSpec{
+					ClusterSelector: map[string]string{
+						"ray.io/cluster": "existing-cluster",
+						"rayClusterNamespace": testNamespace,
+					},
+				},
+				Status: v1.RayJobStatus{
+					JobStatus: "SUCCEEDED",
+				},
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -197,6 +255,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 			requestRayJob := types.NamespacedName{
 				Name:      rayJobName,
 				Namespace: testNamespace,
+			}
+			if tc.rayIOSetup != nil {
+				fakeRayV1Client.RayJobs(testNamespace).Create(context.Background(), tc.rayIOSetup, metav1.CreateOptions{})
 			}
 			res, err := r.Reconcile(ctx, ctrl.Request{
 				NamespacedName: requestRayJob,
