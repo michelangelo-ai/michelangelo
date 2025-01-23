@@ -3,6 +3,7 @@ package raycluster
 import (
 	"context"
 	"fmt"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"reflect"
 	"time"
 
@@ -29,8 +30,8 @@ const (
 // Reconciler reconciles a Ray Cluster object
 type Reconciler struct {
 	client.Client
+	rayv1.RayV1Interface
 	env         env.Context
-	rayV1Client *rayv1.RayV1Client
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -65,13 +66,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		res.RequeueAfter = requeueAfter
 		return ctrl.Result{}, err
 	}
-
 	originalRayCluster := rayCluster.DeepCopy()
 
 	shouldBeTerminated := rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID
 	status, reason, err := r.getClusterStatus(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 
-	if reason != nil {
+	if reason != nil && *reason != "" {
 		podError := &v2pb.PodErrors{
 			ContainerName: rayCluster.Name,
 			ExitCode:      0,
@@ -169,7 +169,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 			WorkerGroupSpecs: convertWorkerGroupSpecsToWorkerSpec(cluster.Name, cluster.Spec.Workers),
 		},
 	}
-	createdRayCluster, err := r.rayV1Client.RayClusters(cluster.Namespace).Create(ctx, rayV1Cluster, metav1.CreateOptions{})
+	createdRayCluster, err := r.RayClusters(cluster.Namespace).Create(ctx, rayV1Cluster, metav1.CreateOptions{})
 	log.Info("ray cluster created", "namespace", createdRayCluster.Namespace, "name", createdRayCluster.Name)
 	if err != nil {
 		log.Error(err, "Failed to submit RayCluster")
@@ -182,11 +182,15 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 }
 
 func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, namespace string, name string) (*v1.ClusterState, *string, error) {
-	rayV1Cluster, err := r.rayV1Client.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
+	rayV1Cluster, err := r.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	// Fetch the status of the RayCluster
 	if err != nil {
 		log.Error(err, "Failed to get RayCluster status", "namespace", namespace, "name", name)
 		return nil, nil, err
+	}
+	if rayV1Cluster != nil && rayV1Cluster.Name == "" {
+		log.Error(err, "Failed to get RayCluster status", "namespace", namespace, "name", name)
+		return nil, nil, apiErrors.NewNotFound(v1.Resource("rayclusters"), name)
 	}
 
 	return &rayV1Cluster.Status.State, &rayV1Cluster.Status.Reason, nil
@@ -194,7 +198,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 
 func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespace string, name string) error {
 	// TODO make sure all jobs are terminated before deleting the cluster
-	err := r.rayV1Client.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	err := r.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
 		log.Error(err, "Failed to delete RayCluster: ", "namespace", namespace, "name", name)
 		return err
