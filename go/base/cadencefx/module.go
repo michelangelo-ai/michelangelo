@@ -5,6 +5,7 @@ package cadencefx
 import (
 	"context"
 	"fmt"
+
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/uber-go/tally"
 	"go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"

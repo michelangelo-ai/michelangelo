@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+
 	"go.uber.org/cadence/activity"
 	"go.uber.org/zap"
 )
