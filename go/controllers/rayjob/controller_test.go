@@ -172,7 +172,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				objects = append(objects, cluster)
 				return objects
 			},
-			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
+			expectedState:   v2pb.RAY_JOB_STATE_INITIALIZING,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
@@ -209,11 +209,11 @@ func TestReconciler_Reconcile(t *testing.T) {
 				objects = append(objects, cluster)
 				return objects
 			},
-			expectedState:   v2pb.RAY_JOB_STATE_RUNNING,
+			expectedState:   v2pb.RAY_JOB_STATE_SUCCEEDED,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			rayIOSetup: &v1.RayJob{
 				TypeMeta: metav1.TypeMeta{
@@ -247,6 +247,12 @@ func TestReconciler_Reconcile(t *testing.T) {
 				Fake: &k8stesting.Fake{},
 			}
 			fakeClientWrapper := testutils.NewFakeClientWrapper(fakeClient)
+
+			reactorManager := &testutils.ReactorManager{}
+
+			// Add reusable reactors for "create" and "get"
+			fakeRayV1Client.Fake.AddReactor("create", "rayjobs", reactorManager.CreateReactor())
+			fakeRayV1Client.Fake.AddReactor("get", "rayjobs", reactorManager.GetReactor())
 
 			r := &Reconciler{
 				Client:         fakeClientWrapper,

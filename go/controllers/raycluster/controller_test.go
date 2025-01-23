@@ -243,7 +243,6 @@ func TestReconciler_Reconcile(t *testing.T) {
 			fakeRayV1Client.Fake.AddReactor("create", "rayclusters", reactorManager.CreateReactor())
 			fakeRayV1Client.Fake.AddReactor("get", "rayclusters", reactorManager.GetReactor())
 
-
 			r := &Reconciler{
 				Client:         fakeClientWrapper,
 				RayV1Interface: fakeRayV1Client,
