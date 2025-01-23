@@ -7,7 +7,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/worker"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 )
 
 func main() {
@@ -21,8 +20,5 @@ func options() fx.Option {
 		config.Module,
 		zapfx.Module,
 		cadencefx.Module,
-		fx.Invoke(func(logger *zap.Logger) {
-			logger.Info("Hello, world!")
-		}),
 	)
 }

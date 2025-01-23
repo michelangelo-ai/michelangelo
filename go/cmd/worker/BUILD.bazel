@@ -12,7 +12,6 @@ go_library(
         "//go/base/zapfx:go_default_library",
         "//go/worker:go_default_library",
         "@org_uber_go_fx//:go_default_library",
-        "@org_uber_go_zap//:go_default_library",
     ],
 )
 

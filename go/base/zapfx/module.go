@@ -23,6 +23,7 @@ type In struct {
 
 type Out struct {
 	fx.Out
+	Config zap.Config
 	Level  zap.AtomicLevel
 	Logger *zap.Logger
 }
@@ -53,16 +54,16 @@ func provide(in In) (Out, error) {
 		encoderConfig = zap.NewProductionEncoderConfig()
 	}
 
-	z := zap.Config{
+	out.Config = zap.Config{
 		Level:            level,
 		Development:      development,
 		Encoding:         encoding,
 		EncoderConfig:    encoderConfig,
-		OutputPaths:      []string{"stderr"},
-		ErrorOutputPaths: []string{"stderr"},
+		OutputPaths:      []string{"stdout"},
+		ErrorOutputPaths: []string{"stdout"},
 	}
 
-	if out.Logger, err = z.Build(); err != nil {
+	if out.Logger, err = out.Config.Build(); err != nil {
 		return out, err
 	}
 
