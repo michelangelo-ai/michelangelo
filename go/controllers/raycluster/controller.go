@@ -3,9 +3,10 @@ package raycluster
 import (
 	"context"
 	"fmt"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"reflect"
 	"time"
+
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -31,7 +32,7 @@ const (
 type Reconciler struct {
 	client.Client
 	rayv1.RayV1Interface
-	env         env.Context
+	env env.Context
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to

@@ -2,9 +2,10 @@ package raycluster
 
 import (
 	"context"
-	corev1 "k8s.io/api/core/v1"
 	"testing"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -24,8 +25,8 @@ import (
 )
 
 const (
-	rayClusterName    = "test-cluster"
-	testNamespace = "default"
+	rayClusterName = "test-cluster"
+	testNamespace  = "default"
 )
 
 func TestReconciler_Reconcile(t *testing.T) {
@@ -96,30 +97,30 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Namespace: testNamespace,
 					},
 					Spec: v2pb.RayClusterSpec{
-						RayVersion:  "2.3.1",
-						Head:        &v2pb.RayHeadSpec{
-							ServiceType:    "clusterIP",
-							Pod:            &v2pb.PodSpec{
-								Name:                "test",
-								Resource:            &v2pb.ResourceSpec{
-									Cpu:             2,
-									Memory:          "2Gi",
+						RayVersion: "2.3.1",
+						Head: &v2pb.RayHeadSpec{
+							ServiceType: "clusterIP",
+							Pod: &v2pb.PodSpec{
+								Name: "test",
+								Resource: &v2pb.ResourceSpec{
+									Cpu:    2,
+									Memory: "2Gi",
 								},
-								Image:               "test",
+								Image: "test",
 							},
 						},
-						Workers:     []*v2pb.RayWorkerSpec{
+						Workers: []*v2pb.RayWorkerSpec{
 							{
-								Pod:            &v2pb.PodSpec{
-									Name:                "test",
-									Resource:            &v2pb.ResourceSpec{
-										Cpu:             2,
-										Memory:          "2Gi",
+								Pod: &v2pb.PodSpec{
+									Name: "test",
+									Resource: &v2pb.ResourceSpec{
+										Cpu:    2,
+										Memory: "2Gi",
 									},
-									Image:               "test",
+									Image: "test",
 								},
-								MinInstances:   1,
-								MaxInstances:   1,
+								MinInstances: 1,
+								MaxInstances: 1,
 							},
 						},
 					},
@@ -189,7 +190,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				objects = append(objects, cluster)
 				return objects
 			},
-			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
+			expectedState: v2pb.RAY_CLUSTER_STATE_FAILED,
 			expectedMessage: []*v2pb.PodErrors{
 				{
 					Name:          "",
@@ -199,7 +200,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Message:       "",
 				},
 			},
-			errorAssertion:  require.NoError,
+			errorAssertion: require.NoError,
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
@@ -216,7 +217,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 					},
 				},
 				Status: v1.RayClusterStatus{
-					State: v1.Failed,
+					State:  v1.Failed,
 					Reason: "cluster failed",
 				},
 			},
@@ -262,7 +263,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			_ = r.Get(ctx, requestRayCluster, &updatedRayCluster)
 
 			assert.Equal(t, tc.expectedState, updatedRayCluster.Status.State)
-			assert.Equal(t,  tc.expectedMessage, updatedRayCluster.Status.PodErrors)
+			assert.Equal(t, tc.expectedMessage, updatedRayCluster.Status.PodErrors)
 		})
 	}
 }
