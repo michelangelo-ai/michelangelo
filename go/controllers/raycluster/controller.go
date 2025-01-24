@@ -15,9 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -30,7 +30,7 @@ const (
 
 // Reconciler reconciles a Ray Cluster object
 type Reconciler struct {
-	client.Client
+	api.Handler
 	rayv1.RayV1Interface
 	env env.Context
 }
@@ -44,7 +44,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	res := ctrl.Result{}
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
-	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
+	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, &rayCluster); err != nil {
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)
@@ -129,7 +129,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 
 	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
-		err = r.Status().Update(ctx, &rayCluster)
+		err = r.Update(ctx, &rayCluster, &metav1.UpdateOptions{})
 		if err != nil {
 			logger.Error(err, "failed to update status")
 			return res, nil
@@ -158,13 +158,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 			HeadGroupSpec: v1.HeadGroupSpec{
 				ServiceType:    corev1.ServiceType(cluster.Spec.Head.ServiceType),
 				RayStartParams: cluster.Spec.Head.RayStartParams,
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							convertPodSpecToContainer(cluster.Spec.Head.Pod),
-						},
-					},
-				},
+				Template: *cluster.Spec.Head.Pod,
 			},
 			RayVersion:       cluster.Spec.RayVersion,
 			WorkerGroupSpecs: convertWorkerGroupSpecsToWorkerSpec(cluster.Name, cluster.Spec.Workers),
@@ -284,11 +278,7 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,
 			RayStartParams: workerGroup.RayStartParams,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{convertPodSpecToContainer(workerGroup.Pod)},
-				},
-			},
+			Template: *workerGroup.Pod,
 		}
 		workerGroupSpecsJson[i] = workerGroupMap
 	}

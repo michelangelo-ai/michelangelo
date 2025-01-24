@@ -1,6 +1,7 @@
 package raycluster
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -20,6 +21,7 @@ func register(
 	conf Config,
 	env env.Context,
 	mgr manager.Manager,
+	handler api.Handler,
 ) error {
 	restConfig := mgr.GetConfig()
 	restConfig.QPS = conf.QPS
@@ -29,7 +31,7 @@ func register(
 		return err
 	}
 	return (&Reconciler{
-		Client:         mgr.GetClient(),
+		Handler:        handler,
 		env:            env,
 		RayV1Interface: rayClient,
 	}).Register(mgr)

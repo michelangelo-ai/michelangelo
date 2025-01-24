@@ -1,0 +1,10 @@
+yarpc:
+  inbounds:
+    http:
+      address: "127.0.0.1:${PORT_HTTP:8080}"
+    grpc:
+      address: ":${PORT_GRPC:8081}"
+
+apiserver:
+  port: 8080
+  host: 127.0.0.1
