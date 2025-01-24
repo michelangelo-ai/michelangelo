@@ -66,6 +66,7 @@ use_repo(
     "org_golang_google_grpc",
     "org_golang_google_protobuf",
     "org_golang_x_tools",
+    "org_uber_go_cadence",
     "org_uber_go_config",
     "org_uber_go_fx",
     "org_uber_go_yarpc",

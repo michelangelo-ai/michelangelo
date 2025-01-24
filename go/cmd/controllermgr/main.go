@@ -1,15 +1,16 @@
 package main
 
 import (
-	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/logging"
+	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
 	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
@@ -48,13 +49,13 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		config.Module,
-		logging.Module,
+		zapfx.Module,
 		fx.Provide(scheme),
 		raycluster.Module,
 		rayjob.Module,
 		controllermgr.Module,
-		fx.Invoke(func(logger logr.Logger) {
-			ctrl.SetLogger(logger)
+		fx.Invoke(func(logger *zap.Logger) {
+			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
 	)
 }

@@ -10,6 +10,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/ray-project/kuberay/ray-operator v1.2.2
 	github.com/stretchr/testify v1.9.0
+	go.uber.org/cadence v1.2.9
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
@@ -25,8 +26,21 @@ require (
 )
 
 require (
+	github.com/apache/thrift v0.16.0 // indirect
+	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
+	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
+	github.com/golang-jwt/jwt/v5 v5.2.0 // indirect
+	github.com/marusama/semaphore/v2 v2.5.0 // indirect
+	github.com/pborman/uuid v0.0.0-20160209185913-a97ce2ca70fa // indirect
+	github.com/robfig/cron v1.2.0 // indirect
+	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/tklauser/go-sysconf v0.3.11 // indirect
+	github.com/tklauser/numcpus v0.6.0 // indirect
+	github.com/uber-go/mapdecode v1.0.0 // indirect
+	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect

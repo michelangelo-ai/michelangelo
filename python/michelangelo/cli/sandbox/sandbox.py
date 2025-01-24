@@ -27,7 +27,10 @@ _cadence_domain = "default"
 def init_arguments(p: argparse.ArgumentParser):
     sp = p.add_subparsers(dest="action", required=True)
 
-    _ = sp.add_parser("create", help="Create and start the cluster.")
+    create_p = sp.add_parser("create", help="Create and start the cluster.")
+    # TODO: andrii: Implement the --exclude option in the sandbox CLI.
+    create_p.add_argument("--exclude", help="Excludes the specified services.", nargs="+")
+
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
@@ -66,8 +69,8 @@ def _create(ns: argparse.Namespace):
 
     _exec("kubectl", "create", "-k", "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.2.2")
 
-    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready")
-    _exec("kubectl", "-n", "ray-system", "wait", "--all", "deployments", "--for=condition=available")
+    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=300s")
+    _exec("kubectl", "-n", "ray-system", "wait", "--all", "deployments", "--for=condition=available", "--timeout=300s")
 
     links = []
 

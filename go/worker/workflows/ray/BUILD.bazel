@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "module.go",
+        "ray_workflows.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/workflows/ray",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/worker/activities/ray:go_default_library",
+        "@org_uber_go_cadence//worker:go_default_library",
+        "@org_uber_go_cadence//workflow:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
