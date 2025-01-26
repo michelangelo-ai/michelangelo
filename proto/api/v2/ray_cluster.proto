@@ -7,7 +7,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "k8s.io/api/core/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/pod.proto";
@@ -20,7 +19,7 @@ message RayHeadSpec {
   string service_type = 1;
 
   // Pod spec for the Ray head
-  k8s.io.api.core.v1.PodTemplateSpec pod = 2;
+  PodSpec pod = 2;
 
   // Ray start parameters for the head node
   map<string, string> ray_start_params = 3;
@@ -29,7 +28,7 @@ message RayHeadSpec {
 // Specification for the workers in a Ray cluster
 message RayWorkerSpec {
   // Pod spec for the Ray worker instances
-  k8s.io.api.core.v1.PodTemplateSpec pod = 1;
+  PodSpec pod = 1;
 
   // Minimum number of worker instances
   int32 min_instances = 2;
