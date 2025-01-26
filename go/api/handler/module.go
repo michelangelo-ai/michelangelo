@@ -4,10 +4,12 @@ import (
 	"github.com/go-logr/zapr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/kubernetes/scheme"
 
 	"go.uber.org/fx"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
@@ -40,4 +42,13 @@ type Result struct {
 	Scheme       *runtime.Scheme
 	GroupVersion runtime.GroupVersioner
 	IndexMaps    []map[schema.GroupVersionKind]map[string]string `group:"indexMaps,flatten"`
+}
+
+// GetCRDScheme provides the CRD scheme related dependencies
+func GetCRDScheme() (Result, error) {
+	return Result{
+		Scheme:       scheme.Scheme,
+		GroupVersion: v2pb.GroupVersion,
+		IndexMaps:    []map[schema.GroupVersionKind]map[string]string{v2pb.IndexesPathToKeyMap},
+	}, nil
 }

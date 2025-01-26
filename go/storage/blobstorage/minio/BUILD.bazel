@@ -1,0 +1,18 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["minio.go", "module.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/storage/blobstorage/minio",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/storage:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@com_github_minio_minio_go_v7//:go_default_library",
+        "@com_github_minio_minio_go_v7//pkg/tags:go_default_library",
+        "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)

@@ -8,3 +8,26 @@ yarpc:
 apiserver:
   port: 8080
   host: 127.0.0.1
+  k8sQps: 300
+  k8sBurst: 600
+
+minio:
+  endpoint: "localhost:9001" # Replace with your MinIO service address
+  accessKey: "minioadmin"                            # Access key for MinIO
+  secretKey: "minioadmin"                            # Secret key for MinIO
+  bucketName: "default"                          # Name of the bucket to use
+  useSSL: false                                           # Use SSL (true for secure connection)
+
+mysql:
+  database: michelangelo
+  user: root
+  password: root
+  host: localhost
+  port: 3306
+  params:
+    charset: utf8mb4
+    parseTime: "true"
+    loc: Local
+  max_con_lifetime_sec: 3600
+  max_open_cons: 100
+  max_idle_cons: 10

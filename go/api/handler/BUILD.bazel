@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//proto/api/v2:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/storage:go_default_library",
         "//proto/api:go_default_library",

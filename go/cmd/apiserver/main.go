@@ -4,22 +4,39 @@ import (
 	"context"
 	"fmt"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
+	"github.com/michelangelo-ai/michelangelo/go/storage/blobstorage/minio"
+	"github.com/michelangelo-ai/michelangelo/go/storage/mysql"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 	uber_config "go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/transport/http"
+	"k8s.io/apimachinery/pkg/runtime"
+	kubescheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // Module provides the YARPC dispatcher and server.
 var Module = fx.Options(
+	zapfx.Module,
+	fx.Provide(logging.GetLogrLoggerOrPanic),
+	fx.Provide(handler.GetCRDScheme),
 	handler.APIServerModule,
 	config.Module,
+	mysql.Module,
+	minio.Module,
+	storage.ConfigModule,
+	fx.Provide(utils.NewAuditLogEmitter),
+	fx.Provide(newRestConfig),
 	fx.Provide(newScope),
 	fx.Provide(newAuth),
 	fx.Provide(v2pb.GetK8sClient),
@@ -32,6 +49,25 @@ var Module = fx.Options(
 	fx.Invoke(startYARPCServer),
 )
 
+// scheme provides a Kubernetes runtime.Scheme object.
+//
+// This function creates a new Kubernetes runtime scheme and registers both the standard Kubernetes API types
+// (via the k8s.io/client-go/kubernetes/scheme package) and custom API types defined in the proto/api/v2 package.
+//
+// Returns:
+//   - *runtime.Scheme: A runtime scheme containing registered Kubernetes API and custom CRD types.
+//   - error: An error if there is a failure during scheme registration.
+func scheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	if err := kubescheme.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := v2pb.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
+}
+
 const configKey = "apiserver"
 
 type (
@@ -39,6 +75,8 @@ type (
 	Config struct {
 		Port int    `yaml:"port"`
 		Host string `yaml:"host"`
+		QPS   float32 `yaml:"k8sQps"`
+		Burst int     `yaml:"k8sBurst"`
 	}
 
 	In struct {
@@ -124,6 +162,12 @@ func newScope() (tally.Scope, error) {
 	return s, nil
 }
 
-func newLogging() (logging.AuditLog, error) {
-	return logging.GetLogrLoggerOrPanic(), nil
+func newRestConfig(conf Config) (*rest.Config, error) {
+	restConfig, err := ctrl.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	restConfig.QPS = conf.QPS
+	restConfig.Burst = conf.Burst
+	return restConfig, nil
 }
