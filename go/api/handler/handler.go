@@ -371,18 +371,15 @@ func emptyListOption(listOptionsExt *apipb.ListOptionsExt) bool {
 func (handler *apiHandler) List(ctx context.Context, namespace string, opts *metav1.ListOptions,
 	listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 
-	println("==============Listing==============")
 	start := time.Now()
 	kind := list.GetObjectKind().GroupVersionKind().Kind
 	if typeMeta, err := utils.GetObjectTypeMetaFromList(list, scheme.Scheme); err == nil {
 		kind = typeMeta.Kind
 	}
 	log, headers := initLogger(ctx, handler.logger, "List", namespace, "", kind)
-	println("==============Listing1==============")
 	defer emitAPIMetrics("List", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) {
-		println("==============Listing1.2==============")
 		return handler.metadataStorageList(ctx, namespace, opts, listOptionsExt, list)
 	} else if listOptionsExt != nil && !emptyListOption(listOptionsExt) {
 		return status.Errorf(codes.Unimplemented,
