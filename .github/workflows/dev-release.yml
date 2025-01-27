@@ -38,6 +38,6 @@ jobs:
             BINARY_PATH=bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
             CONFIG_PATH=go/cmd/controllermgr/config
           file: docker/service.Dockerfile
-          push: false
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
