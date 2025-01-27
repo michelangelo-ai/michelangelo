@@ -65,7 +65,7 @@ jobs:
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: "{{defaultContext}}"
           file: docker/service.Dockerfile
           build-args: |
             BINARY_PATH=bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
