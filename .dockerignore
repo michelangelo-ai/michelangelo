@@ -1,0 +1,3 @@
+bazel-*
+pkg
+MODULE.bazel.lock

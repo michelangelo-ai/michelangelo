@@ -1,2 +1,5 @@
-pkg
+docker
 go/vendor
+pkg
+python
+tools

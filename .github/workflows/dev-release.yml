@@ -1,0 +1,43 @@
+name: Dev Release
+
+on:
+  workflow_dispatch: # Manually triggered with the new workflow_dispatch event
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  dev-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Extract Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/michelangelo-ai/controllermgr
+          tags: |
+            type=schedule
+            type=sha
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Build and Push
+        id: push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          build-args: |
+            BAZEL_TARGET=//go/cmd/controllermgr
+            BINARY_PATH=bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
+            CONFIG_PATH=go/cmd/controllermgr/config
+          file: docker/service.Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
