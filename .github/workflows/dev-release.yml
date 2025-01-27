@@ -33,7 +33,6 @@ jobs:
         id: push
         uses: docker/build-push-action@v6
         with:
-          context: .
           build-args: |
             BAZEL_TARGET=//go/cmd/controllermgr
             BINARY_PATH=bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
