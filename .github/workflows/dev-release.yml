@@ -1,9 +1,9 @@
 name: Dev Release
 
 on:
-  workflow_dispatch: # Manually triggered with the new workflow_dispatch event
+  workflow_dispatch:
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 env:
   REGISTRY: ghcr.io
@@ -24,14 +24,15 @@ jobs:
       - name: Cache Bazel Outputs
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.cache/bazel
+          path: ~/.cache/bazel
           key: bazel_cache_root
-          restore-keys: |
-            bazel_cache_root
+          restore-keys: bazel_cache_root
 
       - name: Build controllermgr
         run: ./tools/bazel build //go/cmd/controllermgr
+
+      - name: Verify the binary exists
+        run: ls -la ./bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
 
       - name: Login to Container Registry
         uses: docker/login-action@v3
@@ -65,8 +66,8 @@ jobs:
           context: .
           file: docker/service.Dockerfile
           build-args: |
-            BINARY_PATH=bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
-            CONFIG_PATH=go/cmd/controllermgr/config
+            BINARY_PATH=./bazel-bin/go/cmd/controllermgr/controllermgr_/controllermgr
+            CONFIG_PATH=./go/cmd/controllermgr/config
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           push: true
