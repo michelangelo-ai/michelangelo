@@ -3,13 +3,18 @@ name: Dev Release
 on:
   workflow_dispatch: # Manually triggered with the new workflow_dispatch event
   pull_request:
-    branches: [main]
+    branches: [ main ]
 env:
   REGISTRY: ghcr.io
 
 jobs:
   dev-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      attestations: write
+      id-token: write
     steps:
       - name: Login to GHCR
         uses: docker/login-action@v3
