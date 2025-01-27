@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"runtime"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"github.com/go-logr/logr"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
-
+	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -21,7 +22,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
 const (
@@ -35,6 +35,19 @@ type Reconciler struct {
 	env env.Context
 }
 
+// captureError adds file, line, and function information to the error
+func captureError(err error) error {
+	if err == nil {
+		return nil
+	}
+	pc, file, line, ok := runtime.Caller(1) // 1 means the caller of this function
+	if !ok {
+		return fmt.Errorf("error: %v (unable to capture runtime information)", err)
+	}
+	fn := runtime.FuncForPC(pc)
+	return fmt.Errorf("error: %v\n\tat %s:%d in %s", err, file, line, fn.Name())
+}
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -45,6 +58,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
+		err = captureError(err)
+
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)
@@ -158,13 +173,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 			HeadGroupSpec: v1.HeadGroupSpec{
 				ServiceType:    corev1.ServiceType(cluster.Spec.Head.ServiceType),
 				RayStartParams: cluster.Spec.Head.RayStartParams,
-				Template: corev1.PodTemplateSpec{
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							convertPodSpecToContainer(cluster.Spec.Head.Pod),
-						},
-					},
-				},
+				Template: *cluster.Spec.Head.Pod,
 			},
 			RayVersion:       cluster.Spec.RayVersion,
 			WorkerGroupSpecs: convertWorkerGroupSpecsToWorkerSpec(cluster.Name, cluster.Spec.Workers),
@@ -284,11 +293,7 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,
 			RayStartParams: workerGroup.RayStartParams,
-			Template: corev1.PodTemplateSpec{
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{convertPodSpecToContainer(workerGroup.Pod)},
-				},
-			},
+			Template: *workerGroup.Pod,
 		}
 		workerGroupSpecsJson[i] = workerGroupMap
 	}

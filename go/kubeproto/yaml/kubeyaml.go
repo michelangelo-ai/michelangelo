@@ -143,6 +143,23 @@ func getDurationFieldProperties(comment string) *apiext.JSONSchemaProps {
 	return schema
 }
 
+func getQuantityFieldProperties(comment string) *apiext.JSONSchemaProps {
+	schema := &apiext.JSONSchemaProps{
+		Description: comment,
+		AnyOf: []apiext.JSONSchemaProps{
+			{
+				Type: "integer",
+			},
+			{
+				Type: "string",
+			},
+		},
+		Pattern: "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$",
+		XIntOrString: true,
+	}
+	return schema
+}
+
 // We should stop recursing if the field's message type is parsed within this recursion path, to prevent from going into
 // infinite recursion.
 // For a simple example:
@@ -249,6 +266,8 @@ func parseMessageFields(msg *protogen.Message, comment string, isRootSchema bool
 				props = getPreserveUnknownFieldProperties(getComment(&field.Comments))
 			} else if field.Message.Desc.FullName() == "google.protobuf.Duration" {
 				props = getDurationFieldProperties(getComment(&field.Comments))
+			} else if field.Message.Desc.FullName() == "k8s.io.apimachinery.pkg.api.resource.Quantity" {
+				props = getQuantityFieldProperties(getComment(&field.Comments))
 			} else {
 				// Many k8s types have incompatible protobuf and yaml schemas. We have to hard code the yaml schemas
 				// for these types, rather than directly translate from protobuf schemas.
@@ -285,7 +304,6 @@ func parseMessageFields(msg *protogen.Message, comment string, isRootSchema bool
 				logger.Panicf("Failed to generate CRD for field %s. Map type only supports string key",
 					fieldName)
 			}
-
 			mapProps := apiext.JSONSchemaProps{
 				Description: getComment(&field.Comments),
 				Type:        "object",
@@ -299,6 +317,9 @@ func parseMessageFields(msg *protogen.Message, comment string, isRootSchema bool
 				mapProps.AdditionalProperties = &apiext.JSONSchemaPropsOrBool{
 					Schema: &apiext.JSONSchemaProps{
 						Type: props.Properties["value"].Type,
+						AnyOf: props.Properties["value"].AnyOf,
+						Pattern:          props.Properties["value"].Pattern,
+						XIntOrString:        props.Properties["value"].XIntOrString,
 					},
 				}
 			}

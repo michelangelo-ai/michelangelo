@@ -2,6 +2,7 @@ package raycluster
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 	"time"
 
@@ -100,24 +101,33 @@ func TestReconciler_Reconcile(t *testing.T) {
 						RayVersion: "2.3.1",
 						Head: &v2pb.RayHeadSpec{
 							ServiceType: "clusterIP",
-							Pod: &v2pb.PodSpec{
-								Name: "test",
-								Resource: &v2pb.ResourceSpec{
-									Cpu:    2,
-									Memory: "2Gi",
+							Pod: &corev1.PodTemplateSpec{
+								Spec:       corev1.PodSpec{
+									Containers:                    []corev1.Container{
+
+									},
+
 								},
-								Image: "test",
 							},
 						},
 						Workers: []*v2pb.RayWorkerSpec{
 							{
-								Pod: &v2pb.PodSpec{
-									Name: "test",
-									Resource: &v2pb.ResourceSpec{
-										Cpu:    2,
-										Memory: "2Gi",
+								Pod: &corev1.PodTemplateSpec{
+									Spec:       corev1.PodSpec{
+										Containers:                    []corev1.Container{
+											{
+												Name:                     "test",
+												Image:                    "test",
+												Resources: corev1.ResourceRequirements{
+													Requests: corev1.ResourceList{
+														corev1.ResourceCPU: resource.MustParse("1"),
+														corev1.ResourceMemory: resource.MustParse("1Gi"),
+													},
+												},
+											},
+										},
+
 									},
-									Image: "test",
 								},
 								MinInstances: 1,
 								MaxInstances: 1,
