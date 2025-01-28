@@ -278,3 +278,5 @@ MODULE.bazel.lock
 .idea
 # ignore go vendor directory
 /go/vendor
+
+.envrc.local
