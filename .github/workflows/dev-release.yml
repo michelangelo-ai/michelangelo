@@ -74,7 +74,7 @@ jobs:
             type=ref,prefix=pr-,event=pr
 
       - name: controllermgr / Push Image
-        id: push
+        id: push-controllermgr
         uses: docker/build-push-action@v6  # https://github.com/docker/build-push-action
         with:
           context: .
@@ -88,7 +88,7 @@ jobs:
           push: true
 
       - name: worker / Push Image
-        id: push
+        id: push-worker
         uses: docker/build-push-action@v6  # https://github.com/docker/build-push-action
         with:
           context: .
