@@ -49,7 +49,7 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: [ controllermgr ] Extract Metadata
+      - name: controllermgr / Extract Metadata
         id: meta-controllermgr
         uses: docker/metadata-action@v5  # https://github.com/docker/metadata-action
         with:
@@ -61,7 +61,7 @@ jobs:
             type=ref,event=tag
             type=ref,prefix=pr-,event=pr
 
-      - name: [ worker ] Extract Metadata
+      - name: worker / Extract Metadata
         id: meta-worker
         uses: docker/metadata-action@v5  # https://github.com/docker/metadata-action
         with:
@@ -73,7 +73,7 @@ jobs:
             type=ref,event=tag
             type=ref,prefix=pr-,event=pr
 
-      - name: [ controllermgr ] Push Image
+      - name: controllermgr / Push Image
         id: push
         uses: docker/build-push-action@v6  # https://github.com/docker/build-push-action
         with:
@@ -87,7 +87,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
 
-      - name: [ worker ] Push Image
+      - name: worker / Push Image
         id: push
         uses: docker/build-push-action@v6  # https://github.com/docker/build-push-action
         with:
