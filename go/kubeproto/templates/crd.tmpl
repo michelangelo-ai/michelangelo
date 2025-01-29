@@ -335,10 +335,17 @@ func (m *{{.Name}}Status) MarshalJSON() ([]byte,error) {
 }
 
 func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
-	return (&jsonpb.Unmarshaler{
-	  AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
-	  AnyResolver: &util.GenericResolver{},
-	}).Unmarshal(bytes.NewReader(b), m)
+	err := (&jsonpb.Unmarshaler{
+      AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
+      AnyResolver: &util.GenericResolver{},
+    }).Unmarshal(bytes.NewReader(b), m)
+    if err == nil {
+        return nil
+    }
+    type Alias {{.Name}}Status
+    aux := (*Alias)(m)
+
+    return json.Unmarshal(b, aux)
 }
 
 func (in *{{.Name}}) DeepCopy() *{{.Name}} {

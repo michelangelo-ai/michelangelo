@@ -12,7 +12,6 @@ import (
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -44,8 +43,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
-		println("received error*****************")
-		println(err.Error())
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)
@@ -159,7 +156,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 			HeadGroupSpec: v1.HeadGroupSpec{
 				ServiceType:    corev1.ServiceType(cluster.Spec.Head.ServiceType),
 				RayStartParams: cluster.Spec.Head.RayStartParams,
-				Template: *cluster.Spec.Head.Pod,
+				Template:       *cluster.Spec.Head.Pod,
 			},
 			RayVersion:       cluster.Spec.RayVersion,
 			WorkerGroupSpecs: convertWorkerGroupSpecsToWorkerSpec(cluster.Name, cluster.Spec.Workers),
@@ -211,64 +208,6 @@ func (r *Reconciler) isTerminatedState(status v1.ClusterState) bool {
 	return false
 }
 
-func convertResource(resourceSpec *v2pb.ResourceSpec) corev1.ResourceRequirements {
-	requestedResource := corev1.ResourceRequirements{
-		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
-			corev1.ResourceMemory: resource.MustParse(resourceSpec.Memory),
-		},
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse(fmt.Sprintf("%d", resourceSpec.Cpu)),
-			corev1.ResourceMemory: resource.MustParse(resourceSpec.Memory),
-		},
-	}
-
-	if resourceSpec.Gpu > 0 {
-		requestedResource.Requests["gpu"] = resource.MustParse(fmt.Sprintf("%d", resourceSpec.Gpu))
-	}
-	if resourceSpec.GpuSku != "" {
-		requestedResource.Requests["gpu_sku"] = resource.MustParse(resourceSpec.GpuSku)
-	}
-	if resourceSpec.FileDescriptors != 0 {
-		requestedResource.Requests["file_descriptors"] = resource.MustParse(fmt.Sprintf("%d", resourceSpec.FileDescriptors))
-	}
-	if resourceSpec.DiskSize != "" && resourceSpec.DiskSize != "0" {
-		requestedResource.Requests["disk_size"] = resource.MustParse(resourceSpec.DiskSize)
-	}
-	return requestedResource
-}
-
-func convertEnvVar(environments []*v2pb.Environment) []corev1.EnvVar {
-	envVars := make([]corev1.EnvVar, 0)
-	for _, env := range environments {
-		newEnv := corev1.EnvVar{
-			Name:  env.Name,
-			Value: env.Value,
-		}
-		envVars = append(envVars, newEnv)
-	}
-	return envVars
-}
-
-func convertPodSpecToContainer(pod *v2pb.PodSpec) corev1.Container {
-	return corev1.Container{
-		Name:    pod.Name,
-		Image:   pod.Image,
-		Command: pod.Command,
-		EnvFrom: []corev1.EnvFromSource{
-			{
-				ConfigMapRef: &corev1.ConfigMapEnvSource{
-					LocalObjectReference: corev1.LocalObjectReference{
-						Name: "michelangelo-config",
-					},
-				},
-			},
-		},
-		Env:       convertEnvVar(pod.Env),
-		Resources: convertResource(pod.Resource),
-	}
-}
-
 // Function to convert WorkerGroupSpecs to JSON
 func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.RayWorkerSpec) []v1.WorkerGroupSpec {
 	workerGroupSpecsJson := make([]v1.WorkerGroupSpec, len(workers))
@@ -279,7 +218,7 @@ func convertWorkerGroupSpecsToWorkerSpec(clusterName string, workers []*v2pb.Ray
 			MinReplicas:    &workerGroup.MinInstances,
 			MaxReplicas:    &workerGroup.MaxInstances,
 			RayStartParams: workerGroup.RayStartParams,
-			Template: *workerGroup.Pod,
+			Template:       *workerGroup.Pod,
 		}
 		workerGroupSpecsJson[i] = workerGroupMap
 	}

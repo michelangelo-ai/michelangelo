@@ -191,6 +191,81 @@ func TestReconciler_Reconcile(t *testing.T) {
 			},
 		},
 		{
+			name: "cluster is terminating",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayClusterName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayClusterSpec{
+						Termination: &v2pb.TerminationSpec{
+							Type:   v2pb.TERMINATION_TYPE_SUCCEEDED,
+							Reason: "job completed successfully",
+						},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATING,
+			expectedMessage: []*v2pb.PodErrors(nil),
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			rayIOSetup: &v1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rayClusterName,
+					Namespace: testNamespace,
+				},
+				Spec: v1.RayClusterSpec{
+					EnableInTreeAutoscaling: nil,
+					HeadGroupSpec: v1.HeadGroupSpec{
+						ServiceType:    corev1.ServiceType("clusterIP"),
+						RayStartParams: map[string]string{},
+					},
+				},
+				Status: v1.RayClusterStatus{
+					State: v1.Ready,
+				},
+			},
+		},
+		{
+			name: "cluster is terminated",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayClusterName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayClusterSpec{
+						Termination: &v2pb.TerminationSpec{
+							Type:   v2pb.TERMINATION_TYPE_SUCCEEDED,
+							Reason: "job completed successfully",
+						},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			expectedMessage: []*v2pb.PodErrors(nil),
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			rayIOSetup: nil,
+		},
+		{
 			name: "cluster is failed",
 			setup: func() []client.Object {
 				objects := make([]client.Object, 0)
