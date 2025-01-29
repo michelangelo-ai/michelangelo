@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"reflect"
-	"runtime"
 	"time"
 
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -35,19 +34,6 @@ type Reconciler struct {
 	env env.Context
 }
 
-// captureError adds file, line, and function information to the error
-func captureError(err error) error {
-	if err == nil {
-		return nil
-	}
-	pc, file, line, ok := runtime.Caller(1) // 1 means the caller of this function
-	if !ok {
-		return fmt.Errorf("error: %v (unable to capture runtime information)", err)
-	}
-	fn := runtime.FuncForPC(pc)
-	return fmt.Errorf("error: %v\n\tat %s:%d in %s", err, file, line, fn.Name())
-}
-
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -58,8 +44,8 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	// retrieve the ray cluster
 	var rayCluster v2pb.RayCluster
 	if err := r.Get(ctx, req.NamespacedName, &rayCluster); err != nil {
-		err = captureError(err)
-
+		println("received error*****************")
+		println(err.Error())
 		// Resource not found (resource deleted)
 		if utils.IsNotFoundError(err) {
 			_, _, err = r.getClusterStatus(ctx, logger, req.Namespace, req.Name)

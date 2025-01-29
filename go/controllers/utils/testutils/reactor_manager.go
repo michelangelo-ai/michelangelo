@@ -44,6 +44,7 @@ func (rm *ReactorManager) GetReactor() k8stesting.ReactionFunc {
 			return true, nil, apiErrors.NewNotFound(v1.Resource(resource), name)
 		}
 
+		println("************************")
 		// Return the retrieved object
 		return true, obj.(runtime.Object), nil
 	}

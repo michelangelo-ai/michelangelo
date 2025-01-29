@@ -14,36 +14,29 @@ spec:
   head:
     serviceType: "ClusterIP"
     pod:
-      name: head
-      resource:
-        cpu: 1
-        memory: "2Gi"
-      image: rayproject/ray:2.3.1-py310-cpu
-      env:
-        - name: RAY_HEAD_ENV
-          value: "true"
-        - name: DEBUG
-          value: "false"
-      hdfsDelegationToken: ""
-      onInit: "/bin/bash -c echo 'Initializing Ray Head'"
-    rayStartParams:
-      dashboard-host: "0.0.0.0"
-      block: "true"
+      spec:
+        containers:
+          - name: head
+            image: rayproject/ray:2.5.0
+            env:
+              - name: RAY_HEAD_ENV
+                value: "true"
+              - name: DEBUG
+                value: "false"
   workers:
     - minInstances: 1
       maxInstances: 1
       pod:
-        name: worker
-        resource:
-          cpu: 1
-          memory: "1Gi"
-        image: rayproject/ray:2.3.1-py310-cpu
-        env:
-          - name: RAY_WORKER_ENV
-            value: "true"
-          - name: DEBUG
-            value: "false"
-        hdfsDelegationToken: ""
-        onInit: "/bin/bash -c echo 'Initializing Ray Worker'"
-      rayStartParams:
-        block: "true"
+        spec:
+          containers:
+            - name: head
+              resources:
+                requests:
+                  cpu: 1
+                  memory: 2Gi
+              image: rayproject/ray:2.5.0
+              env:
+                - name: RAY_HEAD_ENV
+                  value: "true"
+                - name: DEBUG
+                  value: "false"

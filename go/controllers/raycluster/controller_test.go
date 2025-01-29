@@ -2,11 +2,8 @@ package raycluster
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"testing"
 	"time"
-
-	corev1 "k8s.io/api/core/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -15,6 +12,8 @@ import (
 	rayv1fake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -102,31 +101,38 @@ func TestReconciler_Reconcile(t *testing.T) {
 						Head: &v2pb.RayHeadSpec{
 							ServiceType: "clusterIP",
 							Pod: &corev1.PodTemplateSpec{
-								Spec:       corev1.PodSpec{
-									Containers:                    []corev1.Container{
-
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "test",
+											Image: "test",
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("1Gi"),
+												},
+											},
+										},
 									},
-
 								},
 							},
 						},
 						Workers: []*v2pb.RayWorkerSpec{
 							{
 								Pod: &corev1.PodTemplateSpec{
-									Spec:       corev1.PodSpec{
-										Containers:                    []corev1.Container{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
 											{
-												Name:                     "test",
-												Image:                    "test",
+												Name:  "test",
+												Image: "test",
 												Resources: corev1.ResourceRequirements{
 													Requests: corev1.ResourceList{
-														corev1.ResourceCPU: resource.MustParse("1"),
+														corev1.ResourceCPU:    resource.MustParse("1"),
 														corev1.ResourceMemory: resource.MustParse("1Gi"),
 													},
 												},
 											},
 										},
-
 									},
 								},
 								MinInstances: 1,
