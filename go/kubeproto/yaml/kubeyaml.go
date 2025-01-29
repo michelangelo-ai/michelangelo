@@ -154,7 +154,7 @@ func getQuantityFieldProperties(comment string) *apiext.JSONSchemaProps {
 				Type: "string",
 			},
 		},
-		Pattern: "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$",
+		Pattern:      "^(\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\\+|-)?(([0-9]+(\\.[0-9]*)?)|(\\.[0-9]+))))?$",
 		XIntOrString: true,
 	}
 	return schema
@@ -316,10 +316,10 @@ func parseMessageFields(msg *protogen.Message, comment string, isRootSchema bool
 			} else {
 				mapProps.AdditionalProperties = &apiext.JSONSchemaPropsOrBool{
 					Schema: &apiext.JSONSchemaProps{
-						Type: props.Properties["value"].Type,
-						AnyOf: props.Properties["value"].AnyOf,
-						Pattern:          props.Properties["value"].Pattern,
-						XIntOrString:        props.Properties["value"].XIntOrString,
+						Type:         props.Properties["value"].Type,
+						AnyOf:        props.Properties["value"].AnyOf,
+						Pattern:      props.Properties["value"].Pattern,
+						XIntOrString: props.Properties["value"].XIntOrString,
 					},
 				}
 			}
