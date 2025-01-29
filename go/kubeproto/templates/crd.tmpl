@@ -317,7 +317,7 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 	if err == nil {
 	    return nil
 	}
-	type Alias {{.Name}}Spec
+    type Alias {{.Name}}Spec
     aux := (*Alias)(m)
 
     return json.Unmarshal(b, aux)

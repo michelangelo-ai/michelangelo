@@ -42,38 +42,30 @@ func TestGroupVersionInfo(t *testing.T) {
 func TestCrdInfo(t *testing.T) {
 	tests := map[string]crdInfo{
 		"project_ut": {
-			// Set both the singular and plural name.
 			SingularName: "project-singular",
 			PluralName:   "projects-plural",
 			Kind:         "Project",
-			// Default to namespace scope if scope is unset.
-			Scope: apiext.NamespaceScoped,
+			Scope:        apiext.NamespaceScoped,
 		},
 		"testobject": {
-			// Both singular and plural name are not set.  Default to message name.
 			SingularName: "testobject",
 			PluralName:   "testobjects",
 			Kind:         "TestObject",
-			// Set the namespace scope.
-			Scope: apiext.NamespaceScoped,
+			Scope:        apiext.NamespaceScoped,
 		},
 		"crd_info_ut": {
-			// Only set the plural name.
 			SingularName: "testcrd",
 			PluralName:   "testcrds",
 			Kind:         "TestCRD",
-			// Set the cluster scope.
-			Scope: apiext.ClusterScoped,
+			Scope:        apiext.ClusterScoped,
 		},
 	}
-
 	tested := 0
 	gen, extTypes := readInput(t)
 	for _, f := range gen.Files {
 		if !f.Generate {
 			continue
 		}
-
 		crdInfo := getCrdInfo(f, extTypes)
 		filename := filepath.Base(f.GeneratedFilenamePrefix)
 		if test, ok := tests[filename]; ok {
@@ -84,7 +76,6 @@ func TestCrdInfo(t *testing.T) {
 			tested++
 		}
 	}
-
 	assert.Equal(t, len(tests), tested)
 }
 
@@ -99,7 +90,6 @@ func TestYamlGen(t *testing.T) {
 		"project_ut.pb.yaml": projectYAML,
 		"testobject.pb.yaml": testObjectYAML,
 	}
-
 	data := testpb.GetProtocReqData()
 	resp := GenerateYaml(data)
 	tested := 0
@@ -110,10 +100,18 @@ func TestYamlGen(t *testing.T) {
 			tested++
 		}
 	}
-
 	assert.Equal(t, len(tests), tested)
 }
 
 func TestK8sTypes(t *testing.T) {
 	assert.Contains(t, jsonSchemas, "k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector")
+}
+
+func TestQuantityFieldProperties(t *testing.T) {
+	comment := "This is a test comment for Quantity field"
+	props := getQuantityFieldProperties(comment)
+	assert.NotNil(t, props)
+	assert.Contains(t, props, "type")
+	assert.Equal(t, 2, len(props.AnyOf))
+	assert.Equal(t, true, props.XIntOrString)
 }
