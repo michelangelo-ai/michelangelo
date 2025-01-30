@@ -2,6 +2,7 @@ import json
 import os
 import sys
 import argparse
+import shutil
 import subprocess
 import tempfile
 import time
@@ -244,9 +245,7 @@ def _exec(
 
 
 def _assert_command(command: str, err_message: str):
-    try:
-        _exec("command", "-v", command, raise_error=True)
-    except subprocess.CalledProcessError:
+    if shutil.which(command) is None:
         _err_exit(err_message)
 
 
