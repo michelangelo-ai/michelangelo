@@ -14,7 +14,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-const serverName = "michelangelo-ai-apiserver"
+const serverName = "ma-apiserver"
 
 func main() {
 	fx.New(
