@@ -3,7 +3,6 @@ package handler
 import (
 	"context"
 	"errors"
-	"go.uber.org/zap"
 	"net"
 	"reflect"
 	"strings"
@@ -19,6 +18,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/uber-go/tally"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
