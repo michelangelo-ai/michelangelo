@@ -5,8 +5,6 @@ import (
 	"testing"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -14,6 +12,8 @@ import (
 	rayv1fake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1/fake"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -100,24 +100,40 @@ func TestReconciler_Reconcile(t *testing.T) {
 						RayVersion: "2.3.1",
 						Head: &v2pb.RayHeadSpec{
 							ServiceType: "clusterIP",
-							Pod: &v2pb.PodSpec{
-								Name: "test",
-								Resource: &v2pb.ResourceSpec{
-									Cpu:    2,
-									Memory: "2Gi",
+							Pod: &corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{
+										{
+											Name:  "test",
+											Image: "test",
+											Resources: corev1.ResourceRequirements{
+												Requests: corev1.ResourceList{
+													corev1.ResourceCPU:    resource.MustParse("1"),
+													corev1.ResourceMemory: resource.MustParse("1Gi"),
+												},
+											},
+										},
+									},
 								},
-								Image: "test",
 							},
 						},
 						Workers: []*v2pb.RayWorkerSpec{
 							{
-								Pod: &v2pb.PodSpec{
-									Name: "test",
-									Resource: &v2pb.ResourceSpec{
-										Cpu:    2,
-										Memory: "2Gi",
+								Pod: &corev1.PodTemplateSpec{
+									Spec: corev1.PodSpec{
+										Containers: []corev1.Container{
+											{
+												Name:  "test",
+												Image: "test",
+												Resources: corev1.ResourceRequirements{
+													Requests: corev1.ResourceList{
+														corev1.ResourceCPU:    resource.MustParse("1"),
+														corev1.ResourceMemory: resource.MustParse("1Gi"),
+													},
+												},
+											},
+										},
 									},
-									Image: "test",
 								},
 								MinInstances: 1,
 								MaxInstances: 1,
@@ -173,6 +189,81 @@ func TestReconciler_Reconcile(t *testing.T) {
 					State: v1.Ready,
 				},
 			},
+		},
+		{
+			name: "cluster is terminating",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayClusterName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayClusterSpec{
+						Termination: &v2pb.TerminationSpec{
+							Type:   v2pb.TERMINATION_TYPE_SUCCEEDED,
+							Reason: "job completed successfully",
+						},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATING,
+			expectedMessage: []*v2pb.PodErrors(nil),
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			rayIOSetup: &v1.RayCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      rayClusterName,
+					Namespace: testNamespace,
+				},
+				Spec: v1.RayClusterSpec{
+					EnableInTreeAutoscaling: nil,
+					HeadGroupSpec: v1.HeadGroupSpec{
+						ServiceType:    corev1.ServiceType("clusterIP"),
+						RayStartParams: map[string]string{},
+					},
+				},
+				Status: v1.RayClusterStatus{
+					State: v1.Ready,
+				},
+			},
+		},
+		{
+			name: "cluster is terminated",
+			setup: func() []client.Object {
+				objects := make([]client.Object, 0)
+				cluster := &v2pb.RayCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      rayClusterName,
+						Namespace: testNamespace,
+					},
+					Spec: v2pb.RayClusterSpec{
+						Termination: &v2pb.TerminationSpec{
+							Type:   v2pb.TERMINATION_TYPE_SUCCEEDED,
+							Reason: "job completed successfully",
+						},
+					},
+					Status: v2pb.RayClusterStatus{
+						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+				}
+				objects = append(objects, cluster)
+				return objects
+			},
+			expectedState:   v2pb.RAY_CLUSTER_STATE_TERMINATED,
+			expectedMessage: []*v2pb.PodErrors(nil),
+			errorAssertion:  require.NoError,
+			postCheck: func(res ctrl.Result) {
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
+			},
+			rayIOSetup: nil,
 		},
 		{
 			name: "cluster is failed",

@@ -23,6 +23,7 @@ proto_library(
         "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:struct_proto",
         "@com_google_protobuf//:timestamp_proto",
+        "@io_k8s_api//core/v1:v1_proto",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )
@@ -39,6 +40,7 @@ go_proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:go_default_library",
+        "@io_k8s_api//core/v1:core",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )

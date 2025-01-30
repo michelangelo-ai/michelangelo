@@ -68,6 +68,7 @@ var GroupVersion = template.Must(
 // CRDImports add these imports in the generated go code, if the file contains CRD types
 var CRDImports = `
 	"bytes"
+	"encoding/json"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 	"github.com/gogo/protobuf/jsonpb"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
