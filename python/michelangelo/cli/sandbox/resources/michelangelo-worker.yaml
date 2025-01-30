@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/michelangelo-ai/worker:main
+      volumeMounts:
+        - name: config-volume
+          mountPath: /config
+  volumes:
+    - name: config-volume
+      configMap:
+        name: michelangelo-worker-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-worker-config
+  labels:
+    app: michelangelo-worker
+data:
+  base.yaml: |
+    logging:
+      level: info
+      development: true
+      encoding: console
+
+    cadence:
+      host: cadence:7833
+      transport: grpc
+      workers:
+        - domain: default
+          taskList: default
+      client:
+        domain: default
