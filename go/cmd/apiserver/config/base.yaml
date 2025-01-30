@@ -3,7 +3,7 @@ apiserver:
     host: "127.0.0.1"
     port: 8080
   k8s:
-    Qps: 300
-    Burst: 600
+    qps: 300
+    burst: 600
   metadataStorage:
     enableMetadataStorage: false

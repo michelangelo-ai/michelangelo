@@ -14,7 +14,11 @@
 
 package auth
 
-import "context"
+import (
+	"context"
+
+	"go.uber.org/fx"
+)
 
 // Action performed by user
 type Action string
@@ -43,3 +47,9 @@ func (_ DummyAuth) UserAuthorized(context.Context, string, Action, string) (bool
 func (_ DummyAuth) UserAuthenticated(context.Context) (bool, error) {
 	return true, nil
 }
+
+var DummyAuthModule = fx.Options(
+	fx.Provide(func() Auth {
+		return DummyAuth{}
+	}),
+)

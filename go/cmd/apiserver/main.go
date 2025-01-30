@@ -1,8 +1,6 @@
 package main
 
 import (
-	"context"
-
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -16,6 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
+const serverName = "michelangelo-ai-apiserver"
+
 func main() {
 	fx.New(
 		opts(),
@@ -28,8 +28,8 @@ func opts() fx.Option {
 		config.Module,
 		zapfx.Module,
 		apihandler.APIServerModule,
-		fx.Provide(getDummyAuth),
-		fx.Provide(getDummyAuditLog),
+		auth.DummyAuthModule,
+		logging.DummyAuditLogModule,
 		fx.Provide(getTallyScope),
 		fx.Provide(getK8sRestConfig),
 		fx.Provide(getYARPCConfig),
@@ -45,24 +45,11 @@ func opts() fx.Option {
 	)
 }
 
-func getDummyAuth() auth.Auth {
-	return auth.DummyAuth{}
-}
-
 func getTallyScope() (tally.Scope, error) {
 	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
-		Prefix: "michelangelo-apiserver",
+		Prefix: serverName,
 	})
 	return s, nil
-}
-
-type DummyAuditLog struct{}
-
-func (d *DummyAuditLog) Emit(_ context.Context, _ *logging.AuditLogEvent) {
-}
-
-func getDummyAuditLog() logging.AuditLog {
-	return &DummyAuditLog{}
 }
 
 func getScheme() *runtime.Scheme {

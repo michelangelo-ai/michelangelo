@@ -23,8 +23,8 @@ type (
 	}
 	// K8sConfig is the configuration for k8s REST client.
 	K8sConfig struct {
-		QPS   float32 `yaml:"Qps"`
-		Burst int     `yaml:"Burst"`
+		QPS   float32 `yaml:"qps"`
+		Burst int     `yaml:"burst"`
 	}
 )
 

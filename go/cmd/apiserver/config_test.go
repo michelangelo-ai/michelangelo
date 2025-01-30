@@ -38,8 +38,8 @@ func TestGetK8sConfig(t *testing.T) {
 	yamlStr := `
 apiserver:
   k8s:
-    Qps: 300
-    Burst: 600
+    qps: 300
+    burst: 600
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
 	assert.NoError(t, err)
@@ -63,7 +63,7 @@ apiserver:
 	yamlStr2 := `
 apiserver:
   k8s:
-    QPS: "invalid"
+    qps: "invalid"
 `
 	provider2, err := config.NewYAML(config.Source(strings.NewReader(yamlStr2)))
 	assert.NoError(t, err)

@@ -26,9 +26,9 @@ type RegisterParams struct {
 // provideDispatcher creates and configures a YARPC dispatcher.
 func provideDispatcher(conf YARPCConfig, zapLogger *zap.Logger) (*yarpc.Dispatcher, error) {
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
-		Name: "michelangelo-apiserver",
+		Name: serverName,
 		Outbounds: yarpc.Outbounds{
-			"michelangelo-apiserver": {
+			serverName: {
 				Unary: http.NewTransport().NewSingleOutbound(fmt.Sprintf("http://%s:%d", conf.Host, conf.Port)),
 			},
 		},
