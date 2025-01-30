@@ -18,6 +18,10 @@ spec:
         containers:
           - name: head
             image: rayproject/ray:2.5.0
+            lifecycle:
+              postStart:
+                exec:
+                  command: [ "/bin/sh","-c", "echo","'Initializing Ray Head'" ]
             env:
               - name: RAY_HEAD_ENV
                 value: "true"
@@ -29,14 +33,18 @@ spec:
       pod:
         spec:
           containers:
-            - name: head
+            - name: worker
               resources:
                 requests:
                   cpu: 1
                   memory: 2Gi
               image: rayproject/ray:2.5.0
+              lifecycle:
+                postStart:
+                  exec:
+                    command: [ "/bin/sh","-c", "echo","'Initializing Ray Worker'" ]
               env:
-                - name: RAY_HEAD_ENV
+                - name: RAY_WORKER_ENV
                   value: "true"
                 - name: DEBUG
                   value: "false"
