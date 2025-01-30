@@ -15,7 +15,7 @@ func TestProvideDispatcher(t *testing.T) {
 		Host: "localhost",
 		Port: 12345,
 	}
-	dispatcher, err := provideDispatcher(conf, *zap.NewNop())
+	dispatcher, err := provideDispatcher(conf, zap.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 }
@@ -24,7 +24,7 @@ func TestRegisterProcedures(t *testing.T) {
 	dispatcher, err := provideDispatcher(YARPCConfig{
 		Host: "localhost",
 		Port: 12345,
-	}, *zap.NewNop())
+	}, zap.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 	params := RegisterParams{
@@ -44,7 +44,7 @@ func TestStartYARPCServer(t *testing.T) {
 	dispatcher, err := provideDispatcher(YARPCConfig{
 		Host: "localhost",
 		Port: 0,
-	}, *zap.NewNop())
+	}, zap.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
 	lc := fxtest.NewLifecycle(t)

@@ -3,13 +3,13 @@ package handler
 import (
 	"context"
 	"errors"
+	"go.uber.org/zap"
 	"net"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -314,7 +314,7 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 		},
 		MetadataStorage: mockMetadataStorage,
 		BlobStorage:     mockBlobStorage,
-		Logger:          logr.Logger{},
+		Logger:          zap.Must(zap.NewDevelopment()),
 		Metrics:         tally.NoopScope,
 	})
 	handler, err := factory.GetAPIHandler(k8sClient)
@@ -448,7 +448,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 			DeletionDelay:              0,
 			EnableResourceVersionCache: false,
 		},
-		Logger:  logr.Logger{},
+		Logger:  zap.Must(zap.NewDevelopment()),
 		Metrics: tally.NoopScope,
 	})
 	assert.NoError(t, err)
