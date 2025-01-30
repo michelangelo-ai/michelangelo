@@ -13,13 +13,21 @@ go_library(
     deps = [
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["utils_test.go"],
+    srcs = [
+        "audit_logger_test.go",
+        "utils_test.go",
+    ],
     embed = [":go_default_library"],
-    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_fx//fxtest:go_default_library",
+    ],
 )

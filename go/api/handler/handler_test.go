@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/go-logr/logr"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -19,6 +18,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/uber-go/tally"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -314,7 +314,7 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 		},
 		MetadataStorage: mockMetadataStorage,
 		BlobStorage:     mockBlobStorage,
-		Logger:          logr.Logger{},
+		Logger:          zap.Must(zap.NewDevelopment()),
 		Metrics:         tally.NoopScope,
 	})
 	handler, err := factory.GetAPIHandler(k8sClient)
@@ -448,7 +448,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 			DeletionDelay:              0,
 			EnableResourceVersionCache: false,
 		},
-		Logger:  logr.Logger{},
+		Logger:  zap.Must(zap.NewDevelopment()),
 		Metrics: tally.NoopScope,
 	})
 	assert.NoError(t, err)
