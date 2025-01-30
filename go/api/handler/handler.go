@@ -8,12 +8,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"github.com/uber-go/tally"
-	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
@@ -21,10 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
-	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 	ctrlRTApiutil "sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	ctrlRTUtil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,18 +37,16 @@ const (
 	_apiActionLatencyMetric = "apiActionLatency"
 )
 
-// Params are the dependencies to build API handler library
-type Params struct {
-	fx.In
-
-	Manager         ctrl.Manager `optional:"true"`
-	K8sRestConfig   *rest.Config
-	Scheme          *runtime.Scheme
-	StorageConfig   storage.MetadataStorageConfig
-	MetadataStorage storage.MetadataStorage
-	BlobStorage     storage.BlobStorage
-	Logger          logr.Logger
-	Metrics         tally.Scope
+// NewFakeAPIHandler creates an API handler with the provided k8s client.  This is used for unit test only.
+func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
+	return &apiHandler{
+		k8sClient: k8sClient,
+		conf: storage.MetadataStorageConfig{
+			EnableMetadataStorage: false,
+		},
+		logger:  zapr.NewLogger(zap.NewNop()),
+		metrics: tally.NoopScope,
+	}
 }
 
 func newAPIServerHandler(params Params) (api.Handler, error) {
@@ -82,13 +78,13 @@ func newK8sOnlyFactory(params Params) Factory {
 		},
 		StorageClient: nil,
 		BlobStorage:   nil,
-		Logger:        params.Logger,
+		Logger:        zapr.NewLogger(params.Logger),
 		Metrics:       params.Metrics}
 }
 
 func newK8sAndMetadataStorageFactory(params Params) Factory {
 	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.MetadataStorage,
-		BlobStorage: params.BlobStorage, Logger: params.Logger,
+		BlobStorage: params.BlobStorage, Logger: zapr.NewLogger(params.Logger),
 		Metrics: params.Metrics}
 }
 

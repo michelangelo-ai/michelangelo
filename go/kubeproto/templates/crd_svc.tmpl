@@ -1,9 +1,8 @@
-func New{{.KindName}}ServiceHandler(client *K8sClient, handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) {{.KindName}}ServiceYARPCServer {
-	return &{{.LowerKindName}}ServiceHandler{client: client, apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.MichelangeloAPIScopeName), auth: auth, auditLogEmitter: auditLog}
+func New{{.KindName}}ServiceHandler(handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) {{.KindName}}ServiceYARPCServer {
+	return &{{.LowerKindName}}ServiceHandler{apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.MichelangeloAPIScopeName), auth: auth, auditLogEmitter: auditLog}
 }
 
 type {{.LowerKindName}}ServiceHandler struct {
-	client          *K8sClient
 	apiHandler      api.Handler
 	MetricsScope    tally.Scope
 	auth            authapi.Auth

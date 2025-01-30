@@ -54,7 +54,7 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, p.imports, `"go.uber.org/fx"`)
 	assert.Contains(t, p.imports, `"k8s.io/apimachinery/pkg/apis/meta/v1"`)
 
-	assert.Contains(t, c, `func NewProjectServiceHandler(client *K8sClient, handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) ProjectServiceYARPCServer`)
+	assert.Contains(t, c, `func NewProjectServiceHandler(handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) ProjectServiceYARPCServer`)
 	assert.Contains(t, c, `var ProjectSvcModule =`)
 
 	assert.True(t, groupInfoFile != nil)
@@ -63,6 +63,4 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, g.imports, `"k8s.io/apimachinery/pkg/runtime/serializer"`)
 	assert.Contains(t, g.imports, `"k8s.io/client-go/kubernetes/scheme"`)
 	assert.Contains(t, g.imports, `"k8s.io/client-go/rest"`)
-	assert.Contains(t, c, `func GetK8sClient(c *rest.Config) (*K8sClient, error)`)
-	assert.Contains(t, c, `type K8sClient struct`)
 }
