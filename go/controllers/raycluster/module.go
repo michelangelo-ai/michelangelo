@@ -1,6 +1,7 @@
 package raycluster
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
@@ -18,12 +19,13 @@ var (
 
 func register(
 	conf Config,
+	mgrConfig controllermgr.Config,
 	env env.Context,
 	mgr manager.Manager,
 ) error {
 	restConfig := mgr.GetConfig()
-	restConfig.QPS = conf.QPS
-	restConfig.Burst = conf.Burst
+	restConfig.QPS = mgrConfig.QPS
+	restConfig.Burst = mgrConfig.Burst
 	rayClient, err := rayv1.NewForConfig(restConfig)
 	if err != nil {
 		return err

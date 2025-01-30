@@ -14,6 +14,9 @@ type (
 		LeaderElection         bool   `yaml:"leaderElection"`
 		LeaderElectionID       string `yaml:"leaderElectionID"`
 		Port                   int    `yaml:"port"`
+
+		QPS   float32 `yaml:"k8sQps"`
+		Burst int     `yaml:"k8sBurst"`
 	}
 )
 
