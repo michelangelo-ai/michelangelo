@@ -93,7 +93,9 @@ class RemoteRun:
             "--tasklist",
             os.environ.get("UFC_CADENCE_TASK_LIST", "default"),
             "--workflow_type",
-            os.environ.get("UFC_CADENCE_WORKFLOW_TYPE", "github.com/cadence-workflow/starlark-worker/cadstar.(*Service).Run"),
+            os.environ.get(
+                "UFC_CADENCE_WORKFLOW_TYPE", "github.com/cadence-workflow/starlark-worker/cadstar.(*Service).Run"
+            ),
             "--execution_timeout",
             str(self.execution_timeout_seconds),
             "--workflow_id",

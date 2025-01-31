@@ -19,6 +19,7 @@ def train_workflow(data_shape: tuple[int, int]):
     print("data:", data)
     print("ok.")
 
+
 # For Local Run: python3 examples/bert_cola/bert_cola.py
 # For Remote Run: python3 examples/bert_cola/bert_cola.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
