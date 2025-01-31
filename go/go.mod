@@ -3,13 +3,15 @@ module github.com/michelangelo-ai/michelangelo/go
 go 1.23.2
 
 require (
+	github.com/cadence-workflow/starlark-worker v1.0.0
 	github.com/dave/dst v0.27.3
 	github.com/go-logr/zapr v1.3.0
 	github.com/gobuffalo/flect v1.0.3
 	github.com/gogo/status v1.1.0
 	github.com/google/uuid v1.6.0
 	github.com/ray-project/kuberay/ray-operator v1.2.2
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
+	go.starlark.net v0.0.0-20241125201518-c05ff208a98f
 	go.uber.org/cadence v1.2.9
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
@@ -42,6 +44,7 @@ require (
 	github.com/uber-go/mapdecode v1.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/dig v1.17.1 // indirect
+	golang.org/x/crypto v0.32.0 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
@@ -81,7 +84,7 @@ require (
 	github.com/prometheus/common v0.55.0 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect
-	github.com/uber-go/tally v3.5.8+incompatible
+	github.com/uber-go/tally v3.5.10+incompatible
 	github.com/uber/tchannel-go v1.34.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
