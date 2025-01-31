@@ -1,7 +1,7 @@
 # Dockerfile for Michelangelo services.
 
 # Distroless: https://github.com/GoogleContainerTools/distroless
-FROM gcr.io/distroless/static-debian12
+FROM gcr.io/distroless/base-debian12
 
 # Path to the service binary built by the BAZEL_TARGET.
 # The path must be relative to the repository root.
