@@ -13,6 +13,10 @@ packages = [
 [tool.poetry.dependencies]
 python = "^3.9.0"
 fsspec = "^2024.10.0"
+ray = "^2.41.0"
+pydantic = "^2.10.6"
+pandas = "^2.2.3"
+pyarrow = "^19.0.0"
 
 
 [tool.poetry.group.dev.dependencies]
