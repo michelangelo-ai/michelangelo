@@ -167,7 +167,7 @@ def task(
     config: TaskConfig,
     alias: Optional[str] = None,
     io: IORegistry = default_io,
-    cache_endabled: bool = False,
+    cache_enabled: bool = False,
     cache_version: Optional[str] = None,
 ):
     """
@@ -197,7 +197,7 @@ def task(
             config=config,
             alias=alias,
             io=io,
-            cache_enabled=cache_endabled,
+            cache_enabled=cache_enabled,
             cache_version=cache_version,
         )
         update_wrapper(task_fn, fn)

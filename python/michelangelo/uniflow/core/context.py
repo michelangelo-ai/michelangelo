@@ -102,7 +102,7 @@ def _local_run(fn: Callable, *args, **kw):
         err_message = (
             "Error in building the @workflow function. Ensure it meets all required workflow code specifications."
         )
-        raise NameError(err_message) from err
+        raise RuntimeError(err_message) from err
 
     os.environ["UF_LOCAL_RUN"] = "1"
 
