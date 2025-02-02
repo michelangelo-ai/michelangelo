@@ -33,9 +33,7 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 	g.P("package ", file.GoPackageName)
 	g.P()
 
-	if options != nil && options.Bool("has_group_info") {
-		g.P(templates.GroupK8sClient)
-	} else {
+	if options == nil || !options.Bool("has_group_info") {
 		hasCrdImport := false
 		for _, msg := range file.Messages {
 			pbOptions := msg.Desc.Options().(*descriptorpb.MessageOptions)

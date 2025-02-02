@@ -37,13 +37,9 @@ func TestGen(t *testing.T) {
 	resp := generate(data)
 
 	var projectFile *pluginpb.CodeGeneratorResponse_File
-	var groupInfoFile *pluginpb.CodeGeneratorResponse_File
 	for _, f := range resp.GetFile() {
 		if strings.HasSuffix(*f.Name, "project_ut.pb.kubeyarpc.go") {
 			projectFile = f
-		}
-		if strings.HasSuffix(*f.Name, "groupversion_info_ut.pb.kubeyarpc.go") {
-			groupInfoFile = f
 		}
 	}
 
@@ -56,11 +52,4 @@ func TestGen(t *testing.T) {
 
 	assert.Contains(t, c, `func NewProjectServiceHandler(handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) ProjectServiceYARPCServer`)
 	assert.Contains(t, c, `var ProjectSvcModule =`)
-
-	assert.True(t, groupInfoFile != nil)
-	c = groupInfoFile.GetContent()
-	g := parse(c)
-	assert.Contains(t, g.imports, `"k8s.io/apimachinery/pkg/runtime/serializer"`)
-	assert.Contains(t, g.imports, `"k8s.io/client-go/kubernetes/scheme"`)
-	assert.Contains(t, g.imports, `"k8s.io/client-go/rest"`)
 }

@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/apiserver",
     visibility = ["//visibility:private"],
     deps = [
+        "//go/api/crd:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/auth:go_default_library",
         "//go/base/config:go_default_library",

@@ -1,0 +1,61 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "gateway.go",
+        "module.go",
+        "schema_diff.go",
+        "sync.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/api/crd",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_cenkalti_backoff//:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/client/clientset/clientset:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/json:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/yaml:go_default_library",
+        "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "gateway_test.go",
+        "schema_diff_test.go",
+        "sync_test.go",
+    ],
+    data = [
+        "//go/api/crd/test_manifest",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/api/crd/crdmocks:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/client/clientset/clientset/fake:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/yaml:go_default_library",
+        "@io_k8s_client_go//dynamic/fake:go_default_library",
+        "@io_k8s_client_go//kubernetes/scheme:go_default_library",
+        "@io_k8s_client_go//testing:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
