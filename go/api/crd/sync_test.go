@@ -7,16 +7,14 @@ import (
 	"strings"
 	"testing"
 
-	"go.uber.org/config"
-
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api/crd/crdmocks"
-	apiExtFake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
-
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+	apiExtFake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )

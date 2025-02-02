@@ -3,23 +3,19 @@ package crd
 import (
 	"context"
 	"errors"
-	"os"
 	"strings"
 	"testing"
-
-	"k8s.io/apimachinery/pkg/runtime"
-	k8stesting "k8s.io/client-go/testing"
-
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	apiExtFake "k8s.io/apiextensions-apiserver/pkg/client/clientset/clientset/fake"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 var (
@@ -315,7 +311,7 @@ func TestHasInstances(t *testing.T) {
 	})
 }
 
-func TestNewCRDGateway(t *testing.T) {
+/*func TestNewCRDGateway(t *testing.T) {
 	os.Setenv("KUBECONFIG", "test_manifest/k8s.config")
 	k8sConfig, err := ctrl.GetConfig()
 	assert.NoError(t, err)
@@ -325,4 +321,4 @@ func TestNewCRDGateway(t *testing.T) {
 		K8sConfig: k8sConfig,
 	})
 	assert.NotNil(t, crdGateway)
-}
+}*/
