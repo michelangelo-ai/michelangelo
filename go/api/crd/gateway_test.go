@@ -3,6 +3,8 @@ package crd
 import (
 	"context"
 	"errors"
+	"os"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"strings"
 	"testing"
 
@@ -311,7 +313,7 @@ func TestHasInstances(t *testing.T) {
 	})
 }
 
-/*func TestNewCRDGateway(t *testing.T) {
+func TestNewCRDGateway(t *testing.T) {
 	os.Setenv("KUBECONFIG", "test_manifest/k8s.config")
 	k8sConfig, err := ctrl.GetConfig()
 	assert.NoError(t, err)
@@ -321,4 +323,4 @@ func TestHasInstances(t *testing.T) {
 		K8sConfig: k8sConfig,
 	})
 	assert.NotNil(t, crdGateway)
-}*/
+}
