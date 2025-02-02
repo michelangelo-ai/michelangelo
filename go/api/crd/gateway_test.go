@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"strings"
 	"testing"
 
@@ -18,6 +17,7 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	k8stesting "k8s.io/client-go/testing"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 var (
