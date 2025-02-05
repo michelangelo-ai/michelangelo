@@ -1,10 +1,9 @@
 package crd
 
 import (
-	"bytes"
+	"reflect"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
-	"k8s.io/apimachinery/pkg/util/json"
 )
 
 // A valueDiff is compatible only if both from and To are nil.
@@ -315,15 +314,7 @@ func compareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiext
 }
 
 func hasChange(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) bool {
-	var oldSpec bytes.Buffer
-	json.NewEncoder(&oldSpec).Encode(oldCRD.Spec.Versions)
-	var newSpec bytes.Buffer
-	json.NewEncoder(&newSpec).Encode(newCRD.Spec.Versions)
-	if oldSpec.String() == newSpec.String() {
-		return false
-	}
-
-	return true
+	return !reflect.DeepEqual(oldCRD.Spec.Versions, newCRD.Spec.Versions)
 }
 
 func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (bool, error) {
