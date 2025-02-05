@@ -5,8 +5,6 @@ import pytorch_lightning
 import torch
 import torch.nn.functional as F
 import transformers
-
-
 from examples.bert_cola.data import tokenizer_path
 
 log = logging.getLogger(__name__)

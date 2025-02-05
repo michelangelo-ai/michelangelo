@@ -88,6 +88,8 @@ class RemoteRun:
         cmd += [
             "--domain",
             os.environ.get("UFC_CADENCE_DOMAIN", "default"),
+            "--env",
+            "development",
             "workflow",
             "start",
             "--tasklist",

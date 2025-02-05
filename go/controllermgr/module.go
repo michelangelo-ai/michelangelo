@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
 )
 
 var (
@@ -57,6 +58,9 @@ func create(p params) (result, error) {
 
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme: p.Scheme,
+		Metrics: server.Options{
+			BindAddress: p.Config.MetricsBindAddress,
+		},
 		//MetricsBindAddress:     p.Config.MetricsBindAddress,
 		//Port:                   p.Config.Port,
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,

@@ -94,7 +94,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {
 			res.RequeueAfter = requeueAfter
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else if status != nil {
 		logger.Info("get ray cluster with status ", "status", *status)
@@ -102,7 +101,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			err = r.deleteCluster(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 			if err != nil {
 				res.RequeueAfter = requeueAfter
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			} else {
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			}
@@ -120,7 +118,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
 		} else {
 			res.RequeueAfter = requeueAfter
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else {
 		res.RequeueAfter = requeueAfter

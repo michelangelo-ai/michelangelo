@@ -5,8 +5,8 @@ import ray
 import transformers
 from ray.data import Dataset
 
-# from uber.ai.uniflow.ray_task import Ray
-import michelangelo.uniflow as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
+import michelangelo.uniflow.core as uniflow
 
 
 tokenizer_path = "bert-base-cased"
@@ -14,9 +14,12 @@ tokenizer_path = "bert-base-cased"
 log = logging.getLogger(__name__)
 
 
-@uniflow.task(
-    config="test"
-)
+@uniflow.task(config=RayTask(
+    head_cpu=1,
+    head_memory="2Gi",
+    worker_cpu=1,
+    worker_memory="2Gi",
+    worker_instances=1))
 def load_data(
     path: str,
     name: str,
@@ -41,8 +44,7 @@ def load_data(
         ds = ray.data.from_huggingface(data[data_slice])
         ds = ds.map_batches(tokenize_sentence, batch_format="numpy")
 
-        if uniflow.is_local_run():
-            ds = ds.random_sample(0.2, seed=1)
+        ds = ds.random_sample(0.01, seed=1)
 
         return ds
 

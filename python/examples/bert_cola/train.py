@@ -1,83 +1,114 @@
 import logging
-import pytorch_lightning
-
+import torch
+import transformers
 from ray.data import Dataset
-from ray.train import CheckpointConfig
-from ray.train.lightning import RayFSDPStrategy
-
-from examples.bert_cola.model import SentimentModel
-from uber.ai.michelangelo.maf.ray.train import create_run_config, create_scaling_config
-from uber.ai.michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
-    LightningTrainer,
-    LightningTrainerParam,
-)
-
-from uber.ai.uniflow.ray_task import Ray
-from michelangelo.uniflow import uniflow
-
+from michelangelo.uniflow.plugins.ray import RayTask
+import michelangelo.uniflow.core as uniflow
+import numpy as np
 
 log = logging.getLogger(__name__)
 
-
-def create_model(metric_path: str, metric_config_name: str, lr: float, eps: float) -> pytorch_lightning.LightningModule:
-    return SentimentModel(metric_path=metric_path, metric_config_name=metric_config_name, lr=lr, eps=eps)
-
+# Model creation function
+def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClassification:
+    return transformers.AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-cased", num_labels=2
+    )
 
 @uniflow.task(
-    config=Ray(
-        head_cpu=16,
-        head_memory="32Gi",
-        head_gpu=1,
-        worker_cpu=8,
-        worker_memory="16Gi",
-        worker_gpu=1,
-        worker_instances=3,
+    config=RayTask(
+        head_cpu=1,
+        head_memory="2Gi",
+        worker_cpu=1,
+        worker_memory="2Gi",
+        worker_instances=1,
     ),
 )
 def train(
         train_data: Dataset,
         validation_data: Dataset,
-        train_loop_config: dict,
+        test_data: Dataset,
 ):
-    scaling_config = create_scaling_config(
-        trainer_cpu=2,
-        cpu_per_worker=4,
-    )
-    log.info("scaling_config: %r", scaling_config)
+    log.info("Starting training...")
 
-    run_config = create_run_config(
-        checkpoint_config=CheckpointConfig(
-            num_to_keep=1,  # Save the top-1 checkpoints according to the evaluation metric.
-            checkpoint_score_attribute="matthews_correlation",
-            checkpoint_score_order="max",
-        ),
-    )
-    log.info("run_config: %r", run_config)
+    # Training configuration
+    batch_size = 32
+    max_epochs = 1
+    lr = 2e-5
+    eps = 1e-8
+    output_dir = "./bert_cola"
 
-    lightning_trainer_kwargs = {
-        "strategy": RayFSDPStrategy(
-            sharding_strategy="SHARD_GRAD_OP",
-        ),
-        "precision": 16,
-    }
-    if uniflow.is_local_run():
-        lightning_trainer_kwargs = None
+    # Load model
+    model = create_model(lr=lr, eps=eps)
 
-    trainer_param = LightningTrainerParam(
-        create_model,
-        {
-            "metric_path": train_loop_config["metric_path"],
-            "metric_config_name": train_loop_config["metric_config_name"],
-            "lr": train_loop_config["lr"],
-            "eps": train_loop_config["eps"],
-        },
-        train_data,
-        validation_data,
-        batch_size=train_loop_config["batch_size"],
-        num_epochs=train_loop_config["max_epochs"],
-        lightning_trainer_kwargs=lightning_trainer_kwargs,
+    from datasets import Dataset as HFDataset
+    train_data = HFDataset.from_pandas(train_data.to_pandas())
+    validation_data = HFDataset.from_pandas(validation_data.to_pandas())
+    test_data = HFDataset.from_pandas(test_data.to_pandas())
+
+
+# Define training arguments
+    training_args = transformers.TrainingArguments(
+        output_dir=output_dir,
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        save_total_limit=1,  # Keep only the best checkpoint
+        metric_for_best_model="eval_loss",  # Customize based on your needs
+        greater_is_better=False,
+        per_device_train_batch_size=batch_size,
+        per_device_eval_batch_size=batch_size,
+        num_train_epochs=max_epochs,
+        learning_rate=lr,
+        logging_dir=f"{output_dir}/logs",
+        load_best_model_at_end=True,
     )
 
-    trainer = LightningTrainer(trainer_param)
+    trainer = transformers.Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train_data,
+        eval_dataset=validation_data,
+        tokenizer=transformers.AutoTokenizer.from_pretrained("bert-base-cased"),
+        compute_metrics=_compute_metrics,
+    )
 
-    return trainer.fit(run_config, scaling_config)
+    train_result = trainer.train()
+    trainer.save_model(output_dir)
+
+    log.info("Training complete. Best model saved.")
+
+    # Evaluate on test set
+    log.info("Starting evaluation on test set...")
+    test_results = trainer.evaluate(eval_dataset=test_data)
+    log.info(f"Test Results: {test_results}")
+
+    # Get the best checkpoint path
+    best_checkpoint = training_args.output_dir + "/checkpoint-best"
+    log.info(f"Best checkpoint path: {best_checkpoint}")
+
+    return train_result, best_checkpoint
+
+def _compute_metrics(eval_pred):
+    """Compute Matthews Correlation Coefficient (MCC) directly using NumPy."""
+    logits, labels = eval_pred
+
+    # Ensure logits and labels are NumPy arrays
+    if isinstance(logits, torch.Tensor):
+        logits = logits.detach().cpu().numpy()
+    if isinstance(labels, torch.Tensor):
+        labels = labels.detach().cpu().numpy()
+
+    # Convert logits to class predictions
+    predictions = np.argmax(logits, axis=-1)
+
+    # Compute MCC manually
+    tp = np.sum((predictions == 1) & (labels == 1))
+    tn = np.sum((predictions == 0) & (labels == 0))
+    fp = np.sum((predictions == 1) & (labels == 0))
+    fn = np.sum((predictions == 0) & (labels == 1))
+
+    numerator = (tp * tn) - (fp * fn)
+    denominator = np.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+
+    mcc = numerator / denominator if denominator != 0 else 0.0
+
+    return {"matthews_correlation": mcc}

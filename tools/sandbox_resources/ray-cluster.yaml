@@ -13,11 +13,15 @@ spec:
 #    reason: "job succeeded"
   head:
     serviceType: "ClusterIP"
+    rayStartParams:
+      block: "false"
+      dashboard-host: "0.0.0.0"
     pod:
       spec:
         containers:
           - name: head
-            image: rayproject/ray:2.5.0
+            image: bert-cola
+            imagePullPolicy: Never
             lifecycle:
               postStart:
                 exec:
@@ -30,6 +34,9 @@ spec:
   workers:
     - minInstances: 1
       maxInstances: 1
+      rayStartParams:
+        block: "false"
+        dashboard-host: "0.0.0.0"
       pod:
         spec:
           containers:
@@ -38,7 +45,8 @@ spec:
                 requests:
                   cpu: 1
                   memory: 2Gi
-              image: rayproject/ray:2.5.0
+              image: bert-cola
+              imagePullPolicy: Never
               lifecycle:
                 postStart:
                   exec:
