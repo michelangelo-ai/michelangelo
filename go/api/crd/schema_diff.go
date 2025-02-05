@@ -7,25 +7,17 @@ import (
 	"k8s.io/apimachinery/pkg/util/json"
 )
 
-// Diff composite pattern for diff calculation and compatibility validation
-type Diff interface {
-
-	// Compatible define compatibility rules. Separate concerns of diff calculation and compatibility validation
-	Compatible() bool
+// A valueDiff is compatible only if both from and To are nil.
+type valueDiff struct {
+	from interface{}
+	to   interface{}
 }
 
-// ValueDiff implements Diff interface. A ValueDiff is compatible only if both From and To are nil.
-type ValueDiff struct {
-	From interface{}
-	To   interface{}
+func (vd *valueDiff) compatible() bool {
+	return vd == nil || *vd == valueDiff{}
 }
 
-// Compatible implements Diff.Compatible
-func (vd *ValueDiff) Compatible() bool {
-	return vd == nil || *vd == ValueDiff{}
-}
-
-// SchemaDiff checks compatability of two k8s CRD schemas
+// schemaDiff checks compatability of two k8s CRD schemas
 // k8s use OpenAPI schema for CRD definition [https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#specifying-a-structural-schema]
 // When checking compatability, we ignore following OPENAPI props:
 // 1) OPENAPI props only used for documentation
@@ -44,18 +36,18 @@ func (vd *ValueDiff) Compatible() bool {
 //   - AdditionalProperties
 //
 // Validation changes (e.g. maximum, minimum, format, etc.) in the schema are not checked for compatibility.
-type SchemaDiff struct {
-	TypeDiff       *ValueDiff
-	PropertiesDiff *SchemaObjectDiff
-	ItemsDiff      *SchemaDiff
-	OneOfDiff      *SchemaArrayDiff
-	AnyOfDiff      *SchemaArrayDiff
-	AllOfDiff      *SchemaArrayDiff
+type schemaDiff struct {
+	typeDiff       *valueDiff
+	propertiesDiff *schemaObjectDiff
+	itemsDiff      *schemaDiff
+	oneOfDiff      *schemaArrayDiff
+	anyOfDiff      *schemaArrayDiff
+	allOfDiff      *schemaArrayDiff
 }
 
-// NewSchemaDiff compare two JSONSchemaProps and return the diff
-func NewSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps) (*SchemaDiff, error) {
-	diff := SchemaDiff{}
+// newSchemaDiff compare two JSONSchemaProps and return the diff
+func newSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps) (*schemaDiff, error) {
+	diff := schemaDiff{}
 
 	if old == nil {
 		old = &apiextv1.JSONSchemaProps{}
@@ -66,15 +58,15 @@ func NewSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps)
 	}
 
 	if old.Type != new.Type {
-		diff.TypeDiff = &ValueDiff{From: old.Type, To: new.Type}
+		diff.typeDiff = &valueDiff{from: old.Type, to: new.Type}
 	}
 
 	if old.Properties != nil || new.Properties != nil {
-		propertiesDiff, err := NewSchemaObjectDiff(old.Properties, new.Properties)
+		propertiesDiff, err := newSchemaObjectDiff(old.Properties, new.Properties)
 		if err != nil {
 			return nil, err
 		}
-		diff.PropertiesDiff = propertiesDiff
+		diff.propertiesDiff = propertiesDiff
 	}
 
 	if old.Items != nil || new.Items != nil {
@@ -86,47 +78,39 @@ func NewSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps)
 		if new.Items != nil {
 			newItemSchema = new.Items.Schema
 		}
-		itemsDiff, err := NewSchemaDiff(oldItemSchema, newItemSchema)
+		itemsDiff, err := newSchemaDiff(oldItemSchema, newItemSchema)
 		if err != nil {
 			return nil, err
 		}
-		diff.ItemsDiff = itemsDiff
+		diff.itemsDiff = itemsDiff
 	}
 
 	if old.OneOf != nil || new.OneOf != nil {
-		oneOfDiff, err := NewSchemaArrayDiff(old.OneOf, new.OneOf)
+		oneOfDiff, err := newSchemaArrayDiff(old.OneOf, new.OneOf)
 		if err != nil {
 			return nil, err
 		}
-		diff.OneOfDiff = oneOfDiff
+		diff.oneOfDiff = oneOfDiff
 	}
 
 	if old.AnyOf != nil || new.AnyOf != nil {
-		anyOfDiff, err := NewSchemaArrayDiff(old.AnyOf, new.AnyOf)
+		anyOfDiff, err := newSchemaArrayDiff(old.AnyOf, new.AnyOf)
 		if err != nil {
 			return nil, err
 		}
-		diff.AnyOfDiff = anyOfDiff
+		diff.anyOfDiff = anyOfDiff
 	}
 
 	if old.AllOf != nil || new.AllOf != nil {
-		allOfDiff, err := NewSchemaArrayDiff(old.AllOf, new.AllOf)
+		allOfDiff, err := newSchemaArrayDiff(old.AllOf, new.AllOf)
 		if err != nil {
 			return nil, err
 		}
-		diff.AllOfDiff = allOfDiff
-	}
-
-	if old.AllOf != nil || new.AllOf != nil {
-		allOfDiff, err := NewSchemaArrayDiff(old.AllOf, new.AllOf)
-		if err != nil {
-			return nil, err
-		}
-		diff.AllOfDiff = allOfDiff
+		diff.allOfDiff = allOfDiff
 	}
 
 	// return nil if no diff exists
-	emptyDiff := SchemaDiff{}
+	emptyDiff := schemaDiff{}
 	if diff == emptyDiff {
 		return nil, nil
 	}
@@ -134,56 +118,55 @@ func NewSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps)
 	return &diff, nil
 }
 
-// Compatible implement Diff.Compatible
-// Following changes are not compatible
+// Following changes are not compatible for a schema
 // 1) type change
 // 2) remove properties
 // 3) any 1) and 2) changes in nested schema hierarchy (recursive)
-func (d *SchemaDiff) Compatible() bool {
+func (d *schemaDiff) compatible() bool {
 	if d == nil {
 		return true
 	}
 
-	if !d.TypeDiff.Compatible() {
+	if !d.typeDiff.compatible() {
 		return false
 	}
 
-	if !d.PropertiesDiff.Compatible() {
+	if !d.propertiesDiff.compatible() {
 		return false
 	}
 
-	if !d.ItemsDiff.Compatible() {
+	if !d.itemsDiff.compatible() {
 		return false
 	}
 
-	if !d.AnyOfDiff.Compatible() {
+	if !d.anyOfDiff.compatible() {
 		return false
 	}
 
-	if !d.AllOfDiff.Compatible() {
+	if !d.allOfDiff.compatible() {
 		return false
 	}
 
-	if !d.OneOfDiff.Compatible() {
+	if !d.oneOfDiff.compatible() {
 		return false
 	}
 
 	return true
 }
 
-// SchemaArrayDiff implements Diff interface, compares two arrays of JSON property schemas
-type SchemaArrayDiff struct {
-	Deleted  []*apiextv1.JSONSchemaProps
-	Added    []*apiextv1.JSONSchemaProps
-	Modified []*SchemaDiff
+// schemaArrayDiff compares two arrays of JSON property schemas
+type schemaArrayDiff struct {
+	deleted  []*apiextv1.JSONSchemaProps
+	added    []*apiextv1.JSONSchemaProps
+	modified []*schemaDiff
 }
 
-// NewSchemaArrayDiff compares two arrays of JSON property schemas
-func NewSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchemaProps) (*SchemaArrayDiff, error) {
+// newSchemaArrayDiff compares two arrays of JSON property schemas
+func newSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchemaProps) (*schemaArrayDiff, error) {
 
 	var deletedProps []*apiextv1.JSONSchemaProps
 	var addedProps []*apiextv1.JSONSchemaProps
-	var modifiedProps []*SchemaDiff
+	var modifiedProps []*schemaDiff
 	n := len(old)
 	for i := 0; i < n; i++ {
 		if i >= len(new) {
@@ -191,7 +174,7 @@ func NewSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchem
 			continue
 		}
 
-		diff, err := NewSchemaDiff(&old[i], &new[i])
+		diff, err := newSchemaDiff(&old[i], &new[i])
 		if err != nil {
 			return nil, err
 		}
@@ -205,26 +188,25 @@ func NewSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchem
 	}
 
 	if len(deletedProps) > 0 || len(addedProps) > 0 || len(modifiedProps) > 0 {
-		return &SchemaArrayDiff{Deleted: deletedProps, Added: addedProps, Modified: modifiedProps}, nil
+		return &schemaArrayDiff{deleted: deletedProps, added: addedProps, modified: modifiedProps}, nil
 	}
 
 	return nil, nil
 }
 
-// Compatible implements Diff.Compatible, allows both deletion and addition
-func (d *SchemaArrayDiff) Compatible() bool {
+func (d *schemaArrayDiff) compatible() bool {
 	if d == nil {
 		return true
 	}
 
 	// not allow deletion
-	if len(d.Deleted) > 0 {
+	if len(d.deleted) > 0 {
 		return false
 	}
 
 	// not compatible if there is incompatible modifications
-	for _, v := range d.Modified {
-		if !v.Compatible() {
+	for _, v := range d.modified {
+		if !v.compatible() {
 			return false
 		}
 	}
@@ -232,18 +214,18 @@ func (d *SchemaArrayDiff) Compatible() bool {
 	return true
 }
 
-// SchemaObjectDiff implements Diff interface, compares the property maps of two JSON object schemas
-type SchemaObjectDiff struct {
-	Deleted  map[string]*apiextv1.JSONSchemaProps
-	Added    map[string]*apiextv1.JSONSchemaProps
-	Modified map[string]*SchemaDiff
+// schemaObjectDiff compares the property maps of two JSON object schemas
+type schemaObjectDiff struct {
+	deleted  map[string]*apiextv1.JSONSchemaProps
+	added    map[string]*apiextv1.JSONSchemaProps
+	modified map[string]*schemaDiff
 }
 
-func NewSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string]apiextv1.JSONSchemaProps) (*SchemaObjectDiff, error) {
+func newSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string]apiextv1.JSONSchemaProps) (*schemaObjectDiff, error) {
 
 	deletedProps := make(map[string]*apiextv1.JSONSchemaProps)
 	addedProps := make(map[string]*apiextv1.JSONSchemaProps)
-	modifiedProps := make(map[string]*SchemaDiff)
+	modifiedProps := make(map[string]*schemaDiff)
 	for key, oldValue := range old {
 		newValue, present := new[key]
 		if !present {
@@ -251,7 +233,7 @@ func NewSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string
 			continue
 		}
 
-		diff, err := NewSchemaDiff(&oldValue, &newValue)
+		diff, err := newSchemaDiff(&oldValue, &newValue)
 		if err != nil {
 			return nil, err
 		}
@@ -270,30 +252,29 @@ func NewSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string
 	}
 
 	if len(deletedProps) != 0 || len(addedProps) != 0 || len(modifiedProps) != 0 {
-		return &SchemaObjectDiff{
-			Deleted:  deletedProps,
-			Added:    addedProps,
-			Modified: modifiedProps,
+		return &schemaObjectDiff{
+			deleted:  deletedProps,
+			added:    addedProps,
+			modified: modifiedProps,
 		}, nil
 	}
 
 	return nil, nil
 }
 
-// Compatible implements Diff.Compatible, allows both deletion and addition
-func (d *SchemaObjectDiff) Compatible() bool {
+func (d *schemaObjectDiff) compatible() bool {
 	if d == nil {
 		return true
 	}
 
 	// not allow deletion
-	if len(d.Deleted) > 0 {
+	if len(d.deleted) > 0 {
 		return false
 	}
 
 	// not compatible if there is incompatible modifications
-	for _, v := range d.Modified {
-		if !v.Compatible() {
+	for _, v := range d.modified {
+		if !v.compatible() {
 			return false
 		}
 	}
@@ -301,24 +282,24 @@ func (d *SchemaObjectDiff) Compatible() bool {
 	return true
 }
 
-// CompareResult is the result of CompareCRDSchemas function,
+// compareResult is the result of compareCRDSchemas function,
 // indicating whether there is a change and whether the change is compatible
-type CompareResult struct {
-	HasChange  bool
-	Compatible bool
+type compareResult struct {
+	hasChange  bool
+	compatible bool
 }
 
-// CompareCRDSchemas compare two CRD schemas
+// compareCRDSchemas compare two CRD schemas
 // This function compares if the schema of the two CRDs has changed.
 // If the CRD schema has changed, it will check if the schemas of the same version are backward compatible.
 // For example, if both oldCRD and newCRD have a version named "v1", it will check the compatibility of
 // the two "v1" schemas in oldCRD and newCRD.
-func CompareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (*CompareResult, error) {
+func compareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (*compareResult, error) {
 	schemaHasChange := hasChange(oldCRD, newCRD)
 	if !schemaHasChange {
-		return &CompareResult{
-			HasChange:  false,
-			Compatible: true,
+		return &compareResult{
+			hasChange:  false,
+			compatible: true,
 		}, nil
 	}
 
@@ -327,9 +308,9 @@ func CompareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiext
 		return nil, err
 	}
 
-	return &CompareResult{
-		HasChange:  true,
-		Compatible: changeCompatible,
+	return &compareResult{
+		hasChange:  true,
+		compatible: changeCompatible,
 	}, nil
 }
 
@@ -368,12 +349,12 @@ func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *a
 		}
 
 		// compare the two schemas with the same version name
-		schemaDiff, err := NewSchemaDiff(oldVersion.Schema.OpenAPIV3Schema, newVersion.Schema.OpenAPIV3Schema)
+		diff, err := newSchemaDiff(oldVersion.Schema.OpenAPIV3Schema, newVersion.Schema.OpenAPIV3Schema)
 		if err != nil {
 			return false, err
 		}
 
-		if schemaDiff != nil && !schemaDiff.Compatible() {
+		if diff != nil && !diff.compatible() {
 			return false, nil
 		}
 	}

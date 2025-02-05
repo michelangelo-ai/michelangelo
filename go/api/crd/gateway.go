@@ -51,7 +51,7 @@ func NewCRDGateway(p GatewayParams) Gateway {
 	dynamicClient := dynamic.NewForConfigOrDie(p.K8sConfig)
 
 	return &gateway{
-		logger:        p.Logger.With(zap.String("module", "crd_manager")),
+		logger:        p.Logger.With(zap.String("module", moduleName)),
 		scheme:        p.Scheme,
 		k8sConfig:     p.K8sConfig,
 		apiExtClient:  apiExtClient,
@@ -61,12 +61,12 @@ func NewCRDGateway(p GatewayParams) Gateway {
 
 // ConditionalUpsert create or update CRD, also check for CRD compatibility before update
 func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomResourceDefinition, enableIncompatibleUpdate bool) error {
-	r.logger.Info(fmt.Sprintf("Get CRD schema from k8s server:  %v", crd.Name))
+	r.logger.Info("Get CRD schema from k8s server.", zap.String("name", crd.Name))
 	crdOnServer, err := r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crd.Name, metav1.GetOptions{})
 	if err != nil {
 		// directly update if CRD not found
 		if k8sErrors.IsNotFound(err) {
-			r.logger.Info(fmt.Sprintf("CRD does not exist, create CRD:  %v", crd.Name))
+			r.logger.Info("CRD does not exist, create CRD.", zap.String("name", crd.Name))
 			_, err = r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Create(
 				ctx,
 				crd,
@@ -77,7 +77,7 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 				r.logger.Error(e.Error())
 				return e
 			}
-			return err
+			return nil
 		}
 
 		e := fmt.Errorf("failed to get CRD %s: %w", crd.Name, err)
@@ -86,18 +86,18 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 	}
 
 	// Compare change, then apply update conditionally
-	r.logger.Info(fmt.Sprintf("CRD %s exist, compare CRD schema", crd.Name))
-	compareResult, err := CompareCRDSchemas(crdOnServer, crd)
+	r.logger.Info("CRD exists, compare CRD schema", zap.String("name", crd.Name))
+	compareResult, err := compareCRDSchemas(crdOnServer, crd)
 	if err != nil {
 		return err
 	}
 
-	if !compareResult.HasChange {
-		r.logger.Info(fmt.Sprintf("Skip schema update. No change in CRD %s", crd.Name))
+	if !compareResult.hasChange {
+		r.logger.Info("Skip schema update. No change in CRD.", zap.String("name", crd.Name))
 		return nil
 	}
 
-	if !compareResult.Compatible && !enableIncompatibleUpdate {
+	if !compareResult.compatible && !enableIncompatibleUpdate {
 		has, e := r.hasInstances(ctx, crdOnServer)
 		if e != nil {
 			return e
@@ -108,7 +108,7 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 	}
 
 	// k8s use ResourceVersion for concurrency control
-	r.logger.Info(fmt.Sprintf("Update CRD definition:  %v", crd.Name))
+	r.logger.Info("Update CRD definition.", zap.String("name", crd.Name))
 	crd.ResourceVersion = crdOnServer.ResourceVersion
 	updatedCRD, err := r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Update(
 		ctx,
@@ -118,7 +118,7 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 	if err != nil {
 		return err
 	}
-	r.logger.Info(fmt.Sprintf("CRD %s updated successfully to version %s", updatedCRD.Name, updatedCRD.ResourceVersion))
+	r.logger.Info("CRD updated successfully to version", zap.String("name", updatedCRD.Name), zap.String("version", updatedCRD.ResourceVersion))
 	return nil
 }
 
@@ -134,7 +134,7 @@ func (r *gateway) Delete(ctx context.Context, crdToDelete *apiextv1.CustomResour
 		return fmt.Errorf("failed to delete CRD %s. There are existing resources", crdToDelete.Name)
 	}
 
-	r.logger.Info(fmt.Sprintf("Delete CRD %s", crdToDelete.Name))
+	r.logger.Info("Delete CRD", zap.String("name", crdToDelete.Name))
 	return r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Delete(ctx, crdToDelete.Name, metav1.DeleteOptions{})
 }
 

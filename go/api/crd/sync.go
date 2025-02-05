@@ -56,7 +56,7 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 			return nil
 		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), occRetry))
 		if err != nil {
-			logger.Error(fmt.Sprintf("Fail to update CRD definition:  %v", crd.Name), zap.Error(err))
+			logger.Error("Fail to update CRD definition.", zap.String("name", crd.Name), zap.Error(err))
 			return err
 		}
 	}
@@ -89,7 +89,7 @@ type SyncCRDsParams struct {
 func SyncCRDs(groups []string, yamlSchemas ...map[string]string) fx.Option {
 	return fx.Invoke(func(p SyncCRDsParams) error {
 		if p.Config.EnableCRDUpdate {
-			logger := p.Logger.With(zap.String("module", "crd"))
+			logger := p.Logger.With(zap.String("module", moduleName))
 
 			return syncCRDs(logger, groups, p.Config.EnableIncompatibleUpdate, p.Gateway, yamlSchemas...)
 		}
