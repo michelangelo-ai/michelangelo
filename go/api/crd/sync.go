@@ -18,7 +18,7 @@ import (
 
 const (
 	crdSyncConfigKey = "apiserver.crdSync"
-	occRetry         = 3
+	k8sMaxRetries    = 3
 )
 
 // Configuration crd register configuration
@@ -41,12 +41,12 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 	crds []*apiextv1.CustomResourceDefinition, enableIncompatibleUpdate bool) error {
 	logger.Info("Compare CRD in cluster with new CRD definition, and conditionally update CRDs")
 	for _, crd := range crds {
-		// retry on conflict
 		err := backoff.Retry(func() error {
 			err := gateway.ConditionalUpsert(ctx, crd, enableIncompatibleUpdate)
 			if err != nil {
-				// retry on OCC conflict
-				if k8sErrors.IsConflict(err) {
+				if k8sErrors.IsConflict(err) || k8sErrors.IsServerTimeout(err) ||
+					k8sErrors.IsTooManyRequests(err) || k8sErrors.IsUnexpectedServerError(err) ||
+					k8sErrors.IsInternalError(err) || k8sErrors.IsServiceUnavailable(err) {
 					return err
 				}
 
@@ -54,7 +54,7 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 			}
 
 			return nil
-		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), occRetry))
+		}, backoff.WithMaxRetries(backoff.NewExponentialBackOff(), k8sMaxRetries))
 		if err != nil {
 			logger.Error("Fail to update CRD definition.", zap.String("name", crd.Name), zap.Error(err))
 			return err
