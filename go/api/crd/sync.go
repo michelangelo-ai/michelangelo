@@ -6,9 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"go.uber.org/config"
-
 	"github.com/cenkalti/backoff"
+	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -67,9 +66,10 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 type SyncCRDsParams struct {
 	fx.In
 
-	Config  *Configuration
-	Logger  *zap.Logger
-	Gateway Gateway
+	Lifecycle fx.Lifecycle
+	Config    *Configuration
+	Logger    *zap.Logger
+	Gateway   Gateway
 }
 
 // SyncCRDs sync CRDs to k8s cluster
@@ -91,16 +91,20 @@ func SyncCRDs(groups []string, yamlSchemas ...map[string]string) fx.Option {
 		if p.Config.EnableCRDUpdate {
 			logger := p.Logger.With(zap.String("module", moduleName))
 
-			return syncCRDs(logger, groups, p.Config.EnableIncompatibleUpdate, p.Gateway, yamlSchemas...)
+			p.Lifecycle.Append(fx.Hook{
+				OnStart: func(ctx context.Context) error {
+					return syncCRDs(ctx, logger, groups, p.Config.EnableIncompatibleUpdate, p.Gateway, yamlSchemas...)
+				},
+				OnStop: nil,
+			})
 		}
 
 		return nil
 	})
 }
 
-func syncCRDs(logger *zap.Logger, groups []string, enableIncompatibleUpdate bool, gateway Gateway,
+func syncCRDs(ctx context.Context, logger *zap.Logger, groups []string, enableIncompatibleUpdate bool, gateway Gateway,
 	yamlSchemas ...map[string]string) error {
-	ctx := context.Background()
 
 	var crdList []*apiextv1.CustomResourceDefinition
 	for _, schemaMap := range yamlSchemas {
