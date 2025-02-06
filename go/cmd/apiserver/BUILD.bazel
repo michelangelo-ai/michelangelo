@@ -1,4 +1,6 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 go_library(
     name = "go_default_library",
@@ -28,14 +30,29 @@ go_library(
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_yarpc//:go_default_library",
         "@org_uber_go_yarpc//api/transport:go_default_library",
-        "@org_uber_go_yarpc//transport/http:go_default_library",
+        "@org_uber_go_yarpc//transport/grpc:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
 
 go_binary(
     name = "apiserver",
+    data = ["config"],
     embed = [":go_default_library"],
+    env = {
+        "CONFIG_DIR": "$(location :config)",
+    },
+    gc_linkopts = select({
+        "@io_bazel_rules_go//go/platform:linux": [
+            # The following GC options instruct Bazel to build a static binary for running the service in a static
+            # Distroless container. https://github.com/GoogleContainerTools/distroless
+            "-linkmode",
+            "external",
+            "-extldflags",
+            "-static",
+        ],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
 )
 
@@ -56,4 +73,17 @@ go_test(
         "@org_uber_go_yarpc//api/transport:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
+)
+
+pkg_tar(
+    name = "tar",
+    srcs = [":apiserver"],
+    files = {file: file for file in glob(["config/*.yaml"])},
+)
+
+oci_image(
+    name = "image",
+    base = "@distroless_base",
+    entrypoint = ["/apiserver"],
+    tars = [":tar"],
 )

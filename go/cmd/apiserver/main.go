@@ -55,6 +55,10 @@ func getTallyScope() (tally.Scope, error) {
 	return s, nil
 }
 
-func getScheme() *runtime.Scheme {
-	return scheme.Scheme
+func getScheme() (*runtime.Scheme, error) {
+	s := scheme.Scheme
+	if err := v2pb.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	return s, nil
 }
