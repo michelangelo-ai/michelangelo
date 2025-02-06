@@ -7,3 +7,6 @@ apiserver:
     burst: 600
   metadataStorage:
     enableMetadataStorage: false
+  crdSync:
+    enableCRDUpdate: true
+    enableIncompatibleUpdate: false

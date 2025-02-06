@@ -74,11 +74,6 @@ var CRDImports = `
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 `
 
-// GroupK8sClient template for group k8s client
-//
-//go:embed group_k8s_client.tmpl
-var GroupK8sClient string
-
 // CrdSvcHandlerImports imports of CRD YARPC handlers
 var CrdSvcHandlerImports = `
 import (

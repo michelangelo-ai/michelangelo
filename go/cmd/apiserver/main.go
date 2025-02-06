@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
@@ -40,6 +41,8 @@ func opts() fx.Option {
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
 		v2pb.SparkJobSvcModule,
+		crd.Module,
+		crd.SyncCRDs([]string{v2pb.GroupVersion.Group}, v2pb.YamlSchemas),
 		fx.Invoke(registerProcedures),
 		fx.Invoke(startYARPCServer),
 	)

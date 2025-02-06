@@ -1,0 +1,89 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: projects.test
+spec:
+  group: test
+  names:
+    kind: Project
+    listKind: ProjectList
+    plural: projects
+    singular: project
+  scope: Namespaced
+  versions:
+  - name: v0
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            description: Spec of the desired behavior of the Project.
+            properties:
+              artifactName:
+                type: string
+              meta:
+                description: Metadata of the ML project
+                properties:
+                  name:
+                    description: Name of the ML project.
+                    type: string
+                  ownerEmails:
+                    description: List of owner emails of this project.
+                    items:
+                      type: string
+                    type: array
+                  owningTeamUuid:
+                    type: string
+                  projectId:
+                    description: Project ID of the corresponding Michelangelo project.
+                    type: string
+                  tier:
+                    description: The tier of the project.
+                    format: int32
+                    type: integer
+                  testProperty:
+                    description: a test property
+                    format: int32
+                    type: integer
+                  testObjectProperty:
+                    description: a test property
+                    type: object
+                    properties:
+                      k1:
+                        type: integer
+                      k2:
+                        type: string
+                  testArrayProperty:
+                    description: a test property
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        x:
+                          type: integer
+                        y:
+                          type: integer
+                  testPropertyArray:
+                    oneOf:
+                      - type: string
+                    anyOf:
+                      - type: string
+                      - type: integer
+                    allOf:
+                      - type: string
+                type: object
+            type: object
+          status:
+            description: Most recently observed status of the Project.
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []

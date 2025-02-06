@@ -308,12 +308,12 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 							genImmutability(typeName, &crdFunctionsBuf, options)
 							genCRDObject(typeName, gInfo, &crdFunctionsBuf)
 							genCRDBlobFields(typeName, protoMsg, &crdFunctionsBuf, extTypes)
+							crdFunctionsBuf.Write([]byte("func init() {\n\tYamlSchemas[\"" + typeName + "\"] = `"))
+							yamlStr := string(yaml.GenerateCRDYaml(protofile, extTypes, *gInfo))
+							crdFunctionsBuf.Write([]byte(strings.Replace(yamlStr, "`", "`+\"`\"+`", -1)))
+							crdFunctionsBuf.Write([]byte("`\n"))
+							crdFunctionsBuf.Write([]byte("}"))
 						}
-						crdFunctionsBuf.Write([]byte("func init() {\n\tYamlSchemas[\"" + typeName + "\"] = `"))
-						yamlStr := string(yaml.GenerateCRDYaml(protofile, extTypes, *gInfo))
-						crdFunctionsBuf.Write([]byte(strings.Replace(yamlStr, "`", "`+\"`\"+`", -1)))
-						crdFunctionsBuf.Write([]byte("`\n"))
-						crdFunctionsBuf.Write([]byte("}"))
 					}
 				}
 			}

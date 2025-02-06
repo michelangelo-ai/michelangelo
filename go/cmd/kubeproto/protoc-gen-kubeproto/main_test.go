@@ -88,7 +88,7 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, c, `SchemeBuilder.Register(&ProjectList{})`)
 	assert.Contains(t, c, `func (in *Project) DeepCopy() *Project`)
 	assert.Contains(t, c, `func (in *ProjectList) DeepCopy() *ProjectList`)
-	assert.Contains(t, c, `YamlSchemas["ProjectList"] =`)
+	assert.Contains(t, c, `YamlSchemas["Project"] =`)
 	assert.Contains(t, c, `name: projects-plural.michelangelo.api`)
 	//TODO(https://github.com/uber/michelangelo/issues/65): assert.Contains(t, c, expectedCRDDescription)
 
