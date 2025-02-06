@@ -18,6 +18,7 @@ func TestGetTallyScope(t *testing.T) {
 }
 
 func TestGetScheme(t *testing.T) {
-	scheme := getScheme()
+	scheme, err := getScheme()
+	assert.NoError(t, err)
 	assert.NotNil(t, scheme)
 }

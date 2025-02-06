@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
+	"net"
 
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/api/transport"
-	"go.uber.org/yarpc/transport/http"
+	"go.uber.org/yarpc/transport/grpc"
 	"go.uber.org/zap"
 )
 
@@ -25,15 +26,19 @@ type RegisterParams struct {
 
 // provideDispatcher creates and configures a YARPC dispatcher.
 func provideDispatcher(conf YARPCConfig, zapLogger *zap.Logger) (*yarpc.Dispatcher, error) {
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", conf.Host, conf.Port))
+	if err != nil {
+		return nil, err
+	}
+	grpcTransport := grpc.NewTransport()
+	inbound := grpcTransport.NewInbound(
+		listener,
+	)
+
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
 		Name: serverName,
-		Outbounds: yarpc.Outbounds{
-			serverName: {
-				Unary: http.NewTransport().NewSingleOutbound(fmt.Sprintf("http://%s:%d", conf.Host, conf.Port)),
-			},
-		},
 		Inbounds: yarpc.Inbounds{
-			http.NewTransport().NewInbound(fmt.Sprintf(":%d", conf.Port)),
+			inbound,
 		},
 		Logging: yarpc.LoggingConfig{
 			Zap: zapLogger,

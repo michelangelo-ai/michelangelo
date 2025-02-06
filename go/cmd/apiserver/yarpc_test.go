@@ -13,7 +13,7 @@ import (
 func TestProvideDispatcher(t *testing.T) {
 	conf := YARPCConfig{
 		Host: "localhost",
-		Port: 12345,
+		Port: 0,
 	}
 	dispatcher, err := provideDispatcher(conf, zap.NewNop())
 	assert.NoError(t, err)
@@ -23,7 +23,7 @@ func TestProvideDispatcher(t *testing.T) {
 func TestRegisterProcedures(t *testing.T) {
 	dispatcher, err := provideDispatcher(YARPCConfig{
 		Host: "localhost",
-		Port: 12345,
+		Port: 0,
 	}, zap.NewNop())
 	assert.NoError(t, err)
 	assert.NotNil(t, dispatcher)
