@@ -54,9 +54,11 @@ find "${TMP_DIR}/gen/python" -name '*_pb2*.py' -print0 | \
   xargs -0 perl -pi -e \
   's/from michelangelo./from michelangelo.gen./g; s/from k8s.io./from michelangelo.gen.k8s.io./g'
 
-rm -rf /Users/yingz/git/michelangelo/python/michelangelo/gen
-mkdir -p /Users/yingz/git/michelangelo/python/michelangelo/gen
+# copy generated code to /python/michelangelo/gen
+rm -rf "${WORKSPACE_ROOT}/python/michelangelo/gen"
+mkdir -p "${WORKSPACE_ROOT}/python/michelangelo/gen"
 mv "${TMP_DIR}/gen/python/k8s" "${WORKSPACE_ROOT}/python/michelangelo/gen/k8s"
 mv "${TMP_DIR}/gen/python/michelangelo/api" "${WORKSPACE_ROOT}/python/michelangelo/gen/api"
 
+# create __init__.py files
 find "${WORKSPACE_ROOT}/python/michelangelo/gen/" -type d -exec touch {}/"__init__.py"  \;
