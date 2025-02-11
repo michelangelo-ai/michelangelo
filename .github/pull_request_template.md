@@ -23,5 +23,5 @@
 <!-- Is it notable for release? e.g. schema updates, configuration or data migration required? If so, please mention it, and also update CHANGELOG.md -->
 **Release notes**
 
-<!-- Is there any documentation updates in wiki https://github.com/michelangelo-ai/michelangelo/wiki? -->
+<!-- Does this PR introduce a user-facing or API change? Is user document updated? Is the change backward compatible? If so please update in wiki https://github.com/michelangelo-ai/michelangelo/wiki? -->
 **Documentation Changes**
