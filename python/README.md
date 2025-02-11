@@ -2,13 +2,20 @@ Michelangelo SDK
 
 ## User Guide
 
-```
-pip install michelangelo
+``` pip install michelangelo
 ```
 
 TODO: User Guide
 
 ## Developer Guide
+
+### Quick example run
+
+```bash
+$ cd $REPO_ROOT/python
+$ docker build -t $IMAGE_NAME -f ./examples/bert_cola/Dockerfile .
+$ docker run $IMAGE_NAME
+```
 
 ### Preprequisites
 
