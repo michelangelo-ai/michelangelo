@@ -1,3 +1,8 @@
+###############################################################################
+# $ cd $REPO_ROOT/python
+# $ docker build -t <IMAGE_NAME> -f ./examples/bert_cola/Dockerfile .
+###############################################################################
+
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
@@ -51,4 +56,4 @@ COPY . .
 RUN ls -alF ./
 RUN poetry install
 
-CMD ["bash"]
+CMD ["poetry", "run", "python", "./examples/bert_cola/bert_cola.py"]
