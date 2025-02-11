@@ -2,7 +2,8 @@ Michelangelo SDK
 
 ## User Guide
 
-``` pip install michelangelo
+```
+pip install michelangelo
 ```
 
 TODO: User Guide
