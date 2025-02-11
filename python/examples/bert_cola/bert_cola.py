@@ -1,23 +1,19 @@
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 from examples.bert_cola.data import load_data
 from examples.bert_cola.train import train
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def train_workflow():
     data_path="glue"
     data_name="cola"
-    train_data, validation_data, test_data = load_data(
+    train_data = load_data(
         data_path,
         data_name,
         tokenizer_max_length=128,
     )
-    result = train(
-        train_data,
-        validation_data,
-        test_data,
-    )
+    result = train(train_data)
     print("result:", result)
     print("ok.")
 
@@ -32,6 +28,6 @@ if __name__ == "__main__":
     ctx.environ["DATA_SIZE"] = "10"
 
     # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC docstring for more information.
-    ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
+    ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "1"
     ctx.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] ='0'
     ctx.run(train_workflow)

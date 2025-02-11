@@ -64,6 +64,7 @@ class TaskFunction(Generic[P, R]):
         log.info("result_url: %s", result_url)
 
         for i, v in enumerate(args):
+            print(type(v))
             log.info("arg[%d]: %r", i, v)
 
         for k, v in kwargs.items():

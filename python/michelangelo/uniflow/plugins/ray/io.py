@@ -36,7 +36,18 @@ class RayDatasetIO(IO[Dataset]):
 def _fs_path(url: str) -> tuple[Any, str]:
     if os.environ.get(UF_PLUGIN_RAY_USE_FSSPEC, "0") == "1":
         import fsspec
-
         return fsspec.core.url_to_fs(url)
 
-    return None, url
+    fs = resolve_fs(url.split("://")[0])
+    return fs, url
+
+def resolve_fs(protocol):
+    if protocol == "s3":
+        import pyarrow.fs
+        # Configure PyArrow's S3FileSystem for MinIO
+        return pyarrow.fs.S3FileSystem(
+            access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+            secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            endpoint_override=f'http://{os.getenv("MINIO_SERVICE_HOST")}:{os.getenv("MINIO_SERVICE_PORT")}'
+        )
+    return None

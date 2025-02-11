@@ -192,7 +192,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 
 	sensorCluster := sensorResponse.RayCluster
 	var res starlark.Value
-	if err := AsStar(response, &sensorCluster); err != nil {
+	if err := AsStar(sensorCluster, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
@@ -203,7 +203,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	ctx := cadstar.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var url string
 	var entrypoint string
 	var timeout int64 = 0
 	var poll int64 = 10
@@ -211,10 +210,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	var rayClusterName string
 
 	if err := starlark.UnpackArgs("create_job", args, kwargs,
-		"dashboard_url", &url,
 		"entrypoint", &entrypoint,
-		"timeout_seconds?", &timeout,
-		"poll_seconds?", &poll,
 		"ray_job_namespace?", &rayClusterNamespace,
 		"ray_job_name?", &rayClusterName,
 	); err != nil {
@@ -246,9 +242,11 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
+	println("==========job created successfully==========")
+
 	rayJob = *createRes.RayJob
 
-	var job starlark.Value
+	var sensorRes ray.SensorRayJobReadinessResponse
 	srp := CadenceDefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
@@ -260,11 +258,18 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			GetOptions: nil,
 		},
 		ReturnJobURL: false,
-	}).Get(sensorCtx, &job); err != nil {
+	}).Get(sensorCtx, &sensorRes); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
-	return job, nil
+
+	job := sensorRes.RayJob
+	var res starlark.Value
+	if err := AsStar(job, &res); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+	return res, nil
 }
 
 func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {

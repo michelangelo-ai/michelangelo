@@ -46,8 +46,14 @@ def task(
         zone = RAY_DEFAULT_ZONE,
         breakpoint = False):
     def callable(*args, **kwargs):
-        os.environ["UF_TASK_IMAGE"] = "michelanngelo-python-serivce"
-        os.environ["UF_STORAGE_URL"] = "/tmp/uf_storage"
+        os.environ["UF_TASK_IMAGE"] = "docker.io/library/bert-cola-nv:latest"
+        os.environ["UF_STORAGE_URL"] = "s3://default"
+        os.environ["UF_PLUGIN_RAY_USE_FSSPEC"] = "0"
+
+        # it's required by s3
+        #        os.environ["AWS_ACCESS_KEY_ID"] = "1inaX9pX7vIeaJf3"
+        #        os.environ["AWS_SECRET_ACCESS_KEY"] = "2OuOk0lGBLM1W9lrRzEBPiOoxZZBq6o0"
+        #        os.environ["AWS_ENDPOINT_URL"] = "http://10.244.0.4:9001"
         task_name = get_task_name(task_path, alias)
         cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version)
         namespace = "default"
@@ -121,21 +127,15 @@ def task(
             head_object_store_memory = head_object_store_memory,
             worker_object_store_memory = worker_object_store_memory,
         )
-        cluster_res = ray.create_cluster(cluster)
-        print(cluster_res)
-        cluster = cluster_res["rayCluster"]
-        cluster_url = "http://localhost:8265/#/cluster"
+        cluster = ray.create_cluster(cluster)
+        print(cluster)
         cluster_name = cluster["metadata"]["name"]
         cluster_namespace = cluster["metadata"]["namespace"]
-        head_node = "ray-cluster-head-8kt9g"
-        head_ip = "8265"
-        dashboard_port = "8088"
 
-        print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url, "head_ip=" + head_ip)
+        print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name)
         report_progress(
             task_path = task_path,
             task_name = task_name,
-            task_log = cluster_url,
             task_message = "Ray Cluster Created Successfully",
             task_state = TASK_STATE_RUNNING,
             start_time = start_time_formated_str,
@@ -148,20 +148,11 @@ def task(
 
         atexit.register(terminate_cluster)
 
-        # Comment out hacky way to access ray dashboard through ssh tunnel port forwarding
-        # print("ray | dashboad ssh:", "ssh -fMNL 8265:{}:{} bastion.uber.com; open http://localhost:8265".format(head_ip, dashboard_port))
-        print("ray | cluster dashboard:", "http://localhost:8265/#/cluster")
-        if breakpoint:
-            jupyter_notebook_port = head_node.get("jupyterNotebookPort")
-            print("ray | jupyter ssh:", "ssh -fMNL 8888:{}:{} bastion.uber.com; open http://localhost:8888".format(head_ip, jupyter_notebook_port))
-
         # Run job
-        dashboard_url = "http://{}:{}".format(head_ip, dashboard_port)
         result_url = get_result_url()
         entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
         print("ray | run job:", "task_path=" + task_path)
         job = ray.create_job(
-            dashboard_url,
             entrypoint,
             ray_job_namespace = cluster_namespace,
             ray_job_name = cluster_name,
@@ -171,23 +162,21 @@ def task(
         def report_ray_task_result():
             end_time_seconds = time.time()
             end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-            if job["ray_job"]["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
+            if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
                 report_progress(
                     task_path = task_path,
                     task_name = task_name,
-                    task_log = cluster_url,
                     task_message = "Ray Job Succeeded",
                     task_state = TASK_STATE_SUCCEEDED,
                     start_time = start_time_formated_str,
                     end_time = end_time_formated_str,
                 )
-            elif job["ray_job"]["status"]["state"] == "RAY_JOB_STATE_KILLED":
+            elif job["status"]["state"] == "RAY_JOB_STATE_KILLED":
                 message = job.get("message", "unknown reason")
                 task_message = "Ray Job killed with {}".format(message)
                 report_progress(
                     task_path = task_path,
                     task_name = task_name,
-                    task_log = cluster_url,
                     task_message = task_message,
                     task_state = TASK_STATE_KILLED,
                     start_time = start_time_formated_str,
@@ -200,7 +189,6 @@ def task(
                 report_progress(
                     task_path = task_path,
                     task_name = task_name,
-                    task_log = cluster_url,
                     task_message = task_message,
                     task_state = TASK_STATE_FAILED,
                     start_time = start_time_formated_str,
@@ -210,7 +198,7 @@ def task(
         atexit.register(report_ray_task_result)
 
         if breakpoint:
-            print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name, "head_ip=" + head_ip)
+            print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
             # TODO: andrii: use HITL instead of sleep.
             time.sleep(seconds = 60 * 60 * 24)
@@ -227,8 +215,8 @@ def task(
         atexit.unregister(report_ray_task_result)
 
         # Read result from the storage
-        if job["ray_job"]["status"]["state"] != "RAY_JOB_STATE_SUCCEEDED":
-            fail("internal:", "message:bad job status:", job["ray_job"]["status"]["state"], job)
+        if job["status"]["state"] != "RAY_JOB_STATE_SUCCEEDED":
+            fail("internal:", "message:bad job status:", job["status"]["state"], job)
 
         created_cached_output = create_cached_output(
             namespace = cluster_namespace,
@@ -245,7 +233,6 @@ def task(
             task_name = task_name,
             task_path = task_path,
             task_state = TASK_STATE_SUCCEEDED,
-            task_log = cluster_url,
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
@@ -324,13 +311,6 @@ def ray_cluster_spec(
         # "python3 -m uber.ai.michelangelo.tools.hadoop.setup_hadoop",
         # "(python3 -m uber.ai.michelangelo.tools.hadoop.token_renewer &)",
     ]
-    if debug_enabled:
-        # Run Jupyter Lab in the head node.
-        jupyter_cmd = "; ".join([
-            "pip install ipykernel --upgrade",  # https://t3.uberinternal.com/browse/MA-37993
-            "jupyter lab --no-browser --port=$JUPYTER_NOTEBOOK_PORT --allow-root --ip=0.0.0.0 --NotebookApp.allow_origin='*' --NotebookApp.token='' --NotebookApp.password=''",
-        ])
-        head_cmd.append("( " + jupyter_cmd + " & )")
 
     head_ray_start = [
         # "ray start --head",
@@ -344,9 +324,6 @@ def ray_cluster_spec(
         # "--dashboard-agent-listen-port=$DASHBOARD_AGENT_LISTEN_PORT",
         # "--resources='{\"head\":1}'",
     ]
-
-    if head_object_store_memory != None:
-        head_ray_start.append("--object-store-memory={}".format(head_object_store_memory))
 
     head_cmd += [
         " ".join(head_ray_start),
@@ -414,6 +391,15 @@ def ray_cluster_spec(
                                 "image": image,  # Keeping original variable
                                 "imagePullPolicy": "Never",
                                 "env": env,  # Keeping original variable
+                                "envFrom": [
+                                    {
+                                        "configMapRef": {
+                                            "localObjectReference": {
+                                                "name": "michelangelo-config",
+                                            },
+                                        },
+                                    },
+                                ],
                                 "lifecycle": {
                                     "postStart": {
                                         "exec": {
@@ -446,10 +432,14 @@ def ray_cluster_spec(
                                     },
                                     "image": image,  # Keeping original variable
                                     "imagePullPolicy": "Never",
-                                    "env": [
+                                    "env": env,
+                                    "envFrom": [
                                         {
-                                            "name": "configMapRef",
-                                            "value": "michelangelo-config",
+                                            "configMapRef": {
+                                                "localObjectReference": {
+                                                    "name": "michelangelo-config",
+                                                },
+                                            },
                                         },
                                     ],
                                     "lifecycle": {

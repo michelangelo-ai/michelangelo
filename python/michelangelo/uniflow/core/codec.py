@@ -218,6 +218,7 @@ class Decoder(JSONDecoder):
         self.codec_registry = codec_registry
 
     def object_hook(self, dct: dict):  # pylint: disable=method-hidden
+        print("decoding", dct)
         if _ATTR_CODEC not in dct:
             return dct
 

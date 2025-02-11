@@ -51,7 +51,15 @@ def ref(value, io: IORegistry):
 def unref(value, io: IORegistry):
     # If Ref - read checkpoint: run IO.read and replace Ref with the actual value
     if isinstance(value, Ref):
-        return io[value.type].read(value.url, value.metadata)
+        value_type = value.type
+        if isinstance(value_type, dict) and "path" in value_type:
+            import importlib
+            path = value_type["path"]
+            log.debug(f"Resolving type for path: {path}")
+            module_name, class_name = path.rsplit(".", 1)  # Split into module and class
+            module = importlib.import_module(module_name)  # Dynamically import the module
+            value_type = getattr(module, class_name)
+        return io[value_type].read(value.url, value.metadata)
 
     # If container type - recurse
     if isinstance(value, list):

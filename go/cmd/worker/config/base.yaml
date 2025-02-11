@@ -11,3 +11,9 @@ cadence:
       taskList: default
   client:
     domain: default
+
+s3:
+  awsRegion: us-east-1
+  awsAccessKeyId: 1inaX9pX7vIeaJf3
+  awsSecretAccessKey: 2OuOk0lGBLM1W9lrRzEBPiOoxZZBq6o0
+  awsEndpointUrl: localhost:9001

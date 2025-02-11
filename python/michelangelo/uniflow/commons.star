@@ -1,4 +1,4 @@
-load("@plugin", "cad", "hashlib", "json", "os", "progress", "uuid")
+load("@plugin", "cad", "hashlib", "json", "os", "progress", "s3", "uuid")
 
 ENV = {
     "UF_HACK_MA_33362": "1",
@@ -53,15 +53,26 @@ def get_result_url():
     result_url = "{}/{}.json".format(metadata_storage_url, uuid.uuid4().hex)
     return result_url
 
-def io_read_json(file_path):
-    if not os.exists(file_path):
-        fail("400: file not found: " + file_path)
+def s3_read_json(path):
+    # the format of the path is <bucket>/<file_path>
+    parts = path.split("/")
+    if len(parts) != 2:
+        fail("400: unsupported path:", path)
+    b = s3.read(parts[0], parts[1])
+    print("=====star=========")
+    print(b)
+    return b
 
-    f = os.open(file_path, "r")
-    data = json.decode(f.read())
-    f.close()
+def io_read_json(url):
+    readers = {
+        "s3://": s3_read_json,
+    }
+    for prefix, reader in readers.items():
+        if url.startswith(prefix):
+            path = url[len(prefix):]
+            return reader(path)
 
-    return data
+    fail("400: unsupported url:", url)
 
 # Get the task image for the task.
 # Args:

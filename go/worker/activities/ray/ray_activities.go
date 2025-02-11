@@ -2,15 +2,10 @@ package ray
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/cadence"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
-	"os"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -174,21 +169,15 @@ func (r *activities) SensorRayClusterReadiness(ctx context.Context, request Sens
 		Namespace: request.Request.Namespace,
 		Name:      request.Request.Name,
 	}
-	println("======sensoring=======")
-	println(nn.Name)
 	rayCluster := &v2pb.RayCluster{}
 	err := r.k8sClient.Get(ctx, nn, rayCluster)
 	if err != nil {
-		println("=============error sensoring==========")
-		println(err.Error())
 		logger.Error(err, "activity-error")
 		return nil, cadence.NewCustomError(err.Error())
 	}
-	println("=============get status==========")
 	status := rayCluster.Status
 
 	if hasClusterTerminalCondition(status.State) {
-		println("=============get terminated condition==========")
 		// Return non-retry-able error. RayCluster is in the terminal state - it'll never be ready to accept a job request.
 		return nil, cadence.NewCustomError(yarpcerrors.CodeInternal.String(), status)
 	}
@@ -368,165 +357,6 @@ func (r *activities) SensorRayJob(ctx context.Context, request SensorRayJobReque
 
 	return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), status)
 }
-
-// SensorRayJobSubmissionRequest DTO
-type SensorRayJobSubmissionRequest struct {
-	SubmissionURL   string `json:"submission_url,omitempty"`
-	RayJobNamespace string `json:"ray_job_namespace,omitempty"`
-	RayJobName      string `json:"ray_job_name,omitempty"`
-}
-
-// SensorRayJobSubmission is a sensor activity used to monitor completeness of the Ray job submission.
-func (r *activities) SensorRayJobSubmission(ctx context.Context, request SensorRayJobSubmissionRequest) (map[string]any, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("activity-start", zap.Any("request", request))
-	kubeconfig := os.Getenv("KUBECONFIG")
-	if kubeconfig == "" {
-		kubeconfig = os.ExpandEnv("/Users/weric/.kube/config")
-	}
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError("500", err)
-	}
-
-	// Create a REST client
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError("500", err)
-	} // Define the runtime environment as a JSON string
-
-	// Define the runtime environment JSON
-	//runtimeEnv := `{
-	//	"working_dir": "/workspace",
-	//	"container": {
-	//		"image": "your-docker-repo/model-training:latest"
-	//	}
-	//}`
-
-	// Encode the runtime environment in Base64
-	//encodedRuntimeEnv := base64.StdEncoding.EncodeToString([]byte(runtimeEnv))
-
-	// Fetch the status of the RayJob
-	statusRequest := clientset.RESTClient().Get().
-		AbsPath(fmt.Sprintf("/apis/ray.io/v1alpha1/namespaces/default/rayjobs/%s", request.RayJobName))
-
-	statusResponse := statusRequest.Do(context.TODO())
-	if statusResponse.Error() != nil {
-		logger.Error(err, "activity-error", zap.Any("err", statusResponse.Error()), zap.Any("statusResponse", statusResponse))
-		return nil, cadence.NewCustomError("500", statusResponse.Error())
-	}
-
-	// Read the status response
-	statusRaw, err := statusResponse.Raw()
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError("400", err)
-	}
-
-	// Parse the status JSON
-	var statusMap map[string]interface{}
-	err = json.Unmarshal(statusRaw, &statusMap)
-	if err != nil {
-		logger.Error(err, "activity-error", zap.Any("err", "Parse the status JSON"), zap.Any("statusMap", statusMap))
-		return nil, cadence.NewCustomError("400", err)
-	}
-
-	// Extract and print the RayJob status
-	status, ok := statusMap["status"].(map[string]interface{})
-	if !ok {
-		logger.Error(err, "activity-error", zap.Any("failed to extract rayjob status", "Extract and print the RayJob status"), zap.Any("statusMap", statusMap))
-		return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), nil)
-	}
-
-	//jobId := status["jobId"]
-	jobStatus := status["jobStatus"]
-	logger.Info("activity-running", zap.Any("jobStatus", jobStatus))
-	//message := status["message"]
-	//rayClusterStatus := status["rayClusterStatus"]
-	//dashboardURL := status["dashboardURL"]
-	//jobDeploymentStatus := status["jobDeploymentStatus"]
-	//rayClusterName := status["rayClusterName"]
-	if jobStatus != "RUNNING" {
-		// Return OK. The job submission has reached a terminal status.
-		return map[string]any{
-			"status":  jobStatus,
-			"message": status["message"],
-		}, nil
-	}
-	// Return retry-able error.
-	return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), nil)
-}
-
-//
-//// CreateSparkJob creates a SparkJob CRD
-//func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSparkJobRequest) (*v2pb.CreateSparkJobResponse, *cadence.CustomError) {
-//	logger := log.FromContext(ctx)
-//	logger.Info("activity-start", zap.Any("request", request))
-//	response, err := r.sparkJob.CreateSparkJob(ctx, &request)
-//	if err != nil {
-//		logger.Error(err, "activity-error")
-//		return nil, cadence.NewCustomError(err.Error())
-//	}
-//	return response, nil
-//}
-//
-//// SensorSparkJob sensors a SparkJob CRD
-//// It will return if the status of the sparkJob changes.
-//func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest, originalStatus *v2pb.SparkJobStatus) (*v2pb.GetSparkJobResponse, *cadence.CustomError) {
-//	logger := log.FromContext(ctx)
-//	logger.Info("activity-start", zap.Any("request", request))
-//	response, err := r.sparkJob.GetSparkJob(ctx, &request)
-//	if err != nil {
-//		logger.Error(err, "activity-error")
-//		return nil, cadence.NewCustomError(err.Error())
-//	}
-//
-//	status := &response.SparkJob.Status
-//	// If job status change, return to update result
-//	if !reflect.DeepEqual(status, originalStatus) {
-//		return response, nil
-//	}
-//	return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), status)
-//}
-//
-//// TerminateSparkJob kills a spark job
-//func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSparkJobRequest) (*v2pb.UpdateSparkJobResponse, *cadence.CustomError) {
-//	logger := log.FromContext(ctx)
-//	logger.Info("activity-start", zap.String("namespace", request.Namespace), zap.String("name", request.Name))
-//
-//	getRequest := v2pb.GetSparkJobRequest{
-//		Namespace: request.Namespace,
-//		Name:      request.Name,
-//	}
-//	response, err := r.sparkJob.GetSparkJob(ctx, &getRequest)
-//	if err != nil {
-//		logger.Error(err, "activity-error")
-//		if utils.IsNotFoundError(err) {
-//			// If it is not find, no need to kill it
-//			logger.Error(err, "Spark Job Not Found")
-//			return nil, nil
-//		}
-//		return nil, cadence.NewCustomError(err.Error())
-//	}
-//	sparkJob := response.SparkJob
-//	if sparkJob.Status.GetStatusConditions() != nil {
-//		// If the job is already succeeded, no need to kill it
-//		logger.Info("Skip Killing. Spark Job Already Terminated.", zap.String("namespace", request.Namespace), zap.String("name", request.Name))
-//		return &v2pb.UpdateSparkJobResponse{SparkJob: sparkJob}, nil
-//	}
-//	sparkJob.Spec.Termination = &v2pb.TerminationSpec{
-//		Type:   request.Type,
-//		Reason: request.Reason,
-//	}
-//	updateResp, err := r.sparkJob.UpdateSparkJob(ctx, &v2pb.UpdateSparkJobRequest{SparkJob: sparkJob})
-//	if err != nil {
-//		logger.Error(err, "activity-error")
-//		return nil, cadence.NewCustomError(err.Error())
-//	}
-//	return updateResp, nil
-//}
 
 func hasJobTerminalCondition(state v2pb.RayJobState) bool {
 	return state == v2pb.RAY_JOB_STATE_SUCCEEDED || state == v2pb.RAY_JOB_STATE_KILLED || state == v2pb.RAY_JOB_STATE_FAILED

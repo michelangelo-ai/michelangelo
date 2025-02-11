@@ -14,18 +14,22 @@ spec:
   head:
     serviceType: "ClusterIP"
     rayStartParams:
-      block: "false"
+      block: "true"
       dashboard-host: "0.0.0.0"
     pod:
       spec:
         containers:
           - name: head
-            image: bert-cola
+            image: docker.io/library/bert-cola-nv:latest
             imagePullPolicy: Never
             lifecycle:
               postStart:
                 exec:
                   command: [ "/bin/sh","-c", "echo","'Initializing Ray Head'" ]
+            envFrom:
+              - configMapRef:
+                  localObjectReference:
+                    name: michelangelo-config
             env:
               - name: RAY_HEAD_ENV
                 value: "true"
@@ -35,22 +39,35 @@ spec:
     - minInstances: 1
       maxInstances: 1
       rayStartParams:
-        block: "false"
+        block: "true"
         dashboard-host: "0.0.0.0"
       pod:
         spec:
+          volumes:
+            - name: dshm
+              volumeSource:
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 1Gi
           containers:
             - name: worker
+              volumeMounts:
+                - mountPath: /dev/shm
+                  name: dshm
               resources:
                 requests:
                   cpu: 1
-                  memory: 2Gi
-              image: bert-cola
+                  memory: 1Gi
+              image: docker.io/library/bert-cola-nv:latest
               imagePullPolicy: Never
               lifecycle:
                 postStart:
                   exec:
                     command: [ "/bin/sh","-c", "echo","'Initializing Ray Worker'" ]
+              envFrom:
+                - configMapRef:
+                    localObjectReference:
+                      name: michelangelo-config
               env:
                 - name: RAY_WORKER_ENV
                   value: "true"
