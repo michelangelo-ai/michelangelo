@@ -11,6 +11,12 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
+
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/gogo/protobuf/proto"
@@ -18,11 +24,6 @@ import (
 	plugingo "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 	"github.com/gogo/protobuf/vanity"
 	"github.com/gogo/protobuf/vanity/command"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
 	"google.golang.org/protobuf/compiler/protogen"
 	golangproto "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -37,6 +38,11 @@ var snakeCaseSeparators = regexp.MustCompile("-\\.")
 var logger = log.New(os.Stderr, "", 0)
 
 const _testProtoImportPath = "michelangelo/tools/kubeproto/unittest/pb"
+
+type EnumValue struct {
+	Name        string // Enum value as a string (e.g., "Pending")
+	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
+}
 
 // Call gogo proto to generate go code from protobuf
 // The options are chosen to make the generated go code to be compatible
@@ -492,12 +498,13 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 // - Maintains a record of processed message types and Go package imports to avoid redundant processing.
 //
 // Args:
-//   curMsg                 *protogen.Message     - The current protobuf message being analyzed.
-//   pathPrefix             string               - The prefix representing the field hierarchy (used for recursion).
-//   enumFields             *[]string            - A list to store discovered enum field names.
-//   processedMessageTypes  *map[protogen.GoIdent]bool - Tracks already processed message types to prevent cycles.
-//   extTypes               *protoregistry.Types - A registry of external types (not used in this function but may be useful for extensions).
-//   processedGoPackageList *map[string]bool     - A map to track processed Go packages and prevent duplicate enum field entries.
+//
+//	curMsg                 *protogen.Message     - The current protobuf message being analyzed.
+//	pathPrefix             string               - The prefix representing the field hierarchy (used for recursion).
+//	enumFields             *[]string            - A list to store discovered enum field names.
+//	processedMessageTypes  *map[protogen.GoIdent]bool - Tracks already processed message types to prevent cycles.
+//	extTypes               *protoregistry.Types - A registry of external types (not used in this function but may be useful for extensions).
+//	processedGoPackageList *map[string]bool     - A map to track processed Go packages and prevent duplicate enum field entries.
 func findEnumFields(curMsg *protogen.Message, pathPrefix string, enumFields *[]string,
 	processedMessageTypes *map[protogen.GoIdent]bool, extTypes *protoregistry.Types, processedGoPackageList *map[string]bool) {
 	for _, field := range curMsg.Fields {
@@ -522,11 +529,6 @@ func findEnumFields(curMsg *protogen.Message, pathPrefix string, enumFields *[]s
 	}
 }
 
-type EnumValue struct {
-	Name        string // Enum value as a string (e.g., "Pending")
-	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
-}
-
 // genCRDEnumFields generates UnmarshalJSON methods for all enum fields in a given CRD (Custom Resource Definition) message.
 //
 // This function:
@@ -536,11 +538,12 @@ type EnumValue struct {
 // - Writes the generated code to the provided buffer (`crdBuf`).
 //
 // Args:
-//   crdName                string                    - The name of the CRD being processed.
-//   crdMsg                 *protogen.Message         - The protobuf message representing the CRD.
-//   crdBuf                 *bytes.Buffer            - The buffer to write the generated code to.
-//   extTypes               *protoregistry.Types     - A registry of external types (may be useful for future extensions).
-//   processedGoPackageList *map[string]bool         - A map to track processed Go packages to avoid redundant processing.
+//
+//	crdName                string                    - The name of the CRD being processed.
+//	crdMsg                 *protogen.Message         - The protobuf message representing the CRD.
+//	crdBuf                 *bytes.Buffer            - The buffer to write the generated code to.
+//	extTypes               *protoregistry.Types     - A registry of external types (may be useful for future extensions).
+//	processedGoPackageList *map[string]bool         - A map to track processed Go packages to avoid redundant processing.
 func genCRDEnumFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Buffer, extTypes *protoregistry.Types,
 	processedGoPackageList *map[string]bool,
 ) {
