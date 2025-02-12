@@ -483,6 +483,21 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 	return resp
 }
 
+// findEnumFields recursively finds all enum fields within a given protobuf message and its nested messages.
+//
+// This function:
+// - Traverses through all fields of the given message (`curMsg`).
+// - Identifies enum fields and adds them to `enumFields`, ensuring they are not duplicated.
+// - Recursively processes nested messages to extract enum fields from them as well.
+// - Maintains a record of processed message types and Go package imports to avoid redundant processing.
+//
+// Args:
+//   curMsg                 *protogen.Message     - The current protobuf message being analyzed.
+//   pathPrefix             string               - The prefix representing the field hierarchy (used for recursion).
+//   enumFields             *[]string            - A list to store discovered enum field names.
+//   processedMessageTypes  *map[protogen.GoIdent]bool - Tracks already processed message types to prevent cycles.
+//   extTypes               *protoregistry.Types - A registry of external types (not used in this function but may be useful for extensions).
+//   processedGoPackageList *map[string]bool     - A map to track processed Go packages and prevent duplicate enum field entries.
 func findEnumFields(curMsg *protogen.Message, pathPrefix string, enumFields *[]string,
 	processedMessageTypes *map[protogen.GoIdent]bool, extTypes *protoregistry.Types, processedGoPackageList *map[string]bool) {
 	for _, field := range curMsg.Fields {
