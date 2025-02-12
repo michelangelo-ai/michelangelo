@@ -34,3 +34,14 @@ The last step will create a `.venv` directory if it doesn't already exist.
 This directory contains a Python virtual environment with all the dependencies installed.
 You can activate this virtual environment and use it like any other Python virtual environment, 
 or you can run commands via the Poetry CLI, e.g., `poetry run python`, `poetry run pytest`, etc.
+
+### Dockerfile
+
+If you experience issues with the Python environment, you can use the Dockerfile to build a Docker image with the necessary dependencies.
+We recommend to setup your local environment with the instructions above (with poetry), but you can use the Dockerfile as a fallback.
+
+```bash
+$ cd $REPO_ROOT/python
+$ docker build -t $IMAGE_NAME -f ./examples/bert_cola/Dockerfile .
+$ docker run $IMAGE_NAME
+```

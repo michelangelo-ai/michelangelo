@@ -18,6 +18,8 @@ pyarrow = "^19.0.0"
 pydantic = "^2.10.6"
 ray = "^2.41.0"
 typing-extensions = "^4.12.2"
+torch = "^2.6.0"
+torchvision = "^0.21.0"
 
 
 [tool.poetry.group.dev.dependencies]
