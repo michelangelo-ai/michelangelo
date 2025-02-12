@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Michelangelo is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
-exclude = ["michelangelo", "env"]    # TODO: temporary exclude all codes in package building
+exclude = ["michelangelo"]    # TODO: temporary exclude all codes in package building
 packages = [
     { include = "michelangelo" },
 ]
@@ -22,7 +22,6 @@ python = "^3.9.0"
 ray = "^2.41.0"
 torch = "2.0.1"
 transformers = "4.36.2"
-
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
