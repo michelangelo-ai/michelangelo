@@ -159,7 +159,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 				ctx, _ = workflow.NewDisconnectedContext(ctx)
 				reason = "Canceled"
 			}
-			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateRayJob, ray.TerminateRayJobRequest{
+			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
 				Type:      v2pb.TERMINATION_TYPE_FAILED,
@@ -204,8 +204,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	logger := workflow.GetLogger(ctx)
 
 	var entrypoint string
-	var timeout int64 = 0
-	var poll int64 = 10
 	var rayClusterNamespace string
 	var rayClusterName string
 
@@ -276,11 +274,47 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 	ctx := cadstar.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var spec *starlark.Dict
-	if err := starlark.UnpackArgs("terminate_cluster", args, kwargs, "spec", &spec); err != nil {
-		logger.Error("error", zap.Error(err))
+	var name string
+	var namespce string
+	var reason string
+	var terminateTypeStr string
+
+	if err := starlark.UnpackArgs("terminate_job", args, kwargs,
+		"name", &name,
+		"namespce", &namespce,
+		"reason", &reason,
+		"terminateType", &terminateTypeStr,
+	); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
 
-	return spec, nil
+	var terminateType v2pb.TerminationType
+	if terminateTypeStr == v2pb.TERMINATION_TYPE_SUCCEEDED.String() {
+		terminateType = v2pb.TERMINATION_TYPE_SUCCEEDED
+	} else if terminateTypeStr == v2pb.TERMINATION_TYPE_FAILED.String() {
+		terminateType = v2pb.TERMINATION_TYPE_FAILED
+	}
+
+	var res v2pb.UpdateRayClusterResponse
+	srp := CadenceDefaultSensorRetryPolicy
+	srp.ExpirationInterval = time.Second * time.Duration(timeout)
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
+	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
+		Name:      name,
+		Namespace: namespce,
+		Type:      terminateType,
+		Reason:    reason,
+	}).Get(sensorCtx, &res); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+
+	cluster := res.RayCluster
+	if cluster.Status.State == v2pb.RAY_CLUSTER_STATE_TERMINATED {
+		return starlark.Bool(true), nil
+	}
+
+	return starlark.Bool(false), nil
 }

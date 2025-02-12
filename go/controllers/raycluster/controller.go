@@ -2,7 +2,6 @@ package raycluster
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"reflect"
 	"time"
@@ -100,6 +99,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	} else if status != nil {
 		logger.Info("get ray cluster with status ", "status", status.State)
 		if shouldBeTerminated {
+			logger.Info("terminating cluster")
 			err = r.deleteCluster(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 			if err != nil {
 				res.RequeueAfter = requeueAfter
@@ -130,12 +130,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 						logger.Info("Cluster is ready, re-queuing until receiving termination signal")
 						res.RequeueAfter = requeueAfter
 					}
-					reasonStr := ""
-					if reason != nil {
-						reasonStr = *reason
-					}
-					logger.Error(errors.New("cluster provisioning failed"),
-						"failed to provision cluster", "reason", reasonStr)
 				} else {
 					res.RequeueAfter = requeueAfter
 				}

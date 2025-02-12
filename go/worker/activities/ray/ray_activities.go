@@ -6,6 +6,7 @@ import (
 	"go.uber.org/cadence"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -18,8 +19,8 @@ import (
 
 var Activities = (*activities)(nil)
 
-// TerminateRayJobRequest request
-type TerminateRayJobRequest struct {
+// TerminateClusterRequest request
+type TerminateClusterRequest struct {
 	Name      string               `json:"name,omitempty"`      // name of the ray job
 	Namespace string               `json:"namespace,omitempty"` // namespace of the ray job
 	Type      v2pb.TerminationType `json:"type,omitempty"`      // termination code
@@ -232,7 +233,7 @@ func (r *activities) SensorRayJobReadiness(ctx context.Context, request SensorRa
 	return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), status)
 }
 
-func (r *activities) TerminateRayJob(ctx context.Context, request TerminateRayJobRequest) (*v2pb.UpdateRayClusterResponse, *cadence.CustomError) {
+func (r *activities) TerminateCluster(ctx context.Context, request TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
@@ -240,26 +241,36 @@ func (r *activities) TerminateRayJob(ctx context.Context, request TerminateRayJo
 		Name:      request.Name,
 		Namespace: request.Namespace,
 	}
-	rayCluster := &v2pb.RayCluster{}
-	err := r.k8sClient.Get(ctx, nn, rayCluster)
+	var cluster *v2pb.RayCluster
+	err := retry.RetryOnConflict(retry.DefaultBackoff, func() error {
+		rayCluster := &v2pb.RayCluster{}
+		err := r.k8sClient.Get(ctx, nn, rayCluster)
+		if err != nil {
+			logger.Error(err, "activity-error")
+			return err
+		}
+
+		cluster = rayCluster
+		cluster.Spec.Termination = &v2pb.TerminationSpec{
+			Type:   request.Type,
+			Reason: request.Reason,
+		}
+
+		err = r.k8sClient.Update(ctx, cluster)
+		if err != nil {
+			logger.Error(err, "activity-error")
+			return err
+		}
+		return nil
+	})
+
 	if err != nil {
 		logger.Error(err, "activity-error")
 		return nil, cadence.NewCustomError(err.Error())
 	}
 
-	job := rayCluster
-	job.Spec.Termination = &v2pb.TerminationSpec{
-		Type:   request.Type,
-		Reason: request.Reason,
-	}
-
-	err = r.k8sClient.Update(ctx, job)
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError(err.Error())
-	}
 	return &v2pb.UpdateRayClusterResponse{
-		RayCluster: rayCluster,
+		RayCluster: cluster,
 	}, nil
 }
 

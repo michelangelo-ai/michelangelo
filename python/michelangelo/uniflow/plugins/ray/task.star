@@ -143,7 +143,7 @@ def task(
         )
 
         def terminate_cluster():
-            # ray.terminate_cluster(cluster_namespace, cluster_name)
+            ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
             print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
         atexit.register(terminate_cluster)
@@ -207,9 +207,11 @@ def task(
             fail(err_message)
 
         # Terminate cluster
-        # if job["status"] == "SUCCEEDED":
-        # we must unregister the exit hook to avoid calling them for other tasks.
-        terminate_cluster()
+        if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
+            ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
+        else:
+            ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
+
         report_ray_task_result()
         atexit.unregister(terminate_cluster)
         atexit.unregister(report_ray_task_result)
