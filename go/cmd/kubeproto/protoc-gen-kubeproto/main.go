@@ -527,6 +527,20 @@ type EnumValue struct {
 	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
 }
 
+// genCRDEnumFields generates UnmarshalJSON methods for all enum fields in a given CRD (Custom Resource Definition) message.
+//
+// This function:
+// - Identifies all enum fields within the provided CRD protobuf message (`crdMsg`).
+// - Uses `findEnumFields` to traverse nested messages and collect enum field names.
+// - Iterates through the discovered enum fields and generates UnmarshalJSON methods using a template.
+// - Writes the generated code to the provided buffer (`crdBuf`).
+//
+// Args:
+//   crdName                string                    - The name of the CRD being processed.
+//   crdMsg                 *protogen.Message         - The protobuf message representing the CRD.
+//   crdBuf                 *bytes.Buffer            - The buffer to write the generated code to.
+//   extTypes               *protoregistry.Types     - A registry of external types (may be useful for future extensions).
+//   processedGoPackageList *map[string]bool         - A map to track processed Go packages to avoid redundant processing.
 func genCRDEnumFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Buffer, extTypes *protoregistry.Types,
 	processedGoPackageList *map[string]bool,
 ) {
