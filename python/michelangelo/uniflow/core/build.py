@@ -279,102 +279,35 @@ def _fn_path(fn: Callable) -> Path:
 
 
 class FunctionTransformer(ast.NodeTransformer):
-    """
-    A custom AST transformer that modifies function syntax for a restricted execution environment.
-    
-    This transformer:
-    - Prohibits certain Python constructs (e.g., `import`, `try`, `is`, `is not`).
-    - Transforms annotated assignments into regular assignments.
-    - Validates and processes global variable references.
-    - Integrates with dependency tracking to manage external references.
-
-    The main use case is ensuring compatibility with a restricted subset of Python (e.g., 
-    Starlark-like environments) while handling dependencies for workflow execution.
-    """
     def __init__(self, fn):
         self._code = fn.__code__
         self._module = inspect.getmodule(fn)
         self.deps = Dependencies()
 
     def visit_AnnAssign(self, node):
-        """
-        Transforms annotated assignments (`a: type = value`) into standard assignments (`a = value`).
-        
-        Example:
-            Input: `a: dict = foo()`
-            Output: `a = foo()`
-        
-        This ensures compatibility with environments that do not support type annotations.
-        """
+        # Replace annotated assignment with just assignment. Ex:
+        # a: dict = foo()  ->  a = foo()
         return ast.Assign(
             value=node.value,
             targets=[node.target],
         )
 
     def visit_Is(self, _node):
-        """
-        Prohibits the use of the `is` operator, enforcing `==` instead.
-        
-        Raises:
-            NameError: If `is` is used in the function.
-        """
         raise NameError("[is] is not supported, use == instead")
 
     def visit_IsNot(self, _node):
-        """
-        Prohibits the use of the `is not` operator, enforcing `!=` instead.
-        
-        Raises:
-            NameError: If `is not` is used in the function.
-        """
         raise NameError("[is not] is not supported, use != instead")
 
     def visit_Import(self, _node):
-        """
-        Prohibits `import` statements to prevent arbitrary code execution.
-        
-        Raises:
-            NameError: Always.
-        """
         raise NameError("[import] is not supported")
 
     def visit_ImportFrom(self, _node):
-        """
-        Prohibits `from ... import ...` statements for the same reason as `import`.
-        
-        Raises:
-            NameError: Always.
-        """
         raise NameError("[import] is not supported")
 
     def visit_Try(self, _node):
-        """
-        Prohibits `try` statements to avoid exception handling mechanisms.
-        
-        Raises:
-            NameError: Always.
-        """
         raise NameError("[try] is not supported")
 
     def visit_Name(self, node: ast.Name):
-        """
-        Handles variable references by validating their usage and tracking dependencies.
-        
-        - If a variable is a local function variable, it is preserved.
-        - If a variable is a global reference, it is checked against allowed built-ins.
-        - If a variable is a workflow function, it is registered in dependencies.
-        - If a variable is a plugin function, it is transformed into an alias reference.
-
-        Args:
-            node (ast.Name): The AST node representing a variable name.
-
-        Returns:
-            ast.Name or transformed AST node.
-
-        Raises:
-            ValueError: If a referenced global is not found in the function's globals.
-            NameError: If an unsupported global variable is used.
-        """
         if not isinstance(node.ctx, ast.Load):
             # Skip non load var context. I.e. keep var assignment code as-is.
             return node
