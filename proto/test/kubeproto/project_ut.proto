@@ -3,6 +3,7 @@ syntax = "proto3";
 package michelangelo.test.kubeproto;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/test/kubeproto/testobject.proto";
 import "michelangelo/api/options.proto";
 
 option go_package = "kubeproto";
@@ -23,6 +24,10 @@ message ProjectSpec {
   option (michelangelo.api.no_default) = true;
   // Metadata of the ML project
   Metadata meta = 1;
+
+  // Testing enum that appears in another proto under the same package.
+  // to make sure we don't generate two version of unmarshalJson method
+  DataType data_type = 7;
 }
 
 // Defines the status of a ML project
