@@ -11,12 +11,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
-
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/gogo/protobuf/proto"
@@ -24,6 +18,11 @@ import (
 	plugingo "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 	"github.com/gogo/protobuf/vanity"
 	"github.com/gogo/protobuf/vanity/command"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
 	"google.golang.org/protobuf/compiler/protogen"
 	golangproto "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -203,7 +202,7 @@ func genCRD(crdBuf *bytes.Buffer, filename string, name string, protoComments *p
 //     generate deep copy functions, add controller-tools markers, and register the type to k8s runtime scheme
 //  5. If the input file contains michelangelo.api.k8s_api_group_name option, generate group-version info for k8s runtime
 func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protogen.File,
-	extTypes *protoregistry.Types, gInfo *yaml.GroupInfo) {
+	extTypes *protoregistry.Types, gInfo *yaml.GroupInfo, processedGoPackageList *map[string]bool) {
 	dstFile, err := decorator.Parse(*gofile.Content)
 	if err != nil {
 		logger.Panicf("failed to parse gogoproto generated file %v: %v", gofile.GetName(), err)
@@ -308,12 +307,13 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 							genImmutability(typeName, &crdFunctionsBuf, options)
 							genCRDObject(typeName, gInfo, &crdFunctionsBuf)
 							genCRDBlobFields(typeName, protoMsg, &crdFunctionsBuf, extTypes)
-							crdFunctionsBuf.Write([]byte("func init() {\n\tYamlSchemas[\"" + typeName + "\"] = `"))
-							yamlStr := string(yaml.GenerateCRDYaml(protofile, extTypes, *gInfo))
-							crdFunctionsBuf.Write([]byte(strings.Replace(yamlStr, "`", "`+\"`\"+`", -1)))
-							crdFunctionsBuf.Write([]byte("`\n"))
-							crdFunctionsBuf.Write([]byte("}"))
+							genCRDEnumFields(typeName, protoMsg, &crdFunctionsBuf, extTypes, processedGoPackageList)
 						}
+						crdFunctionsBuf.Write([]byte("func init() {\n\tYamlSchemas[\"" + typeName + "\"] = `"))
+						yamlStr := string(yaml.GenerateCRDYaml(protofile, extTypes, *gInfo))
+						crdFunctionsBuf.Write([]byte(strings.Replace(yamlStr, "`", "`+\"`\"+`", -1)))
+						crdFunctionsBuf.Write([]byte("`\n"))
+						crdFunctionsBuf.Write([]byte("}"))
 					}
 				}
 			}
@@ -471,15 +471,66 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 	// Load group info
 	gInfo := yaml.LoadGroupInfo(gen, extTypes, false)
 
+	processedGoPackageList := make(map[string]bool)
 	for _, f := range gen.Files {
 		// skip the proto file that don't need to generate go code,
 		// such as imported proto files
 		if !f.Generate {
 			continue
 		}
-		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo)
+		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo, &processedGoPackageList)
 	}
 	return resp
+}
+
+func findEnumFields(curMsg *protogen.Message, pathPrefix string, enumFields *[]string,
+	processedMessageTypes *map[protogen.GoIdent]bool, extTypes *protoregistry.Types, processedGoPackageList *map[string]bool) {
+	for _, field := range curMsg.Fields {
+		// Check if this field is an enum
+		if field.Enum != nil {
+			key := fmt.Sprintf("%s.%s", field.Enum.GoIdent.GoImportPath, field.Enum.GoIdent.GoName)
+			if _, found := (*processedGoPackageList)[key]; !found {
+				(*processedGoPackageList)[key] = true
+				newPrefix := strings.Trim(field.Enum.GoIdent.GoName, ".")
+				*enumFields = append(*enumFields, newPrefix)
+			}
+		}
+		// Continue processing nested messages
+		if field.Message != nil && field.Message.GoIdent.GoImportPath == curMsg.GoIdent.GoImportPath {
+			if _, found := (*processedMessageTypes)[field.Message.GoIdent]; !found {
+				(*processedMessageTypes)[field.Message.GoIdent] = true
+				findEnumFields(field.Message, pathPrefix+"."+field.GoName, enumFields, processedMessageTypes,
+					extTypes, processedGoPackageList)
+				delete(*processedMessageTypes, field.Message.GoIdent)
+			}
+		}
+	}
+}
+
+type EnumValue struct {
+	Name        string // Enum value as a string (e.g., "Pending")
+	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
+}
+
+func genCRDEnumFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Buffer, extTypes *protoregistry.Types,
+	processedGoPackageList *map[string]bool,
+) {
+	processedMessageTypes := make(map[protogen.GoIdent]bool)
+	enumFields := make([]string, 0)
+	// Find all enum fields in the CRD message
+	findEnumFields(crdMsg, "", &enumFields, &processedMessageTypes, extTypes, processedGoPackageList)
+
+	// Generate UnmarshalJSON methods for each enum field
+	for _, enumFieldName := range enumFields {
+		typeInfo := struct {
+			EnumFieldName string
+			EnumValues    []EnumValue
+		}{
+			EnumFieldName: enumFieldName,
+		}
+		templates.CRDUnmarshalEnum.Execute(crdBuf, typeInfo)
+		crdBuf.Write([]byte("\n"))
+	}
 }
 
 func main() {
