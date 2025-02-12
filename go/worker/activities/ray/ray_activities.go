@@ -21,17 +21,17 @@ var Activities = (*activities)(nil)
 
 // TerminateClusterRequest request
 type TerminateClusterRequest struct {
-	Name      string               `json:"name,omitempty"`      // name of the ray job
-	Namespace string               `json:"namespace,omitempty"` // namespace of the ray job
-	Type      v2pb.TerminationType `json:"type,omitempty"`      // termination code
-	Reason    string               `json:"reason,omitempty"`    // termination reason
+	Name      string `json:"name,omitempty"`      // name of the ray job
+	Namespace string `json:"namespace,omitempty"` // namespace of the ray job
+	Type      string `json:"type,omitempty"`      // termination code
+	Reason    string `json:"reason,omitempty"`    // termination reason
 }
 
 // TerminateSparkJobRequest request
 type TerminateSparkJobRequest struct {
-	Name      string               `json:"name,omitempty"`      // name of the spark job
-	Namespace string               `json:"namespace,omitempty"` // namespace of the spark job
-	Type      v2pb.TerminationType `json:"type,omitempty"`      // termination code
+	Name      string `json:"name,omitempty"`      // name of the spark job
+	Namespace string `json:"namespace,omitempty"` // namespace of the spark job
+	Type      string `json:"type,omitempty"`      // termination code
 	Reason    string
 }
 
@@ -251,8 +251,14 @@ func (r *activities) TerminateCluster(ctx context.Context, request TerminateClus
 		}
 
 		cluster = rayCluster
+		var terminateType v2pb.TerminationType
+		if request.Type == v2pb.TERMINATION_TYPE_SUCCEEDED.String() {
+			terminateType = v2pb.TERMINATION_TYPE_SUCCEEDED
+		} else if request.Type == v2pb.TERMINATION_TYPE_FAILED.String() {
+			terminateType = v2pb.TERMINATION_TYPE_FAILED
+		}
 		cluster.Spec.Termination = &v2pb.TerminationSpec{
-			Type:   request.Type,
+			Type:   terminateType,
 			Reason: request.Reason,
 		}
 

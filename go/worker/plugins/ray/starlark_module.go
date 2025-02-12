@@ -162,7 +162,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
-				Type:      v2pb.TERMINATION_TYPE_FAILED,
+				Type:      "failed",
 				Reason:    reason,
 			}).Get(ctx, nil); err != nil {
 				logger.Error("builtin-error", ext.ZapError(err)...)
@@ -240,8 +240,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		return nil, err
 	}
 
-	println("==========job created successfully==========")
-
 	rayJob = *createRes.RayJob
 
 	var sensorRes ray.SensorRayJobReadinessResponse
@@ -289,13 +287,6 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 		return nil, err
 	}
 
-	var terminateType v2pb.TerminationType
-	if terminateTypeStr == v2pb.TERMINATION_TYPE_SUCCEEDED.String() {
-		terminateType = v2pb.TERMINATION_TYPE_SUCCEEDED
-	} else if terminateTypeStr == v2pb.TERMINATION_TYPE_FAILED.String() {
-		terminateType = v2pb.TERMINATION_TYPE_FAILED
-	}
-
 	var res v2pb.UpdateRayClusterResponse
 	srp := CadenceDefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
@@ -304,7 +295,7 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 		Name:      name,
 		Namespace: namespce,
-		Type:      terminateType,
+		Type:      terminateTypeStr,
 		Reason:    reason,
 	}).Get(sensorCtx, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)

@@ -17,9 +17,9 @@ def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClas
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_memory="2Gi",
+        head_memory="4Gi",
         worker_cpu=1,
-        worker_memory="2Gi",
+        worker_memory="4Gi",
         worker_instances=1,
     ),
 )
@@ -31,7 +31,7 @@ def train(
     log.info("Starting training...")
 
     # Training configuration
-    batch_size = 32
+    batch_size = 8
     max_epochs = 1
     lr = 2e-5
     eps = 1e-8
@@ -75,11 +75,6 @@ def train(
     trainer.save_model(output_dir)
 
     log.info("Training complete. Best model saved.")
-
-    # Evaluate on test set
-    log.info("Starting evaluation on test set...")
-    test_results = trainer.evaluate(eval_dataset=test_data)
-    log.info(f"Test Results: {test_results}")
 
     # Get the best checkpoint path
     best_checkpoint = training_args.output_dir + "/checkpoint-best"
