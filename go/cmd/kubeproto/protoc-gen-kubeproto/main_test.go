@@ -67,9 +67,13 @@ func TestGen(t *testing.T) {
 
 	var projectFile *plugin_go.CodeGeneratorResponse_File
 	var groupInfoFile *plugin_go.CodeGeneratorResponse_File
+	var testObjectFile *plugin_go.CodeGeneratorResponse_File
 	for _, f := range resp.GetFile() {
 		if strings.HasSuffix(*f.Name, "project_ut.pb.go") {
 			projectFile = f
+		}
+		if strings.HasSuffix(*f.Name, "testobject.pb.go") {
+			testObjectFile = f
 		}
 		if strings.HasSuffix(*f.Name, "groupversion_info_ut.pb.go") {
 			groupInfoFile = f
@@ -90,6 +94,11 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, c, `func (in *ProjectList) DeepCopy() *ProjectList`)
 	assert.Contains(t, c, `YamlSchemas["Project"] =`)
 	assert.Contains(t, c, `name: projects-plural.michelangelo.api`)
+
+	c = testObjectFile.GetContent()
+	assert.Contains(t, c, `func (m *DataType) UnmarshalJSON(b []byte) error {`)
+	assert.Contains(t, c, `func (m *TestObjectSpec_ClusterType) UnmarshalJSON(b []byte) error {`)
+
 	//TODO(https://github.com/uber/michelangelo/issues/65): assert.Contains(t, c, expectedCRDDescription)
 
 	assert.True(t, groupInfoFile != nil)
