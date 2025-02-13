@@ -20,12 +20,13 @@ ray = "^2.41.0"
 typing-extensions = "^4.12.2"
 torch = "^2.6.0"
 torchvision = "^0.21.0"
-
+protobuf = "^5.29.3"
+grpcio = "^1.70.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.4"
 ruff = "^0.9.1"
-
+notebook = "^7.3.2"
 
 [tool.poetry.scripts]
 ma = 'michelangelo.cli.cli:main'
