@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"go/token"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -67,9 +68,13 @@ func TestGen(t *testing.T) {
 
 	var projectFile *plugin_go.CodeGeneratorResponse_File
 	var groupInfoFile *plugin_go.CodeGeneratorResponse_File
+	var testObjectFile *plugin_go.CodeGeneratorResponse_File
 	for _, f := range resp.GetFile() {
 		if strings.HasSuffix(*f.Name, "project_ut.pb.go") {
 			projectFile = f
+		}
+		if strings.HasSuffix(*f.Name, "testobject.pb.go") {
+			testObjectFile = f
 		}
 		if strings.HasSuffix(*f.Name, "groupversion_info_ut.pb.go") {
 			groupInfoFile = f
@@ -90,6 +95,11 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, c, `func (in *ProjectList) DeepCopy() *ProjectList`)
 	assert.Contains(t, c, `YamlSchemas["Project"] =`)
 	assert.Contains(t, c, `name: projects-plural.michelangelo.api`)
+
+	c = testObjectFile.GetContent()
+	assert.Contains(t, c, `func (m *DataType) UnmarshalJSON(b []byte) error {`)
+	assert.Contains(t, c, `func (m *TestObjectSpec_ClusterType) UnmarshalJSON(b []byte) error {`)
+
 	//TODO(https://github.com/uber/michelangelo/issues/65): assert.Contains(t, c, expectedCRDDescription)
 
 	assert.True(t, groupInfoFile != nil)
@@ -149,8 +159,12 @@ func TestJSON(t *testing.T) {
 	testObject.Spec.Description = "test"
 
 	testObjectJSON, err := json.Marshal(testObject)
-	assert.True(t, err == nil)
+	assert.Nil(t, err)
 	assert.Equal(t, ObjectJSON, string(testObjectJSON))
+	testObjectUnmarshalled := &testpb.TestObject{}
+	err = json.Unmarshal(testObjectJSON, testObjectUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testObject, testObjectUnmarshalled))
 
 	// Test enum type
 	testEnum := &testpb.TestObjectSpec{
@@ -172,6 +186,10 @@ func TestJSON(t *testing.T) {
 	testEnumJSON, err := json.Marshal(testEnum)
 	assert.True(t, err == nil)
 	assert.Equal(t, EnumJSON, string(testEnumJSON))
+	testEnumUnmarshalled := &testpb.TestObjectSpec{}
+	err = json.Unmarshal(testEnumJSON, testEnumUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testEnum, testEnumUnmarshalled))
 
 	// Test Any type
 	testMsg := &testpb.TestMsg{
@@ -187,6 +205,10 @@ func TestJSON(t *testing.T) {
 	testAnyJSON, err := json.Marshal(testAny)
 	assert.True(t, err == nil)
 	assert.Equal(t, AnyJSON, string(testAnyJSON))
+	testAnyUnmarshalled := &testpb.TestObjectSpec{}
+	err = json.Unmarshal(testAnyJSON, testAnyUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testAny, testAnyUnmarshalled))
 
 	// Test Timestamp type
 	timestamp, err := types.TimestampProto(
@@ -199,18 +221,30 @@ func TestJSON(t *testing.T) {
 	testTimeJSON, err := json.Marshal(testTimestamp)
 	assert.True(t, err == nil)
 	assert.Equal(t, TimeJSON, string(testTimeJSON))
+	testTimeUnmarshalled := &testpb.TestObjectSpec{}
+	err = json.Unmarshal(testTimeJSON, testTimeUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testTimestamp, testTimeUnmarshalled))
 
 	// Test duration type
 	testDuration := types.DurationProto(1000 * time.Second)
 	testDurationJSON, err := json.Marshal(testDuration)
 	assert.True(t, err == nil)
 	assert.Equal(t, DurationJSON, string(testDurationJSON))
+	testDurationUnmarshalled := &types.Duration{}
+	err = json.Unmarshal(testDurationJSON, testDurationUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testDuration, testDurationUnmarshalled))
 
 	// Test duration type
 	testDuration2 := types.DurationProto(1000 * time.Nanosecond)
 	testDurationJSON2, err := json.Marshal(testDuration2)
 	assert.True(t, err == nil)
 	assert.Equal(t, DurationJSON2, string(testDurationJSON2))
+	testDurationUnmarshalled2 := &types.Duration{}
+	err = json.Unmarshal(testDurationJSON2, testDurationUnmarshalled2)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testDuration2, testDurationUnmarshalled2))
 
 	tmp := &testpb.TestObjectSpec{}
 	err = json.Unmarshal(testTimeJSON, tmp)
@@ -253,6 +287,10 @@ func TestJSON(t *testing.T) {
 	testStructJSON, err := json.Marshal(testPbWithStruct)
 	assert.Nil(t, err)
 	assert.Equal(t, StructJSON, string(testStructJSON))
+	testStructUnmarshalled := &testpb.TestObjectSpec{}
+	err = json.Unmarshal(testStructJSON, testStructUnmarshalled)
+	assert.Nil(t, err)
+	assert.True(t, reflect.DeepEqual(testPbWithStruct, testStructUnmarshalled))
 
 	testPbWithStructDecode := &testpb.TestObjectSpec{}
 	err = json.Unmarshal(testStructJSON, testPbWithStructDecode)

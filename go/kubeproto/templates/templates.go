@@ -46,6 +46,24 @@ var CRDHasBlobFields = template.Must(template.New("crdHasBlobFields").Parse(`fun
 }
 `))
 
+// CRDUnmarshalEnum is a template for the HasEnumFields() function.
+var CRDUnmarshalEnum = template.Must(template.New("unmarshalJSON").Parse(`func (m *{{.EnumTypeName}}) UnmarshalJSON(b []byte) error {
+	var s string
+    err := json.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+	// Check if the string exists in the map
+	val, exists := {{.EnumTypeName}}_value[s]
+	if !exists {
+		return fmt.Errorf("invalid DataType: %s", s)
+	}
+	
+	*m = {{.EnumTypeName}}(val)
+	return nil
+}
+`))
+
 // CRDClearBlobFieldsHeader is a template of the ClearBlobFields() function signature
 var CRDClearBlobFieldsHeader = template.Must(template.New("crdClearBlobFields").Parse(`func (m *{{.Name}}) ClearBlobFields() {
 `))

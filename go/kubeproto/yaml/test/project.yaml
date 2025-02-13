@@ -20,6 +20,15 @@ spec:
         properties:
           spec:
             properties:
+              dataType:
+                enum:
+                - DATA_TYPE_INVALID
+                - DATA_TYPE_UNKNOWN
+                - DATA_TYPE_NUMERIC
+                - DATA_TYPE_ARRAY
+                - DATA_TYPE_BOOLEAN
+                - DATA_TYPE_DATE
+                type: string
               meta:
                 properties:
                   name:

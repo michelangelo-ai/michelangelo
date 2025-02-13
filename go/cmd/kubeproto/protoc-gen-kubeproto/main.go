@@ -39,6 +39,11 @@ var logger = log.New(os.Stderr, "", 0)
 
 const _testProtoImportPath = "michelangelo/tools/kubeproto/unittest/pb"
 
+type EnumValue struct {
+	Name        string // Enum value as a string (e.g., "Pending")
+	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
+}
+
 // Call gogo proto to generate go code from protobuf
 // The options are chosen to make the generated go code to be compatible
 // with k8s "k8s.io/apimachinery/pkg/apis/meta/v1" library (e.g. no Equal function)
@@ -203,7 +208,7 @@ func genCRD(crdBuf *bytes.Buffer, filename string, name string, protoComments *p
 //     generate deep copy functions, add controller-tools markers, and register the type to k8s runtime scheme
 //  5. If the input file contains michelangelo.api.k8s_api_group_name option, generate group-version info for k8s runtime
 func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protogen.File,
-	extTypes *protoregistry.Types, gInfo *yaml.GroupInfo) {
+	extTypes *protoregistry.Types, gInfo *yaml.GroupInfo, processedGoPackageList *map[string]bool) {
 	dstFile, err := decorator.Parse(*gofile.Content)
 	if err != nil {
 		logger.Panicf("failed to parse gogoproto generated file %v: %v", gofile.GetName(), err)
@@ -308,6 +313,7 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 							genImmutability(typeName, &crdFunctionsBuf, options)
 							genCRDObject(typeName, gInfo, &crdFunctionsBuf)
 							genCRDBlobFields(typeName, protoMsg, &crdFunctionsBuf, extTypes)
+							genCRDEnumTypeFields(typeName, protoMsg, &crdFunctionsBuf, extTypes, processedGoPackageList)
 							crdFunctionsBuf.Write([]byte("func init() {\n\tYamlSchemas[\"" + typeName + "\"] = `"))
 							yamlStr := string(yaml.GenerateCRDYaml(protofile, extTypes, *gInfo))
 							crdFunctionsBuf.Write([]byte(strings.Replace(yamlStr, "`", "`+\"`\"+`", -1)))
@@ -471,15 +477,91 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 	// Load group info
 	gInfo := yaml.LoadGroupInfo(gen, extTypes, false)
 
+	processedGoPackageList := make(map[string]bool)
 	for _, f := range gen.Files {
 		// skip the proto file that don't need to generate go code,
 		// such as imported proto files
 		if !f.Generate {
 			continue
 		}
-		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo)
+		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo, &processedGoPackageList)
 	}
 	return resp
+}
+
+// findEnumTypeFields recursively finds all enum fields within a given protobuf message and its nested messages.
+//
+// This function:
+// - Traverses through all fields of the given message (`curMsg`).
+// - Identifies enum fields and adds them to `enumTypeFields`, ensuring they are not duplicated.
+// - Recursively processes nested messages to extract enum fields from them as well.
+// - Maintains a record of processed message types and Go package imports to avoid redundant processing.
+//
+// Args:
+//
+//	curMsg                 *protogen.Message     - The current protobuf message being analyzed.
+//	pathPrefix             string               - The prefix representing the field hierarchy (used for recursion).
+//	enumTypeFields             *[]string            - A list to store discovered enum type names.
+//	processedMessageTypes  *map[protogen.GoIdent]bool - Tracks already processed message types to prevent cycles.
+//	extTypes               *protoregistry.Types - A registry of external types (not used in this function but may be useful for extensions).
+//	processedGoPackageList *map[string]bool     - A map to track processed Go packages and prevent duplicate enum field entries.
+func findEnumTypeFields(curMsg *protogen.Message, pathPrefix string, enumTypeFields *[]string,
+	processedMessageTypes *map[protogen.GoIdent]bool, extTypes *protoregistry.Types, processedGoPackageList *map[string]bool) {
+	for _, field := range curMsg.Fields {
+		// Check if this field is an enum
+		if field.Enum != nil {
+			key := fmt.Sprintf("%s.%s", field.Enum.GoIdent.GoImportPath, field.Enum.GoIdent.GoName)
+			if _, found := (*processedGoPackageList)[key]; !found {
+				(*processedGoPackageList)[key] = true
+				newPrefix := strings.Trim(field.Enum.GoIdent.GoName, ".")
+				*enumTypeFields = append(*enumTypeFields, newPrefix)
+			}
+		}
+		// Continue processing nested messages
+		if field.Message != nil && field.Message.GoIdent.GoImportPath == curMsg.GoIdent.GoImportPath {
+			if _, found := (*processedMessageTypes)[field.Message.GoIdent]; !found {
+				(*processedMessageTypes)[field.Message.GoIdent] = true
+				findEnumTypeFields(field.Message, pathPrefix+"."+field.GoName, enumTypeFields, processedMessageTypes,
+					extTypes, processedGoPackageList)
+				delete(*processedMessageTypes, field.Message.GoIdent)
+			}
+		}
+	}
+}
+
+// genCRDEnumTypeFields generates UnmarshalJSON methods for all enum fields in a given CRD (Custom Resource Definition) message.
+//
+// This function:
+// - Identifies all enum fields within the provided CRD protobuf message (`crdMsg`).
+// - Uses `findEnumTypeFields` to traverse nested messages and collect enum field names.
+// - Iterates through the discovered enum fields and generates UnmarshalJSON methods using a template.
+// - Writes the generated code to the provided buffer (`crdBuf`).
+//
+// Args:
+//
+//	crdName                string                    - The name of the CRD being processed.
+//	crdMsg                 *protogen.Message         - The protobuf message representing the CRD.
+//	crdBuf                 *bytes.Buffer            - The buffer to write the generated code to.
+//	extTypes               *protoregistry.Types     - A registry of external types (may be useful for future extensions).
+//	processedGoPackageList *map[string]bool         - A map to track processed Go packages to avoid redundant processing.
+func genCRDEnumTypeFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Buffer, extTypes *protoregistry.Types,
+	processedGoPackageList *map[string]bool,
+) {
+	processedMessageTypes := make(map[protogen.GoIdent]bool)
+	enumTypeFields := make([]string, 0)
+	// Find all enum fields in the CRD message
+	findEnumTypeFields(crdMsg, "", &enumTypeFields, &processedMessageTypes, extTypes, processedGoPackageList)
+
+	// Generate UnmarshalJSON methods for each enum field
+	for _, enumTypeName := range enumTypeFields {
+		typeInfo := struct {
+			EnumTypeName string
+		}{
+			EnumTypeName: enumTypeName,
+		}
+		templates.CRDUnmarshalEnum.Execute(crdBuf, typeInfo)
+		crdBuf.Write([]byte("\n"))
+	}
 }
 
 func main() {
