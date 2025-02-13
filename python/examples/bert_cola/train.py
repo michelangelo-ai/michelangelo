@@ -1,10 +1,14 @@
 import logging
+import os
+
 import torch
 import transformers
 from ray.data import Dataset
 from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
 import numpy as np
+
+import fsspec
 
 log = logging.getLogger(__name__)
 
@@ -80,6 +84,16 @@ def train(
     best_checkpoint = training_args.output_dir + "/checkpoint-best"
     log.info(f"Best checkpoint path: {best_checkpoint}")
 
+    # push model to repository
+    url = "s3://default/model"
+    with fsspec.open(url, mode="wb") as f:
+        # Walk through the checkpoint directory and upload its contents
+        for root, dirs, files in os.walk(output_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                with open(file_path, "rb") as local_file:
+                    f.write(local_file.read())
+        log.info("Model upload completed successfully.")
     return train_result, best_checkpoint
 
 def _compute_metrics(eval_pred):
