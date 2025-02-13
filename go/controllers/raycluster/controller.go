@@ -12,6 +12,7 @@ import (
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -94,33 +95,45 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
 		} else {
 			res.RequeueAfter = requeueAfter
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 		}
 	} else if status != nil {
-		logger.Info("get ray cluster with status ", "status", *status)
+		logger.Info("get ray cluster with status ", "status", status.State)
 		if shouldBeTerminated {
+			logger.Info("terminating cluster")
 			err = r.deleteCluster(ctx, logger, rayCluster.Namespace, rayCluster.Name)
 			if err != nil {
 				res.RequeueAfter = requeueAfter
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 			} else {
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			}
-		} else if r.isTerminatedState(*status) {
-			if *status == "failed" {
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
-			} else if *status == "terminated" {
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATED
-			} else if *status == "unknown" {
-				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_UNKNOWN
-			}
-		} else if *status == "ready" {
-			logger.Info("cluster is ready, we continue to re-queue until receiving termination signal")
-			res.RequeueAfter = requeueAfter
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
 		} else {
-			res.RequeueAfter = requeueAfter
-			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+			// Check conditions first
+			if status.Conditions != nil {
+				if meta.IsStatusConditionTrue(status.Conditions, string(v1.HeadPodReady)) {
+					rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+					res.RequeueAfter = requeueAfter
+				} else if meta.IsStatusConditionTrue(status.Conditions, string(v1.RayClusterReplicaFailure)) {
+					rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+				}
+			} else {
+				// Fallback to deprecated state field
+				terminateStateMap := map[v1.ClusterState]v2pb.RayClusterState{
+					v1.Failed:    v2pb.RAY_CLUSTER_STATE_FAILED,
+					v1.Suspended: v2pb.RAY_CLUSTER_STATE_TERMINATED,
+					v1.Ready:     v2pb.RAY_CLUSTER_STATE_READY,
+				}
+				println("============state===========")
+				println(status.State)
+				if newState, exists := terminateStateMap[status.State]; exists {
+					rayCluster.Status.State = newState
+					if newState == v2pb.RAY_CLUSTER_STATE_READY {
+						logger.Info("Cluster is ready, re-queuing until receiving termination signal")
+						res.RequeueAfter = requeueAfter
+					}
+				} else {
+					res.RequeueAfter = requeueAfter
+				}
+			}
 		}
 	} else {
 		res.RequeueAfter = requeueAfter
@@ -169,12 +182,13 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 		return err
 	}
 	cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
-		Name: createdRayCluster.Name,
+		Name: createdRayCluster.Status.Head.PodName,
+		Ip:   createdRayCluster.Status.Head.PodIP,
 	}
 	return nil
 }
 
-func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, namespace string, name string) (*v1.ClusterState, *string, error) {
+func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, namespace string, name string) (*v1.RayClusterStatus, *string, error) {
 	rayV1Cluster, err := r.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	// Fetch the status of the RayCluster
 	if err != nil {
@@ -186,7 +200,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 		return nil, nil, apiErrors.NewNotFound(v1.Resource("rayclusters"), name)
 	}
 
-	return &rayV1Cluster.Status.State, &rayV1Cluster.Status.Reason, nil
+	return &rayV1Cluster.Status, &rayV1Cluster.Status.Reason, nil
 }
 
 func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespace string, name string) error {
@@ -197,15 +211,6 @@ func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespa
 		return err
 	}
 	return nil
-}
-
-func (r *Reconciler) isTerminatedState(status v1.ClusterState) bool {
-	for _, state := range []v1.ClusterState{v1.Failed, v1.Suspended} {
-		if status == state {
-			return true
-		}
-	}
-	return false
 }
 
 // Function to convert WorkerGroupSpecs to JSON

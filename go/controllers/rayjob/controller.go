@@ -162,6 +162,9 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 				"rayClusterNamespace": cluster.Namespace,
 			},
 			Entrypoint: job.Spec.Entrypoint,
+			// we do http model here instead of default K8sJobMode
+			// this avoids to create another image pulling from the job running inside the cluster
+			SubmissionMode: v1.HTTPMode,
 		},
 	}
 
