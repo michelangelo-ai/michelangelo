@@ -553,12 +553,11 @@ func genCRDEnumFields(crdName string, crdMsg *protogen.Message, crdBuf *bytes.Bu
 	findEnumFields(crdMsg, "", &enumFields, &processedMessageTypes, extTypes, processedGoPackageList)
 
 	// Generate UnmarshalJSON methods for each enum field
-	for _, enumFieldName := range enumFields {
+	for _, enumTypeName := range enumFields {
 		typeInfo := struct {
-			EnumFieldName string
-			EnumValues    []EnumValue
+			EnumTypeName string
 		}{
-			EnumFieldName: enumFieldName,
+			EnumTypeName: enumTypeName,
 		}
 		templates.CRDUnmarshalEnum.Execute(crdBuf, typeInfo)
 		crdBuf.Write([]byte("\n"))

@@ -47,19 +47,19 @@ var CRDHasBlobFields = template.Must(template.New("crdHasBlobFields").Parse(`fun
 `))
 
 // CRDUnmarshalEnum is a template for the HasEnumFields() function.
-var CRDUnmarshalEnum = template.Must(template.New("unmarshalJSON").Parse(`func (m *{{.EnumFieldName}}) UnmarshalJSON(b []byte) error {
+var CRDUnmarshalEnum = template.Must(template.New("unmarshalJSON").Parse(`func (m *{{.EnumTypeName}}) UnmarshalJSON(b []byte) error {
 	var s string
     err := json.Unmarshal(b, &s)
 	if err != nil {
 		return err
 	}
 	// Check if the string exists in the map
-	val, exists := {{.EnumFieldName}}_value[s]
+	val, exists := {{.EnumTypeName}}_value[s]
 	if !exists {
 		return fmt.Errorf("invalid DataType: %s", s)
 	}
 	
-	*m = {{.EnumFieldName}}(val)
+	*m = {{.EnumTypeName}}(val)
 	return nil
 }
 `))
