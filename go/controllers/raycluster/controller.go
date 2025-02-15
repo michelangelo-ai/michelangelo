@@ -122,8 +122,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 					v1.Suspended: v2pb.RAY_CLUSTER_STATE_TERMINATED,
 					v1.Ready:     v2pb.RAY_CLUSTER_STATE_READY,
 				}
-				println("============state===========")
-				println(status.State)
 				if newState, exists := terminateStateMap[status.State]; exists {
 					rayCluster.Status.State = newState
 					if newState == v2pb.RAY_CLUSTER_STATE_READY {
