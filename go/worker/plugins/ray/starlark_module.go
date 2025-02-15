@@ -2,21 +2,22 @@ package ray
 
 import (
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/cadence"
-	"go.uber.org/yarpc/yarpcerrors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/star"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
+	jsoniter "github.com/json-iterator/go"
 	"go.starlark.net/starlark"
+	"go.uber.org/cadence"
 	"go.uber.org/cadence/workflow"
+	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TODO: andrii: implement Ray starlark plugin here
@@ -65,20 +66,6 @@ var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
 	ExpirationInterval:       CadenceLongTimeout,
 	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
 	MaximumAttempts:          100,
-}
-
-var CadenceDefaultActivityOptions = workflow.ActivityOptions{
-	ScheduleToStartTimeout: time.Second * 15,
-	StartToCloseTimeout:    time.Second * 15,
-	RetryPolicy:            &CadenceDefaultRetryPolicy,
-}
-
-var CadenceDefaultChildWorkflowOptions = workflow.ChildWorkflowOptions{
-	ExecutionStartToCloseTimeout: CadenceLongTimeout,
-	// Don't retry child workflows by default. Why? - Based on the following assumptions:
-	// 1. Cadence scheduler starts child workflow reliably.
-	// 2. Child workflow performs retries for all the activities it invokes. I.e. child workflow logic is designed to be reliable.
-	RetryPolicy: nil,
 }
 
 func newModule() starlark.Value {
@@ -142,12 +129,10 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
-	sensorRequest := ray.SensorRayClusterReadinessRequest{
-		Request: v2pb.GetRayClusterRequest{
-			Name:      cluster.Name,
-			Namespace: cluster.Namespace,
-		},
-		ReturnJobURL: true,
+	sensorRequest := v2pb.GetRayClusterRequest{
+		Name:       cluster.Name,
+		Namespace:  cluster.Namespace,
+		GetOptions: &metav1.GetOptions{},
 	}
 	var sensorResponse ray.SensorRayClusterReadinessResponse
 	var printJobURL = true
@@ -162,7 +147,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
-				Type:      "failed",
+				Type:      v2pb.TERMINATION_TYPE_FAILED.String(),
 				Reason:    reason,
 			}).Get(ctx, nil); err != nil {
 				logger.Error("builtin-error", ext.ZapError(err)...)
@@ -171,7 +156,6 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		}
 		if sensorResponse.JobURL != "" {
 			// Sensor activity has returned JobURL. Disable ReturnJobURL early-return flag for the next sensor calls, if any.
-			sensorRequest.ReturnJobURL = false
 			if printJobURL {
 				t.Print(t, "ray | create cluster: url="+sensorResponse.JobURL)
 				printJobURL = false
@@ -242,18 +226,15 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 
 	rayJob = *createRes.RayJob
 
-	var sensorRes ray.SensorRayJobReadinessResponse
+	var sensorRes ray.SensorRayJobResponse
 	srp := CadenceDefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
-	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayJob, ray.SensorRayJobRequest{
-		Request: v2pb.GetRayJobRequest{
-			Name:       createRes.RayJob.Name,
-			Namespace:  createRes.RayJob.Namespace,
-			GetOptions: nil,
-		},
-		ReturnJobURL: false,
+	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayJob, v2pb.GetRayJobRequest{
+		Name:       createRes.RayJob.Name,
+		Namespace:  createRes.RayJob.Namespace,
+		GetOptions: &metav1.GetOptions{},
 	}).Get(sensorCtx, &sensorRes); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err

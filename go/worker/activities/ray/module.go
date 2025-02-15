@@ -1,81 +1,40 @@
 package ray
 
 import (
-	"context"
-	"fmt"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/cadence/worker"
 	"go.uber.org/fx"
-	"k8s.io/apimachinery/pkg/runtime"
-	kubescheme "k8s.io/client-go/kubernetes/scheme"
-	"os"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
+const serverName = "ma-apiserver" // The name of the API server providing YARPC services for Ray operations.
+
+// Module defines the dependency injection options for the fx framework.
+// It provides YARPC clients for the RayClusterService and RayJobService,
+// and registers the necessary activities with the worker.
 var Module = fx.Options(
-	fx.Provide(scheme),
-	fx.Provide(register),
-	fx.Invoke(start),
+	fx.Provide(v2pb.NewFxRayClusterServiceYARPCClient(serverName)), // Provides the RayClusterService YARPC client.
+	fx.Provide(v2pb.NewFxRayJobServiceYARPCClient(serverName)),     // Provides the RayJobService YARPC client.
+	fx.Invoke(register), // Invokes the register function to register activities with the workers.
 )
 
-func scheme() (*runtime.Scheme, error) {
-	scheme := runtime.NewScheme()
-	if err := kubescheme.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-	if err := v2pb.AddToScheme(scheme); err != nil {
-		return nil, err
-	}
-	return scheme, nil
-}
-
-func register(workers []worker.Worker, scheme *runtime.Scheme) manager.Manager {
-
-	restConf, err := ctrl.GetConfig()
-	if err != nil {
-		return nil
-	}
-
-	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
-		Scheme:                 scheme,
-		HealthProbeBindAddress: "localhost:8081",
-		LeaderElection:         false,
-		LeaderElectionID:       "decaf1259.michelangelo.uber.com",
-	})
-
-	if err != nil {
-		return nil
-	}
-	a := &activities{
-		k8sClient: mgr.GetClient(),
-	}
-	for _, w := range workers {
-		w.RegisterActivity(a)
-	}
-	return mgr
-}
-
-func start(lc fx.Lifecycle, mgr manager.Manager) error {
-	lc.Append(fx.Hook{
-		OnStart: func(ctx context.Context) error {
-			go _start(mgr)
-			return nil
-		},
-	})
-	return nil
-}
-
-// _start starts the Kubernetes controller manager and handles runtime errors.
-// If the manager fails to start, it logs the error and exits the application.
+// register registers the activities for Ray cluster and job operations to the provided workers.
 //
 // Params:
-//
-//	mgr (manager.Manager): Kubernetes controller manager to be started.
-func _start(mgr manager.Manager) {
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		// TODO: handle error properly. Exit app? Propagate to the parent thread?
-		fmt.Printf("ERR: Controller Manager execution failed: %v", err)
-		os.Exit(1)
+// - workers ([]worker.Worker): A list of Cadence workers where activities will be registered.
+// - rayJob (v2pb.RayJobServiceYARPCClient): YARPC client for Ray job operations.
+// - rayCluster (v2pb.RayClusterServiceYARPCClient): YARPC client for Ray cluster operations.
+func register(workers []worker.Worker,
+	rayJob v2pb.RayJobServiceYARPCClient,
+	rayCluster v2pb.RayClusterServiceYARPCClient) {
+
+	// Initialize the activities struct with the YARPC clients for Ray services.
+	a := &activities{
+		rayClusterService: rayCluster,
+		rayJobService:     rayJob,
+	}
+
+	// Register the activities with each worker.
+	for _, w := range workers {
+		w.RegisterActivity(a)
 	}
 }
