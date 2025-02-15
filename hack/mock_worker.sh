@@ -11,9 +11,9 @@ echo "Setting up environment and installing gomock and mockgen..."
 echo "Installing gomock library..."
 go get github.com/golang/mock/gomock || { echo "Failed to install gomock"; exit 1; }
 
-# Install mockgen in ../bin/ directory
-echo "Installing mockgen tool to ../bin/..."
-GO_BIN_DIR="../bin"
+# Install mockgen in ../build/ directory
+echo "Installing mockgen tool to ../build/..."
+GO_BIN_DIR="../build"
 go install github.com/golang/mock/mockgen@latest || { echo "Failed to install mockgen"; exit 1; }
 
 # Verify installation
