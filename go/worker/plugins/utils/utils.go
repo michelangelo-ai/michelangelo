@@ -1,12 +1,13 @@
 package utils
 
 import (
+	"time"
+
 	"github.com/cadence-workflow/starlark-worker/star"
 	jsoniter "github.com/json-iterator/go"
 	"go.starlark.net/starlark"
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/yarpc/yarpcerrors"
-	"time"
 )
 
 const CadenceLongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
