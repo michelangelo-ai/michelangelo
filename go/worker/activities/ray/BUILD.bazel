@@ -25,7 +25,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["ray_activities_test.go"],
+    srcs = [
+        "module_test.go",
+        "ray_activities_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//proto/api/v2:go_michelangelo_v2_gomock_library",
