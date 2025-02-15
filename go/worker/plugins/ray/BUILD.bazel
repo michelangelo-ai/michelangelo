@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -23,5 +23,15 @@ go_library(
         "@org_uber_go_cadence//workflow:go_default_library",
         "@org_uber_go_yarpc//yarpcerrors:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["starlark_module_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//suite:go_default_library",
     ],
 )

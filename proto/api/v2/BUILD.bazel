@@ -1,5 +1,6 @@
 # gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto
 # gazelle:go_grpc_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_yarpc,//bazel/rules/proto:go_kubeyarpc,//bazel/rules/proto:go_validation
+# gazelle:exclude michelangelo_v2mock.go
 load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
