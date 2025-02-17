@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "RESOURCE_AFFINITY_LABEL_CLOUD_ZONE", "RESOURCE_AFFINITY_LABEL_SUPPORT_GPU", "RESOURCE_AFFINITY_LABEL_ZONE", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_keys", "get_env_label", "get_project_resource_annotation", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "RESOURCE_AFFINITY_LABEL_CLOUD_ZONE", "RESOURCE_AFFINITY_LABEL_SUPPORT_GPU", "RESOURCE_AFFINITY_LABEL_ZONE", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_cache_keys", "get_env_label", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -26,8 +26,8 @@ RAY_DEFAULT_WORKER_INSTANCES = os.environ.get("RAY_DEFAULT_WORKER_INSTANCES", "1
 RAY_DEFAULT_GPU_SKU = os.environ.get("RAY_DEFAULT_GPU_SKU", "")
 RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 
-USER_ID = os.environ["USER_ID", "default_user"]
-IMAGE_PULL_POLICY = os.environ["IMAGE_PULL_POLICY", "Never"]
+USER_ID = os.environ.get("USER_ID", "default_user")
+IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
 def task(
         task_path,

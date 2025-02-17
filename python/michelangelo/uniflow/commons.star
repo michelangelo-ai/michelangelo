@@ -1,4 +1,4 @@
-load("@plugin", "cad", "hashlib", "json", "os", "progress", "s3", "uuid")
+load("@plugin", "cad", "hashlib", "json", "os", "progress", "uuid")
 
 ENV = {
     "UF_HACK_MA_33362": "1",
@@ -53,17 +53,18 @@ def get_result_url():
     result_url = "{}/{}.json".format(metadata_storage_url, uuid.uuid4().hex)
     return result_url
 
-def s3_read_json(path):
-    # the format of the path is <bucket>/<file_path>
-    parts = path.split("/")
-    if len(parts) != 2:
-        fail("400: unsupported path:", path)
-    b = s3.read(parts[0], parts[1])
-    return b
+#
+#def s3_read_json(path):
+#    # the format of the path is <bucket>/<file_path>
+#    parts = path.split("/")
+#    if len(parts) != 2:
+#        fail("400: unsupported path:", path)
+#    b = s3.read(parts[0], parts[1])
+#    return b
 
 def io_read_json(url):
     readers = {
-        "s3://": s3_read_json,
+        #        "s3://": s3_read_json,
     }
     for prefix, reader in readers.items():
         if url.startswith(prefix):
