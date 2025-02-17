@@ -26,6 +26,9 @@ RAY_DEFAULT_WORKER_INSTANCES = os.environ.get("RAY_DEFAULT_WORKER_INSTANCES", "1
 RAY_DEFAULT_GPU_SKU = os.environ.get("RAY_DEFAULT_GPU_SKU", "")
 RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 
+USER_ID = os.environ["USER_ID", "default_user"]
+IMAGE_PULL_POLICY = os.environ["IMAGE_PULL_POLICY", "Never"]
+
 def task(
         task_path,
         alias = None,
@@ -46,37 +49,14 @@ def task(
         zone = RAY_DEFAULT_ZONE,
         breakpoint = False):
     def callable(*args, **kwargs):
-        os.environ["UF_TASK_IMAGE"] = "docker.io/library/bert-cola-nv:latest"
-        os.environ["UF_STORAGE_URL"] = "s3://default"
-        os.environ["UF_PLUGIN_RAY_USE_FSSPEC"] = "0"
-
-        # it's required by s3
-        #        os.environ["AWS_ACCESS_KEY_ID"] = "1inaX9pX7vIeaJf3"
-        #        os.environ["AWS_SECRET_ACCESS_KEY"] = "2OuOk0lGBLM1W9lrRzEBPiOoxZZBq6o0"
-        #        os.environ["AWS_ENDPOINT_URL"] = "http://10.244.0.4:9001"
         task_name = get_task_name(task_path, alias)
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version)
-        namespace = "default"
+        namespace = os.environ["MA_NAMESPACE"]
+        if not namespace:
+            namespace = "default"
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        #        if cache_enabled:  # Check if the result is cached
-        #            cached_output = get_cached_output(namespace, cache_keys)
-        #            if cached_output != None:
-        #                cached_result_json_url = cached_output.get("spec", {}).get("storageUri", "")
-        #                if cached_result_json_url != "":
-        #                    end_time_seconds = time.time()
-        #                    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-        #                    report_progress(
-        #                        task_path = task_path,
-        #                        task_name = task_name,
-        #                        task_log = "",
-        #                        task_message = "Ray Task Skipped with Cache Hit",
-        #                        task_state = TASK_STATE_SKIPPED,
-        #                        start_time = start_time_formated_str,
-        #                        end_time = end_time_formated_str,
-        #                        output = cached_output.get("metadata", {}).get("name", ""),
-        #                    )
-        #                    return io_read_json(cached_result_json_url)
+
+        # TODO load cached output here
 
         # Apply resource overrides
         _head_cpu = os.environ.get("RAY_OVERRIDE_HEAD_CPU." + task_path, head_cpu)
@@ -104,11 +84,6 @@ def task(
         cluster_namespace = "default"
         cluster_image = get_task_image(task_name)
         print("ray | create cluster:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
-        if _worker_gpu + _head_gpu > 0:
-            # By default, we will launch ray gpu jobs to phx8 with A100 for phx4 GPU decommission
-            if _zone == "" and _gpu_sku == "":
-                _zone = "phx8"
-                _gpu_sku = "A100"
 
         cluster = ray_cluster_spec(
             namespace = cluster_namespace,
@@ -200,7 +175,6 @@ def task(
         if breakpoint:
             print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
-            # TODO: andrii: use HITL instead of sleep.
             time.sleep(seconds = 60 * 60 * 24)
             err_message = "internal: breakpoint timeout"
             print("ray | error:", err_message)
@@ -220,15 +194,6 @@ def task(
         if job["status"]["state"] != "RAY_JOB_STATE_SUCCEEDED":
             fail("internal:", "message:bad job status:", job["status"]["state"], job)
 
-        created_cached_output = create_cached_output(
-            namespace = cluster_namespace,
-            cache_keys = cache_keys,
-            zone = "",  #TODO: baoquan: add zone info to cache
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
-        cached_output_name = created_cached_output
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
         report_progress(
@@ -238,7 +203,6 @@ def task(
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
-            output = cached_output_name,
         )
         return io_read_json(result_url)
 
@@ -305,62 +269,8 @@ def ray_cluster_spec(
         {"name": k, "value": v}
         for k, v in env.items()
     ]
-    temp_dir = "/mnt/mesos/sandbox"
-    export_hadoop_classpath = "export CLASSPATH=$(hadoop classpath --glob)"
 
-    head_cmd = [
-        # export_hadoop_classpath,
-        # "python3 -m uber.ai.michelangelo.tools.hadoop.setup_hadoop",
-        # "(python3 -m uber.ai.michelangelo.tools.hadoop.token_renewer &)",
-    ]
-
-    head_ray_start = [
-        # "ray start --head",
-        # "--temp-dir={}".format(temp_dir),
-        # "--object-manager-port=$OBJECT_MANAGER_PORT",
-        # "--port=$RAY_PORT",
-        # "--ray-client-server-port=$RAY_CLIENT_PORT",
-        # "--dashboard-port=$DASHBOARD_PORT",
-        # "--metrics-export-port=$METRICS_EXPORT_PORT",
-        # "--dashboard-host='0.0.0.0'",
-        # "--dashboard-agent-listen-port=$DASHBOARD_AGENT_LISTEN_PORT",
-        # "--resources='{\"head\":1}'",
-    ]
-
-    head_cmd += [
-        " ".join(head_ray_start),
-        "sleep infinity",
-    ]
-    head_cmd = " && ".join(head_cmd)
-
-    # Cluster Management CLI: https://docs.ray.io/en/releases-2.9.2/cluster/cli.html#ray-start
-    worker_ray_start = [
-        # "ray start",
-        # "--temp-dir={}".format(temp_dir),
-        # "--object-manager-port=$OBJECT_MANAGER_PORT",
-        # "--metrics-export-port=$METRICS_EXPORT_PORT",
-        # "--address=$RAY_IP",
-        # "--worker-port-list={}".format(",".join(["$W_" + str(i) for i in range(worker_resource["cpu"] * 5)])),
-        # "--num-cpus={}".format(worker_resource["cpu"]),
-        # "--num-gpus={}".format(worker_resource.get("gpu", 0)),
-        # "--block",
-    ]
-
-    if worker_object_store_memory != None:
-        worker_ray_start.append("--object-store-memory={}".format(worker_object_store_memory))
-
-    worker_cmd = " && ".join([
-        export_hadoop_classpath,
-        "export $(cat /data/head_info.env | tr -d ' ' | xargs -L 1)",
-        "python3 -m uber.ai.michelangelo.tools.hadoop.setup_hadoop",
-        "echo ray start",
-        " ".join(worker_ray_start),
-        # Uber Ray Operator injects extra args, however, we don't use them. Source: https://code.uberinternal.com/D12719989
-        # Add echo command in the end to consume operator-injected args without breaking the whole command.
-        "echo extra: ",
-    ])
     support_gpu = head_resource.get("gpu", 0) + worker_resource.get("gpu", 0) * worker_instances > 0
-    # match_labels = get_ray_job_match_labels(support_gpu, zone)
 
     annotations = {}
     if debug_enabled:
@@ -374,7 +284,7 @@ def ray_cluster_spec(
             "annotations": annotations,
         },
         "spec": {
-            "user": {"name": "weric"},
+            "user": {"name": USER_ID},
             "rayVersion": "2.3.1",  # Keeping original version
             "head": {
                 "serviceType": "ClusterIP",
@@ -391,7 +301,7 @@ def ray_cluster_spec(
                                     "requests": head_resource,
                                 },
                                 "image": image,  # Keeping original variable
-                                "imagePullPolicy": "Never",
+                                "imagePullPolicy": IMAGE_PULL_POLICY,
                                 "env": env,  # Keeping original variable
                                 "envFrom": [
                                     {
@@ -433,7 +343,7 @@ def ray_cluster_spec(
                                         "requests": worker_resource,
                                     },
                                     "image": image,  # Keeping original variable
-                                    "imagePullPolicy": "Never",
+                                    "imagePullPolicy": IMAGE_PULL_POLICY,
                                     "env": env,
                                     "envFrom": [
                                         {
@@ -460,25 +370,3 @@ def ray_cluster_spec(
             "rayConf": {},
         },
     }
-
-# Get the match labels for the ray job.
-# Args:
-#   support_gpu: whether the ray job requires gpu
-#   zone: the zone of the ray job
-#
-# Returns:
-#   match_labels: the match labels for the ray job
-def get_ray_job_match_labels(support_gpu, zone):
-    env_label = get_env_label()
-    match_labels = {
-        RESOURCE_AFFINITY_LABEL_SUPPORT_GPU: str(support_gpu).lower(),
-        env_label: "true",
-    }
-
-    if zone:
-        match_labels[RESOURCE_AFFINITY_LABEL_ZONE] = zone
-
-    project_annotations = get_project_resource_annotation(os.environ["MA_NAMESPACE"], os.environ["MA_NAMESPACE"])
-    cloud_zone = project_annotations.get(RESOURCE_AFFINITY_LABEL_CLOUD_ZONE, "")
-
-    return match_labels

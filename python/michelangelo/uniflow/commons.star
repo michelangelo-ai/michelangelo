@@ -59,8 +59,6 @@ def s3_read_json(path):
     if len(parts) != 2:
         fail("400: unsupported path:", path)
     b = s3.read(parts[0], parts[1])
-    print("=====star=========")
-    print(b)
     return b
 
 def io_read_json(url):
@@ -97,23 +95,6 @@ def get_task_name(task_path, alias):
     if alias != None:
         return alias
     return task_path.split(".")[-1]
-
-# Get the resource annotation for the project.
-# Parameters:
-#    project_namespace: str, the namespace of the project
-#    project_name: str, the name of the project
-# Returns:
-#    resource_annotations: dict[str, str] the resource affinity for the project
-def get_project_resource_annotation(project_namespace, project_name):
-    response = cad.execute_activity(
-        "code.uber.internal/uberai/michelangelo/starlark/activity/uapi.(*activities).GetProject",
-        {"name": project_name, "namespace": project_namespace},
-    )
-    if type(response) != "dict" or response.get("project") == None:
-        fail("failed to get project:", project_name)
-
-    project = response["project"]
-    return project.get("metadata", {}).get("annotations", {})
 
 def resource_dict(cpu, memory):
     res = {
@@ -195,25 +176,6 @@ def get_input_hash(args, kwargs):
     input_hash = hashlib.blake2b_hex(args + kwargs, digest_size = 16)
     return input_hash
 
-def get_storage_type(result_json_url):
-    """
-    Get the storage type for the task.
-
-    Args:
-        result_json_url: the dir url of the result.json
-    Returns:
-        storage_type: the storage type for CachedOutput
-    """
-    if result_json_url.startswith("file://"):
-        storage_type = "STORAGE_TYPE_LOCAL"
-    elif result_json_url.startswith("hdfs://"):
-        storage_type = "STORAGE_TYPE_HDFS"
-    elif result_json_url.startswith("cfs://"):
-        storage_type = "STORAGE_TYPE_CFS"
-    else:
-        storage_type = "STORAGE_TYPE_INVALID"
-    return storage_type
-
 def get_label_value(value):
     """
     Get the label value for the task. The label will be saved as CachedOutput label.
@@ -229,41 +191,3 @@ def get_label_value(value):
         value_hash = hashlib.blake2b_hex(value, digest_size = CACHE_KEY_RANDOM_PREFIX_DIGEST_SIZE)
         value = value_hash + "-" + value[-(LABEL_VALUE_SIZE_LIMIT - CACHE_KEY_RANDOM_PREFIX_DIGEST_SIZE * 2 - 1):]
     return value
-
-def create_cached_output(namespace, task_name, cache_keys, zone, ttl_in_days, result_json_url):
-    """
-    Build the cache output for the task.
-
-    Args:
-        namespace: the namespace of the task
-        task_name: the name of the task
-        cache_keys: a dictionary of the cache keys
-        zone: the zone of the cache
-        ttl_in_days: the ttl of the cache
-        result_json_url: the dir url of the result.json
-    Returns:
-        cached_output: the created cached output
-    """
-    new_cachedoutput = {
-        "metadata": {
-            "namespace": namespace,
-            "generateName": "uf-vars-",
-            "labels": cache_keys,
-            "annotations": {
-                "michelangelo/Immutable": "true",  # cachedoutputs are created as immutable
-            },
-        },
-        "spec": {
-            "storage_uri": result_json_url,
-            "type": "CACHED_OUTPUT_TYPE_VARIABLE",
-            "zone": zone,
-            "ttl_in_days": ttl_in_days,
-            "storage_type": get_storage_type(result_json_url),
-            # TODO: add source_pipeline_run resource identifier
-            "source_pipeline_run_step": task_name,
-            "variable_spec": {
-                "type": "VARIABLE_TYPE_CUSTOM",
-            },
-        },
-    }
-    return result_json_url
