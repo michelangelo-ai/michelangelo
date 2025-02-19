@@ -8,4 +8,4 @@ data:
   MA_FILE_SYSTEM_S3_SCHEME: http
   AWS_ACCESS_KEY_ID: minioadmin
   AWS_SECRET_ACCESS_KEY: minioadmin
-  AWS_ENDPOINT_URL: localhost:9090
+  AWS_ENDPOINT_URL: localhost:9091
