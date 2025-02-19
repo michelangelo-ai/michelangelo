@@ -2,12 +2,13 @@ package ray
 
 import (
 	"context"
+	"testing"
+
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/mock"
 	"go.uber.org/cadence"
 	"go.uber.org/yarpc/yarpcerrors"
-	"testing"
 
 	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/stretchr/testify/suite"
