@@ -12,7 +12,7 @@ spec:
         - /bin/bash
         - -c
       args:
-        - minio server /data --console-address :9090
+        - minio server /data --console-address :9090 --address :9091
       volumeMounts:
         - mountPath: /data
           name: data-volume
