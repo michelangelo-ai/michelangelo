@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -9,9 +9,29 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/ray",
     visibility = ["//visibility:public"],
     deps = [
-        "@org_uber_go_cadence//activity:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_client_go//util/retry:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/log:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
         "@org_uber_go_cadence//worker:go_default_library",
         "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["ray_activities_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "//proto/api/v2:go_michelangelo_v2_gomock_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )
