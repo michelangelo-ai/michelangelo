@@ -290,7 +290,7 @@ type SensorRayJobResponse struct {
 }
 
 // SensorRayJob is a sensor-like activity that is used to monitor the status of a RayJob.
-func (r *activities) SensorRayJob(ctx context.Context, request v2pb.GetRayJobRequest) (*SensorRayJobResponse, error) {
+func (r *activities) SensorRayJob(ctx context.Context, request v2pb.GetRayJobRequest) (*SensorRayJobResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 

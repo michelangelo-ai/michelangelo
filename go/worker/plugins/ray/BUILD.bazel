@@ -32,6 +32,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
+        "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_stretchr_testify//suite:go_default_library",
     ],
 )

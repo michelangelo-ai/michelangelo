@@ -95,3 +95,59 @@ func (r *Test) TestCreateClusterFailed() {
 	require.Error(err)
 	require.Nil(res)
 }
+
+func (r *Test) TestCreateRayJobSuccessfully() {
+	env := r.env.GetTestWorkflowEnvironment()
+	env.RegisterActivity(ray.Activities.CreateRayJob)
+	env.RegisterActivity(ray.Activities.SensorRayJob)
+
+	rayJob := &v2pb.RayJob{}
+	env.OnActivity(ray.Activities.CreateRayJob, mock.Anything, mock.Anything).Once().
+		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, *cadence.CustomError) {
+			return &v2pb.CreateRayJobResponse{
+				RayJob: rayJob,
+			}, nil
+		})
+
+	env.OnActivity(ray.Activities.SensorRayJob, mock.Anything, mock.Anything).Once().
+		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, *cadence.CustomError) {
+			return &ray.SensorRayJobResponse{
+				RayJob:   rayJob,
+				JobURL:   "",
+				Terminal: false,
+			}, nil
+		})
+
+	r.env.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
+	require := r.Require()
+	var res any
+	err := r.env.GetResult(&res)
+	require.NoError(err)
+	require.NotNil(res.(map[string]interface{}))
+}
+
+func (r *Test) TestCreateRayJobFailed() {
+	env := r.env.GetTestWorkflowEnvironment()
+	env.RegisterActivity(ray.Activities.CreateRayJob)
+	env.RegisterActivity(ray.Activities.SensorRayJob)
+
+	rayJob := &v2pb.RayJob{}
+	env.OnActivity(ray.Activities.CreateRayJob, mock.Anything, mock.Anything).Once().
+		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, *cadence.CustomError) {
+			return &v2pb.CreateRayJobResponse{
+				RayJob: rayJob,
+			}, nil
+		})
+
+	env.OnActivity(ray.Activities.SensorRayJob, mock.Anything, mock.Anything).Once().
+		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, *cadence.CustomError) {
+			return nil, cadence.NewCustomError(yarpcerrors.CodeInternal.String(), "failed")
+		})
+
+	r.env.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
+	require := r.Require()
+	var res any
+	err := r.env.GetResult(&res)
+	require.Error(err)
+	require.Nil(res)
+}

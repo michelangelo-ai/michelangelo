@@ -36,7 +36,7 @@ func Test_CreateRayJob(t *testing.T) {
 	mockRayJob.EXPECT().CreateRayJob(ctx, request).Return(&v2pb.CreateRayJobResponse{
 		RayJob: rayJob,
 	}, nil)
-	resp, err := act.CreateRayJob(ctx, request)
+	resp, err := act.CreateRayJob(ctx, *request)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, rayJob, resp.RayJob)
@@ -65,7 +65,7 @@ func Test_CreateRayCluster(t *testing.T) {
 	mockRayCluster.EXPECT().CreateRayCluster(ctx, request).Return(&v2pb.CreateRayClusterResponse{
 		RayCluster: rayCluster,
 	}, nil)
-	resp, err := act.CreateRayCluster(ctx, request)
+	resp, err := act.CreateRayCluster(ctx, *request)
 	assert.Nil(t, err)
 	assert.NotNil(t, resp)
 	assert.Equal(t, rayCluster, resp.RayCluster)
@@ -98,7 +98,7 @@ func Test_TerminateCluster(t *testing.T) {
 	mockRayCluster.EXPECT().UpdateRayCluster(ctx, request).Return(&v2pb.UpdateRayClusterResponse{
 		RayCluster: rayCluster,
 	}, nil)
-	resp, err := act.TerminateCluster(ctx, &TerminateClusterRequest{
+	resp, err := act.TerminateCluster(ctx, TerminateClusterRequest{
 		Name:      rayCluster.Name,
 		Namespace: rayCluster.Namespace,
 		Type:      v2pb.TERMINATION_TYPE_FAILED.String(),
@@ -116,7 +116,7 @@ func Test_TerminateCluster(t *testing.T) {
 		RayCluster: rayCluster,
 	}, nil)
 
-	resp, err = act.TerminateCluster(ctx, &TerminateClusterRequest{
+	resp, err = act.TerminateCluster(ctx, TerminateClusterRequest{
 		Name:      rayCluster.Name,
 		Namespace: rayCluster.Namespace,
 		Type:      v2pb.TERMINATION_TYPE_SUCCEEDED.String(),

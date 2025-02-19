@@ -84,3 +84,6 @@ def test_create_cluster():
         },
     }
     return ray.create_cluster(spec)
+
+def test_create_job():
+    return ray.create_job("python3 -m michelangelo.uniflow.core.run_task --task 'examples.bert_cola.data.load_data' --args '[\"glue\",\"cola\"]' --kwargs '{\"tokenizer_max_length\":128}' --result-url 's3://default/d47efe2f682f4965bcf119f9d9a06eb1.json'", "default", "test-ray-job")
