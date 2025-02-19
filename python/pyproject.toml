@@ -25,7 +25,6 @@ transformers = "4.36.2"
 typing-extensions = "^4.12.2"
 protobuf = "^5.29.3"
 grpcio = "^1.70.0"
-starlark-go = "^1.0.0"
 
 
 [tool.poetry.group.dev.dependencies]

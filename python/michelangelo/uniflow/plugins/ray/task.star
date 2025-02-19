@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_cache_keys", "get_env_label", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
