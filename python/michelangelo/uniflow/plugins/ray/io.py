@@ -39,4 +39,16 @@ def _fs_path(url: str) -> tuple[Any, str]:
 
         return fsspec.core.url_to_fs(url)
 
-    return None, url
+    return resolve_fs(url.split("://")[0]), url
+
+
+def resolve_fs(protocol):
+    if protocol == "s3":
+        import pyarrow.fs
+        # Configure PyArrow's S3FileSystem for MinIO
+        return pyarrow.fs.S3FileSystem(
+            access_key=os.getenv("AWS_ACCESS_KEY_ID"),
+            secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+            endpoint_override=os.getenv("AWS_ENDPOINT_URL"),
+        )
+    return None
