@@ -52,13 +52,10 @@ func (a *activities) Read(ctx context.Context, req ReadRequest) (any, *cadence.C
 		logger.Error("activity-error", ext.ZapError(err)...)
 	}
 
-	println("==================got json data============")
-	fmt.Printf("+%s\n", data)
 	var res any
 	err = jsoniter.Unmarshal(data, &res)
 	if err != nil {
 		return nil, cadence.NewCustomError(yarpcerrors.FromError(err).Code().String(), err.Error())
 	}
-	fmt.Printf("+%v\n", res)
 	return res, nil
 }
