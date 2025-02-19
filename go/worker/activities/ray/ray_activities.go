@@ -51,11 +51,11 @@ type activities struct {
 // Returns:
 // - *v2pb.CreateRayJobResponse: Response containing the created Ray job details.
 // - *cadence.CustomError: Error information if the operation fails.
-func (r *activities) CreateRayJob(ctx context.Context, request *v2pb.CreateRayJobRequest) (
+func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJobRequest) (
 	*v2pb.CreateRayJobResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
-	createRayJobResponse, err := r.rayJobService.CreateRayJob(ctx, request)
+	createRayJobResponse, err := r.rayJobService.CreateRayJob(ctx, &request)
 	if err != nil || createRayJobResponse == nil || createRayJobResponse.RayJob == nil ||
 		createRayJobResponse.RayJob.Name == "" {
 		logger.Error(err, "activity-error")
@@ -77,11 +77,11 @@ func (r *activities) CreateRayJob(ctx context.Context, request *v2pb.CreateRayJo
 // Returns:
 // - *v2pb.CreateRayClusterResponse: Response containing the created cluster details.
 // - *cadence.CustomError: Error information if the operation fails.
-func (r *activities) CreateRayCluster(ctx context.Context, request *v2pb.CreateRayClusterRequest) (
+func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRayClusterRequest) (
 	*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
-	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, request)
+	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
 	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {
 		return nil, cadence.NewCustomError(yarpcerrors.CodeUnavailable.String(), err.Error())
@@ -172,7 +172,7 @@ type SensorRayJobReadinessResponse struct {
 // Returns:
 // - *SensorRayClusterReadinessResponse: Response indicating the readiness of the cluster.
 // - error: Error information if the operation fails.
-func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterReadinessResponse, error) {
+func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterReadinessResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	getRayClusterRequest := &v2pb.GetRayClusterRequest{
@@ -218,7 +218,7 @@ func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb
 // Returns:
 // - *v2pb.UpdateRayClusterResponse: Response containing the updated cluster details.
 // - *cadence.CustomError: Error information if the operation fails.
-func (r *activities) TerminateCluster(ctx context.Context, request *TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, *cadence.CustomError) {
+func (r *activities) TerminateCluster(ctx context.Context, request TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 

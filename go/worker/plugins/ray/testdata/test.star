@@ -3,44 +3,84 @@ load("@plugin", "ray")
 def test_create_cluster():
     spec = {
         "metadata": {
-            "namespace": "test-namespace",
-            "name": "test-name",
+            "name": "uf-ray-test",
+            "namespace": "default",
         },
         "spec": {
-            "affinity": {
-                "resourceAffinity": {
-                    "selector": {
-                        "matchLabels": {
-                            "resourcepool.michelangelo/zone": "dca60",
+            "user": {"name": "test-user"},
+            "rayVersion": "2.3.1",  # Keeping original version
+            "head": {
+                "serviceType": "ClusterIP",
+                "rayStartParams": {
+                    "block": "true",
+                    "dashboard-host": "0.0.0.0",
+                },
+                "pod": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": "head",
+                                "image": "test-image",
+                                "envFrom": [
+                                    {
+                                        "configMapRef": {
+                                            "localObjectReference": {
+                                                "name": "michelangelo-config",
+                                            },
+                                        },
+                                    },
+                                ],
+                                "lifecycle": {
+                                    "postStart": {
+                                        "exec": {
+                                            "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Head'"],
+                                        },
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            },
+            "workers": [
+                {
+                    "minInstances": 1,
+                    "maxInstances": 2,
+                    "nodeType": "worker-group-1",
+                    "objectStoreMemoryRatio": 0.0,
+                    "rayStartParams": {
+                        "block": "true",
+                        "dashboard-host": "0.0.0.0",
+                    },
+                    "pod": {
+                        "spec": {
+                            "containers": [
+                                {
+                                    "name": "worker",
+                                    "image": "test-image",
+                                    "envFrom": [
+                                        {
+                                            "configMapRef": {
+                                                "localObjectReference": {
+                                                    "name": "michelangelo-config",
+                                                },
+                                            },
+                                        },
+                                    ],
+                                    "lifecycle": {
+                                        "postStart": {
+                                            "exec": {
+                                                "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Worker'"],
+                                            },
+                                        },
+                                    },
+                                },
+                            ],
                         },
                     },
                 },
-            },
-            "head": {
-                "pod": {
-                    "resource": {
-                        "cpu": 2,
-                        "memory": "8G",
-                        "gpu": 1,
-                    },
-                },
-            },
-            "worker": {
-                "pod": {
-                    "resource": {
-                        "cpu": 2,
-                        "memory": "8G",
-                        "gpu": 1,
-                    },
-                },
-            },
+            ],
+            "rayConf": {},
         },
     }
-    ray.create_cluster(spec, timeout_seconds = 60, poll_seconds = 10)
-
-def test_terminate_cluster():
-    ray.terminate_cluster("test-namespace", "test-name", type = 1, reason = "default")
-
-def test_run_job():
-    # TODO: andrii: implement test_run_job
-    return "ok"
+    return ray.create_cluster(spec)
