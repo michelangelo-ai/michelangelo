@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Michelangelo is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
-exclude = ["michelangelo"]    # TODO: temporary exclude all codes in package building
+exclude = ["michelangelo"]   # TODO: temporary exclude all codes in package building
 packages = [
     { include = "michelangelo" },
 ]
@@ -15,12 +15,12 @@ python = "^3.9.0"
 fsspec = "^2024.10.0"
 pandas = "^2.2.3"
 pyarrow = "^19.0.0"
-pydantic = "^2.10.6"
-ray = "^2.41.0"
+pydantic = "^2.7.1"
+ray = "^2.35.0"
 typing-extensions = "^4.12.2"
 torch = "^2.6.0"
 torchvision = "^0.21.0"
-protobuf = "^5.29.3"
+protobuf = "^5.27.2"
 grpcio = "^1.70.0"
 
 
