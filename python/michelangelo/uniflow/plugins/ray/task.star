@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "RESOURCE_AFFINITY_LABEL_CLOUD_ZONE", "RESOURCE_AFFINITY_LABEL_SUPPORT_GPU", "RESOURCE_AFFINITY_LABEL_ZONE", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_cache_keys", "get_env_label", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_cache_keys", "get_env_label", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -32,21 +32,12 @@ IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 def task(
         task_path,
         alias = None,
-        cache_version = None,
         cache_enabled = False,
         head_cpu = RAY_DEFAULT_HEAD_CPU,
         head_memory = RAY_DEFAULT_HEAD_MEMORY,
-        head_disk = RAY_DEFAULT_HEAD_DISK,
-        head_gpu = RAY_DEFAULT_HEAD_GPU,
-        head_object_store_memory = None,
         worker_cpu = RAY_DEFAULT_WORKER_CPU,
         worker_memory = RAY_DEFAULT_WORKER_MEMORY,
-        worker_disk = RAY_DEFAULT_WORKER_DISK,
-        worker_gpu = RAY_DEFAULT_WORKER_GPU,
-        worker_object_store_memory = None,
         worker_instances = RAY_DEFAULT_WORKER_INSTANCES,
-        gpu_sku = RAY_DEFAULT_GPU_SKU,
-        zone = RAY_DEFAULT_ZONE,
         breakpoint = False):
     def callable(*args, **kwargs):
         task_name = get_task_name(task_path, alias)
@@ -55,8 +46,6 @@ def task(
             namespace = "default"
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-
-        # TODO load cached output here
 
         # Apply resource overrides
         _head_cpu = os.environ.get("RAY_OVERRIDE_HEAD_CPU." + task_path, head_cpu)
@@ -97,10 +86,7 @@ def task(
                 memory = _worker_memory,
             ),
             worker_instances = _worker_instances,
-            zone = _zone,
             debug_enabled = breakpoint,
-            head_object_store_memory = head_object_store_memory,
-            worker_object_store_memory = worker_object_store_memory,
         )
         cluster = ray.create_cluster(cluster)
         print(cluster)
@@ -210,21 +196,12 @@ def task(
         return task(
             task_path = task_path,
             alias = alias,
-            cache_version = cache_version,
             cache_enabled = cache_enabled,
             head_cpu = head_cpu,
             head_memory = head_memory,
-            head_disk = head_disk,
-            head_gpu = head_gpu,
-            head_object_store_memory = head_object_store_memory,
             worker_cpu = worker_cpu,
             worker_memory = worker_memory,
-            worker_disk = worker_disk,
-            worker_gpu = worker_gpu,
-            worker_object_store_memory = worker_object_store_memory,
             worker_instances = worker_instances,
-            gpu_sku = gpu_sku,
-            zone = zone,
             breakpoint = breakpoint,
         )
 
@@ -236,32 +213,47 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
     args = json.dumps(args) if args else "[]"
     kwargs = json.dumps(kwargs) if kwargs else "{}"
 
-    # TODO: andrii: set --overrides
     return "python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
 
-# Constructs a Unified API resource for a Ray Cluster. Refer to the RayJob CRD: https://sg.uberinternal.com/code.uber.internal/uber-code/go-code/-/blob/idl/code.uber.internal/uberai/michelangelo/api/v2beta1/ray_job.proto
+# Constructs a Unified API resource for provisioning a Ray Cluster.
+# This function generates a RayJob Custom Resource Definition (CRD) that defines the specifications for a Ray cluster.
+# Refer to the RayJob CRD: https://sg.uberinternal.com/code.uber.internal/uber-code/go-code/-/blob/idl/code.uber.internal/uberai/michelangelo/api/v2beta1/ray_job.proto
 #
 # Parameters:
-#     namespace: (string) The Unified API namespace, also known as the Michelangelo Project ID. Ex: ma-dev-test
-#     image: (string) The Docker image that includes Ray, the application code, and its dependencies. Ex: 127.0.0.1:5055/uber-usi/uber-one-michelangelo-sandbox:bkt1-produ-1719018451-45448
-#     head_resource: (dict) Resource configuration for the head node. Refer to the resource_dict function in commons.star.
-#     worker_resource: (dict) Resource configuration for the worker nodes. Refer to the resource_dict function in commons.star.
-#     worker_instances: (int) The number of worker instances. Must be a non-negative integer.
-#     zone: (string, optional) The zone where the cluster will be deployed.
-#     debug_enabled: (bool, optional) Defaults to False. If True, the Ray cluster will run additional debugging tools, such as Jupyter Lab, SYS_PTRACE capability, etc.
+#     namespace (str):
+#         - The Unified API namespace, also known as the Michelangelo Project ID.
+#         - Example: "ma-dev-test"
+#
+#     image (str):
+#         - The Docker image containing Ray, application code, and dependencies.
+#         - Example: "127.0.0.1:5055/uber-usi/uber-one-michelangelo-sandbox:bkt1-produ-1719018451-45448"
+#
+#     head_resource (dict):
+#         - Resource configuration for the Ray **head node**.
+#         - Reference: `resource_dict` function in commons.star.
+#
+#     worker_resource (dict):
+#         - Resource configuration for the Ray **worker nodes**.
+#         - Reference: `resource_dict` function in commons.star.
+#
+#     worker_instances (int):
+#         - Number of Ray worker instances to launch.
+#         - Must be a non-negative integer.
+#
+#     debug_enabled (bool, optional):
+#         - Enables debugging tools if set to True.
+#         - Includes additional debugging utilities such as SYS_PTRACE capability.
+#         - Defaults to False.
 #
 # Returns:
-#     A dictionary representing the RayJob CRD.
+#     dict: A dictionary representing the RayJob CRD.
 def ray_cluster_spec(
         namespace,
         image,
         head_resource,
         worker_resource,
         worker_instances,
-        zone = "",
-        debug_enabled = False,
-        head_object_store_memory = None,
-        worker_object_store_memory = None):
+        debug_enabled = False):
     env = dict(COMMONS_ENV.items())
     env.update(RAY_ENV)
     env.update(os.environ)

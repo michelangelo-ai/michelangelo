@@ -13,37 +13,7 @@ TASK_STATE_KILLED = progress.task_state_killed
 TASK_STATE_SKIPPED = progress.task_state_skipped
 TIME_FOMART = "%Y-%m-%d %H:%M:%S"
 
-CACHE_KEY_TASK_PATH = "michelangelo/uniflow-task-path"
-CACHE_KEY_INPUT_HASH = "michelangelo/uniflow-input-hash"
-CACHE_KEY_CACHE_VERSION = "michelangelo/uniflow-cache-version"
 LABEL_VALUE_SIZE_LIMIT = 60
-CACHE_KEY_RANDOM_PREFIX_DIGEST_SIZE = 4
-
-RESOURCE_ENV_LABEL_PROD = "resourcepool.michelangelo/support-env-prod"
-RESOURCE_ENV_LABEL_DEV = "resourcepool.michelangelo/support-env-dev"
-RESOURCE_ENV_LABEL_TEST = "resourcepool.michelangelo/support-env-test"
-
-RESOURCE_AFFINITY_LABEL_CLOUD_ZONE = "resourcepool.michelangelo/cloud-zone"
-RESOURCE_AFFINITY_LABEL_ZONE = "resourcepool.michelangelo/zone"
-RESOURCE_AFFINITY_LABEL_CLUSTER = "resourcepool.michelangelo/cluster"
-RESOURCE_AFFINITY_LABEL_CLUSTER_TYPE = "resourcepool.michelangelo/cluster_type"
-RESOURCE_AFFINITY_LABEL_NAME = "resourcepool.michelangelo/name"
-RESOURCE_AFFINITY_LABEL_PATH = "resourcepool.michelangelo/path"
-RESOURCE_AFFINITY_LABEL_SUPPORT_GPU = "resourcepool.michelangelo/support-resource-type-gpu"
-
-def get_env_label():
-    """
-    Get the env label for the jobs.
-
-    Returns:
-        A string can be used for the env label in spark/ray jobs.
-    """
-    env = os.environ.get("ENV", "development").lower()
-    if env == "production":
-        return RESOURCE_ENV_LABEL_PROD
-    elif env == "testing":
-        return RESOURCE_ENV_LABEL_TEST
-    return RESOURCE_ENV_LABEL_DEV
 
 def get_result_url():
     """
@@ -117,51 +87,6 @@ def report_progress(task_path, task_name, task_log = "", task_message = "", task
     }
     progress.report(str(state_dict))
 
-def get_task_path(task_path):
-    """
-    Get the task path for the task.
-
-    Args:
-        task_path: the path of the task
-    Returns:
-        final_task_path: the final path of the task.
-    """
-    return get_label_value(task_path)
-
-#Get the cache version for the task.
-#   Args:
-#       cache_version: the version of the cache
-#       task_name: the name of the task
-#   Returns:
-#       final_cache_version: the final version of the cache
-def get_cache_version(cache_version, task_name):
-    if cache_version == None:
-        image = get_task_image(task_name)
-        return hashlib.blake2b_hex(image, digest_size = 16)
-
-    return get_label_value(cache_version)
-
-# Get the cache keys for the task.
-#   Args:
-#       task_path: the path of the task
-#       task_name: the name of the task
-#       args: input arguments
-#       kwargs: input keyword arguments
-#       cache_version: the version of the cache
-#   Returns:
-#      cache_keys: the cache keys
-def get_cache_keys(task_path, task_name, args, kwargs, cache_version):
-    final_task_path = get_task_path(task_path)
-    final_cache_version = get_cache_version(cache_version, task_name)
-    final_input_hash = get_input_hash(args, kwargs)
-
-    cache_keys = {
-        CACHE_KEY_TASK_PATH: final_task_path,
-        CACHE_KEY_INPUT_HASH: final_input_hash,
-        CACHE_KEY_CACHE_VERSION: final_cache_version,
-    }
-    return cache_keys
-
 def get_input_hash(args, kwargs):
     """
     Get the input hash for the task.
@@ -176,19 +101,3 @@ def get_input_hash(args, kwargs):
     kwargs = json.dumps(kwargs) if kwargs else "{}"
     input_hash = hashlib.blake2b_hex(args + kwargs, digest_size = 16)
     return input_hash
-
-def get_label_value(value):
-    """
-    Get the label value for the task. The label will be saved as CachedOutput label.
-
-    If the value is longer than 63, it will be shortened.
-
-    Args:
-        value: the value of the label
-    Returns:
-        value: the shortened value of the label
-    """
-    if len(value) > LABEL_VALUE_SIZE_LIMIT:
-        value_hash = hashlib.blake2b_hex(value, digest_size = CACHE_KEY_RANDOM_PREFIX_DIGEST_SIZE)
-        value = value_hash + "-" + value[-(LABEL_VALUE_SIZE_LIMIT - CACHE_KEY_RANDOM_PREFIX_DIGEST_SIZE * 2 - 1):]
-    return value
