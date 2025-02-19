@@ -31,8 +31,12 @@ go_test(
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
+        "//go/worker/activities/ray:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
         "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_stretchr_testify//suite:go_default_library",
+        "@org_uber_go_cadence//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
     ],
 )
