@@ -2,7 +2,8 @@ package s3
 
 import (
 	"context"
-	"fmt"
+	"io"
+
 	"github.com/cadence-workflow/starlark-worker/ext"
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7"
@@ -11,7 +12,6 @@ import (
 	"go.uber.org/cadence/activity"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
-	"io"
 )
 
 var Activities = (*activities)(nil)
