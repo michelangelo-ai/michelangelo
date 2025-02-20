@@ -29,21 +29,61 @@ RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 USER_ID = os.environ.get("USER_ID", "default_user")
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
+# This function defines the orchestration logic for Ray tasks.
+#
+# Configures and starts a Ray cluster based on provided specifications and environment,
+# then runs a specified Ray job on this cluster. It continuously monitors the job's status, reporting progress
+# and handling job completion or failure. The function ensures the Ray cluster is terminated upon job completion
+# or failure to release resources.
+#
+# Parameters:
+#     task_path (str): The path to the Ray task to be executed. Ex: uber.ai.michelangelo.sandbox.bert_cola.train.train
+#     cache_version (str, optional): The version of the cache to use. If not provided, we will use a default cache version calculated from the image id and apply_to_local_diff/draft.
+#     cache_enabled (bool, optional): If True, the task will try to reuse cached results if the same task is run with the same arguments. Otherwise, the task will always run and produce a new cached result.
+#     head_cpu (int, optional): The number of CPUs for the head node.
+#     head_memory (str, optional): The memory allocation for the head node.
+#     head_disk (str, optional): The disk size for the head node.
+#     head_gpu (int, optional): The number of GPUs for the head node. Can be 0 if no GPU is required.
+#     head_object_store_memory (int, optional): The amount of memory (in bytes) to start the object store with on the head node. https://docs.ray.io/en/releases-2.9.2/cluster/cli.html#cmdoption-ray-start-object-store-memory
+#     worker_cpu (int, optional): The number of CPUs for each worker node.
+#     worker_memory (str, optional): The memory allocation for each worker node.
+#     worker_disk (str, optional): The disk size for each worker node.
+#     worker_gpu (int, optional): The number of GPUs for each worker node. Can be 0 if no GPU is required.
+#     worker_object_store_memory (int, optional): The amount of memory (in bytes) to start the object store with on each worker node. https://docs.ray.io/en/releases-2.9.2/cluster/cli.html#cmdoption-ray-start-object-store-memory
+#     worker_instances (int, optional): The number of worker instances. Can be 0 for head-only clusters.
+#     gpu_sku (str, optional): The SKU for GPUs.
+#     zone (str, optional): The deployment zone for the cluster.
+#     breakpoint (bool, optional): If True, runs the task till completion or failure, however the cluster is not immediately terminated afterwards, allowing time for debugging and profiling the cluster's state.
+#
+# Returns:
+#     callable: A callable function that, when executed, runs the specified Ray job on the configured Ray cluster,
+#     monitors its execution, and handles cleanup and reporting.
+#
+# Note:
+#     The function uses environmental variables for overriding resource specifications.
+#     It also ensures proper cleanup by terminating the Ray cluster and unregistering exit hooks upon job completion or failure.
 def task(
         task_path,
         alias = None,
+        cache_version = None,
         cache_enabled = False,
         head_cpu = RAY_DEFAULT_HEAD_CPU,
         head_memory = RAY_DEFAULT_HEAD_MEMORY,
+        head_disk = RAY_DEFAULT_HEAD_DISK,
+        head_gpu = RAY_DEFAULT_HEAD_GPU,
+        head_object_store_memory = None,
         worker_cpu = RAY_DEFAULT_WORKER_CPU,
         worker_memory = RAY_DEFAULT_WORKER_MEMORY,
+        worker_disk = RAY_DEFAULT_WORKER_DISK,
+        worker_gpu = RAY_DEFAULT_WORKER_GPU,
+        worker_object_store_memory = None,
         worker_instances = RAY_DEFAULT_WORKER_INSTANCES,
+        gpu_sku = RAY_DEFAULT_GPU_SKU,
+        zone = RAY_DEFAULT_ZONE,
         breakpoint = False):
     def callable(*args, **kwargs):
         task_name = get_task_name(task_path, alias)
-        namespace = os.environ["MA_NAMESPACE"]
-        if not namespace:
-            namespace = "default"
+        namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
 
@@ -196,12 +236,21 @@ def task(
         return task(
             task_path = task_path,
             alias = alias,
+            cache_version = cache_version,
             cache_enabled = cache_enabled,
             head_cpu = head_cpu,
             head_memory = head_memory,
+            head_disk = head_disk,
+            head_gpu = head_gpu,
+            head_object_store_memory = head_object_store_memory,
             worker_cpu = worker_cpu,
             worker_memory = worker_memory,
+            worker_disk = worker_disk,
+            worker_gpu = worker_gpu,
+            worker_object_store_memory = worker_object_store_memory,
             worker_instances = worker_instances,
+            gpu_sku = gpu_sku,
+            zone = zone,
             breakpoint = breakpoint,
         )
 

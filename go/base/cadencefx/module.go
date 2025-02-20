@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/uber-go/tally"
 	"go.uber.org/cadence/.gen/go/cadence/workflowserviceclient"
@@ -57,8 +58,9 @@ func provide(in In) (Out, error) {
 	out.Workers = make([]worker.Worker, len(conf.Workers))
 	for i, w := range conf.Workers {
 		out.Workers[i] = worker.New(inter, w.Domain, w.TaskList, worker.Options{
-			MetricsScope: metrics,
-			Logger:       in.Logger,
+			MetricsScope:  metrics,
+			Logger:        in.Logger,
+			DataConverter: &cadstar.DataConverter{Logger: in.Logger},
 		})
 	}
 

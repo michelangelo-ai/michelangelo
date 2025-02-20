@@ -64,7 +64,10 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	}
 
 	var response v2pb.CreateRayClusterResponse
-	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, cluster).Get(ctx, &response); err != nil {
+	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, v2pb.CreateRayClusterRequest{
+		RayCluster:    &cluster,
+		CreateOptions: &metav1.CreateOptions{},
+	}).Get(ctx, &response); err != nil {
 		logger.Error("error", zap.Error(err))
 		return nil, err
 	}

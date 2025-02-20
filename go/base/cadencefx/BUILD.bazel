@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/config:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
         "@org_uber_go_cadence//.gen/go/cadence/workflowserviceclient:go_default_library",
         "@org_uber_go_cadence//client:go_default_library",

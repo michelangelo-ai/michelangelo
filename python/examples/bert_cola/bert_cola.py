@@ -34,4 +34,7 @@ if __name__ == "__main__":
     # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC docstring for more information.
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] ='0'
+    ctx.environ['MA_NAMESPACE'] ='default'
+    # this is example docker image, we don't need to pull it from docker registry
+    ctx.environ['IMAGE_PULL_POLICY'] ='Never'
     ctx.run(train_workflow)

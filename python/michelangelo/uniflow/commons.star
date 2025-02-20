@@ -1,4 +1,4 @@
-load("@plugin", "cad", "hashlib", "json", "os", "progress", "uuid")
+load("@plugin", "cad", "hashlib", "json", "os", "progress", "s3", "uuid")
 
 ENV = {
     "UF_HACK_MA_33362": "1",

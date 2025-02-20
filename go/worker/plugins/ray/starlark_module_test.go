@@ -2,6 +2,8 @@ package ray
 
 import (
 	"context"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"testing"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
@@ -39,8 +41,98 @@ func (r *Test) TestCreateClusterSuccessfully() {
 	env.RegisterActivity(ray.Activities.TerminateCluster)
 	env.RegisterActivity(ray.Activities.SensorRayClusterReadiness)
 
-	rayCluster := &v2pb.RayCluster{}
+	rayCluster := &v2pb.RayCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "uf-ray-test",
+			Namespace: "default",
+		},
+		Spec: v2pb.RayClusterSpec{
+			User: &v2pb.UserInfo{
+				Name:      "test-user",
+				ProxyUser: "",
+			},
+			RayVersion: "2.3.1",
+			Head: &v2pb.RayHeadSpec{
+				ServiceType: "ClusterIP",
+				Pod: &v1.PodTemplateSpec{
+					Spec: v1.PodSpec{
+						Containers: []v1.Container{
+							{
+								Name:  "head",
+								Image: "test-image",
+								EnvFrom: []v1.EnvFromSource{
+									{
+										Prefix: "",
+										ConfigMapRef: &v1.ConfigMapEnvSource{
+											LocalObjectReference: v1.LocalObjectReference{
+												Name: "michelangelo-config",
+											},
+										},
+									},
+								},
+								Lifecycle: &v1.Lifecycle{
+									PostStart: &v1.LifecycleHandler{
+										Exec: &v1.ExecAction{
+											Command: []string{"/bin/sh", "-c", "echo", "'Initializing Ray Head'"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				RayStartParams: map[string]string{
+					"block":          "true",
+					"dashboard-host": "0.0.0.0",
+				},
+			},
+			Workers: []*v2pb.RayWorkerSpec{
+				{
+					Pod: &v1.PodTemplateSpec{
+						Spec: v1.PodSpec{
+							Containers: []v1.Container{
+								{
+									Name:  "worker",
+									Image: "test-image",
+									EnvFrom: []v1.EnvFromSource{
+										{
+											Prefix: "",
+											ConfigMapRef: &v1.ConfigMapEnvSource{
+												LocalObjectReference: v1.LocalObjectReference{
+													Name: "michelangelo-config",
+												},
+											},
+										},
+									},
+									Lifecycle: &v1.Lifecycle{
+										PostStart: &v1.LifecycleHandler{
+											Exec: &v1.ExecAction{
+												Command: []string{"/bin/sh", "-c", "echo", "'Initializing Ray Worker'"},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+					RayStartParams: map[string]string{
+						"block":          "true",
+						"dashboard-host": "0.0.0.0",
+					},
+					NodeType:     "worker-group-1",
+					MinInstances: 1,
+					MaxInstances: 2,
+				},
+			},
+			RayConf: map[string]string{},
+		},
+		Status: v2pb.RayClusterStatus{},
+	}
+	var createClusterReq v2pb.CreateRayClusterRequest
 	env.OnActivity(ray.Activities.CreateRayCluster, mock.Anything, mock.Anything).Once().
+		Run(func(args mock.Arguments) {
+			createClusterReq = args.Get(1).(v2pb.CreateRayClusterRequest) // Capture the request argument
+		}).
 		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
 			return &v2pb.CreateRayClusterResponse{
 				RayCluster: rayCluster,
@@ -60,6 +152,7 @@ func (r *Test) TestCreateClusterSuccessfully() {
 	var res any
 	err := r.env.GetResult(&res)
 	require.NoError(err)
+	require.EqualValues(rayCluster, createClusterReq.RayCluster)
 	require.NotNil(res.(map[string]interface{}))
 }
 
