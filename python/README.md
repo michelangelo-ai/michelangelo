@@ -32,7 +32,7 @@ TODO: User Guide
 
 The last step will create a `.venv` directory if it doesn't already exist.
 This directory contains a Python virtual environment with all the dependencies installed.
-You can activate this virtual environment and use it like any other Python virtual environment, 
+You can activate this virtual environment and use it like any other Python virtual environment,
 or you can run commands via the Poetry CLI, e.g., `poetry run python`, `poetry run pytest`, etc.
 
 ### Dockerfile
@@ -47,5 +47,6 @@ $ docker run $IMAGE_NAME
 ```
 
 ### Regenerate Python gRPC client code
+
 After protobuf file changes, use the following script to regenerate the Python gRPC client code.
-tools/gen-grpc-py-client.sh
+tools/gen-grpc-client.sh --clients python
