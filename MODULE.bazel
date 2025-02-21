@@ -56,7 +56,6 @@ use_repo(
     "com_github_google_uuid",
     "com_github_json_iterator_go",
     "com_github_michelangelo_ai_michelangelo_proto",
-    "com_github_minio_minio_go_v7",
     "com_github_ray_project_kuberay_ray_operator",
     "com_github_stretchr_testify",
     "com_github_uber_go_tally",
