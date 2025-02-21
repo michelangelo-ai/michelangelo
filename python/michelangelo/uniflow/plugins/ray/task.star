@@ -110,7 +110,7 @@ def task(
         _worker_instances = int(_worker_instances)
 
         # Create cluster
-        cluster_namespace = "default"
+        cluster_namespace = namespace
         cluster_image = get_task_image(task_name)
         print("ray | create cluster:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
 
@@ -129,7 +129,6 @@ def task(
             debug_enabled = breakpoint,
         )
         cluster = ray.create_cluster(cluster)
-        print(cluster)
         cluster_name = cluster["metadata"]["name"]
         cluster_namespace = cluster["metadata"]["namespace"]
 

@@ -15,3 +15,9 @@ cadence:
       taskList: default
   client:
     domain: default
+
+s3:
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: localhost:9001

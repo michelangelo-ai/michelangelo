@@ -139,7 +139,11 @@ func (r *Test) TestCreateClusterSuccessfully() {
 			}, nil
 		})
 
+	var sensorClusterReq v2pb.GetRayClusterRequest
 	env.OnActivity(ray.Activities.SensorRayClusterReadiness, mock.Anything, mock.Anything).Once().
+		Run(func(args mock.Arguments) {
+			sensorClusterReq = args.Get(1).(v2pb.GetRayClusterRequest) // Capture the request argument
+		}).
 		Return(func(ctx context.Context, req v2pb.GetRayClusterRequest) (*ray.SensorRayClusterReadinessResponse, *cadence.CustomError) {
 			return &ray.SensorRayClusterReadinessResponse{
 				RayCluster: rayCluster,
@@ -153,6 +157,8 @@ func (r *Test) TestCreateClusterSuccessfully() {
 	err := r.env.GetResult(&res)
 	require.NoError(err)
 	require.EqualValues(rayCluster, createClusterReq.RayCluster)
+	require.EqualValues(rayCluster.Name, sensorClusterReq.Name)
+	require.EqualValues(rayCluster.Namespace, sensorClusterReq.Namespace)
 	require.NotNil(res.(map[string]interface{}))
 }
 
