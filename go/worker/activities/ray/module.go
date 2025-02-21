@@ -12,8 +12,6 @@ const serverName = "ma-apiserver" // The name of the API server providing YARPC 
 // It provides YARPC clients for the RayClusterService and RayJobService,
 // and registers the necessary activities with the worker.
 var Module = fx.Options(
-	fx.Provide(v2pb.NewFxRayClusterServiceYARPCClient(serverName)), // Provides the RayClusterService YARPC client.
-	fx.Provide(v2pb.NewFxRayJobServiceYARPCClient(serverName)),     // Provides the RayJobService YARPC client.
 	fx.Invoke(register), // Invokes the register function to register activities with the workers.
 )
 

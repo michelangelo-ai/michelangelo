@@ -8,6 +8,7 @@ import (
 )
 
 var Module = fx.Options(
+	fx.Provide(getYARPCClients),
 	activities.Module,
 	workflows.Module,
 	starlark.Module,

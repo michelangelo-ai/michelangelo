@@ -175,12 +175,7 @@ type SensorRayJobReadinessResponse struct {
 func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterReadinessResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
-	getRayClusterRequest := &v2pb.GetRayClusterRequest{
-		Name:       request.Name,
-		Namespace:  "",
-		GetOptions: nil,
-	}
-	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, getRayClusterRequest)
+	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, &request)
 	if err != nil {
 		logger.Error(err, "activity-error")
 		return nil, cadence.NewCustomError(err.Error())

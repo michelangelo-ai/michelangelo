@@ -31,6 +31,8 @@ type In struct {
 	fx.In
 	Config Config
 	Logger *zap.Logger
+
+	WorkerOptions worker.Options
 }
 
 type Out struct {
@@ -41,9 +43,6 @@ type Out struct {
 
 func provide(in In) (Out, error) {
 	out := Out{}
-
-	// TODO: andrii: Create FX module for Tally and inject metrics here.
-	metrics := tally.NoopScope
 
 	conf := in.Config
 
@@ -56,15 +55,12 @@ func provide(in In) (Out, error) {
 	// Create Cadence workers
 	out.Workers = make([]worker.Worker, len(conf.Workers))
 	for i, w := range conf.Workers {
-		out.Workers[i] = worker.New(inter, w.Domain, w.TaskList, worker.Options{
-			MetricsScope: metrics,
-			Logger:       in.Logger,
-		})
+		out.Workers[i] = worker.New(inter, w.Domain, w.TaskList, in.WorkerOptions)
 	}
 
 	// Create Cadence client
 	out.Client = client.NewClient(inter, conf.Client.Domain, &client.Options{
-		MetricsScope: metrics,
+		MetricsScope: tally.NoopScope,
 	})
 
 	return out, nil
