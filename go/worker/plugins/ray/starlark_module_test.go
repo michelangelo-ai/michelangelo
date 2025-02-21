@@ -2,9 +2,10 @@ package ray
 
 import (
 	"context"
+	"testing"
+
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"testing"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
