@@ -2,6 +2,7 @@ package ray
 
 import (
 	"context"
+	"github.com/michelangelo-ai/michelangelo/proto/api"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
@@ -202,15 +203,39 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 	env.RegisterActivity(ray.Activities.CreateRayJob)
 	env.RegisterActivity(ray.Activities.SensorRayJob)
 
-	rayJob := &v2pb.RayJob{}
+	rayJob := &v2pb.RayJob{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "uf-rj-test-ray-job-",
+			Namespace:    "default",
+		},
+		Spec: v2pb.RayJobSpec{
+			User:                   nil,
+			Entrypoint:             "python3 -m michelangelo.uniflow.core.run_task --task 'examples.bert_cola.data.load_data' --args '[\"glue\",\"cola\"]' --kwargs '{\"tokenizer_max_length\":128}' --result-url 's3://default/d47efe2f682f4965bcf119f9d9a06eb1.json'",
+			ObjectStoreMemoryRatio: 0,
+			JobId:                  "",
+			Cluster: &api.ResourceIdentifier{
+				Namespace: "default",
+				Name:      "test-ray-job",
+			},
+		},
+	}
+
+	var createdRayJob v2pb.CreateRayJobRequest
 	env.OnActivity(ray.Activities.CreateRayJob, mock.Anything, mock.Anything).Once().
+		Run(func(args mock.Arguments) {
+			createdRayJob = args.Get(1).(v2pb.CreateRayJobRequest) // Capture the request argument
+		}).
 		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, *cadence.CustomError) {
 			return &v2pb.CreateRayJobResponse{
 				RayJob: rayJob,
 			}, nil
 		})
 
+	var sensorJobReq v2pb.GetRayJobRequest
 	env.OnActivity(ray.Activities.SensorRayJob, mock.Anything, mock.Anything).Once().
+		Run(func(args mock.Arguments) {
+			sensorJobReq = args.Get(1).(v2pb.GetRayJobRequest) // Capture the request argument
+		}).
 		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, *cadence.CustomError) {
 			return &ray.SensorRayJobResponse{
 				RayJob:   rayJob,
@@ -224,6 +249,9 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 	var res any
 	err := r.env.GetResult(&res)
 	require.NoError(err)
+	require.EqualValues(createdRayJob.RayJob, rayJob)
+	require.EqualValues(rayJob.Name, sensorJobReq.Name)
+	require.EqualValues(rayJob.Namespace, sensorJobReq.Namespace)
 	require.NotNil(res.(map[string]interface{}))
 }
 
