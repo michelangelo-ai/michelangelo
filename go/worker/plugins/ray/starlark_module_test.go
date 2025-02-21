@@ -2,8 +2,9 @@ package ray
 
 import (
 	"context"
-	"github.com/michelangelo-ai/michelangelo/proto/api"
 	"testing"
+
+	"github.com/michelangelo-ai/michelangelo/proto/api"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
