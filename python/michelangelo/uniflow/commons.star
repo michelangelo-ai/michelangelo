@@ -1,7 +1,6 @@
 load("@plugin", "cad", "hashlib", "json", "os", "progress", "s3", "uuid")
 
 ENV = {
-    "UF_HACK_MA_33362": "1",
     "UF_REMOTE_RUN": "1",
 }
 
