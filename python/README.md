@@ -6,7 +6,46 @@ Michelangelo SDK
 pip install michelangelo
 ```
 
-TODO: User Guide
+## User Guide
+
+### Michelangelo Python Client
+
+1. Set Michelangelo API server address using environment variable `MICHELANGELO_API_SERVER`. e.g.
+
+```bash
+export MICHELANGELO_API_SERVER="localhost:12345"
+```
+
+2. Access API resources using Michelangelo Python client.
+
+```python
+from michelangelo.api.v2.client import APIClient
+from michelangelo.gen.api.v2.project_pb2 import Project
+
+APIClient.set_caller('my-client') # initialize client with caller name
+# If not specified in Python code, the client will use the Michelangelo API server
+# address from MICHELANGELO_API_SERVER environment variable.
+
+# list existing projects
+projects = APIClient.ProjectService.list_project(namespace='default')
+print("Existing projects:")
+print(projects)
+
+# create a new project
+proj = Project()
+proj.metadata.namespace = "default"
+proj.metadata.name = "demo-project"
+proj.spec.tier = 2
+proj.spec.description = "demo project"
+proj.spec.owner.owning_team = "8D8AC610-566D-4EF0-9C22-186B2A5ED793"
+proj.spec.git_repo = "https://github.com/michelangelo-ai/michelangelo"
+proj.spec.root_dir = "/demo-project"
+APIClient.ProjectService.create_project(proj)
+
+# get the new project
+project = APIClient.ProjectService.get_project(namespace='default', name='demo-project')
+print(project)
+```
 
 ## Developer Guide
 
