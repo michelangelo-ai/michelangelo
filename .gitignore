@@ -62,19 +62,19 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-develop-eggs/
-dist/
-downloads/
+/python/build/
+/python/develop-eggs/
+/python/dist/
+/python/downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+/python/lib/
+/python/lib64/
+/python/parts/
+/python/sdist/
+/python/var/
+/python/wheels/
+/python/share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
