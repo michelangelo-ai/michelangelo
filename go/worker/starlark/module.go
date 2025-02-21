@@ -2,18 +2,20 @@ package starlark
 
 import (
 	"fmt"
-	
+
+	"github.com/uber-go/tally"
 	"go.uber.org/cadence/worker"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 
 	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/plugin"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
-	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/s3"
 )
 
 var Module = fx.Options(
 	fx.Invoke(register),
+	fx.Provide(getDataConvertor),
 )
 
 func register(workers []worker.Worker) error {
@@ -24,7 +26,6 @@ func register(workers []worker.Worker) error {
 
 	plugins := plugin.Registry
 	plugins[ray.Plugin.ID()] = ray.Plugin
-	plugins[s3.Plugin.ID()] = s3.Plugin
 
 	service := &cadstar.Service{
 		Plugins: plugins,
@@ -34,4 +35,13 @@ func register(workers []worker.Worker) error {
 	}
 
 	return nil
+}
+
+func getDataConvertor(logger *zap.Logger) worker.Options {
+	metrics := tally.NoopScope
+	return worker.Options{
+		MetricsScope:  metrics,
+		Logger:        logger,
+		DataConverter: &cadstar.DataConverter{Logger: logger},
+	}
 }
