@@ -2,7 +2,6 @@ package starlark
 
 import (
 	"fmt"
-
 	"github.com/uber-go/tally"
 	"go.uber.org/cadence/worker"
 	"go.uber.org/fx"
@@ -11,7 +10,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/plugin"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
-	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/s3"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
 )
 
 var Module = fx.Options(
@@ -27,7 +26,7 @@ func register(workers []worker.Worker) error {
 
 	plugins := plugin.Registry
 	plugins[ray.Plugin.ID()] = ray.Plugin
-	plugins[s3.Plugin.ID()] = s3.Plugin
+	plugins[storage.Plugin.ID()] = storage.Plugin
 
 	service := &cadstar.Service{
 		Plugins: plugins,

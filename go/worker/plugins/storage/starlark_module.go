@@ -1,4 +1,4 @@
-package s3
+package storage
 
 import (
 	"fmt"
@@ -6,28 +6,10 @@ import (
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/star"
 	jsoniter "github.com/json-iterator/go"
-	"go.starlark.net/starlark"
-	"go.uber.org/cadence/worker"
-	"go.uber.org/cadence/workflow"
-
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/s3"
+	"go.starlark.net/starlark"
+	"go.uber.org/cadence/workflow"
 )
-
-const pluginID = "storage"
-
-var Plugin = &plugin{}
-
-type plugin struct{}
-
-var _ cadstar.IPlugin = (*plugin)(nil)
-
-func (r *plugin) ID() string {
-	return pluginID
-}
-func (r *plugin) Create(_ cadstar.RunInfo) starlark.Value {
-	return newModule()
-}
-func (r *plugin) Register(_ worker.Registry) {}
 
 type module struct {
 	attributes map[string]starlark.Value
@@ -59,10 +41,10 @@ func (m *module) read(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 	ctx := cadstar.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var bucket string
+	var protocol string
 	var path string
 	if err := starlark.UnpackArgs("execute", args, kwargs,
-		"bucket", &bucket,
+		"protocol", &protocol,
 		"path", &path,
 	); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
