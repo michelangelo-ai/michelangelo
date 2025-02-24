@@ -47,5 +47,6 @@ $ docker run $IMAGE_NAME
 ```
 
 ### Regenerate Python gRPC client code
+
 After protobuf file changes, use the following script to regenerate the Python gRPC client code.
-tools/gen-grpc-py-client.sh
+tools/gen-grpc-client.sh --clients python
