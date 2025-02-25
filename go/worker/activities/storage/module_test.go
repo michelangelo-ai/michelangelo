@@ -2,9 +2,10 @@ package storage
 
 import (
 	"context"
+	"testing"
+
 	"go.uber.org/cadence/activity"
 	"go.uber.org/cadence/workflow"
-	"testing"
 
 	"go.uber.org/cadence/worker"
 )
