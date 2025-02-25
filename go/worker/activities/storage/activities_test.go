@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"strings"
 	"testing"
+
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 
 	"github.com/stretchr/testify/assert"
 

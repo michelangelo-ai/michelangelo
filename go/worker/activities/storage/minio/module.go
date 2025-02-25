@@ -1,7 +1,6 @@
 package minio
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"

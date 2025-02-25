@@ -4,7 +4,7 @@ import (
 	"go.uber.org/cadence/worker"
 	"go.uber.org/fx"
 
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio"
 )
 

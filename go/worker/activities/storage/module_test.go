@@ -2,8 +2,9 @@ package storage
 
 import (
 	"context"
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"testing"
+
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 
 	"go.uber.org/cadence/activity"
 	"go.uber.org/cadence/workflow"
