@@ -1,9 +1,9 @@
-package s3
+package minio
 
 import "go.uber.org/config"
 
 const (
-	configKey = "s3"
+	configKey = "minio"
 )
 
 type (
