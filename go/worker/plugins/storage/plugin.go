@@ -14,7 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"
 )
 
-const pluginID = "s3"
+const pluginID = "storage"
 
 var Plugin = &plugin{}
 
