@@ -25,17 +25,18 @@ def load_data(
     name: str,
     tokenizer_max_length: int = 128,
 ) -> tuple[Dataset, Dataset, Dataset]:
-    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_path)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_path, tru)
 
     def tokenize_sentence(batch):
+        print("Batch Keys:", batch.keys())
         outputs = tokenizer(
-            batch["sentence"].tolist(),
+            batch["text"].tolist(),
             max_length=tokenizer_max_length,
             truncation=True,
             padding="max_length",
             return_tensors="np",
         )
-        outputs["label"] = batch["label"]
+        outputs["labels"] = outputs["input_ids"].copy()
         return outputs
 
     data = datasets.load_dataset(path=path, name=name)
