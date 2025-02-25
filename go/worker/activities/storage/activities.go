@@ -4,9 +4,9 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"go.uber.org/cadence"           // Cadence workflow library for activity management.
-	"go.uber.org/cadence/activity"  // Provides utilities for Cadence activities.
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
 )
@@ -20,17 +20,12 @@ type activities struct {
 	impls map[string]Storage
 }
 
-// Protocol returns the default protocol identifier.
-func (a *activities) Protocol() string {
-	return "minio"
-}
-
 // Read attempts to read data from the specified path using the given protocol.
 // It logs the start of the activity, checks for a valid protocol implementation,
 // and wraps any errors using Cadence's CustomError for consistent error handling.
 func (a *activities) Read(ctx context.Context, protocol string, path string) (any, *cadence.CustomError) {
 	// Retrieve logger from context and log the start of the read activity.
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("path", path))
 
 	// Check if there is an implementation available for the requested protocol.
