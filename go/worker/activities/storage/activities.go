@@ -1,30 +1,55 @@
+// Package storage provides functionality for reading data using different storage protocols.
 package storage
 
 import (
 	"context"
 	"fmt"
-	"go.uber.org/cadence"
-	"go.uber.org/cadence/activity"
-	"go.uber.org/yarpc/yarpcerrors"
-	"go.uber.org/zap"
+
+	"go.uber.org/cadence"           // Cadence workflow library for activity management.
+	"go.uber.org/cadence/activity"  // Provides utilities for Cadence activities.
+	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
+	"go.uber.org/zap"               // Logger for structured logging.
 )
 
+// Activities is a package-level variable that holds the activities implementation.
 var Activities = (*activities)(nil)
 
+// activities holds implementations for different storage protocols.
+// The map keys represent protocol names, and the values are Storage implementations.
 type activities struct {
 	impls map[string]Storage
 }
 
-// Implement the Read method for the S3Activities struct
+// Protocol returns the default protocol identifier.
+func (a *activities) Protocol() string {
+	return "minio"
+}
+
+// Read attempts to read data from the specified path using the given protocol.
+// It logs the start of the activity, checks for a valid protocol implementation,
+// and wraps any errors using Cadence's CustomError for consistent error handling.
 func (a *activities) Read(ctx context.Context, protocol string, path string) (any, *cadence.CustomError) {
+	// Retrieve logger from context and log the start of the read activity.
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("path", path))
+
+	// Check if there is an implementation available for the requested protocol.
 	if impl, ok := a.impls[protocol]; ok {
+		// Attempt to read from the storage using the protocol's implementation.
 		result, err := impl.Read(ctx, path)
 		if err != nil {
-			return nil, cadence.NewCustomError(yarpcerrors.FromError(err).Code().String(), err.Error())
+			// Wrap the error in a Cadence CustomError using YARPC error codes.
+			return nil, cadence.NewCustomError(
+				yarpcerrors.FromError(err).Code().String(),
+				err.Error(),
+			)
 		}
+		// Return the successful result.
 		return result, nil
 	}
-	return nil, cadence.NewCustomError(fmt.Sprintf("protocol %s is not supported"), protocol)
+	// Return an error if the protocol is not supported.
+	return nil, cadence.NewCustomError(
+		fmt.Sprintf("protocol %s is not supported", protocol),
+		"",
+	)
 }
