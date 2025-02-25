@@ -139,10 +139,6 @@ class Context:
             _channel = channel
         return _channel
 
-    @staticmethod
-    def _get_default_header_provider():
-        return HeaderProvider()
-
 
 class BaseService(object):
 
