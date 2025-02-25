@@ -5,11 +5,12 @@ import (
 	"context"
 	"fmt"
 
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
 	"go.uber.org/cadence"           // Cadence workflow library for activity management.
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 )
 
 // Activities is a package-level variable that holds the activities implementation.
@@ -18,7 +19,7 @@ var Activities = (*activities)(nil)
 // activities holds implementations for different storage protocols.
 // The map keys represent protocol names, and the values are Storage implementations.
 type activities struct {
-	impls map[string]Storage
+	impls map[string]intf.Storage
 }
 
 // Read attempts to read data from the specified path using the given protocol.

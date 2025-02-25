@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"strings"
 	"testing"
 
@@ -43,7 +44,7 @@ func TestActivities_Read_Success(t *testing.T) {
 
 	// Initialize activities with the fake storage implementation.
 	acts := &activities{
-		impls: map[string]Storage{
+		impls: map[string]intf.Storage{
 			"test": fake,
 		},
 	}
@@ -72,7 +73,7 @@ func TestActivities_Read_Error(t *testing.T) {
 	}
 
 	acts := &activities{
-		impls: map[string]Storage{
+		impls: map[string]intf.Storage{
 			"test": fake,
 		},
 	}
@@ -101,7 +102,7 @@ func TestActivities_Read_Error(t *testing.T) {
 func TestActivities_Read_UnsupportedProtocol(t *testing.T) {
 	// Initialize activities with an empty storage implementation map.
 	acts := &activities{
-		impls: map[string]Storage{},
+		impls: map[string]intf.Storage{},
 	}
 	ctx := context.Background()
 	result, err := acts.Read(ctx, "unsupported", "dummyPath")

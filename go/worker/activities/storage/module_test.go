@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"testing"
 
 	"go.uber.org/cadence/activity"
@@ -60,7 +61,7 @@ func (w *dummyWorker) RegisterActivity(activity interface{}) {
 // and registers the resulting activities with each Cadence worker.
 func TestRegister(t *testing.T) {
 	// Create dummy Storage implementations with distinct protocols.
-	storages := []Storage{
+	storages := []intf.Storage{
 		&dummyStorage{proto: "s1"},
 		&dummyStorage{proto: "s2"},
 	}

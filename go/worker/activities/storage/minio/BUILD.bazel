@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/activities/storage/interface:go_default_library",
         "@com_github_json_iterator_go//:go_default_library",
         "@com_github_minio_minio_go_v7//:go_default_library",
         "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",

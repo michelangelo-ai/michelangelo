@@ -4,12 +4,12 @@ go_library(
     name = "go_default_library",
     srcs = [
         "activities.go",
-        "interface.go",
         "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/activities/storage/interface:go_default_library",
         "//go/worker/activities/storage/minio:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/log:go_default_library",
         "@org_uber_go_cadence//:go_default_library",

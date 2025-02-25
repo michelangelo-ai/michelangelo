@@ -1,10 +1,19 @@
 package storage
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio"
 	"go.uber.org/cadence/worker"
 	"go.uber.org/fx"
+
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio"
 )
+
+// Define an fx.In struct to receive the group.
+type storagesIn struct {
+	fx.In
+	Workers  []worker.Worker
+	Storages []intf.Storage `group:"storages"`
+}
 
 // Module provides the fx dependency injection options,
 // including the MinIO module and activity registration.
@@ -15,9 +24,9 @@ var Module = fx.Options(
 
 // register maps Storage implementations by protocol and registers
 // the resulting activities with each Cadence worker.
-func register(workers []worker.Worker, storages []Storage) {
-	storageMap := make(map[string]Storage, len(storages))
-	for _, storage := range storages {
+func register(in storagesIn) {
+	storageMap := make(map[string]intf.Storage, len(in.Storages))
+	for _, storage := range in.Storages {
 		storageMap[storage.Protocol()] = storage
 	}
 
@@ -25,7 +34,7 @@ func register(workers []worker.Worker, storages []Storage) {
 		impls: storageMap,
 	}
 
-	for _, w := range workers {
+	for _, w := range in.Workers {
 		w.RegisterActivity(a)
 	}
 }
