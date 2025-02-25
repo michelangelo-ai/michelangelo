@@ -72,8 +72,12 @@ func TestRegister(t *testing.T) {
 	worker2 := &dummyWorker{}
 	workers := []worker.Worker{worker1, worker2}
 
+	params := storagesIn{
+		Workers:  workers,
+		Storages: storages,
+	}
 	// Call the register function.
-	register(workers, storages)
+	register(params)
 
 	// Verify that each worker received exactly one registered activity.
 	for i, w := range []*dummyWorker{worker1, worker2} {

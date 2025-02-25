@@ -4,6 +4,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"
+
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 )
 
 type StorageOut struct {
