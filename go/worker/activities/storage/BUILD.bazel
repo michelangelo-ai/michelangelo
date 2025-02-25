@@ -28,6 +28,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/worker/activities/storage/interface:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@org_uber_go_cadence//activity:go_default_library",
         "@org_uber_go_cadence//worker:go_default_library",
