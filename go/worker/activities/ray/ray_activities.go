@@ -79,8 +79,8 @@ func (r *activities) CreateRayJob(ctx context.Context, request v2pb.CreateRayJob
 // - *cadence.CustomError: Error information if the operation fails.
 func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRayClusterRequest) (
 	*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
-	//logger := log.FromContext(ctx)
-	//logger.Info("activity-start", zap.Any("request", request))
+	logger := log.FromContext(ctx)
+	logger.Info("activity-start", zap.Any("request", request))
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
 	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {

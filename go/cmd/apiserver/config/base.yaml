@@ -1,7 +1,7 @@
 apiserver:
   yarpc:
     host: "localhost"
-    port: 14566
+    port: 8080
   k8s:
     qps: 300
     burst: 600
