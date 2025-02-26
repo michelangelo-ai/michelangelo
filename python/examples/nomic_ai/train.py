@@ -8,9 +8,9 @@ from michelangelo.uniflow.plugins.ray import RayTask
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_memory="4Gi",
+        head_memory="3Gi",
         worker_cpu=1,
-        worker_memory="4Gi",
+        worker_memory="3Gi",
         worker_instances=1,
     ),
 )

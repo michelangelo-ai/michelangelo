@@ -25,7 +25,7 @@ def load_data(
     name: str,
     tokenizer_max_length: int = 128,
 ) -> tuple[Dataset, Dataset, Dataset]:
-    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_path, tru)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_path, trust_remote_code=True)
 
     def tokenize_sentence(batch):
         print("Batch Keys:", batch.keys())
