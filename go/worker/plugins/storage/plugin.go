@@ -70,7 +70,6 @@ func (m *module) read(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 		return nil, err
 	}
 
-	// Call the S3 read activity
 	var res any
 	if err := workflow.ExecuteActivity(ctx, storage.Activities.Read, protocol, path).Get(ctx, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
