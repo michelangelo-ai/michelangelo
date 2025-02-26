@@ -1,0 +1,27 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "client.go",
+        "config.go",
+        "module.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/worker/activities/storage/interface:go_default_library",
+        "@com_github_json_iterator_go//:go_default_library",
+        "@com_github_minio_minio_go_v7//:go_default_library",
+        "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["config_test.go"],
+    embed = [":go_default_library"],
+    deps = ["@org_uber_go_config//:go_default_library"],
+)
