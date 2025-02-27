@@ -1,24 +1,21 @@
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
-from data import load_data
-from train import train
+from examples.nomic_ai.data import load_data
+from examples.nomic_ai.train import train
+
 
 
 @uniflow.workflow()
 def train_workflow():
-    data_path = "wikitext"
-    data_name = "wikitext-2-raw-v1"
+    model_name = "nomic-ai/nomic-bert-2048"
 
-    train_data, validation_data, test_data = load_data(
-        data_path,
-        data_name,
-        tokenizer_max_length=128,
-    )
+    train_data, validation_data, test_data = load_data(model_name)
 
     result = train(
         train_data,
         validation_data,
         test_data,
+        model_name,
     )
 
     print("Training Workflow Result:", result)

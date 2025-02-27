@@ -1,9 +1,13 @@
-import torch
-import transformers
-from transformers import AutoModelForCausalLM, Trainer, TrainingArguments
 from ray.data import Dataset
+from transformers import AutoTokenizer
+from pytorch_lightning.strategies import DeepSpeedStrategy
+import torch
 import michelangelo.uniflow.core as uniflow
+from examples.nomic_ai.model import HuggingFaceLightningModel
 from michelangelo.uniflow.plugins.ray import RayTask
+import pytorch_lightning as pl
+from torch.utils.data import DataLoader
+
 
 @uniflow.task(
     config=RayTask(
@@ -18,39 +22,28 @@ def train(
         train_data: Dataset,
         validation_data: Dataset,
         test_data: Dataset,
+        model_name="nomic-ai/nomic-bert-2048",
 ) -> dict:
-    model_name = "nomic-ai/nomic-embed-text-v1"
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    # Convert Ray dataset to Hugging Face dataset format
-    train_dataset = train_data.to_torch()
-    validation_dataset = validation_data.to_torch()
+    train_dataloader = DataLoader(train_data, batch_size=8, shuffle=True)
+    val_dataloader = DataLoader(validation_data, batch_size=8)
 
-    training_args = TrainingArguments(
-        output_dir="./results",
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
-        logging_dir="./logs",
-        logging_steps=500,
-        per_device_train_batch_size=4,
-        per_device_eval_batch_size=4,
-        num_train_epochs=1,
-        weight_decay=0.01,
-        save_total_limit=2,
-        fp16=torch.cuda.is_available(),
-        push_to_hub=False,
+    model = HuggingFaceLightningModel(model_name)
+
+    use_deepspeed = torch.cuda.is_available()
+    strategy = DeepSpeedStrategy(stage=2) if use_deepspeed else "auto"
+
+    trainer = pl.Trainer(
+        max_epochs=1,
+        precision=16 if torch.cuda.is_available() else 32,
+        accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        devices=torch.cuda.device_count() if torch.cuda.is_available() else 1,
+        strategy=strategy,
+        log_every_n_steps=10,
     )
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=validation_dataset,
-        tokenizer=tokenizer,
-    )
-
-    trainer.train()
+    trainer.fit(model, train_dataloader, val_dataloader)
 
     model.save_pretrained("./trained_model")
     tokenizer.save_pretrained("./trained_model")
