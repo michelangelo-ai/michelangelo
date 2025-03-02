@@ -24,6 +24,8 @@ _kube_ports = [
     "7833:30002",  # Cadence gRPC
     "7933:30003",  # Cadence TChannel
     "8088:30004",  # Cadence Web
+    "9091:30007",  # MinIO
+    "9090:30008",  # MinIO
 ]
 _cadence_domain = "default"
 
@@ -112,7 +114,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml"]
+    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml"]
     if "worker" not in ns.exclude:
         resources.append("michelangelo-worker.yaml")
 

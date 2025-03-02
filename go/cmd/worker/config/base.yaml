@@ -1,5 +1,5 @@
 worker:
-  address: localhost:8080
+  address: localhost:14566 # apiserver grpc port
   maApiServiceName: ma-apiserver
 
 logging:
