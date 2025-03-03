@@ -2,8 +2,16 @@ Michelangelo SDK
 
 ## User Guide
 
+Install core packges only
+
 ```
 pip install michelangelo
+```
+
+Install with bundle plugins
+
+```
+pip install michelangelo[plugin]
 ```
 
 ## User Guide
@@ -57,9 +65,12 @@ print(project)
 ### Cheat Sheet
 
 - Install dependencies: `poetry install`
+  - Install dependencies with plugins: `poetry install -E plugin`
 - Add a new dependency: `poetry add <package-name>`
 - Run tests: `poetry run pytest`
-- Run examples: `poetry run python ./examples/bert_cola/bert_cola.py`
+- Run examples:
+  - Install dependencies for example (ML libs for BERT model): `poetery install -E example`
+  - Run example: `poetry run python ./examples/bert_cola/bert_cola.py`
 - Format code: `poetry run ruff format .`
 - Run Michelangelo CLI: `poetry run ma --help`
 
