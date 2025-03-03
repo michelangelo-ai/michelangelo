@@ -54,6 +54,6 @@ COPY . .
 
 # Install python dependencies
 RUN ls -alF ./
-RUN poetry install
+RUN poetry install -E example
 
 CMD ["poetry", "run", "python", "./examples/bert_cola/bert_cola.py"]
