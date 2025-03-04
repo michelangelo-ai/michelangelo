@@ -1,7 +1,9 @@
 package ray
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/cadence-workflow/starlark-worker/star"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/cadstar"
@@ -57,22 +59,25 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		return nil, err
 	}
 
-	var cluster v2pb.RayCluster
-	if err := utils.AsGo(spec, &cluster); err != nil {
+	cluster := &v2pb.RayCluster{}
+	b, _ := star.Encode(spec)
+	_ = json.Unmarshal(b, cluster)
+
+	if err := utils.AsGoJson(spec, cluster); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
 
 	var response v2pb.CreateRayClusterResponse
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, v2pb.CreateRayClusterRequest{
-		RayCluster:    &cluster,
+		RayCluster:    cluster,
 		CreateOptions: &metav1.CreateOptions{},
 	}).Get(ctx, &response); err != nil {
 		logger.Error("error", zap.Error(err))
 		return nil, err
 	}
 
-	cluster = *response.RayCluster
+	cluster = response.RayCluster
 
 	srp := utils.CadenceDefaultSensorRetryPolicy
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
@@ -112,7 +117,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 			}
 		}
 	}
-	cluster = *sensorResponse.RayCluster
+	cluster = sensorResponse.RayCluster
 
 	if cluster.Status.State == v2pb.RAY_CLUSTER_STATE_FAILED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_TERMINATED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_UNKNOWN {
 		// TODO: [ray] send termination signal?
@@ -216,6 +221,10 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 	); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
+	}
+
+	if true {
+		return starlark.Bool(true), nil
 	}
 
 	var res v2pb.UpdateRayClusterResponse

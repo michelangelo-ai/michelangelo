@@ -334,31 +334,46 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
+                        "volumes": [
+                            {"name": "logs", "volumeSource": {"emptyDir": {}}},
+                            {"name": "fluent-bit-config", "volumeSource": {"configMap": {"localObjectReference": {"name": "fluent-bit-config"}}}},
+                        ],
                         "containers": [
                             {
                                 "name": "head",
-                                "resources": {
-                                    "requests": head_resource,
-                                },
+                                "resources": {"requests": head_resource},
                                 "image": image,  # Keeping original variable
                                 "imagePullPolicy": IMAGE_PULL_POLICY,
                                 "env": env,  # Keeping original variable
                                 "envFrom": [
                                     {
                                         "configMapRef": {
-                                            "localObjectReference": {
-                                                "name": "michelangelo-config",
-                                            },
+                                            "name": "michelangelo-config",
                                         },
                                     },
                                 ],
                                 "lifecycle": {
-                                    "postStart": {
-                                        "exec": {
-                                            "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Head'"],
+                                    "postStart": {"exec": {"command": ["/bin/sh", "-c", "echo", "'Initializing Ray Head'"]}},
+                                },
+                                "volumeMounts": [
+                                    {"name": "logs", "mountPath": "/tmp/ray/session_latest/logs"},
+                                ],
+                            },
+                            {
+                                "name": "fluent-bit",
+                                "image": "fluent/fluent-bit:latest",
+                                "args": ["-c", "/fluent-bit/etc/fluent-bit.conf"],
+                                "volumeMounts": [
+                                    {"mountPath": "/tmp/ray/session_latest/logs", "name": "logs"},
+                                    {"mountPath": "/fluent-bit/etc/", "name": "fluent-bit-config", "readOnly": True},
+                                ],
+                                "envFrom": [
+                                    {
+                                        "configMapRef": {
+                                            "name": "michelangelo-config",
                                         },
                                     },
-                                },
+                                ],
                             },
                         ],
                     },
@@ -376,31 +391,39 @@ def ray_cluster_spec(
                     },
                     "pod": {
                         "spec": {
+                            "volumes": [
+                                {"name": "logs", "volumeSource": {"emptyDir": {}}},
+                                {"name": "fluent-bit-config", "volumeSource": {"configMap": {"localObjectReference": {"name": "fluent-bit-config"}}}},
+                            ],
                             "containers": [
                                 {
                                     "name": "worker",
-                                    "resources": {
-                                        "requests": worker_resource,
-                                    },
+                                    "resources": {"requests": worker_resource},
                                     "image": image,  # Keeping original variable
                                     "imagePullPolicy": IMAGE_PULL_POLICY,
                                     "env": env,
                                     "envFrom": [
                                         {
                                             "configMapRef": {
-                                                "localObjectReference": {
-                                                    "name": "michelangelo-config",
-                                                },
+                                                "name": "michelangelo-config",
                                             },
                                         },
                                     ],
                                     "lifecycle": {
-                                        "postStart": {
-                                            "exec": {
-                                                "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Worker'"],
-                                            },
-                                        },
+                                        "postStart": {"exec": {"command": ["/bin/sh", "-c", "echo", "'Initializing Ray Worker'"]}},
                                     },
+                                    "volumeMounts": [
+                                        {"name": "logs", "mountPath": "/tmp/ray/session_latest/logs"},
+                                    ],
+                                },
+                                {
+                                    "name": "fluent-bit",
+                                    "image": "fluent/fluent-bit:latest",
+                                    "args": ["-c", "/fluent-bit/etc/fluent-bit.conf"],
+                                    "volumeMounts": [
+                                        {"mountPath": "/tmp/ray/session_latest/logs", "name": "logs"},
+                                        {"mountPath": "/fluent-bit/etc/", "name": "fluent-bit-config", "readOnly": True},
+                                    ],
                                 },
                             ],
                         },

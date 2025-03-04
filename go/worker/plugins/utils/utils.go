@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/star"
@@ -61,4 +62,11 @@ func AsGo(source starlark.Value, out any) error {
 		return err
 	}
 	return jsoniter.Unmarshal(b, out)
+}
+func AsGoJson(source starlark.Value, out any) error {
+	b, err := star.Encode(source)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, out)
 }

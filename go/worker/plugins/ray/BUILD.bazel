@@ -15,6 +15,7 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//star:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
         "@org_uber_go_cadence//:go_default_library",

@@ -114,7 +114,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml"]
+    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml", "michelangelo-config.yaml"]
     if "worker" not in ns.exclude:
         resources.append("michelangelo-worker.yaml")
 

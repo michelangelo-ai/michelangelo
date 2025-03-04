@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: fluent-bit
+  namespace: kube-system
+  labels:
+    app: fluent-bit
+spec:
+  selector:
+    matchLabels:
+      app: fluent-bit
+  template:
+    metadata:
+      labels:
+        app: fluent-bit
+    spec:
+      containers:
+        - name: fluent-bit
+          image: fluent/fluent-bit:latest
+          env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: fluent-bit-aws-credentials
+                  key: aws_access_key_id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fluent-bit-aws-credentials
+                  key: aws_secret_access_key
+          securityContext:
+            runAsUser: 0  # ✅ Allow Fluent Bit to read logs
+          volumeMounts:
+            - name: raylogs
+              mountPath: /tmp/ray/session_latest/logs
+              readOnly: true
+      volumes:
+        - name: raylogs
+          hostPath:
+            path: /tmp/ray/session_latest/logs
+        - name: config
+          configMap:
+            name: fluent-bit-config

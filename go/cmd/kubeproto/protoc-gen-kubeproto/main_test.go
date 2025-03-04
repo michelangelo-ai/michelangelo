@@ -4,12 +4,17 @@ import (
 	_ "embed"
 	"encoding/json"
 	"go/token"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -301,6 +306,138 @@ func TestJSON(t *testing.T) {
 	assert.Equal(t, testStructBool, testPbWithStructDecode.Struct.Fields["boolValue"].GetBoolValue())
 	assert.True(t, testStructNestedStruct.Equal(testPbWithStructDecode.Struct.Fields["structValue"].GetStructValue()))
 	assert.True(t, testStructList.Equal(testPbWithStructDecode.Struct.Fields["listValue"].GetListValue()))
+}
+func TestRayCluster(t *testing.T) {
+	// Test inline field
+	testObject := &v2pb.RayCluster{}
+	//testObject.Namespace = "default"
+	//testObject.Name = "object01"
+	//testObject.Kind = "Object"
+
+	testObject.Spec.Head = &v2pb.RayHeadSpec{
+		Pod: &corev1.PodTemplateSpec{
+			Spec: corev1.PodSpec{
+				Containers: []corev1.Container{
+					{
+						Name:  "c1",
+						Image: "test",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("1"),
+							},
+						},
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "test1",
+									},
+								},
+							},
+						},
+					},
+					{
+						Name:  "c2",
+						Image: "test",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("1"),
+							},
+						},
+						EnvFrom: []corev1.EnvFromSource{
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "test2",
+									},
+								},
+							},
+							{
+								ConfigMapRef: &corev1.ConfigMapEnvSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "test3",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := json.Marshal(testObject)
+	assert.Nil(t, err)
+
+	testUnmarshalled := &v2pb.RayCluster{}
+	jsonStr := "{\n  \"kind\" : \"Object\",\n  \"metadata\" : {\n    \"name\" : \"object01\",\n    \"namespace\" : \"default\",\n    \"creationTimestamp\" : null\n  },\n  \"spec\" : {\n    \"head\" : {\n      \"pod\" : {\n        \"metadata\" : {\n          \"creationTimestamp\" : null\n        },\n        \"spec\" : {\n          \"containers\" : [ {\n            \"name\" : \"c1\",\n            \"image\" : \"test\",\n            \"envFrom\" : [ {\n              \"configMapRef\" : {                \n                  \"name\" : \"test1\"                \n              }\n            } ],\n            \"resources\" : {\n              \"requests\" : {\n                \"cpu\" : 1,\n                \"memory\" : \"2Gi\"\n              }\n            },\n            \"volumeMounts\" : [ {\n              \"mountPath\" : \"/tmp/ray/session_latest/logs\",\n              \"name\" : \"logs\"\n            }, {\n              \"mountPath\" : \"/fluent-bit/etc/\",\n              \"name\" : \"fluent-bit-config\",\n              \"readOnly\" : true\n            } ]\n          }, {\n            \"name\" : \"c2\",\n            \"image\" : \"test\",\n            \"envFrom\" : [ {\n              \"configMapRef\" : {                \n                  \"name\" : \"test2\"                \n              }\n            }, {\n              \"configMapRef\" : {                \n                  \"name\" : \"test3\"                \n              }\n            } ],\n            \"resources\" : { }\n          } ]\n        }\n      }\n    }\n  },\n  \"status\" : { }\n}"
+	err = json.Unmarshal([]byte(jsonStr), testUnmarshalled)
+	//err = json.Unmarshal(testJSON, testUnmarshalled)
+	//err = (&jsonpb.Unmarshaler{
+	//	AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
+	//	AnyResolver:        &util.GenericResolver{},
+	//}).Unmarshal(bytes.NewReader(testJSON), testUnmarshalled)
+	assert.Nil(t, err)
+}
+func getAllowUnknownFieldsEnvVar() bool {
+	value := strings.ToLower(os.Getenv("PROTO_ALLOW_UNKNOWN_FIELDS"))
+	return value == "true" || value == "1" || value == "yes" || value == "y"
+}
+func TestPodTemplateSpecJSON(t *testing.T) {
+	// Test inline field
+	testObject := &testpb.TestObject{}
+	testObject.Namespace = "default"
+	testObject.Name = "object01"
+	testObject.Kind = "Object"
+	testObject.Spec.Description = "test"
+
+	testObject.Spec.Pod = &corev1.PodTemplateSpec{
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name:  "c1",
+					Image: "test",
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "test1",
+								},
+							},
+						},
+					},
+				},
+				{
+					Name:  "c2",
+					Image: "test",
+					EnvFrom: []corev1.EnvFromSource{
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "test2",
+								},
+							},
+						},
+						{
+							ConfigMapRef: &corev1.ConfigMapEnvSource{
+								LocalObjectReference: corev1.LocalObjectReference{
+									Name: "test3",
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testObjectJSON, err := json.Marshal(testObject)
+	assert.Nil(t, err)
+	assert.Equal(t, ObjectJSON, string(testObjectJSON))
+
+	testUnmarshalled := &testpb.TestObject{}
+	err = json.Unmarshal(testObjectJSON, testUnmarshalled)
+	assert.Nil(t, err)
 }
 
 func TestImmutability(t *testing.T) {

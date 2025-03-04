@@ -13,38 +13,104 @@ spec:
 #    reason: "job succeeded"
   head:
     serviceType: "ClusterIP"
+    rayStartParams:
+      block: "true"
+      dashboard-host: 0.0.0.0
     pod:
       spec:
+        volumes:
+          - name: logs
+            volumeSource:
+              emptyDir: { }
+          - name: fluent-bit-config
+            volumeSource:
+              configMap:
+                localObjectReference:
+                  name: fluent-bit-config
         containers:
           - name: head
-            image: rayproject/ray:2.5.0
+            image: docker.io/library/bert-cola-nv:latest
+            imagePullPolicy: Never
             lifecycle:
               postStart:
                 exec:
-                  command: [ "/bin/sh","-c", "echo","'Initializing Ray Head'" ]
+                  command: [ "/bin/sh", "-c", "echo 'Initializing Ray Head'" ]
             env:
               - name: RAY_HEAD_ENV
                 value: "true"
               - name: DEBUG
                 value: "false"
+            envFrom:
+              - configMapRef:
+                  localObjectReference:
+                    name: michelangelo-config
+            volumeMounts:
+              - name: logs
+                mountPath: /tmp/ray/session_latest/logs
+          - name: fluent-bit
+            image: fluent/fluent-bit:latest
+            args: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+            volumeMounts:
+              - mountPath: /tmp/ray/session_latest/logs
+                name: logs
+              - mountPath: /fluent-bit/etc/
+                name: fluent-bit-config
+                readOnly: true
+            envFrom:
+              - configMapRef:
+                  localObjectReference:
+                    name: fluent-bit-config
+              - configMapRef:
+                  localObjectReference:
+                    name: michelangelo-config
+
   workers:
     - minInstances: 1
       maxInstances: 1
+      rayStartParams:
+        block: "true"
+        dashboard-host: 0.0.0.0
       pod:
         spec:
+          volumes:
+            - name: logs
+              volumeSource:
+                emptyDir: { }
+            - name: fluent-bit-config
+              volumeSource:
+                configMap:
+                  localObjectReference:
+                    name: fluent-bit-config
           containers:
             - name: worker
               resources:
                 requests:
                   cpu: 1
                   memory: 2Gi
-              image: rayproject/ray:2.5.0
+              image: docker.io/library/bert-cola-nv:latest
+              imagePullPolicy: Never
               lifecycle:
                 postStart:
                   exec:
-                    command: [ "/bin/sh","-c", "echo","'Initializing Ray Worker'" ]
+                    command: [ "/bin/sh", "-c", "echo 'Initializing Ray Worker'" ]
               env:
                 - name: RAY_WORKER_ENV
                   value: "true"
                 - name: DEBUG
                   value: "false"
+              envFrom:
+                - configMapRef:
+                    localObjectReference:
+                      name: michelangelo-config
+              volumeMounts:
+                - name: logs
+                  mountPath: /tmp/ray/session_latest/logs
+            - name: fluent-bit
+              image: fluent/fluent-bit:latest
+              args: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
+              volumeMounts:
+                - mountPath: /tmp/ray/session_latest/logs
+                  name: logs
+                - mountPath: /fluent-bit/etc/
+                  name: fluent-bit-config
+                  readOnly: true

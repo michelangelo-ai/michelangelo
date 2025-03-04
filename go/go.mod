@@ -22,22 +22,26 @@ require (
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.67.1
 	google.golang.org/protobuf v1.35.2
-	k8s.io/api v0.32.0
-	k8s.io/apiextensions-apiserver v0.31.0
-	k8s.io/apimachinery v0.32.0
-	sigs.k8s.io/controller-runtime v0.19.3
+	k8s.io/api v0.30.2
+	k8s.io/apiextensions-apiserver v0.29.6
+	k8s.io/apimachinery v0.30.2
+	sigs.k8s.io/controller-runtime v0.17.5
 	sigs.k8s.io/yaml v1.4.0
 )
 
 require (
 	github.com/apache/thrift v0.16.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/evanphx/json-patch v5.9.0+incompatible // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.0 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
+	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/marusama/semaphore/v2 v2.5.0 // indirect
@@ -57,8 +61,8 @@ require (
 	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
-	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	k8s.io/component-base v0.29.6 // indirect
 )
 
 require (
@@ -68,7 +72,6 @@ require (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.0 // indirect
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-logr/logr v1.4.2
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
 	github.com/go-openapi/jsonreference v0.21.0 // indirect
@@ -96,7 +99,6 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/uber-go/tally v3.5.10+incompatible
 	github.com/uber/tchannel-go v1.34.5 // indirect
-	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/net/metrics v1.4.0 // indirect
@@ -116,12 +118,12 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.4.3 // indirect
-	k8s.io/client-go v0.32.0
+	k8s.io/client-go v0.30.2
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20241105132330-32ad38e42d3f // indirect
+	k8s.io/kube-openapi v0.0.0-20240620174524-b456828f718b // indirect
 	k8s.io/utils v0.0.0-20241104100929-3ea5e8cea738 // indirect
 	sigs.k8s.io/json v0.0.0-20241010143419-9aa6b5e7a4b3 // indirect
-	sigs.k8s.io/structured-merge-diff/v4 v4.4.2 // indirect
+	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 )
 
 replace github.com/michelangelo-ai/michelangelo/proto => ../proto
