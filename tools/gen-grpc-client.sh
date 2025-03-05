@@ -91,6 +91,11 @@ for CLIENT in "${CLIENT_ARRAY[@]}"; do
   rm -rf "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen"
   mkdir -p "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen"
 
-  mv "${TMP_DIR}/gen/${CLIENT}/k8s.io" "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen/k8s.io"
+  if [ "${CLIENT}" == "python" ]; then
+    mv "${TMP_DIR}/gen/${CLIENT}/k8s" "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen/k8s"
+  elif [ "${CLIENT}" == "javascript" ]; then
+    mv "${TMP_DIR}/gen/${CLIENT}/k8s.io" "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen/k8s.io"
+  fi
+
   mv "${TMP_DIR}/gen/${CLIENT}/michelangelo/api"* "${WORKSPACE_ROOT}/${CLIENT}/michelangelo/gen/api"
 done
