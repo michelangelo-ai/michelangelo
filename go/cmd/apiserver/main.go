@@ -10,7 +10,9 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
 )
@@ -28,6 +30,7 @@ func opts() fx.Option {
 		env.Module,
 		config.Module,
 		zapfx.Module,
+		fx.Invoke(printConfig),
 		apihandler.APIServerModule,
 		auth.DummyAuthModule,
 		logging.DummyAuditLogModule,
@@ -61,4 +64,8 @@ func getScheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+func printConfig(logger *zap.Logger, provider uberconfig.Provider) {
+	logger.Info("Configuration", zap.Any("config", provider.Get(uberconfig.Root)))
 }
