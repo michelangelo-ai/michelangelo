@@ -1,0 +1,35 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "module.go",
+        "ray_activities.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/temporalworker/activities/ray",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_client_go//util/retry:go_default_library",
+        "@io_temporal_go_sdk//activity:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@io_temporal_go_sdk//worker:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["ray_activities_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "//proto/api/v2:go_michelangelo_v2_gomock_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)

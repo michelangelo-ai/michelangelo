@@ -4,9 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/gogo/protobuf/proto"
 	"go.uber.org/cadence"
-	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -313,22 +311,4 @@ func (r *activities) SensorRayJob(ctx context.Context, request v2pb.GetRayJobReq
 func hasClusterTerminalCondition(state v2pb.RayClusterState) bool {
 	return state == v2pb.RAY_CLUSTER_STATE_TERMINATED ||
 		state == v2pb.RAY_CLUSTER_STATE_FAILED
-}
-
-func _activity[REQ proto.Message, RES proto.Message](
-	ctx context.Context,
-	request REQ,
-	delegate func(context.Context, REQ, ...yarpc.CallOption) (RES, error),
-) (
-	RES,
-	*cadence.CustomError,
-) {
-	logger := log.FromContext(ctx)
-	logger.Info("activity-start", zap.Any("request", request))
-	response, err := delegate(ctx, request)
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return *new(RES), cadence.NewCustomError(err.Error())
-	}
-	return response, nil
 }

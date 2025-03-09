@@ -14,10 +14,13 @@ require (
 	github.com/ray-project/kuberay/ray-operator v1.2.2
 	github.com/stretchr/testify v1.10.0
 	go.starlark.net v0.0.0-20250128212104-d908c3ead437
+	go.temporal.io/api v1.44.1
+	go.temporal.io/sdk v1.33.0
 	go.uber.org/cadence v1.2.9
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.75.3
+	golang.org/x/crypto v0.33.0
 	golang.org/x/tools v0.26.0
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.67.1
@@ -38,12 +41,15 @@ require (
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.0 // indirect
+	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.9 // indirect
 	github.com/marusama/semaphore/v2 v2.5.0 // indirect
 	github.com/minio/crc64nvme v1.0.0 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
-	github.com/pborman/uuid v0.0.0-20160209185913-a97ce2ca70fa // indirect
+	github.com/nexus-rpc/sdk-go v0.3.0 // indirect
+	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
@@ -54,9 +60,9 @@ require (
 	github.com/uber-go/mapdecode v1.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/dig v1.17.1 // indirect
-	golang.org/x/crypto v0.33.0 // indirect
 	golang.org/x/exp v0.0.0-20240613232115-7f521ea00fb8 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20240827150818-7e3bb234dfed // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
@@ -98,7 +104,7 @@ require (
 	github.com/uber/tchannel-go v1.34.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	go.uber.org/multierr v1.11.0 // indirect
+	go.uber.org/multierr v1.11.0
 	go.uber.org/net/metrics v1.4.0 // indirect
 	go.uber.org/thriftrw v1.32.0 // indirect
 	go.uber.org/zap v1.27.0

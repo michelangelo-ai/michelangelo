@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["main.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/temporalworker",
+    visibility = ["//visibility:private"],
+    deps = [
+        "//go/base/cadencefx:go_default_library",
+        "//go/base/config:go_default_library",
+        "//go/base/env:go_default_library",
+        "//go/base/zapfx:go_default_library",
+        "//go/cadence-starlark/ext/cadence:go_default_library",
+        "//go/temporalworker:go_default_library",
+        "@io_temporal_go_sdk//client:go_default_library",
+        "@io_temporal_go_sdk//worker:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_binary(
+    name = "temporalworker",
+    data = ["config"],
+    embed = [":go_default_library"],
+    env = {
+        "CONFIG_DIR": "$(location :config)",
+    },
+    visibility = ["//visibility:public"],
+)

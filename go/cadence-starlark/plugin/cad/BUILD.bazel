@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "future.go",
+        "module.go",
+        "plugin.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cadence-starlark/plugin/cad",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cadence-starlark/cadstar:go_default_library",
+        "//go/cadence-starlark/star:go_default_library",
+        "@io_temporal_go_api//enums/v1:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@io_temporal_go_sdk//workflow:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+    ],
+)

@@ -1,0 +1,27 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "plugin.go",
+        "starlark_module.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/temporalworker/plugins/ray",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cadence-starlark/cadstar:go_default_library",
+        "//go/cadence-starlark/ext:go_default_library",
+        "//go/cadence-starlark/star:go_default_library",
+        "//go/temporalworker/activities/ray:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@io_temporal_go_sdk//workflow:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)

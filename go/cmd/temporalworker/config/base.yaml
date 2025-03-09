@@ -1,0 +1,17 @@
+worker:
+  taskQueue: default
+  namespace: default
+  address: localhost:7233
+  maApiServiceAddress: localhost:14566
+  maApiServiceName: ma-apiserver
+
+logging:
+  level: debug
+  development: true
+  encoding: console
+
+minio:
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: localhost:9001

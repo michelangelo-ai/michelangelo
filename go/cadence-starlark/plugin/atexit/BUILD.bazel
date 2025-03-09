@@ -1,0 +1,13 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["plugin.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cadence-starlark/plugin/atexit",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cadence-starlark/cadstar:go_default_library",
+        "//go/cadence-starlark/star:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+    ],
+)

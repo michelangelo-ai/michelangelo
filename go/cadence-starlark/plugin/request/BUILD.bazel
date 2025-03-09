@@ -1,0 +1,24 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "activities.go",
+        "module.go",
+        "plugin.go",
+        "response.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cadence-starlark/plugin/request",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/cadence-starlark/cadstar:go_default_library",
+        "//go/cadence-starlark/ext:go_default_library",
+        "//go/cadence-starlark/star:go_default_library",
+        "@com_github_json_iterator_go//:go_default_library",
+        "@io_temporal_go_sdk//activity:go_default_library",
+        "@io_temporal_go_sdk//temporal:go_default_library",
+        "@io_temporal_go_sdk//worker:go_default_library",
+        "@io_temporal_go_sdk//workflow:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+    ],
+)
