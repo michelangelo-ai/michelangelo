@@ -5,23 +5,31 @@ metadata:
   namespace: default
 spec:
   rayVersion: "2.2.0"
-#  termination:
-#    type: TERMINATION_TYPE_FAILED
-#    reason: "killed by user"
-#  termination:
-#    type: TERMINATION_TYPE_SUCCEEDED
-#    reason: "job succeeded"
+  #  termination:
+  #    type: TERMINATION_TYPE_FAILED
+  #    reason: "killed by user"
+  #  termination:
+  #    type: TERMINATION_TYPE_SUCCEEDED
+  #    reason: "job succeeded"
   head:
     serviceType: "ClusterIP"
+    rayStartParams:
+      block: "true"
+      dashboard-host: "0.0.0.0"
     pod:
       spec:
         containers:
           - name: head
-            image: rayproject/ray:2.5.0
+            image: docker.io/library/bert-cola-nv:latest
+            imagePullPolicy: Never
             lifecycle:
               postStart:
                 exec:
                   command: [ "/bin/sh","-c", "echo","'Initializing Ray Head'" ]
+            envFrom:
+              - configMapRef:
+                  localObjectReference:
+                    name: michelangelo-config
             env:
               - name: RAY_HEAD_ENV
                 value: "true"
@@ -30,19 +38,36 @@ spec:
   workers:
     - minInstances: 1
       maxInstances: 1
+      rayStartParams:
+        block: "true"
+        dashboard-host: "0.0.0.0"
       pod:
         spec:
+          volumes:
+            - name: dshm
+              volumeSource:
+                emptyDir:
+                  medium: Memory
+                  sizeLimit: 1Gi
           containers:
             - name: worker
+              volumeMounts:
+                - mountPath: /dev/shm
+                  name: dshm
               resources:
                 requests:
                   cpu: 1
-                  memory: 2Gi
-              image: rayproject/ray:2.5.0
+                  memory: 1Gi
+              image: docker.io/library/bert-cola-nv:latest
+              imagePullPolicy: Never
               lifecycle:
                 postStart:
                   exec:
                     command: [ "/bin/sh","-c", "echo","'Initializing Ray Worker'" ]
+              envFrom:
+                - configMapRef:
+                    localObjectReference:
+                      name: michelangelo-config
               env:
                 - name: RAY_WORKER_ENV
                   value: "true"

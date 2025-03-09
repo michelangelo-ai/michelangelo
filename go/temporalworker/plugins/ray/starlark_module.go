@@ -19,9 +19,9 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-var timeout int64 = 0
 var maxAttempts int32 = 5
 var sensorJobMaxAttempts int32 = 500
+var sensorClusterMaxAttempts int32 = 500
 var poll int64 = 10
 
 const pluginID = "ray"
@@ -74,7 +74,7 @@ func createCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple,
 	cluster = *response.RayCluster
 
 	srp := ext.TemporalDefaultSensorRetryPolicy
-	srp.MaximumAttempts = maxAttempts
+	srp.MaximumAttempts = sensorClusterMaxAttempts
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
@@ -217,6 +217,9 @@ func terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 		return nil, err
 	}
 
+	if true {
+		return starlark.Bool(true), nil
+	}
 	var res v2pb.UpdateRayClusterResponse
 	srp := ext.TemporalDefaultSensorRetryPolicy
 	srp.MaximumAttempts = maxAttempts
