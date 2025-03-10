@@ -142,9 +142,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     )
     links.append(("Cadence Dashboard", f"http://localhost:8088/domains/{_cadence_domain}/workflows", ""))
 
-    # write _api_run for go service
-    _api_run()
-
     print()
     print("Sandbox created. To access the services, please use the following links:")
     for title, url, comment in links:
