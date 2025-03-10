@@ -25,9 +25,9 @@ metadata:
     app: michelangelo-worker
 data:
   base.yaml: |
-    # worker:
-    #   address: michelangelo-apiserver:14566
-    #   maApiServiceName: ma-apiserver
+    worker:
+      address: localhost:14566
+      maApiServiceName: ma-apiserver
 
     logging:
       level: info
@@ -35,7 +35,7 @@ data:
       encoding: console
 
     cadence:
-      host: cadence:7833
+      host: localhost:7833
       transport: grpc
       workers:
         - domain: default
@@ -43,8 +43,8 @@ data:
       client:
         domain: default
 
-    # minio:
-    #   awsRegion: us-east-1
-    #   awsAccessKeyId: minioadmin
-    #   awsSecretAccessKey: minioadmin
-    #   awsEndpointUrl: minio:9001
+    minio:
+      awsRegion: us-east-1
+      awsAccessKeyId: minioadmin
+      awsSecretAccessKey: minioadmin
+      awsEndpointUrl: localhost:9001
