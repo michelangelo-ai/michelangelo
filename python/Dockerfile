@@ -46,7 +46,7 @@ COPY pyproject.toml poetry.lock ./
 # Copy the application code
 COPY ../.. .
 
-RUN poetry config virtualenvs.create false && poetry install --all-extras --no-interaction --no-ansi && pip install ray[default] numpy==1.23.4 torch==2.0.1 transformers==4.36.2 pandas==1.5.1 pyarrow
+RUN poetry config virtualenvs.create false && poetry install --all-extras --no-interaction --no-ansi && pip install ray[default] numpy==1.23.4 torch==2.0.1 transformers==4.36.2 pandas==1.5.1 pyarrow s3fs==2024.3.0
 
 # Set entrypoint using Poetry
 CMD ["bash", "-c", "ray"]
