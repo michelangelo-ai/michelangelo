@@ -117,6 +117,10 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml", "michelangelo-config.yaml"]
     if "worker" not in ns.exclude:
         resources.append("michelangelo-worker.yaml")
+    if "apiserver" not in ns.exclude:
+        resources.append("michelangelo-apiserver.yaml")
+    if "controllermgr" not in ns.exclude:
+        resources.append("michelangelo-controllermgr.yaml")
 
     for r in resources:
         _kube_create(_dir / "resources" / r)
@@ -137,6 +141,9 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         retry_attempts=3,
     )
     links.append(("Cadence Dashboard", f"http://localhost:8088/domains/{_cadence_domain}/workflows", ""))
+
+    # write _api_run for go service
+    _api_run()
 
     print()
     print("Sandbox created. To access the services, please use the following links:")

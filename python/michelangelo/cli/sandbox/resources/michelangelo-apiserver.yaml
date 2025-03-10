@@ -1,0 +1,39 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: michelangelo-apiserver
+  labels:
+    app: michelangelo-apiserver
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/michelangelo-ai/apiserver:main
+      volumeMounts:
+        - name: config-volume
+          mountPath: /config
+  volumes:
+    - name: config-volume
+      configMap:
+        name: michelangelo-apiserver-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-apiserver-config
+  labels:
+    app: michelangelo-apiserver
+data:
+  base.yaml: |
+    apiserver:
+      yarpc:
+        host: "localhost"
+        port: 14566
+      k8s:
+        qps: 300
+        burst: 600
+      metadataStorage:
+        enableMetadataStorage: false
+      crdSync:
+        enableCRDUpdate: true
+        enableIncompatibleUpdate: false
