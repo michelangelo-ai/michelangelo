@@ -217,9 +217,6 @@ func terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 		return nil, err
 	}
 
-	if true {
-		return starlark.Bool(true), nil
-	}
 	var res v2pb.UpdateRayClusterResponse
 	srp := ext.TemporalDefaultSensorRetryPolicy
 	srp.MaximumAttempts = maxAttempts
