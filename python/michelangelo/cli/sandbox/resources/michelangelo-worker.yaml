@@ -10,10 +10,10 @@ spec:
     - name: app
       image: ghcr.io/michelangelo-ai/worker:main
       volumeMounts:
-        - name: config-volume
+        - name: worker-config-volume
           mountPath: /config
   volumes:
-    - name: config-volume
+    - name: worker-config-volume
       configMap:
         name: michelangelo-worker-config
 ---
@@ -25,16 +25,26 @@ metadata:
     app: michelangelo-worker
 data:
   base.yaml: |
+    worker:
+      address: localhost:14566
+      maApiServiceName: ma-apiserver
+
     logging:
       level: info
       development: true
       encoding: console
 
     cadence:
-      host: cadence:7833
+      host: localhost:7833
       transport: grpc
       workers:
         - domain: default
           taskList: default
       client:
         domain: default
+
+    minio:
+      awsRegion: us-east-1
+      awsAccessKeyId: minioadmin
+      awsSecretAccessKey: minioadmin
+      awsEndpointUrl: localhost:9001
