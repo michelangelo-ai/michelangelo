@@ -24,6 +24,17 @@ go_binary(
     env = {
         "CONFIG_DIR": "$(location :config)",
     },
+    gc_linkopts = select({
+        "@io_bazel_rules_go//go/platform:linux": [
+            # The following GC options instruct Bazel to build a static binary for running the service in a static
+            # Distroless container. https://github.com/GoogleContainerTools/distroless
+            "-linkmode",
+            "external",
+            "-extldflags",
+            "-static",
+        ],
+        "//conditions:default": [],
+    }),
     visibility = ["//visibility:public"],
 )
 
