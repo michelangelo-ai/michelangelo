@@ -26,6 +26,7 @@ _kube_ports = [
     "8088:30004",  # Cadence Web
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO
+    "14566:30009",  # Michelangelo API Server
 ]
 _cadence_domain = "default"
 
