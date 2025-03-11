@@ -1,4 +1,6 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@rules_oci//oci:defs.bzl", "oci_image")
+load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 go_library(
     name = "go_default_library",
@@ -23,4 +25,17 @@ go_binary(
         "CONFIG_DIR": "$(location :config)",
     },
     visibility = ["//visibility:public"],
+)
+
+pkg_tar(
+    name = "tar",
+    srcs = [":worker"],
+    files = {file: file for file in glob(["config/*.yaml"])},
+)
+
+oci_image(
+    name = "image",
+    base = "@distroless_base",
+    entrypoint = ["/worker"],
+    tars = [":tar"],
 )
