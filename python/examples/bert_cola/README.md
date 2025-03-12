@@ -54,6 +54,12 @@ a new revision of the project's container, or use an existing revision if you di
 
 Copy the build's `Revision ID`, we use it later.
 
+In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
+
+    k3d image import bert-cola-nv:latest -c michelangelo-sandbox
+
+Before running the remote, we need to have a default storage bucket. If you don't have one, create it.
+In your browser, open http://localhost:9090/buckets, click "Create Bucket" and create a bucket with the name `default`.
 <hr/>
 
 **Run workflows in the remote cluster**
