@@ -261,7 +261,7 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
     args = json.dumps(args) if args else "[]"
     kwargs = json.dumps(kwargs) if kwargs else "{}"
 
-    return "python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
+    return "poetry run python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
 
 # Constructs a Unified API resource for provisioning a Ray Cluster.
 # This function generates a RayJob Custom Resource Definition (CRD) that defines the specifications for a Ray cluster.
