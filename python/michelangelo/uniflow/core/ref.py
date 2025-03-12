@@ -52,6 +52,8 @@ def unref(value, io: IORegistry):
     # If Ref - read checkpoint: run IO.read and replace Ref with the actual value
     if isinstance(value, Ref):
         value_type = value.type
+        # when type json is missing "__class__" key, it's not get unmarsheled to the correct type, so we need to add
+        # logic to get the path from the metadata and import the module and class
         if isinstance(value_type, dict) and "path" in value_type:
             import importlib
             path = value_type["path"]
