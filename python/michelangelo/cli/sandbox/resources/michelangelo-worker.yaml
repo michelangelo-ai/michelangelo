@@ -26,7 +26,7 @@ metadata:
 data:
   base.yaml: |
     worker:
-      address: localhost:14566
+      address: host.docker.internal:14566
       maApiServiceName: ma-apiserver
 
     logging:
@@ -35,7 +35,7 @@ data:
       encoding: console
 
     cadence:
-      host: localhost:7833
+      host: host.docker.internal:7833
       transport: grpc
       workers:
         - domain: default
@@ -47,4 +47,4 @@ data:
       awsRegion: us-east-1
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
-      awsEndpointUrl: localhost:9001
+      awsEndpointUrl: host.docker.internal:9091
