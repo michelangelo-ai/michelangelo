@@ -2,6 +2,8 @@ package apihook
 
 import (
 	"context"
+	"strings"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
@@ -13,7 +15,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sCoreClient "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
-	"strings"
 )
 
 const (

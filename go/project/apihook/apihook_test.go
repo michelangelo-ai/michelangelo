@@ -2,6 +2,8 @@ package apihook
 
 import (
 	"context"
+	"testing"
+
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
@@ -13,7 +15,6 @@ import (
 	k8sCoreClient "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	k8stesting "k8s.io/client-go/testing"
-	"testing"
 )
 
 func TestCreateProject(t *testing.T) {
