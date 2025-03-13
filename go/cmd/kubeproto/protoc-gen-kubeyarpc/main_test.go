@@ -50,6 +50,7 @@ func TestGen(t *testing.T) {
 	assert.Contains(t, p.imports, `"go.uber.org/fx"`)
 	assert.Contains(t, p.imports, `"k8s.io/apimachinery/pkg/apis/meta/v1"`)
 
-	assert.Contains(t, c, `func NewProjectServiceHandler(handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) ProjectServiceYARPCServer`)
+	assert.Contains(t, c, `func NewProjectServiceHandler(params FxProjectServiceHandlerParams) ProjectServiceYARPCServer {`)
+	assert.Contains(t, c, `type ProjectAPIHook interface`)
 	assert.Contains(t, c, `var ProjectSvcModule =`)
 }

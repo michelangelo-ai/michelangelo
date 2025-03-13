@@ -8,6 +8,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
+	projectapihook "github.com/michelangelo-ai/michelangelo/go/project/apihook"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
@@ -40,6 +41,7 @@ func opts() fx.Option {
 		fx.Provide(getMetadataStorageConfig),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
+		fx.Provide(projectapihook.GetProjectAPIHook),
 		v2pb.ProjectSvcModule,
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
