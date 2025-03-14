@@ -54,11 +54,16 @@ type apiHook struct {
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateProjectRequest) error {
 	// Validate the request
 	if request.Project.Namespace != _integrationTestNamespace && request.Project.Name != request.Project.Namespace {
-		return status.Errorf(codes.InvalidArgument, "project name and namespace cannot be different")
+		return status.Errorf(codes.InvalidArgument,
+			"project name <%s> is different from namespace name <%s>. Project name must be the same as namespace name.",
+			request.Project.Name,
+			request.Project.Namespace)
 	}
 
 	if request.Project.Namespace == _defaultNamespace || strings.HasPrefix(request.Project.Namespace, _systemNamespacePrefix) {
-		return status.Errorf(codes.PermissionDenied, "users are forbidden to create project in default or system namespace")
+		return status.Errorf(codes.PermissionDenied,
+			"namespace <%s> is invalid. Users are forbidden to create projects in default or system namespace",
+			request.Project.Namespace)
 	}
 
 	// Create namespace

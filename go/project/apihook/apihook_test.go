@@ -112,7 +112,9 @@ func TestCreateProject(t *testing.T) {
 			},
 			setup: nil,
 			assert: func(t *testing.T, err error, client k8sCoreClient.CoreV1Interface) {
-				assert.Error(t, err, "project name and namespace cannot be different")
+				assert.Error(t, err)
+				assert.ErrorContains(t, err,
+					"project name <test_project> is different from namespace name <test>. Project name must be the same as namespace name.")
 			},
 		},
 		{
@@ -136,7 +138,9 @@ func TestCreateProject(t *testing.T) {
 			},
 			setup: nil,
 			assert: func(t *testing.T, err error, client k8sCoreClient.CoreV1Interface) {
-				assert.Error(t, err, "users are forbidden to create project in default or system namespace")
+				assert.Error(t, err)
+				assert.ErrorContains(t, err,
+					"namespace <default> is invalid. Users are forbidden to create projects in default or system namespace")
 			},
 		},
 	}
