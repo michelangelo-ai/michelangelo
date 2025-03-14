@@ -1,5 +1,21 @@
-func New{{.KindName}}ServiceHandler(handler api.Handler, metricsScope tally.Scope, auth authapi.Auth, auditLog logging.AuditLog) {{.KindName}}ServiceYARPCServer {
-	return &{{.LowerKindName}}ServiceHandler{apiHandler: handler, MetricsScope: metricsScope.SubScope(logging.MichelangeloAPIScopeName), auth: auth, auditLogEmitter: auditLog}
+type Fx{{.KindName}}ServiceHandlerParams struct {
+	fx.In
+
+	Handler      api.Handler
+	MetricsScope tally.Scope
+	Auth         authapi.Auth
+	AuditLog     logging.AuditLog
+	ApiHooks     []{{.KindName}}APIHook `group:"apiHooks"`
+}
+
+func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
+	return &{{.LowerKindName}}ServiceHandler{
+	    apiHandler:      params.Handler,
+	    MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),
+	    auth:            params.Auth,
+	    auditLogEmitter: params.AuditLog,
+	    apiHooks:        params.ApiHooks,
+	}
 }
 
 type {{.LowerKindName}}ServiceHandler struct {
@@ -7,15 +23,12 @@ type {{.LowerKindName}}ServiceHandler struct {
 	MetricsScope    tally.Scope
 	auth            authapi.Auth
 	auditLogEmitter logging.AuditLog
+	apiHooks        []{{.KindName}}APIHook
 }
 
-// Emit{{.KindName}}WriteMetric allows developer to emit metrics when they Create and Update each CRD object
-// This metric emitter will emit metrics after the Create/Update API call completed.
-var Emit{{.KindName}}WriteMetric func(context.Context, tally.Scope, *{{.KindName}}, error, api.Handler) = nil
-
-// {{.KindName}}ApiHook allows API developers to hook the standard CRUD methods,
+// {{.KindName}}APIHook allows API developers to hook the standard CRUD methods,
 // before the request is sent to K8s API server, or before the response is returned to the client.
-var {{.KindName}}ApiHook interface {
+type {{.KindName}}APIHook interface {
 	// BeforeCreate is called before a Create{{.KindName}}Request is sent to the K8s API server.
 	//
 	// This method can be used to validate or modify the Create{{.KindName}}Request, before it's sent to the k8s API
@@ -77,11 +90,38 @@ var {{.KindName}}ApiHook interface {
 	// removed, the gRPC call Delete{{.KindName}} still returns success (error = nil). It's the API developer's
 	// responsibility to remove the orphan data (e.g. with a garbage collection job).
 	OnDeleteCollectionSuccess(context.Context, *Delete{{.KindName}}CollectionRequest)
+}
 
+// Noop{{.KindName}}APIHook is a no-op implementation of {{.KindName}}APIHook, which can be embedded in a
+// {{.KindName}}APIHook struct to implement only the methods that are needed.
+type Noop{{.KindName}}APIHook struct{}
 
-} = nil
+func (n Noop{{.KindName}}APIHook) BeforeCreate(context.Context, *Create{{.KindName}}Request) error {
+	return nil
+}
 
-func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
+func (n Noop{{.KindName}}APIHook) BeforeUpdate(context.Context, *Update{{.KindName}}Request) error {
+	return nil
+}
+
+func (n Noop{{.KindName}}APIHook) OnGetSuccess(context.Context, *{{.KindName}}) error {
+	return nil
+}
+
+func (n Noop{{.KindName}}APIHook) BeforeDelete(context.Context, *Delete{{.KindName}}Request) error {
+	return nil
+}
+
+func (n Noop{{.KindName}}APIHook) OnDeleteSuccess(context.Context, *Delete{{.KindName}}Request) {}
+
+func (n Noop{{.KindName}}APIHook) BeforeDeleteCollection(context.Context, *Delete{{.KindName}}CollectionRequest) error {
+	return nil
+}
+
+func (n Noop{{.KindName}}APIHook) OnDeleteCollectionSuccess(context.Context, *Delete{{.KindName}}CollectionRequest) {}
+
+func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
+	ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
 	requestJSON := logging.MarshalToString(request)
@@ -95,10 +135,6 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
 
-	if Emit{{.KindName}}WriteMetric != nil {
-		defer Emit{{.KindName}}WriteMetric(ctx, metric, request.{{.KindName}}, err, c.apiHandler)
-	}
-
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForCreate(
 												ctx,
 												request,
@@ -111,9 +147,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
 	if !userAuthenticated {
 		logger.Error(err, "User is not authenticated")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthenticated").Inc(1)
-		}
+		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
 	}
 
@@ -123,9 +157,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 
 	if !userAuthorized {
 		logger.Error(err, "User is not authorized")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthorized").Inc(1)
-		}
+		metric.Counter("unauthorized").Inc(1)
 		return nil, err
 	}
 
@@ -134,43 +166,35 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(ctx context.Contex
 		createOptions = request.CreateOptions
 	}
 
-	if {{.KindName}}ApiHook != nil {
-		if err = api.Validate(request.{{.KindName}}); err != nil {
-			if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-			}
-			return nil, err
-		}
-		if err = {{.KindName}}ApiHook.BeforeCreate(ctx, request); err != nil {
-			logger.Error(err, "Error in BeforeCreate Validation", "error", err, "api_msg_tag", "Create{{.KindName}}")
-			if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-			}
-			return nil, err
-		}
-
+    if err = api.Validate(request.{{.KindName}}); err != nil {
+		metric.Counter("fail").Inc(1)
+		return nil, err
 	}
 
+    for _, hook := range c.apiHooks {
+        if err = hook.BeforeCreate(ctx, request); err != nil {
+            logger.Error(err, "Error in BeforeCreate API hook", "error", err, "api_msg_tag", "Create{{.KindName}}")
+            metric.Counter("fail").Inc(1)
+            return nil, err
+        }
+    }
 
 	err = c.apiHandler.Create(ctx, request.{{.KindName}}, createOptions)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to create {{.KindName}}", "error", err, "api_msg_tag", "Create{{.KindName}}")
-		if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-		}
+		metric.Counter("fail").Inc(1)
 		return nil, err
 	}
 
 	logger.Info("Create{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Create{{.KindName}}")
 
-	if Emit{{.KindName}}WriteMetric == nil {
-		metric.Counter("success").Inc(1)
-	}
+	metric.Counter("success").Inc(1)
 	return &Create{{.KindName}}Response{ {{.KindName}}: request.{{.KindName}}}, err
 }
 
-func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
+func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
+	ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 	requestJSON := logging.MarshalToString(request)
 
@@ -211,14 +235,13 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, 
 	result.APIVersion = "michelangelo.uber.com/v2beta1"
 	result.Kind = "{{.KindName}}"
 
-	if {{.KindName}}ApiHook != nil {
-		if err = {{.KindName}}ApiHook.OnGetSuccess(ctx, result); err != nil {
-			logger.Error(err, "Error in OnGetSuccess call after successful k8s Get", "error", err, "api_msg_tag", "Get{{.KindName}}")
-			metric.Counter("fail").Inc(1)
-			return nil, err
-		}
-
-	}
+    for _, hook := range c.apiHooks {
+        if err = hook.OnGetSuccess(ctx, result); err != nil {
+            logger.Error(err, "Error in OnGetSuccess API hook", "error", err, "api_msg_tag", "Get{{.KindName}}")
+            metric.Counter("fail").Inc(1)
+            return nil, err
+        }
+    }
 
 	logger.Info("Get{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Get{{.KindName}}")
 
@@ -229,7 +252,8 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(ctx context.Context, 
 	return &Get{{.KindName}}Response{ {{.KindName}}: result}, nil
 }
 
-func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
+func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
+	ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 	requestJSON := logging.MarshalToString(request)
 
@@ -241,10 +265,6 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 		logging.NamespaceTag:    request.{{.KindName}}.ObjectMeta.Namespace,
 		logging.EntityNameTag:   request.{{.KindName}}.ObjectMeta.Name,
 	})
-
-	if Emit{{.KindName}}WriteMetric != nil {
-		defer Emit{{.KindName}}WriteMetric(ctx, metric, request.{{.KindName}}, err, c.apiHandler)
-	}
 
 	defer c.auditLogEmitter.Emit(ctx, c.build{{.KindName}}AuditLogEventForUpdate(
 												ctx,
@@ -258,9 +278,7 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
 	if !userAuthenticated {
 		logger.Error(err, "User is not authenticated")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthenticated").Inc(1)
-		}
+		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
 	}
 
@@ -270,9 +288,7 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 
 	if !userAuthorized {
 		logger.Error(err, "User is not authorized")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthorized").Inc(1)
-		}
+		metric.Counter("unauthorized").Inc(1)
 		return nil, err
 	}
 
@@ -281,42 +297,35 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(ctx context.Contex
 		updateOptions = request.UpdateOptions
 	}
 
-	if {{.KindName}}ApiHook != nil {
-		if err = api.Validate(request.{{.KindName}}); err != nil {
-			if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-			}
-			return nil, err
-		}
-		if err = {{.KindName}}ApiHook.BeforeUpdate(ctx, request); err != nil {
-			logger.Error(err, "Error in BeforeUpdate Validation", "error", err, "api_msg_tag", "Update{{.KindName}}")
-			if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-			}
-			return nil, err
-		}
+    if err = api.Validate(request.{{.KindName}}); err != nil {
+    	metric.Counter("fail").Inc(1)
+    	return nil, err
+    }
 
-	}
+    for _, hook := range c.apiHooks {
+        if err = hook.BeforeUpdate(ctx, request); err != nil {
+            logger.Error(err, "Error in BeforeUpdate API hook", "error", err, "api_msg_tag", "Update{{.KindName}}")
+            metric.Counter("fail").Inc(1)
+            return nil, err
+        }
+    }
 
 	err = c.apiHandler.Update(ctx, request.{{.KindName}}, updateOptions)
 
 	if err != nil {
 		logger.Error(err, "API Handler failed to update {{.KindName}}", "error", err, "api_msg_tag", "Update{{.KindName}}")
-		if Emit{{.KindName}}WriteMetric == nil {
-				metric.Counter("fail").Inc(1)
-		}
+		metric.Counter("fail").Inc(1)
 		return nil, err
 	}
 
 	logger.Info("Update{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Update{{.KindName}}")
 
-	if Emit{{.KindName}}WriteMetric == nil {
-		metric.Counter("success").Inc(1)
-	}
+	metric.Counter("success").Inc(1)
 	return &Update{{.KindName}}Response{ {{.KindName}}: request.{{.KindName}}}, err
 }
 
-func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
+func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
+	ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 	requestJSON := logging.MarshalToString(request)
 
@@ -341,9 +350,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
 	if !userAuthenticated {
 		logger.Error(err, "User is not authenticated")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthenticated").Inc(1)
-		}
+		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
 	}
 
@@ -353,9 +360,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 
 	if !userAuthorized {
 		logger.Error(err, "User is not authorized")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthorized").Inc(1)
-		}
+		metric.Counter("unauthorized").Inc(1)
 		return nil, err
 	}
 
@@ -367,14 +372,13 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 	deleteObj := &{{.KindName}}{
 		ObjectMeta: metav1.ObjectMeta{Namespace: request.Namespace, Name: request.Name}}
 
-	if {{.KindName}}ApiHook != nil {
-		if err = {{.KindName}}ApiHook.BeforeDelete(ctx, request); err != nil {
-			logger.Error(err, "Error in BeforeDelete Validation", "error", err, "api_msg_tag", "Delete{{.KindName}}")
-			metric.Counter("fail").Inc(1)
-			return nil, err
-		}
-
-	}
+    for _, hook := range c.apiHooks {
+        if err = hook.BeforeDelete(ctx, request); err != nil {
+            logger.Error(err, "Error in BeforeDelete API hook", "error", err, "api_msg_tag", "Delete{{.KindName}}")
+            metric.Counter("fail").Inc(1)
+            return nil, err
+        }
+    }
 
 	err = c.apiHandler.Delete(ctx, deleteObj, deleteOptions)
 
@@ -384,9 +388,9 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 		return nil, err
 	}
 
-	if {{.KindName}}ApiHook != nil {
-		{{.KindName}}ApiHook.OnDeleteSuccess(ctx, request)
-	}
+    for _, hook := range c.apiHooks {
+        hook.OnDeleteSuccess(ctx, request)
+    }
 
 	logger.Info("Delete{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}")
 
@@ -394,7 +398,8 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(ctx context.Contex
 	return &Delete{{.KindName}}Response{}, nil
 }
 
-func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
+func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
+	ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 	requestJSON := logging.MarshalToString(request)
 
@@ -418,9 +423,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 	userAuthenticated, err := c.auth.UserAuthenticated(ctx)
 	if !userAuthenticated {
 		logger.Error(err, "User is not authenticated")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthenticated").Inc(1)
-		}
+		metric.Counter("unauthenticated").Inc(1)
 		return nil, err
 	}
 
@@ -430,9 +433,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 
 	if !userAuthorized {
 		logger.Error(err, "User is not authorized")
-		if Emit{{.KindName}}WriteMetric == nil {
-			metric.Counter("unauthorized").Inc(1)
-		}
+		metric.Counter("unauthorized").Inc(1)
 		return nil, err
 	}
 
@@ -446,13 +447,12 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 		listOptions = request.ListOptions
 	}
 
-	if {{.KindName}}ApiHook != nil {
-		if err = {{.KindName}}ApiHook.BeforeDeleteCollection(ctx, request); err != nil {
-			logger.Error(err, "Error in BeforeDeleteCollection Validation", "error", err, "api_msg_tag", "Delete{{.KindName}}Collection")
+	for _, hook := range c.apiHooks {
+		if err = hook.BeforeDeleteCollection(ctx, request); err != nil {
+		 	logger.Error(err, "Error in BeforeDeleteCollection", "error", err, "api_msg_tag", "Delete{{.KindName}}Collection")
 			metric.Counter("fail").Inc(1)
 			return nil, err
 		}
-
 	}
 
 	err = c.apiHandler.DeleteCollection(ctx, &{{.KindName}}{}, request.Namespace, deleteOptions, listOptions)
@@ -463,9 +463,9 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 		return nil, err
 	}
 
-	if {{.KindName}}ApiHook != nil {
-		{{.KindName}}ApiHook.OnDeleteCollectionSuccess(ctx, request)
-	}
+    for _, hook := range c.apiHooks {
+        hook.OnDeleteCollectionSuccess(ctx, request)
+    }
 
 	logger.Info("Delete{{.KindName}}Collection Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}Collection")
 
@@ -473,7 +473,8 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(ctx cont
 	return &Delete{{.KindName}}CollectionResponse{}, nil
 }
 
-func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
+func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
+	ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
 	requestJSON := logging.MarshalToString(request)
@@ -524,7 +525,8 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(ctx context.Context,
 	return resp, err
 }
 
-func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(
+	ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error) *logging.AuditLogEvent {
 	requestJSON := logging.MarshalToString(request)
 	responseJSON := logging.MarshalToString(response)
 	errMsg := ""
@@ -545,7 +547,11 @@ func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(ctx context.Context
 	return event
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCreate(ctx context.Context, request *Create{{.KindName}}Request, response *Create{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCreate(
+	ctx context.Context,
+	request *Create{{.KindName}}Request,
+	response *Create{{.KindName}}Response,
+	grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
 	requestName := request.{{.KindName}}.ObjectMeta.Name
 	entityType := "{{.KindName}}"
@@ -553,7 +559,9 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForCrea
 	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(ctx context.Context, request *Get{{.KindName}}Request, response *Get{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(
+	ctx context.Context, request *Get{{.KindName}}Request,
+	response *Get{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := request.Name
 	entityType := "{{.KindName}}"
@@ -562,7 +570,9 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForGet(
 
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpdate(ctx context.Context, request *Update{{.KindName}}Request, response *Update{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpdate(
+	ctx context.Context, request *Update{{.KindName}}Request,
+	response *Update{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.{{.KindName}}.ObjectMeta.Namespace
 	requestName := request.{{.KindName}}.ObjectMeta.Name
 	entityType := "{{.KindName}}"
@@ -589,7 +599,9 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpda
 	return event
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDelete(ctx context.Context, request *Delete{{.KindName}}Request, response *Delete{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDelete(
+	ctx context.Context, request *Delete{{.KindName}}Request,
+	response *Delete{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := request.Name
 	entityType := "{{.KindName}}"
@@ -616,7 +628,9 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDele
 
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDeleteCollection(ctx context.Context, request *Delete{{.KindName}}CollectionRequest, response *Delete{{.KindName}}CollectionResponse, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDeleteCollection(
+	ctx context.Context, request *Delete{{.KindName}}CollectionRequest,
+	response *Delete{{.KindName}}CollectionResponse, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := ""
 	entityType := "{{.KindName}}"
@@ -624,7 +638,9 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDele
 	return c.buildAuditLogEvent(ctx, procedure, entityType, requestNamespace, requestName, request, response, grpcErr)
 }
 
-func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList(ctx context.Context, request *List{{.KindName}}Request, response *List{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
+func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForList(
+	ctx context.Context, request *List{{.KindName}}Request,
+	response *List{{.KindName}}Response, grpcErr error) *logging.AuditLogEvent {
 	requestNamespace := request.Namespace
 	requestName := ""
 	entityType := "{{.KindName}}"

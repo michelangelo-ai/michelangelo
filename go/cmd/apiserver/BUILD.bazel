@@ -19,6 +19,7 @@ go_library(
         "//go/base/env:go_default_library",
         "//go/base/zapfx:go_default_library",
         "//go/logging:go_default_library",
+        "//go/project/apihook:go_default_library",
         "//go/storage:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
