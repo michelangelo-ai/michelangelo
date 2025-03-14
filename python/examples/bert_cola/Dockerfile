@@ -40,6 +40,7 @@ RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
 
 # Install pip and Poetry
 RUN python --version
+RUN python -m ensurepip && python -m pip install --upgrade pip
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
@@ -49,11 +50,21 @@ WORKDIR /app
 
 ENV PYTHONPATH=/app
 
+# Copy pyproject.toml and poetry.lock before copying full source
+COPY pyproject.toml poetry.lock ./
+
 # Copy the application code
-COPY . .
+# COPY . .
+# TODO: Change to . . once michelangelo python package is published
+COPY ../.. .
 
 # Install python dependencies
 RUN ls -alF ./
+
+RUN poetry config virtualenvs.create false
 RUN poetry install -E example
 
-CMD ["poetry", "run", "python", "./examples/bert_cola/bert_cola.py"]
+# Activate Poetry's virtual environment by default
+# ENV PATH="/app/.venv/bin:$PATH"
+
+RUN pip install datasets ray[default] numpy==1.23.4 torch==2.0.1 transformers==4.36.2 pandas==1.5.1 pyarrow s3fs==2024.3.0
