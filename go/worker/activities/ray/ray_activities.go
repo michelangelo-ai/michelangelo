@@ -3,6 +3,7 @@ package ray
 import (
 	"context"
 	"errors"
+
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/cadence"
 	"go.uber.org/yarpc"
@@ -80,7 +81,6 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 	*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
-	println("===marshalled request in activity ===")
 	createRayClusterResponse, err := r.rayClusterService.CreateRayCluster(ctx, &request)
 	if err != nil || createRayClusterResponse == nil || createRayClusterResponse.RayCluster == nil ||
 		createRayClusterResponse.RayCluster.Name == "" {
