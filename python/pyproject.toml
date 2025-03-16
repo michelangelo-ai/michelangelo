@@ -20,7 +20,7 @@ typing-extensions = "^4.12.2"
 
 ### Optional dependencies
 # For plugin
-ray = { version = "^2.41.0", optional = true }
+ray = {extras = ["default"], version = "^2.41.0", optional = true }
 
 # For example run
 accelerate = { version = "0.30.1", optional = true }
