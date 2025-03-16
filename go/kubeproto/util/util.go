@@ -1,13 +1,12 @@
 package util
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/gogo/protobuf/jsonpb"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
@@ -173,112 +172,140 @@ func SetPackageAlias(file *dst.File, pkgPath string, newAlias string) {
 	}
 }
 
-// InlineField holds information about inline fields.
-type InlineField struct {
-	ParentPath string
-	JSONValue  string
+// InlineFieldMapping holds old and new paths for inline fields.
+type InlineFieldMapping struct {
+	OldPath string
+	NewPath string
 }
 
-// RecordInlineFields recursively traverses a struct to find fields with `json:",inline"`
-// and records their parent keys and corresponding JSON string values using JSONPath syntax.
-func RecordInlineFields(v interface{}, result *[]InlineField, currentPath string) {
-	val := reflect.ValueOf(v)
-
-	// Dereference pointers
-	if val.Kind() == reflect.Ptr && !val.IsNil() {
-		val = val.Elem()
+// RemoveInlineFields identifies old and new JSON paths for inline fields.
+func RemoveInlineFields(typ reflect.Type, currentPath string, visited map[reflect.Type]bool, paths *[]InlineFieldMapping) {
+	// Dereference pointer types
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
 	}
 
-	if !val.IsValid() {
+	// Handle slices and arrays by processing their element types
+	if typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array {
+		RemoveInlineFields(typ.Elem(), currentPath+".#", visited, paths)
 		return
 	}
 
-	switch val.Kind() {
-	case reflect.Struct:
-		typ := val.Type()
-		for i := 0; i < val.NumField(); i++ {
-			field := val.Field(i)
-			fieldType := typ.Field(i)
-
-			if !field.CanInterface() {
-				continue
-			}
-
-			jsonTag := fieldType.Tag.Get("json")
-			fieldName := strings.Split(jsonTag, ",")[0]
-			if fieldName == "" {
-				fieldName = fieldType.Name
-			}
-
-			fullPath := currentPath + "." + fieldName
-			fullPath = strings.TrimPrefix(fullPath, ".")
-
-			if jsonTag == ",inline" {
-				processInlineField(field, fullPath, result)
-			} else {
-				RecordInlineFields(field.Interface(), result, fullPath)
-			}
-		}
-
-	case reflect.Slice, reflect.Array:
-		for i := 0; i < val.Len(); i++ {
-			indexedPath := fmt.Sprintf("%s.%d", currentPath, i)
-			RecordInlineFields(val.Index(i).Interface(), result, indexedPath)
-		}
-
-	case reflect.Map:
-		for _, key := range val.MapKeys() {
-			mapKey := fmt.Sprintf("%v", key.Interface())
-			mapPath := currentPath + "." + mapKey
-			RecordInlineFields(val.MapIndex(key).Interface(), result, mapPath)
-		}
-	}
-}
-
-// processInlineField marshals the inline field and records it as a JSON string.
-func processInlineField(field reflect.Value, parentPath string, result *[]InlineField) {
-	var protoMsg gogoproto.Message
-
-	// Ensure addressability and type correctness
-	if field.CanAddr() && field.Addr().Type().Implements(reflect.TypeOf((*gogoproto.Message)(nil)).Elem()) {
-		protoMsg = field.Addr().Interface().(gogoproto.Message)
-	} else if field.Type().Implements(reflect.TypeOf((*gogoproto.Message)(nil)).Elem()) {
-		protoMsg = field.Interface().(gogoproto.Message)
+	// Skip non-struct types
+	if typ.Kind() != reflect.Struct {
+		return
 	}
 
-	// Marshal and record the inline field as a JSON string
-	if protoMsg != nil {
-		inlineBuf := bytes.Buffer{}
-		if err := (&jsonpb.Marshaler{}).Marshal(&inlineBuf, protoMsg); err != nil {
-			return
-		}
-
-		*result = append(*result, InlineField{
-			ParentPath: parentPath,
-			JSONValue:  inlineBuf.String(),
-		})
+	if visited[typ] {
+		return
 	}
-}
+	visited[typ] = true
 
-// ApplyInlineFields uses gjson and sjson to replace inline fields in the JSON string.
-func ApplyInlineFields(jsonStr string, fields []InlineField) (string, error) {
-	for _, field := range fields {
-		// Modify the path to remove the last inline object key
-		lastDot := strings.LastIndex(field.ParentPath, ".")
-		if lastDot == -1 {
+	for i := 0; i < typ.NumField(); i++ {
+		fieldType := typ.Field(i)
+		jsonTag := fieldType.Tag.Get("json")
+		protobufTag := fieldType.Tag.Get("protobuf")
+		fieldName := extractFieldName(jsonTag, protobufTag, fieldType.Name)
+
+		// Skip unexported fields or explicitly ignored ones
+		if fieldName == "-" || fieldType.PkgPath != "" {
 			continue
 		}
 
-		// Determine the replacement path and value
-		replacePath := field.ParentPath[:lastDot]
-		if gjson.Get(jsonStr, replacePath).Exists() {
-			// Replace with the inline value
-			updatedJSON, err := sjson.SetRaw(jsonStr, replacePath, field.JSONValue)
-			if err != nil {
-				return "", err
-			}
-			jsonStr = updatedJSON
+		oldPath := strings.TrimPrefix(currentPath+"."+fieldName, ".")
+		if jsonTag == ",inline" {
+			newFlattenedPath := strings.TrimPrefix(currentPath, ".")
+			*paths = append(*paths, InlineFieldMapping{
+				OldPath: oldPath,
+				NewPath: newFlattenedPath,
+			})
+		}
+		RemoveInlineFields(fieldType.Type, oldPath, visited, paths)
+	}
+
+	delete(visited, typ)
+}
+func extractFieldName(jsonTag, protobufTag, defaultName string) string {
+	// If the JSON tag explicitly says "-", ignore the field
+	if jsonTag == "-" {
+		return ""
+	}
+
+	// Attempt to extract the name from the JSON tag
+	if jsonTag != "" {
+		parts := strings.Split(jsonTag, ",")
+		name := parts[0]
+		if name != "" {
+			return name
 		}
 	}
-	return jsonStr, nil
+
+	// If no name in JSON, try extracting from the protobuf tag
+	if protobufTag != "" {
+		parts := strings.Split(protobufTag, ",")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "name=") {
+				return strings.TrimPrefix(part, "name=")
+			}
+		}
+	}
+
+	// Fallback to the Go field name
+	return defaultName
+}
+
+type MatchedResult struct {
+	Path    string
+	NewPath string
+	Value   gjson.Result
+}
+
+func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, error) {
+	jsonStr := string(jsonData)
+
+	// Helper function to find matched paths with resolved indices
+	var findMatchedPaths func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult)
+	findMatchedPaths = func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult) {
+		value := gjson.Get(jsonStr, currentPath)
+
+		if value.IsArray() {
+			value.ForEach(func(index, item gjson.Result) bool {
+				nextPath := strings.Replace(currentPath, "#", strconv.Itoa(int(index.Int())), 1)
+				nextResolvedPath := strings.Replace(resolvedPath, "#", strconv.Itoa(int(index.Int())), 1)
+				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
+				return true
+			})
+		} else if value.IsObject() {
+			value.ForEach(func(key, item gjson.Result) bool {
+				nextPath := fmt.Sprintf("%s.%s", currentPath, key.Str)
+				nextResolvedPath := fmt.Sprintf("%s.%s", resolvedPath, key.Str)
+				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
+				return true
+			})
+		} else if value.Exists() {
+			*results = append(*results, MatchedResult{
+				Path:  resolvedPath,
+				Value: value,
+			})
+		}
+	}
+
+	for _, field := range fields {
+		var matchedResults []MatchedResult
+		findMatchedPaths(jsonStr, field.OldPath, field.NewPath, &matchedResults)
+
+		for _, match := range matchedResults {
+			// Construct the new path dynamically
+			newPath := strings.Replace(match.Path, field.OldPath, field.NewPath, 1)
+
+			// Set the new value using sjson
+			var err error
+			jsonStr, err = sjson.Set(jsonStr, newPath, match.Value.Value())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return []byte(jsonStr), nil
 }

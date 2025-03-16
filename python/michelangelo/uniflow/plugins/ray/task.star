@@ -346,7 +346,9 @@ def ray_cluster_spec(
                                 "envFrom": [
                                     {
                                         "configMapRef": {
-                                            "name": "michelangelo-config",
+                                            "localObjectReference": {
+                                                "name": "michelangelo-config",
+                                            },
                                         },
                                     },
                                 ],
@@ -386,7 +388,9 @@ def ray_cluster_spec(
                                     "envFrom": [
                                         {
                                             "configMapRef": {
-                                                "name": "michelangelo-config",
+                                                "localObjectReference": {
+                                                    "name": "michelangelo-config",
+                                                },
                                             },
                                         },
                                     ],

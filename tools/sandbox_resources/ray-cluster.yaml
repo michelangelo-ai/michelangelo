@@ -28,10 +28,9 @@ spec:
               - name: DEBUG
                 value: "false"
             envFrom:
-              configMapRef:
+              - configMapRef:
                   localObjectReference:
                     name: michelangelo-config
-            ]
   workers:
     - minInstances: 1
       maxInstances: 1

@@ -299,10 +299,6 @@ func (m *{{.Name}}) Unmarshal(dAtA []byte) error {
    inline field (TypeMeta), we work around this by implementing the
    marshal and unmarshal functions for Spec and Status respectively. */
 func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
-	// Clean inline fields generically before marshaling
-    var inlineFields []util.InlineField
-    util.RecordInlineFields(m, &inlineFields, "")
-
 	var buf bytes.Buffer
 	err := (&jsonpb.Marshaler{
 	  EnumsAsInts: false,
@@ -310,11 +306,7 @@ func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
 	  OrigName: false,
 	  AnyResolver: &util.GenericResolver{},
 	}).Marshal(&buf, m)
-
-	jsonStr := string(buf.Bytes())
-	finalJSON, err := util.ApplyInlineFields(jsonStr, inlineFields)
-    fmt.Printf("\n--------MarshalJSON:\n %s\n", finalJSON)
-	return []byte(finalJSON), err
+	return buf.Bytes(), err
 }
 
 func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
@@ -324,6 +316,12 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 	}).Unmarshal(bytes.NewReader(b), m)
 	if err == nil {
 	    return nil
+	}
+	visited := make(map[reflect.Type]bool)
+    var paths []util.InlineFieldMapping
+	util.RemoveInlineFields(reflect.TypeOf(m), "", visited, &paths)
+	if len(paths) > 0 {
+	    b, err = util.ApplyInlineFields(b, paths)
 	}
     type Alias {{.Name}}Spec
     aux := (*Alias)(m)
