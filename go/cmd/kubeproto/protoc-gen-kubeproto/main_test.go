@@ -151,53 +151,6 @@ const TimeJSON = `{"time":"2021-06-07T09:01:02.000000003Z"}`
 const StructJSON = `{"struct":{"boolValue":true,"listValue":[true,"ma20api",64],"nullValue":null,"numberValue":64,"stringValue":"ma20api","structValue":{"nestedNumberValue":64}}}`
 const DurationJSON = `{"seconds":1000}`
 const DurationJSON2 = `{"nanos":1000}`
-const PODJSON = `{
-  "kind" : "Object",
-  "metadata" : {
-    "name" : "object01",
-    "namespace" : "default",
-    "creationTimestamp" : null
-  },
-  "spec" : {
-    "description" : "test",
-    "pod" : {
-      "metadata" : {
-        "creationTimestamp" : null
-      },
-      "spec" : {
-        "containers" : [ {
-          "name" : "test-container",
-          "image" : "test-image",
-          "workingDir" : "workdir",
-          "envFrom" : [ {
-            "configMapRef" : {
-                "name" : "test"
-            }
-          } ],
-          "resources" : {
-            "requests" : {
-              "cpu" : "100m"
-            }
-          }
-        }, {
-          "name" : "test-container2",
-          "image" : "test-image2",
-          "envFrom" : [ {
-            "configMapRef" : {
-                "name" : "test2"
-            }
-          } ],
-          "resources" : {
-            "requests" : {
-              "cpu" : "100m"
-            }
-          }
-        } ]
-      }
-    }
-  },
-  "status" : { }
-}`
 
 func TestJSON(t *testing.T) {
 	// Test inline field
