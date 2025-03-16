@@ -2,7 +2,6 @@ package raycluster
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -79,7 +78,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Create a copy of the original RayCluster for comparison
 	originalRayCluster := rayCluster.DeepCopy()
-	json.Marshal(rayCluster)
 
 	// Check if the cluster should be terminated based on its spec
 	shouldBeTerminated := rayCluster.Spec.Termination != nil && rayCluster.Spec.Termination.Type != v2pb.TERMINATION_TYPE_INVALID
