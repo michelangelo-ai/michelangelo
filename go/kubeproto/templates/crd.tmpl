@@ -299,6 +299,10 @@ func (m *{{.Name}}) Unmarshal(dAtA []byte) error {
    inline field (TypeMeta), we work around this by implementing the
    marshal and unmarshal functions for Spec and Status respectively. */
 func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
+	// Clean inline fields generically before marshaling
+    var inlineFields []util.InlineField
+    util.RecordInlineFields(m, &inlineFields, "")
+
 	var buf bytes.Buffer
 	err := (&jsonpb.Marshaler{
 	  EnumsAsInts: false,
@@ -306,7 +310,11 @@ func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
 	  OrigName: false,
 	  AnyResolver: &util.GenericResolver{},
 	}).Marshal(&buf, m)
-	return buf.Bytes(), err
+
+	jsonStr := string(buf.Bytes())
+	finalJSON, err := util.ApplyInlineFields(jsonStr, inlineFields)
+    fmt.Printf("\n--------MarshalJSON:\n %s\n", finalJSON)
+	return []byte(finalJSON), err
 }
 
 func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {

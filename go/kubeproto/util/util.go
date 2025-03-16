@@ -1,7 +1,12 @@
 package util
 
 import (
+	"bytes"
 	"fmt"
+	"github.com/gogo/protobuf/jsonpb"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
+	"reflect"
 	"regexp"
 	"strings"
 
@@ -166,4 +171,114 @@ func SetPackageAlias(file *dst.File, pkgPath string, newAlias string) {
 			break
 		}
 	}
+}
+
+// InlineField holds information about inline fields.
+type InlineField struct {
+	ParentPath string
+	JSONValue  string
+}
+
+// RecordInlineFields recursively traverses a struct to find fields with `json:",inline"`
+// and records their parent keys and corresponding JSON string values using JSONPath syntax.
+func RecordInlineFields(v interface{}, result *[]InlineField, currentPath string) {
+	val := reflect.ValueOf(v)
+
+	// Dereference pointers
+	if val.Kind() == reflect.Ptr && !val.IsNil() {
+		val = val.Elem()
+	}
+
+	if !val.IsValid() {
+		return
+	}
+
+	switch val.Kind() {
+	case reflect.Struct:
+		typ := val.Type()
+		for i := 0; i < val.NumField(); i++ {
+			field := val.Field(i)
+			fieldType := typ.Field(i)
+
+			if !field.CanInterface() {
+				continue
+			}
+
+			jsonTag := fieldType.Tag.Get("json")
+			fieldName := strings.Split(jsonTag, ",")[0]
+			if fieldName == "" {
+				fieldName = fieldType.Name
+			}
+
+			fullPath := currentPath + "." + fieldName
+			fullPath = strings.TrimPrefix(fullPath, ".")
+
+			if jsonTag == ",inline" {
+				processInlineField(field, fullPath, result)
+			} else {
+				RecordInlineFields(field.Interface(), result, fullPath)
+			}
+		}
+
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < val.Len(); i++ {
+			indexedPath := fmt.Sprintf("%s.%d", currentPath, i)
+			RecordInlineFields(val.Index(i).Interface(), result, indexedPath)
+		}
+
+	case reflect.Map:
+		for _, key := range val.MapKeys() {
+			mapKey := fmt.Sprintf("%v", key.Interface())
+			mapPath := currentPath + "." + mapKey
+			RecordInlineFields(val.MapIndex(key).Interface(), result, mapPath)
+		}
+	}
+}
+
+// processInlineField marshals the inline field and records it as a JSON string.
+func processInlineField(field reflect.Value, parentPath string, result *[]InlineField) {
+	var protoMsg gogoproto.Message
+
+	// Ensure addressability and type correctness
+	if field.CanAddr() && field.Addr().Type().Implements(reflect.TypeOf((*gogoproto.Message)(nil)).Elem()) {
+		protoMsg = field.Addr().Interface().(gogoproto.Message)
+	} else if field.Type().Implements(reflect.TypeOf((*gogoproto.Message)(nil)).Elem()) {
+		protoMsg = field.Interface().(gogoproto.Message)
+	}
+
+	// Marshal and record the inline field as a JSON string
+	if protoMsg != nil {
+		inlineBuf := bytes.Buffer{}
+		if err := (&jsonpb.Marshaler{}).Marshal(&inlineBuf, protoMsg); err != nil {
+			return
+		}
+
+		*result = append(*result, InlineField{
+			ParentPath: parentPath,
+			JSONValue:  inlineBuf.String(),
+		})
+	}
+}
+
+// ApplyInlineFields uses gjson and sjson to replace inline fields in the JSON string.
+func ApplyInlineFields(jsonStr string, fields []InlineField) (string, error) {
+	for _, field := range fields {
+		// Modify the path to remove the last inline object key
+		lastDot := strings.LastIndex(field.ParentPath, ".")
+		if lastDot == -1 {
+			continue
+		}
+
+		// Determine the replacement path and value
+		replacePath := field.ParentPath[:lastDot]
+		if gjson.Get(jsonStr, replacePath).Exists() {
+			// Replace with the inline value
+			updatedJSON, err := sjson.SetRaw(jsonStr, replacePath, field.JSONValue)
+			if err != nil {
+				return "", err
+			}
+			jsonStr = updatedJSON
+		}
+	}
+	return jsonStr, nil
 }

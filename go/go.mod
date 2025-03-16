@@ -20,6 +20,8 @@ require (
 	github.com/ray-project/kuberay/ray-operator v1.0.0
 	github.com/stretchr/testify v1.10.0
 	github.com/uber-go/tally v3.5.10+incompatible
+	github.com/tidwall/gjson v1.18.0
+	github.com/tidwall/sjson v1.2.5
 	go.starlark.net v0.0.0-20250128212104-d908c3ead437
 	go.uber.org/cadence v1.2.9
 	go.uber.org/config v1.4.0

@@ -64,6 +64,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	}
 
 	var response v2pb.CreateRayClusterResponse
+	println("===marshalled request===")
 	if err := workflow.ExecuteActivity(ctx, ray.Activities.CreateRayCluster, v2pb.CreateRayClusterRequest{
 		RayCluster:    &cluster,
 		CreateOptions: &metav1.CreateOptions{},
@@ -216,6 +217,9 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 	); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
+	}
+	if true {
+		return starlark.True, nil
 	}
 
 	var res v2pb.UpdateRayClusterResponse

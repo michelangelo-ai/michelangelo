@@ -5,6 +5,9 @@ go_library(
     srcs = ["tags.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/tags",
     visibility = ["//visibility:public"],
+    deps = [
+        "@com_github_tidwall_gjson//:go_default_library",
+    ],
 )
 
 go_test(

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"go/token"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"reflect"
 	"strings"
 	"testing"
@@ -16,6 +17,7 @@ import (
 	plugin_go "github.com/gogo/protobuf/protoc-gen-gogo/plugin"
 	"github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -149,6 +151,53 @@ const TimeJSON = `{"time":"2021-06-07T09:01:02.000000003Z"}`
 const StructJSON = `{"struct":{"boolValue":true,"listValue":[true,"ma20api",64],"nullValue":null,"numberValue":64,"stringValue":"ma20api","structValue":{"nestedNumberValue":64}}}`
 const DurationJSON = `{"seconds":1000}`
 const DurationJSON2 = `{"nanos":1000}`
+const PODJSON = `{
+  "kind" : "Object",
+  "metadata" : {
+    "name" : "object01",
+    "namespace" : "default",
+    "creationTimestamp" : null
+  },
+  "spec" : {
+    "description" : "test",
+    "pod" : {
+      "metadata" : {
+        "creationTimestamp" : null
+      },
+      "spec" : {
+        "containers" : [ {
+          "name" : "test-container",
+          "image" : "test-image",
+          "workingDir" : "workdir",
+          "envFrom" : [ {
+            "configMapRef" : {
+                "name" : "test"
+            }
+          } ],
+          "resources" : {
+            "requests" : {
+              "cpu" : "100m"
+            }
+          }
+        }, {
+          "name" : "test-container2",
+          "image" : "test-image2",
+          "envFrom" : [ {
+            "configMapRef" : {
+                "name" : "test2"
+            }
+          } ],
+          "resources" : {
+            "requests" : {
+              "cpu" : "100m"
+            }
+          }
+        } ]
+      }
+    }
+  },
+  "status" : { }
+}`
 
 func TestJSON(t *testing.T) {
 	// Test inline field
@@ -303,6 +352,69 @@ func TestJSON(t *testing.T) {
 	assert.True(t, testStructList.Equal(testPbWithStructDecode.Struct.Fields["listValue"].GetListValue()))
 }
 
+func TestJSONPod(t *testing.T) {
+	// Test inline field
+	testObject := &testpb.TestObject{
+		Spec: testpb.TestObjectSpec{
+			Pod: &corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:       "test-container",
+							Image:      "test-image",
+							WorkingDir: "workdir",
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "test",
+										},
+									},
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									"cpu": resource.MustParse("100m"),
+								},
+							},
+						},
+						{
+							Name:       "test-container2",
+							Image:      "test-image2",
+							WorkingDir: "",
+							EnvFrom: []corev1.EnvFromSource{
+								{
+									ConfigMapRef: &corev1.ConfigMapEnvSource{
+										LocalObjectReference: corev1.LocalObjectReference{
+											Name: "test2",
+										},
+									},
+								},
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									"cpu": resource.MustParse("100m"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	testObject.Namespace = "default"
+	testObject.Name = "object01"
+	testObject.Kind = "Object"
+	testObject.Spec.Description = "test"
+
+	testObjectJSON, err := json.Marshal(testObject)
+	assert.Nil(t, err)
+
+	var testObjectUnmarshalled testpb.TestObject
+	json.Unmarshal(testObjectJSON, &testObjectUnmarshalled)
+	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test")
+	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[1].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test2")
+}
 func TestImmutability(t *testing.T) {
 	obj2 := &testpb.TestObject{}
 	assert.Equal(t, true, obj2.IsImmutableKind())
