@@ -122,8 +122,9 @@ When the job finishes, the cluster will be terminated by Uniflow
 
 **Kill workflows in the remote run**
 
-For the remote run from the devpod, cancel/stop the workflow in Cadence staging.
+For the remote run from sandbox, terminate the workflow in Cadence.
 
-    cadence --proxy_region phx --env docstore-staging --do michelangelo-poc-phx workflow cancel -w [Workflow Id]
+    visit http://localhost:8088/ 
+    And terminate target workflow
 
 
