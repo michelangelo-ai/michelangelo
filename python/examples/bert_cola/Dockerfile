@@ -55,8 +55,6 @@ COPY pyproject.toml poetry.lock ./
 
 # Copy the application code
 COPY . .
-# TODO: Change to . . once michelangelo python package is published
-# COPY ../.. .
 
 # Install python dependencies
 RUN ls -alF ./

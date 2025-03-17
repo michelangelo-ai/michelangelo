@@ -45,7 +45,7 @@ ma = 'michelangelo.cli.cli:main'
 
 [tool.poetry.extras]
 plugin = ["ray"]
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "s3fs"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers"]
 
 
 [tool.pytest.ini_options]
