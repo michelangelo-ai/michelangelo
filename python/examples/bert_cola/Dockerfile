@@ -40,7 +40,6 @@ RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
 
 # Install pip and Poetry
 RUN python --version
-RUN python -m ensurepip && python -m pip install --upgrade pip
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
@@ -49,9 +48,6 @@ RUN poetry --version
 WORKDIR /app
 
 ENV PYTHONPATH=/app
-
-# Copy pyproject.toml and poetry.lock before copying full source
-COPY pyproject.toml poetry.lock ./
 
 # Copy the application code
 COPY . .
