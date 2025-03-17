@@ -25,6 +25,7 @@ def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClas
         worker_cpu=1,
         worker_memory="4Gi",
         worker_instances=1,
+        #breakpoint=True,
     ),
 )
 def train(
