@@ -2,12 +2,13 @@ package util
 
 import (
 	"fmt"
-	"github.com/tidwall/gjson"
-	"github.com/tidwall/sjson"
 	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 

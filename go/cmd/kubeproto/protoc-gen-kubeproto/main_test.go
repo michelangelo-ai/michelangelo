@@ -4,11 +4,12 @@ import (
 	_ "embed"
 	"encoding/json"
 	"go/token"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
 
