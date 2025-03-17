@@ -14,13 +14,9 @@ Example project showing various capabilities of the Michelangelo workflows.
 
 **Run workflows locally**
 
-Workflows run locally as an ordinary Python program. Just use relevant `py_binary` Bazel target to run a workflow in the
-local mode. Ex:
+Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
 
-    bazel run //uber/ai/michelangelo/sandbox/boston_housing_xgb
-    bazel run //uber/ai/michelangelo/sandbox/torch_example
-    bazel run //uber/ai/michelangelo/sandbox/bert_cola
-    bazel run //uber/ai/michelangelo/sandbox/nlp_two_tower
+    poetry run python ./examples/bert_cola/bert_cola.py
 
 For IDE users to access ray dashboard,
 - Command + Cmd Shift + P
@@ -33,7 +29,8 @@ For IDE users to access ray dashboard,
 
 setup sandbox, see /python/michelangelo/sandbox/README.md
 
-    ma sandbox create
+    cd python
+    poetry run ma sandbox create
 
 The create setup dependencies for Uniflow including
 
@@ -50,7 +47,8 @@ The create setup dependencies for Uniflow including
 Running workflows in the remote mode requires a docker container that contains code of the workflow tasks. Build
 a new revision of the project's container, or use an existing revision if you didn't change task code.
 
-    docker build -t bert-cola-nv:latest .
+    cd python
+    docker build -t bert-cola-nv:latest -f ./examples/bert_cola/Dockerfile .
 
 Copy the build's `Revision ID`, we use it later.
 
@@ -89,7 +87,7 @@ Cadence workflow Id: `examples.bert_cola.bert_cola.train_workflow.0v5ja`
 Waiting for cluster started and open the cluster dashboard URL
 
 Example:
-The cluster dashboard URL is `http://10.6.4.1:8265`
+The cluster dashboard URL is `http://localhost:8265`
 
 <hr/>
 
