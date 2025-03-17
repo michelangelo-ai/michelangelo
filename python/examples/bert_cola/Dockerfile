@@ -54,6 +54,9 @@ COPY . .
 
 # Install python dependencies
 RUN ls -alF ./
+
+RUN poetry config virtualenvs.create false
 RUN poetry install -E example
 
-CMD ["poetry", "run", "python", "./examples/bert_cola/bert_cola.py"]
+# Activate Poetry's virtual environment by default
+ENV PATH="/app/.venv/bin:$PATH"
