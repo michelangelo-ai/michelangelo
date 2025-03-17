@@ -570,7 +570,7 @@ description = "A platform independent file lock."
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"example\" or extra == \"plugin\") or extra == \"plugin\" or extra == \"example\""
+markers = "extra == \"example\" or extra == \"plugin\""
 files = [
     {file = "filelock-3.18.0-py3-none-any.whl", hash = "sha256:c401f4f8377c4464e6db25fff06205fd89bdd83b65eb0488ed1b160f780e21de"},
     {file = "filelock-3.18.0.tar.gz", hash = "sha256:adbc88eabb99d2fec8c9c1b229b171f18afa655400173ddc653d5d01501fb9f2"},
@@ -3455,10 +3455,10 @@ multidict = ">=4.0"
 propcache = ">=0.2.0"
 
 [extras]
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "s3fs", "torch", "transformers"]
 plugin = ["ray"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "be9f19e37a9f7dcdd24f01a1d83933fb46a41dfdabd1440d2cc370c965b35d16"
+content-hash = "9305b7e2e60212d24ba66eb1b9565afecc2ce21eaa46330ffe8aa675674f3b0c"

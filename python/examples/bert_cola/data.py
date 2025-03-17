@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
     worker_cpu=1,
     worker_memory="2Gi",
     worker_instances=1, 
-    breakpoint=True,
+    #breakpoint=True,
     ))
 def load_data(
     path: str,
