@@ -1,12 +1,14 @@
-from ray.data import Dataset
-from transformers import AutoTokenizer
-from pytorch_lightning.strategies import DeepSpeedStrategy
 import torch
+
 import michelangelo.uniflow.core as uniflow
+import pytorch_lightning as pl
+
 from examples.nomic_ai.model import HuggingFaceLightningModel
 from michelangelo.uniflow.plugins.ray import RayTask
-import pytorch_lightning as pl
+from pytorch_lightning.strategies import DeepSpeedStrategy
+from ray.data import Dataset
 from torch.utils.data import DataLoader
+from transformers import AutoTokenizer
 
 
 @uniflow.task(
@@ -23,11 +25,26 @@ def train(
         validation_data: Dataset,
         test_data: Dataset,
         model_name="nomic-ai/nomic-bert-2048",
+        breakpoint=True,
 ) -> dict:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
-    train_dataloader = DataLoader(train_data, batch_size=8, shuffle=True)
-    val_dataloader = DataLoader(validation_data, batch_size=8)
+    class RayDatasetWrapper(torch.utils.data.Dataset):
+        def __init__(self, ray_dataset):
+            self.data = ray_dataset.take_all()
+            
+        def __len__(self):
+            return len(self.data)
+            
+        def __getitem__(self, idx):
+            item = self.data[idx]
+            return {
+                'input_ids': torch.tensor(item['input_ids']),
+                'attention_mask': torch.tensor(item['attention_mask'])
+            }
+
+    train_dataloader = DataLoader(RayDatasetWrapper(train_data), batch_size=8, shuffle=True)
+    val_dataloader = DataLoader(RayDatasetWrapper(validation_data), batch_size=8)
 
     model = HuggingFaceLightningModel(model_name)
 
