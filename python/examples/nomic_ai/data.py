@@ -17,7 +17,9 @@ log = logging.getLogger(__name__)
     head_memory="2Gi",
     worker_cpu=1,
     worker_memory="2Gi",
-    worker_instances=1))
+    worker_instances=1,
+    #breakpoint=True
+    ))
 def load_data(model_name="nomic-ai/nomic-bert-2048", dataset_name: str = "wikitext", tokenizer=None, max_length: int = 512,  dataset_size=200) -> tuple[Dataset, Dataset, Dataset]:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 

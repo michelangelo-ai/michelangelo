@@ -45,7 +45,7 @@ def train(
 
     trainer.fit(model, train_dataloader, val_dataloader)
 
-    model.save_pretrained("./trained_model")
+    model.model.save_pretrained("./trained_model")
     tokenizer.save_pretrained("./trained_model")
 
     return {"status": "Training completed successfully"}
