@@ -46,7 +46,7 @@ func TestDelete(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset(crd)
+		apiExtClientStub := apiExtFake.NewSimpleClientset(crd)
 		crdGateway := gateway{
 			logger:        zap.NewExample(),
 			apiExtClient:  apiExtClientStub,
@@ -61,7 +61,7 @@ func TestDelete(t *testing.T) {
 
 	t.Run("test delete CRD with instance", func(t *testing.T) {
 		// Prepare
-		apiExtClientStub := apiExtFake.NewClientset()
+		apiExtClientStub := apiExtFake.NewSimpleClientset()
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
@@ -103,7 +103,7 @@ func TestConditionalUpsert(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset(crd)
+		apiExtClientStub := apiExtFake.NewSimpleClientset(crd)
 		crdGateway := gateway{
 			logger:        zap.NewExample(),
 			apiExtClient:  apiExtClientStub,
@@ -188,7 +188,7 @@ func TestConditionalUpsert(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset(crd)
+		apiExtClientStub := apiExtFake.NewSimpleClientset(crd)
 		crdGateway := gateway{
 			logger:        zap.NewExample(),
 			apiExtClient:  apiExtClientStub,
@@ -211,7 +211,7 @@ func TestConditionalUpsert(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset()
+		apiExtClientStub := apiExtFake.NewSimpleClientset()
 		apiExtClientStub.PrependReactor("create", "customresourcedefinitions",
 			func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("test error")
@@ -230,7 +230,7 @@ func TestConditionalUpsert(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset()
+		apiExtClientStub := apiExtFake.NewSimpleClientset()
 		apiExtClientStub.PrependReactor("get", "customresourcedefinitions",
 			func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("test error")
@@ -251,7 +251,7 @@ func TestList(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		apiExtClientStub := apiExtFake.NewClientset(crd)
+		apiExtClientStub := apiExtFake.NewSimpleClientset(crd)
 		crdGateway := gateway{logger: zap.NewExample(), apiExtClient: apiExtClientStub}
 
 		ctx := context.Background()
@@ -262,7 +262,7 @@ func TestList(t *testing.T) {
 	})
 
 	t.Run("test listing with error", func(t *testing.T) {
-		apiExtClientStub := apiExtFake.NewClientset()
+		apiExtClientStub := apiExtFake.NewSimpleClientset()
 		apiExtClientStub.PrependReactor("list", "customresourcedefinitions",
 			func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
 				return true, nil, errors.New("test error")

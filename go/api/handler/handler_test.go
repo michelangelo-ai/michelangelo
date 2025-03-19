@@ -103,8 +103,7 @@ func setupK8s() (ctrlRTClient.Client, error) {
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
-		WithLists(initLists...).
-		WithStatusSubresource(initObjs...).Build()
+		WithLists(initLists...).Build()
 
 	return fakeClient, nil
 }
@@ -353,6 +352,9 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	err = handler.Get(context.Background(), initObjs[0].GetNamespace(), initObjs[0].GetName(), nil, &j1)
 	assert.NoError(t, err)
 	j1.ResourceVersion = "" // Remove the resource version set by fake k8s client
+	// remove TypeMeta that is set by k8s
+	j1.TypeMeta.Kind = ""
+	j1.TypeMeta.APIVersion = ""
 	assert.Equal(t, job1, j1)
 
 	// Get a non-existing job
@@ -436,7 +438,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 		return nil, errors.New("test dialer failure")
 	}
 
-	handler, err := newAPIServerHandler(Params{
+	_, err = newAPIServerHandler(Params{
 		K8sRestConfig: &rest.Config{
 			Host:    "test.host",
 			Timeout: 0,
@@ -451,9 +453,6 @@ func TestNewAPIServerHandler(t *testing.T) {
 		Logger:  zap.Must(zap.NewDevelopment()),
 		Metrics: tally.NoopScope,
 	})
-	assert.NoError(t, err)
-	job := v2pb.RayJob{}
-	err = handler.Get(context.Background(), "project0", "job01", &metav1.GetOptions{}, &job)
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "test dialer failure"))
 }

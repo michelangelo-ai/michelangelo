@@ -104,9 +104,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 						} else if *status == "STOPPED" {
 							rayJob.Status.State = v2pb.RAY_JOB_STATE_KILLED
 						}
-						if jobFailedReason != nil {
-							rayJob.Status.Message = string(*jobFailedReason)
-						}
+						rayJob.Status.Message = jobFailedReason
 					} else {
 						// job is still running, wait
 						logger.Info("job is running")
@@ -162,9 +160,7 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 				"rayClusterNamespace": cluster.Namespace,
 			},
 			Entrypoint: job.Spec.Entrypoint,
-			// we do http model here instead of default K8sJobMode
-			// this avoids to create another image pulling from the job running inside the cluster
-			SubmissionMode: v1.HTTPMode,
+			// TODO: SubmissionMode
 		},
 	}
 
@@ -181,18 +177,18 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 	return nil
 }
 
-func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) (*v1.JobStatus, *v1.JobFailedReason, error) {
+func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob) (*v1.JobStatus, string, error) {
 	rayV1Job, err := r.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
 		logger.Error(err, "failed to get RayJob status: %v")
-		return nil, nil, err
+		return nil, "", err
 	}
 	rayJob.Status.JobId = rayV1Job.Status.JobId
 	rayJob.Status.DashboardUrl = rayV1Job.Status.DashboardURL
 	rayJob.Status.JobDeploymentStatus = string(rayV1Job.Status.JobDeploymentStatus)
 
-	return &rayV1Job.Status.JobStatus, &rayV1Job.Status.Reason, nil
+	return &rayV1Job.Status.JobStatus, rayV1Job.Status.Message, nil
 }
 
 func (r *Reconciler) isTerminatedState(status v1.JobStatus) bool {

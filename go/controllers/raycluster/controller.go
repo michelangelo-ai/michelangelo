@@ -12,7 +12,6 @@ import (
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -126,29 +125,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_TERMINATING
 			}
 		} else {
-			// Update the cluster state based on current conditions or legacy fields
-			if status.Conditions != nil {
-				if meta.IsStatusConditionTrue(status.Conditions, string(v1.HeadPodReady)) {
-					rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_READY
+			terminateStateMap := map[v1.ClusterState]v2pb.RayClusterState{
+				v1.Failed: v2pb.RAY_CLUSTER_STATE_FAILED,
+				v1.Ready:  v2pb.RAY_CLUSTER_STATE_READY,
+			}
+			if newState, exists := terminateStateMap[status.State]; exists {
+				rayCluster.Status.State = newState
+				if newState == v2pb.RAY_CLUSTER_STATE_READY {
+					logger.Info("Cluster is ready, re-queuing until receiving termination signal")
 					res.RequeueAfter = requeueAfter
-				} else if meta.IsStatusConditionTrue(status.Conditions, string(v1.RayClusterReplicaFailure)) {
-					rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
 				}
 			} else {
-				terminateStateMap := map[v1.ClusterState]v2pb.RayClusterState{
-					v1.Failed:    v2pb.RAY_CLUSTER_STATE_FAILED,
-					v1.Suspended: v2pb.RAY_CLUSTER_STATE_TERMINATED,
-					v1.Ready:     v2pb.RAY_CLUSTER_STATE_READY,
-				}
-				if newState, exists := terminateStateMap[status.State]; exists {
-					rayCluster.Status.State = newState
-					if newState == v2pb.RAY_CLUSTER_STATE_READY {
-						logger.Info("Cluster is ready, re-queuing until receiving termination signal")
-						res.RequeueAfter = requeueAfter
-					}
-				} else {
-					res.RequeueAfter = requeueAfter
-				}
+				res.RequeueAfter = requeueAfter
 			}
 		}
 	} else {
@@ -205,7 +193,8 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 	}
 	// Update the cluster's head node information
 	cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
-		Name: createdRayCluster.Status.Head.PodName,
+		// TODO: use createdRayCluster.Status.Head.PodName after upgrading to a newer version
+		Name: cluster.Spec.Head.Pod.Name,
 		Ip:   createdRayCluster.Status.Head.PodIP,
 	}
 	return nil

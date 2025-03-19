@@ -147,7 +147,7 @@ func TestCreateProject(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			clientSet := fakek8sclient.NewClientset()
+			clientSet := fakek8sclient.NewSimpleClientset()
 			client := clientSet.CoreV1()
 			fakeAPIHook := apiHook{
 				logger:     zap.NewNop(),
