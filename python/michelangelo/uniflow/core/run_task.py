@@ -3,7 +3,6 @@ import argparse
 import sys
 import logging
 from michelangelo.uniflow.core.codec import decoder
-from michelangelo.uniflow.core.decorator import TaskFunction
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
 
 log = logging.getLogger(__name__)
@@ -20,12 +19,12 @@ def main():
     p.add_argument("--result-url", required=True, type=str)
     p.add_argument("--overrides", type=decoder.decode)
     ns = p.parse_args()
-
-    assert isinstance(ns.task, TaskFunction)
-    assert isinstance(ns.args, list)
-    assert isinstance(ns.kwargs, dict)
-    assert isinstance(ns.result_url, str)
-    assert ns.result_url.endswith(".json")
+    
+    assert type(ns.task).__name__ == 'TaskFunction', f"Expected task to be a TaskFunction instance, but got instance of {type(ns.task)}"
+    assert isinstance(ns.args, list), f"Expected args to be a list, but got {type(ns.args)}"
+    assert isinstance(ns.kwargs, dict), f"Expected kwargs to be a dict, but got {type(ns.kwargs)}"
+    assert isinstance(ns.result_url, str), f"Expected result_url to be a string, but got {type(ns.result_url)}"
+    assert ns.result_url.endswith(".json"), f"Expected result_url to end with .json, but got {ns.result_url}"
 
     task = ns.task
     if ns.overrides:

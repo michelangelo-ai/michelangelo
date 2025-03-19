@@ -1,14 +1,24 @@
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
 from examples.bert_cola.train import train
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC, RayTask
 
 
 @uniflow.workflow()
 def train_workflow():
-    data_path = "glue"
-    data_name = "cola"
-    train_data, validation_data, test_data = load_data(
+    data_path="glue"
+    data_name="cola"
+    load_data_overrides = load_data.with_overrides(
+        alias="load_data_overrides",
+        config=RayTask(
+            head_cpu=1,
+            head_memory="4Gi",
+            worker_cpu=1,
+            worker_memory="4Gi",
+            worker_instances=1,
+        )
+    )
+    train_data, validation_data, test_data = load_data_overrides(
         data_path,
         data_name,
         tokenizer_max_length=128,

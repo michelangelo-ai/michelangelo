@@ -113,7 +113,7 @@ def generate_random_text_workflow(
 @workflow()
 def with_overrides_workflow(a, b) -> tuple:
     # Override task config
-    echo_a = echo_task.with_overrides(alias="echo_a")
+    echo_a = echo_task.with_overrides(alias="echo_a", config=TaskA(cpu=1))
     a = echo_a(a)
 
     # Override task config and call in-line.
