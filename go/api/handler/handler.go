@@ -153,10 +153,9 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
 	err = handler.k8sClient.Create(ctx, obj, &ctrlRTClient.CreateOptions{
-		DryRun:          opts.DryRun,
-		FieldManager:    opts.FieldManager,
-		FieldValidation: opts.FieldValidation,
-		Raw:             opts,
+		DryRun:       opts.DryRun,
+		FieldManager: opts.FieldManager,
+		Raw:          opts,
 	})
 
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
@@ -165,7 +164,7 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 // Get implements api.Handler.Get
 // Returns nil if successful, otherwise a gRPC status error is returned.
 func (handler *apiHandler) Get(
-	ctx context.Context, namespace string, name string, opts *metav1.GetOptions, obj ctrlRTClient.Object) error {
+	ctx context.Context, namespace string, name string, _ *metav1.GetOptions, obj ctrlRTClient.Object) error {
 	start := time.Now()
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	if typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme); err == nil {
@@ -175,9 +174,7 @@ func (handler *apiHandler) Get(
 	defer emitAPIMetrics("Get", handler.metrics, log, start, kind, headers)
 
 	// Get from K8s/ETCD
-	err := handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: namespace, Name: name}, obj, &ctrlRTClient.GetOptions{
-		Raw: opts,
-	})
+	err := handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: namespace, Name: name}, obj)
 	if err == nil {
 		// If an object is immutable and is being deleted in ETCD, it means the object is within the grace period and is
 		// pending deleted, so we should proceed to the section below to get from the metadata storage.
@@ -231,10 +228,9 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	}
 
 	err = handler.k8sClient.Update(ctx, obj, &ctrlRTClient.UpdateOptions{
-		DryRun:          opts.DryRun,
-		FieldManager:    opts.FieldManager,
-		FieldValidation: opts.FieldValidation,
-		Raw:             opts,
+		DryRun:       opts.DryRun,
+		FieldManager: opts.FieldManager,
+		Raw:          opts,
 	})
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
@@ -267,14 +263,12 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 
 	setUpdateTimestamp(obj, false)
 
-	err := handler.k8sClient.Status().Update(ctx, obj, &ctrlRTClient.SubResourceUpdateOptions{
-		UpdateOptions: ctrlRTClient.UpdateOptions{
-			DryRun:          opts.DryRun,
-			FieldManager:    opts.FieldManager,
-			FieldValidation: opts.FieldValidation,
-			Raw:             opts,
-		},
-	})
+	err := handler.k8sClient.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
+		DryRun:       opts.DryRun,
+		FieldManager: opts.FieldManager,
+		Raw:          opts,
+	},
+	)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }
