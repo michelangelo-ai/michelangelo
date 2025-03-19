@@ -1,0 +1,64 @@
+name: Ruff Lint & Format
+
+on:
+  pull_request:
+
+jobs:
+  ruff:
+    name: Run Ruff on Changed Files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+
+      - name: Get changed files (excluding specific directories)
+        id: changed-files
+        run: |
+          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} | grep -E '\.py$' || true)
+          echo "$CHANGED_FILES"
+          echo "FILES=$CHANGED_FILES" >> $GITHUB_ENV
+
+      - name: Run ruff format on changed files
+        if: env.FILES != ''
+        run: |
+          ruff format $FILES
+          echo "Ruff Format applied."
+
+      - name: Run ruff lint on changed files
+        if: env.FILES != ''
+        id: ruff-lint
+        run: |
+          output=$(ruff check $FILES || true)
+          echo "$output" | tee ruff_lint_output.txt
+          echo "RUFF_LINT_OUTPUT<<EOF" >> $GITHUB_ENV
+          echo "$output" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Comment on PR with Ruff results
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = process.env.RUFF_LINT_OUTPUT;
+            const pr_number = context.payload.pull_request.number;
+            if (output.trim() !== "") {
+              github.rest.issues.createComment({
+                issue_number: pr_number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: "### 🛠 Ruff Check & Format Results\n```\n" + output + "\n\n Please run `poetry install -E dev` to run pre-commit hook on your local.\n```"
+              });
+            }
