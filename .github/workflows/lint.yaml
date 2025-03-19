@@ -1,12 +1,16 @@
-name: Ruff Lint & Format
+name: Python Ruff Lint & Format
 
 on:
   pull_request:
+    branches: [main]
 
 jobs:
   ruff:
-    name: Run Ruff on Changed Files
+    name: Python Run Ruff on Changed Files
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python
 
     steps:
       - name: Checkout repository
@@ -15,15 +19,35 @@ jobs:
           fetch-depth: 2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.9'
 
+      #----------------------------------------------
+      #  install deps
+      #----------------------------------------------
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+          virtualenvs-path: .venv
+          installer-parallel: true
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --no-interaction --no-root -E dev
+      - name: Install project
+        run: poetry install --no-interaction
 
+      #----------------------------------------------
+      # Run ruff on changed files
+      #----------------------------------------------
       - name: Get changed files (excluding specific directories)
         id: changed-files
         run: |
@@ -49,6 +73,7 @@ jobs:
 
       - name: Comment on PR with Ruff results
         uses: actions/github-script@v6
+        if: env.FILES != ''
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
