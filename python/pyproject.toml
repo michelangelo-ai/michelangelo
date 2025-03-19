@@ -90,6 +90,8 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    "michelangelo/api/v2/services/gen/**",
+    "michelangelo/gen/**",
 ]
 
 # https://peps.python.org/pep-0008/
