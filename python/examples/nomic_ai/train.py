@@ -14,9 +14,9 @@ from transformers import AutoTokenizer
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_memory="3Gi",
+        head_memory="4Gi",
         worker_cpu=1,
-        worker_memory="3Gi",
+        worker_memory="4Gi",
         worker_instances=1,
     ),
 )
@@ -25,8 +25,13 @@ def train(
         validation_data: Dataset,
         test_data: Dataset,
         model_name="nomic-ai/nomic-bert-2048",
-        breakpoint=True,
+        # breakpoint=True,
 ) -> dict:
+    log.info("Starting training...")
+
+    # Training configuration
+    output_dir = "./nomic_ai"
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     class RayDatasetWrapper(torch.utils.data.Dataset):
@@ -62,7 +67,7 @@ def train(
 
     trainer.fit(model, train_dataloader, val_dataloader)
 
-    model.model.save_pretrained("./trained_model")
-    tokenizer.save_pretrained("./trained_model")
+    model.model.save_pretrained(output_dir)
+    tokenizer.save_pretrained(output_dir)
 
     return {"status": "Training completed successfully"}
