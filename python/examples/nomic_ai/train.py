@@ -10,6 +10,7 @@ from ray.data import Dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
+log = logging.getLogger(__name__)
 
 @uniflow.task(
     config=RayTask(
