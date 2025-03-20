@@ -1,3 +1,19 @@
+// Spark Job API provides interfaces for managing Spark applications in Michelangelo.
+// A Spark job represents a distributed data processing application.
+// The job definition includes:
+// - Driver pod specifications and configuration
+// - Executor pod specifications and scaling
+// - Spark configuration properties
+// - User information and ownership
+// - Resource requirements and constraints
+//
+// Key concepts:
+// - Driver pod coordinates the Spark application
+// - Executors perform distributed processing
+// - Spark configs control runtime behavior
+// - Jobs can specify resource requirements
+// - Affinity rules control placement
+
 syntax = "proto3";
 
 package michelangelo.api.v2;

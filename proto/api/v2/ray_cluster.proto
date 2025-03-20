@@ -1,4 +1,17 @@
-// This file defines the Ray Cluster in Michelangelo API
+// Ray Cluster API provides interfaces for managing Ray clusters in Michelangelo.
+// A Ray cluster consists of a head node and worker nodes for distributed computing.
+// The cluster definition includes:
+// - Head node specifications and service configuration 
+// - Worker node specifications and scaling parameters
+// - Resource requirements and constraints
+// - User information and ownership
+//
+// Key concepts:
+// - Head node runs Ray control plane components
+// - Workers execute distributed Ray tasks and actors
+// - Clusters can be homogeneous or heterogeneous
+// - Service type controls head node accessibility
+// - Worker groups can scale independently
 
 syntax = "proto3";
 

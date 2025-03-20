@@ -1,3 +1,16 @@
+// GroupVersion Info API defines version and group information for the Michelangelo API.
+// This file contains package metadata and options for:
+// - API group name (michelangelo.api)
+// - API version (v2)
+// - Go package configuration
+// - Group info options
+//
+// Key concepts:
+// - API groups organize related APIs together
+// - Versions allow API evolution while maintaining compatibility
+// - Go package options configure code generation
+// - Group info tracks API metadata
+
 syntax = "proto3";
 
 package michelangelo.api.v2;

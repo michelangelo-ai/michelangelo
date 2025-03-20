@@ -1,4 +1,18 @@
-// This file defines the Ray Job in Michelangelo API
+// Ray Job API provides interfaces for managing Ray jobs in Michelangelo.
+// A Ray job represents a distributed computation task that runs on a Ray cluster.
+// The job definition includes:
+// - User information and ownership
+// - Entrypoint script or command
+// - Memory configuration for object store
+// - Cluster reference for execution
+// - Job state tracking
+//
+// Key concepts:
+// - Jobs execute distributed Ray computations
+// - Entrypoint defines the job's main logic
+// - Object store memory is configurable
+// - Jobs run on specified Ray clusters
+// - Job states track execution progress
 
 syntax = "proto3";
 
