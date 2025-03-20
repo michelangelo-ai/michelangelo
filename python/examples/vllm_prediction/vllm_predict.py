@@ -1,21 +1,17 @@
 import logging
 import os
 import ray
-import torch
-import transformers
 from ray.data import Dataset
 from michelangelo.uniflow.plugins.ray import RayTask
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
 import michelangelo.uniflow.core as uniflow
 import numpy as np
 from vllm import LLM, SamplingParams
-from abc import ABC, abstractmethod
-
 
 log = logging.getLogger(__name__)
 
 
-class VLLMPredictor(ABC):
+class VLLMPredictor():
     def __init__(
         self,
         model_name: str,
@@ -36,7 +32,7 @@ class VLLMPredictor(ABC):
         )
 
     def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
-        outputs = self.llm.generate(batch["text"], sampling_params)
+        outputs = self.llm.generate(batch["text"], self.sampling_params)
         prompt: list[str] = []
         generated_text: list[str] = []
         for output in outputs:
@@ -56,7 +52,7 @@ class VLLMPredictor(ABC):
         worker_memory="16Gi",
         worker_instances=1,
         worker_gpu=1,
-        #breakpoint=True,
+        # breakpoint=True,
     ),
 )
 def predict(
@@ -71,7 +67,7 @@ def predict(
         temperature: float,
         top_p: float,
         max_tokens: int,
-):
+) -> Dataset:
     log.info("Starting offline prediction...")
 
     if worker_gpu % tensor_parallel_size != 0:
@@ -90,7 +86,7 @@ def predict(
             strategy="STRICT_PACK",
         )
         return dict(scheduling_strategy=PlacementGroupSchedulingStrategy(
-            pg, placement_group_capture_child_tasks=True)) 
+            pg, placement_group_capture_child_tasks=True))
 
     resources_kwarg: dict[str, Any] = {}
     if tensor_parallel_size == 1:
@@ -103,6 +99,7 @@ def predict(
         resources_kwarg["num_gpus"] = 0
         resources_kwarg["ray_remote_args_fn"] = scheduling_strategy_fn
 
+    log.info(f"Starting prediction with batch_size {batch_size} concurrency {concurrency} tensor_parallel_size {tensor_parallel_size}")
     predict_data = predict_data.map_batches(
         VLLMPredictor,
         fn_constructor_kwargs={
@@ -116,10 +113,4 @@ def predict(
         batch_size=batch_size,
         **resources_kwarg,
     )
-
-    log.info(f"Starting prediction with batch_size {batch_size} concurrency {concurrency} tensor_parallel_size {tensor_parallel_size}")
-    outputs = predict_data.take(limit=10)
-    for output in outputs:
-        prompt = output["prompt"]
-        generated_text = output["generated_text"]
-        print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
+    return predict_data
