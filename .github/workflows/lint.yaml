@@ -5,18 +5,35 @@ on:
     branches: [main]
 
 jobs:
+
+  
   ruff:
     name: Python Run Ruff on Changed Files
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write   # For commenting on PRs
+      contents: read
+
     defaults:
       run:
         working-directory: ./python
 
     steps:
+      - name: Checkout main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 50      # Fetch 50 max commits in single PR
+
+      - name: Fetch main branch
+        run: git fetch origin main 
+
+      - name: Check branch list
+        run: git branch -av
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -43,29 +60,57 @@ jobs:
         if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
         run: poetry install --no-interaction --no-root -E dev
       - name: Install project
-        run: poetry install --no-interaction
+        run: poetry install --no-interaction -E dev
 
       #----------------------------------------------
       # Run ruff on changed files
       #----------------------------------------------
-      - name: Get changed files (excluding specific directories)
+      - name: Get base SHA for comparison
+        id: get-base-sha
+        run: |
+          BASE_SHA=$(git merge-base origin/${{ github.base_ref }} HEAD)
+          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+
+      - name: Get changed files
         id: changed-files
         run: |
-          CHANGED_FILES=$(git diff --name-only origin/${{ github.base_ref }} | grep -E '\.py$' || true)
-          echo "$CHANGED_FILES"
-          echo "FILES=$CHANGED_FILES" >> $GITHUB_ENV
+          echo "Comparing changes from $BASE_SHA to HEAD"
+          CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD | grep -E '^python/.*\.py$' | sed 's|^python/||' || true)
+          CHANGED_FILES_PRE=$(git diff --name-only $BASE_SHA HEAD | grep -E '\.py$' || true)
 
-      - name: Run ruff format on changed files
-        if: env.FILES != ''
+          CHANGED_FILES=$(echo "$CHANGED_FILES_PRE" | awk '
+          {
+              if ($0 ~ /^python\//) {
+                  sub(/^python\//, "", $0);
+                  print $0;
+              } else {
+                  print "../"$0;
+              }
+          }')
+          echo "Raw Changed files:"
+          echo "$CHANGED_FILES_PRE"
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
+          echo "$CHANGED_FILES" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+
+      - name: Run ruff format check (without applying)
+        if: env.CHANGED_FILES != ''
+        id: ruff-format
         run: |
-          ruff format $FILES
-          echo "Ruff Format applied."
+          output=$(poetry run ruff format --diff $CHANGED_FILES || true)
+          echo "$output" | tee ruff_format_output.txt
+          echo "RUFF_FORMAT_OUTPUT<<EOF" >> $GITHUB_ENV
+          echo "$output" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Run ruff lint on changed files
-        if: env.FILES != ''
+        if: env.CHANGED_FILES != ''
         id: ruff-lint
         run: |
-          output=$(ruff check $FILES || true)
+          output=$(poetry run ruff check $CHANGED_FILES || true)
           echo "$output" | tee ruff_lint_output.txt
           echo "RUFF_LINT_OUTPUT<<EOF" >> $GITHUB_ENV
           echo "$output" >> $GITHUB_ENV
@@ -73,17 +118,30 @@ jobs:
 
       - name: Comment on PR with Ruff results
         uses: actions/github-script@v6
-        if: env.FILES != ''
+        if: env.CHANGED_FILES != ''
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const output = process.env.RUFF_LINT_OUTPUT;
+            const formatOutput = process.env.RUFF_FORMAT_OUTPUT.trim();
+            const lintOutput = process.env.RUFF_LINT_OUTPUT.trim();
             const pr_number = context.payload.pull_request.number;
-            if (output.trim() !== "") {
+            let body = "### 🛠 Ruff Check & Format Results\n";
+
+            if (formatOutput) {
+              body += "\n#### ⚠️ Format Issues Detected\n```\n" + formatOutput + "\n```\n";
+              body += "📌 Please run `poetry run ruff format .` locally to fix formatting issues.\n\n";
+            }
+
+            if (lintOutput) {
+              body += "\n#### 🚨 Lint Issues Detected\n```\n" + lintOutput + "\n```\n";
+            }
+
+            if (formatOutput || lintOutput) {
+              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally.";
               github.rest.issues.createComment({
                 issue_number: pr_number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                body: "### 🛠 Ruff Check & Format Results\n```\n" + output + "\n\n Please run `poetry install -E dev` to run pre-commit hook on your local.\n```"
+                body: body
               });
             }
