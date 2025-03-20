@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/michelangelo-ai/michelangelo/go/base/yarpc/reflection"
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/api/transport"
+	yarpcreflection "go.uber.org/yarpc/encoding/protobuf/reflection"
 	"go.uber.org/yarpc/transport/grpc"
 	"go.uber.org/zap"
 )
@@ -22,6 +24,8 @@ type RegisterParams struct {
 	// provided to the "yarpcfx" group.
 	SingleProcedures []transport.Procedure   `group:"yarpcfx"`
 	ProcedureLists   [][]transport.Procedure `group:"yarpcfx"`
+
+	ProtoReflectionMetas []yarpcreflection.ServerMeta `group:"yarpcfx"`
 }
 
 // provideDispatcher creates and configures a YARPC dispatcher.
@@ -53,6 +57,10 @@ func registerProcedures(p RegisterParams) {
 	procs = append(procs, p.SingleProcedures...)
 	for _, ps := range p.ProcedureLists {
 		procs = append(procs, ps...)
+	}
+	refl, reflErr := reflection.NewServer(p.ProtoReflectionMetas)
+	if reflErr == nil {
+		procs = append(procs, refl...)
 	}
 
 	p.Dispatcher.Register(procs)

@@ -1,0 +1,60 @@
+# gazelle:exclude testdata/**/*
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "index.go",
+        "server.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/base/yarpc/reflection",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/base/yarpc/reflection/grpc_reflection_v1alpha:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//protoc-gen-gogo/descriptor:go_default_library",
+        "@org_golang_google_grpc//codes:go_default_library",
+        "@org_golang_google_grpc//status:go_default_library",
+        "@org_uber_go_yarpc//api/transport:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "index_test.go",
+        "server_test.go",
+    ],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    embedsrcs = [
+        "testdata/conflict_extension.proto",
+        "testdata/conflict_extension.proto.bin",
+        "testdata/conflict_message.proto",
+        "testdata/conflict_message.proto.bin",
+        "testdata/conflict_message_extension.proto",
+        "testdata/conflict_message_extension.proto.bin",
+        "testdata/conflict_message_nest.proto",
+        "testdata/conflict_message_nest.proto.bin",
+        "testdata/conflict_service.proto",
+        "testdata/conflict_service.proto.bin",
+        "testdata/conflict_service_method.proto",
+        "testdata/conflict_service_method.proto.bin",
+        "testdata/main.proto",
+        "testdata/main.proto.bin",
+        "testdata/other.proto",
+        "testdata/other.proto.bin",
+        "testdata/otherroot/main.proto",
+        "testdata/otherroot/main.proto.bin",
+    ],
+    deps = [
+        "//go/base/yarpc/reflection/grpc_reflection_v1alpha:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//protoc-gen-gogo/descriptor:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
+    ],
+)

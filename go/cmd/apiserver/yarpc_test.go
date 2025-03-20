@@ -37,7 +37,7 @@ func TestRegisterProcedures(t *testing.T) {
 	registerProcedures(params)
 	r := dispatcher.Router()
 	procedures := r.Procedures()
-	assert.Len(t, procedures, 24)
+	assert.Len(t, procedures, 26)
 }
 
 func TestStartYARPCServer(t *testing.T) {
