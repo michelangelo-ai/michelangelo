@@ -317,6 +317,12 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 	if err == nil {
 	    return nil
 	}
+	visited := make(map[reflect.Type]bool)
+    var paths []util.InlineFieldMapping
+	util.RemoveInlineFields(reflect.TypeOf(m), "", visited, &paths)
+	if len(paths) > 0 {
+	    b, err = util.ApplyInlineFields(b, paths)
+	}
     type Alias {{.Name}}Spec
     aux := (*Alias)(m)
 

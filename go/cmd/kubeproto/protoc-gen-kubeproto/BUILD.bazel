@@ -44,6 +44,8 @@ go_test(
         "@com_github_gogo_protobuf//protoc-gen-gogo/plugin:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )

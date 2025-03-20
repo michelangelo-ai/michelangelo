@@ -9,6 +9,8 @@ go_library(
         "//go/kubeproto/pboptions:go_default_library",
         "@com_github_dave_dst//:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
+        "@com_github_tidwall_gjson//:go_default_library",
+        "@com_github_tidwall_sjson//:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
         "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
