@@ -1,4 +1,16 @@
-// This file defines the Pod related messages in Michelangelo API.
+// Pod API provides interfaces for managing Pod resources in Michelangelo.
+// A Pod represents a unit of compute that can be scheduled and executed.
+// The Pod definition includes:
+// - Resource requirements like CPU, memory, GPU
+// - Environment variables for configuration
+// - Pod specifications for container settings
+//
+// Key concepts:
+// - Pods request specific compute resources
+// - Environment variables configure runtime behavior
+// - Resource specs define hardware requirements
+// - GPU SKUs can be specified for cloud workloads
+// - File descriptor limits can be configured
 
 syntax = "proto3";
 

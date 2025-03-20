@@ -1,4 +1,17 @@
-// This file defines the Project related messages in Michelangelo API.
+// Project API provides interfaces for managing ML projects in Michelangelo.
+// A project represents a logical grouping of ML resources and workloads.
+// The project definition includes:
+// - Project metadata and ownership information
+// - Resource retention policies and configurations
+// - Notification settings for project events
+// - Git repository tracking for project code
+//
+// Key concepts:
+// - Projects organize related ML resources together
+// - Ownership controls access and permissions
+// - Retention policies manage resource lifecycle
+// - Notifications control event communication
+// - Projects track Git repositories and commits
 
 syntax = "proto3";
 

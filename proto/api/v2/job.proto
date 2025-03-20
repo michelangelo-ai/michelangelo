@@ -1,3 +1,18 @@
+// Job API provides interfaces for managing ML jobs in Michelangelo.
+// A job represents a unit of work that can be executed on compute resources.
+// The job definition includes:
+// - Job specifications like resource requirements and scheduling preferences
+// - Job status tracking execution state and history
+// - Job affinity rules for resource selection
+// - Assignment information for resource allocation
+//
+// Key concepts:
+// - Jobs can request specific compute resources and constraints
+// - Job status tracks execution progress and outcomes
+// - Affinity rules control resource selection and placement
+// - Jobs are assigned to resource pools and clusters
+// - Jobs can have dependencies and anti-affinity rules
+
 syntax = "proto3";
 
 package michelangelo.api.v2;
