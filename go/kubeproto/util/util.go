@@ -2,8 +2,13 @@ package util
 
 import (
 	"fmt"
+	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 
@@ -166,4 +171,166 @@ func SetPackageAlias(file *dst.File, pkgPath string, newAlias string) {
 			break
 		}
 	}
+}
+
+// InlineFieldMapping holds old and new paths for inline fields.
+type InlineFieldMapping struct {
+	OldPath string
+	NewPath string
+}
+
+// RemoveInlineFields identifies old and new JSON paths for inline fields.
+//
+// Parameters:
+// - typ: The reflect.Type of the struct to process.
+// - currentPath: The current JSON path being processed.
+// - visited: A map to track visited types and avoid infinite recursion.
+// - paths: A slice to store the identified InlineFieldMapping structs.
+func RemoveInlineFields(typ reflect.Type, currentPath string, visited map[reflect.Type]bool, paths *[]InlineFieldMapping) {
+	// Dereference pointer types
+	for typ.Kind() == reflect.Ptr {
+		typ = typ.Elem()
+	}
+
+	// Handle slices and arrays by processing their element types
+	if typ.Kind() == reflect.Slice || typ.Kind() == reflect.Array {
+		RemoveInlineFields(typ.Elem(), currentPath+".#", visited, paths)
+		return
+	}
+
+	// Skip non-struct types
+	if typ.Kind() != reflect.Struct {
+		return
+	}
+	// Check if the type has already been visited to avoid infinite recursion
+	if visited[typ] {
+		return
+	}
+	visited[typ] = true
+	// Iterate over the fields of the struct
+	for i := 0; i < typ.NumField(); i++ {
+		fieldType := typ.Field(i)
+		jsonTag := fieldType.Tag.Get("json")
+		protobufTag := fieldType.Tag.Get("protobuf")
+		fieldName := extractFieldName(jsonTag, protobufTag, fieldType.Name)
+
+		// Skip unexported fields or explicitly ignored ones
+		if fieldName == "-" || fieldType.PkgPath != "" {
+			continue
+		}
+
+		oldPath := strings.TrimPrefix(currentPath+"."+fieldName, ".")
+		if jsonTag == ",inline" {
+			newFlattenedPath := strings.TrimPrefix(currentPath, ".")
+			*paths = append(*paths, InlineFieldMapping{
+				OldPath: oldPath,
+				NewPath: newFlattenedPath,
+			})
+		}
+		// Recursively process the field type
+		RemoveInlineFields(fieldType.Type, oldPath, visited, paths)
+	}
+
+	delete(visited, typ)
+}
+
+// extractFieldName extracts the field name from the JSON tag, protobuf tag, or the Go field name.
+func extractFieldName(jsonTag, protobufTag, defaultName string) string {
+	// If the JSON tag explicitly says "-", ignore the field
+	if jsonTag == "-" {
+		return ""
+	}
+
+	// Attempt to extract the name from the JSON tag
+	if jsonTag != "" {
+		parts := strings.Split(jsonTag, ",")
+		name := parts[0]
+		if name != "" {
+			return name
+		}
+	}
+
+	// If no name in JSON, try extracting from the protobuf tag
+	if protobufTag != "" {
+		parts := strings.Split(protobufTag, ",")
+		for _, part := range parts {
+			if strings.HasPrefix(part, "name=") {
+				return strings.TrimPrefix(part, "name=")
+			}
+		}
+	}
+
+	// Fallback to the Go field name
+	return defaultName
+}
+
+// MatchedResult holds the path, value, and new path for a matched field.
+type MatchedResult struct {
+	Path    string
+	NewPath string
+	Value   gjson.Result
+}
+
+// ApplyInlineFields processes JSON data to apply inline field mappings.
+// It takes a JSON byte slice and a slice of InlineFieldMapping, and returns the modified JSON byte slice.
+//
+// Parameters:
+// - jsonData: A byte slice containing the JSON data to be processed.
+// - fields: A slice of InlineFieldMapping structs that define the old and new paths for inline fields.
+//
+// Returns:
+// - A byte slice containing the modified JSON data.
+// - An error if any issues occur during the processing.
+func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, error) {
+	// Convert the JSON byte slice to a string for easier manipulation.
+	jsonStr := string(jsonData)
+
+	// Helper function to find matched paths with resolved indices.
+	var findMatchedPaths func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult)
+	findMatchedPaths = func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult) {
+		value := gjson.Get(jsonStr, currentPath)
+
+		// Check if the value is an array.
+		if value.IsArray() {
+			value.ForEach(func(index, item gjson.Result) bool {
+				nextPath := strings.Replace(currentPath, "#", strconv.Itoa(int(index.Int())), 1)
+				nextResolvedPath := strings.Replace(resolvedPath, "#", strconv.Itoa(int(index.Int())), 1)
+				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
+				return true
+			})
+		} else if value.IsObject() {
+			value.ForEach(func(key, item gjson.Result) bool {
+				nextPath := fmt.Sprintf("%s.%s", currentPath, key.Str)
+				nextResolvedPath := fmt.Sprintf("%s.%s", resolvedPath, key.Str)
+				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
+				return true
+			})
+		} else if value.Exists() {
+			*results = append(*results, MatchedResult{
+				Path:  resolvedPath,
+				Value: value,
+			})
+		}
+	}
+
+	// Iterate over each field mapping to apply the inline transformations.
+	for _, field := range fields {
+		var matchedResults []MatchedResult
+		findMatchedPaths(jsonStr, field.OldPath, field.NewPath, &matchedResults)
+
+		for _, match := range matchedResults {
+			// Construct the new path dynamically.
+			newPath := strings.Replace(match.Path, field.OldPath, field.NewPath, 1)
+
+			// Set the new value using sjson.
+			var err error
+			jsonStr, err = sjson.Set(jsonStr, newPath, match.Value.Value())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	// Return the modified JSON data as a byte slice.
+	return []byte(jsonStr), nil
 }

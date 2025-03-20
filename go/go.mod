@@ -19,6 +19,8 @@ require (
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/ray-project/kuberay/ray-operator v1.0.0
 	github.com/stretchr/testify v1.10.0
+	github.com/tidwall/gjson v1.18.0
+	github.com/tidwall/sjson v1.2.5
 	github.com/uber-go/tally v3.5.10+incompatible
 	go.starlark.net v0.0.0-20250128212104-d908c3ead437
 	go.uber.org/cadence v1.2.9
@@ -88,6 +90,8 @@ require (
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect
 	github.com/twmb/murmur3 v1.1.8 // indirect

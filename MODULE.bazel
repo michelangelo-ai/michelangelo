@@ -59,6 +59,8 @@ use_repo(
     "com_github_minio_minio_go_v7",
     "com_github_ray_project_kuberay_ray_operator",
     "com_github_stretchr_testify",
+    "com_github_tidwall_gjson",
+    "com_github_tidwall_sjson",
     "com_github_uber_go_tally",
     "io_k8s_api",
     "io_k8s_apiextensions_apiserver",
