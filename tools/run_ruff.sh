@@ -3,6 +3,11 @@ set -euo pipefail
 
 MODE="$1"; shift
 
+if [ "$#" -eq 0 ]; then
+    echo "No files to lint. Skipping \`ruff $MODE\`."
+    exit 0
+fi
+
 # Use awk to transform file paths:
 # - Remove leading 'python/' if present
 # - Else, prepend '../'
