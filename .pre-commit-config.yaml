@@ -1,11 +1,13 @@
 repos:
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.3.0
+  - repo: local
     hooks:
-      - id: ruff
-        args: ["./python/"]
-        pass_filenames: false
-        verbose: true
+      - id: ruff-lint
+        name: ruff linter
+        entry: poetry run ruff check --config python/pyproject.toml
+        language: system
+        types: [python]
       - id: ruff-format
-        args: ["./python/"]
-        # pass_filenames: true
+        name: ruff formatter
+        entry: poetry run ruff format --config python/pyproject.toml
+        language: system
+        types: [python]
