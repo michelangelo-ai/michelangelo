@@ -22,6 +22,12 @@ typing-extensions = "^4.12.2"
 # For plugin
 ray = {extras = ["default"], version = "^2.41.0", optional = true }
 
+# For development
+pytest = { version = "^8.3.4", optional = true }
+ruff = { version = "^0.9.1", optional = true }
+jinja2 = { version = "^3.1.2", optional = true }
+pre-commit = {version = "^4.2.0", optional = true}
+
 # For example run
 accelerate = { version = "0.30.1", optional = true }
 datasets = { version = "3.2.0", optional = true }
@@ -35,17 +41,12 @@ einops = { version = "0.8.0", optional = true }
 transformers = { version = "4.36.2", optional = true }
 
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.3.4"
-ruff = "^0.9.1"
-jinja2 = "^3.1.2"
-
-
 [tool.poetry.scripts]
 ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
+dev = ["pytest", "ruff", "jinja2", "pre-commit"]
 plugin = ["ray"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops"]
 
@@ -90,6 +91,8 @@ exclude = [
     "node_modules",
     "site-packages",
     "venv",
+    "michelangelo/api/v2/services/gen/**",
+    "michelangelo/gen/**",
 ]
 
 # https://peps.python.org/pep-0008/
