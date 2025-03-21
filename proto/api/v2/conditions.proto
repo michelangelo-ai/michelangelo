@@ -1,8 +1,20 @@
-// This file defines the protos related to conditions in Michelangelo API.
+// Conditions API provides interfaces for tracking resource status in Michelangelo.
+// A condition represents a specific aspect of a resource's state that can be monitored.
+// The condition definition includes:
+// - Type that identifies what aspect is being tracked
+// - Status indicating if the condition is met
+// - Reason and message providing context
+// - Timestamps and metadata for tracking changes
+//
+// Key concepts:
+// - Conditions use positive indicators (e.g. "Ready" vs "NotReady")
+// - Status can be True, False or Unknown
+// - Reasons are for debugging, messages are for users
+// - Metadata allows condition-specific state storage
 
 syntax = "proto3";
 
-package michelangelo.api.v2beta1;
+package michelangelo.api.v2;
 
 option go_package = "v2";
 
