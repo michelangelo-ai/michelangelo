@@ -61,7 +61,7 @@ message BatchPolicy {
   int32 batch_size = 1;
 
   // wait time between batches of pipeline_runs kicked off by the trigger
-  google.protobuf.Duration wait = 3;
+  google.protobuf.Duration wait = 4;
 }
 
 // BatchRerun defines parameters for triggering batch reruns of pipeline runs.
