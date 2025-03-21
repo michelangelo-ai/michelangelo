@@ -1,0 +1,298 @@
+// Trigger Run API provides interfaces for managing trigger executions in Michelangelo.
+// A trigger run represents a single execution of a pipeline trigger that can create one or more pipeline runs.
+// The trigger run definition includes:
+// - Trigger specification with schedule and parameters
+// - Trigger run status tracking execution state
+// - Batch policies for controlling run creation
+// - Error handling and logging
+//
+// Key concepts:
+// - Triggers can be scheduled or manual
+// - Parameters customize pipeline execution
+// - Batch policies control run creation
+// - Status tracks trigger execution
+// - Errors are captured and logged
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/params.proto";
+import "michelangelo/api/v2/user.proto";
+import "michelangelo/api/v2/notification.proto";
+
+// CronSchedule defines a schedule for triggering pipeline runs using cron expressions.
+// The cron expression follows standard cron format with 5 fields:
+// minute (0-59), hour (0-23), day of month (1-31), month (1-12), day of week (0-6)
+// Example: "0 2 * * *" runs at 2am daily
+message CronSchedule {
+  // the cron expression in string
+  string cron = 1;
+}
+
+// IntervalSchedule defines a schedule for triggering pipeline runs at fixed time intervals.
+// The interval duration specifies how frequently the trigger should execute.
+// For example, an interval of 1 hour means the trigger will run every hour.
+// The interval can be specified in any duration unit (seconds, minutes, hours, etc).
+// This provides more flexibility than cron schedules for simple recurring triggers.
+message IntervalSchedule {
+  // duration defines the interval between run cycles
+  google.protobuf.Duration interval = 1;
+}
+
+// BatchPolicy defines how pipeline runs are created and executed in batches.
+// This allows controlling the rate and parallelism of pipeline executions:
+// - Batch size limits how many runs are created at once
+// - Wait time adds delays between batches
+// - This prevents overwhelming resources while still processing all runs
+// For example, with batch_size=10 and wait_minutes=5:
+// - Creates 10 pipeline runs
+// - Waits 5 minutes
+// - Creates next batch of 10 runs
+// - Continues until all runs are created
+message BatchPolicy {
+  // number of pipeline_runs created in one batch
+  int32 batch_size = 1;
+
+  // wait time between batches of pipeline_runs kicked off by the trigger
+  google.protobuf.Duration wait = 3;
+}
+
+// BatchRerun defines parameters for triggering batch reruns of pipeline runs.
+// This allows rerunning multiple pipeline runs that may have failed or need to be retried:
+// - Specifies a list of pipeline run IDs to rerun
+// - Can be used to retry failed runs or rerun successful runs with different parameters
+// - Supports batching and concurrency controls via BatchPolicy
+// For example:
+// - Select failed pipeline runs from last 24 hours
+// - Create batch rerun trigger with those run IDs
+// - Runs will be reprocessed according to batch policy settings
+message BatchRerun {
+  // List of pipeline run IDs to rerun
+  repeated string pipeline_run_ids = 1;
+}
+
+// Trigger defines how pipeline runs are created and executed.
+// It supports different trigger types:
+// - Cron schedules for time-based execution
+// - Batch reruns for retrying multiple runs
+// - Interval schedules for fixed-time recurring runs
+// The trigger configuration includes:
+// - Parameters for customizing each run
+// - Batch policies for controlling execution rate
+// - Concurrency limits for parallel runs
+// For example:
+// - Schedule daily runs at 2am via cron
+// - Rerun failed pipeline runs in batches
+// - Execute every hour via interval schedule
+message Trigger {
+  oneof trigger_type {
+    // CronSchedule used to trigger pipeline_run
+    CronSchedule cron_schedule = 1;
+
+    // BatchRerun used to trigger batch rerun list of pipeline_run
+    BatchRerun batch_rerun = 4;
+
+    // IntervalSchedule used to trigger pipeline_run
+    IntervalSchedule interval_schedule = 6;
+  }
+
+  // Parameters used to trigger pipeline_run.
+  // For automated triggering, each ID in the map will trigger a run
+  // For on-demand execution, one ID will be selected to trigger a run
+  map<string, PipelineExecutionParams> params_map = 2;
+
+  // batch policy used by the trigger to kick off pipeline_runs
+  BatchPolicy batch_policy = 3;
+
+  // defines an upper bound on how many pipelines may run in parallel
+  int32 max_concurrency = 5;
+}
+
+// TriggerRunSpec defines the specification for executing a pipeline trigger.
+// It contains all the configuration needed to run a pipeline trigger:
+// - Target pipeline and revision to execute
+// - Trigger configuration (cron/batch/interval)
+// - User and execution parameters
+// - Time window for backfills
+// - Notification settings
+// For example:
+// - Schedule a daily training pipeline run
+// - Rerun failed pipeline runs in batches
+// - Execute backfills over a date range
+message TriggerRunSpec {
+  // Target pipeline for this TriggerRun
+  michelangelo.api.ResourceIdentifier pipeline = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo/Pipeline"
+    }
+  ];
+
+  // Target pipeline revision for this TriggerRun
+  michelangelo.api.ResourceIdentifier revision = 2 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo/Revision"
+    }
+  ];
+
+  Trigger trigger = 3;
+
+  // The user launches this trigger run.
+  UserInfo actor = 4;
+
+  // True if this is a kill request. When set to true, this will terminate the trigger run
+  // and any associated pipeline runs that are currently executing.
+  bool kill = 5;
+
+  // Start time for backfilling pipeline runs. When specified, triggers pipeline runs 
+  // starting from this timestamp. Used in conjunction with end_timestamp to define
+  // a time window for backfilling multiple runs.
+  google.protobuf.Timestamp start_timestamp = 6;
+
+  // When specified along with start_timestamp, allows backfilling pipeline runs 
+  // for a time window between start_timestamp and end_timestamp
+  google.protobuf.Timestamp end_timestamp = 7;
+
+  // Source trigger name from the pipeline manifest's triggers map that this TriggerRun executes.
+  // This field maps to a trigger name defined in PipelineManifest.triggers.
+  // For example, if the pipeline manifest has a trigger named "daily_training",
+  // this field would be set to "daily_training" when executing that trigger.
+  string source_trigger_name = 8;
+
+  // This is the user flag to enable auto flip for the trigger run.
+  // When enabled, the trigger run will automatically flip to the latest revision
+  // of the pipeline when a new revision is available. This ensures the trigger
+  // always uses the most up-to-date pipeline definition.
+  bool auto_flip = 9;
+
+  // Configures notifications to be sent on pipeline run events like completion or failure.
+  // Multiple notifications can be configured with different triggers and channels.
+  // For example:
+  // - Email notifications when pipeline runs complete
+  // - Slack alerts on pipeline failures 
+  // - Webhook notifications for run status updates
+  // Each notification can specify:
+  // - Trigger conditions (success, failure, etc)
+  // - Notification channel (email, slack, webhook)
+  // - Recipients and message template
+  repeated Notification notifications = 10;
+}
+
+// BatchRerun defines configuration for rerunning multiple failed pipeline runs.
+// It allows resuming execution from specific nodes in the DAG for multiple runs:
+// - List of pipeline runs to rerun
+// - Optional resume_from nodes to start from
+// - Optional resume_up_to nodes to stop at
+// For example:
+// - Rerun failed training pipeline runs from feature generation step
+// - Resume multiple evaluation runs from model validation
+// - Rerun batch prediction runs up to scoring step
+message BatchRerun {
+  // List of pipeline_runs to resume from
+  repeated michelangelo.api.ResourceIdentifier pipeline_runs = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo-ai/PipelineRun"
+    },
+    (michelangelo.api.validation) = {required: true}
+  ];
+
+  // Nodes in the execution DAG all PipelineRuns will be resumed from.
+  // These nodes represent steps in the pipeline workflow where execution should restart.
+  // For example, if a pipeline run failed at feature generation, setting resume_from=["feature_gen"]
+  // will resume execution from that step. Multiple nodes can be specified to resume from multiple points.
+  repeated string resume_from = 2;
+
+  // Nodes in the execution DAG all PipelineRuns will execute up to (inclusive).
+  // These nodes represent steps in the pipeline workflow where execution should stop.
+  // For example, if you want to only run up to model training but skip deployment,
+  // setting resume_up_to=["train_model"] will stop execution after that step.
+  // Multiple nodes can be specified to stop at different points in parallel branches.
+  repeated string resume_up_to = 3;
+}
+
+// Describes the state of a trigger run:
+// - INVALID: The trigger run state is invalid or unspecified
+// - RUNNING: The trigger run is currently executing
+// - KILLED: The trigger run was terminated by a user
+// - FAILED: The trigger run failed due to an error
+// - SUCCEEDED: The trigger run completed successfully
+// - PENDING_KILL: The trigger run is marked for termination but not yet killed
+enum TriggerRunState {
+  TRIGGER_RUN_STATE_INVALID = 0;
+  TRIGGER_RUN_STATE_RUNNING = 1;
+  TRIGGER_RUN_STATE_KILLED = 2;
+  TRIGGER_RUN_STATE_FAILED = 3;
+  TRIGGER_RUN_STATE_SUCCEEDED = 4;
+  TRIGGER_RUN_STATE_PENDING_KILL = 5;
+}
+
+// Describes the current status of a trigger run:
+// - state: Current state of the trigger run (running, killed, failed, etc)
+// - execution_workflow_id: ID of the workflow in the execution engine
+// - error_message: Error details if the run failed
+// - log_url: URL to access the trigger run logs
+message TriggerRunStatus {
+  TriggerRunState state = 1;
+
+  // workflow id from the execution engine
+  string execution_workflow_id = 2;
+
+  // error message
+  string error_message = 3;
+
+  // log_url for the trigger_run
+  string log_url = 4;
+}
+
+// Defines a trigger run resource that represents an execution of a pipeline:
+// - Spec contains the pipeline reference and execution parameters
+// - Status tracks the execution state and results
+// - Indexes enable querying by pipeline, revision, state and auto_flip
+// - Follows Kubernetes resource model with TypeMeta and ObjectMeta
+message TriggerRun {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.pipeline",
+    key:  "pipeline",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.revision",
+    key:  "revision",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "status.state",
+    key:  "state",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.auto_flip",
+    key:  "auto_flip",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+  TriggerRunSpec spec = 3;
+  TriggerRunStatus status = 4;
+}
+
+// TriggerRunList represents a collection of TriggerRun objects:
+// - Follows Kubernetes list resource model with TypeMeta and ListMeta
+// - Contains repeated list of TriggerRun items
+// - Used for listing and querying multiple trigger runs
+message TriggerRunList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of TriggerRuns
+  repeated TriggerRun items = 3;
+}

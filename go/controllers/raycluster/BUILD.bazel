@@ -12,8 +12,8 @@ go_library(
     deps = [
         "//go/api/utils:go_default_library",
         "//go/base/env:go_default_library",
-        "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo_proto//api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//pkg/client/clientset/versioned/typed/ray/v1:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
@@ -34,7 +34,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//go/controllers/utils/testutils:go_default_library",
-        "//proto/api/v2:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo_proto//api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//pkg/client/clientset/versioned/scheme:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//pkg/client/clientset/versioned/typed/ray/v1/fake:go_default_library",

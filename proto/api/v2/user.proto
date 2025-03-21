@@ -17,11 +17,27 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
-// Defines actor information.
+// UserInfo defines information about a user who initiates workloads:
+// - name: LDAP username for authentication and identification
+// - proxy_user: Optional proxy user for delegated execution
+// For example:
+// - Direct execution: name="jsmith", no proxy_user
+// - Delegated execution: name="jsmith", proxy_user="training-service"
+// The user info is used to:
+// - Track workload ownership and permissions
+// - Enable service account delegation
+// - Audit pipeline and job executions
 message UserInfo {
 
-  // LDAP of user.
+  // LDAP username of the user who initiated the workload.
+  // This field identifies the user for authentication and authorization.
+  // For example: "jsmith" or "training-service"
+  // Required field that must be a valid LDAP username.
   string name = 1;
 
+  // Optional proxy user for delegated execution.
+  // When specified, allows the named user to execute workloads on behalf of another user.
+  // For example, a service account like "training-service" can run pipelines as other users.
+  // This enables automated workflows while maintaining proper ownership attribution.
   string proxy_user = 2;
 }
