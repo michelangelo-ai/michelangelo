@@ -137,7 +137,7 @@ jobs:
             }
 
             if (formatOutput || lintOutput) {
-              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally.";
+              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally. (or run `poetry run pre-commit` before run git commit)";
               github.rest.issues.createComment({
                 issue_number: pr_number,
                 owner: context.repo.owner,
