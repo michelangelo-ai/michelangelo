@@ -14,21 +14,6 @@ sandbox.sh create
 bazel run //go/cmd/controllermgr
 ```
 
-3. **Register sample pipelines:**
-```bash
-kubectl apply -f $WORKSPACE_ROOT/kubernetes/samples/v2beta1_pipeline.yaml
-```
-
-4. **Run a sample pipeline:**
-```bash
-kubectl create -f $WORKSPACE_ROOT/kubernetes/samples/v2beta1_pipeline_run.yaml
-```
-
-5. **Delete the sandbox instance (if previously created):**
-```bash
-sandbox.sh delete
-```
-
 ## Build and Run in a Container
 To build the `:image`  target, use the following command with the specified platform flag for Linux containers:
 
