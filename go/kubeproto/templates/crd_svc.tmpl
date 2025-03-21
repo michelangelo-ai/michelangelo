@@ -232,7 +232,7 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 	// There's a bug in k8s client's Get() method where TypeMeta is not returned
 	// https://github.com/kubernetes-sigs/controller-runtime/issues/1517
 	// Therefore fill it manually
-	result.APIVersion = "michelangelo.uber.com/v2beta1"
+	result.APIVersion = GroupVersion.String()
 	result.Kind = "{{.KindName}}"
 
     for _, hook := range c.apiHooks {

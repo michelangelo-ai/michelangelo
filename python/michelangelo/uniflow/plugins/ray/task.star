@@ -265,7 +265,7 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
 
 # Constructs a Unified API resource for provisioning a Ray Cluster.
 # This function generates a RayJob Custom Resource Definition (CRD) that defines the specifications for a Ray cluster.
-# Refer to the RayJob CRD: https://sg.uberinternal.com/code.uber.internal/uber-code/go-code/-/blob/idl/code.uber.internal/uberai/michelangelo/api/v2beta1/ray_job.proto
+# Refer to the RayJob CRD: https://github.com/michelangelo-ai/michelangelo/blob/main/proto/api/v2/ray_job.proto
 #
 # Parameters:
 #     namespace (str):
