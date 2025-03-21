@@ -29,5 +29,5 @@ jobs:
       #----------------------------------------------
       # Run test
       #----------------------------------------------
-      - name: Run image
-        run: docker run ma-it-bert-cola-local
+      - name: Run pipeline
+        run: docker run --rm ma-it-bert-cola-local poetry run python ./examples/bert_cola/bert_cola.py
