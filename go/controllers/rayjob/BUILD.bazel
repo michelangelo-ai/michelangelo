@@ -33,7 +33,7 @@ go_test(
     deps = [
         "//go/controllers/utils/testutils:go_default_library",
         "//proto/api:go_default_library",
-        "@com_github_michelangelo_ai_michelangelo_proto//api/v2:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//pkg/client/clientset/versioned/typed/ray/v1/fake:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
