@@ -1,9 +1,11 @@
 """
 Training task for fine-tuning a BERT model on the CoLA dataset.
 """
+
 import logging
 import os
 
+from datasets import Dataset as HFDataset
 import torch
 import transformers
 from ray.data import Dataset
@@ -15,11 +17,15 @@ import fsspec
 
 log = logging.getLogger(__name__)
 
+
 # Model creation function
-def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClassification:
+def create_model(
+    lr: float, eps: float
+) -> transformers.AutoModelForSequenceClassification:
     return transformers.AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
     )
+
 
 @uniflow.task(
     config=RayTask(
@@ -28,13 +34,13 @@ def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClas
         worker_cpu=1,
         worker_memory="4Gi",
         worker_instances=1,
-        #breakpoint=True,
+        # breakpoint=True,
     ),
 )
 def train(
-        train_data: Dataset,
-        validation_data: Dataset,
-        test_data: Dataset,
+    train_data: Dataset,
+    validation_data: Dataset,
+    test_data: Dataset,
 ):
     log.info("Starting training...")
 
@@ -48,13 +54,11 @@ def train(
     # Load model
     model = create_model(lr=lr, eps=eps)
 
-    from datasets import Dataset as HFDataset
     train_data = HFDataset.from_pandas(train_data.to_pandas())
     validation_data = HFDataset.from_pandas(validation_data.to_pandas())
     test_data = HFDataset.from_pandas(test_data.to_pandas())
 
-
-# Define training arguments
+    # Define training arguments
     training_args = transformers.TrainingArguments(
         output_dir=output_dir,
         evaluation_strategy="epoch",
@@ -89,6 +93,7 @@ def train(
     log.info(f"Best checkpoint path: {best_checkpoint}")
 
     return train_result, best_checkpoint
+
 
 def _compute_metrics(eval_pred):
     """Compute Matthews Correlation Coefficient (MCC) directly using NumPy."""

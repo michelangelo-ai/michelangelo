@@ -3,11 +3,11 @@ repos:
     hooks:
       - id: ruff-lint
         name: ruff linter
-        entry: poetry run ruff check --config python/pyproject.toml
+        entry: bash tools/run_ruff.sh check
         language: system
         types: [python]
       - id: ruff-format
         name: ruff formatter
-        entry: poetry run ruff format --config python/pyproject.toml
+        entry: bash tools/run_ruff.sh format
         language: system
         types: [python]
