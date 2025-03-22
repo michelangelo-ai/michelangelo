@@ -19,8 +19,8 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
-// PipelineExecutionParams used to trigger multiple pipeline runs with different parameters from one pipeline definition
-// PipelineExecutionParams defines a set of key-value parameters for customizing pipeline execution.
+// PipelineExecutionParameters used to trigger multiple pipeline runs with different parameters from one pipeline definition
+// PipelineExecutionParameters defines a set of key-value parameters for customizing pipeline execution.
 // Each parameter set can be used to trigger a pipeline run with different configuration values.
 // For example:
 // - Training parameters like learning rate, batch size, epochs

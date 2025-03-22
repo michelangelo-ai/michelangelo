@@ -73,14 +73,19 @@ message Notification {
     // Notification is from pipeline.
     RESOURCE_TYPE_PIPELINE = 3;
   }
+
   // The type of the notification.
   NotificationType notification_type = 1;
+  
   // The event type of notification generation
   repeated EventType event_types = 2;
+  
   // The resource type of notification
   ResourceType resource_type = 3;
+  
   // The email address to send the notification to.
   repeated string emails = 4;
+  
   // The slack destinations to send the notification to.
   repeated string slack_destinations = 5;
 }

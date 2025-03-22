@@ -23,7 +23,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/struct.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "michelangelo/api/v2/params.proto";
+import "michelangelo/api/v2/parameter.proto";
 import "michelangelo/api/v2/git.proto";
 import "michelangelo/api/v2/job_specs.proto";
 import "michelangelo/api/v2/trigger_run.proto";
@@ -73,7 +73,7 @@ message PipelineManifest {
   google.protobuf.Any content = 4 [(michelangelo.api.external_storage) = true];
 
   // map of ids to corresponding pipeline run parameters, each id in the map can trigger one pipeline run
-  map<string, PipelineExecutionParams> params_map = 5;
+  map<string, PipelineExecutionParameters> params_map = 5;
 
   // defines name to trigger mapping, multiple triggers can be defined for one pipeline
   map<string, Trigger> triggers = 6;
