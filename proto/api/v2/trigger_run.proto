@@ -64,20 +64,6 @@ message BatchPolicy {
   google.protobuf.Duration wait = 4;
 }
 
-// BatchRerun defines parameters for triggering batch reruns of pipeline runs.
-// This allows rerunning multiple pipeline runs that may have failed or need to be retried:
-// - Specifies a list of pipeline run IDs to rerun
-// - Can be used to retry failed runs or rerun successful runs with different parameters
-// - Supports batching and concurrency controls via BatchPolicy
-// For example:
-// - Select failed pipeline runs from last 24 hours
-// - Create batch rerun trigger with those run IDs
-// - Runs will be reprocessed according to batch policy settings
-message BatchRerun {
-  // List of pipeline run IDs to rerun
-  repeated string pipeline_run_ids = 1;
-}
-
 // Trigger defines how pipeline runs are created and executed.
 // It supports different trigger types:
 // - Cron schedules for time-based execution
