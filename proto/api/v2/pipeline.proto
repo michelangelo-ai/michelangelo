@@ -118,7 +118,7 @@ message PipelineManifest {
 // - Optimization pipelines for model tuning
 // Each type has specific configurations and requirements for execution.
 enum PipelineType {
-  // Invalid manifest type.
+  // Invalid pipeline type.
   PIPELINE_TYPE_INVALID = 0;
   PIPELINE_TYPE_TRAIN = 1;
   PIPELINE_TYPE_EVAL = 2;
