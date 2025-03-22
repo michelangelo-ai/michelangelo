@@ -23,7 +23,7 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/duration.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "michelangelo/api/v2/params.proto";
+import "michelangelo/api/v2/parameter.proto";
 import "michelangelo/api/v2/user.proto";
 import "michelangelo/api/v2/notification.proto";
 
@@ -92,7 +92,7 @@ message Trigger {
   // Parameters used to trigger pipeline_run.
   // For automated triggering, each ID in the map will trigger a run
   // For on-demand execution, one ID will be selected to trigger a run
-  map<string, PipelineExecutionParams> params_map = 2;
+  map<string, PipelineExecutionParameters> parameters_map = 2;
 
   // batch policy used by the trigger to kick off pipeline_runs
   BatchPolicy batch_policy = 3;

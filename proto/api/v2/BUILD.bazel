@@ -15,7 +15,7 @@ proto_library(
         "job.proto",
         "job_specs.proto",
         "notification.proto",
-        "params.proto",
+        "parameter.proto",
         "pipeline.proto",
         "pod.proto",
         "project.proto",
