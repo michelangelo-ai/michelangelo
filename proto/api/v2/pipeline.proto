@@ -76,7 +76,7 @@ message PipelineManifest {
   map<string, PipelineExecutionParameters> params_map = 5;
 
   // defines name to trigger mapping, multiple triggers can be defined for one pipeline
-  map<string, Trigger> triggers = 6;
+  map<string, Trigger> trigger_map = 6;
 
   // Terrablob path of UniFlow tar.gz
   // Contains the packaged UniFlow code and dependencies required for pipeline execution.
