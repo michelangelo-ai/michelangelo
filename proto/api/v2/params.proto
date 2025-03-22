@@ -28,7 +28,7 @@ option go_package = "v2";
 // - Model hyperparameters and architecture choices
 // - Input/output data paths and formats
 // The parameters are validated before pipeline execution to ensure they meet requirements.
-message PipelineExecutionParams {
+message PipelineExecutionParameters {
   // pipeline execution parameters stored in string key-value map
   map<string, string> params = 1;
 }
