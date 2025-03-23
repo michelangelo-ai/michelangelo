@@ -380,10 +380,3 @@ func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, er
 
 	return []byte(jsonStr), nil
 }
-
-func joinPath(prefix, token string) string {
-	if prefix == "" {
-		return token
-	}
-	return prefix + "." + token
-}
