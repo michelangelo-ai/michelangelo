@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fluent-bit-config
+  namespace: default
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush 1
+        Log_Level info
+        Daemon off
+
+    [INPUT]
+        Name tail
+        Path /tmp/ray/session_*/logs/job*.log
+        Tag raylogs
+        Refresh_Interval 5
+        Read_from_Head true
+        Key             log
+
+    [FILTER]
+        Name stdout
+        Match *
+    
+    [OUTPUT]
+        Name              s3
+        Match             *
+        Bucket            logs
+        Region            us-east-1
+        Endpoint          http://host.docker.internal:9091
+        storage_class     STANDARD
+        s3_key_format     /logs/%Y%m%d-${CLUSTER_NAME}.log
+        upload_chunk_size 10485760
+        total_file_size   20971520 
+        Upload_Timeout    2
+        profile           default
+        log_key           log

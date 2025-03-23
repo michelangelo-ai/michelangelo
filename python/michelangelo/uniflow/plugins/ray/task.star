@@ -334,15 +334,54 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
+                        "volumes": [
+                            {
+                                "name": "logs",
+                                "volumeSource": {
+                                    "emptyDir": {},
+                                },
+                            },
+                            {
+                                "name": "fluent-bit-config",
+                                "volumeSource": {
+                                    "configMap": {
+                                        "localObjectReference": {
+                                            "name": "fluent-bit-config",
+                                        },
+                                    },
+                                },
+                            },
+                            {
+                                "name": "aws-credentials",
+                                "volumeSource": {
+                                    "secret": {
+                                        "secretName": "fluent-bit-aws-creds",
+                                    },
+                                },
+                            },
+                        ],
+                        "initContainers": [
+                            {
+                                "name": "fix-perms",
+                                "image": "busybox",
+                                "command": ["sh", "-c", "chown -R 1000:1000 /tmp/ray"],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                ],
+                            },
+                        ],
                         "containers": [
                             {
                                 "name": "head",
                                 "resources": {
                                     "requests": head_resource,
                                 },
-                                "image": image,  # Keeping original variable
+                                "image": image,
                                 "imagePullPolicy": IMAGE_PULL_POLICY,
-                                "env": env,  # Keeping original variable
+                                "env": env,
                                 "envFrom": [
                                     {
                                         "configMapRef": {
@@ -352,6 +391,12 @@ def ray_cluster_spec(
                                         },
                                     },
                                 ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                ],
                                 "lifecycle": {
                                     "postStart": {
                                         "exec": {
@@ -359,6 +404,37 @@ def ray_cluster_spec(
                                         },
                                     },
                                 },
+                            },
+                            {
+                                "name": "fluent-bit",
+                                "image": "fluent/fluent-bit:3.2.7",
+                                "args": ["-c", "/fluent-bit/etc/fluent-bit.conf"],
+                                "env": [
+                                    {
+                                        "name": "CLUSTER_NAME",
+                                        "valueFrom": {
+                                            "fieldRef": {
+                                                "fieldPath": "metadata.name",
+                                            },
+                                        },
+                                    },
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                    {
+                                        "name": "fluent-bit-config",
+                                        "mountPath": "/fluent-bit/etc/",
+                                        "readOnly": True,
+                                    },
+                                    {
+                                        "name": "aws-credentials",
+                                        "mountPath": "/root/.aws/",
+                                        "readOnly": True,
+                                    },
+                                ],
                             },
                         ],
                     },
