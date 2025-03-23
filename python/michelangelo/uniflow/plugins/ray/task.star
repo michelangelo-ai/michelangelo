@@ -366,8 +366,8 @@ def ray_cluster_spec(
             },
             "workers": [
                 {
-                    "minInstances": worker_instances,  # Keeping original variable
-                    "maxInstances": worker_instances,  # Keeping original variable
+                    "minInstances": worker_instances,
+                    "maxInstances": worker_instances,
                     "nodeType": "worker-group-1",
                     "objectStoreMemoryRatio": 0.0,
                     "rayStartParams": {
@@ -376,13 +376,14 @@ def ray_cluster_spec(
                     },
                     "pod": {
                         "spec": {
+                            "restartPolicy": "Never",
                             "containers": [
                                 {
                                     "name": "worker",
                                     "resources": {
                                         "requests": worker_resource,
                                     },
-                                    "image": image,  # Keeping original variable
+                                    "image": image,
                                     "imagePullPolicy": IMAGE_PULL_POLICY,
                                     "env": env,
                                     "envFrom": [

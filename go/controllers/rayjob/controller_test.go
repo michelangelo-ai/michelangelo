@@ -13,6 +13,7 @@ import (
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1fake "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1/fake"
 	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -167,6 +168,15 @@ func TestReconciler_Reconcile(t *testing.T) {
 					Status: v2pb.RayClusterStatus{
 						State: v2pb.RAY_CLUSTER_STATE_READY,
 					},
+					Spec: v2pb.RayClusterSpec{
+						Head: &v2pb.RayHeadSpec{
+							Pod: &corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{},
+								},
+							},
+						},
+					},
 				}
 				objects = append(objects, rayJob)
 				objects = append(objects, cluster)
@@ -203,6 +213,15 @@ func TestReconciler_Reconcile(t *testing.T) {
 					},
 					Status: v2pb.RayClusterStatus{
 						State: v2pb.RAY_CLUSTER_STATE_READY,
+					},
+					Spec: v2pb.RayClusterSpec{
+						Head: &v2pb.RayHeadSpec{
+							Pod: &corev1.PodTemplateSpec{
+								Spec: corev1.PodSpec{
+									Containers: []corev1.Container{},
+								},
+							},
+						},
 					},
 				}
 				objects = append(objects, rayJob)
