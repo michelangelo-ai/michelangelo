@@ -332,7 +332,7 @@ func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, er
 			}
 		}
 	}
-
+	// Iterate over each field mapping to apply the inline transformations.
 	for _, field := range fields {
 		var matchedResults []MatchedResult
 		resolvePath(jsonStr, fmt.Sprintf("%s.%s", field.Path, field.FieldToBeTrimmed), "", &matchedResults)
@@ -340,6 +340,7 @@ func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, er
 		for _, match := range matchedResults {
 			var err error
 			if strings.HasSuffix(field.Path, ".#") {
+				// Array update for handling inline fields in array
 				// Get the full object at the matched path
 				original := gjson.Get(jsonStr, match.Path)
 				var obj map[string]interface{}
