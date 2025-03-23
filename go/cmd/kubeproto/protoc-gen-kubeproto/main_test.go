@@ -4,12 +4,13 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
-	"github.com/google/go-cmp/cmp"
 	"go/token"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
