@@ -53,6 +53,7 @@ use_repo(
     "com_github_gogo_status",
     "com_github_golang_mock",
     "com_github_golang_protobuf",
+    "com_github_google_go_cmp",
     "com_github_google_uuid",
     "com_github_json_iterator_go",
     "com_github_michelangelo_ai_michelangelo_proto",

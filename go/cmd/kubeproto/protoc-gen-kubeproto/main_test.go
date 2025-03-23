@@ -3,6 +3,8 @@ package main
 import (
 	_ "embed"
 	"encoding/json"
+	"fmt"
+	"github.com/google/go-cmp/cmp"
 	"go/token"
 	"reflect"
 	"strings"
@@ -312,6 +314,36 @@ func TestJSONPod(t *testing.T) {
 		Spec: testpb.TestObjectSpec{
 			Pod: &corev1.PodTemplateSpec{
 				Spec: corev1.PodSpec{
+					InitContainers: []corev1.Container{
+						{
+							Command: []string{"/bin/sh"},
+							Image:   "alpine",
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									MountPath: "/var/www/html",
+									Name:      "www",
+								},
+							},
+						},
+					},
+					Volumes: []corev1.Volume{
+						{
+							Name: "logs",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: "fluent-bit-config",
+									},
+								},
+							},
+						},
+					},
 					Containers: []corev1.Container{
 						{
 							Name:       "test-container",
@@ -368,6 +400,13 @@ func TestJSONPod(t *testing.T) {
 	json.Unmarshal(testObjectJSON, &testObjectUnmarshalled)
 	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test")
 	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[1].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test2")
+	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Volumes[1].VolumeSource.ConfigMap.LocalObjectReference.Name, "fluent-bit-config")
+	if diff := cmp.Diff(testObject, testObjectUnmarshalled); diff != "" {
+		fmt.Println("Mismatch (-origin +unmarshalled):")
+		fmt.Println(diff)
+	} else {
+		fmt.Println("✅ testObjectUnmarshalled is equal to originCluster")
+	}
 }
 func TestImmutability(t *testing.T) {
 	obj2 := &testpb.TestObject{}
