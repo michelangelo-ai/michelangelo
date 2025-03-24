@@ -77,18 +77,22 @@ jobs:
           echo "Comparing changes from $BASE_SHA to HEAD"
           CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD | grep -E '^python/.*\.py$' | sed 's|^python/||' || true)
           CHANGED_FILES_PRE=$(git diff --name-only $BASE_SHA HEAD | grep -E '\.py$' || true)
-
-          CHANGED_FILES=$(echo "$CHANGED_FILES_PRE" | awk '
-          {
-              if ($0 ~ /^python\//) {
-                  sub(/^python\//, "", $0);
-                  print $0;
-              } else {
-                  print "../"$0;
-              }
-          }')
           echo "Raw Changed files:"
           echo "$CHANGED_FILES_PRE"
+
+          if [ -z "$CHANGED_FILES_PRE" ]; then
+              CHANGED_FILES=""
+          else
+              CHANGED_FILES=$(echo "$CHANGED_FILES_PRE" | awk '
+              {
+                  if ($0 ~ /^python\//) {
+                      sub(/^python\//, "", $0);
+                      print $0;
+                  } else {
+                      print "../"$0;
+                  }
+              }')
+          fi
           echo "Changed files:"
           echo "$CHANGED_FILES"
           echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
@@ -137,7 +141,7 @@ jobs:
             }
 
             if (formatOutput || lintOutput) {
-              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally.";
+              body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally. (or run `poetry run pre-commit` before run git commit)";
               github.rest.issues.createComment({
                 issue_number: pr_number,
                 owner: context.repo.owner,

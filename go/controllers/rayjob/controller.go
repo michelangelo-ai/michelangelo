@@ -145,6 +145,10 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.RayJob, cluster *v2pb.RayCluster) error {
+	pod := cluster.Spec.Head.Pod
+	if len(cluster.Spec.Workers) > 0 {
+		pod = cluster.Spec.Workers[0].Pod
+	}
 	rayJob := &v1.RayJob{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "RayJob",
@@ -160,7 +164,10 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 				"rayClusterNamespace": cluster.Namespace,
 			},
 			Entrypoint: job.Spec.Entrypoint,
-			// TODO: SubmissionMode
+			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
+			// We need to allow user to configure the submitter pod template via ray task configuration
+			// TODO: add support for v1.2.2 kuberay once we upgrade to newer version
+			SubmitterPodTemplate: pod,
 		},
 	}
 
