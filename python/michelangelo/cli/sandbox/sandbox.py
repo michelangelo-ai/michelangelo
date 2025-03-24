@@ -28,6 +28,8 @@ _kube_ports = [
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
     "8081:30010", # Envoy gRPC --> gRPC-web proxy
+    "3000:30000",   # Grafana (NodePort)
+    "3100:31000",   # Loki (NodePort)
 ]
 _cadence_domain = "default"
 
@@ -37,6 +39,11 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument("--exclude", help="Excludes the specified services.", nargs="+", default=[])
+    create_p.add_argument(
+        "--monitor",
+        action="store_true",
+        help="Install monitoring stack only (Loki + Grafana)."
+    )
 
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
@@ -116,7 +123,13 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml", "michelangelo-config.yaml"]
+    resources = ["boot.yaml",
+                 "mysql.yaml",
+                 "cadence.yaml",
+                 "minio.yaml",
+                 "michelangelo-config.yaml",
+                 "fluent-bit-aws-secret.yaml",
+                 "fluent-bit-config.yaml"]
     if "worker" not in ns.exclude:
         resources.append("michelangelo-worker.yaml")
     if "apiserver" not in ns.exclude:
@@ -150,6 +163,48 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     print("Sandbox created. To access the services, please use the following links:")
     for title, url, comment in links:
         print(f"  - {title}: {url} {comment}")
+
+    if ns.monitor:
+        # Install Fluent Bit with Loki backend
+        _exec("helm", "repo", "add", "fluent", "https://fluent.github.io/helm-charts")
+        _exec("helm", "repo", "update")
+
+        _exec(
+            "helm", "upgrade", "--install", "fluent-bit", "fluent/fluent-bit",
+            "--namespace", "kube-system",
+            "--set", "backend.type=loki",
+            "--set", "backend.loki.host=loki.default.svc.cluster.local",
+            "--set", "backend.loki.port=3100"
+        )
+        # Add Helm repo for Grafana
+        _exec("helm", "repo", "add", "grafana", "https://grafana.github.io/helm-charts")
+        _exec("helm", "repo", "update")
+
+        # Install Loki (backend only)
+        _exec(
+            "helm", "upgrade", "--install", "loki", "grafana/loki-stack",
+            "--namespace", "kube-system",
+            "--set", "grafana.enabled=false",
+            "--set", "promtail.enabled=false",
+            "--set", "loki.enabled=true"
+        )
+
+        # Install Grafana with Loki datasource
+        _exec(
+            "helm", "upgrade", "--install", "grafana", "grafana/grafana",
+            "--namespace", "kube-system",
+            "--set", "adminPassword=admin",
+            "--set", "service.type=NodePort",
+            "--set", "service.nodePort=30000",
+            "--set", "datasources.datasources\\.yaml.apiVersion=1",
+            "--set", "datasources.datasources\\.yaml.datasources[0].name=Loki",
+            "--set", "datasources.datasources\\.yaml.datasources[0].type=loki",
+            "--set", "datasources.datasources\\.yaml.datasources[0].url=http://loki.kube-system.svc.cluster.local:3100"
+        )
+
+        print("\n✅ Monitoring stack installed.")
+        print("Grafana: http://localhost:3000 (admin / admin)")
+        print("Loki:    http://localhost:3100")
 
     print()
     print("ok.")
