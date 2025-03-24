@@ -18,6 +18,14 @@ if [[ ! "${CRD}" =~ ^[A-Z].*$ ]]; then
   exit
 fi
 
+# Check if WORKSPACE_ROOT is set
+if [ -z "$WORKSPACE_ROOT" ]; then
+    echo "WORKSPACE_ROOT is not set. setting to ${SCRIPT_DIR}/.."
+    WORKSPACE_ROOT="${SCRIPT_DIR}/.."
+else
+    echo "WORKSPACE_ROOT is set to: $WORKSPACE_ROOT"
+fi
+
 echo "CRD name: ${CRD}"
 SNAKE_CRD="$(echo "${CRD}" | sed -r 's/([A-Z])/_\1/g' | sed 's/^_//' | tr '[:upper:]' '[:lower:]')"
 echo "CRD name in snake_case: ${SNAKE_CRD}"
