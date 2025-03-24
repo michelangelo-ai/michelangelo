@@ -126,7 +126,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
-    _exec("kubectl", "create", "-k", "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.2.2")
+    _exec("kubectl", "create", "-k", "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0")
 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
     _exec("kubectl", "-n", "ray-system", "wait", "--all", "deployments", "--for=condition=available", "--timeout=600s")
