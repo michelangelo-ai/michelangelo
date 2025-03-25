@@ -58,11 +58,6 @@ message PipelineManifest {
   // Path to the manifest file.
   string file_path = 2;
 
-  // GIT revision ID of the manifest file, in either short or long
-  // SHA1 hash format.
-  // TODO: deprecate this and use CommitInfo instead.
-  string revision_id = 3;
-
   // Content of the manifest file for specific pipeline templates like
   // training, evaluation, prediction etc. Only available for
   // YAML based manifest type. To support dynamic extensibility other
