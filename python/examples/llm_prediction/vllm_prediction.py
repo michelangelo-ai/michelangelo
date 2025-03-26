@@ -1,5 +1,5 @@
 import michelangelo.uniflow.core as uniflow
-from examples.llm_prediction.hf_predict import predict
+from examples.llm_prediction.vllm_predict import predict
 from examples.llm_prediction.data import load_data, write_data
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -26,7 +26,6 @@ def llm_prediction_workflow(
         predict_column=data_predict_column,
         limit=data_limit,
     )
-
     result = predict(
         predict_data,
         worker_gpu=worker_gpu,
@@ -47,8 +46,8 @@ def llm_prediction_workflow(
     print("ok.")
 
 
-# For Local Run: poetry run python examples/llm_prediction/hf_prediction.py
-# For Remote Run: poetry run python examples/llm_prediction/hf_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run: poetry run python examples/llm_prediction/vllm_prediction.py
+# For Remote Run: poetry run python examples/llm_prediction/vllm_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
 
     ctx = uniflow.create_context()
@@ -60,22 +59,23 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ['IMAGE_PULL_POLICY'] ='Never'
 
-    worker_gpu = 0
+    worker_gpu = 1
     worker_instances = 1
     data_path = "THUDM/LongBench"
     data_name = "2wikimqa"
     data_slice = "test"
     data_predict_column = "input"
-    data_limit = 2
-    batch_size = 1
+    data_limit = 15
+    batch_size = 8
     model_name = "Qwen/Qwen2.5-0.5B"
     temperature = 0.95
     top_p = 0.95
     max_tokens = 128
 
-    # Run with HF for CPU or GPU
+    # Run with VLLM if GPU is enabled
     ctx.run(
         llm_prediction_workflow,
+        engine="vllm",
         worker_gpu=worker_gpu,
         worker_instances=worker_instances,
         data_path=data_path,

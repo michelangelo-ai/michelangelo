@@ -13,7 +13,7 @@ Example project showing various capabilities of the Michelangelo workflows.
 
 1. Install dependencies depending on your environment:
     * For AMD64 + CUDA support with VLLM: `poetry install -E vllm`
-    * For other environments without VLLM: `poetry install -E example`
+    * For other environments with HF: `poetry install -E example`
 
 **Run workflows locally**
 
@@ -55,13 +55,13 @@ Install dependencies depending on your environment:
 For AMD64 + CUDA support with VLLM
 ```
 cd python
-docker build -t llm-prediction:latest -f ./examples/llm_prediction/Dockerfile .
+docker build -t vllm-prediction:latest -f ./examples/llm_prediction/Dockerfile-vllm .
 ```
 
-For other environments without VLLM
+For other environments with HF
 ```
 cd python
-docker build -t llm-prediction:latest -f ./examples/llm_prediction/Dockerfile-vllm .
+docker build -t hf-prediction:latest -f ./examples/llm_prediction/Dockerfile .
 ```
 
 The image build will be slow to build
@@ -70,7 +70,8 @@ Copy the build's `Revision ID`, we use it later.
 
 In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
 
-    k3d image import llm-prediction:latest -c michelangelo-sandbox
+    k3d image import vllm-prediction:latest -c michelangelo-sandbox
+    k3d image import hf-prediction:latest -c michelangelo-sandbox
 
 Before running the remote, we need to have a default storage bucket. If you don't have one, create it.
 In your browser, open http://localhost:9090/buckets, click "Create Bucket" and create a bucket with the name `default`.
@@ -80,7 +81,9 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
-   poetry run python ./examples/llm_prediction/llm_prediction.py remote-run --image docker.io/library/llm-prediction:latest --storage-url s3://default --yes
+    poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/llm-prediction:latest --storage-url s3://default --yes
+
+    poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/llm-prediction:latest --storage-url s3://default --yes
 
 <hr/>
 

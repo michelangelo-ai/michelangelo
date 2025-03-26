@@ -48,7 +48,7 @@ class HFPredictor():
         head_cpu=1,
         head_memory="4Gi",
         worker_cpu=1,
-        worker_memory="16Gi",
+        worker_memory="4Gi",
         worker_instances=1,   # TODO: make this configurable from workflow after supported is added
         worker_gpu=0,         # TODO: make this configurable from workflow after supported is added
         # breakpoint=True,
