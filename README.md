@@ -12,7 +12,7 @@ Michelangelo-AI is an open-source platform designed to streamline the developmen
 
 ## Installation
 
-To install Michelangelo-AI, follow [Getting Started](https://github.com/michelangelo-ai/michelangelo/wiki/Getting-Started) until github is public.
+To install Michelangelo-AI, follow [Getting Started](https://github.com/michelangelo-ai/michelangelo/wiki/Getting-Started) guide until GitHub respository is public.
 
 ## Usage
 
