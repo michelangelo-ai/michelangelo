@@ -34,7 +34,7 @@ If you're interested in contributing, please read our [Contributing Guidelines](
 
 ## License
 
-This project is licensed under the [LICENSE](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before the public.
+This project is licensed under [LICENSE](https://github.com/michelangelo-ai/michelangelo/blob/main/LICENSE) before public release.
 
 
 ## Acknowledgments
