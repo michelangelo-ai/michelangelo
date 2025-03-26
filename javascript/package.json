@@ -1,5 +1,9 @@
 {
   "name": "javascript",
+  "engines": {
+    "node": "22.11.0",
+    "yarn": "^1.22.22"
+  },
   "private": true,
   "version": "0.0.0",
   "workspaces": [
