@@ -29,6 +29,27 @@ import "michelangelo/api/v2/trigger_run.proto";
 import "michelangelo/api/v2/notification.proto";
 import "michelangelo/api/v2/user.proto";
 
+
+// JobCluster represents a Job cluster resource in Kubernetes.
+// It defines the configuration and status of a Job cluster deployment.
+// The Job cluster provides distributed compute for pipeline tasks.
+// Key fields:
+// - Metadata: Standard Kubernetes metadata
+// - Spec: Job cluster configuration like head/worker nodes
+// - Status: Current state and conditions of the cluster
+message TaskSpec {
+  // Task name
+  string name = 1;
+
+  // Path to the task image manifest target that specifies the container image to use for this task.
+  // The manifest target should point to a Bazel target that builds a container image.
+  string image_manifest_path = 2;
+
+  // This hash uniquely identifies the built container image target and is used to detect changes
+  // in the image build configuration. When the hash changes, it indicates the image needs to be rebuilt.
+  string image_target_hash = 3;
+}
+
 // PipelineManifest defines the configuration for a pipeline workflow:
 // - Type specifies the manifest format (YAML, UniFlow)
 // - Path points to the manifest file location
@@ -100,6 +121,14 @@ message PipelineManifest {
   // - Feature configurations that can be modified
   // - Resource settings that can be adjusted
   string overridable_fields_url = 9;
+
+  // List of task specifications that define the pipeline's execution steps
+  // Each TaskSpec describes a discrete unit of work in the pipeline including:
+  // - Resource requirements (CPU, memory, GPU)
+  // - Container image and runtime configuration
+  // - Input/output specifications
+  // - Dependencies and execution order
+  repeated TaskSpec task_specs = 10;
 
 }
 
