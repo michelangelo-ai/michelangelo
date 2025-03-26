@@ -80,7 +80,7 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
-    poetry run python ./examples/llm_prediction/llm_prediction.py remote-run --image docker.io/library/llm-prediction:latest --storage-url s3://default --yes
+   poetry run python ./examples/llm_prediction/llm_prediction.py remote-run --image docker.io/library/llm-prediction:latest --storage-url s3://default --yes
 
 <hr/>
 

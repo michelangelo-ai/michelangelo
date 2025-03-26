@@ -1,6 +1,5 @@
 import michelangelo.uniflow.core as uniflow
-from examples.llm_prediction.vllm_predict import predict as vllm_predict
-from examples.llm_prediction.hf_predict import predict as hf_predict
+from examples.llm_prediction.hf_predict import predict
 from examples.llm_prediction.data import load_data, write_data
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -19,7 +18,6 @@ def llm_prediction_workflow(
     max_tokens: int,
     worker_instances: int = 1,
     worker_gpu: int = 0,
-    engine: str = "hf",
 ):
     predict_data = load_data(
         path=data_path,
@@ -38,20 +36,10 @@ def llm_prediction_workflow(
         "top_p": top_p,
         "max_tokens": max_tokens,
     }
-    if engine == "vllm":
-        result = vllm_predict(
-            predict_data,
-            tensor_parallel_size=1,
-            **shared_kwargs,
-        )
-    elif engine == "hf":
-        result = hf_predict(
-            predict_data,
-            **shared_kwargs,
-        )
-    else:
-        print("{} is not a valid prediction engine".format(engine))
-        result = None
+    result = predict(
+        predict_data,
+        **shared_kwargs,
+    )
 
     if result:
         write_data(
@@ -62,8 +50,8 @@ def llm_prediction_workflow(
     print("ok.")
 
 
-# For Local Run: poetry run python examples/llm_prediction/llm_prediction.py
-# For Remote Run: poetry run python examples/llm_prediction/llm_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run: poetry run python examples/llm_prediction/hf_prediction.py
+# For Remote Run: poetry run python examples/llm_prediction/hf_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
 
     ctx = uniflow.create_context()
@@ -104,21 +92,3 @@ if __name__ == "__main__":
         top_p=top_p,
         max_tokens=max_tokens,
     )
-
-    # # Run with VLLM if GPU is enabled
-    # ctx.run(
-    #     llm_prediction_workflow,
-    #     engine="vllm",
-    #     worker_gpu=worker_gpu,
-    #     worker_instances=worker_instances,
-    #     data_path=data_path,
-    #     data_name=data_name,
-    #     data_slice=data_slice,
-    #     data_predict_column=data_predict_column,
-    #     data_limit=data_limit,
-    #     batch_size=batch_size,
-    #     model_name=model_name,
-    #     temperature=temperature,
-    #     top_p=top_p,
-    #     max_tokens=max_tokens,
-    # )
