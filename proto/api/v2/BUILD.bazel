@@ -13,7 +13,6 @@ proto_library(
         "git.proto",
         "groupversion_info.proto",
         "job.proto",
-        "job_specs.proto",
         "notification.proto",
         "parameter.proto",
         "pipeline.proto",

@@ -25,7 +25,6 @@ import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/parameter.proto";
 import "michelangelo/api/v2/git.proto";
-import "michelangelo/api/v2/job_specs.proto";
 import "michelangelo/api/v2/trigger_run.proto";
 import "michelangelo/api/v2/notification.proto";
 import "michelangelo/api/v2/user.proto";
@@ -73,7 +72,7 @@ message PipelineManifest {
   // defines name to trigger mapping, multiple triggers can be defined for one pipeline
   map<string, Trigger> trigger_map = 6;
 
-  // Terrablob path of UniFlow tar.gz
+  // Blob Storage path of UniFlow tar.gz
   // Contains the packaged UniFlow code and dependencies required for pipeline execution.
   // The tar.gz file should include:
   // - Python source code implementing the pipeline logic
@@ -154,11 +153,6 @@ message PipelineSpec {
 
   // Type of pipeline. E.g. train, eval, inference, etc.
   PipelineType type = 4;
-
-  // Default job specs to run this pipeline. These specs override the
-  // default ones in the project level. They are also overridable by
-  // the params specified in the PipelineRunSpec (maybe in future).
-  JobSpecs job_defaults = 5;
 
   // Git commit of the pipeline
   CommitInfo commit = 6;
