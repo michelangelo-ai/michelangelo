@@ -14,8 +14,8 @@
     "build": "yarn workspaces run build",
     "dev": "vite --config app/vite.config.ts",
     "format": "prettier --check .",
-    "lint": "eslint . --ext .ts,.tsx",
-    "typecheck": "tsc -b --noEmit"
+    "lint": "eslint .",
+    "typecheck": "tsc -b"
   },
   "dependencies": {},
   "devDependencies": {
@@ -24,8 +24,9 @@
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vitejs/plugin-react": "^4.3.4",
-    "eslint": "^9.21.0",
+    "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
+    "eslint-plugin-prettier": "^5.2.5",
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "eslint-plugin-simple-import-sort": "^12.1.1",

@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "noEmit": true,
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "jsx": "react-jsx"
+  },
+  "include": ["src"],
+  "references": [{ "path": "../packages/core" }]
+}
