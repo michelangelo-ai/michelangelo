@@ -1,0 +1,40 @@
+name: UI Quality Checks
+
+on:
+  pull_request:
+    paths:
+      - 'javascript/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'javascript/**'
+
+jobs:
+  lint:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: javascript
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run ESLint
+        run: yarn lint .
+
+      - name: Type check
+        run: yarn typecheck
