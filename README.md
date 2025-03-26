@@ -12,23 +12,7 @@ Michelangelo-AI is an open-source platform designed to streamline the developmen
 
 ## Installation
 
-To install Michelangelo-AI, follow these steps:
-
-1. Clone the repository:
-
-   ```bash
-   git clone https://github.com/michelangelo-ai/michelangelo.git
-   ```
-2. Navigate to the project directory:
-   
-   ```bash
-   cd michelangelo
-   ```
-4. Install the required dependencies:
-   
-   ```bash
-   pip install -r requirements.txt
-   ```
+To install Michelangelo-AI, follow [Getting Started](https://github.com/michelangelo-ai/michelangelo/wiki/Getting-Started) until github is public.
 
 ## Usage
 
