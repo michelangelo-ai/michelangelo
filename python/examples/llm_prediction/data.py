@@ -34,6 +34,7 @@ def load_data(
         hf_dataset = hf_dataset[data_slice].select(range(limit))
     return ray.data.from_huggingface(hf_dataset)
 
+
 @uniflow.task(
     config=RayTask(
         head_cpu=1,

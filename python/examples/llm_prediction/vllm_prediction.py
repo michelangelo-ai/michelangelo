@@ -51,15 +51,14 @@ def llm_prediction_workflow(
 # For Local Run: poetry run python examples/llm_prediction/vllm_prediction.py
 # For Remote Run: poetry run python examples/llm_prediction/vllm_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
-
     ctx = uniflow.create_context()
 
     # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC docstring for more information.
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
-    ctx.environ['PYTORCH_MPS_HIGH_WATERMARK_RATIO'] ='0'
-    ctx.environ['MA_NAMESPACE'] ='default'
+    ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
+    ctx.environ["MA_NAMESPACE"] = "default"
     # this is example docker image, we don't need to pull it from docker registry
-    ctx.environ['IMAGE_PULL_POLICY'] ='Never'
+    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
 
     worker_gpu = 1
     worker_instances = 1
