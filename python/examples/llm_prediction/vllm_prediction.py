@@ -18,6 +18,7 @@ def llm_prediction_workflow(
     max_tokens: int,
     worker_instances: int = 1,
     worker_gpu: int = 0,
+    tensor_parallel_size: int = 1,
 ):
     predict_data = load_data(
         path=data_path,
@@ -28,6 +29,7 @@ def llm_prediction_workflow(
     )
     result = predict(
         predict_data,
+        tensor_parallel_size=tensor_parallel_size,
         worker_gpu=worker_gpu,
         worker_instances=worker_instances,
         batch_size=batch_size,
@@ -71,13 +73,14 @@ if __name__ == "__main__":
     temperature = 0.95
     top_p = 0.95
     max_tokens = 128
+    tensor_parallel_size = 1
 
     # Run with VLLM if GPU is enabled
     ctx.run(
         llm_prediction_workflow,
-        engine="vllm",
         worker_gpu=worker_gpu,
         worker_instances=worker_instances,
+        tensor_parallel_size=tensor_parallel_size,
         data_path=data_path,
         data_name=data_name,
         data_slice=data_slice,

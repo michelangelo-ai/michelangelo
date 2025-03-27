@@ -19,7 +19,8 @@ Example project showing various capabilities of the Michelangelo workflows.
 
 Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
 
-    poetry run python ./examples/llm_prediction/llm_prediction.py
+    poetry run python ./examples/llm_prediction/vllm_prediction.py
+    poetry run python ./examples/llm_prediction/hf_prediction.py
 
 For IDE users to access ray dashboard,
 - Command + Cmd Shift + P
@@ -141,7 +142,5 @@ When the job finishes, the cluster will be terminated by Uniflow
 
 For the remote run from sandbox, terminate the workflow in Cadence.
 
-    visit http://localhost:8088/ 
+    visit http://localhost:8088/
     And terminate target workflow
-
-
