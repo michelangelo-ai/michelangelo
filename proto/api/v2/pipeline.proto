@@ -1,0 +1,319 @@
+
+// Pipeline API provides interfaces for managing ML pipelines in Michelangelo.
+// A pipeline represents a workflow that can be executed to train, evaluate and deploy ML models.
+// The pipeline definition includes:
+// - Pipeline manifest that defines the workflow steps and dependencies
+// - Pipeline spec that configures runtime behavior like triggers and notifications
+// - Pipeline status that tracks execution state and history
+// 
+// Key concepts:
+// - Pipeline manifests can be defined in YAML, Python or UniFlow formats
+// - Pipelines can be triggered manually or on schedule
+// - Pipeline runs are tracked and monitored
+// - Notifications can be configured for pipeline events
+// - Access control is managed through pipeline ownership
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/parameter.proto";
+import "michelangelo/api/v2/git.proto";
+import "michelangelo/api/v2/trigger_run.proto";
+import "michelangelo/api/v2/notification.proto";
+import "michelangelo/api/v2/user.proto";
+
+
+// JobCluster represents a Job cluster resource in Kubernetes.
+// It defines the configuration and status of a Job cluster deployment.
+// The Job cluster provides distributed compute for pipeline tasks.
+// Key fields:
+// - Metadata: Standard Kubernetes metadata
+// - Spec: Job cluster configuration like head/worker nodes
+// - Status: Current state and conditions of the cluster
+message TaskSpec {
+  // Task name
+  string name = 1;
+
+  // Path to the task image manifest target that specifies the container image to use for this task.
+  // The manifest target should point to a target path that builds a container image.
+  string image_manifest_path = 2;
+
+  // This hash uniquely identifies the built container image target and is used to detect changes
+  // in the image build configuration. When the hash changes, it indicates the image needs to be rebuilt.
+  string image_target_hash = 3;
+}
+
+// PipelineManifest defines the configuration for a pipeline workflow:
+// - Type specifies the manifest format (YAML, UniFlow)
+// - Path points to the manifest file location
+// - Content contains the actual manifest definition
+// - Parameters customize pipeline execution
+// - Triggers define how the pipeline is executed
+// For example:
+// - YAML manifest defining a training pipeline
+// - UniFlow Python code implementing model evaluation
+// - Parameters for different training configurations
+// - Cron triggers for scheduled execution
+message PipelineManifest {
+
+  enum Type {
+    // Invalid manifest type.
+    PIPELINE_MANIFEST_TYPE_INVALID = 0;
+    // YAML config based manifest type.
+    PIPELINE_MANIFEST_TYPE_YAML = 1;
+    // UniFlow (Python SDK) based manifest type.
+    PIPELINE_MANIFEST_TYPE_UNIFLOW = 3;
+  }
+
+  // Type of the manifest file.
+  Type type = 1;
+
+  // Path to the manifest file.
+  string file_path = 2;
+
+  // Content of the manifest file for specific pipeline templates like
+  // training, evaluation, prediction etc. Only available for
+  // YAML based manifest type. To support dynamic extensibility other
+  // than built-in pipeline templates, like TrainingTemplate etc, we
+  // recommend to use an embedded TypedStruct as suggested by the Envoy
+  // Proxy project.
+  // https://blog.envoyproxy.io/dynamic-extensibility-and-protocol-buffers-dcd0bf0b8801
+  google.protobuf.Any content = 4 [(michelangelo.api.external_storage) = true];
+
+  // map of ids to corresponding pipeline run parameters, each id in the map can trigger one pipeline run
+  map<string, PipelineExecutionParameters> params_map = 5;
+
+  // defines name to trigger mapping, multiple triggers can be defined for one pipeline
+  map<string, Trigger> trigger_map = 6;
+
+  // Blob Storage path of UniFlow tar.gz
+  // Contains the packaged UniFlow code and dependencies required for pipeline execution.
+  // The tar.gz file should include:
+  // - Python source code implementing the pipeline logic
+  // - Required dependencies and libraries
+  // - Configuration files and resources
+  // For example:
+  // - UniFlow pipeline implementation code
+  // - Custom modules and utilities
+  // - Environment and dependency specifications
+  string uniflow_tar = 7;
+
+  // UniFlow function name that defines the pipeline logic
+  // This specifies the entry point function in the UniFlow code that implements the pipeline.
+  // The function should be defined in the Python code packaged in uniflow_tar.
+  string uniflow_function = 8;
+
+  // Blobstore link that stores overridable fields
+  // This URL points to a blob containing field definitions that can be overridden at runtime.
+  // The blob specifies which pipeline parameters and fields can be modified when:
+  // - Triggering pipeline runs
+  // - Creating pipeline revisions 
+  // - Updating pipeline configurations
+  // For example:
+  // - Model hyperparameters that can be tuned
+  // - Feature configurations that can be modified
+  // - Resource settings that can be adjusted
+  string overridable_fields_url = 9;
+
+  // List of task specifications that define the pipeline's execution steps
+  // Each TaskSpec describes a discrete unit of work in the pipeline including:
+  // - Resource requirements (CPU, memory, GPU)
+  // - Container image and runtime configuration
+  // - Input/output specifications
+  // - Dependencies and execution order
+  repeated TaskSpec task_specs = 10;
+
+}
+
+// PipelineType enumerates the different types of ML pipelines supported:
+// - Training pipelines for model development and training
+// - Evaluation pipelines for model validation and testing
+// - Prediction pipelines for model inference
+// - Monitoring pipelines for tracking performance
+// - Feature pipelines for data preparation and transformation
+// - Optimization pipelines for model tuning
+// Each type has specific configurations and requirements for execution.
+enum PipelineType {
+  // Invalid pipeline type.
+  PIPELINE_TYPE_INVALID = 0;
+  PIPELINE_TYPE_TRAIN = 1;
+  PIPELINE_TYPE_EVAL = 2;
+  PIPELINE_TYPE_PERF_EVAL = 3;
+  PIPELINE_TYPE_EXPERIMENT = 4;
+  PIPELINE_TYPE_RETRAIN = 5;
+  PIPELINE_TYPE_PREDICTION = 6;
+  PIPELINE_TYPE_PERFORMANCE_MONITORING = 7;
+  PIPELINE_TYPE_BASIS_FEATURE = 8;
+  PIPELINE_TYPE_DATA_PREP = 9;
+  PIPELINE_TYPE_ONLINE_OFFLINE_FEATURE_CONSISTENCY = 10;
+  PIPELINE_TYPE_FEATURE_GROUP_COMPUTE = 11;
+  PIPELINE_TYPE_ONLINE_OFFLINE_FEATURE_CONSISTENCY_ORCHESTRATION = 12;
+  PIPELINE_TYPE_POST_PROCESSING = 13;
+  PIPELINE_TYPE_OPTIMIZATION = 14;
+  PIPELINE_TYPE_SCORER = 15;
+}
+
+// Defines the specification for a machine learning pipeline in Michelangelo.
+// A pipeline represents a workflow that can be customized for different ML tasks:
+// - Training pipelines for model development
+// - Evaluation pipelines for model validation 
+// - Inference pipelines for inference
+// The pipeline definition includes:
+// - Pipeline type and template configuration
+// - Job specifications and resource requirements
+// - Git commit information for version control
+// - Owner and notification settings
+// - Description and documentation
+message PipelineSpec {
+
+  // Manifest file of the pipeline definition in a GIT repo. Used for
+  // reconciliation between code and UI driven mutations.
+  PipelineManifest manifest = 2;
+
+  // Last user who creates or updates the pipeline.
+  UserInfo owner = 3;
+
+  // Type of pipeline. E.g. train, eval, inference, etc.
+  PipelineType type = 4;
+
+  // Git commit of the pipeline
+  CommitInfo commit = 6;
+
+  // Description of the pipeline.
+  string description = 8;
+
+  // Notifications settings for the pipeline.
+  repeated Notification notifications = 9;
+}
+
+// Describes the state of a pipeline resource:
+// - INVALID: The pipeline state is invalid or unspecified
+// - CREATED: Pipeline exists but hasn't been built and cannot run yet
+// - BUILDING: Pipeline is building container image and compiling DAG
+// - READY: Pipeline is fully built and ready for execution
+// - ERROR: Pipeline failed to build due to errors
+enum PipelineState {
+  // The pipeline state is invalid.
+  PIPELINE_STATE_INVALID = 0;
+
+  // The pipeline has been created but hasn't been built and not
+  // runnable yet.
+  PIPELINE_STATE_CREATED = 1;
+
+  // The pipeline is building docker image and compiling detailed DAG
+  // graph for execution.
+  PIPELINE_STATE_BUILDING = 2;
+
+  // The pipeline is ready for running.
+  PIPELINE_STATE_READY = 3;
+
+  // The pipeline has build errors.
+  PIPELINE_STATE_ERROR = 4;
+}
+
+// PipelineStatus defines the current state and runtime information for a ML pipeline.
+// It tracks:
+// - Build and execution state (created, building, ready, error)
+// - Container image with pipeline dependencies
+// - Build process information and results
+// - Latest revision reference
+// - Error details for failed builds
+message PipelineStatus {
+
+  // State of the pipeline
+  PipelineState state = 1;
+
+  // The container image that encapsulate the runtime dependencies of a
+  // pipeline such as OS and python libraries, user-defined python
+  // modules like feature transformation, model architecture, loss
+  // functions etc.
+  string container_image = 2;
+
+  // Reference to the build information returned by the build process. Will be used by different pipeline states to check the build status.
+  string build_id = 3;
+
+  // Registered Workflow to store logical workflow related information.
+  // This field contains the workflow definition and metadata that describes
+  // the pipeline's execution flow, including:
+  // - DAG structure and dependencies
+  // - Node configurations and parameters
+  // - Resource requirements
+  // - Scheduling constraints
+  // The workflow is stored externally for scalability.
+  google.protobuf.Any registered_workflow = 4 [(michelangelo.api.external_storage) = true];
+
+  // Reference to the latest revision of this pipeline from main branch.
+  michelangelo.api.ResourceIdentifier latest_revision = 5 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo/Revision"
+    }
+  ];
+
+  // Contains details about what went wrong during pipeline building, such as:
+  // - Compilation errors in pipeline code
+  // - Missing dependencies or imports
+  // - Container build failures
+  // - DAG validation errors
+  // - Resource configuration issues
+  // This helps users diagnose and fix pipeline build problems.
+  string error_message = 6;
+}
+
+// Pipeline defines a machine learning pipeline resource that encapsulates:
+// - Pipeline type and configuration
+// - Owner and access controls
+// - Build and runtime dependencies
+// - Workflow definition and execution logic
+// - Status tracking and error handling
+// The pipeline resource provides:
+// - Versioned pipeline definitions
+// - Reproducible ML workflows
+// - Dependency management
+// - Execution monitoring
+// - Error tracking and debugging
+message Pipeline {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.type",
+    key:  "pipeline_type",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.owner.name",
+    key: "owner",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the pipeline.
+  PipelineSpec spec = 3;
+
+  // Most recently observed status of the pipeline.
+  PipelineStatus status = 4;
+}
+
+// PipelineList represents a collection of Pipeline resources.
+// It provides:
+// - Batch operations on multiple pipelines
+// - Pagination and filtering support
+// - Consistent list format for API responses
+// - Metadata about the list contents
+// - Efficient pipeline enumeration
+message PipelineList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of pipelines
+  repeated Pipeline items = 3;
+}

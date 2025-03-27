@@ -1,0 +1,34 @@
+// Pipeline Execution Parameters API provides interfaces for configuring pipeline run parameters in Michelangelo.
+// Pipeline Execution Parameters allow customizing pipeline behavior at runtime by passing different parameter values.
+// The parameters definition includes:
+// - Key-value pairs for configuring pipeline runs
+// - Support for multiple parameter sets per pipeline
+// - Parameter validation and type checking
+//
+// Key concepts:
+// - Parameters customize pipeline execution
+// - Multiple parameter sets enable different run configurations
+// - Parameters are validated before pipeline execution
+// - Parameter values can be strings, numbers, or booleans
+// - Parameters can be overridden at runtime
+
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+// PipelineExecutionParameters used to trigger multiple pipeline runs with different parameters from one pipeline definition
+// PipelineExecutionParameters defines a set of key-value parameters for customizing pipeline execution.
+// Each parameter set can be used to trigger a pipeline run with different configuration values.
+// For example:
+// - Training parameters like learning rate, batch size, epochs
+// - Feature selection and preprocessing settings
+// - Model hyperparameters and architecture choices
+// - Input/output data paths and formats
+// The parameters are validated before pipeline execution to ensure they meet requirements.
+message PipelineExecutionParameters {
+  // pipeline execution parameters stored in string key-value map
+  map<string, string> parameter_map = 1;
+}
