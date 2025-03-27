@@ -11,12 +11,14 @@ Example project showing various capabilities of the Michelangelo workflows.
 
 **Prerequisite**
 
+Install dependencies for example (ML libs for BERT model): `poetry install -E example`
 
 **Run workflows locally**
 
 Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
 
     poetry run python ./examples/bert_cola/bert_cola.py
+    poetry run python ./examples/nomic_ai/nomic_ai.py   
 
 For IDE users to access ray dashboard,
 - Command + Cmd Shift + P
@@ -48,13 +50,13 @@ Running workflows in the remote mode requires a docker container that contains c
 a new revision of the project's container, or use an existing revision if you didn't change task code.
 
     cd python
-    docker build -t bert-cola-nv:latest -f ./examples/bert_cola/Dockerfile .
+    docker build -t examples:latest -f ./examples/Dockerfile .
 
 Copy the build's `Revision ID`, we use it later.
 
 In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
 
-    k3d image import bert-cola-nv:latest -c michelangelo-sandbox
+    k3d image import examples:latest -c michelangelo-sandbox
 
 Before running the remote, we need to have a default storage bucket. If you don't have one, create it.
 In your browser, open http://localhost:9090/buckets, click "Create Bucket" and create a bucket with the name `default`.
@@ -64,7 +66,8 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
-    poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/bert-cola-nv:latest --storage-url s3://default --yes
+    poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+    poetry run python ./examples/nomic_ai/nomic_ai.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
 <hr/>
 

@@ -22,7 +22,7 @@ jobs:
       # Build docker image
       #----------------------------------------------
       - name: Build docker image
-        run: docker build -t ma-it-bert-cola-local -f ./examples/bert_cola/Dockerfile .
+        run: docker build -t ma-it-examples -f ./examples/Dockerfile .
       - name: Check docker image
         run: docker image ls
 
@@ -30,4 +30,4 @@ jobs:
       # Run test
       #----------------------------------------------
       - name: Run pipeline
-        run: docker run --rm ma-it-bert-cola-local poetry run python ./examples/bert_cola/bert_cola.py
+        run: docker run --rm ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
