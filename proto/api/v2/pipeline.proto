@@ -42,7 +42,7 @@ message TaskSpec {
   string name = 1;
 
   // Path to the task image manifest target that specifies the container image to use for this task.
-  // The manifest target should point to a Bazel target that builds a container image.
+  // The manifest target should point to a target path that builds a container image.
   string image_manifest_path = 2;
 
   // This hash uniquely identifies the built container image target and is used to detect changes
