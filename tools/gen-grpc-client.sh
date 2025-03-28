@@ -3,6 +3,8 @@
 set -e
 set -x
 
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(git rev-parse --show-toplevel)}"
+
 # Function to move generated files for any client
 move_generated_files() {
   local client=$1
@@ -14,7 +16,7 @@ move_generated_files() {
     local src_k8s="${TMP_DIR}/gen/${client}/k8s"
     local src_api="${TMP_DIR}/gen/${client}/michelangelo/api"
   elif [ "$client" == "javascript" ]; then
-    client_dir="${WORKSPACE_ROOT}/${client}/gen"
+    client_dir="${WORKSPACE_ROOT}/${client}/gen/grpc"
     local src_k8s="${TMP_DIR}/gen/${client}/k8s.io"
     local src_api="${TMP_DIR}/gen/${client}/michelangelo"
   else

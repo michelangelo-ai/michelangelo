@@ -49,8 +49,8 @@ export default [
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
-        project: './app/tsconfig.node.json',
-        tsconfigRootDir: process.cwd(),
+        project: new URL('./app/tsconfig.app.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
       },
       ecmaVersion: 2020,
       sourceType: 'module',
@@ -69,8 +69,8 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: './app/tsconfig.app.json',
-        tsconfigRootDir: process.cwd(),
+        project: new URL('./app/tsconfig.app.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
       },
       globals: globals.browser,
     },
@@ -86,8 +86,8 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: './app/tsconfig.node.json',
-        tsconfigRootDir: process.cwd(),
+        project: new URL('./app/tsconfig.node.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./app', import.meta.url).pathname,
       },
       globals: globals.node,
     },
@@ -101,8 +101,8 @@ export default [
       sourceType: 'module',
       parser: tseslint.parser,
       parserOptions: {
-        project: './packages/core/tsconfig.json',
-        tsconfigRootDir: process.cwd(),
+        project: new URL('./packages/core/tsconfig.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./packages/core', import.meta.url).pathname,
       },
       globals: globals.browser,
     },
