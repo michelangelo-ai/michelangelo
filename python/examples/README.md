@@ -7,18 +7,37 @@ Example project showing various capabilities of the Michelangelo workflows.
 - commons directory contains reusable utility code.
 - Other directories represent concrete workflow use cases.
 
+## Requirements
+
+There are two environments that are provided for examples. Choose the one that supports your developer environment and the examples you want to run.
+1. `example`
+    * Supports most machines with mixed CPU and GPU configurations
+    * Supports the following examples:
+        * `bert_cola`
+        * `nomic_ai`
+        * `hf_prediction`
+2. `vllm`
+     * Only supports machines with an AMD64 CPU with CUDA-compatible GPU
+     * Supports the following examples:
+        * Any of the previous examples
+        * `vllm_prediction`
+
 ## Local Run
 
 **Prerequisite**
 
-Install dependencies for example (ML libs for BERT model): `poetry install -E example`
+Install dependencies depending on your environment:
+* For `example` environment, run `poetry install -E example`
+* For `vllm` enviroment, run `poetry install -E vllm`   
 
 **Run workflows locally**
 
 Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
 
     poetry run python ./examples/bert_cola/bert_cola.py
-    poetry run python ./examples/nomic_ai/nomic_ai.py   
+    poetry run python ./examples/nomic_ai/nomic_ai.py
+    poetry run python ./examples/llm_prediction/vllm_prediction.py
+    poetry run python ./examples/llm_prediction/hf_prediction.py
 
 For IDE users to access ray dashboard,
 - Command + Cmd Shift + P
@@ -49,14 +68,29 @@ The create setup dependencies for Uniflow including
 Running workflows in the remote mode requires a docker container that contains code of the workflow tasks. Build
 a new revision of the project's container, or use an existing revision if you didn't change task code.
 
+Build Docker image depending on your required environment
+
+For `example` environment:
+
     cd python
     docker build -t examples:latest -f ./examples/Dockerfile .
+
+For `vllm` environment:
+
+    cd python
+    docker build -t vllm:latest -f ./examples/Dockerfile-vllm .
 
 Copy the build's `Revision ID`, we use it later.
 
 In order for Kubernetes to pull the image, push it to a registry that the cluster has access to. For example, push it to
 
+For `example` environment:
+
     k3d image import examples:latest -c michelangelo-sandbox
+
+For `vllm` environment:
+
+    k3d image import vllm:latest -c michelangelo-sandbox
 
 Before running the remote, we need to have a default storage bucket. If you don't have one, create it.
 In your browser, open http://localhost:9090/buckets, click "Create Bucket" and create a bucket with the name `default`.
@@ -66,8 +100,13 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
-    poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
-    poetry run python ./examples/nomic_ai/nomic_ai.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+    poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+
+    poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+
+    poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes
+
+    poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
 <hr/>
 
