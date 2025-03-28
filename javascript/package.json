@@ -14,7 +14,10 @@
     "build": "yarn workspaces run build",
     "dev": "vite --config app/vite.config.ts",
     "format": "prettier --check .",
+    "generate": "../tools/gen-grpc-client.sh --clients javascript",
     "lint": "eslint .",
+    "prebuild": "yarn generate",
+    "setup": "yarn install && yarn generate",
     "typecheck": "tsc -b"
   },
   "dependencies": {},
