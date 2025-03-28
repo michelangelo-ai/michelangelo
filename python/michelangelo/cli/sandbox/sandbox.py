@@ -27,6 +27,7 @@ _kube_ports = [
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
+    "8081:30010", # Envoy gRPC --> gRPC-web proxy
 ]
 _cadence_domain = "default"
 
@@ -122,6 +123,8 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         resources.append("michelangelo-apiserver.yaml")
     if "controllermgr" not in ns.exclude:
         resources.append("michelangelo-controllermgr.yaml")
+    if "ui" not in ns.exclude:
+        resources.append("envoy.yaml")
 
     for r in resources:
         _kube_create(_dir / "resources" / r)

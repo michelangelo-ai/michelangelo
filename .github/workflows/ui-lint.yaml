@@ -23,6 +23,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -31,10 +34,12 @@ jobs:
           cache-dependency-path: javascript/yarn.lock
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn setup
+        env:
+          WORKSPACE_ROOT: ${{ github.workspace }}
 
       - name: Run ESLint
-        run: yarn lint .
+        run: yarn lint
 
       - name: Type check
         run: yarn typecheck

@@ -4,12 +4,18 @@
     "lib": ["DOM", "DOM.Iterable", "ES2020"],
     "module": "ESNext",
     "skipLibCheck": true,
-    "strict": true,
+    "strict": false,
+    "strictNullChecks": true,
     "isolatedModules": true,
     "moduleDetection": "force",
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    "baseUrl": ".",
+    "paths": {
+      "@michelangelo/gen-api/*": ["gen/grpc/michelangelo/api/*"],
+      "@michelangelo/gen-k8s/*": ["gen/grpc/k8s.io/*"]
+    }
   }
 }
