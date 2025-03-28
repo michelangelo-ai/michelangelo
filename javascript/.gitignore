@@ -28,3 +28,6 @@ dist-ssr
 
 # TypeScript incremental build info
 **/*.tsbuildinfo
+
+# Generated files
+michelangelo/gen
