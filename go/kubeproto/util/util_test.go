@@ -64,6 +64,97 @@ func unmarshalDefaultAny(msg proto.Message, b []byte) error {
 	}).Unmarshal(bytes.NewReader(b), msg)
 }
 
+func TestApplyInlineFields(t *testing.T) {
+	tests := []struct {
+		name     string
+		jsonData []byte
+		fields   []util.InlineFieldMapping
+		want     []byte
+		wantErr  bool
+	}{
+		{
+			name: "simple inline field",
+			jsonData: []byte(`{
+                "name": "test",
+                "details": {
+                    "info": "data"
+                }
+            }`),
+			fields: []util.InlineFieldMapping{
+				{Path: "details", FieldToBeTrimmed: "info"},
+			},
+			want: []byte(`{
+                "name": "test",
+                "details": "data"
+            }`),
+			wantErr: false,
+		},
+		{
+			name: "nested inline field",
+			jsonData: []byte(`{
+                "name": "test",
+                "details": {
+                    "info": {
+                        "data": "value"
+                    }
+                }
+            }`),
+			fields: []util.InlineFieldMapping{
+				{Path: "details.info", FieldToBeTrimmed: "data"},
+			},
+			want: []byte(`{
+                "name": "test",
+                "details": {
+                    "info": "value"
+                }
+            }`),
+			wantErr: false,
+		},
+		{
+			name: "array inline field",
+			jsonData: []byte(`{
+                "items": [
+					{
+						"name": "test",
+						"details": {
+							"data": "value"
+						}
+					},
+					{
+						"name": "test2",
+						"details": {
+							"data": "value2"
+						}
+					}
+                ]
+            }`),
+			fields: []util.InlineFieldMapping{
+				{Path: "items.#", FieldToBeTrimmed: "details"},
+			},
+			want: []byte(`{
+                "items": [
+					{"data":"value","details":{"data":"value"},"name":"test"},
+					{"data":"value2","details":{"data":"value2"},"name":"test2"}
+                ]
+            }`),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := util.ApplyInlineFields(tt.jsonData, tt.fields)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ApplyInlineFields() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !bytes.Equal(got, tt.want) {
+				t.Errorf("ApplyInlineFields() = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAnyMarshal(t *testing.T) {
 	const randomTestString = "ma2022"
 	const randomTestString2 = "ma20api"

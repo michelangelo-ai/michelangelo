@@ -1,10 +1,11 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
-	"strconv"
+	"sort"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -175,8 +176,8 @@ func SetPackageAlias(file *dst.File, pkgPath string, newAlias string) {
 
 // InlineFieldMapping holds old and new paths for inline fields.
 type InlineFieldMapping struct {
-	OldPath string
-	NewPath string
+	Path             string
+	FieldToBeTrimmed string
 }
 
 // RemoveInlineFields identifies old and new JSON paths for inline fields.
@@ -221,10 +222,9 @@ func RemoveInlineFields(typ reflect.Type, currentPath string, visited map[reflec
 
 		oldPath := strings.TrimPrefix(currentPath+"."+fieldName, ".")
 		if jsonTag == ",inline" {
-			newFlattenedPath := strings.TrimPrefix(currentPath, ".")
 			*paths = append(*paths, InlineFieldMapping{
-				OldPath: oldPath,
-				NewPath: newFlattenedPath,
+				Path:             currentPath,
+				FieldToBeTrimmed: fieldName,
 			})
 		}
 		// Recursively process the field type
@@ -282,55 +282,101 @@ type MatchedResult struct {
 // - A byte slice containing the modified JSON data.
 // - An error if any issues occur during the processing.
 func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, error) {
-	// Convert the JSON byte slice to a string for easier manipulation.
+	sort.Slice(fields, func(i, j int) bool {
+		return len(fields[i].Path) > len(fields[j].Path) // longest first
+	})
+
 	jsonStr := string(jsonData)
+	var resolvePath func(jsonStr, path, resolvedOld string, results *[]MatchedResult)
+	resolvePath = func(jsonStr, path, currentResolved string, results *[]MatchedResult) {
+		tokens := strings.SplitN(path, ".", 2)
+		current := tokens[0]
+		rest := ""
+		if len(tokens) > 1 {
+			rest = tokens[1]
+		}
 
-	// Helper function to find matched paths with resolved indices.
-	var findMatchedPaths func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult)
-	findMatchedPaths = func(jsonStr, currentPath, resolvedPath string, results *[]MatchedResult) {
-		value := gjson.Get(jsonStr, currentPath)
-
-		// Check if the value is an array.
-		if value.IsArray() {
-			value.ForEach(func(index, item gjson.Result) bool {
-				nextPath := strings.Replace(currentPath, "#", strconv.Itoa(int(index.Int())), 1)
-				nextResolvedPath := strings.Replace(resolvedPath, "#", strconv.Itoa(int(index.Int())), 1)
-				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
+		// If current is a wildcard
+		if current == "#" {
+			array := gjson.Get(jsonStr, currentResolved)
+			if !array.IsArray() {
+				return
+			}
+			array.ForEach(func(index, item gjson.Result) bool {
+				nextPath := currentResolved
+				if nextPath != "" {
+					nextPath += "."
+				}
+				nextPath += fmt.Sprintf("%d", index.Int())
+				resolvePath(jsonStr, rest, nextPath, results)
 				return true
 			})
-		} else if value.IsObject() {
-			value.ForEach(func(key, item gjson.Result) bool {
-				nextPath := fmt.Sprintf("%s.%s", currentPath, key.Str)
-				nextResolvedPath := fmt.Sprintf("%s.%s", resolvedPath, key.Str)
-				findMatchedPaths(jsonStr, nextPath, nextResolvedPath, results)
-				return true
-			})
-		} else if value.Exists() {
-			*results = append(*results, MatchedResult{
-				Path:  resolvedPath,
-				Value: value,
-			})
+		} else {
+			nextPath := currentResolved
+			if nextPath != "" {
+				nextPath += "."
+			}
+			nextPath += current
+
+			if rest != "" {
+				resolvePath(jsonStr, rest, nextPath, results)
+			} else {
+				val := gjson.Get(jsonStr, nextPath)
+				lastDot := strings.LastIndex(nextPath, ".")
+				if val.Exists() && lastDot > 0 {
+					*results = append(*results, MatchedResult{
+						Path:  nextPath[:lastDot],
+						Value: val,
+					})
+				}
+			}
 		}
 	}
-
 	// Iterate over each field mapping to apply the inline transformations.
 	for _, field := range fields {
 		var matchedResults []MatchedResult
-		findMatchedPaths(jsonStr, field.OldPath, field.NewPath, &matchedResults)
+		resolvePath(jsonStr, fmt.Sprintf("%s.%s", field.Path, field.FieldToBeTrimmed), "", &matchedResults)
 
 		for _, match := range matchedResults {
-			// Construct the new path dynamically.
-			newPath := strings.Replace(match.Path, field.OldPath, field.NewPath, 1)
-
-			// Set the new value using sjson.
 			var err error
-			jsonStr, err = sjson.Set(jsonStr, newPath, match.Value.Value())
-			if err != nil {
-				return nil, err
+			if strings.HasSuffix(field.Path, ".#") {
+				// Array update for handling inline fields in array
+				// Get the full object at the matched path
+				original := gjson.Get(jsonStr, match.Path)
+				var obj map[string]interface{}
+				if err = json.Unmarshal([]byte(original.Raw), &obj); err != nil {
+					return nil, err
+				}
+
+				// Apply match.Value to the existing object
+				var patch map[string]interface{}
+				if err = json.Unmarshal([]byte(match.Value.Raw), &patch); err != nil {
+					return nil, err
+				}
+				for k, v := range patch {
+					obj[k] = v // overwrite or add
+				}
+
+				// Marshal the updated object
+				updatedBytes, jErr := json.Marshal(obj)
+				if jErr != nil {
+					return nil, jErr
+				}
+
+				// Replace the full element at match.Path
+				jsonStr, err = sjson.SetRaw(jsonStr, match.Path, string(updatedBytes))
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				// Normal non-array update
+				jsonStr, err = sjson.SetRaw(jsonStr, match.Path, match.Value.Raw)
+				if err != nil {
+					return nil, err
+				}
 			}
 		}
 	}
 
-	// Return the modified JSON data as a byte slice.
 	return []byte(jsonStr), nil
 }
