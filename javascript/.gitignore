@@ -30,4 +30,4 @@ dist-ssr
 **/*.tsbuildinfo
 
 # Generated files
-michelangelo/gen
+gen/
