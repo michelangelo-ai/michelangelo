@@ -2,6 +2,7 @@ package templates
 
 import (
 	_ "embed"
+	"strings"
 	"text/template"
 )
 
@@ -114,3 +115,21 @@ var crdSvcTmpl string
 
 // CrdSvcHandler template of CRD YARPC handler
 var CrdSvcHandler = template.Must(template.New("crdsvc").Parse(crdSvcTmpl))
+
+//go:embed mysql_main_table_columns.tmpl
+var mysqlMainTableColumns string
+
+// CRDMySQLMainTableColumn consists of the base columns of a CRD's main table.
+var CRDMySQLMainTableColumn = template.Must(template.New("MySQLMainTableColumn").Parse(mysqlMainTableColumns))
+
+//go:embed mysql_main_table_indices.tmpl
+var mysqlMainTableIndices string
+
+// CRDMySQLMainTableIndex consists of the base indexes of a CRD's main table.
+var CRDMySQLMainTableIndex = template.Must(template.New("MySQLMainTableIndex").Parse(strings.TrimSuffix(mysqlMainTableIndices, "\n")))
+
+//go:embed mysql_label_annotation_tables.tmpl
+var mysqlLabelAnnotationTables string
+
+// CRDMySQLLabelAnnotationTable is a template of a CRD's label and annotation table schema.
+var CRDMySQLLabelAnnotationTable = template.Must(template.New("MySQLLabelAnnotationTable").Parse(mysqlLabelAnnotationTables))

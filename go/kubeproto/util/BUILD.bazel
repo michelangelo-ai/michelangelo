@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["util.go"],
+    srcs = [
+        "index.go",
+        "util.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/util",
     visibility = ["//visibility:public"],
     deps = [
@@ -13,6 +16,7 @@ go_library(
         "@com_github_tidwall_sjson//:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//proto:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",
         "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
         "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
         "@org_golang_google_protobuf//types/pluginpb:go_default_library",
@@ -21,15 +25,23 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["util_test.go"],
+    srcs = [
+        "index_test.go",
+        "util_test.go",
+    ],
     deps = [
         ":go_default_library",
+        "//go/kubeproto/pboptions:go_default_library",
         "//proto/test/kubeproto:go_default_library",
+        "//proto/test/kubeproto/indexing_errors:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",
         "@com_github_gogo_protobuf//jsonpb:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@org_golang_google_protobuf//compiler/protogen:go_default_library",
+        "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
+        "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
         "@org_golang_google_protobuf//types/pluginpb:go_default_library",
     ],
 )

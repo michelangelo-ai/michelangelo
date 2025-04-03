@@ -1,0 +1,188 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "kubeproto";
+
+enum EnumType {
+  ENUM_TYPE_INVALID = 0;
+  ENUM_TYPE_DEV = 1;
+  ENUM_TYPE_STAGING = 2;
+  ENUM_TYPE_PROD = 3;
+}
+
+// SampleMessage consists of all the primitive types that are supported for indexing
+message SampleMessage{
+  string tmp_string = 1;
+
+  // Check if int32 can be indexed correctly
+  int32 indexed_int32 = 2;
+
+  // Check if int64 can be indexed correctly
+  int64 indexed_int64 = 3;
+
+  EnumType indexed_enum = 4;
+
+  oneof one_of_field {
+    string one_of_str = 5;
+    int64 one_of_int64 = 6;
+  }
+
+  michelangelo.api.ResourceIdentifier relation_4 = 7 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/test_type_4"
+    }
+  ];
+
+  bool indexed_bool = 8;
+
+  // Check if string can be indexed correctly
+  string indexed_string = 9;
+
+  // Check if a long string can be indexed correctly with overridden type
+  string indexed_long_string = 10;
+}
+
+// Defines the spec of a TestIndexing.
+message TestIndexingSpec {
+  // Test that we can support primitive field indexing in spec (spec message does not generated as a pointer).
+  string name = 1;
+
+  SampleMessage sample_msg = 2;
+
+  michelangelo.api.ResourceIdentifier indexed_resource_id = 3;
+
+  michelangelo.api.v2.UserInfo indexed_user_info = 4;
+
+  oneof one_of_field {
+    string one_of_str = 5;
+    int64 one_of_int64 = 6;
+    SampleMessage one_of_sample_msg = 7;
+  }
+}
+
+// Defines the status of a TestIndexing.
+message TestIndexingStatus {
+  // Test that we can also index status field.
+  int32 count = 1;
+
+  // test timestamp field
+  google.protobuf.Timestamp time_msg = 6;
+}
+
+// TestIndexing is a sample CRD to test the protobuf option for field indexing.
+message TestIndexing {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "key01";
+  };
+  option (michelangelo.api.index) = {
+    path: "status.count";
+    key:  "key02";
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_int32";
+    key:  "key03";
+  };
+  // Both semicolon and comma should be a valid separator in option field syntax
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_int64",
+    key:  "key04",
+  };
+  option (michelangelo.api.index) = {
+     path: "spec.indexed_resource_id",
+     key:  "key05",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.indexed_user_info",
+    key:  "key06",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_enum",
+    key:  "key07",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_str",
+    key: "key08",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_int64",
+    key: "key09",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_sample_msg.indexed_int32",
+    key: "key10",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.one_of_str",
+    key: "key11",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_sample_msg.one_of_int64",
+    key: "key12",
+  };
+  option (michelangelo.api.index) = {
+    path: "status.time_msg",
+    key: "key13",
+  };
+  option (michelangelo.api.index) = {
+    path: "metadata.deletionTimestamp",
+    key: "key14",
+  };
+  option (michelangelo.api.index) = {
+    path: "type_meta.kind",
+    key: "key15",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_bool",
+    key: "key16",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_sample_msg.indexed_bool",
+    key: "key17",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_string",
+    key: "key18",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.sample_msg.indexed_long_string",
+    key: "key19",
+    type_override: "VARCHAR(768)",
+  };
+    option (michelangelo.api.index) = {
+    path: "spec.one_of_sample_msg.indexed_string",
+    key: "key20",
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.one_of_sample_msg.indexed_long_string",
+    key: "key21",
+    type_override: "VARCHAR(768)",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestIndexingSpec spec = 3;
+
+  TestIndexingStatus status = 4;
+}
+
+// A list of TestIndexing objects.
+message TestIndexingList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of TestIndexings
+  repeated TestIndexing items = 3;
+}
