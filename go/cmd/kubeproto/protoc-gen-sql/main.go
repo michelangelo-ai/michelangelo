@@ -88,21 +88,10 @@ func generateSQLSchema(crdRootMsg *protogen.Message, crdOptions *pboptions.Optio
 }
 
 func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
-	req := &pluginpb.CodeGeneratorRequest{}
-	err := proto.Unmarshal(reqData, req)
+	gen, extTypes, err := util.GetPluginAndExtensions(reqData, true)
 	if err != nil {
-		logger.Panicf("Failed to unmarshal input from protoc %v.", err)
+		logger.Panic(err)
 	}
-	util.ReplaceImportPath(req)
-
-	// Initialize protobuf generator
-	gen, err := protogen.Options{}.New(req)
-	if err != nil {
-		logger.Panicf("Failed to initialize golang proto generator %v.", err)
-	}
-
-	// Load protobuf extensions from all the imported protobuf files
-	extTypes := pboptions.LoadPBExtensions(gen.Files)
 
 	for _, f := range gen.Files {
 		// Skip the proto file that don't need to generate go code,
