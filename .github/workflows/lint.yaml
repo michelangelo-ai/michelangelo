@@ -75,15 +75,16 @@ jobs:
         id: changed-files
         run: |
           echo "Comparing changes from $BASE_SHA to HEAD"
-          CHANGED_FILES=$(git diff --name-only $BASE_SHA HEAD | grep -E '^python/.*\.py$' | sed 's|^python/||' || true)
           CHANGED_FILES_PRE=$(git diff --name-only $BASE_SHA HEAD | grep -E '\.py$' || true)
           echo "Raw Changed files:"
           echo "$CHANGED_FILES_PRE"
 
+          # Check if there are any changed files
           if [ -z "$CHANGED_FILES_PRE" ]; then
               CHANGED_FILES=""
           else
-              CHANGED_FILES=$(echo "$CHANGED_FILES_PRE" | awk '
+              # Filter out files in michelangelo/gen/
+              CHANGED_FILES=$(echo "$CHANGED_FILES_PRE" | grep -vE '^python/michelangelo/gen/' | awk '
               {
                   if ($0 ~ /^python\//) {
                       sub(/^python\//, "", $0);
@@ -93,12 +94,12 @@ jobs:
                   }
               }')
           fi
-          echo "Changed files:"
+
+          echo "Filtered Changed files:"
           echo "$CHANGED_FILES"
           echo "CHANGED_FILES<<EOF" >> $GITHUB_ENV
           echo "$CHANGED_FILES" >> $GITHUB_ENV
           echo "EOF" >> $GITHUB_ENV
-
 
       - name: Run ruff format check (without applying)
         if: env.CHANGED_FILES != ''
