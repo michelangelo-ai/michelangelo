@@ -20,7 +20,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "google/protobuf/any.proto";
-import "google/protobuf/struct.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/parameter.proto";
