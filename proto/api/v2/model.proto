@@ -444,7 +444,7 @@ message IncrementalTrainingSpec {
   // - Model architecture and hyperparameters
   // - Training progress and metrics
   // This enables resuming training from a previous state for incremental updates
-  michelangelo.api.ResourceIdentifier training_ckpt = 3 [
+  michelangelo.api.ResourceIdentifier training_checkpoint = 3 [
    (michelangelo.api.resource_reference) = {
      type: "michelangelo.uber.com/CachedOutput"
    }
