@@ -20,61 +20,173 @@ option go_package = "v2";
 
 import "michelangelo/api/options.proto";
 
-// Resource requirements of a Kubernetes Pod or Peloton task
-// This proto is shared among project, pipeline and job. Default value is legitimate for input validation.
+// ResourceSpec defines compute resource requirements for a Pod.
+// It specifies hardware limits and constraints for:
+// - CPU cores and memory allocation
+// - Disk storage capacity
+// - GPU count and SKU type
+// - File descriptor limits
+// This enables consistent resource management across:
+// - Projects and pipelines
+// - Training and inference jobs
+// - Batch and streaming workloads
+// Default values are allowed and validated on input.
 // TODO: Replace with K8s Quantity in ResourceRequirements
 message ResourceSpec {
-  // CPU limit in number of CPU cores
+  // CPU limit in number of CPU cores. This field specifies:
+  // - The maximum number of CPU cores allocated to the Pod
+  // - Must be a non-negative integer (validated by min:0)
+  // - Used for resource scheduling and limits
+  // - Fractional cores can be specified (e.g. 0.5 cores)
+  // For example: 2 means 2 full CPU cores, 0.5 means half a core
   int32 cpu = 1 [(michelangelo.api.validation) = {min: "0"}];
 
-  // Memory limit such as 32G
+  // Memory limit in bytes. This field specifies:
+  // - The maximum memory allocated to the Pod
+  // - Must be a non-negative string value (e.g. "32G", "1024M")
+  // - Used for resource scheduling and limits
+  // - Supports units like G (gigabytes), M (megabytes), K (kilobytes)
+  // For example: "32G" means 32 gigabytes, "1024M" means 1024 megabytes
   string memory = 2;
 
-  // Disk size limit such as 100G
+  // Disk size limit in bytes. This field specifies:
+  // - The maximum disk storage allocated to the Pod
+  // - Must be a non-negative string value (e.g. "100G", "1024M") 
+  // - Used for resource scheduling and limits
+  // - Supports units like G (gigabytes), M (megabytes), K (kilobytes)
+  // For example: "100G" means 100 gigabytes, "1024M" means 1024 megabytes
   string disk_size = 3;
 
-  // GPU limit in number of GPUs
+  // GPU limit in number of GPUs. This field specifies:
+  // - The maximum number of GPUs allocated to the Pod
+  // - Must be a non-negative integer (validated by min:0)
+  // - Used for resource scheduling and limits
+  // - Required for GPU workloads like model training
+  // For example: 2 means 2 GPUs, 0 means no GPUs required
   int32 gpu = 4 [(michelangelo.api.validation) = {min: "0"}];
 
-  // File descriptor limit in number of open file descriptors
+  // File descriptor limit in number of open file descriptors. This field specifies:
+  // - The maximum number of file descriptors allowed for the Pod
+  // - Must be a non-negative integer (validated by min:0)
+  // - Used to prevent "too many open files" errors
+  // - Critical for workloads that open many files/sockets
+  // For example: 1024 means the Pod can have up to 1024 open files/sockets
   int32 file_descriptors = 5 [(michelangelo.api.validation) = {min: "0"}];
 
-  // GPU sku identifier. Mandatory for
-  // cloud workloads
+  // GPU SKU identifier that specifies:
+  // - The type/model of GPU required (e.g. "nvidia-tesla-v100")
+  // - Required for cloud workloads to ensure correct GPU allocation
+  // - Must match available SKUs in the cloud provider
+  // - Used for resource scheduling and cost estimation
+  // For example: "nvidia-tesla-v100" requests V100 GPUs specifically
+  // Mandatory for cloud GPU
   string gpu_sku = 6;
 }
 
 // Environment represents an environment variable present in a Pod.
+// It defines:
+// - Name of the environment variable
+// - Value assigned to the variable
+// - Used to configure Pod runtime environment
+// For example:
+// - Setting PATH, LD_LIBRARY_PATH for dependencies
+// - Configuring application parameters
+// - Setting credentials and connection strings
 message Environment {
-  // Name of the environment variable.
+  // Name of the environment variable. This field specifies:
+  // - The unique identifier for this environment variable
+  // - Must be a valid environment variable name
+  // - Used to reference this variable in the Pod
+  // - Case sensitive and should follow shell naming conventions
+  // For example: "PATH", "LD_LIBRARY_PATH", "DB_CONNECTION_STRING"
   string name = 1;
 
-  // Value of the environment variable.
+  // Value of the environment variable. This field specifies:
+  // - The value assigned to this environment variable
+  // - Can contain strings, numbers, or references to other variables
+  // - Used to configure the Pod's runtime environment
+  // - Supports variable expansion and shell syntax
+  // For example: "/usr/local/bin:$PATH", "postgres://localhost:5432", "DEBUG=true"
   string value = 2;
 }
 
-// Specification for the Pod in a Spark or Horovod job.
+// PodSpec defines configuration for a Pod running in a distributed ML job:
+// - Used by Spark and Horovod jobs for distributed training
+// - Specifies resource requirements and environment
+// - Configures container image and initialization
+// - Sets security and access controls
+// For example:
+// - Spark executor pods with GPU resources
+// - Horovod worker pods with custom training images
+// - Parameter server pods with environment config
 message PodSpec {
-  // Optional name of the Pod
+  // Optional name of the Pod. This field specifies:
+  // - A unique identifier for this Pod instance
+  // - Used for logging and monitoring purposes
+  // - Helps identify specific Pods in a distributed job
+  // - If not provided, a system-generated name will be used
+  // For example: "spark-executor-0", "horovod-worker-1", "parameter-server-0"
   string name = 1;
 
-  // Resource requirement of the Pod
+  // Resource requirements for the Pod. This field specifies:
+  // - CPU, memory, and GPU resource requests and limits
+  // - Used for Pod scheduling and resource allocation
+  // - Ensures Pods get required compute capacity
+  // - Helps optimize cluster resource utilization
+  // For example:
+  // - CPU: 4 cores for compute-intensive training
+  // - Memory: 16GB for large model loading
+  // - GPU: 2 V100 GPUs for deep learning
   ResourceSpec resource = 2;
 
-  // Custom docker image name
+  // Docker image name for the Pod container. This field specifies:
+  // - The container image to use for this Pod
+  // - Must be a valid docker image reference
+  // - Can include registry, repository and tag/digest
+  // - Used to determine the Pod's runtime environment
+  // For example: "uber/michelangelo-training:v1.2.3", "nvidia/cuda:11.0-base"
   string image = 3;
 
-  // Environment variables
+  // Environment variables for the Pod container. This field specifies:
+  // - Key-value pairs that configure the container environment
+  // - Used to pass configuration to applications
+  // - Can reference secrets and config maps
+  // - Supports variable expansion and shell syntax
+  // For example:
+  // - Database connection strings
+  // - API keys and credentials
+  // - Feature flags and debug settings
+  // - Path and library configurations
   repeated Environment env = 4;
 
-  // Security token used to read/write to secure HDFS.
-  // TODO: replace this with K8s or Peloton Secrets
+  // Security token used to authenticate and authorize access to secure HDFS.
+  // This field specifies:
+  // - Token for reading and writing HDFS data
+  // - Used for secure data access in distributed jobs
+  // - Temporary credential with expiration
+  // - Should be rotated periodically
+  // TODO: Replace with K8s Secrets for improved security
   string hdfs_delegation_token = 5;
 
-  // Custom module to run on Pod initialization
+  // Custom module to run during Pod initialization. This field specifies:
+  // - Code or script to execute when Pod starts up
+  // - Used for environment setup and configuration
+  // - Can perform initialization tasks like:
+  //   - Installing dependencies
+  //   - Setting up storage mounts
+  //   - Configuring network settings
+  //   - Validating prerequisites
+  // - Must complete successfully before main container starts
   string on_init = 6;
 
-  // Optional command for the container.
-  // The container image's ENTRYPOINT is used if this is not provided.
+  // Command to execute in the Pod container. This field specifies:
+  // - The command and arguments to run in the container
+  // - Overrides the default ENTRYPOINT if provided
+  // - Used to customize container behavior
+  // - Can reference environment variables
+  // For example:
+  // - Custom training scripts: ["python", "train.py", "--epochs=100"]
+  // - Model serving commands: ["tritonserver", "--model-repository=/models"]
+  // - Data processing jobs: ["spark-submit", "process.py", "--input=/data"]
   repeated string command = 7;
 }

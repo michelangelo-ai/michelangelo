@@ -22,57 +22,116 @@ option go_package = "v2";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 
 // @Deprecated - use ResourceAffinity instead
-// ClusterAffinity provides cluster affinity
+// ClusterAffinity defines rules for targeting specific clusters based on their labels.
+// This message is deprecated in favor of ResourceAffinity which provides:
+// - More flexible resource selection capabilities
+// - Support for additional resource properties
+// - Better integration with Kubernetes label selectors
+// - Consistent resource filtering across the platform
+// Use ResourceAffinity for new code and migrate existing usage.
 message ClusterAffinity {
   // cluster selector
   k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector cluster_selector = 1;
 }
 
-// ResourceAffinity provides affinity on how
-// resources should be selected. It can include
-// their type, the region they're, if they're
-// experimental resources etc.
+// ResourceAffinity defines rules for selecting compute resources based on their properties.
+// It allows specifying preferences and requirements for:
+// - Resource types (CPU, GPU, etc)
+// - Geographic regions and zones
+// - Resource capabilities and features
+// - Experimental vs production resources
+// - Custom resource labels and annotations
+// This enables fine-grained control over resource selection and workload placement.
 message ResourceAffinity {
-  // resource selector
+  // Label selector for filtering compute resources based on their properties.
+  // The selector uses label key-value pairs to match resources that:
+  // - Have specific capabilities (e.g. GPU=true)
+  // - Are in certain regions/zones (e.g. region=us-west)
+  // - Match environment tags (e.g. env=prod)
+  // - Have custom resource labels
+  // This enables targeting workloads to resources with required features.
   k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector selector = 1;
 }
 
-// Affinity for job
+// Affinity defines rules for job placement and resource selection.
+// It allows specifying:
+// - Cluster affinity for targeting specific clusters
+// - Resource affinity for selecting compute resources with required properties
+// - (Future) Inter-job affinity and anti-affinity rules
+// This enables fine-grained control over where and how jobs are scheduled.
 message Affinity {
-  // TODO Mark this as reserved after removing usage
-  // Cluster affinity
+  // @Deprecated - use resource_affinity instead
+  // Cluster affinity for targeting specific clusters based on their labels.
+  // This field is deprecated in favor of resource_affinity which provides more
+  // flexible resource selection capabilities.
   ClusterAffinity cluster_affinity = 1;
 
-  // Resource affinity
+  // Resource affinity for selecting compute resources based on their properties.
+  // This field specifies:
+  // - Label selector rules for resource matching
+  // - Enables targeting resources with required capabilities
+  // - Supports geographic and environment-based selection
+  // - Provides fine-grained control over workload placement
+  // For example:
+  // - Select GPU-enabled resources: {gpu: "true"}
+  // - Target specific regions: {region: "us-west"} 
+  // - Match production resources: {env: "prod"}
   ResourceAffinity resource_affinity = 2;
 
   // TODO: Add inter-job and anti-affinity
 }
 
-// AssignmentInfo provides assignment
-// related status
+// AssignmentInfo provides information about where a job is assigned to run.
+// It tracks:
+// - Resource pool allocation
+// - Cluster assignment details
+// - Job status and monitoring
+// This enables tracking job placement and execution status.
 message AssignmentInfo {
-  // Qualified name of the resource pool
+  // Qualified name of the resource pool. This field specifies:
+  // - The fully qualified identifier for the resource pool
+  // - Used to determine where the job will run
+  // - References a specific pool of compute resources
+  // - Enables resource isolation and quota management
+  // For example: "prod.us-west.gpu" or "dev.training.cpu"
   string resource_pool = 1;
 
-  // Name of the assigned cluster. The cluster
-  // object is defined in cluster.proto
+  // Name of the assigned cluster. This field specifies:
+  // - The cluster where this job is scheduled to run
+  // - References a Cluster resource defined in cluster.proto
+  // - Used for job placement and resource allocation
+  // - Enables tracking which cluster is running the job
+  // For example: "prod-us-west-1" or "training-cluster-gpu"
   string cluster = 2;
 
-  // @Deprecated
-  // Job's url to view job specific details
+  // @Deprecated - use job_url in status instead
+  // URL to view job details and monitoring information. This field is deprecated
+  // in favor of job_url in the job status which provides a more consistent location
+  // for runtime URLs.
   string job_url = 3 [deprecated = true];
 }
 
-// @Deprecated - use AssignmentInfo instead
-// ClusterAssignment provides cluster assignment
-// related status
+// ClusterAssignment provides legacy cluster assignment status.
+// This message is deprecated and will be removed in a future version.
+// Use AssignmentInfo instead which provides:
+// - Resource pool tracking
+// - Cluster assignment details 
+// - Job monitoring information
+// For example:
+// - AssignmentInfo tracks both resource pool and cluster
+// - Provides consistent job URL location
+// - Enables better resource management
+// @Deprecated - use AssignmentInfo message instead
 message ClusterAssignment {
   // cluster name of the assigned cluster
   string cluster = 1;
 }
 
-// TerminationType of a job
+// TerminationType enumerates the possible ways a job can terminate:
+// - INVALID: Invalid or unspecified termination type
+// - SUCCEEDED: Job completed successfully
+// - FAILED: Job failed due to an error
+// This enables tracking job completion status and handling failures.
 enum TerminationType {
   // invalid
   TERMINATION_TYPE_INVALID = 0;
@@ -84,32 +143,89 @@ enum TerminationType {
   TERMINATION_TYPE_FAILED = 2;
 }
 
-// TerminationSpec provides job termination
-// related information
+// TerminationSpec defines how a job terminated and captures failure details.
+// It specifies:
+// - The type of termination (success/failure)
+// - Detailed reason for failures
+// - Used for job monitoring and debugging
+// For example:
+// - Track successful job completions
+// - Capture error details for failed jobs
+// - Enable failure analysis and reporting
 message TerminationSpec {
-  // TerminationType i.e. succeeded vs failed
+  // Type of job termination. This field specifies:
+  // - Whether the job succeeded or failed
+  // - Used to track job completion status
+  // - Enables success/failure handling logic
+  // For example: SUCCEEDED indicates normal completion,
+  // FAILED indicates an error occurred
   TerminationType type = 1;
 
-  // Reason for termination if not successful
+  // Reason for termination if job failed. This field specifies:
+  // - Detailed error message or failure reason
+  // - Used for debugging and error analysis
+  // - Helps identify root cause of failures
+  // - Empty for successful terminations
+  // For example:
+  // - "Out of memory error during training"
+  // - "Input data validation failed"
+  // - "Container crashed with exit code 1"
   string reason = 2;
 }
 
-// SchedulingSpec provides job scheduling
-// related information
+// SchedulingSpec defines configuration for job scheduling and resource allocation.
+// It specifies:
+// - Whether jobs can be preempted for resource sharing
+// - Priority and scheduling preferences
+// - Used to optimize cluster utilization
+// For example:
+// - Low priority jobs can be preempted
+// - Critical jobs get dedicated resources
+// - Elastic resource sharing between pools
 message SchedulingSpec {
-  // Set to true if a job is preemptible. Preemptible jobs
-  // may use the elastic resources from other resource
-  // pools. These are subject to preemption when the
-  // demand in the other pools rise.
+  // Whether this job can be preempted. This field specifies:
+  // - If true, job can use elastic resources from other pools
+  // - Job may be terminated if resources are needed elsewhere
+  // - Enables flexible resource sharing between pools
+  // - Lower priority than non-preemptible jobs
+  // For example:
+  // - Training jobs that can be restarted
+  // - Batch jobs with flexible timing
+  // - Development and test workloads
   bool preemptible = 1;
 
   // TODO: Add priority related information
 }
 
+// SchedulingInfo tracks job scheduling attempts and history.
+// It captures:
+// - Timing of scheduling attempts
+// - Number of retry attempts
+// - Used for monitoring scheduling issues
+// For example:
+// - Track failed scheduling attempts
+// - Analyze scheduling latency
+// - Debug resource allocation problems
 message SchedulingInfo {
-  // last scheduling attempt
+  // Last time the job scheduling was attempted. This field specifies:
+  // - Timestamp of most recent scheduling try
+  // - Used to track scheduling history
+  // - Helps identify scheduling delays
+  // - Reset on each new attempt
+  // For example:
+  // - Track time between scheduling retries
+  // - Measure scheduling latency
+  // - Detect stuck jobs
   k8s.io.apimachinery.pkg.apis.meta.v1.Time last_attempt_time = 1;
 
-  // number of attempts at scheduling
+  // Number of attempts made to schedule this job. This field specifies:
+  // - Count of scheduling attempts, including failures
+  // - Used to track retry history and limits
+  // - Helps identify scheduling problems
+  // - Incremented on each new attempt
+  // For example:
+  // - Track failed scheduling attempts
+  // - Enforce maximum retry limits
+  // - Detect scheduling issues
   int32 num_attempts = 2;
 }
