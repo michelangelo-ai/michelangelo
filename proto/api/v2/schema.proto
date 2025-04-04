@@ -46,13 +46,11 @@ message DataSchemaItem {
 // DataType enumerates the supported data types for schema fields.
 // This enum defines the valid types that can be used in DataSchemaItem fields.
 // The types include:
-// - Basic types like numeric, boolean, string
-// - Complex types like arrays, maps, structs
-// - Date/time types for temporal data
-// - Special types like null and unknown
+// - Basic numeric types (byte, short, int, long, float, double)
+// - String and character types
+// - Special types (invalid, unknown)
 // Each type has specific validation rules and serialization behavior.
-// The type system enables strong typing of data fields while supporting
-// a wide range of data modeling needs.
+// The type system enables strong typing of data fields.
 enum DataType {
   DATA_TYPE_INVALID = 0;
   DATA_TYPE_UNKNOWN = 1;
