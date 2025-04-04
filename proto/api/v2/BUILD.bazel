@@ -18,6 +18,8 @@ proto_library(
         "notification.proto",
         "parameter.proto",
         "pipeline.proto",
+        "pipeline_run.proto",
+        "pipeline_run_svc.proto",
         "pipeline_svc.proto",
         "pod.proto",
         "project.proto",

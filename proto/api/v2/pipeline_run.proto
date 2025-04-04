@@ -1,0 +1,671 @@
+// PipelineRun API provides interfaces for executing and managing ML pipeline runs in Michelangelo.
+// A pipeline run represents a single execution instance of a pipeline workflow.
+// The pipeline run definition includes:
+// - Pipeline run spec that configures the execution parameters and target pipeline
+// - Pipeline run status that tracks execution progress and results
+// - Actor information identifying who triggered the run
+// - Revision/draft information for version control
+//
+// Key concepts:
+// - Pipeline runs execute a specific pipeline version/revision
+// - Runs can be triggered manually or automatically
+// - Run status tracks progress, errors and results
+// - Runs maintain execution history and logs
+// - Access control is managed through actor permissions
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+import "michelangelo/api/v2/pipeline.proto";
+import "michelangelo/api/v2/notification.proto";
+
+// PipelineRunSpec defines the desired state and configuration for executing a pipeline run.
+// It contains all the necessary information to instantiate and run a pipeline, including:
+// - Target pipeline and version/revision to execute
+// - Actor triggering the run
+// - Input parameters and data
+// - Execution controls like kill flag
+// - Resource overrides and configuration
+message PipelineRunSpec {
+
+  // Target pipeline identifier that this PipelineRun will execute.
+  // References a registered Pipeline resource by name and namespace.
+  // The pipeline defines the workflow steps and configuration that
+  // will be executed by this run.
+   michelangelo.api.ResourceIdentifier pipeline = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Pipeline"
+    }
+  ];
+
+  // Revision represents a specific version of the pipeline to execute.
+  // This field identifies which revision of the target pipeline should be used
+  // for this run. The revision provides version control and reproducibility by
+  // ensuring the exact pipeline definition and dependencies are tracked.
+  // The revision must match the pipeline type and resource references.
+   michelangelo.api.ResourceIdentifier revision = 5 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // Draft represents a draft version of the pipeline that this run will execute.
+  // A draft allows testing pipeline changes before committing them as a revision.
+  // The draft contains temporary modifications to the pipeline definition that
+  // will only apply to this specific run.
+   michelangelo.api.ResourceIdentifier draft = 6 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Draft"
+    }
+  ];
+
+  // Actor represents the user or system that initiated this pipeline run.
+  // This field tracks who triggered the run for auditing and access control.
+  // The actor information includes the user identity and any delegated permissions.
+  UserInfo actor = 2;
+
+  // Kill flag indicates whether this is a request to terminate the pipeline run.
+  // When set to true, the system will attempt to gracefully stop the running pipeline.
+  // This allows users to cancel long-running pipelines that are no longer needed.
+  bool kill = 3;
+
+  // Input data and parameters for the pipeline run.
+  // Contains key-value pairs that configure the pipeline execution:
+  // - Runtime parameters that control pipeline behavior
+  // - Input data paths and configurations
+  // - Feature configurations and model hyperparameters
+  // - Environment variables and runtime settings
+  // The input data is passed as a structured object that can be accessed
+  // by pipeline tasks during execution.
+  google.protobuf.Struct input = 4;
+
+  // Resume configuration for continuing execution from a previous pipeline run.
+  // This allows restarting failed runs or continuing from specific steps.
+  // The resume spec identifies the source run and controls which parts
+  // of the pipeline to re-execute.
+  Resume resume = 7;
+
+  // Encoded diff between the current working tree and Pipeline/Revision reference.
+  // This field contains a serialized diff that represents local changes made to the pipeline
+  // definition that have not been committed. When apply_local_diff is used, these changes
+  // will be temporarily applied during pipeline execution without requiring a new revision.
+  // The diff is encoded in a format that can be parsed and applied by the pipeline system.
+  string local_diff = 8;
+
+  // This allows customizing the base directory where pipeline artifacts and outputs are stored.
+  // e.g. The path must be an absolute path in HDFS starting with '/' and can contain alphanumeric characters,
+  // hyphens and underscores. A trailing slash is optional.
+  string workspace_root_dir = 9 [(michelangelo.api.validation) = {pattern: "^(/[\\w-]+)*/?$"}];
+
+  // A human-readable description that provides context about the purpose,
+  // configuration or expected behavior of this pipeline run. This can be used
+  // to document special parameters, track experiments, or add notes for debugging.
+  string description = 10;
+
+  // Configures notifications that will be sent during pipeline execution:
+  // - Success/failure notifications
+  // - Progress updates and milestones 
+  // - Custom notification triggers
+  // Each notification specifies the notification channel (email, slack etc),
+  // recipients, and conditions for when to send notifications.
+  repeated Notification notifications = 11;
+}
+
+// PipelineRunState represents the current execution state of a pipeline run.
+// The state transitions follow this flow:
+// PENDING -> RUNNING -> (SUCCEEDED | FAILED | KILLED | SKIPPED)
+// This enum is used to track and report the pipeline execution status,
+// enable monitoring and debugging, and trigger appropriate notifications
+// and actions based on state changes.
+enum PipelineRunState {
+  // The pipeline run state is invalid. This is the default state when a pipeline run
+  // is first created and has not yet been validated or started. It indicates that
+  // the pipeline run is not in a valid state for execution.
+  PIPELINE_RUN_STATE_INVALID = 0;
+
+  // The pipeline run is in pending state, waiting to be scheduled for execution.
+  // This indicates that the run has been created and validated but has not yet
+  // started running. Common reasons for pending state include:
+  // - Waiting for resources to become available
+  // - Queued behind other pipeline runs
+  // - Scheduled for future execution
+  PIPELINE_RUN_STATE_PENDING = 1;
+
+  // The pipeline run is actively executing its workflow steps. This indicates that:
+  // - Resources have been allocated
+  // - Tasks are being processed
+  // - Progress is being tracked
+  // - Logs are being generated
+  // The run will remain in this state until it completes successfully,
+  // fails with an error, or is manually killed.
+  PIPELINE_RUN_STATE_RUNNING = 2;
+
+  // The pipeline run finished successfully, indicating that:
+  // - All workflow steps completed without errors
+  // - Expected outputs were generated
+  // - Success conditions were met
+  // - Resources were cleaned up properly
+  // This is the desired end state for pipeline runs and triggers any configured
+  // success notifications or downstream actions.
+  PIPELINE_RUN_STATE_SUCCEEDED = 3;
+
+  // The pipeline run was manually terminated before completion, indicating that:
+  // - The run was stopped by a user or system action
+  // - Resources were released and cleaned up
+  // - Partial results may be available
+  // - No further tasks will be executed
+  // This state is used to track intentional termination vs failures
+  PIPELINE_RUN_STATE_KILLED = 4;
+
+  // The pipeline run failed with errors, indicating that:
+  // - One or more workflow steps encountered errors
+  // - The run could not complete successfully
+  // - Error details and logs are available
+  // - Resources were cleaned up
+  // This state triggers error notifications and enables debugging
+  PIPELINE_RUN_STATE_FAILED = 5;
+
+  // The pipeline run was skipped, indicating that:
+  // - The run was not executed due to configuration or dependencies
+  // - No resources were allocated
+  // - No tasks were processed
+  // - The run was marked as skipped without errors
+  // This state is used to track runs that were intentionally bypassed
+  PIPELINE_RUN_STATE_SKIPPED = 6;
+}
+
+// PipelineRunStatus defines the current state and execution details of a ML pipeline run.
+// It tracks:
+// - Overall run state (pending, running, succeeded, failed etc)
+// - Execution progress and step status
+// - Error details and logs
+// - Timing information
+// - Pipeline configuration used
+// This status enables monitoring, debugging and auditing of pipeline executions.
+message PipelineRunStatus {
+
+  // Current state of the pipeline run execution.
+  // Tracks the overall progress and status:
+  // - PENDING: Run is queued and waiting to start
+  // - RUNNING: Run is actively executing tasks
+  // - SUCCEEDED: Run completed successfully
+  // - KILLED: Run was manually terminated
+  // - FAILED: Run encountered errors
+  // - SKIPPED: Run was bypassed
+  PipelineRunState state = 1;
+
+  // URL to the workflow engine UI where this pipeline run can be monitored and debugged.
+  // This provides a direct link to view execution details, logs, and status in the workflow service.
+  string log_url = 2;
+
+  // Error message describing the failure reason when a pipeline run fails.
+  // This provides details about what went wrong to help with debugging and troubleshooting.
+  // For example:
+  // - Task execution errors
+  // - Resource allocation failures 
+  // - Configuration issues
+  // - System errors
+  string error_message = 3;
+
+  // A list of messages containing additional error details. Each message can include arbitrary
+  // information about the error, such as:
+  // - Stack traces
+  // - Error codes
+  // - System state
+  // - Resource usage
+  // - Debugging context
+  // This provides rich error information to help diagnose and troubleshoot failures.
+  repeated google.protobuf.Any details = 4;
+
+  // The status code indicating the result of the pipeline run execution.
+  // Uses standard [google.rpc.Code] error codes (e.g. OK, CANCELLED, UNKNOWN, etc)
+  // with the ability to extend with additional custom error codes if needed.
+  // This provides a standardized way to categorize and handle pipeline run outcomes.
+  int32 code = 5;
+
+  // Timestamp when the pipeline run finished executing.
+  // This marks the completion time, whether successful or failed.
+  // Used for tracking execution duration and historical analysis.
+  google.protobuf.Timestamp end_time = 6;
+
+  // Conditions track the status of individual tasks in the pipeline run.
+  // Each condition represents a task's state (e.g. Pending, Running, Completed).
+  // The aggregate state of all conditions determines the overall pipeline run status.
+  // This enables granular tracking of task-level progress and failures.
+  repeated Condition conditions = 7 [(michelangelo.api.external_storage) = true];
+
+  // Records detailed information about each step in the pipeline run execution.
+  // Each step represents a task or stage in the workflow and includes:
+  // - Step name and type
+  // - Start/end timestamps
+  // - Status and error details
+  // - Resource usage metrics
+  // - Input/output artifacts
+  // This provides granular tracking and observability at the step level.
+  repeated PipelineRunStepInfo steps = 8;
+
+  // Source pipeline that this PipelineRun executes, containing:
+  // - Pipeline definition and configuration
+  // - Version/revision information
+  // - Input parameters and dependencies
+  // This provides the workflow template that gets instantiated for execution.
+  SourcePipeline source_pipeline = 10 [(michelangelo.api.external_storage) = true];
+
+  // Exception type indicating the category of failure for a failed PipelineRun.
+  // Can be either a system error (infrastructure/platform issues) or
+  // user error (invalid inputs, configuration mistakes).
+  // Used for error classification, reporting and handling.
+  PipelineRunExceptionType exception_type = 11;
+}
+
+// PipelineRunExceptionType indicates the category of failure for a failed PipelineRun.
+// It helps classify errors as either system-level infrastructure issues or user-level mistakes.
+// This enables appropriate error handling, reporting and remediation strategies.
+// Key categories:
+// - System exceptions: Platform/infrastructure failures like network issues or resource constraints
+// - User exceptions: Configuration errors, invalid inputs, or workflow logic mistakes
+enum PipelineRunExceptionType {
+  // PipelineRunExceptionType_Invalid represents an invalid/unspecified exception type.
+  // This is the default value and should not be used explicitly.
+  PIPELINE_RUN_EXCEPTION_TYPE_INVALID = 0;
+  
+  // SystemException represents infrastructure or platform-level errors like:
+  // - Network connectivity issues
+  // - Resource allocation failures
+  // - System component outages
+  // - Platform service disruptions
+  // These errors are not caused by user configuration or inputs.
+  PIPELINE_RUN_EXCEPTION_TYPE_SYSTEM = 1;
+  
+  // UserException represents errors caused by user configuration or inputs like:
+  // - Invalid parameter values
+  // - Missing required inputs
+  // - Incorrect workflow logic
+  // - Configuration mistakes
+  // These errors are due to user mistakes rather than system issues.
+  PIPELINE_RUN_EXCEPTION_TYPE_USER = 2;
+}
+
+// PipelineRunStepState represents the execution state of a pipeline step.
+// It tracks the lifecycle of a step from pending through completion:
+// - Pending: Step is queued and waiting to start
+// - Running: Step is actively executing
+// - Succeeded: Step completed successfully 
+// - Failed: Step encountered an error
+// - Killed: Step was terminated
+// - Skipped: Step was skipped due to upstream failure
+// This enables tracking step progress and handling failures appropriately.
+enum PipelineRunStepState {
+  // PipelineRunStepState_Invalid represents an invalid/unspecified step state.
+  // This is the default value and should not be used explicitly.
+  PIPELINE_RUN_STEP_STATE_INVALID = 0;
+
+  // Pending indicates the step is queued and waiting to start execution.
+  // The step has been scheduled but has not begun processing yet.
+  // This is the initial state for all steps before they start running.
+  PIPELINE_RUN_STEP_STATE_PENDING = 1;
+
+  // Running indicates the step is actively executing its task.
+  // The step has started processing and is performing its defined operations.
+  // This state indicates work is in progress but not yet complete.
+  PIPELINE_RUN_STEP_STATE_RUNNING = 2;
+
+  // Succeeded indicates the step completed successfully with no errors.
+  // The step finished all its operations and produced valid outputs.
+  // This is a terminal state indicating successful completion.
+  PIPELINE_RUN_STEP_STATE_SUCCEEDED = 3;
+
+  // Killed indicates the step was terminated before completion.
+  // The step was forcefully stopped, either by user action or system intervention.
+  // This is a terminal state indicating the step did not complete its intended work.
+  PIPELINE_RUN_STEP_STATE_KILLED = 4;
+
+  // Failed indicates the step encountered an error and did not complete successfully.
+  // The step terminated due to an exception or error condition.
+  // This is a terminal state indicating unsuccessful completion.
+  PIPELINE_RUN_STEP_STATE_FAILED = 5;
+
+  // Skipped indicates the step was not executed due to upstream failures or conditions.
+  // When a step is skipped, all downstream dependent steps will also be skipped.
+  // This is a terminal state indicating the step was bypassed without execution.
+  PIPELINE_RUN_STEP_STATE_SKIPPED = 6;
+}
+
+// PipelineRunStepInfo represents detailed information about a pipeline step execution.
+// It tracks:
+// - Step metadata like name and display name
+// - Execution state and timing
+// - Input parameters and output results
+// - Log locations and error messages
+// - Sub-step hierarchy and dependencies
+// - Cached outputs and resources
+// This enables monitoring step progress, debugging failures, and managing execution state.
+message PipelineRunStepInfo {
+  // Unique identifier for this step within the pipeline run.
+  // Must be unique among sibling steps at the same level.
+  // Used to reference this step and track its execution.
+  string name = 1;
+
+  // Current execution state of this step in the pipeline run.
+  // Tracks whether the step is pending, running, completed successfully,
+  // failed, killed, or skipped. Used to monitor progress and handle failures.
+  PipelineRunStepState state = 2;
+
+  // Start time when this step began executing.
+  // Used to track step duration and analyze pipeline performance.
+  // Required field that is set when the step transitions to RUNNING state.
+  google.protobuf.Timestamp start_time = 3;
+
+  // End time when this step completed execution.
+  // Used to track step duration and analyze pipeline performance.
+  // Set when the step transitions to a terminal state (SUCCEEDED, FAILED, KILLED, SKIPPED).
+  google.protobuf.Timestamp end_time = 4;
+
+  // URL pointing to the logs for this step's execution.
+  // Contains detailed logs from the step's runtime environment.
+  // Used for debugging and monitoring step execution.
+  // Optional field that may be empty if logs are not available.
+  string log_url = 5;
+
+  // Outputs produced by this step's execution.
+  // Contains structured data like metrics, artifacts and results.
+  // Used to pass data between steps and analyze pipeline outcomes.
+  // Optional field that may be empty if the step produces no outputs.
+  google.protobuf.Struct output = 6;
+
+  // Nested sub-steps executed as part of this step.
+  // Used to represent hierarchical workflows where steps contain child steps.
+  // The sub-steps inherit context from the parent step and are executed in sequence.
+  // Optional field that may be empty for leaf steps with no children.
+  repeated PipelineRunStepInfo sub_steps = 7;
+
+  // Error message or status message for this step.
+  // Contains details about step failures, warnings, or other important status information.
+  // Used for debugging failures and tracking step execution status.
+  // Required field that is populated when step fails, optional otherwise.
+  string message = 8;
+
+  // Display name for this step that can be shown in UIs and reports.
+  // This is a human-readable name that may be more descriptive than the step name.
+  // Optional field that defaults to the step name if not specified.
+  string display_name = 9;
+
+  // Input parameters and configuration used by this step during execution.
+  // Contains the resolved values after parameter substitution and overrides.
+  // Used to track what inputs were actually used when the step ran.
+  // Optional field that may be empty if the step takes no inputs.
+  google.protobuf.Struct input = 10;
+
+  // A collection of cached outputs generated in the step that are stored in blob storage.
+  // Contains intermediate variables, checkpoints, and raw models that can be reused.
+  // When resuming from a skipped step, only this cached_outputs field needs to be copied,
+  // simplifying the handling of both incremental and non-incremental training jobs.
+  PipelineRunStepCachedOutputs step_cached_outputs = 11;
+
+  // List of resources that provide additional information for the PipelineRun step. Each resource can be either
+  // a resource identifier referencing a API entity or a link to external systems.
+  repeated PipelineRunResource resources = 12;
+
+  // List of attempt IDs for this pipeline step.
+  // Each attempt represents a distinct execution of the step.
+  // When a step is retried due to failure, a new attempt ID is appended to this list.
+  // The attempt IDs provide a history of step retries and help track execution attempts.
+  // For example, if a step fails and is retried twice, this would contain 3 attempt IDs.
+  repeated string attempt_ids = 13;
+}
+
+// PipelineRunStepCachedOutputs contains cached outputs from a pipeline step execution.
+// These outputs are stored in blob storage and can be reused when resuming pipeline runs.
+// The cached outputs include:
+// - Intermediate variables for passing data between steps
+// - Model checkpoints for incremental training
+// - Raw model artifacts
+// This enables efficient resumption of pipeline runs by reusing previously computed results.
+message PipelineRunStepCachedOutputs {
+  // A list of intermediate variables generated during step execution and stored in blob storage.
+  // These variables can be passed between steps and reused when resuming pipeline runs.
+  // For example, preprocessed datasets, feature vectors, or model evaluation metrics.
+  // The variables are stored as ResourceIdentifiers pointing to the blob storage location.
+  repeated  michelangelo.api.ResourceIdentifier intermediate_vars = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/CachedOutput"
+    }
+  ];
+
+  // A list of checkpoints produced by the step. Currently limited to 1 checkpoint each
+  // for transform and trainer steps in incremental training jobs. Can be extended in
+  // the future to store multiple checkpoints, e.g., per-epoch checkpoints from trainer
+  // steps.
+  repeated  michelangelo.api.ResourceIdentifier checkpoints = 2 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/CachedOutput"
+    }
+  ];
+
+  // A list of raw model artifacts generated during step execution and stored in blob storage.
+  // These represent the unprocessed model outputs before any post-processing or optimization.
+  // Raw models can be used for debugging, analysis, or as inputs to subsequent pipeline steps.
+  repeated  michelangelo.api.ResourceIdentifier raw_models = 3 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/CachedOutput"
+    }
+  ];
+}
+
+// PipelineRunResource represents a resource associated with a pipeline run step.
+// Resources provide additional context and links for pipeline steps, such as:
+// - References to model artifacts
+// - Links to monitoring dashboards 
+// - Pointers to evaluation results
+// - URLs to external tools and systems
+// The resource can be either internal (Unified API entity) or external (URL link).
+message PipelineRunResource {
+  oneof resource {
+    // Reference to an API entity that provides additional context for the pipeline run step.
+    // For example, this could point to a model artifact, evaluation result, or other internal resource.
+    InternalResource internal_resource = 1;
+    
+    // Reference to an external resource (outside of the Unified API) like monitoring dashboards,
+    // external tools, or third-party systems that provide additional context for the pipeline run
+    ExternalResource external_resource = 2;
+  }
+}
+
+// InternalResource represents a reference to an API entity that provides additional context
+// for a pipeline run step. It contains:
+// - Type metadata identifying the kind of entity
+// - Resource identifier pointing to the specific entity instance
+// For example, this could reference:
+// - Model artifacts from training
+// - Evaluation results and metrics
+// - Dataset versions used in the pipeline
+// - Other pipeline-related resources
+message InternalResource {
+  // Type of the API entity that provides additional context for the pipeline run step
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta entity_type = 1;
+
+  // Identifier of the API entity that this resource references.
+  // This points to the specific instance of the entity type defined above.
+  // For example, if entity_type is "Model", this would identify a specific model version.
+   michelangelo.api.ResourceIdentifier entity = 2;
+}
+
+// ExternalResource represents a reference to a resource outside of the API that provides
+// additional context for a pipeline run step. It contains:
+// - Name: Human readable identifier for the resource
+// - URL: Web link to access the external resource
+// For example, this could reference:
+// - Monitoring dashboards
+// - External tools and systems
+// - Documentation pages
+// - Third-party services
+message ExternalResource {
+  // Human-readable name identifying the external resource link. This should be descriptive
+  // and indicate what kind of resource is being referenced (e.g. "Training Dashboard",
+  // "Model Documentation", "Evaluation Results")
+  string name = 1;
+  
+  // URL of the external resource that provides additional context for the pipeline run step.
+  // This should be a valid web URL that points to the external system, tool, or dashboard.
+  // For example: monitoring dashboard URL, documentation page, or third-party service link.
+  string url = 2;
+}
+
+// Resume defines the specification for resuming a previous pipeline run.
+// A resumed run creates a new PipelineRun that continues execution from a specific point
+// in the original run. This allows:
+// - Recovering from failures by resuming from the failed step
+// - Rerunning portions of a pipeline with modified parameters
+// - Splitting long-running pipelines into multiple executions
+// - Debugging pipeline steps by running them in isolation
+message Resume {
+  // Target pipeline_run that this PipelineRun will be resumed from. This field identifies
+  // the original pipeline run that will be used as the starting point for the resumed execution.
+  // The resumed run will have access to the state and artifacts from this target run.
+   michelangelo.api.ResourceIdentifier pipeline_run = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/PipelineRun"
+    },
+    (michelangelo.api.validation) = {required: true}
+  ];
+
+  // Nodes in the execution DAG this PipelineRun will be resumed from. These nodes represent
+  // the starting points for the resumed execution. The pipeline will resume from these nodes
+  // and continue executing downstream nodes based on the DAG dependencies. Multiple nodes can
+  // be specified to resume execution from multiple points in parallel.
+  repeated string resume_from = 2;
+
+  // Nodes in the execution DAG this PipelineRun will execute up to (inclusive). These nodes represent
+  // the end points for the resumed execution. The pipeline will stop executing once these nodes are
+  // completed. If not specified, the pipeline will execute until all downstream nodes are completed.
+  repeated string resume_up_to = 3;
+
+  // force_resume ignores dependencies and skips all steps that either:
+  // - Do not exist in the previous run
+  // - Were not in a successful state in the previous run
+  // This option is only applicable to orchestration pipelines.
+  bool force_resume = 4;
+}
+
+// PipelineRun represents an execution instance of a Pipeline workflow.
+// It tracks:
+// - Pipeline configuration and parameters used for this run
+// - Execution status and progress
+// - Generated artifacts and metrics
+// - Runtime logs and debugging info
+// - Success/failure state
+// The run resource enables:
+// - Pipeline execution tracking
+// - Run reproducibility
+// - Status monitoring
+// - Debugging and troubleshooting
+message PipelineRun {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.pipeline",
+    key:  "pipeline",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.revision",
+    key:  "revision",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "status.state",
+    key:  "state",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "status.end_time",
+    key:  "end_time",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.actor.name",
+    key: "actor",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "status.exception_type",
+    key: "exception_type",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.resume.pipeline_run",
+    key: "resume_pipeline_run",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec defines the desired behavior and configuration for this pipeline run:
+  // - Pipeline reference and version
+  // - Input parameters and overrides 
+  // - Runtime configuration
+  // - Execution triggers and scheduling
+  // - Resume/retry behavior
+  PipelineRunSpec spec = 3;
+
+  // Most recently observed status of the pipeline run.
+  // Contains:
+  // - Current execution state (running, completed, failed)
+  // - Start and end timestamps
+  // - Step-by-step progress and status
+  // - Error details and stack traces
+  // - Performance metrics and resource usage
+  // Used for monitoring execution progress and debugging failures.
+  PipelineRunStatus status = 4;
+}
+
+// PipelineRunList represents a collection of PipelineRun resources.
+// It provides:
+// - Batch operations on multiple pipeline runs
+// - Pagination and filtering support 
+// - Consistent list format for API responses
+// - Metadata about the list contents
+// - Efficient pipeline run enumeration
+message PipelineRunList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // List of PipelineRun resources.
+  // Contains the pipeline runs matching the list request criteria.
+  // Used for batch operations, pagination, and filtering pipeline runs.
+  // The items are ordered by creation timestamp by default.
+  repeated PipelineRun items = 3;
+}
+
+// SourcePipeline represents the source pipeline configuration for a pipeline run.
+// It contains either a draft pipeline or a published pipeline that will be executed.
+// The source pipeline provides:
+// - Pipeline definition and configuration
+// - Workflow steps and dependencies
+// - Runtime parameters and settings
+// - Version information
+// This enables tracking which pipeline version was used for each run.
+message SourcePipeline {
+  // Reference to a draft pipeline that will be executed by this PipelineRun.
+  // A draft pipeline is an unpublished version that can be used for testing and development.
+  // Only one of draft_pipeline or pipeline should be set.
+  Pipeline draft_pipeline = 1;
+
+  // Reference to a published pipeline that will be executed by this PipelineRun.
+  // A published pipeline is a versioned, immutable pipeline definition.
+  // Only one of draft_pipeline or pipeline should be set.
+  Pipeline pipeline = 2;
+}
