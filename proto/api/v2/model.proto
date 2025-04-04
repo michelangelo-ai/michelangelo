@@ -460,7 +460,7 @@ message IncrementalTrainingSpec {
 // This message is the core resource type for managing ML models throughout their lifecycle.
 message Model {
   option (michelangelo.api.resource) = {
-    immutable: false  // TODO: set this to true after ingestor supports SIA publishing.
+    immutable: true
   };
 
   // index fields
