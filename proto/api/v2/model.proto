@@ -318,15 +318,6 @@ message ModelSpec {
     }
   ];
 
-  // A list of model performance metrics ranked by their importance.
-  // These metrics:
-  // - Quantify model quality and behavior
-  // - Are sorted by relevance to model evaluation
-  // - Include standard metrics like accuracy, AUC, F1
-  // - Help assess model performance and readiness
-  // This field is deprecated - use quality_scores instead
-  repeated ModelPerformanceMetric performance_metrics = 22 [deprecated = true];
-
   // The model family that this model belongs to.
   // A model family:
   // - Groups related model versions together

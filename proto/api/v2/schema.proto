@@ -6,12 +6,9 @@
 
 syntax = "proto3";
 
-package michelangelo.api.v2beta1;
+package michelangelo.api.v2;
 
-option go_package = "michelangelo/api/v2beta1;v2beta1pb";
-option java_multiple_files = true;
-option java_outer_classname = "SchemaProto";
-option java_package = "com.michelangelo.api.v2beta1";
+option go_package = "v2";
 
 // DataSchema represents a schema definition for structured data.
 // It contains an ordered list of schema items that define the fields,
