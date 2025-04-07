@@ -46,7 +46,7 @@ message ResourceAffinity {
   // Label selector for filtering compute resources based on their properties.
   // The selector uses label key-value pairs to match resources that:
   // - Have specific capabilities (e.g. GPU=true)
-  // - Are in certain regions/zones (e.g. region=us-west)
+  // - Are in certain regions/zones (e.g. resourcepool.michelangelo/region=us-west)
   // - Match environment tags (e.g. env=prod)
   // - Have custom resource labels
   // This enables targeting workloads to resources with required features.
