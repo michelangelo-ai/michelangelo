@@ -1,0 +1,31 @@
+/* main.css - Global base styles and resets */
+html {
+  font-family: sans-serif;
+}
+
+body {
+  /* Remove default body margin */
+  margin: 0;
+
+  /* Improve text rendering */
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Focus styles for accessibility */
+button:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid Highlight;
+  outline-offset: 2px;
+}
+
+/* Remove number input spin buttons and search decorations, handled by BaseWeb components */
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button,
+input[type='search']::-webkit-search-cancel-button,
+input[type='search']::-webkit-search-decoration {
+  -webkit-appearance: none;
+  appearance: none;
+}

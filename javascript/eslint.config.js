@@ -2,6 +2,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
+import baseUIEslint from 'eslint-plugin-baseui';
 import prettierPlugin from 'eslint-plugin-prettier';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
@@ -14,6 +15,7 @@ const sharedPlugins = {
   'react-hooks': reactHooks,
   'simple-import-sort': simpleImportSort,
   'react-refresh': reactRefresh,
+  baseui: baseUIEslint,
 };
 
 // Shared rules (used in app and packages/*)
@@ -31,6 +33,9 @@ const sharedRules = {
       ],
     },
   ],
+  'baseui/deprecated-theme-api': 'warn',
+  'baseui/deprecated-component-api': 'warn',
+  'baseui/no-deep-imports': 'warn',
 };
 
 export default [
