@@ -11,7 +11,11 @@
     "@bufbuild/protobuf": "^2.2.5",
     "@connectrpc/connect": "^2.0.2",
     "@connectrpc/connect-web": "^2.0.2",
+    "baseui": "^0.0.0-next-2113e1821",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
-  }
+    "react-dom": "18.3.1",
+    "styletron-engine-monolithic": "^1.0.0",
+    "styletron-react": "^6.1.1"
+  },
+  "devDependencies": {}
 }
