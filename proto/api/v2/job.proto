@@ -74,7 +74,7 @@ message Affinity {
   // - Provides fine-grained control over workload placement
   // For example:
   // - Select GPU-enabled resources: {gpu: "true"}
-  // - Target specific regions: {region: "us-west"} 
+  // - Target specific regions: {resourcepool.michelangelo/region=us-west: "us-west"} 
   // - Match production resources: {env: "prod"}
   ResourceAffinity resource_affinity = 2;
 
