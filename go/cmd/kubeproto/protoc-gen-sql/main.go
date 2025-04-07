@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
@@ -125,8 +123,7 @@ func generateSQL(reqData []byte) *pluginpb.CodeGeneratorResponse {
 }
 
 func main() {
-	reqData, _ := io.ReadAll(os.Stdin)
+	reqData := util.ReadRequest()
 	resp := generateSQL(reqData)
-	out, _ := proto.Marshal(resp)
-	os.Stdout.Write(out)
+	util.WriteResponse(resp)
 }

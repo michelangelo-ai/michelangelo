@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"go/token"
-	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -32,17 +31,9 @@ import (
 )
 
 var _reProtoFileName = regexp.MustCompile(`\.pb\.go$`)
-var reGogoTypeRemapPath = regexp.MustCompile(`github\.com\/gogo\/protobuf\/types`)
 var snakeCaseSeparators = regexp.MustCompile("-\\.")
 
 var logger = log.New(os.Stderr, "", 0)
-
-const _testProtoImportPath = "michelangelo/tools/kubeproto/unittest/pb"
-
-type EnumValue struct {
-	Name        string // Enum value as a string (e.g., "Pending")
-	GoEnumValue string // Fully qualified Go enum value (e.g., "MyEnum_PENDING")
-}
 
 // Call gogo proto to generate go code from protobuf
 // The options are chosen to make the generated go code to be compatible
@@ -565,12 +556,7 @@ func genCRDEnumTypeFields(crdName string, crdMsg *protogen.Message, crdBuf *byte
 }
 
 func main() {
-	// read protoc request from stdin
-	reqData, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		logger.Panicf("reading input %v", err)
-	}
-
+	reqData := util.ReadRequest()
 	resp := generate(reqData)
 	command.Write(resp)
 }
