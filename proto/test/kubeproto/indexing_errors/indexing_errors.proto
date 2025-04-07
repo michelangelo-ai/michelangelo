@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "kubeproto";
+
+message TestIndexingInvalidPathSpec {
+}
+
+message TestIndexingInvalidPathStatus {
+}
+
+message TestIndexingInvalidPath {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+  };
+  option (michelangelo.api.index) = {
+    path: ".spec.name";
+    key:  "key01";
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestIndexingInvalidPathSpec spec = 3;
+
+  TestIndexingInvalidPathStatus status = 4;
+}
+
+message TestIndexingDuplicatedKeySpec {
+  string name = 1;
+  int32 int32_field = 2;
+}
+
+message TestIndexingDuplicatedKeyStatus {
+}
+
+message TestIndexingDuplicatedKey {
+  option (michelangelo.api.resource) = {
+    scope: "Namespaced";
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.name";
+    key:  "key01";
+  };
+  option (michelangelo.api.index) = {
+    path: "spec.int32_field";
+    key:  "key01";
+  };
+
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestIndexingDuplicatedKeySpec spec = 3;
+
+  TestIndexingDuplicatedKeyStatus status = 4;
+}

@@ -1,0 +1,12 @@
+CREATE TABLE `{{.TableName}}`
+(
+    `uid`         VARCHAR(255) NOT NULL,
+    `group_ver`   VARCHAR(255) NOT NULL,
+    `namespace`   VARCHAR(255) NOT NULL,
+    `name`        VARCHAR(255) NOT NULL,
+    `res_version` BIGINT UNSIGNED NOT NULL,
+    `create_time` DATETIME     NOT NULL,
+    `update_time` DATETIME,
+    `delete_time` DATETIME,
+    `proto`       MEDIUMBLOB,
+    `json`        JSON,

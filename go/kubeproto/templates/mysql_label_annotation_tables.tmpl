@@ -1,0 +1,20 @@
+
+CREATE TABLE `{{.TableName}}_labels`
+(
+    `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key`     VARCHAR(255) NOT NULL,
+    `value`   VARCHAR(63),
+    PRIMARY KEY (`id`),
+    KEY    `{{.TableName}}_labels_uid` (`obj_uid`),
+    KEY    `{{.TableName}}_labels_value` (`key`, `value`)
+);
+CREATE TABLE `{{.TableName}}_annotations`
+(
+    `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+    `obj_uid` VARCHAR(255) NOT NULL,
+    `key`     VARCHAR(255) NOT NULL,
+    `value`   TEXT,
+    PRIMARY KEY (`id`),
+    KEY    `{{.TableName}}_annotations_uid` (`obj_uid`)
+);

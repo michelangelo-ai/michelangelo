@@ -5,6 +5,7 @@ load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
+load("//bazel/rules/proto:kube_proto_sql.bzl", "kube_proto_sql")
 load("//bazel/rules/proto:kube_proto_yaml.bzl", "kube_proto_yaml")
 
 proto_library(
@@ -73,6 +74,13 @@ go_library(
 
 kube_proto_yaml(
     name = "v2_kube_proto_yaml",
+    visibility = ["//visibility:public"],
+    deps = [":v2_proto"],
+)
+
+kube_proto_sql(
+    name = "v2_kube_proto_sql",
+    visibility = ["//visibility:public"],
     deps = [":v2_proto"],
 )
 

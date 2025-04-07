@@ -1,0 +1,6 @@
+    PRIMARY KEY   (`uid`),
+    KEY    `{{.TableName}}_namespace_name` (`namespace`, `name`),
+    KEY    `{{.TableName}}_create_time` (`create_time`),
+    KEY    `{{.TableName}}_update_time` (`update_time`),
+    KEY    `{{.TableName}}_delete_time` (`delete_time`),
+    KEY    `{{.TableName}}_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`)
