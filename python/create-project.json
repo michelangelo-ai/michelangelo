@@ -1,0 +1,48 @@
+{
+  "project": {
+    "type_meta": {
+      "kind": "Project",
+      "apiVersion": "michelangelo.api.v2"
+    },
+    "metadata": {
+      "name": "craig-test-project",
+      "namespace": "craig-test-project",
+      "labels": {
+        "example-label": "true"
+      },
+      "annotations": {
+        "example-annotation": "created-by-craig"
+      }
+    },
+    "spec": {
+      "description": "Full example ML project for testing",
+      "owner": {
+        "owning_team": "11111111-1111-1111-1111-111111111111",
+        "owners": ["craigmarker"],
+        "owner_groups": ["ml-eng"]
+      },
+      "tier": 2,
+      "git_repo": "https://github.com/michelangelo-ai/ml-projects",
+      "root_dir": "ml-code",
+      "commit": {
+        "branch": "main",
+        "git_ref": "d34db33f"
+      },
+      "supporting_links": {
+        "docs": "https://github.com/michelangelo-ai/docs",
+        "wiki": "https://confluence.example.com/ml"
+      },
+      "retention_config": {
+        "online_deployment_retention": { "retention_in_days": 30 },
+        "offline_deployment_retention": { "retention_in_days": 60 },
+        "endpoint_retention": { "retention_in_days": 90 },
+        "model_retention": { "retention_in_days": 120 },
+        "notification_control": "NOTIFICATION_CONTROL_PROJECT_OWNER_AND_USER_TEAM"
+      },
+      "type_info": {
+        "is_core_ml": true,
+        "is_generative_ai": false
+      }
+    }
+  }
+}
