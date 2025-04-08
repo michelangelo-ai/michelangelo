@@ -1,0 +1,753 @@
+// This file defines messages related to trained ML models in the Michelangelo API.
+// It includes:
+// - Model metadata and configuration
+// - Model types and package formats
+// - Training metrics and quality scores
+// - Feature importance and model explanations
+// - Model status tracking and versioning
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/struct.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/schema.proto";
+import "michelangelo/api/v2/user.proto";
+
+// ModelKind enumerates the supported types of machine learning models.
+// This enum defines the high-level categories of ML models that can be trained and deployed.
+// The kinds include:
+// - Custom models for specialized use cases
+// - Traditional ML models like regression and classification
+// - Clustering models for unsupervised learning
+// - Large language models (LLMs) for different tasks
+// Each kind has specific training requirements, evaluation metrics, and deployment patterns.
+// The model kind helps determine appropriate validation rules and runtime behavior.
+enum ModelKind {
+  MODEL_KIND_INVALID = 0;
+  MODEL_KIND_CUSTOM = 1;
+  MODEL_KIND_REGRESSION = 2;
+  MODEL_KIND_BINARY_CLASSIFICATION = 3;
+  MODEL_KIND_MULTICLASS_CLASSIFICATION = 4;
+  MODEL_KIND_CLUSTERING = 5;
+  MODEL_KIND_LLM_COMPLETION = 6;
+  MODEL_KIND_LLM_CHAT_COMPLETION = 7;
+  MODEL_KIND_LLM_EMBEDDING = 8;
+}
+
+// DeployableModelPackageType enumerates the supported formats for deployable model artifacts.
+// This enum defines the packaging formats that can be used when deploying models:
+// - SPARK_PIPELINE: Models packaged as Spark ML pipelines
+// - TRITON: Models packaged for NVIDIA Triton inference server
+// - RAW: Raw model files without specialized packaging
+// - MOBILE: Models packaged for mobile device deployment
+// The package type determines how the model artifact at deployable_artifact_uri
+// should be interpreted and loaded at runtime.
+enum DeployableModelPackageType {
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_INVALID = 0;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE = 1;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON = 2;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_RAW = 3;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_MOBILE = 4;
+}
+
+// ModelStatus defines the current state and runtime information for a trained ML model.
+// It tracks:
+// - Model version and lifecycle state
+// - Training metrics and quality scores
+// - Deployment status and history
+// - Feature importance and model explanations
+// - Error details for failed models
+// This helps monitor model health and enables debugging of issues.
+message ModelStatus {
+}
+
+// LLMSpec defines the configuration for a Large Language Model (LLM).
+// It specifies:
+// - The model vendor (e.g. OpenAI, Anthropic, etc)
+// - Base model name and version
+// - Fine-tuning identifiers if applicable
+// This enables tracking and managing different LLM variants.
+message LLMSpec {
+  // The vendor of the LLM model (e.g. OpenAI, Anthropic, Cohere).
+  // This identifies the provider of the base model and determines:
+  // - API integration requirements
+  // - Pricing and usage tracking
+  // - Available model capabilities
+  // - Deployment constraints
+  string vendor = 1;
+  
+  // The name of the base LLM model (e.g. gpt-4, claude-2, llama-2).
+  // This identifies the specific model variant and determines:
+  // - Model capabilities and limitations
+  // - Token context windows
+  // - Pricing tiers
+  // - Performance characteristics
+  string model_name = 2;
+  
+  // The ID that uniquely identifies this fine-tuned model variant.
+  // For models that have been fine-tuned from a base model, this ID:
+  // - Links to the specific fine-tuning run
+  // - Enables tracking model lineage
+  // - Allows retrieving fine-tuning parameters
+  // - Distinguishes between different fine-tuned versions
+  // Leave empty for base models that have not been fine-tuned.
+  string fine_tuned_model_id = 3;
+}
+
+// ModelSpec defines the configuration and metadata for a trained ML model.
+// It specifies:
+// - Model ownership and description
+// - ML problem type and algorithm details
+// - Training framework and source platform
+// - Model artifacts and deployment info
+// - Input/output schemas and feature definitions
+// - Model thresholds and parameters
+// This enables tracking model lineage and reproducible deployments.
+message ModelSpec {
+  // The user who owns this model. The owner:
+  // - Has full access rights to the model
+  // - Is responsible for model maintenance
+  // - Receives notifications about model status
+  // - Can grant access to other users
+  // This enables tracking model ownership and access control.
+  UserInfo owner = 1;
+
+  // The description of the trained model that provides context about:
+  // - Model purpose and use cases
+  // - Training data and methodology 
+  // - Performance characteristics
+  // - Known limitations or biases
+  // - Deployment considerations
+  // This helps users understand the model's capabilities and constraints.
+  string description = 2;
+
+  // The nature of the ML problem that this model solves. Examples include:
+  // - Classification: Predicting categorical labels/classes
+  // - Regression: Predicting continuous numeric values
+  // - Clustering: Grouping similar data points
+  // - Ranking: Ordering items by relevance/preference
+  // - Time Series: Forecasting future values from historical data
+  // Using an enum ensures consistent categorization and enables:
+  // - Type safety and validation
+  // - Efficient storage and querying
+  // - Clear documentation of supported problem types
+  // - Standardized model organization and discovery
+  ModelKind kind = 3;
+
+  // The machine learning algorithm used to train this model, such as:
+  // - Gradient Boosted Decision Trees (GBDT)
+  // - Random Forest
+  // - Deep Neural Networks (DNN)
+  // - Linear/Logistic Regression
+  // - Support Vector Machines (SVM)
+  // This helps track model architecture and enables:
+  // - Algorithm-specific optimizations
+  // - Appropriate evaluation metrics
+  // - Compatible deployment targets
+  string algorithm = 4;
+
+  // The ML framework or library used to develop and train the model, such as:
+  // - TensorFlow: For deep learning and neural networks
+  // - PyTorch: For dynamic neural networks and research
+  // - SparkML: For distributed machine learning
+  // - scikit-learn: For traditional ML algorithms
+  // This enables framework-specific optimizations and determines:
+  // - Model serialization format
+  // - Runtime dependencies
+  // - Compatible deployment targets
+  string training_framework = 5;
+
+  // The platform or system where this model was created and trained, such as:
+  // - Canvas: For no-code model development
+  // - Michelangelo V2: Current ML platform
+  // This source identifier enables:
+  // - Dependency management and versioning
+  // - Platform-specific optimizations
+  // - Appropriate prediction interfaces
+  // - Compatibility checks during deployment
+  string source = 6;
+
+  // Input schema defines the features required by the model to make predictions.
+  // The schema specifies the expected input data structure including:
+  // - Feature names and data types (numeric, string, boolean, etc.)
+  // - Required vs optional fields
+  // - Valid value ranges and formats
+  // - Feature grouping and relationships
+  // This enables validation of input data and ensures the model receives
+  // properly formatted features at inference time.
+  DataSchema input_schema = 8 [(michelangelo.api.external_storage) = true];
+
+  // Schema defining the target variables that the model predicts. The schema specifies:
+  // - Names and data types of prediction outputs (numeric, categorical, etc.)
+  // - Format and valid ranges for predicted values
+  // - Required vs optional prediction fields
+  // - Relationships between multiple prediction targets
+  // This enables validation of model outputs and proper handling of predictions
+  // by downstream systems.
+  DataSchema predict_fields = 9 [(michelangelo.api.external_storage) = true];
+
+  // Schema defining which fields should be published to output channels like:
+  // - Kafka: For real-time streaming outputs
+  // - Hive: For batch prediction results
+  // This enables configuring which model outputs and metadata are:
+  // - Streamed to downstream systems
+  // - Stored for offline analysis
+  // - Made available for monitoring
+  // The schema validates the structure and types of published fields.
+  DataSchema published_fields = 10 [(michelangelo.api.external_storage) = true];
+
+  // Schema defining the transformed features produced by feature engineering.
+  // This includes:
+  // - Engineered features derived from raw inputs
+  // - Feature transformations and normalizations
+  // - Intermediate computed values
+  // - Feature combinations and interactions
+  // The schema validates the structure of transformed features used by the model.
+  DataSchema derived_fields = 11 [(michelangelo.api.external_storage) = true];
+
+  // The value of the positive label that represents the "true" or "positive" class in binary classification.
+  // For example:
+  // - In fraud detection: "fraud" vs "not_fraud"
+  // - In churn prediction: "churned" vs "retained"
+  // - In click prediction: "clicked" vs "not_clicked"
+  // This label value is used to:
+  // - Calculate metrics like precision/recall
+  // - Tune decision thresholds
+  // - Interpret model predictions
+  string positive_label = 12;
+
+  // Numeric threshold value between 0 and 1 used to convert predicted probabilities into binary decisions.
+  // For binary classification models, predictions above this threshold are considered positive class,
+  // while predictions below are considered negative class. For example:
+  // - Fraud detection: threshold=0.8 means predictions >= 0.8 are classified as fraud
+  // - Churn prediction: threshold=0.6 means predictions >= 0.6 indicate likely churn
+  // The threshold can be tuned to balance precision/recall tradeoffs based on business requirements.
+  double decision_threshold = 13;
+
+  // Pipeline run that created this model. The pipeline run:
+  // - Contains the training configuration and parameters
+  // - Records the training data sources and versions
+  // - Tracks the training job execution details
+  // - Links to training logs and artifacts
+  // This enables reproducibility and debugging of model training.
+  michelangelo.api.ResourceIdentifier source_pipeline_run = 14 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/PipelineRun"
+    }
+  ];
+
+  // Performance evaluation report associated with this model.
+  // This report contains:
+  // - Model quality metrics and scores
+  // - Performance on test/validation data
+  // - Comparison to baseline models
+  // - Detailed analysis of model behavior
+  // The report helps assess model quality and readiness for deployment.
+  michelangelo.api.ResourceIdentifier performance_evaluation_report = 15 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  // Feature evaluation report associated with this model.
+  // This report contains:
+  // - Feature importance scores and rankings
+  // - Feature correlation analysis
+  // - Feature distribution statistics
+  // - Feature drift detection results
+  // The report helps understand feature contributions and monitor feature health.
+  michelangelo.api.ResourceIdentifier feature_evaluation_report = 16 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  // Revision ID that uniquely identifies this version of the model.
+  // The revision ID:
+  // - Starts at 0 for new models
+  // - Increments with each update/retrain
+  // - Enables tracking model lineage
+  // - Helps identify specific model versions
+  // This allows managing multiple versions of the same model.
+  int32 revision_id = 17;
+
+  // Whether this model is sealed and cannot undergo further incremental training.
+  // When a model is sealed:
+  // - No new incremental training jobs can be created
+  // - Existing training data cannot be updated
+  // - Model parameters are frozen
+  // This provides a way to lock models at a specific version.
+  bool sealed = 18;
+
+  // Data Quality Report associated with this model.
+  // This report contains:
+  // - Data validation results and checks
+  // - Data distribution statistics
+  // - Data drift analysis
+  // - Data quality metrics and scores
+  // The report helps assess training data quality and monitor for issues.
+  michelangelo.api.ResourceIdentifier feature_quality_report = 19 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  // Model quality scores that track key metrics including:
+  // - Model performance metrics (accuracy, AUC, etc)
+  // - Data quality metrics (completeness, validity)
+  // - Feature quality metrics (importance, drift)
+  // - Training stability metrics (convergence, loss)
+  // These scores help assess model health and readiness for deployment.
+  repeated ModelQualityScore quality_scores = 20;
+
+  // The list of feature store features that are used by the model for scoring.
+  // These features:
+  // - Are retrieved from the feature store at inference time
+  // - Must be registered and available in the feature store
+  // - Define the model's feature dependencies
+  // - Enable tracking feature lineage and usage
+  // This helps manage feature dependencies and ensures features are available.
+  repeated michelangelo.api.ResourceIdentifier feature_store_features = 21 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Feature"
+    }
+  ];
+
+  // The model family that this model belongs to.
+  // A model family:
+  // - Groups related model versions together
+  // - Defines shared configuration and parameters
+  // - Enables tracking model lineage and evolution
+  // - Helps organize and manage model lifecycle
+  // This reference links the model to its family for governance.
+  michelangelo.api.ResourceIdentifier model_family = 23 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/ModelFamily"
+    }
+  ];
+
+  // The Hive table names containing model predictions on training and validation data.
+  // These tables store:
+  // - Model predictions on training and test datasets
+  // - Prediction timestamps and metadata
+  // - Feature values used for predictions
+  // - Actual labels for evaluation
+  // This enables analyzing model performance and debugging issues.
+  message PredictionResult {
+    string train_table_name = 1;
+    string test_table_name = 2;
+  }
+  PredictionResult prediction_result = 24;
+
+  // The spec for incremental training jobs that:
+  // - Builds on top of a previous model version
+  // - Reuses cached training artifacts
+  // - Updates model weights with new data
+  // - Maintains model lineage and history
+  // This enables efficient model retraining and updates.
+  IncrementalTrainingSpec incremental_training = 25;
+
+  // The package format used to deploy this model.
+  // This determines:
+  // - Which backend targets can run the model
+  // - How the model artifacts should be loaded
+  // - Required runtime dependencies
+  // - Deployment validation rules
+  // Must match one of the DeployableModelPackageType enum values.
+  DeployableModelPackageType package_type = 26;
+
+  // The URIs to the deployable model artifacts.
+  // These artifacts:
+  // - Are packaged for specific backend targets (e.g. Spark Pipeline, Triton)
+  // - Must match the package_type field
+  // - Contain all dependencies needed for deployment
+  // - Replace the legacy artifact_uri field
+  // The URIs point to the packaged model files that can be loaded by the target runtime.
+  repeated string deployable_artifact_uri = 27;
+
+  // The URIs to the raw model artifacts produced directly by the ML framework.
+  // These artifacts:
+  // - Are the direct outputs of framework save operations (e.g. torch.save())
+  // - Contain the raw model weights and architecture
+  // - Are not packaged for deployment
+  // - May require framework-specific loading code
+  // The URIs point to remote storage locations containing the unmodified framework outputs.
+  repeated string model_artifact_uri = 28;
+
+  // The spec for Large Language Models (LLMs).
+  // This contains configuration for:
+  // - Model vendor and base model selection
+  // - Fine-tuning identifiers and parameters
+  // - Model capabilities and constraints
+  // - Deployment and runtime requirements
+  // This enables managing different LLM variants and their configurations.
+  LLMSpec llm_spec = 29;
+
+  // The explainability report associated with this model.
+  // This report contains:
+  // - Feature attribution analysis
+  // - Model behavior explanations
+  // - Interpretability metrics
+  // - Visualization data
+  // Used to understand and validate model decisions.
+  michelangelo.api.ResourceIdentifier explainability_report = 30 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  // Raw feature importance values associated with this model.
+  // This field contains:
+  // - Feature names and their importance scores
+  // - Relative importance rankings
+  // - Contribution metrics for each feature
+  // Used for model interpretation and feature selection.
+  repeated FeatureImportanceMap feature_importance_list = 31;
+}
+
+// IncrementalTrainingSpec defines configuration for incremental model training.
+// It specifies:
+// - The parent model revision being incrementally updated
+// - Transform step checkpoint for feature engineering
+// - Training step checkpoint for model weights
+// This enables efficient training by building on existing models rather than
+// starting from scratch. The checkpoints allow resuming from intermediate steps.
+message IncrementalTrainingSpec {
+  // The parent revision ID that identifies the base model version being incrementally updated.
+  // This ID:
+  // - Links to the previous model version being built upon
+  // - Enables tracking model lineage and version history
+  // - Helps validate training data and feature compatibility
+  // - Allows comparing metrics between parent and child models
+  int32 parent_revision_id = 1;
+
+  // The checkpoint produced by the transform step that contains:
+  // - Saved feature transformation state
+  // - Feature engineering parameters
+  // - Data preprocessing configuration
+  // - Feature statistics and metadata
+  // This enables reusing the same transformations for incremental training
+  michelangelo.api.ResourceIdentifier transform_checkpoint = 2 [
+   (michelangelo.api.resource_reference) = {
+     type: "michelangelo.uber.com/CachedOutput"
+   }
+  ];
+
+  // The checkpoint produced by the trainer step that contains:
+  // - Saved model weights and parameters
+  // - Training state and optimizer configuration
+  // - Model architecture and hyperparameters
+  // - Training progress and metrics
+  // This enables resuming training from a previous state for incremental updates
+  michelangelo.api.ResourceIdentifier training_checkpoint = 3 [
+   (michelangelo.api.resource_reference) = {
+     type: "michelangelo.uber.com/CachedOutput"
+   }
+  ];
+}
+
+// Model represents a trained ML model in the Michelangelo platform.
+// It contains:
+// - Model metadata and configuration
+// - Training data and feature specifications
+// - Model artifacts and evaluation results
+// - Deployment status and history
+// This message is the core resource type for managing ML models throughout their lifecycle.
+message Model {
+  option (michelangelo.api.resource) = {
+    immutable: true
+  };
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "spec.source_pipeline_run",
+    key: "src_pipeline_run",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.algorithm",
+    key:  "algorithm",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.training_framework",
+    key:  "training_framework",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.source",
+    key:  "source",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.performance_evaluation_report",
+    key: "performance_eval_report",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.feature_evaluation_report",
+    key: "feature_eval_report",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.revision_id",
+    key: "revision_id",
+  };
+
+  option (michelangelo.api.index) = {
+      path: "spec.owner.name",
+      key:  "owner",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.feature_quality_report",
+    key: "feature_quality_report",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.model_family",
+    key: "model_family",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.package_type",
+    key:  "package_type",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.explainability_report",
+    key: "explainability_report",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.description",
+    key:  "description",
+    type_override: "VARCHAR(768)",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.kind",
+    key: "model_kind",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Specification that defines the desired configuration and behavior of the trained model.
+  // This includes:
+  // - Model metadata and properties
+  // - Training framework and algorithm
+  // - Input/output schemas
+  // - Quality metrics and thresholds
+  // - Feature dependencies and requirements
+  // The spec acts as the source of truth for how the model should be configured.
+  ModelSpec spec = 3;
+
+  // Most recently observed status of the Trained Model.
+  // This status field tracks:
+  // - Current model state and health
+  // - Training progress and completion
+  // - Deployment status and history
+  // - Error conditions and messages
+  // - Runtime metrics and statistics
+  // The status enables monitoring model lifecycle and debugging issues.
+  ModelStatus status = 4;
+}
+
+// ModelList represents a collection of trained ML models.
+// This message type enables:
+// - Batch operations on multiple models
+// - Pagination and filtering of model lists
+// - Consistent model organization and grouping
+// - Efficient model discovery and retrieval
+message ModelList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Model resources that are included in this collection.
+  // The items:
+  // - Are ordered by creation timestamp by default
+  // - Can be filtered and paginated
+  // - Include full Model specifications and status
+  // - Enable batch operations and management
+  // This field contains the actual Model resources being listed.
+  repeated Model items = 3;
+}
+
+// ModelQualityScore represents a quality metric or score from model training.
+// This includes:
+// - Model performance metrics (accuracy, AUC, etc)
+// - Data quality scores (completeness, validity)
+// - Feature quality metrics (importance, drift)
+// - Training stability metrics (convergence, loss)
+// The scores help assess model health and readiness for deployment.
+message ModelQualityScore {
+
+  // The name that identifies this quality score metric.
+  // Examples include:
+  // - Model metrics: "accuracy", "auc_roc", "f1_score"
+  // - Data metrics: "feature_coverage", "data_freshness"
+  // - Training metrics: "loss", "convergence_rate"
+  // The name should be descriptive and follow consistent naming conventions
+  // to enable proper tracking and comparison of scores.
+  string name = 1;
+
+  // The name of the application or system that generated this quality score.
+  // Examples include:
+  // - Model training pipelines
+  // - Evaluation frameworks
+  // - Data quality checkers
+  // - Monitoring systems
+  // This helps track the source of quality metrics and enables:
+  // - Score validation and verification
+  // - Source-specific score interpretation
+  // - Debugging and auditing of scores
+  string source = 2;
+
+  // The scope or category that this quality score belongs to.
+  // The scoping helps organize and group related metrics:
+  // - Feature quality: Metrics about feature health and importance
+  // - Data quality: Metrics about training data freshness and validity
+  // - Model quality: Metrics about model performance and stability
+  // - Training quality: Metrics about training job success and convergence
+  // This enables proper organization and interpretation of different metric types.
+  string scoping = 3;
+
+  // The numeric value of this quality score metric.
+  // This represents:
+  // - Raw metric values (e.g. 0.95 for accuracy)
+  // - Normalized scores (e.g. 0-1 range)
+  // - Composite indices (e.g. weighted combinations)
+  // The value enables quantitative comparison and tracking of model quality.
+  double value = 4;
+
+  // Additional metadata about this quality score stored as key-value pairs.
+  // This can include:
+  // - Score calculation parameters and configuration
+  // - Validation thresholds and criteria
+  // - Timestamp and version information
+  // - Links to related metrics and reports
+  // - Custom attributes for specialized metrics
+  // The metadata enables extensible tracking of score context and details.
+  google.protobuf.Struct metadata = 5;
+
+  // Whether this is a primary metric that should be prominently displayed.
+  // Primary metrics:
+  // - Are shown in model list overviews and summaries
+  // - Receive higher visibility in dashboards and reports
+  // - Are prioritized for monitoring and alerting
+  // - Help quickly assess model quality at a glance
+  // This flag enables highlighting the most important quality metrics.
+  bool primary = 6;
+}
+
+// FeatureImportanceMap represents feature importance scores for a model's predictions.
+// It contains:
+// - A mapping of feature names to their importance metrics
+// - The specific model output being explained
+// - The explainer algorithm used to calculate importances
+// This enables:
+// - Understanding feature contributions to predictions
+// - Identifying key drivers of model behavior
+// - Debugging and validating model decisions
+// - Explaining model outputs to stakeholders
+message FeatureImportanceMap {
+  // A mapping of feature names to their importance scores for this model output.
+  // Each entry contains:
+  // - Feature name as the key
+  // - FeatureImportance metrics as the value
+  // This enables:
+  // - Quantifying feature contributions
+  // - Ranking features by importance
+  // - Understanding model behavior
+  // - Validating feature selection
+  map<string, FeatureImportance> feature_importance = 1;
+
+  // The name of the model output that these feature importances explain.
+  // For example:
+  // - The predicted class for classification models
+  // - The target variable for regression models
+  // - A specific output head for multi-output models
+  // This identifies which model prediction is being explained by these
+  // feature importance scores.
+  string output_name = 2;
+
+  // The explainer algorithm/class used to calculate feature importance scores.
+  // This identifies the method used to attribute predictions to features, such as:
+  // - SHAP (SHapley Additive exPlanations)
+  // - LIME (Local Interpretable Model-agnostic Explanations)
+  // - Integrated Gradients
+  // - Feature Ablation
+  // This enables understanding the explanation methodology and its assumptions.
+  string explainer_module = 3;
+}
+
+// BaselineValue represents a reference value used as a baseline for feature attribution calculations.
+// It supports different value types to handle various feature data types:
+// - float_value: For continuous numeric features
+// - string_value: For categorical/text features 
+// - bool_value: For binary/boolean features
+// - int_value: For discrete numeric features
+// The baseline provides a reference point for measuring feature contributions and:
+// - Enables calculating attribution scores relative to a neutral state
+// - Helps interpret feature importance magnitudes
+// - Provides context for understanding feature effects
+// - Supports different attribution methods like SHAP and LIME
+message BaselineValue {
+  oneof value_type {
+      float float_value = 1;
+      string string_value = 2;
+      bool bool_value = 3;
+      int32 int_value = 4;
+  }
+}
+
+// FeatureImportance captures attribution metrics that quantify a feature's contribution to model predictions.
+// It includes:
+// - Statistical aggregations of attribution scores (mean, abs_mean, std_dev)
+// - Baseline reference values for calculating attributions
+// These metrics help:
+// - Understand feature influence on model outputs
+// - Compare relative importance between features
+// - Identify key drivers of predictions
+// - Validate feature selection decisions
+message FeatureImportance {
+  // Mean aggregation of attribution scores across samples.
+  // This represents the average contribution of this feature to model predictions:
+  // - Positive values indicate the feature increases predictions on average
+  // - Negative values indicate the feature decreases predictions on average
+  // - Values closer to zero suggest less impact on predictions
+  // The mean helps assess the overall direction and magnitude of feature influence.
+  double mean = 1;
+
+  // Absolute mean aggregation of attribution scores across samples.
+  // This represents the average magnitude of feature impact, ignoring direction:
+  // - Higher values indicate stronger overall influence on predictions
+  // - Useful for comparing relative importance between features
+  // - Helps identify features with large effects in either direction
+  // The absolute mean enables ranking features by their total impact strength.
+  double abs_mean = 2;
+
+  // Standard deviation of attribution scores across samples.
+  // This represents the variability in feature impact:
+  // - Higher values indicate more inconsistent feature influence
+  // - Lower values suggest more stable feature contributions
+  // - Helps identify features with high attribution variance
+  // The standard deviation enables assessing feature reliability and consistency.
+  double std_dev = 3;
+
+  // Baseline reference value used to calculate feature attributions.
+  // This represents a neutral or default state for the feature:
+  // - Provides a reference point for measuring feature impact
+  // - Enables calculating attribution scores as deviations from baseline
+  // - Helps normalize and compare attributions across features
+  // - Required by attribution methods like SHAP and LIME
+  BaselineValue baseline = 4;
+}

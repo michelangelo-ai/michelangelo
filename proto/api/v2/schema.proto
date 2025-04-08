@@ -1,0 +1,65 @@
+// This file defines messages related to data schemas in the Michelangelo API.
+// It includes:
+// - Data schema definitions and structure
+// - Data type enumerations
+// - Schema validation and metadata
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+// DataSchema represents a schema definition for structured data.
+// It contains an ordered list of schema items that define the fields,
+// their names, and data types. The schema is used to:
+// - Validate data structure and types
+// - Define feature specifications
+// - Document data formats
+// - Enable schema evolution tracking
+// - Support data serialization/deserialization
+message DataSchema {
+  repeated DataSchemaItem schema_items = 1;
+}
+
+// DataSchemaItem represents a single field in a data schema.
+// It defines:
+// - The field name that uniquely identifies this item
+// - The data type that specifies the kind of values this field can contain
+// This allows for structured definition of data fields and enables validation,
+// serialization, and schema evolution tracking at the individual field level.
+message DataSchemaItem {
+  // The name that uniquely identifies this schema item.
+  // Must be a valid field name that follows the naming conventions:
+  // - Contains only alphanumeric characters, underscores
+  // - Starts with a letter
+  // - Is case sensitive
+  // - Must be unique within the schema
+  string name = 1;
+
+  // The data type that specifies what kind of values this field can contain.
+  // This determines the validation rules, serialization format, and compatible operations
+  // for values in this field. The type must be one of the defined DataType enum values.
+  DataType data_type = 2;
+}
+
+// DataType enumerates the supported data types for schema fields.
+// This enum defines the valid types that can be used in DataSchemaItem fields.
+// The types include:
+// - Basic numeric types (byte, short, int, long, float, double)
+// - String and character types
+// - Special types (invalid, unknown)
+// Each type has specific validation rules and serialization behavior.
+// The type system enables strong typing of data fields.
+enum DataType {
+  DATA_TYPE_INVALID = 0;
+  DATA_TYPE_UNKNOWN = 1;
+  DATA_TYPE_STRING = 7;
+  DATA_TYPE_BYTE = 15;
+  DATA_TYPE_CHAR = 16;
+  DATA_TYPE_SHORT = 17;
+  DATA_TYPE_INT = 18;
+  DATA_TYPE_LONG = 19;
+  DATA_TYPE_FLOAT = 20;
+  DATA_TYPE_DOUBLE = 21;
+}
