@@ -193,12 +193,6 @@ message RayClusterStatus {
   // This field includes details about the pod running the head node, such as its IP address and health status.
   RayHeadNodeInfo head_node = 3;
 
-  // Cluster assignment details.
-  // This field is marked for deprecation and should be removed in the future.
-  // It currently provides metadata about the logical grouping of clusters, but its usage is being phased out.
-  // TODO: Mark this as reserved after removing the usage.
-  ClusterAssignment cluster_assignment = 4;
-
   // Assignment information.
   // Provides additional metadata about how the cluster is allocated for specific workloads.
   // This field helps map resources to their intended tasks or tenants within a shared environment.

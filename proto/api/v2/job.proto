@@ -21,19 +21,6 @@ option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 
-// @Deprecated - use ResourceAffinity instead
-// ClusterAffinity defines rules for targeting specific clusters based on their labels.
-// This message is deprecated in favor of ResourceAffinity which provides:
-// - More flexible resource selection capabilities
-// - Support for additional resource properties
-// - Better integration with Kubernetes label selectors
-// - Consistent resource filtering across the platform
-// Use ResourceAffinity for new code and migrate existing usage.
-message ClusterAffinity {
-  // cluster selector
-  k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector cluster_selector = 1;
-}
-
 // ResourceAffinity defines rules for selecting compute resources based on their properties.
 // It allows specifying preferences and requirements for:
 // - Resource types (CPU, GPU, etc)
@@ -60,12 +47,6 @@ message ResourceAffinity {
 // - (Future) Inter-job affinity and anti-affinity rules
 // This enables fine-grained control over where and how jobs are scheduled.
 message Affinity {
-  // @Deprecated - use resource_affinity instead
-  // Cluster affinity for targeting specific clusters based on their labels.
-  // This field is deprecated in favor of resource_affinity which provides more
-  // flexible resource selection capabilities.
-  ClusterAffinity cluster_affinity = 1;
-
   // Resource affinity for selecting compute resources based on their properties.
   // This field specifies:
   // - Label selector rules for resource matching
@@ -103,28 +84,6 @@ message AssignmentInfo {
   // - Enables tracking which cluster is running the job
   // For example: "prod-us-west-1" or "training-cluster-gpu"
   string cluster = 2;
-
-  // @Deprecated - use job_url in status instead
-  // URL to view job details and monitoring information. This field is deprecated
-  // in favor of job_url in the job status which provides a more consistent location
-  // for runtime URLs.
-  string job_url = 3 [deprecated = true];
-}
-
-// ClusterAssignment provides legacy cluster assignment status.
-// This message is deprecated and will be removed in a future version.
-// Use AssignmentInfo instead which provides:
-// - Resource pool tracking
-// - Cluster assignment details 
-// - Job monitoring information
-// For example:
-// - AssignmentInfo tracks both resource pool and cluster
-// - Provides consistent job URL location
-// - Enables better resource management
-// @Deprecated - use AssignmentInfo message instead
-message ClusterAssignment {
-  // cluster name of the assigned cluster
-  string cluster = 1;
 }
 
 // TerminationType enumerates the possible ways a job can terminate:
