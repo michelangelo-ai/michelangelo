@@ -3,6 +3,8 @@ package util
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"reflect"
 	"regexp"
 	"sort"
@@ -379,4 +381,24 @@ func ApplyInlineFields(jsonData []byte, fields []InlineFieldMapping) ([]byte, er
 	}
 
 	return []byte(jsonStr), nil
+}
+
+// ReadRequest reads the protoc request from stdin and returns it as a byte slice.
+func ReadRequest() []byte {
+	reqData, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to read protoc request from stdin: %v", err))
+	}
+	return reqData
+}
+
+// WriteResponse writes the CodeGeneratorResponse to stdout.
+func WriteResponse(resp *pluginpb.CodeGeneratorResponse) {
+	out, err := proto.Marshal(resp)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to marshal response: %v\n", err))
+	}
+	if _, err = os.Stdout.Write(out); err != nil {
+		panic(err)
+	}
 }

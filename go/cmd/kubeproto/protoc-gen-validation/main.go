@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"regexp"
@@ -14,7 +13,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 
 	"google.golang.org/protobuf/compiler/protogen"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
@@ -759,9 +757,7 @@ func generate(reqData []byte) *pluginpb.CodeGeneratorResponse {
 }
 
 func main() {
-	// read protoc request from stdin
-	reqData, _ := io.ReadAll(os.Stdin)
+	reqData := util.ReadRequest()
 	resp := generate(reqData)
-	out, _ := proto.Marshal(resp)
-	os.Stdout.Write(out)
+	util.WriteResponse(resp)
 }

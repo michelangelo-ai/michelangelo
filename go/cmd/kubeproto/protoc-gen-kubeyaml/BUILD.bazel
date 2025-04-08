@@ -6,8 +6,8 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/kubeproto/protoc-gen-kubeyaml",
     visibility = ["//visibility:private"],
     deps = [
+        "//go/kubeproto/util:go_default_library",
         "//go/kubeproto/yaml:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
     ],
 )
 

@@ -2,8 +2,6 @@ package main
 
 import (
 	b64 "encoding/base64"
-	"io"
-	"os"
 	"strings"
 	"text/template"
 
@@ -20,10 +18,7 @@ package {{.GoPackageName}}
 
 // record protoc request in a go file for unit test
 func main() {
-	reqData, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		panic(err)
-	}
+	reqData := util.ReadRequest()
 
 	var req pluginpb.CodeGeneratorRequest
 	golangproto.Unmarshal(reqData, &req)
@@ -79,11 +74,5 @@ func main() {
 	}
 
 	resp := gen.Response()
-	out, err := golangproto.Marshal(resp)
-	if err != nil {
-		panic(err)
-	}
-	if _, err := os.Stdout.Write(out); err != nil {
-		panic(err)
-	}
+	util.WriteResponse(resp)
 }

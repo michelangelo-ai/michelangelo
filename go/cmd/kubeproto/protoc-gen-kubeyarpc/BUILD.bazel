@@ -10,7 +10,6 @@ go_library(
         "//go/kubeproto/templates:go_default_library",
         "//go/kubeproto/util:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
         "@org_golang_google_protobuf//reflect/protoregistry:go_default_library",
         "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
         "@org_golang_google_protobuf//types/pluginpb:go_default_library",
