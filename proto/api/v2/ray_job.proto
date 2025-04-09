@@ -25,9 +25,27 @@ import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/user.proto";
 
 // Specification for a Ray job
+//
+// The RayJobSpec message defines the configuration for a Ray job that will run on a Ray cluster.
+// A Ray job represents a distributed computation task that needs to be executed across the cluster.
+// The job specification includes:
+// - User information for authentication and access control
+// - Entrypoint script/command that contains the job's main logic
+// - Memory configuration for the Ray object store
+// - Reference to target Ray cluster for execution
+//
+// The specification ensures proper job configuration and resource allocation before execution.
+// It provides the necessary parameters to initialize and run the distributed computation
+// while maintaining isolation and resource constraints.
 message RayJobSpec {
 
-  // Information about the user initiating the Ray job workload
+  // Information about the user initiating the Ray job workload.
+  // This field identifies the user who submitted the job and is used for:
+  // - Authentication and authorization
+  // - Resource quota enforcement
+  // - Job ownership tracking
+  // - Audit logging and monitoring
+  // The user info helps maintain security and accountability in multi-tenant environments.
   UserInfo user = 1;
 
   // Entrypoint script or command to start the Ray job
@@ -45,10 +63,24 @@ message RayJobSpec {
   // This ratio is specified as an entrypoint parameter to configure the memory allocated for the object store during worker node startup.
   double object_store_memory_ratio = 3;
 
-  // Unique identifier for the Ray job
+  // Unique identifier for the Ray job.
+  // This ID is used to track and reference the job throughout its lifecycle.
+  // It is assigned when the job is created and remains constant until the job
+  // is completed or terminated. The job_id enables:
+  // - Job status lookups and monitoring
+  // - Resource tracking and cleanup
+  // - Log aggregation and debugging
+  // - Job history and audit trails
   string job_id = 4;
 
-  // Reference to the Ray cluster where the job will be executed
+  // Reference to the Ray cluster where the job will be executed.
+  // This field specifies which Ray cluster should run this job by providing a resource identifier.
+  // The cluster must be in a READY state to accept new jobs. The cluster provides:
+  // - Compute resources (CPU, GPU, memory) for distributed execution
+  // - Ray runtime environment and dependencies
+  // - Network connectivity between job components
+  // - Monitoring and logging infrastructure
+  // The job will be scheduled on this cluster and use its resources until completion
   michelangelo.api.ResourceIdentifier cluster = 5 [
     (michelangelo.api.resource_reference) = {
       type: "michelangelo.uber.com/RayCluster"
@@ -56,33 +88,105 @@ message RayJobSpec {
   ];
 }
 
-// Enum representing the various states of a Ray job
+// RayJobState represents the lifecycle states of a Ray job
+//
+// A Ray job progresses through several states during its execution:
+// - INVALID: Default uninitialized state
+// - INITIALIZING: Job is being set up and resources allocated
+// - RUNNING: Job is actively executing tasks
+// - SUCCEEDED: Job completed successfully
+// - FAILED: Job encountered an error and could not complete
+// - KILLED: Job was terminated externally
+//
+// The state transitions help track job progress and handle failures appropriately.
+// State information is crucial for job monitoring, debugging and resource cleanup.
 enum RayJobState {
-  // The state is invalid (used as a default value)
+  // The state is invalid. This is the default state and indicates that
+  // the job's state has not been properly initialized or is in an undefined state.
+  // This state should never be seen during normal operation and typically indicates
+  // an issue with job creation or state management.
   RAY_JOB_STATE_INVALID = 0;
 
-  // The job is currently being initialized
+  // The job is currently being initialized. This state indicates that:
+  // - Job resources are being allocated and configured
+  // - Ray runtime environment is being prepared
+  // - Job dependencies are being loaded
+  // - Initial tasks are being scheduled
+  // The job remains in this state until all initialization steps complete successfully,
+  // after which it transitions to RUNNING state. Initialization failures will move
+  // the job to FAILED state.
   RAY_JOB_STATE_INITIALIZING = 1;
 
-  // The job is actively running
+  // The job is actively running. This state indicates that:
+  // - Ray tasks and actors are being executed across the cluster
+  // - Resources are allocated and being utilized
+  // - Job progress is being monitored and tracked
+  // - Results are being generated and collected
+  // The job remains in this state until it either completes successfully (SUCCEEDED),
+  // encounters an error (FAILED), or is externally terminated (KILLED).
   RAY_JOB_STATE_RUNNING = 2;
 
-  // The job completed successfully
+  // The job completed successfully. This state indicates that:
+  // - All Ray tasks and actors finished execution without errors
+  // - Results were successfully collected and stored
+  // - Resources have been released back to the cluster
+  // - Job cleanup tasks completed normally
+  // This is a terminal state - once a job reaches SUCCEEDED it cannot transition
+  // to any other state. The job's results are available for retrieval and the
+  // job metadata is preserved for auditing and analysis.
   RAY_JOB_STATE_SUCCEEDED = 3;
 
-  // The job failed to complete
+  // The job failed to complete. This state indicates that:
+  // - An unrecoverable error occurred during job execution
+  // - Tasks or actors encountered exceptions or failures
+  // - The job cannot proceed and has been terminated
+  // - Resources have been released back to the cluster
+  // This is a terminal state - once a job reaches FAILED it cannot transition
+  // to any other state. Error details and logs should be preserved for debugging.
+  // The job may need to be resubmitted after addressing the root cause of failure.
   RAY_JOB_STATE_FAILED = 4;
 
-  // The job was terminated or killed
+  // The job was terminated or killed. This state indicates that:
+  // - The job was stopped externally before natural completion
+  // - Resources have been released back to the cluster
+  // - Job cleanup tasks were triggered for graceful shutdown
+  // - Results up to termination point may be partially available
+  // This is a terminal state - once a job reaches KILLED it cannot transition
+  // to any other state. The termination may be user-initiated or due to
+  // system policies like exceeding time/resource limits.
   RAY_JOB_STATE_KILLED = 5;
 }
 
 // Defines the status of a Ray job
+//
+// The `RayJobStatus` message tracks the current state and execution details of a Ray job.
+// It provides critical information about:
+// - Job state transitions and current status
+// - Unique identifiers and cluster assignment
+// - Deployment status and resource allocation
+// - URLs for monitoring and debugging
+// - Error messages and status descriptions
+//
+// This status information enables job monitoring, troubleshooting, and lifecycle management.
+// The status is continuously updated as the job progresses through different states.
 message RayJobStatus {
-  // Current state of the Ray job
+  // Current state of the Ray job.
+  // This field tracks the job's lifecycle state (e.g. PENDING, RUNNING, SUCCEEDED, etc.)
+  // and is updated as the job progresses through different execution phases.
+  // The state transitions follow a defined flow and certain states (like SUCCEEDED,
+  // FAILED, KILLED) are terminal states that cannot transition further.
+  // This state information is crucial for monitoring job progress and health.
   RayJobState state = 1;
 
-  // Unique identifier for the Ray job
+  // Unique identifier for the Ray job.
+  // This ID is automatically generated when the job is created and remains constant
+  // throughout the job's lifecycle. It is used to:
+  // - Track job status and state transitions
+  // - Associate resources and artifacts with the job
+  // - Enable job-specific monitoring and logging
+  // - Provide a reference for job management operations
+  // The job_id follows a standardized format and is guaranteed to be unique
+  // within the system.
   string job_id = 2;
 
   // Status message providing additional information about the job
@@ -95,10 +199,24 @@ message RayJobStatus {
   // and monitoring purposes.
   string job_status = 3;
 
-  // Additional message describing the current state or issues
+  // Additional message providing detailed information about the job's current state or any issues.
+  // This field captures more specific details than the job_status field, such as:
+  // - Error messages and stack traces for debugging
+  // - Progress indicators and completion percentages
+  // - Resource utilization metrics and bottlenecks
+  // - System-generated notifications or warnings
+  // - Custom status messages from the job's application logic
+  // The message helps operators understand job health and troubleshoot problems.
   string message = 4;
 
-  // URL to access the Ray job's dashboard
+  // URL to access the Ray job's dashboard.
+  // This URL provides access to the Ray dashboard UI where users can:
+  // - Monitor job execution progress and task distribution
+  // - View resource utilization metrics and bottlenecks
+  // - Access logs and error messages for debugging
+  // - Inspect object store contents and memory usage
+  // - Profile performance and identify optimization opportunities
+  // The dashboard is a critical tool for observability and troubleshooting
   string dashboard_url = 6;
 
   // Deployment status of the Ray job.
@@ -115,11 +233,28 @@ message RayJobStatus {
   //   - "Error: <specific_error>": A custom error message, such as "Error: Insufficient Memory".
   string job_deployment_status = 7;
 
-  // Name of the Ray cluster running the job
+  // Name of the Ray cluster running the job.
+  // This field identifies the Ray cluster where this job is being executed.
+  // The cluster name is used to:
+  // - Track which cluster is responsible for the job
+  // - Look up cluster status and health information
+  // - Route job management operations to the correct cluster
+  // - Associate job metrics and logs with the cluster context
+  // The cluster must exist and be in a READY state for the job to run successfully.
   string ray_cluster_name = 8;
 }
 
-// Represents a Ray job and its specifications
+// RayJob represents a Ray distributed computing job and its specifications
+//
+// A RayJob encapsulates:
+// - Job configuration and resource requirements (spec)
+// - Runtime status and execution state (status) 
+// - Metadata for tracking and management
+// - Cluster assignment and scheduling details
+//
+// The job runs on a Ray cluster and executes distributed tasks defined in
+// the entrypoint script. The job's lifecycle is managed through its spec
+// and monitored via its status.
 message RayJob {
   // Annotation for Michelangelo resource identification
   option (michelangelo.api.resource) = {};

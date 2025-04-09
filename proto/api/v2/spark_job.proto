@@ -28,98 +28,323 @@ import "michelangelo/api/v2/pod.proto";
 import "michelangelo/api/v2/user.proto";
 
 // Specification for the driver in a Spark job
+//
+// The DriverSpec message defines the configuration for the Spark driver pod that coordinates
+// the distributed Spark application. The driver pod is responsible for:
+// - Initializing and managing the Spark application lifecycle
+// - Coordinating task distribution to executors
+// - Maintaining application state and progress
+// - Handling failures and recovery
+//
+// The driver specification ensures proper configuration and resource allocation for the
+// critical control plane component of a Spark application. It provides the necessary
+// parameters to deploy and run the driver while maintaining isolation and stability.
 message DriverSpec {
-  // Pod spec for the Spark driver
+  // Pod spec for the Spark driver pod that coordinates the distributed application.
+  // This field specifies the Kubernetes pod configuration for the driver, including:
+  // - Container image and resource requirements
+  // - Environment variables and volume mounts
+  // - Security context and service account
+  // - Node selection and affinity rules
+  // The driver pod is critical as it manages the Spark application lifecycle and coordinates
+  // task distribution to executor pods.
   PodSpec pod = 1;
 }
 
 // Specification for the executors in a Spark job
+//
+// The ExecutorSpec message defines the configuration for the Spark executor pods that perform
+// distributed data processing tasks. Executors are responsible for:
+// - Executing tasks assigned by the driver
+// - Processing data partitions in parallel
+// - Caching data in memory or disk
+// - Returning results to the driver
+//
+// The executor specification ensures proper configuration and scaling of the worker pods
+// that handle the actual distributed computation. It provides parameters to control
+// the number of executors and their individual pod configurations.
 message ExecutorSpec {
-  // Pod spec for the Spark executors
+  // Pod spec for the Spark executor pods that perform distributed data processing tasks.
+  // This field specifies the Kubernetes pod configuration for each executor, including:
+  // - Container image and resource requirements 
+  // - Environment variables and volume mounts
+  // - Security context and service account
+  // - Node selection and affinity rules
+  // The executor pods are scaled horizontally to handle parallel task execution and
+  // data processing across the Spark cluster.
   PodSpec pod = 1;
 
-  // Number of executor instances
+  // Number of executor instances to run in parallel.
+  // This field specifies how many executor pods should be created to handle distributed
+  // data processing tasks. Each executor runs in its own pod and can process data
+  // partitions independently. The number of instances affects:
+  // - Overall processing capacity and parallelism
+  // - Resource utilization across the cluster
+  // - Data distribution and shuffle patterns
+  // - Job completion time and throughput
+  // The optimal number depends on data size, resource availability, and workload characteristics.
   int32 instances = 2;
 }
 
 // Specification for a Spark job (application)
+//
+// The SparkJobSpec message defines the configuration for a Spark application that will run on a cluster.
+// A Spark job represents a distributed data processing task that needs to be executed across worker nodes.
+// The job specification includes:
+// - User information for authentication and access control
+// - Driver and executor pod configurations
+// - Spark configuration properties and dependencies
+// - Application entrypoint and arguments
+// - Resource scheduling and termination policies
+//
+// The specification ensures proper job configuration and resource allocation before execution.
+// It provides the necessary parameters to initialize and run the distributed computation
+// while maintaining isolation and resource constraints.
 message SparkJobSpec {
-  // User initiating the spark job workload.
-  // Used to map to the command-line flag “–proxy-user” in spark-submit.
+  // Information about the user initiating the Spark job workload.
+  // This field identifies the user who submitted the job and is used for:
+  // - Authentication and authorization via the "--proxy-user" flag in spark-submit
+  // - Resource quota enforcement
+  // - Job ownership tracking
+  // - Audit logging and monitoring
+  // The user info helps maintain security and accountability in multi-tenant environments.
   UserInfo user = 1;
 
-  // Affinity for the clusters and other jobs
+  // Affinity configuration for scheduling the Spark job.
+  // This field specifies scheduling preferences and constraints for:
+  // - Node selection and anti-affinity rules
+  // - Co-location with other jobs or services
+  // - Cluster placement strategies and topology spread
+  // - Resource pool and zone assignments
+  // The affinity settings help optimize job placement for performance,
+  // availability, and resource utilization across the cluster.
   Affinity affinity = 2;
 
-  // Spark driver specification
+  // Spark driver specification.
+  // This field configures the Spark driver pod which coordinates job execution:
+  // - Manages task scheduling and distribution
+  // - Maintains application state and progress
+  // - Coordinates data shuffling between executors
+  // - Handles job lifecycle and fault tolerance
+  // The driver is critical for job orchestration and must be properly configured
+  // for reliable distributed processing.
   DriverSpec driver = 3;
 
-  // Spark executor specification
+  // Spark executor specification.
+  // This field configures the Spark executor pods that perform distributed processing:
+  // - Execute tasks assigned by the driver
+  // - Process data partitions in parallel
+  // - Cache and persist RDD data
+  // - Handle data shuffling and aggregation
+  // The executors provide the distributed compute capacity and must be sized
+  // appropriately for the workload's processing and memory requirements.
   ExecutorSpec executor = 4;
 
-  // User-specified Spark configuration properties as they would use
-  // the "--conf" option in spark-submit.
+  // User-specified Spark configuration properties.
+  // This field allows setting custom Spark configuration options that would normally
+  // be passed via the "--conf" flag in spark-submit. Examples include:
+  // - spark.executor.memory: Memory per executor
+  // - spark.driver.cores: Number of cores for driver
+  // - spark.sql.shuffle.partitions: Number of shuffle partitions
+  // - spark.speculation: Enable speculative execution
+  // - spark.dynamicAllocation.enabled: Enable dynamic allocation
+  // The configurations control Spark's runtime behavior, performance tuning,
+  // memory management, and other execution parameters. Values should follow
+  // Spark's configuration format and validation rules.
   map<string, string> spark_conf = 5;
 
-  // Fully qualified main class name for
-  // java or scala application
+  // Fully qualified main class name for Java or Scala applications.
+  // This field specifies the entry point class containing the main() method.
+  // Examples:
+  // - "org.apache.spark.examples.SparkPi"
+  // - "com.company.spark.MySparkJob"
+  // The class must be available in the application JAR or dependencies.
+  // Required for JVM-based Spark applications but not used for Python apps.
   string main_class = 6;
 
-  // Main application file e.g. jar or
-  // python file
+  // Main application file that contains the Spark application code.
+  // This field specifies the primary artifact to execute:
+  // - For JVM apps: JAR file containing the main class
+  // - For Python apps: .py file with the application code
+  // The file must be accessible to the Spark driver and executors.
+  // Required for all Spark applications.
   string main_application_file = 7;
 
   // List of arguments to be passed to the application.
+  // These arguments are provided to the main() method or Python script:
+  // - For JVM apps: args passed to main(String[] args)
+  // - For Python apps: sys.argv arguments after the script name
+  // Arguments allow runtime configuration and parameterization of the Spark application.
+  // They should be ordered as expected by the application code.
+  // Examples:
+  // - Input/output paths
+  // - Processing parameters
+  // - Configuration values
+  // - Feature flags
   repeated string main_args = 9;
 
   // Dependencies specifies all possible types of dependencies of a Spark application.
+  // This field allows configuring various dependency types needed by the Spark job:
+  // - JAR files containing Java/Scala code and libraries
+  // - Python files and modules for PySpark applications
+  // - Other files like configuration, data, or resources
+  // Dependencies are distributed to all nodes in the Spark cluster to ensure
+  // consistent execution environment across driver and executors.
   Dependencies deps = 10;
 
-  // Termination spec
+  // Termination spec defines how and when the Spark job should be terminated.
+  // This field configures:
+  // - Timeout duration after which job is killed
+  // - Cleanup behavior for resources
+  // - Graceful shutdown parameters
+  // - Exit conditions and status handling
+  // The termination spec helps ensure proper cleanup and resource release
+  // when jobs complete or need to be stopped.
   TerminationSpec termination = 11;
 
-  // Scheduling spec
+  // Scheduling specification for the Spark job.
+  // This field configures how the job should be scheduled and executed:
+  // - Resource requirements and limits
+  // - Priority and preemption settings
+  // - Node selection and affinity rules
+  // - Scheduling constraints and preferences
+  // The scheduling spec helps ensure optimal placement and resource allocation
+  // for the Spark job across the cluster.
   SchedulingSpec scheduling = 12;
 
-  // Spark version specify the version of spark to use
+  // Spark version to use for this job.
+  // This field specifies which version of Apache Spark should run the application.
+  // The version must be available in the execution environment.
+  // Examples:
+  // - "3.3.0" - Use Spark 3.3.0
+  // - "3.4.1" - Use Spark 3.4.1 
+  // The version affects:
+  // - Available features and APIs
+  // - Performance characteristics
+  // - Compatibility with dependencies
+  // - Runtime behavior and optimizations
   string spark_version = 13;
 }
 
 // Dependencies specifies all possible types of dependencies of a Spark application.
+// This message defines the various dependency types needed by a Spark job:
+// - JAR files containing Java/Scala code and libraries
+// - Python files and modules for PySpark applications 
+// - Other files like configuration, data, or resources
+// Dependencies are distributed to all nodes in the Spark cluster to ensure
+// consistent execution environment across driver and executors.
 message Dependencies {
   // Jars is a list of JAR files the Spark application depends on.
+  // Each JAR file contains Java/Scala code and libraries needed by the application.
+  // The JARs are distributed to all nodes in the Spark cluster to ensure:
+  // - Required classes and dependencies are available
+  // - Consistent execution environment across driver and executors
+  // - Proper classpath configuration for the Spark application
+  // Common examples include application code JARs and third-party library JARs
   repeated string jars = 1;
 
   // Files is a list of files the Spark application depends on.
+  // These files are distributed to all nodes in the Spark cluster and can include:
+  // - Configuration files needed by the application
+  // - Data files that need to be accessible to all executors
+  // - Resource files like ML models or lookup tables
+  // - Shell scripts or other auxiliary files
+  // The files are made available in the working directory of the Spark application
+  // on both driver and executor nodes to ensure consistent access across the cluster.
   repeated string files = 2;
 
   // PyFiles is a list of Python files the Spark application depends on.
+  // These Python files are distributed to all nodes in the Spark cluster and can include:
+  // - Python modules and packages needed by PySpark applications
+  // - Custom Python code containing UDFs, transformations, or business logic
+  // - Python dependencies that need to be available to all executors
+  // The files are added to the Python path of both driver and executor processes
+  // to ensure consistent Python environment across the Spark cluster.
   repeated string py_files = 3;
 }
 
 // Defines the status of a Spark job
+//
+// The SparkJobStatus message tracks the current state and execution details of a Spark job.
+// It provides critical information about:
+// - Job state transitions and conditions
+// - Assignment and scheduling metadata
+// - URLs for monitoring and debugging
+// - Spark application identifiers
+//
+// This status information enables job monitoring, troubleshooting, and lifecycle management.
+// The status is continuously updated as the job progresses through different states.
 message SparkJobStatus {
-  // Deprecated - use status_conditions instead
-  // Conditions that describe states
+  // Deprecated - use status_conditions instead.
+  // This field contains conditions that describe the states of the Spark job.
+  // It has been replaced by the status_conditions field which provides a more
+  // structured way to track job state transitions and conditions.
+  // The conditions field will be removed in a future version.
   repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
 
-  // Assignment info
+  // Assignment information.
+  // Provides additional metadata about how the Spark job is allocated and scheduled.
+  // This field helps track:
+  // - Resource allocation and utilization
+  // - Priority levels and tenant assignments
+  // - Job-specific constraints and requirements
+  // - Scheduling policies and preferences
+  // The assignment info ensures proper resource management in multi-tenant environments.
   AssignmentInfo assignment = 3;
 
-  // Scheduling info
+  // Scheduling information for the Spark job.
+  // Contains data on how resources are allocated and scheduled for this job:
+  // - Resource allocation status and constraints
+  // - Priority and preemption settings
+  // - Queue placement and scheduling policies
+  // - Executor scaling and placement rules
+  // The scheduling info helps track and optimize resource utilization
+  // and job execution across the Spark cluster.
   SchedulingInfo scheduling_info = 4;
 
-  // Conditions that describe states
+  // Conditions that describe the states of the Spark job.
+  // These conditions provide detailed status information about:
+  // - Job lifecycle states (e.g. Pending, Running, Completed)
+  // - Resource allocation and scheduling status
+  // - Error conditions and failure reasons
+  // - Progress indicators and completion status
+  // The conditions are updated as the job transitions through different states
+  // and help track job health and troubleshoot issues.
   repeated Condition status_conditions = 6;
 
-  // Spark Job's url to view spark job specific details
+  // URL to view Spark job-specific details.
+  // This URL provides access to the Spark UI where users can:
+  // - Monitor job execution progress and task distribution
+  // - View resource utilization metrics and bottlenecks
+  // - Access logs and error messages for debugging
+  // - Inspect stage details and task metrics
+  // - Profile performance and identify optimization opportunities
+  // The UI is a critical tool for observability and troubleshooting
   string job_url = 7;
 
-  // Spark application id
+  // Unique identifier for the Spark application.
+  // This ID is automatically generated when the application starts and remains constant
+  // throughout its lifecycle. It is used to:
+  // - Track application status and state transitions
+  // - Associate resources and artifacts with the application
+  // - Enable application-specific monitoring and logging
+  // - Provide a reference for job management operations
+  // The application_id follows the format "application_<timestamp>_<id>" and is
+  // guaranteed to be unique within the Spark cluster.
   string application_id = 8;
 }
 
-// SparkJob refers to a Spark job.
+// SparkJob represents a Spark application and its specifications
+//
+// A SparkJob encapsulates:
+// - Job configuration and resource requirements (spec)
+// - Runtime status and execution state (status)
+// - Metadata for tracking and management
+// - Driver and executor pod definitions
+//
+// The job runs on a cluster and executes distributed data processing tasks
+// defined in the application code. The job's lifecycle is managed through
+// its spec and monitored via its status.
 message SparkJob {
   option (michelangelo.api.resource) = {};
 

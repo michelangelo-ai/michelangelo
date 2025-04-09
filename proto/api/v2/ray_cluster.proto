@@ -27,94 +27,201 @@ import "michelangelo/api/v2/job.proto";
 import "michelangelo/api/v2/user.proto";
 
 // Specification for Ray cluster head node
+//
+// The `RayHeadSpec` message defines the configuration for the head node of a Ray cluster.
+// The head node is a critical component that runs the Ray control plane, including:
+// - Ray scheduler for task/actor placement
+// - Redis servers for object store metadata
+// - GCS (Global Control Store) for cluster state
+// - Dashboard for monitoring and debugging
+//
+// The head node must be properly configured to ensure cluster stability and performance.
+// Its service type determines how other components can connect to the head node.
 message RayHeadSpec {
-  // Kubernetes service type for the head service
+  // Kubernetes service type for the head service.
+  // This field specifies how the Ray head node service is exposed within or outside the Kubernetes cluster.
+  // The service type determines the networking and accessibility model for connecting to the Ray head node.
+  // Valid values are:
+  // - ClusterIP: Exposes the service on a cluster-internal IP (default)
+  // - NodePort: Exposes the service on each Node's IP at a static port
+  // - LoadBalancer: Exposes the service externally using cloud provider's load balancer
   string service_type = 1;
 
-  // Pod spec for the Ray head
+  // Pod spec for the Ray head node that defines the container configuration,
+  // resource requirements, volumes, and other Kubernetes pod settings.
+  // This is used to configure the Ray head process and supporting components.
   k8s.io.api.core.v1.PodTemplateSpec pod = 2;
 
-  // Ray start parameters for the head node
+  // Ray start parameters for the head node that control the Ray runtime configuration.
+  // These parameters are passed directly to the 'ray start' command when launching
+  // the head node process. Common parameters include:
+  // - num-cpus: Number of CPUs allocated to Ray
+  // - num-gpus: Number of GPUs allocated to Ray
+  // - object-store-memory: Size of the Ray object store
+  // - redis-password: Password for the Redis authentication
+  // - dashboard-host: Host to bind the dashboard to
+  // - block: Whether to block while starting Ray
   map<string, string> ray_start_params = 3;
 }
 
-// Specification for the workers in a Ray cluster
+// Specification for Ray cluster worker nodes
+//
+// The `RayWorkerSpec` message defines the configuration for worker nodes in a Ray cluster.
+// Worker nodes are the compute nodes that execute Ray tasks and actors. They connect
+// to the head node and provide the distributed compute capacity for the cluster.
+// Multiple worker groups with different configurations can be defined to create
+// a heterogeneous cluster with specialized node types.
 message RayWorkerSpec {
-  // Pod spec for the Ray worker instances
+  // Pod spec for the Ray worker instances that defines the container configuration,
+  // resource requirements, volumes, and other Kubernetes pod settings.
+  // This is used to configure the Ray worker processes that execute distributed
+  // tasks and actors.
   k8s.io.api.core.v1.PodTemplateSpec pod = 1;
 
-  // Minimum number of worker instances
+  // Minimum number of worker instances that will be maintained in this worker group.
+  // The cluster will attempt to keep at least this many worker nodes running.
+  // Must be >= 0 and <= max_instances.
   int32 min_instances = 2;
 
-  // Maximum number of worker instances
+  // Maximum number of worker instances that will be allowed in this worker group.
+  // The cluster will scale up and down between min_instances and max_instances
+  // based on resource demand. Must be >= min_instances.
   int32 max_instances = 3;
 
-  // Node type for a worker in a heterogeneous cluster
+  // Node type identifier for this worker group in a heterogeneous cluster.
+  // This field allows specifying different worker types (e.g. "gpu", "cpu-small", "cpu-large")
+  // to create specialized node groups with different hardware or configurations.
+  // The node_type is used when submitting Ray jobs to target specific worker groups.
   string node_type = 4;
 
-  // Ray start parameters for the worker nodes
+  // Ray start parameters for the worker nodes that control the Ray runtime configuration.
+  // These parameters are passed directly to the 'ray start' command when launching
+  // the worker processes. Common parameters include:
+  // - num-cpus: Number of CPUs allocated to Ray
+  // - num-gpus: Number of GPUs allocated to Ray  
+  // - object-store-memory: Size of the Ray object store
+  // - block: Whether to block while starting Ray
   map<string, string> ray_start_params = 5;
 }
 
 // Specification for a Ray cluster
+//
+// The `RayClusterSpec` message defines the configuration for a Ray cluster deployment.
+// A Ray cluster consists of a head node that coordinates the cluster and one or more
+// worker nodes that execute distributed tasks and actors. The spec allows configuring
+// the head node, worker groups, Ray version, and cluster-wide settings to create
+// both homogeneous and heterogeneous Ray clusters.
 message RayClusterSpec {
 
-  // User initiating the ray cluster workload
+  // User initiating the ray cluster workload.
+  // Used to track ownership and permissions for the Ray cluster deployment.
+  // The user info is propagated to worker nodes and used for authentication
+  // and access control within the Ray runtime.
   UserInfo user = 1;
 
-  // Ray version for the cluster
+  // Ray version specifies the version of Ray to use for the cluster.
+  // This determines the Ray runtime version that will be installed on all nodes.
+  // Must be a valid Ray release version (e.g. "2.0.0", "1.13.0").
   string ray_version = 2;
 
-  // Ray head specification
+  // Ray head specification that configures the head node of the cluster.
+  // The head node acts as the central coordinator, managing worker nodes and
+  // facilitating communication. It runs critical services like the GCS (Global
+  // Control Store) and scheduling components.
   RayHeadSpec head = 3;
 
-  // Specifications for the worker groups in the cluster
+  // Specifications for the worker groups in the cluster.
+  // Each worker group represents a set of Ray worker nodes with the same configuration.
+  // Worker groups allow creating heterogeneous clusters with different node types
+  // (e.g. CPU vs GPU workers) by specifying different pod specs and Ray configurations.
+  // The worker groups can scale independently based on their min/max instance settings.
   repeated RayWorkerSpec workers = 4;
 
-  // Additional Ray cluster-wide configurations
+  // Additional Ray cluster-wide configurations that are applied to all nodes in the cluster.
+  // These configurations are passed to the Ray runtime and affect the entire cluster's behavior.
+  // Common configurations include:
+  // - redis_password: Password for the Redis instance used by Ray's GCS
+  // - temp_dir: Directory for temporary files
+  // - dashboard_host: Host to bind the Ray dashboard to
+  // - metrics_export_port: Port to expose Ray metrics
   map<string, string> ray_conf = 5;
 
-  // Termination spec
+  // Termination spec defines the conditions and behavior for cluster termination.
+  // This includes settings like maximum runtime duration, idle timeout, and
+  // cleanup policies when the cluster is shut down. The termination spec helps
+  // manage cluster lifecycle and resource cleanup.
   TerminationSpec termination = 6;
 
-  // Scheduling spec
+  // Scheduling spec defines the scheduling preferences and constraints for the Ray cluster.
+  // This includes settings like node selectors, tolerations, and priority class name
+  // that control how the cluster pods are scheduled onto Kubernetes nodes. The scheduling
+  // spec helps ensure optimal placement and resource utilization of the Ray cluster.
   SchedulingSpec scheduling = 7;
 }
 
-// Describes the state of a ray cluster.
+// Describes the possible states of a Ray cluster during its lifecycle.
+// The state transitions follow a typical progression from PROVISIONING to READY,
+// with potential transitions to FAILED or TERMINATING states based on cluster
+// health and administrative actions. This state information is crucial for
+// monitoring cluster health and managing the cluster lifecycle.
 enum RayClusterState {
-  // The cluster state is invalid.
+  // The cluster state is invalid. This is the default state and indicates that
+  // the cluster's state has not been properly initialized or is in an undefined state.
   RAY_CLUSTER_STATE_INVALID = 0;
 
-  // The cluster is being provisioned.
+  // The cluster is being provisioned. This state indicates that the cluster's resources
+  // (head node, worker nodes, networking, etc.) are in the process of being created and
+  // configured. During this phase, the Ray runtime components are being installed and
+  // initialized across the nodes.
   RAY_CLUSTER_STATE_PROVISIONING = 1;
 
-  // The cluster is ready for use.
+  // The cluster is ready for use. This state indicates that all nodes (head and workers)
+  // have been successfully provisioned and initialized. The Ray runtime is fully operational
+  // across the cluster, the head node's services (like GCS) are running, and worker nodes
+  // are connected and ready to accept tasks. The cluster can now process Ray jobs and
+  // handle client connections.
   RAY_CLUSTER_STATE_READY = 2;
 
-  // The cluster is being terminated.
+  // The cluster is being terminated. This state indicates that a termination request has been
+  // initiated and the cluster's resources are in the process of being cleaned up and removed.
+  // During this phase, no new jobs are accepted, existing jobs may be allowed to complete or
+  // be forcefully stopped (depending on termination policy), and nodes are being drained and
+  // shut down in an orderly fashion.
   RAY_CLUSTER_STATE_TERMINATING = 3;
 
-  // The cluster has been terminated.
+  // The cluster has been terminated. This state indicates that all cluster resources
+  // have been successfully cleaned up and removed. The cluster is no longer operational
+  // and cannot accept new jobs or connections. This is a terminal state that occurs
+  // after a successful termination process, where all nodes have been properly shut down
+  // and all associated Kubernetes resources have been deleted.
   RAY_CLUSTER_STATE_TERMINATED = 4;
 
-  // The cluster creation or operation failed.
+  // The cluster creation or operation failed. This state indicates that an error occurred
+  // during cluster provisioning, runtime operation, or maintenance. The failure could be
+  // due to various reasons such as resource constraints, networking issues, configuration
+  // errors, or runtime failures. When in this state, the cluster is non-operational and
+  // requires administrative intervention to diagnose and resolve the underlying issues
+  // before it can be recovered or terminated.
   RAY_CLUSTER_STATE_FAILED = 5;
 
-  // The cluster state is unknown.
+  // The cluster state is unknown. This state indicates that the system cannot determine
+  // the current state of the cluster, possibly due to communication issues, monitoring
+  // failures, or other system-level problems that prevent accurate state reporting.
+  // When in this state, the actual operational status of the cluster is uncertain and
+  // requires investigation to determine its true condition.
   RAY_CLUSTER_STATE_UNKNOWN = 6;
 }
 
-// Specification for RayHeadNodeInfo
+// RayHeadNodeInfo provides information about a Ray cluster's head node
 //
-// The `RayHeadNodeInfo` message provides critical details about the head node
-// of a Ray cluster. The head node acts as the central coordinator for the
-// cluster, managing worker nodes and facilitating communication among them.
+// The head node is the central coordinator for a Ray cluster, responsible for:
+// - Managing worker node registration and lifecycle
+// - Hosting the Ray control plane components (GCS, scheduler)
+// - Providing endpoints for client connections
+// - Coordinating distributed task execution
 //
-// This information is essential for understanding the cluster topology,
-// diagnosing connectivity issues, and interacting with the cluster's core
-// components. Each field encapsulates a specific aspect of the head node's
-// configuration and its operational parameters.
+// This message captures key details needed to identify, connect to, and monitor
+// the head node, including its network location and exposed service ports.
 message RayHeadNodeInfo  {
   // Name of the pod.
   // This is the unique identifier for the head node's pod within the Kubernetes cluster.
@@ -227,7 +334,18 @@ message RayClusterStatus {
 }
 
 
-// RayCluster refers to a Ray cluster.
+// RayCluster represents a Ray distributed computing cluster and its specifications
+//
+// A RayCluster encapsulates:
+// - Cluster configuration and resource requirements (spec)
+// - Runtime status and operational state (status)
+// - Metadata for tracking and management
+// - Head node and worker node definitions
+//
+// The cluster provides the distributed computing infrastructure for running Ray jobs.
+// It consists of a head node that manages the control plane and worker nodes that
+// execute distributed tasks. The cluster's lifecycle is managed through its spec
+// and monitored via its status.
 message RayCluster {
   option (michelangelo.api.resource) = {};
 
