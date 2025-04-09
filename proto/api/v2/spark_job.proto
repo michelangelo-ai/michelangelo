@@ -103,10 +103,6 @@ message SparkJobStatus {
   // Conditions that describe states
   repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
 
-  // TODO Mark this as reserved after removing the usage
-  // Cluster Assignment
-  ClusterAssignment cluster_assignment = 2;
-
   // Assignment info
   AssignmentInfo assignment = 3;
 
