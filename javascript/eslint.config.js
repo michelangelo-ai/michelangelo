@@ -27,15 +27,17 @@ const sharedRules = {
     'error',
     {
       groups: [
-        ['^react', '^@?\\w'],
-        ['^\\.\\.(?!/?$)', '^\\.\\./?$', '^\\./(?=.*/)(?!/?$)', '^\\.(?!/?$)', '^\\./?$'],
+        ['^react', '^@(?!ma/|/)', '^[^@./]'],
+        ['^@ma/', '^@/'],
         ['^@?\\w.*\\u0000$', '^[^.].*\\u0000$', '^\\..*\\u0000$'],
+        ['^.*\\.(css|scss|sass|less)$'],
       ],
     },
   ],
   'baseui/deprecated-theme-api': 'warn',
   'baseui/deprecated-component-api': 'warn',
   'baseui/no-deep-imports': 'warn',
+  '@typescript-eslint/consistent-type-definitions': ['error', 'type'],
 };
 
 export default [
