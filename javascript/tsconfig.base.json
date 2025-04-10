@@ -14,8 +14,8 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
-      "@michelangelo/gen-api/*": ["gen/grpc/michelangelo/api/*"],
-      "@michelangelo/gen-k8s/*": ["gen/grpc/k8s.io/*"]
+      "@ma/gen-api/*": ["gen/grpc/michelangelo/api/*"],
+      "@ma/gen-k8s/*": ["gen/grpc/k8s.io/*"]
     }
   }
 }
