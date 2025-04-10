@@ -54,6 +54,11 @@ type MetadataStorage interface {
 	// Or directly called by API server or controller, if the object is only stored in the MetadataStorage.
 	DeleteCollection(ctx context.Context, namespace string, deleteOptions *v1.DeleteOptions, listOptions *v1.ListOptions) error
 
+	// QueryByTemplateID queries object given a template
+	// Filters need to be parsed via listOptionsExt, if required by the given template.
+	QueryByTemplateID(ctx context.Context, typeMeta *v1.TypeMeta, templateID string, listOptionsExt *apipb.ListOptionsExt,
+		listResponse *ListResponse) error
+
 	// Backfill performs backfill operation specified by createFn using the options given by opts.
 	// It backfills for a Kind (specified by "kind" in BackfillOptions) by the order of creation timestamp.
 	// The backfill starts from the object after "StartTime", and it backfills at least "BatchSize" objects.

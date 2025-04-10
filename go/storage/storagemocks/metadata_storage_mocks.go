@@ -136,6 +136,20 @@ func (mr *MockMetadataStorageMockRecorder) List(ctx, typeMeta, namespace, listOp
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "List", reflect.TypeOf((*MockMetadataStorage)(nil).List), ctx, typeMeta, namespace, listOptions, listOptionsExt, listResponse)
 }
 
+// QueryByTemplateID mocks base method.
+func (m *MockMetadataStorage) QueryByTemplateID(ctx context.Context, typeMeta *v1.TypeMeta, templateID string, listOptionsExt *api.ListOptionsExt, listResponse *storage.ListResponse) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "QueryByTemplateID", ctx, typeMeta, templateID, listOptionsExt, listResponse)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// QueryByTemplateID indicates an expected call of QueryByTemplateID.
+func (mr *MockMetadataStorageMockRecorder) QueryByTemplateID(ctx, typeMeta, templateID, listOptionsExt, listResponse interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryByTemplateID", reflect.TypeOf((*MockMetadataStorage)(nil).QueryByTemplateID), ctx, typeMeta, templateID, listOptionsExt, listResponse)
+}
+
 // Upsert mocks base method.
 func (m *MockMetadataStorage) Upsert(ctx context.Context, object runtime.Object, direct bool, indexedFields []storage.IndexedField) error {
 	m.ctrl.T.Helper()
