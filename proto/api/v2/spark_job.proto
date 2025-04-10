@@ -275,13 +275,6 @@ message Dependencies {
 // This status information enables job monitoring, troubleshooting, and lifecycle management.
 // The status is continuously updated as the job progresses through different states.
 message SparkJobStatus {
-  // Deprecated - use status_conditions instead.
-  // This field contains conditions that describe the states of the Spark job.
-  // It has been replaced by the status_conditions field which provides a more
-  // structured way to track job state transitions and conditions.
-  // The conditions field will be removed in a future version.
-  repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1;
-
   // Assignment information.
   // Provides additional metadata about how the Spark job is allocated and scheduled.
   // This field helps track:
