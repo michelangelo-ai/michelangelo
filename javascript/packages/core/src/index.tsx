@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
 import { createClient, type Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
-import { ProjectService } from '@michelangelo/gen-api/v2/project_svc_pb';
 import { AppNavBar } from 'baseui/app-nav-bar';
 
-import { ThemeProvider } from './themes/provider';
+import { ProjectService } from '@ma/gen-api/v2/project_svc_pb';
+import { MainViewContainer } from '@/components/views/main-view-container';
+import { ThemeProvider } from '@/themes/provider';
 
-import type { Project } from '@michelangelo/gen-api/v2/project_pb';
+import type { Project } from '@ma/gen-api/v2/project_pb';
 
-import './styles/main.css';
+import '@/styles/main.css';
 
 export function CoreApp() {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -44,7 +45,7 @@ export function CoreApp() {
   return (
     <ThemeProvider>
       <AppNavBar title="Michelangelo Studio" />
-      Hi! {projects[0]?.metadata?.name}
+      <MainViewContainer>Hi! {projects[0]?.metadata?.name}</MainViewContainer>
     </ThemeProvider>
   );
 }

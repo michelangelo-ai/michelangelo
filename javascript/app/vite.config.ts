@@ -8,9 +8,14 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
+      // Multiple aliases are required for the core package, such that
+      // the core package can import from itself using "@" and app can
+      // import from the core package using "@michelangelo/core"
+      '@': path.resolve(__dirname, '../packages/core/src'),
       '@michelangelo/core': path.resolve(__dirname, '../packages/core/src'),
-      '@michelangelo/gen-k8s': path.resolve(__dirname, '../gen/grpc/k8s.io/'),
-      '@michelangelo/gen-api': path.resolve(__dirname, '../gen/grpc/michelangelo/api/'),
+
+      '@ma/gen-k8s': path.resolve(__dirname, '../gen/grpc/k8s.io/'),
+      '@ma/gen-api': path.resolve(__dirname, '../gen/grpc/michelangelo/api/'),
     },
   },
 });
