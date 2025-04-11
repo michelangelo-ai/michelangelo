@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
@@ -301,6 +302,7 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 
 						genCRD(&crdFunctionsBuf, fileName, typeName, &protoMsg.Comments, options)
 						if options.Bool("has_resource") {
+							genCRDIndexedFields(typeName, protoMsg, &crdFunctionsBuf, options, gInfo)
 							genImmutability(typeName, &crdFunctionsBuf, options)
 							genCRDObject(typeName, gInfo, &crdFunctionsBuf)
 							genCRDBlobFields(typeName, protoMsg, &crdFunctionsBuf, extTypes)
@@ -359,6 +361,99 @@ func genImmutability(crdName string, crdBuf *bytes.Buffer, crdOptions *pboptions
 	}{crdName, crdIsImmutable}
 	templates.CRDImmutability.Execute(crdBuf, typeInfo)
 	crdBuf.Write([]byte("\n"))
+}
+
+func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *bytes.Buffer, crdOptions *pboptions.Options,
+	groupInfo *yaml.GroupInfo) {
+	indexedFields := util.ParseIndexedFields(crdRootMsg, crdOptions)
+
+	typeInfo := struct {
+		Name string
+	}{crdName}
+	templates.CRDGetIndexedFieldsHeader.Execute(crdBuf, typeInfo)
+
+	declareVar := false
+	for _, field := range indexedFields {
+		// generate clause that check the message path
+		checkMessagePathclause := "\tif m != nil "
+		fieldGoPath := "m"
+		for idx := 0; idx < len(field.GoPaths); idx++ {
+			path := field.GoPaths[idx]
+			if path == "Metadata" || path == "TypeMeta" {
+				continue
+			}
+			fieldGoPath += "." + path
+			if idx == len(field.GoPaths)-1 && field.HasFlag(util.IndexFlagPrimitive) {
+				// Primitive fields are not generated as pointers. Thus, no need to check if it is null.
+				break
+			}
+			if idx == 0 {
+				// Spec and Status are not generated as pointers. Thus, no need to check if it is null.
+				continue
+			}
+			checkMessagePathclause += "&& " + fieldGoPath + " != nil "
+		}
+
+		if field.HasFlag(util.IndexFlagPrimitive) {
+			if declareVar == false {
+				crdBuf.Write([]byte("\tvar indexedField storage.IndexedField\n\n"))
+				declareVar = true
+			}
+			statement := "\tindexedField.Key = \"" + field.Key + "\"\n"
+			crdBuf.Write([]byte(statement))
+			crdBuf.Write([]byte(checkMessagePathclause))
+			crdBuf.Write([]byte("{\n"))
+			statement = "\t\tindexedField.Value = " + fieldGoPath
+			if field.HasFlag(util.IndexFlagEnum) {
+				statement += ".String()"
+			}
+			statement += "\n"
+			crdBuf.Write([]byte(statement))
+			crdBuf.Write([]byte("\t} else {\n"))
+			crdBuf.Write([]byte("\t\tindexedField.Value = nil\n"))
+			crdBuf.Write([]byte("\t}\n"))
+			crdBuf.Write([]byte("\tindexedFields = append(indexedFields, indexedField)\n\n"))
+		} else {
+			crdBuf.Write([]byte("\t{\n"))
+			arrayDeclaration := "\t\tindexedSubFields := make([]storage.IndexedField, " + strconv.Itoa(len(field.SubFields)) + ")\n"
+			crdBuf.Write([]byte(arrayDeclaration))
+			for i, subField := range field.SubFields {
+				statement := "\t\tindexedSubFields[" + strconv.Itoa(i) + "].Key = \"" + subField.Key + "\"\n"
+				crdBuf.Write([]byte(statement))
+			}
+			checkMessagePathclause = "\t" + checkMessagePathclause
+			crdBuf.Write([]byte(checkMessagePathclause))
+			crdBuf.Write([]byte("{\n"))
+			for i, subField := range field.SubFields {
+				statement := "\t\t\tindexedSubFields[" + strconv.Itoa(i) + "].Value = " + fieldGoPath + "." + subField.GoPath + "\n"
+				crdBuf.Write([]byte(statement))
+			}
+			crdBuf.Write([]byte("\t\t}\n"))
+			crdBuf.Write([]byte("\t\tindexedFields = append(indexedFields, indexedSubFields...)\n"))
+			crdBuf.Write([]byte("\t}\n\n"))
+		}
+	}
+	crdBuf.Write([]byte("\treturn indexedFields\n}\n\n"))
+
+	// Generate IndexesPathToKeyMap for this gvk
+	typeInfo2 := struct {
+		Group   string
+		Version string
+		Kind    string
+	}{groupInfo.Name, groupInfo.Version, crdName}
+	templates.CRDIndexesPathToKeyMapHeader.Execute(crdBuf, typeInfo2)
+
+	for _, field := range indexedFields {
+		if field.HasFlag(util.IndexFlagPrimitive) {
+			crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + field.ProtoPath + "\"] = \"" + field.Key + "\"\n"))
+		} else {
+			for _, subField := range field.SubFields {
+				crdBuf.Write([]byte("\tIndexesPathToKeyMap[gvk][\"" + subField.ProtoPath + "\"] = \"" + subField.Key + "\"\n"))
+			}
+		}
+	}
+
+	crdBuf.Write([]byte("}\n\n"))
 }
 
 func findBlobFields(curMsg *protogen.Message, pathPrefix string, blobFields *[]string,

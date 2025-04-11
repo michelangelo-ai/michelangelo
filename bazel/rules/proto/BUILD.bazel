@@ -33,6 +33,7 @@ go_proto_compiler(
     deps = [
         "//go/api:go_default_library",
         "//go/kubeproto/util:go_default_library",
+        "//go/storage:go_default_library",
         "@com_github_gogo_protobuf//gogoproto:go_default_library",
         "@com_github_gogo_protobuf//jsonpb:go_default_library",
         "@com_github_gogo_protobuf//proto:go_default_library",
