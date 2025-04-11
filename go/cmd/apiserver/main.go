@@ -41,7 +41,7 @@ func opts() fx.Option {
 		fx.Provide(getMetadataStorageConfig),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
-		fx.Provide(projectapihook.GetProjectAPIHook),
+		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		v2pb.ProjectSvcModule,
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
