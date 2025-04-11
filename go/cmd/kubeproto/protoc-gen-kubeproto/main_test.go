@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/token"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -398,7 +399,7 @@ func TestJSONPod(t *testing.T) {
 	assert.Nil(t, err)
 
 	var testObjectUnmarshalled testpb.TestObject
-	json.Unmarshal(testObjectJSON, &testObjectUnmarshalled)
+	err = json.Unmarshal(testObjectJSON, &testObjectUnmarshalled)
 	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[0].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test")
 	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Containers[1].EnvFrom[0].ConfigMapRef.LocalObjectReference.Name, "test2")
 	assert.Equal(t, testObjectUnmarshalled.Spec.Pod.Spec.Volumes[1].VolumeSource.ConfigMap.LocalObjectReference.Name, "fluent-bit-config")
@@ -468,4 +469,27 @@ func TestCrdObjectsMap(t *testing.T) {
 	assert.Equal(t, "michelangelo.api", testObj.GetObjectKind().GroupVersionKind().Group)
 	assert.Equal(t, "v2", testObj.GetObjectKind().GroupVersionKind().Version)
 	assert.Equal(t, "TestObject", testObj.GetObjectKind().GroupVersionKind().Kind)
+}
+
+func TestUnmarshalJSON_DisallowUnknownFields(t *testing.T) {
+	// Override environment or stub to disallow unknown fields
+	os.Setenv("ALLOW_UNKNOWN_FIELDS", "false") // or however getAllowUnknownFieldsEnvVar() is implemented
+
+	jsonWithUnknownField := `{
+		"kind": "Object",
+		"metadata": {
+			"name": "object01",
+			"namespace": "default"
+		},
+		"spec": {
+			"description": "test",
+			"unknownField": "should cause failure"
+		}
+	}`
+
+	obj := &testpb.TestObject{}
+	err := json.Unmarshal([]byte(jsonWithUnknownField), obj)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown field")
 }
