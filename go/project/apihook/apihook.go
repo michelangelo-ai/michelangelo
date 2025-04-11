@@ -6,7 +6,6 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -23,24 +22,18 @@ const (
 	_systemNamespacePrefix    = "kube-"
 )
 
-type FxProjectAPIHookResult struct {
-	fx.Out
-	APIHook v2.ProjectAPIHook `group:"apiHooks"`
-}
-
-// GetProjectAPIHook returns the API hook for Project
-func GetProjectAPIHook(logger *zap.Logger, apiHandler api.Handler, k8sRestConfig *rest.Config) (FxProjectAPIHookResult, error) {
+// RegisterProjectAPIHook returns the API hook for Project
+func RegisterProjectAPIHook(logger *zap.Logger, apiHandler api.Handler, k8sRestConfig *rest.Config) error {
 	k8sClient, err := k8sCoreClient.NewForConfig(k8sRestConfig)
 	if err != nil {
-		return FxProjectAPIHookResult{}, err
+		return err
 	}
-	return FxProjectAPIHookResult{
-		APIHook: apiHook{
-			logger:     logger,
-			apiHandler: apiHandler,
-			k8sClient:  k8sClient,
-		},
-	}, nil
+	v2.RegisterProjectAPIHook(apiHook{
+		logger:     logger,
+		apiHandler: apiHandler,
+		k8sClient:  k8sClient,
+	})
+	return nil
 }
 
 type apiHook struct {
