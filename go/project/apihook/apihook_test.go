@@ -164,11 +164,9 @@ func TestCreateProject(t *testing.T) {
 	}
 }
 
-func TestGetProjectAPIHook(t *testing.T) {
+func TestRegisterProjectAPIHook(t *testing.T) {
 	logger := zap.NewNop()
 	k8sRestConfig := &rest.Config{}
-	result, err := GetProjectAPIHook(logger, nil, k8sRestConfig)
+	err := RegisterProjectAPIHook(logger, nil, k8sRestConfig)
 	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.NotNil(t, result.APIHook)
 }

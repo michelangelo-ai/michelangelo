@@ -5,7 +5,12 @@ type Fx{{.KindName}}ServiceHandlerParams struct {
 	MetricsScope tally.Scope
 	Auth         authapi.Auth
 	AuditLog     logging.AuditLog
-	ApiHooks     []{{.KindName}}APIHook `group:"apiHooks"`
+}
+
+var {{.LowerKindName}}ApiHooks []{{.KindName}}APIHook
+
+func Register{{.KindName}}APIHook(hook {{.KindName}}APIHook) {
+    {{.LowerKindName}}ApiHooks = append({{.LowerKindName}}ApiHooks, hook)
 }
 
 func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
@@ -14,7 +19,6 @@ func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) 
 	    MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),
 	    auth:            params.Auth,
 	    auditLogEmitter: params.AuditLog,
-	    apiHooks:        params.ApiHooks,
 	}
 }
 
@@ -23,7 +27,6 @@ type {{.LowerKindName}}ServiceHandler struct {
 	MetricsScope    tally.Scope
 	auth            authapi.Auth
 	auditLogEmitter logging.AuditLog
-	apiHooks        []{{.KindName}}APIHook
 }
 
 // {{.KindName}}APIHook allows API developers to hook the standard CRUD methods,
@@ -171,7 +174,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 		return nil, err
 	}
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         if err = hook.BeforeCreate(ctx, request); err != nil {
             logger.Error(err, "Error in BeforeCreate API hook", "error", err, "api_msg_tag", "Create{{.KindName}}")
             metric.Counter("fail").Inc(1)
@@ -235,7 +238,7 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 	result.APIVersion = GroupVersion.String()
 	result.Kind = "{{.KindName}}"
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         if err = hook.OnGetSuccess(ctx, result); err != nil {
             logger.Error(err, "Error in OnGetSuccess API hook", "error", err, "api_msg_tag", "Get{{.KindName}}")
             metric.Counter("fail").Inc(1)
@@ -302,7 +305,7 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
     	return nil, err
     }
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         if err = hook.BeforeUpdate(ctx, request); err != nil {
             logger.Error(err, "Error in BeforeUpdate API hook", "error", err, "api_msg_tag", "Update{{.KindName}}")
             metric.Counter("fail").Inc(1)
@@ -372,7 +375,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 	deleteObj := &{{.KindName}}{
 		ObjectMeta: metav1.ObjectMeta{Namespace: request.Namespace, Name: request.Name}}
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         if err = hook.BeforeDelete(ctx, request); err != nil {
             logger.Error(err, "Error in BeforeDelete API hook", "error", err, "api_msg_tag", "Delete{{.KindName}}")
             metric.Counter("fail").Inc(1)
@@ -388,7 +391,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 		return nil, err
 	}
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         hook.OnDeleteSuccess(ctx, request)
     }
 
@@ -447,7 +450,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 		listOptions = request.ListOptions
 	}
 
-	for _, hook := range c.apiHooks {
+	for _, hook := range {{.LowerKindName}}ApiHooks {
 		if err = hook.BeforeDeleteCollection(ctx, request); err != nil {
 		 	logger.Error(err, "Error in BeforeDeleteCollection", "error", err, "api_msg_tag", "Delete{{.KindName}}Collection")
 			metric.Counter("fail").Inc(1)
@@ -463,7 +466,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 		return nil, err
 	}
 
-    for _, hook := range c.apiHooks {
+    for _, hook := range {{.LowerKindName}}ApiHooks {
         hook.OnDeleteCollectionSuccess(ctx, request)
     }
 
