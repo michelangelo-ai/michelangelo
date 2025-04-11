@@ -375,7 +375,7 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 	declareVar := false
 	for _, field := range indexedFields {
 		// generate clause that check the message path
-		checkMessagePathclause := "\tif m != nil "
+		checkMessagePathClause := "\tif m != nil "
 		fieldGoPath := "m"
 		for idx := 0; idx < len(field.GoPaths); idx++ {
 			path := field.GoPaths[idx]
@@ -391,17 +391,17 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 				// Spec and Status are not generated as pointers. Thus, no need to check if it is null.
 				continue
 			}
-			checkMessagePathclause += "&& " + fieldGoPath + " != nil "
+			checkMessagePathClause += "&& " + fieldGoPath + " != nil "
 		}
 
 		if field.HasFlag(util.IndexFlagPrimitive) {
-			if declareVar == false {
+			if !declareVar {
 				crdBuf.Write([]byte("\tvar indexedField storage.IndexedField\n\n"))
 				declareVar = true
 			}
 			statement := "\tindexedField.Key = \"" + field.Key + "\"\n"
 			crdBuf.Write([]byte(statement))
-			crdBuf.Write([]byte(checkMessagePathclause))
+			crdBuf.Write([]byte(checkMessagePathClause))
 			crdBuf.Write([]byte("{\n"))
 			statement = "\t\tindexedField.Value = " + fieldGoPath
 			if field.HasFlag(util.IndexFlagEnum) {
@@ -421,8 +421,8 @@ func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *b
 				statement := "\t\tindexedSubFields[" + strconv.Itoa(i) + "].Key = \"" + subField.Key + "\"\n"
 				crdBuf.Write([]byte(statement))
 			}
-			checkMessagePathclause = "\t" + checkMessagePathclause
-			crdBuf.Write([]byte(checkMessagePathclause))
+			checkMessagePathClause = "\t" + checkMessagePathClause
+			crdBuf.Write([]byte(checkMessagePathClause))
 			crdBuf.Write([]byte("{\n"))
 			for i, subField := range field.SubFields {
 				statement := "\t\t\tindexedSubFields[" + strconv.Itoa(i) + "].Value = " + fieldGoPath + "." + subField.GoPath + "\n"
