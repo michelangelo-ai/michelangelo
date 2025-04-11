@@ -1,4 +1,8 @@
+<<<<<<<< HEAD:go/worker/workflowfx/config.go
 package workflowfx
+========
+package enginefx
+>>>>>>>> 4b6f018 (Use agnostic worker):go/worker/enginefx/config.go
 
 const configKey = "workflow-engine"
 
