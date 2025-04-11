@@ -2,7 +2,11 @@ import unittest
 import tempfile
 import torch
 
-from michelangelo.sdk.core.models.tte.tte_model import AbstractTwoTowerModel, create_tte_model, SharedInBatchTwoTower
+from michelangelo.sdk.core.models.tte.tte_model import (
+    AbstractTwoTowerModel,
+    create_tte_model,
+    SharedInBatchTwoTower,
+)
 
 
 import os
@@ -66,7 +70,11 @@ class TestSharedInBatchTwoTower(unittest.TestCase):
             item_selection_prob_column="item_prob",
             metrics_k_all=[1],
         )
-        batch = {"query": ["hello me", "yes I am"], "item": ["hello me", "yes I am"], "item_prob": torch.tensor([0.1, 0.1])}
+        batch = {
+            "query": ["hello me", "yes I am"],
+            "item": ["hello me", "yes I am"],
+            "item_prob": torch.tensor([0.1, 0.1]),
+        }
         loss, scores, labels = tte.get_loss(batch)
         assert scores.shape == (2, 2)
         assert labels.shape == (2,)

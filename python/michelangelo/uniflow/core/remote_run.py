@@ -17,9 +17,13 @@ from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 
-DEFAULT_EXECUTION_TIMEOUT_SECONDS = 60 * 60 * 24 * 365 * 10  # 3650 days, practically no timeout
+DEFAULT_EXECUTION_TIMEOUT_SECONDS = (
+    60 * 60 * 24 * 365 * 10
+)  # 3650 days, practically no timeout
 
-_RUN_ID_SEARCH_RE = re.compile(r"run[ _-]?id[:= ]{1,2}([0-9a-f-]+)", flags=re.IGNORECASE)  # Run ID is a UUID
+_RUN_ID_SEARCH_RE = re.compile(
+    r"run[ _-]?id[:= ]{1,2}([0-9a-f-]+)", flags=re.IGNORECASE
+)  # Run ID is a UUID
 
 
 @dataclass
@@ -94,7 +98,8 @@ class RemoteRun:
             os.environ.get("UFC_CADENCE_TASK_LIST", "default"),
             "--workflow_type",
             os.environ.get(
-                "UFC_CADENCE_WORKFLOW_TYPE", "github.com/cadence-workflow/starlark-worker/cadstar.(*Service).Run"
+                "UFC_CADENCE_WORKFLOW_TYPE",
+                "github.com/cadence-workflow/starlark-worker/cadstar.(*Service).Run",
             ),
             "--execution_timeout",
             str(self.execution_timeout_seconds),
@@ -148,4 +153,6 @@ class RemoteRun:
             print("Dashboard:", dashboard_url)
             return
 
-        print("Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary")
+        print(
+            "Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary"
+        )

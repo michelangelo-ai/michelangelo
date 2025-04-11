@@ -7,11 +7,14 @@ from michelangelo.uniflow.core.build import build
 class Test(unittest.TestCase):
     def test_demo_app(self):
         from tests.uniflow.core.demo_app.demo_app import main
+
         package = build(main)
 
         # Find and assert the main file
         main_file = [
-            p for p in package.files.keys() if p.endswith("/tests/uniflow/core/demo_app/demo_app.py")
+            p
+            for p in package.files.keys()
+            if p.endswith("/tests/uniflow/core/demo_app/demo_app.py")
         ]
         self.assertEqual(1, len(main_file))
         self.assertEqual(main_file[0], package.main_file)

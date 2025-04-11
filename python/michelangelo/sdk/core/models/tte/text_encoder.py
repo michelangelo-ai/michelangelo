@@ -11,7 +11,10 @@ from torch.nn import functional as F
 
 from transformers import AutoTokenizer, AutoModel
 
-from michelangelo.sdk.core.lib.utils import REDUCTION_SCRIP_MODEL_FILE, RESHAPE_LAYER_FILE
+from michelangelo.sdk.core.lib.utils import (
+    REDUCTION_SCRIP_MODEL_FILE,
+    RESHAPE_LAYER_FILE,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -53,24 +56,36 @@ class TextEncoder(nn.Module):
         super().__init__()
         self.model_path = pretrained_text_model_path
         self.pooling_strategy = pooling_strategy
-        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_text_model_path, trust_remote_code=True)
-        self.base_encoder = AutoModel.from_pretrained(pretrained_text_model_path, trust_remote_code=True)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            pretrained_text_model_path, trust_remote_code=True
+        )
+        self.base_encoder = AutoModel.from_pretrained(
+            pretrained_text_model_path, trust_remote_code=True
+        )
         self.reshape_layer_input_dim = reshape_layer_input_dim
         self.reshape_layer_output_dim = reshape_layer_output_dim
         self.pretrained_reduction_script_file = pretrained_reduction_script_file
         self.reduction_layer_args = reduction_layer_args
 
         if self.reshape_layer_input_dim > 0 and self.reshape_layer_output_dim > 0:
-            self.reshape_layer = nn.Linear(self.reshape_layer_input_dim, self.reshape_layer_output_dim)
-            reshape_layer_model_path = os.path.join(pretrained_text_model_path, RESHAPE_LAYER_FILE)
+            self.reshape_layer = nn.Linear(
+                self.reshape_layer_input_dim, self.reshape_layer_output_dim
+            )
+            reshape_layer_model_path = os.path.join(
+                pretrained_text_model_path, RESHAPE_LAYER_FILE
+            )
             if os.path.exists(reshape_layer_model_path):
-                logger.info(f"Load reshaping layer model from {reshape_layer_model_path}...")
+                logger.info(
+                    f"Load reshaping layer model from {reshape_layer_model_path}..."
+                )
                 self.reshape_layer.load_state_dict(torch.load(reshape_layer_model_path))
         else:
             self.reshape_layer = None
 
         if self.pretrained_reduction_script_file is not None:
-            reduction_script_model_path = os.path.join(pretrained_text_model_path, pretrained_reduction_script_file)
+            reduction_script_model_path = os.path.join(
+                pretrained_text_model_path, pretrained_reduction_script_file
+            )
             self.reduction_layer = torch.jit.load(reduction_script_model_path)
         elif self.reduction_layer_args is not None:
             self.reduction_layer = SimpleReductionLayer(**self.reduction_layer_args)
@@ -84,18 +99,26 @@ class TextEncoder(nn.Module):
         elif self.pooling_strategy == "last_token":
             self.pool_func = self.last_token_pool
         else:
-            raise NotImplementedError(f"Not supported pooling strategy: {self.pooling_strategy}")
+            raise NotImplementedError(
+                f"Not supported pooling strategy: {self.pooling_strategy}"
+            )
 
     def freeze_llm_layers(self, n_finetune_layers):
         assert n_finetune_layers is not None
 
     @staticmethod
     def mean_pool(last_hidden_states, attention_mask):
-        input_mask_expanded = attention_mask.unsqueeze(-1).expand(last_hidden_states.size()).float()
-        return torch.sum(last_hidden_states * input_mask_expanded, 1) / torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+        input_mask_expanded = (
+            attention_mask.unsqueeze(-1).expand(last_hidden_states.size()).float()
+        )
+        return torch.sum(last_hidden_states * input_mask_expanded, 1) / torch.clamp(
+            input_mask_expanded.sum(1), min=1e-9
+        )
 
     @staticmethod
-    def last_token_pool(last_hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def last_token_pool(
+        last_hidden_states: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
         """
         Most LLM GTE model use the last token embedding as the output embedding. In the following function,
         1. It checks if the last column of the attention_mask is all ones (i.e. left_padding = True). If so, it simply
@@ -111,21 +134,36 @@ class TextEncoder(nn.Module):
         else:
             sequence_lengths = attention_mask.sum(dim=1) - 1
             batch_size = last_hidden_states.shape[0]
-            return last_hidden_states[torch.arange(batch_size, device=last_hidden_states.device), sequence_lengths]
+            return last_hidden_states[
+                torch.arange(batch_size, device=last_hidden_states.device),
+                sequence_lengths,
+            ]
 
     @staticmethod
-    def average_pool(last_hidden_states: torch.Tensor, attention_mask: torch.Tensor) -> torch.Tensor:
+    def average_pool(
+        last_hidden_states: torch.Tensor, attention_mask: torch.Tensor
+    ) -> torch.Tensor:
         """
         Average pool on last hidden states in all position
         """
-        last_hidden = last_hidden_states.masked_fill(~attention_mask[..., None].bool(), 0.0)
+        last_hidden = last_hidden_states.masked_fill(
+            ~attention_mask[..., None].bool(), 0.0
+        )
         return last_hidden.sum(dim=1) / attention_mask.sum(dim=1)[..., None]
 
     def forward(self, text, max_length: int = 1000):
-        tokenized_text = self.tokenizer(text, padding=True, truncation=True, return_tensors="pt", max_length=max_length, return_token_type_ids=False).to(
-            self.base_encoder.device
+        tokenized_text = self.tokenizer(
+            text,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+            max_length=max_length,
+            return_token_type_ids=False,
+        ).to(self.base_encoder.device)
+        embeddings = self.pool_func(
+            self.base_encoder(**tokenized_text).last_hidden_state,
+            tokenized_text["attention_mask"],
         )
-        embeddings = self.pool_func(self.base_encoder(**tokenized_text).last_hidden_state, tokenized_text["attention_mask"])
         if self.reshape_layer:
             embeddings = torch.nn.functional.silu(embeddings, inplace=False)
             with torch.autocast(device_type="cuda", dtype=embeddings.dtype):
@@ -170,10 +208,16 @@ class TextEncoder(nn.Module):
                     shutil.move(source_path, destination_path)
                     print(f"Moved: {file_name}")
         if self.reshape_layer:
-            torch.save(self.reshape_layer.state_dict(), os.path.join(model_save_local_dir, RESHAPE_LAYER_FILE))
+            torch.save(
+                self.reshape_layer.state_dict(),
+                os.path.join(model_save_local_dir, RESHAPE_LAYER_FILE),
+            )
         if self.reduction_layer:
             script_model = torch.jit.script(self.reduction_layer)
-            torch.jit.save(script_model, os.path.join(model_save_local_dir, REDUCTION_SCRIP_MODEL_FILE))
+            torch.jit.save(
+                script_model,
+                os.path.join(model_save_local_dir, REDUCTION_SCRIP_MODEL_FILE),
+            )
 
 
 class NomicEncoder(TextEncoder):
@@ -194,7 +238,9 @@ class NomicEncoder(TextEncoder):
 
         elif n_finetune_layers > 0:  # set top_n layers to finetune
             if n_finetune_layers > len(self.base_encoder.encoder.layers):
-                raise ValueError("top_n value is greater than the number of layers in the model.")
+                raise ValueError(
+                    "top_n value is greater than the number of layers in the model."
+                )
             # unfreeze transformer layers
             for layer in self.base_encoder.encoder.layers[-n_finetune_layers:]:
                 for param in layer.parameters():
@@ -221,7 +267,9 @@ class Me5Encoder(TextEncoder):
 
         elif n_finetune_layers > 0:  # set top_n layers to finetune
             if n_finetune_layers > len(self.base_encoder.encoder.layer):
-                raise ValueError("top_n value is greater than the number of layers in the model.")
+                raise ValueError(
+                    "top_n value is greater than the number of layers in the model."
+                )
             # unfreeze transformer layers
             for layer in self.base_encoder.encoder.layer[-n_finetune_layers:]:
                 for param in layer.parameters():
@@ -255,7 +303,9 @@ class QWenEncoder(TextEncoder):
 
         elif n_finetune_layers > 0:  # set top_n layers to finetune
             if n_finetune_layers > len(self.base_encoder.layers):
-                raise ValueError("top_n value is greater than the number of layers in the model.")
+                raise ValueError(
+                    "top_n value is greater than the number of layers in the model."
+                )
             # unfreeze transformer layers
             for layer in self.base_encoder.layers[-n_finetune_layers:]:
                 for param in layer.parameters():

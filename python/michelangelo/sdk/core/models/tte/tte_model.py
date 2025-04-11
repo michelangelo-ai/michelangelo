@@ -21,7 +21,9 @@ class AbstractTwoTowerModel(nn.Module, ABC):
     It must contain functions: `encode_query`, `encode_item`, `forward`, `get_loss` and `save_model`
     """
 
-    def __init__(self, query_text_column, item_text_column, query_text_max_len, item_text_max_len):
+    def __init__(
+        self, query_text_column, item_text_column, query_text_max_len, item_text_max_len
+    ):
         super().__init__()
         self.query_text_column = query_text_column
         self.item_text_column = item_text_column
@@ -41,11 +43,19 @@ class AbstractTwoTowerModel(nn.Module, ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_loss(self, batch: dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_loss(
+        self, batch: dict[str, torch.Tensor]
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         raise NotImplementedError
 
     @abstractmethod
-    def get_log_metrics(self, loss: torch.Tensor, predictions: torch.Tensor, labels: torch.Tensor, training: bool) -> dict:
+    def get_log_metrics(
+        self,
+        loss: torch.Tensor,
+        predictions: torch.Tensor,
+        labels: torch.Tensor,
+        training: bool,
+    ) -> dict:
         raise NotImplementedError
 
     @abstractmethod
@@ -68,7 +78,9 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         metrics_k_all: Optional[list[int]] = None,
         item_selection_prob_column: Optional[str] = None,
     ):
-        super().__init__(query_text_column, item_text_column, query_text_max_len, item_text_max_len)
+        super().__init__(
+            query_text_column, item_text_column, query_text_max_len, item_text_max_len
+        )
         self.softmax_temperature = softmax_temperature
         self.metrics_k_all = metrics_k_all or []
         self.item_selection_prob_column = item_selection_prob_column
@@ -99,7 +111,9 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         scores = self.forward(batch)
         device = scores.device
         batch_size = scores.shape[0]
-        softmax_temperature = torch.tensor(self.softmax_temperature).expand(batch_size).to(device)
+        softmax_temperature = (
+            torch.tensor(self.softmax_temperature).expand(batch_size).to(device)
+        )
         item_prob = self.get_item_prob(batch, batch_size, device)
         labels = self.get_labels(scores)
 
@@ -109,9 +123,13 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         return loss, scores, labels
 
     @staticmethod
-    def apply_softmax_temperature(predictions: torch.Tensor, softmax_temperature: torch.Tensor) -> torch.Tensor:
+    def apply_softmax_temperature(
+        predictions: torch.Tensor, softmax_temperature: torch.Tensor
+    ) -> torch.Tensor:
         neg_batch_size = predictions.size(1)
-        softmax_temperature = softmax_temperature.expand(neg_batch_size, -1).transpose(0, 1)
+        softmax_temperature = softmax_temperature.expand(neg_batch_size, -1).transpose(
+            0, 1
+        )
         return predictions / softmax_temperature
 
     @staticmethod
@@ -129,7 +147,9 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         return 0.5 * torch.ones((batch_size,), dtype=torch.float, device=device)
 
     @staticmethod
-    def compute_hit_rate(predictions: torch.Tensor, labels: torch.Tensor, k: int) -> torch.Tensor:
+    def compute_hit_rate(
+        predictions: torch.Tensor, labels: torch.Tensor, k: int
+    ) -> torch.Tensor:
         _, order = predictions.topk(k, dim=1, sorted=False)
         labels_expanded = labels.expand(k, -1).transpose(0, 1)
         return (1.0 * (order == labels_expanded)).sum(dim=1).mean(dim=0)
@@ -146,7 +166,12 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         # latest paper with sampling bias correction from google
         batch_size = item_prob.size(0)
         log_q_raw = torch.log(-torch.expm1(torch.log1p(-item_prob) * batch_size))
-        return log_q_raw.unsqueeze(1).permute([1, 0]).repeat([batch_size, 1]).fill_diagonal_(0.0)
+        return (
+            log_q_raw.unsqueeze(1)
+            .permute([1, 0])
+            .repeat([batch_size, 1])
+            .fill_diagonal_(0.0)
+        )
 
     def apply_log_q_correction(
         self,
@@ -160,7 +185,13 @@ class InBatchAbstractTwoTower(AbstractTwoTowerModel, ABC):
         # Inspired by logQ sampled softmax correction: https://research.google/pubs/pub48840/
         return predictions - 1.0 * self.log_q_correction_wrapper(item_prob)
 
-    def get_log_metrics(self, loss: torch.Tensor, predictions: torch.Tensor, labels: torch.Tensor, training: bool) -> dict:
+    def get_log_metrics(
+        self,
+        loss: torch.Tensor,
+        predictions: torch.Tensor,
+        labels: torch.Tensor,
+        training: bool,
+    ) -> dict:
         neg_batch_size = predictions.size(1)
         loss_type = "train" if training else "val"
         log = {f"{loss_type}_loss": loss.detach()}
@@ -199,7 +230,9 @@ class SharedInBatchTwoTower(InBatchAbstractTwoTower):
             metrics_k_all=metrics_k_all,
             item_selection_prob_column=item_selection_prob_column,
         )
-        model_class = f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+        model_class = (
+            f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+        )
         text_encoder_class = get_class(model_class)
         logger.info(f"Now create {text_model_class_name} object using {kwargs}")
         self.text_model: TextEncoder = text_encoder_class(**kwargs)
@@ -208,14 +241,18 @@ class SharedInBatchTwoTower(InBatchAbstractTwoTower):
     def encode_query(self, batch: dict[str, torch.Tensor]):
         """Expected to return norm = 1 embeddings for each row in the dataset"""
         sentences = batch[self.query_text_column]
-        embeddings = self.text_model.encode(sentences, max_length=self.query_text_max_len)
+        embeddings = self.text_model.encode(
+            sentences, max_length=self.query_text_max_len
+        )
         embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 
     def encode_item(self, batch: dict[str, torch.Tensor]):
         """Expected to return norm = 1 embeddings for each row in the dataset"""
         sentences = batch[self.item_text_column]
-        embeddings = self.text_model.encode(sentences, max_length=self.item_text_max_len)
+        embeddings = self.text_model.encode(
+            sentences, max_length=self.item_text_max_len
+        )
         embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 
@@ -259,7 +296,9 @@ class InBatchTwoTower(InBatchAbstractTwoTower, ABC):
             metrics_k_all=metrics_k_all,
             item_selection_prob_column=item_selection_prob_column,
         )
-        model_class = f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+        model_class = (
+            f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+        )
         text_encoder_class = get_class(model_class)
         logger.info(f"Now create {text_model_class_name} object using {kwargs}")
         self.query_model: TextEncoder = text_encoder_class(**kwargs)
@@ -270,14 +309,18 @@ class InBatchTwoTower(InBatchAbstractTwoTower, ABC):
     def encode_query(self, batch: dict[str, torch.Tensor]):
         """Expected to return norm = 1 embeddings for each row in the dataset"""
         sentences = batch[self.query_text_column]
-        embeddings = self.query_model.encode(sentences, max_length=self.query_text_max_len)
+        embeddings = self.query_model.encode(
+            sentences, max_length=self.query_text_max_len
+        )
         embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 
     def encode_item(self, batch: dict[str, torch.Tensor]):
         """Expected to return norm = 1 embeddings for each row in the dataset"""
         sentences = batch[self.item_text_column]
-        embeddings = self.item_model.encode(sentences, max_length=self.item_text_max_len)
+        embeddings = self.item_model.encode(
+            sentences, max_length=self.item_text_max_len
+        )
         embeddings = F.normalize(embeddings, p=2, dim=1)
         return embeddings
 

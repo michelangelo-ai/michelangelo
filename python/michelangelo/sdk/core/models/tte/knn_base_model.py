@@ -84,8 +84,15 @@ class KNNModel:
         parquet_files = list(Path(local_item_data_path).glob("*.parquet"))
         if len(parquet_files) == 0:
             # sometimes data does not end with `*.parquet` but `.c000` or `-c000`
-            parquet_files = list(set(list(Path(local_item_data_path).glob("*.c000")) + list(Path(local_item_data_path).glob("*-c000"))))
-        full_df = pd.concat(pd.read_parquet(parquet_file) for parquet_file in parquet_files)
+            parquet_files = list(
+                set(
+                    list(Path(local_item_data_path).glob("*.c000"))
+                    + list(Path(local_item_data_path).glob("*-c000"))
+                )
+            )
+        full_df = pd.concat(
+            pd.read_parquet(parquet_file) for parquet_file in parquet_files
+        )
         return full_df
 
     def _load_category_filters(self, df):
@@ -108,7 +115,9 @@ class KNNModel:
         cat2tensor_map = {}
         for cat_col in self.category_filter_columns:
             cat2id = cat2id_map[cat_col]
-            val_tensor = torch.tensor([cat2id[v] for v in df[cat_col]], dtype=torch.int32).to(device)
+            val_tensor = torch.tensor(
+                [cat2id[v] for v in df[cat_col]], dtype=torch.int32
+            ).to(device)
             cat2tensor_map[cat_col] = val_tensor
         return cat2tensor_map
 
@@ -123,7 +132,13 @@ class KNNModel:
                 return ll[:size] + [value] * (size - len(ll[:size]))
 
             set_filter_tensor = torch.tensor(
-                [fill_list([set_filter_cat2id[vv] for vv in v], max_size, filling_value) for v in df[set_filter_column]], dtype=torch.int32
+                [
+                    fill_list(
+                        [set_filter_cat2id[vv] for vv in v], max_size, filling_value
+                    )
+                    for v in df[set_filter_column]
+                ],
+                dtype=torch.int32,
             ).to(device)
             set_filter2tensor_map[set_filter_column] = set_filter_tensor
         return set_filter2tensor_map
@@ -135,7 +150,9 @@ class KNNModel:
             numeric2tensor_map[num_col] = val_tensor
         return numeric2tensor_map
 
-    def _get_query_category_filter_score(self, batch_query_data, cat2id_map, cat2tensor_map):
+    def _get_query_category_filter_score(
+        self, batch_query_data, cat2id_map, cat2tensor_map
+    ):
         scores = None
         num_filters = 0
         for cat_col in self.category_filter_columns:
@@ -144,7 +161,13 @@ class KNNModel:
                 cat_doc_tensor = cat2tensor_map[cat_col]
                 batch_query_values = batch_query_data[cat_col]
                 cat_score = torch.cat(
-                    [sum(cat_doc_tensor == cat2id.get(qv, -1) for qv in query_values).unsqueeze(0).float() for query_values in batch_query_values], dim=0
+                    [
+                        sum(cat_doc_tensor == cat2id.get(qv, -1) for qv in query_values)
+                        .unsqueeze(0)
+                        .float()
+                        for query_values in batch_query_values
+                    ],
+                    dim=0,
                 )
                 if scores is None:
                     scores = cat_score
@@ -156,7 +179,9 @@ class KNNModel:
         # torch.cuda.empty_cache()
         return scores, num_filters
 
-    def _get_query_set_filter_score(self, batch_query_data, set_filter_cat2id_map, set_filter2tensor_map):
+    def _get_query_set_filter_score(
+        self, batch_query_data, set_filter_cat2id_map, set_filter2tensor_map
+    ):
         scores = None
         num_filters = 0
         for set_filter_column in self.set_filter_columns:
@@ -165,7 +190,15 @@ class KNNModel:
                 set_filter_tensor = set_filter2tensor_map[set_filter_column]
                 batch_query_primary_filter = batch_query_data[set_filter_column]
                 set_filter_score = torch.cat(
-                    [torch.sum(set_filter_tensor == set_filter_cat2id.get(qv, -1), dim=1).unsqueeze(0).float() for qv in batch_query_primary_filter], dim=0
+                    [
+                        torch.sum(
+                            set_filter_tensor == set_filter_cat2id.get(qv, -1), dim=1
+                        )
+                        .unsqueeze(0)
+                        .float()
+                        for qv in batch_query_primary_filter
+                    ],
+                    dim=0,
                 )
                 if scores is None:
                     scores = set_filter_score
@@ -180,13 +213,23 @@ class KNNModel:
     def _get_numeric_filter_score(self, batch_query_data, numeric2tensor_map):
         scores = None
         num_filters = 0
-        numeric_lower_bound_filter = batch_query_data.get(self.numeric_lower_bound_filter_key) or []
-        numeric_upper_bound_filter = batch_query_data.get(self.numeric_upper_bound_filter_key) or []
+        numeric_lower_bound_filter = (
+            batch_query_data.get(self.numeric_lower_bound_filter_key) or []
+        )
+        numeric_upper_bound_filter = (
+            batch_query_data.get(self.numeric_upper_bound_filter_key) or []
+        )
         for filter_col in self.numeric_filter_columns:
             if filter_col in numeric_lower_bound_filter:
                 batch_filter_values = numeric_lower_bound_filter[filter_col]
                 numeric2tensor = numeric2tensor_map[filter_col]
-                batch_filter_scores = torch.cat([(numeric2tensor >= qv).unsqueeze(0).float() for qv in batch_filter_values], dim=0)
+                batch_filter_scores = torch.cat(
+                    [
+                        (numeric2tensor >= qv).unsqueeze(0).float()
+                        for qv in batch_filter_values
+                    ],
+                    dim=0,
+                )
                 if scores is None:
                     scores = batch_filter_scores
                 else:
@@ -198,7 +241,13 @@ class KNNModel:
             if filter_col in numeric_upper_bound_filter:
                 batch_filter_values = numeric_upper_bound_filter[filter_col]
                 numeric2tensor = numeric2tensor_map[filter_col]
-                batch_filter_scores = torch.cat([(numeric2tensor <= qv).unsqueeze(0).float() for qv in batch_filter_values], dim=0)
+                batch_filter_scores = torch.cat(
+                    [
+                        (numeric2tensor <= qv).unsqueeze(0).float()
+                        for qv in batch_filter_values
+                    ],
+                    dim=0,
+                )
                 if scores is None:
                     scores = batch_filter_scores
                 else:
@@ -209,15 +258,21 @@ class KNNModel:
         # torch.cuda.empty_cache()
         return scores, num_filters
 
-    def load_model_by_partitions(self, local_item_data_path: str = "/tmp/item_embeddings", n_partitions=2, device="cuda:0"):
+    def load_model_by_partitions(
+        self,
+        local_item_data_path: str = "/tmp/item_embeddings",
+        n_partitions=2,
+        device="cuda:0",
+    ):
         full_df = self._load_model_data(local_item_data_path)
         self.cat2id_map = self._load_category_filters(full_df)
         self.set_filter_cat2id_map = self._load_set_filters(full_df)
 
         size_per_partition = len(full_df) // n_partitions
-        partitions = [[i * size_per_partition, (i + 1) * size_per_partition] for i in range(n_partitions - 1)] + [
-            [(n_partitions - 1) * size_per_partition, len(full_df)]
-        ]
+        partitions = [
+            [i * size_per_partition, (i + 1) * size_per_partition]
+            for i in range(n_partitions - 1)
+        ] + [[(n_partitions - 1) * size_per_partition, len(full_df)]]
         labels_tensor_list = []
         item_emb_list = []
         self.cat2tensor_map = {}
@@ -239,7 +294,9 @@ class KNNModel:
 
             cat2tensor_map = self._category2tensor(df, self.cat2id_map, device=device)
             numeric2tensor_map = self._numeric2tensor(df, device)
-            set_filter2tensor_map = self._set_filter2tensor(df, self.set_filter_cat2id_map, device=device)
+            set_filter2tensor_map = self._set_filter2tensor(
+                df, self.set_filter_cat2id_map, device=device
+            )
             for k, v in cat2tensor_map.items():
                 if k not in self.cat2tensor_map:
                     self.cat2tensor_map[k] = [v]
@@ -280,9 +337,17 @@ class KNNModel:
             del v
         del full_df
 
-    def load_model(self, local_item_data_path: str = "/tmp/item_embeddings", load_by_partitions: bool = False, device="cuda:0", **kwargs):
+    def load_model(
+        self,
+        local_item_data_path: str = "/tmp/item_embeddings",
+        load_by_partitions: bool = False,
+        device="cuda:0",
+        **kwargs,
+    ):
         if load_by_partitions:
-            return self.load_model_by_partitions(local_item_data_path=local_item_data_path, device=device, **kwargs)
+            return self.load_model_by_partitions(
+                local_item_data_path=local_item_data_path, device=device, **kwargs
+            )
 
         full_df = self._load_model_data(local_item_data_path)
         embedding_array = full_df[self.item_embedding_col].apply(pd.Series).to_numpy()
@@ -292,10 +357,14 @@ class KNNModel:
         self.item_emb = torch.tensor(embedding_array, dtype=torch.float32).to(device)
 
         self.cat2id_map = self._load_category_filters(full_df)
-        self.cat2tensor_map = self._category2tensor(full_df, self.cat2id_map, device=device)
+        self.cat2tensor_map = self._category2tensor(
+            full_df, self.cat2id_map, device=device
+        )
         self.numeric2tensor_map = self._numeric2tensor(full_df, device=device)
         self.set_filter_cat2id_map = self._load_set_filters(full_df)
-        self.set_filter2tensor_map = self._set_filter2tensor(full_df, self.set_filter_cat2id_map, device=device)
+        self.set_filter2tensor_map = self._set_filter2tensor(
+            full_df, self.set_filter_cat2id_map, device=device
+        )
 
         del full_df, embedding_array
 
@@ -322,13 +391,25 @@ class KNNModel:
         :param set_filter2tensor_map_per_gpu:
         :return:
         """
-        query_emb = torch.tensor(query_data[self.query_embedding_col]).to(item_emb_per_gpu.device)
+        query_emb = torch.tensor(query_data[self.query_embedding_col]).to(
+            item_emb_per_gpu.device
+        )
 
-        cat_scores, num_cat_filters = self._get_query_category_filter_score(query_data, cat2id_map_per_gpu, cat2tensor_map_per_gpu)
-        numeric_scores, num_numeric_filters = self._get_numeric_filter_score(query_data, numeric2tensor_map_per_gpu)
+        cat_scores, num_cat_filters = self._get_query_category_filter_score(
+            query_data, cat2id_map_per_gpu, cat2tensor_map_per_gpu
+        )
+        numeric_scores, num_numeric_filters = self._get_numeric_filter_score(
+            query_data, numeric2tensor_map_per_gpu
+        )
 
-        set_scores, num_set_filter = self._get_query_set_filter_score(query_data, set_filter_cat2id_map_per_gpu, set_filter2tensor_map_per_gpu)
-        zero_scores = torch.zeros(query_emb.shape[0], item_emb_per_gpu.shape[0], device=item_emb_per_gpu.device)
+        set_scores, num_set_filter = self._get_query_set_filter_score(
+            query_data, set_filter_cat2id_map_per_gpu, set_filter2tensor_map_per_gpu
+        )
+        zero_scores = torch.zeros(
+            query_emb.shape[0],
+            item_emb_per_gpu.shape[0],
+            device=item_emb_per_gpu.device,
+        )
         if cat_scores is None:
             cat_scores = zero_scores
         if numeric_scores is None:
@@ -336,24 +417,43 @@ class KNNModel:
         if set_scores is None:
             set_scores = zero_scores
 
-        if num_cat_filters + num_set_filter + num_numeric_filters > 0 and self.default_ann_max_filter_size > 0:
+        if (
+            num_cat_filters + num_set_filter + num_numeric_filters > 0
+            and self.default_ann_max_filter_size > 0
+        ):
             filter_scores = cat_scores + numeric_scores + set_scores
-            ann_max_filter_size = query_data.get("ann_max_filter_size", self.default_ann_max_filter_size)
+            ann_max_filter_size = query_data.get(
+                "ann_max_filter_size", self.default_ann_max_filter_size
+            )
             _, batch_indices = torch.topk(filter_scores, ann_max_filter_size)
             labels_tensor = labels_tensor_per_gpu[batch_indices]
             filtered_item_emb = item_emb_per_gpu[batch_indices, :]
             query_emb = query_emb.unsqueeze(dim=1)
             # Old code to keep
             # relevance_scores = torch.bmm(query_emb, filtered_item_emb.transpose(1, 2)).squeeze(dim=1)
-            relevance_scores = self.get_relevance_scores(query_emb, filtered_item_emb, True)
-            relevance_scores += torch.cat([filter_scores[i, batch_indices[i]].unsqueeze(dim=0) for i in range(len(filter_scores))], dim=0)
+            relevance_scores = self.get_relevance_scores(
+                query_emb, filtered_item_emb, True
+            )
+            relevance_scores += torch.cat(
+                [
+                    filter_scores[i, batch_indices[i]].unsqueeze(dim=0)
+                    for i in range(len(filter_scores))
+                ],
+                dim=0,
+            )
 
         else:
-            labels_tensor = labels_tensor_per_gpu.unsqueeze(0).repeat(query_emb.shape[0], 1)
+            labels_tensor = labels_tensor_per_gpu.unsqueeze(0).repeat(
+                query_emb.shape[0], 1
+            )
             # Old code to keep
             # relevance_scores = query_emb.matmul(item_emb_per_gpu.transpose(0, 1))
-            relevance_scores = self.get_relevance_scores(query_emb, item_emb_per_gpu, False)
-            relevance_scores = relevance_scores + numeric_scores + cat_scores + set_scores
+            relevance_scores = self.get_relevance_scores(
+                query_emb, item_emb_per_gpu, False
+            )
+            relevance_scores = (
+                relevance_scores + numeric_scores + cat_scores + set_scores
+            )
 
         top_k = min(query_data.get("top_k", self.top_k), len(item_emb_per_gpu))
         scores, indices = torch.topk(relevance_scores, top_k)
@@ -364,21 +464,25 @@ class KNNModel:
     @staticmethod
     def get_relevance_scores(query_emb, item_emb, filtered: bool = False):
         if filtered:
-            relevance_scores = torch.bmm(query_emb, item_emb.transpose(1, 2)).squeeze(dim=1)
+            relevance_scores = torch.bmm(query_emb, item_emb.transpose(1, 2)).squeeze(
+                dim=1
+            )
         else:
             relevance_scores = query_emb.matmul(item_emb.transpose(0, 1))
         return relevance_scores
 
     def predict_batch(self, query_data):
-        batch_scores, batch_indices, batch_labels_tensor = self._predict_batch_from_single_gpu(
-            query_data,
-            self.item_emb,
-            self.labels_tensor,
-            self.cat2id_map,
-            self.cat2tensor_map,
-            self.numeric2tensor_map,
-            self.set_filter_cat2id_map,
-            self.set_filter2tensor_map,
+        batch_scores, batch_indices, batch_labels_tensor = (
+            self._predict_batch_from_single_gpu(
+                query_data,
+                self.item_emb,
+                self.labels_tensor,
+                self.cat2id_map,
+                self.cat2tensor_map,
+                self.numeric2tensor_map,
+                self.set_filter_cat2id_map,
+                self.set_filter2tensor_map,
+            )
         )
         res = []
         for i, indices in enumerate(batch_indices):
@@ -392,7 +496,11 @@ class KNNModel:
                 }
                 for j in range(len(scores))
             ]
-            queries = {k: v[i] if isinstance(v, list) else v for k, v in query_data.items() if k != self.query_embedding_col}
+            queries = {
+                k: v[i] if isinstance(v, list) else v
+                for k, v in query_data.items()
+                if k != self.query_embedding_col
+            }
             res.append(
                 {**queries, "predictions": json.dumps(predictions)},
             )
@@ -416,9 +524,10 @@ class MultiGPUKNNModel(KNNModel):
         full_df = self._load_model_data(local_item_data_path)
         size_per_gpu = len(full_df) // self.gpus_per_worker
 
-        partitions = [[i * size_per_gpu, (i + 1) * size_per_gpu] for i in range(self.gpus_per_worker - 1)] + [
-            [(self.gpus_per_worker - 1) * size_per_gpu, len(full_df)]
-        ]
+        partitions = [
+            [i * size_per_gpu, (i + 1) * size_per_gpu]
+            for i in range(self.gpus_per_worker - 1)
+        ] + [[(self.gpus_per_worker - 1) * size_per_gpu, len(full_df)]]
 
         assert len(partitions) == self.gpus_per_worker
 
@@ -428,17 +537,23 @@ class MultiGPUKNNModel(KNNModel):
             s, e = indices
             df = full_df.iloc[s:e]
             device = f"cuda:{i}" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Loading partition {i} for data range {indices} on device {device}")
+            logger.info(
+                f"Loading partition {i} for data range {indices} on device {device}"
+            )
             embedding_array = df[self.item_embedding_col].apply(pd.Series).to_numpy()
             labels = list(df[self.item_id_col])
             labels_tensor = torch.tensor(list(range(len(labels)))).to(device=device)
-            item_emb = torch.tensor(embedding_array, dtype=torch.float32).to(device=device)
+            item_emb = torch.tensor(embedding_array, dtype=torch.float32).to(
+                device=device
+            )
 
             cat2id_map = self._load_category_filters(df)
             cat2tensor_map = self._category2tensor(df, cat2id_map, device=device)
             numeric2tensor_map = self._numeric2tensor(df, device=device)
             set_filter_cat2id_map = self._load_set_filters(df)
-            set_filter2tensor_map = self._set_filter2tensor(df, set_filter_cat2id_map, device=device)
+            set_filter2tensor_map = self._set_filter2tensor(
+                df, set_filter_cat2id_map, device=device
+            )
 
             self.gpu2item_map.append(
                 {
@@ -465,18 +580,24 @@ class MultiGPUKNNModel(KNNModel):
             cat2id_map_per_gpu = self.gpu2item_map[shard]["cat2id_map"]
             cat2tensor_map_per_gpu = self.gpu2item_map[shard]["cat2tensor_map"]
             numeric2tensor_map_per_gpu = self.gpu2item_map[shard]["numeric2tensor_map"]
-            set_filter_cat2id_map_per_gpu = self.gpu2item_map[shard]["set_filter_cat2id_map"]
-            set_filter2tensor_map_per_gpu = self.gpu2item_map[shard]["set_filter2tensor_map"]
+            set_filter_cat2id_map_per_gpu = self.gpu2item_map[shard][
+                "set_filter_cat2id_map"
+            ]
+            set_filter2tensor_map_per_gpu = self.gpu2item_map[shard][
+                "set_filter2tensor_map"
+            ]
 
-            batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu = self._predict_batch_from_single_gpu(
-                query_data,
-                item_emb_per_gpu,
-                labels_tensor_per_gpu,
-                cat2id_map_per_gpu,
-                cat2tensor_map_per_gpu,
-                numeric2tensor_map_per_gpu,
-                set_filter_cat2id_map_per_gpu,
-                set_filter2tensor_map_per_gpu,
+            batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu = (
+                self._predict_batch_from_single_gpu(
+                    query_data,
+                    item_emb_per_gpu,
+                    labels_tensor_per_gpu,
+                    cat2id_map_per_gpu,
+                    cat2tensor_map_per_gpu,
+                    numeric2tensor_map_per_gpu,
+                    set_filter_cat2id_map_per_gpu,
+                    set_filter2tensor_map_per_gpu,
+                )
             )
 
             for i, indices in enumerate(batch_indices_per_gpu):
@@ -498,7 +619,11 @@ class MultiGPUKNNModel(KNNModel):
         for i, preds in enumerate(reduced_res):
             top_k = min(query_data.get("top_k", self.top_k), len(preds))
             topk_pred = sorted(preds, key=lambda x: -1.0 * x["score"])[:top_k]
-            queries = {k: v[i] if isinstance(v, list) else v for k, v in query_data.items() if k != self.query_embedding_col}
+            queries = {
+                k: v[i] if isinstance(v, list) else v
+                for k, v in query_data.items()
+                if k != self.query_embedding_col
+            }
             res.append(
                 {**queries, "predictions": json.dumps(topk_pred)},
             )
@@ -511,21 +636,32 @@ class MultiGPUKNNModel(KNNModel):
         cat2id_map_per_gpu = self.gpu2item_map[shard]["cat2id_map"]
         cat2tensor_map_per_gpu = self.gpu2item_map[shard]["cat2tensor_map"]
         numeric2tensor_map_per_gpu = self.gpu2item_map[shard]["numeric2tensor_map"]
-        set_filter_cat2id_map_per_gpu = self.gpu2item_map[shard]["set_filter_cat2id_map"]
-        set_filter2tensor_map_per_gpu = self.gpu2item_map[shard]["set_filter2tensor_map"]
+        set_filter_cat2id_map_per_gpu = self.gpu2item_map[shard][
+            "set_filter_cat2id_map"
+        ]
+        set_filter2tensor_map_per_gpu = self.gpu2item_map[shard][
+            "set_filter2tensor_map"
+        ]
 
-        batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu = self._predict_batch_from_single_gpu(
-            query_data,
-            item_emb_per_gpu,
-            labels_tensor_per_gpu,
-            cat2id_map_per_gpu,
-            cat2tensor_map_per_gpu,
-            numeric2tensor_map_per_gpu,
-            set_filter_cat2id_map_per_gpu,
-            set_filter2tensor_map_per_gpu,
+        batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu = (
+            self._predict_batch_from_single_gpu(
+                query_data,
+                item_emb_per_gpu,
+                labels_tensor_per_gpu,
+                cat2id_map_per_gpu,
+                cat2tensor_map_per_gpu,
+                numeric2tensor_map_per_gpu,
+                set_filter_cat2id_map_per_gpu,
+                set_filter2tensor_map_per_gpu,
+            )
         )
 
-        return batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu, shard
+        return (
+            batch_scores_per_gpu,
+            batch_indices_per_gpu,
+            batch_labels_tensor_per_gpu,
+            shard,
+        )
 
     def predict_batch_mt(self, query_data):
         # multi-threads implementation of predict_batch
@@ -533,9 +669,17 @@ class MultiGPUKNNModel(KNNModel):
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         with ThreadPoolExecutor(self.gpus_per_worker) as executor:
-            futures = [executor.submit(self._process_shard, query_data, shard) for shard in range(self.gpus_per_worker)]
+            futures = [
+                executor.submit(self._process_shard, query_data, shard)
+                for shard in range(self.gpus_per_worker)
+            ]
             for future in as_completed(futures):
-                batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu, shard = future.result()
+                (
+                    batch_scores_per_gpu,
+                    batch_indices_per_gpu,
+                    batch_labels_tensor_per_gpu,
+                    shard,
+                ) = future.result()
                 labels_per_gpu = self.gpu2item_map[shard]["labels"]
                 for i, indices in enumerate(batch_indices_per_gpu):
                     labels_tensor = batch_labels_tensor_per_gpu[i, :]
@@ -550,13 +694,21 @@ class MultiGPUKNNModel(KNNModel):
                         for j in range(len(scores))
                     ]
                     reduced_res[i].extend(predictions)
-                del batch_scores_per_gpu, batch_indices_per_gpu, batch_labels_tensor_per_gpu
+                del (
+                    batch_scores_per_gpu,
+                    batch_indices_per_gpu,
+                    batch_labels_tensor_per_gpu,
+                )
                 # torch.cuda.empty_cache()
         res = []
         for i, preds in enumerate(reduced_res):
             top_k = min(query_data.get("top_k", self.top_k), len(preds))
             topk_pred = sorted(preds, key=lambda x: -1.0 * x["score"])[:top_k]
-            queries = {k: v[i] if isinstance(v, list) else v for k, v in query_data.items() if k != self.query_embedding_col}
+            queries = {
+                k: v[i] if isinstance(v, list) else v
+                for k, v in query_data.items()
+                if k != self.query_embedding_col
+            }
             res.append(
                 {**queries, "predictions": json.dumps(topk_pred)},
             )
@@ -581,10 +733,14 @@ class MultiGPUKNNFFNModel(MultiGPUKNNModel):
     def get_relevance_scores(self, query_emb, item_emb, filtered: bool = False):
         # for multi-gpu KNN model, we need a copy of torch script model on each GPU
         model_scripted_gpu = self.pretrained_script_models[query_emb.get_device()]
-        return self._get_relevance_scores_v1(model_scripted_gpu, query_emb, item_emb, filtered)
+        return self._get_relevance_scores_v1(
+            model_scripted_gpu, query_emb, item_emb, filtered
+        )
 
     @staticmethod
-    def _get_relevance_scores_v1(pretrained_script_model, query_emb, item_emb, filtered: bool = False):
+    def _get_relevance_scores_v1(
+        pretrained_script_model, query_emb, item_emb, filtered: bool = False
+    ):
         """
         This function assumes that the input to the pretrained_script_model is concat (query_embedding, item_embedding)
 
@@ -608,14 +764,18 @@ class MultiGPUKNNFFNModel(MultiGPUKNNModel):
             item_emb_expanded = item_emb.unsqueeze(0).expand(num_queries, -1, -1)
 
         embeddings = torch.cat([query_emb_expanded, item_emb_expanded], dim=2)
-        embeddings_flat = torch.reshape(embeddings, (num_queries * num_items, embeddings.shape[2]))
+        embeddings_flat = torch.reshape(
+            embeddings, (num_queries * num_items, embeddings.shape[2])
+        )
         with torch.no_grad():
             scores_flat = pretrained_script_model(embeddings_flat)
         relevance_scores = torch.reshape(scores_flat, (num_queries, num_items))
         return relevance_scores
 
     @staticmethod
-    def _get_relevance_scores_v2(pretrained_script_model, query_emb, item_emb, filtered: bool = False):
+    def _get_relevance_scores_v2(
+        pretrained_script_model, query_emb, item_emb, filtered: bool = False
+    ):
         """
         This function assumes that the input to the pretrained_script_model is [query_embedding, item_embedding]
         :param pretrained_script_model:  a pretrained torch script model `f(query_embedding, item_embedding) -> float`
@@ -637,8 +797,12 @@ class MultiGPUKNNFFNModel(MultiGPUKNNModel):
             query_emb_expanded = query_emb.unsqueeze(1).expand(-1, num_items, -1)
             item_emb_expanded = item_emb.unsqueeze(0).expand(num_queries, -1, -1)
 
-        query_emb_expanded = torch.reshape(query_emb_expanded, (num_queries * num_items, query_emb_expanded.shape[2]))
-        item_emb_expanded = torch.reshape(item_emb_expanded, (num_queries * num_items, item_emb_expanded.shape[2]))
+        query_emb_expanded = torch.reshape(
+            query_emb_expanded, (num_queries * num_items, query_emb_expanded.shape[2])
+        )
+        item_emb_expanded = torch.reshape(
+            item_emb_expanded, (num_queries * num_items, item_emb_expanded.shape[2])
+        )
         with torch.no_grad():
             scores_flat = pretrained_script_model(query_emb_expanded, item_emb_expanded)
         relevance_scores = torch.reshape(scores_flat, (num_queries, num_items))

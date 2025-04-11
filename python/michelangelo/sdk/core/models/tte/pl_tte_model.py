@@ -4,9 +4,14 @@ import tempfile
 
 import torch.optim as optim
 import pytorch_lightning as pl
-from pytorch_lightning.utilities.deepspeed import convert_zero_checkpoint_to_fp32_state_dict
+from pytorch_lightning.utilities.deepspeed import (
+    convert_zero_checkpoint_to_fp32_state_dict,
+)
 
-from michelangelo.sdk.core.models.tte.tte_model import AbstractTwoTowerModel, create_tte_model
+from michelangelo.sdk.core.models.tte.tte_model import (
+    AbstractTwoTowerModel,
+    create_tte_model,
+)
 
 logger = logging.getLogger(__name__)
 # setting environment variable for deepspeed optimizer,
@@ -25,11 +30,19 @@ class TwoTowerPLModule(pl.LightningModule):
 
     """
 
-    def __init__(self, tte_class_name, learning_rate: float = 0.00005, optimizer_str: str = "adam", **kwargs):
+    def __init__(
+        self,
+        tte_class_name,
+        learning_rate: float = 0.00005,
+        optimizer_str: str = "adam",
+        **kwargs,
+    ):
         super().__init__()
         # Important: This property activates manual optimization.
         self.automatic_optimization = False
-        self.tte_model: AbstractTwoTowerModel = create_tte_model(tte_class_name, **kwargs)
+        self.tte_model: AbstractTwoTowerModel = create_tte_model(
+            tte_class_name, **kwargs
+        )
         self.optimizer_str = optimizer_str
         self.learning_rate = learning_rate
 
@@ -89,9 +102,13 @@ class TwoTowerPLModule(pl.LightningModule):
         """
         for metric in log:
             if training:
-                self.log(metric, log[metric], prog_bar=True, on_step=True, on_epoch=True)
+                self.log(
+                    metric, log[metric], prog_bar=True, on_step=True, on_epoch=True
+                )
             else:
-                self.log(metric, log[metric], prog_bar=True, on_step=False, on_epoch=True)
+                self.log(
+                    metric, log[metric], prog_bar=True, on_step=False, on_epoch=True
+                )
 
     def save_final_model(self, model_save_local_dir):
         tte_model_dir = self.tte_model.save_model(model_save_local_dir)
@@ -107,8 +124,12 @@ def load_deepspeed_model_from_checkpoint(lightening_ckt_file, create_model_kwarg
     lightening_ckt_file: a model director output by ray trained using deepspeed.
     """
     model_state_dict_file = os.path.join(lightening_ckt_file, "model.pt")
-    logger.info(f"Loading deepspeed model from {lightening_ckt_file} to {model_state_dict_file}!")
-    model_state_dict = convert_zero_checkpoint_to_fp32_state_dict(lightening_ckt_file, model_state_dict_file)
+    logger.info(
+        f"Loading deepspeed model from {lightening_ckt_file} to {model_state_dict_file}!"
+    )
+    model_state_dict = convert_zero_checkpoint_to_fp32_state_dict(
+        lightening_ckt_file, model_state_dict_file
+    )
     assert model_state_dict
     tower_pl_model = TwoTowerPLModule.load_from_checkpoint(
         model_state_dict_file,
