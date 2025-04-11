@@ -56,9 +56,11 @@ func TestTemplates(t *testing.T) {
 	assert.Equal(t, `
 	"bytes"
 	"encoding/json"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 `, CRDImports)
 
 	buf.Reset()
