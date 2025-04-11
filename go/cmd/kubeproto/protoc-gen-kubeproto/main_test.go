@@ -473,7 +473,7 @@ func TestCrdObjectsMap(t *testing.T) {
 
 func TestUnmarshalJSON_DisallowUnknownFields(t *testing.T) {
 	// Override environment or stub to disallow unknown fields
-	os.Setenv("ALLOW_UNKNOWN_FIELDS", "false") // or however getAllowUnknownFieldsEnvVar() is implemented
+	os.Setenv("ALLOW_UNKNOWN_FIELDS", "false")
 
 	jsonWithUnknownField := `{
 		"kind": "Object",

@@ -47,7 +47,6 @@ def test_create_cluster():
                     "minInstances": 1,
                     "maxInstances": 2,
                     "nodeType": "worker-group-1",
-                    "objectStoreMemoryRatio": 0.0,
                     "rayStartParams": {
                         "block": "true",
                         "dashboard-host": "0.0.0.0",
