@@ -77,6 +77,27 @@ var CRDFillBlobFields = template.Must(template.New("crFillBlobFields").Parse(`fu
 }
 `))
 
+// CRDGetIndexedFieldsHeader is a template for the GetIndexedKeyValuePairs() function signature.
+var CRDGetIndexedFieldsHeader = template.Must(template.New("crdGetIndexedFieldsHeader").Parse(`
+func (m *{{.Name}}) GetIndexedKeyValuePairs() ([]storage.IndexedField){
+	var indexedFields []storage.IndexedField
+`))
+
+// CRDIndexesPathToKeyMapHeader is a template for generating CRDIndexesPathToKeyMap for a CRD.
+var CRDIndexesPathToKeyMapHeader = template.Must(template.New("crdIndexesPathToKeyMapHeader").Parse(`
+func init() {
+	gvk := schema.GroupVersionKind{
+		Group: "{{.Group}}",
+		Version: "{{.Version}}",
+		Kind: "{{.Kind}}",
+	}
+	IndexesPathToKeyMap[gvk] = make(map[string]string)
+
+	// default index
+	IndexesPathToKeyMap[gvk]["metadata.namespace"] = "namespace"
+	IndexesPathToKeyMap[gvk]["metadata.name"] = "name"
+`))
+
 //go:embed group_version.tmpl
 var groupVersionTmpl string
 
@@ -88,9 +109,11 @@ var GroupVersion = template.Must(
 var CRDImports = `
 	"bytes"
 	"encoding/json"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 	"github.com/gogo/protobuf/jsonpb"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 `
 
 // CrdSvcHandlerImports imports of CRD YARPC handlers

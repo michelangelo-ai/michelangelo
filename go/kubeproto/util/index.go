@@ -52,6 +52,11 @@ type IndexedSubField struct {
 	Type      string
 }
 
+// HasFlag checks if the field has the given flag.
+func (f *IndexedField) HasFlag(flag IndexFlag) bool {
+	return f.Flag&flag != 0
+}
+
 func buildSubKey(key, subkey string) string {
 	return key + "_" + subkey
 }
