@@ -262,7 +262,9 @@ def write_task_result(url: str, value):
         json.dump(value, f, default=encoder.default)
 
 
-def _unref_args(sig: inspect.Signature, args: tuple, kwargs: dict, io: IORegistry) -> tuple[tuple, dict]:
+def _unref_args(
+    sig: inspect.Signature, args: tuple, kwargs: dict, io: IORegistry
+) -> tuple[tuple, dict]:
     # Copy args and kwargs to avoid modifying the original
     pos_args, key_args = list(args), dict(kwargs)
 
@@ -282,7 +284,9 @@ def _unref_args(sig: inspect.Signature, args: tuple, kwargs: dict, io: IORegistr
     return tuple(pos_args), key_args
 
 
-def _replace_ref_args(sig: inspect.Signature, pos_args: list, key_args: dict) -> tuple[dict, dict]:
+def _replace_ref_args(
+    sig: inspect.Signature, pos_args: list, key_args: dict
+) -> tuple[dict, dict]:
     replaced_pos_args, replaced_key_args = {}, {}
     for i, p in enumerate(sig.parameters.values()):
         if p.annotation != Ref:

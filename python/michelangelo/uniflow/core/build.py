@@ -19,7 +19,11 @@ from michelangelo.uniflow.core.decorator import (
     TaskFunction,
 )
 from michelangelo.uniflow.core.task_config import Dependencies
-from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute, log_attributes
+from michelangelo.uniflow.core.utils import (
+    LOGGING_FORMAT,
+    import_attribute,
+    log_attributes,
+)
 
 log = logging.getLogger(__name__)
 
@@ -39,7 +43,11 @@ def main(args=None):
         log.info("dry_run")
         return
 
-    with sys.stdout.buffer if a.output == "-" else fsspec.open(a.output, mode="wb") as out:
+    with (
+        sys.stdout.buffer
+        if a.output == "-"
+        else fsspec.open(a.output, mode="wb") as out
+    ):
         out.write(tarball)
 
 
@@ -70,7 +78,9 @@ class File:
         return name in self._functions
 
     def as_ast(self) -> ast.Module:
-        body = [self._ast_load_expr(path, exports) for path, exports in self._loads.items()]
+        body = [
+            self._ast_load_expr(path, exports) for path, exports in self._loads.items()
+        ]
         body += self._functions.values()
         assert body
         return ast.Module(body=body, type_ignores=[])
@@ -85,7 +95,10 @@ class File:
             args=[
                 ast.Constant(value=path),
             ],
-            keywords=[ast.keyword(arg=k, value=ast.Constant(value=v)) for k, v in exports.items()],
+            keywords=[
+                ast.keyword(arg=k, value=ast.Constant(value=v))
+                for k, v in exports.items()
+            ],
         )
         return ast.Expr(call)
 
@@ -158,7 +171,9 @@ def build(fn: Callable) -> Package:
 
     meta_file = "meta.json"
     assert meta_file not in package_files, f"{meta_file} is a reserved file"
-    package_files[meta_file] = f'{{"main_file":"{main_file}","main_function":"{main_function}"}}'.encode()
+    package_files[meta_file] = (
+        f'{{"main_file":"{main_file}","main_function":"{main_function}"}}'.encode()
+    )
 
     return Package(
         files=package_files,
@@ -168,7 +183,9 @@ def build(fn: Callable) -> Package:
 
 
 def _transpile_function(fn: Callable, files: dict[Path, Any]) -> Path:
-    fn = inspect.unwrap(fn)  # Get the user function by unwrapping decorators such as @workflow.
+    fn = inspect.unwrap(
+        fn
+    )  # Get the user function by unwrapping decorators such as @workflow.
     fn_path = _fn_path(fn)
 
     file = files.get(fn_path)
