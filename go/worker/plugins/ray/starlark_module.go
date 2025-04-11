@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
+	"github.com/cadence-workflow/starlark-worker/service"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence"
-	"go.uber.org/cadence/workflow"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,7 +47,7 @@ func (r *module) Attr(n string) (starlark.Value, error) { return r.attributes[n]
 func (r *module) AttrNames() []string                   { return ext.SortedKeys(r.attributes) }
 
 func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var spec *starlark.Dict
@@ -90,7 +89,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayClusterReadiness, sensorRequest).Get(sensorCtx, &sensorResponse); err != nil {
 			logger.Error("builtin-error", ext.ZapError(err)...)
 			reason := err.Error()
-			if cadence.IsCanceledError(err) {
+			if workflow.IsCanceledError(ctx, err) {
 				ctx, _ = workflow.NewDisconnectedContext(ctx)
 				reason = "Canceled"
 			}
@@ -116,7 +115,8 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 
 	if cluster.Status.State == v2pb.RAY_CLUSTER_STATE_FAILED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_TERMINATED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_UNKNOWN {
 		// TODO: [ray] send termination signal?
-		err := cadence.NewCustomError(
+		err := workflow.NewCustomError(
+			ctx,
 			yarpcerrors.CodeInternal.String(),
 			fmt.Sprintf("Ray cluster is not ready: %s/%s", cluster.Namespace, cluster.Name),
 		)
@@ -134,7 +134,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 }
 
 func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var entrypoint string
@@ -200,7 +200,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 }
 
 func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var name string

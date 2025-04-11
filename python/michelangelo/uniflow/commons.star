@@ -1,4 +1,4 @@
-load("@plugin", "cad", "hashlib", "json", "os", "progress", "storage", "uuid")
+load("@plugin", "hashlib", "json", "os", "progress", "storage", "uuid", "workflow")
 
 ENV = {
     "UF_REMOTE_RUN": "1",

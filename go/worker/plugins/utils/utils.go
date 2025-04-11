@@ -4,9 +4,9 @@ import (
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/star"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	jsoniter "github.com/json-iterator/go"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence/workflow"
 	"go.uber.org/yarpc/yarpcerrors"
 )
 

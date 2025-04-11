@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from michelangelo.uniflow.core.build import build
-from michelangelo.uniflow.core.remote_run import DEFAULT_EXECUTION_TIMEOUT_SECONDS, RemoteRun
+from michelangelo.uniflow.core.remote_run import DEFAULT_EXECUTION_TIMEOUT_SECONDS, RemoteRun, RemoteRunTemporal
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, ArgparseEnvironAction
 
 log = logging.getLogger(__name__)
@@ -174,7 +174,7 @@ def _remote_run(
 
     assert isinstance(environ, dict)
 
-    rr = RemoteRun(
+    rr = RemoteRunTemporal(
         fn=fn,
         image=image,
         storage_url=storage_url,

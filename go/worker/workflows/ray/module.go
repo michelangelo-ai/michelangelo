@@ -1,7 +1,7 @@
 package ray
 
 import (
-	"go.uber.org/cadence/worker"
+	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 )
 

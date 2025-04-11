@@ -1,6 +1,6 @@
-package cadencefx
+package enginefx
 
-const configKey = "cadence"
+const configKey = "workflow-engine"
 
 // Config is the configuration for the module. YAML looks like this:
 //
@@ -17,6 +17,7 @@ type Config struct {
 	Transport string         `yaml:"transport"`
 	Workers   []WorkerConfig `yaml:"workers"`
 	Client    ClientConfig   `yaml:"client"`
+	Provider  string         `yaml:"provider"`
 }
 
 type WorkerConfig struct {

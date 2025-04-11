@@ -5,7 +5,7 @@ import (
 	"context"
 	"fmt"
 
-	"go.uber.org/cadence"           // Cadence workflow library for activity management.
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -25,7 +25,7 @@ type activities struct {
 // Read attempts to read data from the specified path using the given protocol.
 // It logs the start of the activity, checks for a valid protocol implementation,
 // and wraps any errors using Cadence's CustomError for consistent error handling.
-func (a *activities) Read(ctx context.Context, protocol string, path string) (any, *cadence.CustomError) {
+func (a *activities) Read(ctx context.Context, protocol string, path string) (any, error) {
 	// Retrieve logger from context and log the start of the read activity.
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("path", path))
@@ -36,7 +36,8 @@ func (a *activities) Read(ctx context.Context, protocol string, path string) (an
 		result, err := impl.Read(ctx, path)
 		if err != nil {
 			// Wrap the error in a Cadence CustomError using YARPC error codes.
-			return nil, cadence.NewCustomError(
+			return nil, workflow.NewCustomError(
+				ctx,
 				yarpcerrors.FromError(err).Code().String(),
 				err.Error(),
 			)
@@ -45,7 +46,8 @@ func (a *activities) Read(ctx context.Context, protocol string, path string) (an
 		return result, nil
 	}
 	// Return an error if the protocol is not supported.
-	return nil, cadence.NewCustomError(
+	return nil, workflow.NewCustomError(
+		ctx,
 		fmt.Sprintf("protocol %s is not supported", protocol),
 		"",
 	)

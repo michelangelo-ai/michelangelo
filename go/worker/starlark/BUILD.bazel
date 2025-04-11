@@ -8,11 +8,9 @@ go_library(
     deps = [
         "//go/worker/plugins/ray:go_default_library",
         "//go/worker/plugins/storage:go_default_library",
-        "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//plugin:go_default_library",
-        "@com_github_uber_go_tally//:go_default_library",
-        "@org_uber_go_cadence//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@org_uber_go_fx//:go_default_library",
-        "@org_uber_go_zap//:go_default_library",
     ],
 )

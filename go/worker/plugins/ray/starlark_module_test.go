@@ -4,42 +4,43 @@ import (
 	"context"
 	"testing"
 
-	"github.com/michelangelo-ai/michelangelo/proto/api"
-
+	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/cadence-workflow/starlark-worker/service"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
+	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/mock"
-	"go.uber.org/cadence"
 	"go.uber.org/yarpc/yarpcerrors"
-
-	"github.com/cadence-workflow/starlark-worker/cadstar"
-	"github.com/stretchr/testify/suite"
 )
 
 type Test struct {
 	suite.Suite
-	cadstar.StarTestSuite
-	env *cadstar.StarTestEnvironment
+	service.TestSuite
+	env *service.TestEnvironment
 }
 
 func TestSuite(t *testing.T) { suite.Run(t, new(Test)) }
 
 func (r *Test) SetupTest() {
-	r.env = r.NewEnvironment(r.T(), &cadstar.StarTestEnvironmentParams{
+	r.env = r.NewTestEnvironment(r.T(), &service.TestEnvironmentParams{
 		RootDirectory: "testdata",
-		Plugins: map[string]cadstar.IPlugin{
+		Plugins: map[string]service.IPlugin{
 			"ray": Plugin,
 		},
 	})
 }
 
-func (r *Test) TearDownTest() { r.env.AssertExpectations(r.T()) }
+func (r *Test) TearDownTest() {
+	r.env.Cadence.AssertExpectations(r.T())
+	r.env.Temporal.AssertExpectations(r.T())
+}
 
 func (r *Test) TestCreateClusterSuccessfully() {
-	env := r.env.GetTestWorkflowEnvironment()
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(ray.Activities.CreateRayCluster)
 	env.RegisterActivity(ray.Activities.TerminateCluster)
 	env.RegisterActivity(ray.Activities.SensorRayClusterReadiness)
@@ -136,7 +137,7 @@ func (r *Test) TestCreateClusterSuccessfully() {
 		Run(func(args mock.Arguments) {
 			createClusterReq = args.Get(1).(v2pb.CreateRayClusterRequest) // Capture the request argument
 		}).
-		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, error) {
 			return &v2pb.CreateRayClusterResponse{
 				RayCluster: rayCluster,
 			}, nil
@@ -147,17 +148,17 @@ func (r *Test) TestCreateClusterSuccessfully() {
 		Run(func(args mock.Arguments) {
 			sensorClusterReq = args.Get(1).(v2pb.GetRayClusterRequest) // Capture the request argument
 		}).
-		Return(func(ctx context.Context, req v2pb.GetRayClusterRequest) (*ray.SensorRayClusterReadinessResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.GetRayClusterRequest) (*ray.SensorRayClusterReadinessResponse, error) {
 			return &ray.SensorRayClusterReadinessResponse{
 				RayCluster: rayCluster,
 				Ready:      true,
 			}, nil
 		})
 
-	r.env.ExecuteFunction("/test.star", "test_create_cluster", nil, nil, nil)
+	r.env.Cadence.ExecuteFunction("/test.star", "test_create_cluster", nil, nil, nil)
 	require := r.Require()
 	var res any
-	err := r.env.GetResult(&res)
+	err := r.env.Cadence.GetResult(&res)
 	require.NoError(err)
 	require.EqualValues(rayCluster, createClusterReq.RayCluster)
 	require.EqualValues(rayCluster.Name, sensorClusterReq.Name)
@@ -166,41 +167,41 @@ func (r *Test) TestCreateClusterSuccessfully() {
 }
 
 func (r *Test) TestCreateClusterFailed() {
-	env := r.env.GetTestWorkflowEnvironment()
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(ray.Activities.CreateRayCluster)
 	env.RegisterActivity(ray.Activities.TerminateCluster)
 	env.RegisterActivity(ray.Activities.SensorRayClusterReadiness)
 
 	rayCluster := &v2pb.RayCluster{}
 	env.OnActivity(ray.Activities.CreateRayCluster, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.CreateRayClusterRequest) (*v2pb.CreateRayClusterResponse, error) {
 			return &v2pb.CreateRayClusterResponse{
 				RayCluster: rayCluster,
 			}, nil
 		})
 
 	env.OnActivity(ray.Activities.TerminateCluster, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req ray.TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req ray.TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, error) {
 			return &v2pb.UpdateRayClusterResponse{
 				RayCluster: rayCluster,
 			}, nil
 		})
 
 	env.OnActivity(ray.Activities.SensorRayClusterReadiness, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req v2pb.GetRayClusterRequest) (*ray.SensorRayClusterReadinessResponse, *cadence.CustomError) {
-			return nil, cadence.NewCustomError(yarpcerrors.CodeInternal.String(), "failed")
+		Return(func(ctx context.Context, req v2pb.GetRayClusterRequest) (*ray.SensorRayClusterReadinessResponse, error) {
+			return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeInternal.String(), "failed")
 		})
 
-	r.env.ExecuteFunction("/test.star", "test_create_cluster", nil, nil, nil)
+	r.env.Cadence.ExecuteFunction("/test.star", "test_create_cluster", nil, nil, nil)
 	require := r.Require()
 	var res any
-	err := r.env.GetResult(&res)
+	err := r.env.Cadence.GetResult(&res)
 	require.Error(err)
 	require.Nil(res)
 }
 
 func (r *Test) TestCreateRayJobSuccessfully() {
-	env := r.env.GetTestWorkflowEnvironment()
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(ray.Activities.CreateRayJob)
 	env.RegisterActivity(ray.Activities.SensorRayJob)
 
@@ -226,7 +227,7 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 		Run(func(args mock.Arguments) {
 			createdRayJob = args.Get(1).(v2pb.CreateRayJobRequest) // Capture the request argument
 		}).
-		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, error) {
 			return &v2pb.CreateRayJobResponse{
 				RayJob: rayJob,
 			}, nil
@@ -237,7 +238,7 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 		Run(func(args mock.Arguments) {
 			sensorJobReq = args.Get(1).(v2pb.GetRayJobRequest) // Capture the request argument
 		}).
-		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, error) {
 			return &ray.SensorRayJobResponse{
 				RayJob:   rayJob,
 				JobURL:   "",
@@ -245,10 +246,10 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 			}, nil
 		})
 
-	r.env.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
+	r.env.Cadence.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
 	require := r.Require()
 	var res any
-	err := r.env.GetResult(&res)
+	err := r.env.Cadence.GetResult(&res)
 	require.NoError(err)
 	require.EqualValues(createdRayJob.RayJob, rayJob)
 	require.EqualValues(rayJob.Name, sensorJobReq.Name)
@@ -257,27 +258,27 @@ func (r *Test) TestCreateRayJobSuccessfully() {
 }
 
 func (r *Test) TestCreateRayJobFailed() {
-	env := r.env.GetTestWorkflowEnvironment()
+	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(ray.Activities.CreateRayJob)
 	env.RegisterActivity(ray.Activities.SensorRayJob)
 
 	rayJob := &v2pb.RayJob{}
 	env.OnActivity(ray.Activities.CreateRayJob, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, *cadence.CustomError) {
+		Return(func(ctx context.Context, req v2pb.CreateRayJobRequest) (*v2pb.CreateRayJobResponse, error) {
 			return &v2pb.CreateRayJobResponse{
 				RayJob: rayJob,
 			}, nil
 		})
 
 	env.OnActivity(ray.Activities.SensorRayJob, mock.Anything, mock.Anything).Once().
-		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, *cadence.CustomError) {
-			return nil, cadence.NewCustomError(yarpcerrors.CodeInternal.String(), "failed")
+		Return(func(ctx context.Context, req v2pb.GetRayJobRequest) (*ray.SensorRayJobResponse, error) {
+			return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeInternal.String(), "failed")
 		})
 
-	r.env.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
+	r.env.Cadence.ExecuteFunction("/test.star", "test_create_job", nil, nil, nil)
 	require := r.Require()
 	var res any
-	err := r.env.GetResult(&res)
+	err := r.env.Cadence.GetResult(&res)
 	require.Error(err)
 	require.Nil(res)
 }
