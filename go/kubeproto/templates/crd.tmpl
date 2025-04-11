@@ -310,15 +310,14 @@ func (m *{{.Name}}Spec) MarshalJSON() ([]byte,error) {
 }
 
 func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
-	allowUnknown := getAllowUnknownFieldsEnvVar()
 	err := (&jsonpb.Unmarshaler{
-	  AllowUnknownFields: allowUnknown,
+	  AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
 	  AnyResolver: &util.GenericResolver{},
 	}).Unmarshal(bytes.NewReader(b), m)
 	if err == nil {
 	    return nil
 	}
-	if !allowUnknown && strings.Contains(err.Error(), "unknown field") {
+    if !strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") {
         return err
     }
 
@@ -346,12 +345,22 @@ func (m *{{.Name}}Status) MarshalJSON() ([]byte,error) {
 }
 
 func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
-	err := (&jsonpb.Unmarshaler{
+    err := (&jsonpb.Unmarshaler{
       AllowUnknownFields: getAllowUnknownFieldsEnvVar(),
       AnyResolver: &util.GenericResolver{},
     }).Unmarshal(bytes.NewReader(b), m)
     if err == nil {
         return nil
+    }
+    if !strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") {
+        return err
+    }
+
+    visited := make(map[reflect.Type]bool)
+    var paths []util.InlineFieldMapping
+    util.RemoveInlineFields(reflect.TypeOf(m), "", visited, &paths)
+    if len(paths) > 0 {
+        b, err = util.ApplyInlineFields(b, paths)
     }
     type Alias {{.Name}}Status
     aux := (*Alias)(m)
