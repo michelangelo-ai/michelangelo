@@ -93,6 +93,7 @@ gomock(
     interfaces = [
         "RayClusterServiceYARPCClient",
         "RayJobServiceYARPCClient",
+        "SparkJobServiceYARPCClient",
     ],
     library = ":go_default_library",
     package = "v2mock",

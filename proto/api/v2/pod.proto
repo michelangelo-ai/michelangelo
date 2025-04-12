@@ -147,6 +147,14 @@ message PodSpec {
   // For example: "uber/michelangelo-training:v1.2.3", "nvidia/cuda:11.0-base"
   string image = 3;
 
+  // Docker image pulling policy for the Pod container. This field specifies:
+  // Value	          Description
+  // --------------------------------
+  // Always	          Always pulls the image from the registry every time the pod is started. Recommended for mutable tags like latest.
+  // IfNotPresent	    Pulls the image only if it is not already present on the node. Recommended for versioned images (e.g., myapp:v1.2.3).
+  // Never	          Never pulls the image; uses the local image only. Fails if the image isn’t already available on the node.
+  string imagePullingPolicy = 8;
+
   // Environment variables for the Pod container. This field specifies:
   // - Key-value pairs that configure the container environment
   // - Used to pass configuration to applications

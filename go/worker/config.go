@@ -20,11 +20,15 @@ type (
 	}
 )
 
-func getYARPCClients(provider config.Provider) (v2pb.RayClusterServiceYARPCClient, v2pb.RayJobServiceYARPCClient, error) {
+func getYARPCClients(provider config.Provider) (
+	v2pb.RayClusterServiceYARPCClient,
+	v2pb.RayJobServiceYARPCClient,
+	v2pb.SparkJobServiceYARPCClient,
+	error) {
 	conf := Config{}
 	err := provider.Get(configKey).Populate(&conf)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	tran := grpc.NewTransport().NewSingleOutbound(conf.Address)
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
@@ -32,9 +36,11 @@ func getYARPCClients(provider config.Provider) (v2pb.RayClusterServiceYARPCClien
 		Outbounds: yarpc.Outbounds{conf.MaAPIServiceName: {Unary: tran}},
 	})
 	if err := dispatcher.Start(); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	return v2pb.NewRayClusterServiceYARPCClient(dispatcher.ClientConfig(conf.MaAPIServiceName)),
-		v2pb.NewRayJobServiceYARPCClient(dispatcher.ClientConfig(conf.MaAPIServiceName)), nil
+		v2pb.NewRayJobServiceYARPCClient(dispatcher.ClientConfig(conf.MaAPIServiceName)),
+		v2pb.NewSparkJobServiceYARPCClient(dispatcher.ClientConfig(conf.MaAPIServiceName)),
+		nil
 }

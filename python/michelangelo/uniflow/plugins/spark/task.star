@@ -1,5 +1,5 @@
-load("@plugin", "atexit", "cad", "json", "os", "spark", "terrablob", "time")
-load("../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "CANVAS_2", "RESOURCE_AFFINITY_LABEL_CLOUD_ZONE", "RESOURCE_AFFINITY_LABEL_CLUSTER", "RESOURCE_AFFINITY_LABEL_CLUSTER_TYPE", "RESOURCE_AFFINITY_LABEL_NAME", "RESOURCE_AFFINITY_LABEL_PATH", "RESOURCE_AFFINITY_LABEL_SUPPORT_GPU", "RESOURCE_AFFINITY_LABEL_ZONE", "RESOURCE_ENV_LABEL_PROD", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_canvas_2_task_config", "get_env_label", "get_project_resource_annotation", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("@plugin", "atexit", "cad", "json", "os", "spark", "time")
+load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
     "PYTHONPATH": ".",
@@ -15,17 +15,6 @@ SPARK_DEFAULT_EXECUTOR_MEMORY = os.environ.get("SPARK_DEFAULT_EXECUTOR_MEMORY", 
 SPARK_DEFAULT_EXECUTOR_DISK = os.environ.get("SPARK_DEFAULT_EXECUTOR_DISK", "512G")
 SPARK_DEFAULT_EXECUTOR_GPU = os.environ.get("SPARK_DEFAULT_EXECUTOR_GPU", "0")
 SPARK_DEFAULT_EXECUTOR_INSTANCES = os.environ.get("SPARK_DEFAULT_EXECUTOR_INSTANCES", "1")
-
-DEFAULT_SPARK_CLUSTER = "phx4-prod02"
-DEFAULT_SPARK_POOL_PATH = "/UberAI/Default"
-DEFAULT_SPARK_CLUSTER_TYPE = "peloton"
-DEFAULT_SPARK_POOL_NAME = "uberai-default-phx4-prod02"
-
-SPARK_CLUSTER = os.environ.get("SPARK_CLUSTER", DEFAULT_SPARK_CLUSTER)
-SPARK_POOL_PATH = os.environ.get("SPARK_POOL_PATH", DEFAULT_SPARK_POOL_PATH)
-SPARK_CLUSTER_TYPE = os.environ.get("SPARK_CLUSTER_TYPE", DEFAULT_SPARK_CLUSTER_TYPE)
-SPARK_POOL_NAME = os.environ.get("SPARK_POOL_NAME", DEFAULT_SPARK_POOL_NAME)
-SPARK_ZONE = os.environ.get("SPARK_ZONE", "")
 
 def spark_task(
         task_path,
@@ -43,29 +32,11 @@ def spark_task(
         executor_instances = SPARK_DEFAULT_EXECUTOR_INSTANCES):
     def callable(*args, **kwargs):
         task_name = get_task_name(task_path, alias)
-        namespace = os.environ["MA_NAMESPACE"]
+        namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
-        if final_cache_enabled:  # Check if the result is cached
-            cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
-            cached_output = get_cached_output(namespace, cache_keys)
-            if cached_output != None:
-                cached_result_json_url = cached_output.get("spec", {}).get("storageUri", "")
-                if cached_result_json_url != "":
-                    end_time_seconds = time.time()
-                    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-                    report_progress(
-                        task_name = task_name,
-                        task_path = task_path,
-                        task_state = TASK_STATE_SKIPPED,
-                        start_time = start_time_formated_str,
-                        task_message = "Spark Task skipped due to Cache Hit",
-                        task_log = "",
-                        end_time = end_time_formated_str,
-                        output = cached_output.get("metadata", {}).get("name", ""),
-                    )
-                    return io_read_json(cached_result_json_url)
+
+        # TODO check cache enabled
 
         # Apply resource overrides
         _driver_cpu = os.environ.get("SPARK_OVERRIDE_DRIVER_CPU." + task_path, driver_cpu)
@@ -85,30 +56,6 @@ def spark_task(
         _executor_cpu = int(_executor_cpu)
         _executor_gpu = int(_executor_gpu)
         _executor_instances = int(_executor_instances)
-
-        if CANVAS_2 == "1":
-            task_config = get_canvas_2_task_config(*args, **kwargs)
-            spark_job_spec = None
-
-            # job_specs is an optional field
-            if hasattr(task_config, "job_specs"):
-                job_specs = task_config.job_specs
-                if hasattr(job_specs, "spark"):
-                    spark_job_spec = job_specs.spark
-
-            if spark_job_spec != None:
-                driver_res = spark_job_spec.driver.pod.resource
-                _driver_cpu = driver_res.cpu
-                _driver_memory = driver_res.memory
-                _driver_disk = driver_res.disk_size
-                _driver_gpu = driver_res.gpu
-
-                executor_res = spark_job_spec.executor.pod.resource
-                _executor_cpu = executor_res.cpu
-                _executor_memory = executor_res.memory
-                _executor_disk = executor_res.disk_size
-                _executor_gpu = executor_res.gpu
-                _executor_instances = spark_job_spec.executor.instances
 
         result_url = get_result_url()
         _args = json.dumps(args) if args else "[]"
@@ -137,7 +84,7 @@ def spark_task(
 
         # submit spark job
         print("spark | submit job. ns:", namespace, "task_name:", task_name)
-        created_spark_job = spark.submit_job(job = spark_job)
+        created_spark_job = spark.create_job(spark_job)
 
         # report task as pending
         report_progress(
@@ -183,15 +130,7 @@ def spark_task(
         terminated_job = spark.sensor_job(job = created_spark_job)
         if report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str) == True:
             atexit.unregister(check_spark_job_final_state_at_workflow_exit)
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        created_cached_output = create_cached_output(
-            namespace = namespace,
-            cache_keys = cache_keys,
-            zone = "",  #TODO: baoquan: add zone info to cache
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
+
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
         report_progress(
@@ -202,7 +141,6 @@ def spark_task(
             task_log = driver_log_url,
             end_time = end_time_formated_str,
             task_message = "Spark job succeeded",
-            output = created_cached_output.get("metadata", {}).get("name", ""),
         )
         return io_read_json(result_url)
 
@@ -303,42 +241,19 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
 
     return False
 
+# TODO add env label for spark job
 # Get the match labels for the spark job.
 # The priority of the cluster/pool config is
 #     default < project annotation < env
 #
 # Returns:
 #   match_labels: the match labels for the spark job
-def get_spark_job_match_labels():
-    env_label = get_env_label()
-    match_labels = {
-        RESOURCE_AFFINITY_LABEL_CLUSTER: SPARK_CLUSTER,
-        RESOURCE_AFFINITY_LABEL_CLUSTER_TYPE: SPARK_CLUSTER_TYPE,
-        RESOURCE_AFFINITY_LABEL_NAME: SPARK_POOL_NAME,
-        RESOURCE_AFFINITY_LABEL_PATH: SPARK_POOL_PATH,
-        RESOURCE_AFFINITY_LABEL_SUPPORT_GPU: "false",  # Spark jobs do not support GPU
-        env_label: "true",
-    }
-
-    if SPARK_ZONE != "":
-        match_labels[RESOURCE_AFFINITY_LABEL_ZONE] = SPARK_ZONE
-
-    if SPARK_ZONE != "" or SPARK_CLUSTER != DEFAULT_SPARK_CLUSTER or SPARK_POOL_PATH != DEFAULT_SPARK_POOL_PATH:
-        # peloton is the only valid cluster type for spark jobs at the moment
-        match_labels[RESOURCE_AFFINITY_LABEL_CLUSTER_TYPE] = DEFAULT_SPARK_CLUSTER_TYPE
-        return match_labels
-
-    project_annotations = get_project_resource_annotation(os.environ["MA_NAMESPACE"], os.environ["MA_NAMESPACE"])
-    cloud_zone = project_annotations.get(RESOURCE_AFFINITY_LABEL_CLOUD_ZONE, "")
-    if cloud_zone != "":
-        for k, _ in match_labels.items():
-            if k in project_annotations:
-                match_labels[k] = project_annotations[k]
-        match_labels[RESOURCE_AFFINITY_LABEL_ZONE] = cloud_zone
-
-    # peloton is the only valid cluster type for spark jobs at the moment
-    match_labels[RESOURCE_AFFINITY_LABEL_CLUSTER_TYPE] = DEFAULT_SPARK_CLUSTER_TYPE
-    return match_labels
+#def get_spark_job_match_labels():
+#    match_labels = {
+#        env_label: "true",
+#    }
+#
+#    return match_labels
 
 def get_spark_job(
         namespace,
@@ -355,34 +270,36 @@ def get_spark_job(
         {"name": k, "value": v}
         for k, v in env.items()
     ]
-    match_labels = get_spark_job_match_labels()
-    env_label = get_env_label()
+
+    #    match_labels = get_spark_job_match_labels()
     preemptible = True
-    if env_label == RESOURCE_ENV_LABEL_PROD:
-        preemptible = False
+
+    # TODO RESOURCE_ENV_LABEL_PROD
+    #    if env_label == RESOURCE_ENV_LABEL_PROD:
+    #        preemptible = False
     return {
         "kind": "SparkJob",
-        "apiVersion": "michelangelo.uber.com/v2beta1",
+        "apiVersion": "michelangelo.api.v2",
         "metadata": {
             "namespace": namespace,
             "generateName": "uniflow-sp-",
         },
         "spec": {
             "user": {
-                "name": os.environ["UBER_LDAP_UID"],
-                "proxyUser": os.environ["UBER_LDAP_UID"],
+                "name": "test",
             },
-            "affinity": {
-                "resourceAffinity": {
-                    "selector": {
-                        "matchLabels": match_labels,
-                    },
-                },
-            },
+            #            "affinity": {
+            #                "resourceAffinity": {
+            #                    "selector": {
+            #                        "matchLabels": match_labels,
+            #                    },
+            #                },
+            #            },
             "driver": {
                 "pod": {
                     "resource": driver_resource,
                     "image": image,
+                    "imagePullingPolicy": "Never",
                     "env": env,
                 },
             },
@@ -390,6 +307,7 @@ def get_spark_job(
                 "pod": {
                     "resource": executor_resource,
                     "image": image,
+                    "imagePullingPolicy": "Never",
                     "env": env,
                 },
                 "instances": executor_instances,
@@ -410,7 +328,7 @@ def get_spark_job(
             "scheduling": {
                 "preemptible": preemptible,
             },
-            "sparkVersion": "SPARK_33",
+            "sparkVersion": "3.5.5",
         },
     }
 

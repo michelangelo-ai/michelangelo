@@ -14,6 +14,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
 	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
+	"github.com/michelangelo-ai/michelangelo/go/controllers/sparkjob"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -53,6 +54,7 @@ func options() fx.Option {
 		fx.Provide(scheme),
 		raycluster.Module,
 		rayjob.Module,
+		sparkjob.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))

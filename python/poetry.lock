@@ -2656,7 +2656,7 @@ description = "NVIDIA Collective Communication Library (NCCL) Runtime"
 optional = true
 python-versions = ">=3"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and platform_machine == \"x86_64\" and (extra == \"vllm\" or extra == \"example\")"
+markers = "platform_system == \"Linux\" and platform_machine != \"aarch64\" and (platform_machine == \"x86_64\" or extra == \"example\") and (extra == \"vllm\" or extra == \"example\")"
 files = [
     {file = "nvidia_nccl_cu12-2.21.5-py3-none-manylinux2014_x86_64.whl", hash = "sha256:8579076d30a8c24988834445f8d633c697d42397e92ffc3f63fa26766d25e0a0"},
 ]
@@ -3345,6 +3345,19 @@ files = [
 ]
 
 [[package]]
+name = "py4j"
+version = "0.10.9.7"
+description = "Enables Python programs to dynamically access arbitrary Java objects"
+optional = false
+python-versions = "*"
+groups = ["main"]
+markers = "extra == \"plugin\""
+files = [
+    {file = "py4j-0.10.9.7-py2.py3-none-any.whl", hash = "sha256:85defdfd2b2376eb3abf5ca6474b51ab7e0de341c75a02f46dc9b5976f5a5c1b"},
+    {file = "py4j-0.10.9.7.tar.gz", hash = "sha256:0b6e5315bb3ada5cf62ac651d107bb2ebc02def3dee9d9548e3baac644ea8dbb"},
+]
+
+[[package]]
 name = "pyarrow"
 version = "19.0.1"
 description = "Python library for Apache Arrow"
@@ -3606,6 +3619,28 @@ files = [
 
 [package.extras]
 windows-terminal = ["colorama (>=0.4.6)"]
+
+[[package]]
+name = "pyspark"
+version = "3.5.5"
+description = "Apache Spark Python API"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "extra == \"plugin\""
+files = [
+    {file = "pyspark-3.5.5.tar.gz", hash = "sha256:6effc9ce98edf231f4d683fd14f7270629bf8458c628d6a2620ded4bb34f3cb9"},
+]
+
+[package.dependencies]
+py4j = "0.10.9.7"
+
+[package.extras]
+connect = ["googleapis-common-protos (>=1.56.4)", "grpcio (>=1.56.0)", "grpcio-status (>=1.56.0)", "numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
+ml = ["numpy (>=1.15,<2)"]
+mllib = ["numpy (>=1.15,<2)"]
+pandas-on-spark = ["numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
+sql = ["numpy (>=1.15,<2)", "pandas (>=1.0.5)", "pyarrow (>=4.0.0)"]
 
 [[package]]
 name = "pytest"
@@ -4402,7 +4437,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "python_version == \"3.9\" and extra == \"vllm\" or platform_system == \"Linux\" and platform_machine == \"aarch64\" and python_version < \"3.10\" and extra == \"vllm\""
+markers = "(python_version == \"3.9\" or platform_system == \"Linux\") and (python_version == \"3.9\" or platform_machine == \"aarch64\") and python_version < \"3.10\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "scipy-1.13.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:20335853b85e9a49ff7572ab453794298bcf0354d8068c5f6775a0eabf350aca"},
     {file = "scipy-1.13.1-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:d605e9c23906d1994f55ace80e0125c587f96c020037ea6aa98d01b4bd2e222f"},
@@ -4446,7 +4481,7 @@ description = "Fundamental algorithms for scientific computing in Python"
 optional = true
 python-versions = ">=3.10"
 groups = ["main"]
-markers = "python_version >= \"3.10\" and extra == \"vllm\""
+markers = "python_version >= \"3.10\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "scipy-1.15.2-cp310-cp310-macosx_10_13_x86_64.whl", hash = "sha256:a2ec871edaa863e8213ea5df811cd600734f6400b4af272e1c011e69401218e9"},
     {file = "scipy-1.15.2-cp310-cp310-macosx_12_0_arm64.whl", hash = "sha256:6f223753c6ea76983af380787611ae1291e3ceb23917393079dcc746ba60cfb5"},
@@ -4575,7 +4610,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"example\" or extra == \"vllm\""
+markers = "(python_version == \"3.9\" or platform_system == \"Linux\") and (python_version == \"3.9\" or platform_machine == \"aarch64\") and python_version < \"3.10\" and (extra == \"example\" or extra == \"vllm\") or (python_version == \"3.10\" or python_version == \"3.11\" or extra == \"vllm\" or extra == \"example\") and python_version >= \"3.10\" and (extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "setuptools-74.1.1-py3-none-any.whl", hash = "sha256:fc91b5f89e392ef5b77fe143b17e32f65d3024744fba66dc3afe07201684d766"},
     {file = "setuptools-74.1.1.tar.gz", hash = "sha256:2353af060c06388be1cecbf5953dcdb1f38362f87a2356c480b6b4d5fcfc8847"},
@@ -4610,7 +4645,7 @@ description = "Python 2 and 3 compatibility utilities"
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "(extra == \"vllm\" or extra == \"plugin\" or extra == \"example\" or python_version == \"3.10\") and platform_system == \"Linux\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\""
+markers = "(python_version == \"3.9\" or platform_system == \"Linux\") and (python_version == \"3.9\" or platform_machine == \"aarch64\") and python_version < \"3.10\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\") or (python_version == \"3.11\" or extra == \"vllm\" or extra == \"plugin\" or extra == \"example\") and python_version >= \"3.10\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\")"
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -5624,6 +5659,59 @@ numpy = "*"
 torch = "2.6.0"
 
 [[package]]
+name = "xgboost"
+version = "2.1.4"
+description = "XGBoost Python Package"
+optional = true
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "extra == \"example\""
+files = [
+    {file = "xgboost-2.1.4-py3-none-macosx_10_15_x86_64.macosx_11_0_x86_64.macosx_12_0_x86_64.whl", hash = "sha256:78d88da184562deff25c820d943420342014dd55e0f4c017cc4563c2148df5ee"},
+    {file = "xgboost-2.1.4-py3-none-macosx_12_0_arm64.whl", hash = "sha256:523db01d4e74b05c61a985028bde88a4dd380eadc97209310621996d7d5d14a7"},
+    {file = "xgboost-2.1.4-py3-none-manylinux2014_aarch64.whl", hash = "sha256:57c7e98111aceef4b689d7d2ce738564a1f7fe44237136837a47847b8b33bade"},
+    {file = "xgboost-2.1.4-py3-none-manylinux2014_x86_64.whl", hash = "sha256:f1343a512e634822eab30d300bfc00bf777dc869d881cc74854b42173cfcdb14"},
+    {file = "xgboost-2.1.4-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:d366097d0db047315736f46af852feaa907f6d7371716af741cdce488ae36d20"},
+    {file = "xgboost-2.1.4-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:8df6da72963969ab2bf49a520c3e147b1e15cbeddd3aa0e3e039b3532c739339"},
+    {file = "xgboost-2.1.4-py3-none-win_amd64.whl", hash = "sha256:8bbfe4fedc151b83a52edbf0de945fd94358b09a81998f2945ad330fd5f20cd6"},
+    {file = "xgboost-2.1.4.tar.gz", hash = "sha256:ab84c4bbedd7fae1a26f61e9dd7897421d5b08454b51c6eb072abc1d346d08d7"},
+]
+
+[package.dependencies]
+numpy = "*"
+nvidia-nccl-cu12 = {version = "*", markers = "platform_system == \"Linux\" and platform_machine != \"aarch64\""}
+scipy = "*"
+
+[package.extras]
+dask = ["dask", "distributed", "pandas"]
+datatable = ["datatable"]
+pandas = ["pandas (>=1.2)"]
+plotting = ["graphviz", "matplotlib"]
+pyspark = ["cloudpickle", "pyspark", "scikit-learn"]
+scikit-learn = ["scikit-learn"]
+
+[[package]]
+name = "xgboost-ray"
+version = "0.1.19"
+description = "A Ray backend for distributed XGBoost"
+optional = true
+python-versions = "*"
+groups = ["main"]
+markers = "extra == \"example\""
+files = [
+    {file = "xgboost_ray-0.1.19-py3-none-any.whl", hash = "sha256:c6956250e1686df207149962b1f18346335a65414324a2c135f88fb0b418d25b"},
+    {file = "xgboost_ray-0.1.19.tar.gz", hash = "sha256:03e3661712daa1c2208086161881129bb6ec3e19bcd04742ace11191922236d0"},
+]
+
+[package.dependencies]
+numpy = ">=1.16"
+packaging = "*"
+pandas = "*"
+ray = ">=2.7"
+wrapt = ">=1.12.1"
+xgboost = ">=0.90"
+
+[[package]]
 name = "xgrammar"
 version = "0.1.16"
 description = "Efficient, Flexible and Portable Structured Generation"
@@ -5925,11 +6013,11 @@ type = ["pytest-mypy"]
 
 [extras]
 dev = ["jinja2", "pre-commit", "pytest", "ruff"]
-example = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "s3fs", "torch", "transformers"]
-plugin = ["ray"]
+example = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "s3fs", "torch", "transformers", "xgboost", "xgboost_ray"]
+plugin = ["pyspark", "ray"]
 vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "s3fs", "setuptools", "torch", "transformers", "vllm"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "7f611f290f89d87ec68298a470f1c7fd9b580728ded66334b3e3061de2f93e46"
+content-hash = "8e3034576ff54f6c45ee514b7bfda0111546493290ece566297c1ed9e38223ac"
