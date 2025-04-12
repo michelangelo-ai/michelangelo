@@ -9,8 +9,14 @@ type Fx{{.KindName}}ServiceHandlerParams struct {
 
 var {{.LowerKindName}}ApiHooks []{{.KindName}}APIHook
 
+// Register{{.KindName}}APIHook registers a new {{.KindName}}APIHook to be called by the {{.KindName}}ServiceHandler.
 func Register{{.KindName}}APIHook(hook {{.KindName}}APIHook) {
     {{.LowerKindName}}ApiHooks = append({{.LowerKindName}}ApiHooks, hook)
+}
+
+// Get{{.KindName}}APIHooks returns the list of registered {{.KindName}}APIHooks.
+func Get{{.KindName}}APIHooks() []{{.KindName}}APIHook {
+    return {{.LowerKindName}}ApiHooks
 }
 
 func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
