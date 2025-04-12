@@ -7,34 +7,29 @@ from typing import Optional
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
 
-from michelangelo.uniflow import setup_krb5_for_hadoop, set_hadoop_classpath
 from michelangelo.uniflow.core.io_registry import io_registry
 from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
 from michelangelo.uniflow.plugins.spark.io import SparkIO
-from uber.core.fsspec_cfs.cfs import register_cfs_into_fsspec
-from michelangelo.uniflow.fs.fsspec_terrablob import register_terrablob_into_fsspec
 
 log = logging.getLogger(__name__)
 
 io_registry()[DataFrame] = SparkIO
-register_cfs_into_fsspec()
-register_terrablob_into_fsspec()
 
 _binding = TaskBinding(
-    star_file=Path(__file__).resolve().parent / "spark_task.star",
+    star_file=Path(__file__).resolve().parent / "task.star",
     function="spark_task",
     export="__spark_task",
 )
 
 _config_binding = TaskBinding(
-    star_file=Path(__file__).resolve().parent / "spark_task.star",
+    star_file=Path(__file__).resolve().parent / "task.star",
     function="spark_config",
     export="__spark_config",
 )
 
 
 @dataclass
-class Spark(TaskConfig):
+class SparkTask(TaskConfig):
     """
     This class encapsulates the configuration properties required to orchestrate a Spark task, including resource
     specifications. It is designed to interface with a Starlark function that executes a Spark job according to these
@@ -72,11 +67,6 @@ class Spark(TaskConfig):
 
         spark = sb.getOrCreate()
         assert spark
-
-        # Set up Hadoop classpath and Kerberos config for remote runs.
-        if os.environ.get("UF_REMOTE_RUN") == "1":
-            set_hadoop_classpath()
-            setup_krb5_for_hadoop()
 
     def post_run(self):
         spark = SparkSession.getActiveSession()

@@ -1,5 +1,6 @@
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
+from examples.bert_cola.preprocessing import preprocess
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -13,6 +14,7 @@ def train_workflow():
         data_name,
         tokenizer_max_length=128,
     )
+    train_data, validation_data, test_data = preprocess(train_data, validation_data, test_data)
     result = train(
         train_data,
         validation_data,

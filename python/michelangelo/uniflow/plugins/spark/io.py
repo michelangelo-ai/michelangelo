@@ -3,7 +3,7 @@ from typing import Optional, Any
 
 from pyspark.sql import DataFrame, SparkSession
 
-from uber.ai.uniflow.core.io_registry import IO
+from michelangelo.uniflow.core.io_registry import IO
 
 
 class SparkIO(IO[DataFrame]):

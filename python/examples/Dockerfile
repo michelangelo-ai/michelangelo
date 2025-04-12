@@ -10,6 +10,7 @@ FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 RUN apt-get update && apt-get install -y \
     curl \
     software-properties-common \
+    vim \
     wget \
     build-essential \
     libssl-dev \
@@ -43,6 +44,16 @@ RUN python --version
 RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
+
+###
+### Install Java
+###
+# Install OpenJDK 11 (multi-arch compatible and open-source)
+RUN apt-get update && apt-get install -y openjdk-11-jdk
+
+# Set JAVA_HOME and update PATH
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory
 WORKDIR /app
