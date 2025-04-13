@@ -45,6 +45,21 @@ RUN curl -sSL https://install.python-poetry.org | python3 -
 ENV PATH="/root/.local/bin:$PATH"
 RUN poetry --version
 
+
+# --------------------------
+# 3. Install Spark (manual)
+# --------------------------
+ENV SPARK_VERSION=3.5.5
+ENV HADOOP_VERSION=3
+ENV SPARK_HOME=/opt/spark
+
+RUN curl -L https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION}.tgz \
+  | tar -xz -C /opt && \
+  ln -s /opt/spark-${SPARK_VERSION}-bin-hadoop${HADOOP_VERSION} ${SPARK_HOME}
+
+ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
+
+
 ###
 ### Install Java
 ###
