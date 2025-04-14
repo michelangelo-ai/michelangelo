@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
+	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
 	"go.uber.org/cadence"
-	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
@@ -73,7 +73,7 @@ func (r *module) Attr(n string) (starlark.Value, error) {
 func (r *module) AttrNames() []string { return ext.SortedKeys(r.attributes) }
 
 func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var spec *starlark.Dict
@@ -116,7 +116,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 //
 //	  return: dict: job status
 func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var _job *starlark.Dict
