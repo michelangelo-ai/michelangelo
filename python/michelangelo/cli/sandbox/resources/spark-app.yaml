@@ -1,0 +1,38 @@
+apiVersion: sparkoperator.k8s.io/v1beta2
+kind: SparkApplication
+metadata:
+  name: spark-app-2
+  namespace: default
+spec:
+  type: Python
+  mode: cluster
+  image: docker.io/library/examples:latest
+  imagePullPolicy: Never
+  sparkVersion: 3.5.5
+  mainClass: org.apache.spark.deploy.PythonRunner
+  mainApplicationFile: local:///app/michelangelo/uniflow/core/run_task.py
+  arguments:
+    - "--task"
+    - "examples.boston_housing_xgb.boston_housing_xgb.preprocess"
+    - "--args"
+    - "[]"
+    - "--kwargs"
+    - '{"cast_float_columns":["age","b","chas","crim","dis","indus","lstat","nox","ptratio","rad","rm","tax","zn","medv"],"train_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/f4ec36a921214d5c9c4e3b4705fca3c0"},"validation_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/6be009b1327c46179761df6feb7b99e9"}}'
+    - "--result-url"
+    - "s3://default/4f4ffd84ce9146b6afe67a7cbda739a7.json"
+  driver:
+    cores: 1
+    memory: 1g
+    serviceAccount: spark-operator-spark
+    labels:
+      version: 3.5.5
+    envFrom:
+      - configMapRef:
+          name: michelangelo-config
+  executor:
+    cores: 1
+    memory: 1g
+    instances: 2
+    envFrom:
+      - configMapRef:
+          name: michelangelo-config

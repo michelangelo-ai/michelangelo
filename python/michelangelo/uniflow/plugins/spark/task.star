@@ -2,7 +2,6 @@ load("@plugin", "atexit", "cad", "json", "os", "spark", "time")
 load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
-    "PYTHONPATH": ".",
 }
 
 SPARK_DEFAULT_DRIVER_CPU = os.environ.get("SPARK_DEFAULT_DRIVER_CPU", "4")
@@ -64,7 +63,8 @@ def spark_task(
         spark_job = get_spark_job(
             namespace = namespace,
             image = get_task_image(task_name),
-            main_file = "local:///home/udocker/app/uber/ai/uniflow/core/run_task.py",
+            main_file = "local:///app/michelangelo/uniflow/core/run_task.py",
+            main_class = "org.apache.spark.deploy.PythonRunner",
             # TODO: andrii: set --overrides
             main_args = ["--task", task_path, "--args", _args, "--kwargs", _kwargs, "--result-url", result_url],
             driver_resource = resource_dict(
@@ -259,6 +259,7 @@ def get_spark_job(
         namespace,
         image,
         main_file,
+        main_class,
         main_args,
         driver_resource,
         executor_resource,
@@ -301,6 +302,15 @@ def get_spark_job(
                     "image": image,
                     "imagePullingPolicy": "Never",
                     "env": env,
+                    "envFrom": [
+                        {
+                            "configMapRef": {
+                                "localObjectReference": {
+                                    "name": "michelangelo-config",
+                                },
+                            },
+                        },
+                    ],
                 },
             },
             "executor": {
@@ -309,6 +319,15 @@ def get_spark_job(
                     "image": image,
                     "imagePullingPolicy": "Never",
                     "env": env,
+                    "envFrom": [
+                        {
+                            "configMapRef": {
+                                "localObjectReference": {
+                                    "name": "michelangelo-config",
+                                },
+                            },
+                        },
+                    ],
                 },
                 "instances": executor_instances,
             },
@@ -324,6 +343,7 @@ def get_spark_job(
             },
             "mainApplicationFile": main_file,
             "mainArgs": main_args,
+            "mainClass": main_class,
             "deps": {},
             "scheduling": {
                 "preemptible": preemptible,

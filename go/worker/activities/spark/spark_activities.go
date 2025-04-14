@@ -2,14 +2,19 @@ package spark
 
 import (
 	"context"
+	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/cadence"
+	"go.uber.org/cadence/activity"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	pluginutils "github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -25,9 +30,9 @@ type TerminateClusterRequest struct {
 
 // TerminateSparkJobRequest defines the request parameters for terminating a Spark job.
 type TerminateSparkJobRequest struct {
-	Name      string `json:"name,omitempty"`      // name of the spark job
-	Namespace string `json:"namespace,omitempty"` // namespace of the spark job
-	Type      string `json:"type,omitempty"`      // termination code
+	Name      string               `json:"name,omitempty"`      // name of the spark job
+	Namespace string               `json:"namespace,omitempty"` // namespace of the spark job
+	Type      v2pb.TerminationType `json:"type,omitempty"`      // termination code
 	Reason    string
 }
 
@@ -136,6 +141,58 @@ func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJo
 
 func hasSparkJobTerminalCondition(state v2pb.SparkJobStatus) bool {
 	return state.ApplicationId == "FAILED" || state.ApplicationId == "COMPLETED"
+}
+
+// TerminateSparkJob kills a spark job
+func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSparkJobRequest) (*v2pb.UpdateSparkJobResponse, *cadence.CustomError) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("activity-start", zap.String("namespace", request.Namespace), zap.String("name", request.Name))
+
+	getRequest := v2pb.GetSparkJobRequest{
+		Namespace: request.Namespace,
+		Name:      request.Name,
+	}
+	response, err := r.sparkJobService.GetSparkJob(ctx, &getRequest)
+	if err != nil {
+		logger.Error("activity-error", ext.ZapError(err)...)
+		if utils.IsNotFoundError(err) {
+			// If it is not find, no need to kill it
+			logger.Error("Spark Job Not Found", zap.String("error", err.Error()))
+			return nil, nil
+		}
+		return nil, cadence.NewCustomError(utils.GetCode(err), err.Error())
+	}
+	sparkJob := response.SparkJob
+	succeeded := GetCondition(pluginutils.SucceededCondition, sparkJob.Status.GetStatusConditions())
+	if succeeded != nil && succeeded.Status != apipb.CONDITION_STATUS_UNKNOWN {
+		// If the job is already succeeded, no need to kill it
+		logger.Info("Skip Killing. Spark Job Already Terminated.", zap.String("namespace", request.Namespace), zap.String("name", request.Name))
+		return &v2pb.UpdateSparkJobResponse{SparkJob: sparkJob}, nil
+	}
+	sparkJob.Spec.Termination = &v2pb.TerminationSpec{
+		Type:   request.Type,
+		Reason: request.Reason,
+	}
+	updateResp, err := r.sparkJobService.UpdateSparkJob(ctx, &v2pb.UpdateSparkJobRequest{SparkJob: sparkJob})
+	if err != nil {
+		logger.Error("activity-error", ext.ZapError(err)...)
+		return nil, cadence.NewCustomError(utils.GetCode(err), err.Error())
+	}
+	return updateResp, nil
+}
+
+// GetCondition provides a utility method for retrieving a particular condition from a condition list.
+// If there is no such condition that exists, nil is returned.
+func GetCondition(t string, conditions []*apipb.Condition) *apipb.Condition {
+	if conditions == nil {
+		return nil
+	}
+	for _, condition := range conditions {
+		if condition != nil && condition.Type == t {
+			return condition
+		}
+	}
+	return nil
 }
 
 func _activity[REQ proto.Message, RES proto.Message](

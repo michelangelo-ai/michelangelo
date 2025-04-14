@@ -96,15 +96,15 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			Mode:                sparkv1beta2.DeployModeCluster,
 			Image:               &spec.Driver.Pod.Image,
 			ImagePullPolicy:     &spec.Driver.Pod.ImagePullingPolicy,
-			MainClass:           stringPtr(spec.MainClass),
-			MainApplicationFile: stringPtr(spec.MainApplicationFile),
+			MainClass:           stringPtr(spec.MainClass, true),
+			MainApplicationFile: stringPtr(spec.MainApplicationFile, true),
 			Arguments:           spec.MainArgs,
 			SparkConf:           spec.SparkConf,
 			Driver: sparkv1beta2.DriverSpec{
-				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod),
+				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, stringPtr("spark-operator-spark", true)),
 			},
 			Executor: sparkv1beta2.ExecutorSpec{
-				SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod),
+				SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod, nil),
 				Instances:    int32Ptr(spec.Executor.Instances),
 			},
 		},
@@ -145,11 +145,11 @@ func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *
 	job.Status.ApplicationId = string(app.UID)
 	job.Status.JobUrl = url
 
-	return stringPtr(string(appID)), url, nil
+	return stringPtr(string(appID), true), url, nil
 }
 
 // toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec
-func (r *Reconciler) toSparkPodSpec(pod *v2pb.PodSpec) sparkv1beta2.SparkPodSpec {
+func (r *Reconciler) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) sparkv1beta2.SparkPodSpec {
 	if pod == nil {
 		return sparkv1beta2.SparkPodSpec{}
 	}
@@ -163,18 +163,44 @@ func (r *Reconciler) toSparkPodSpec(pod *v2pb.PodSpec) sparkv1beta2.SparkPodSpec
 		})
 	}
 
+	// Convert envFrom fields
+	envFrom := make([]corev1.EnvFromSource, 0, len(pod.EnvFrom))
+	for _, ef := range pod.EnvFrom {
+		coreEnvFromSource := corev1.EnvFromSource{}
+		if ef.SecretRef != nil {
+			coreEnvFromSource.SecretRef = &corev1.SecretEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: ef.SecretRef.LocalObjectReference.Name,
+				},
+			}
+		}
+		if ef.ConfigMapRef != nil {
+			coreEnvFromSource.ConfigMapRef = &corev1.ConfigMapEnvSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: ef.ConfigMapRef.LocalObjectReference.Name,
+				},
+			}
+		}
+		envFrom = append(envFrom, coreEnvFromSource)
+	}
+
 	return sparkv1beta2.SparkPodSpec{
 		Cores:  int32Ptr(pod.Resource.Cpu),
-		Memory: stringPtr(pod.Resource.Memory),
+		Memory: stringPtr(pod.Resource.Memory, true),
 		GPU: &sparkv1beta2.GPUSpec{
 			Name:     pod.Resource.GpuSku,
 			Quantity: int64(pod.Resource.Gpu),
 		},
-		Env: envVars,
+		Env:            envVars,
+		EnvFrom:        envFrom,
+		ServiceAccount: serviceAccount,
 	}
 }
 
-func stringPtr(s string) *string {
+func stringPtr(s string, emptyIsNil bool) *string {
+	if s == "" && emptyIsNil {
+		return nil
+	}
 	return &s
 }
 

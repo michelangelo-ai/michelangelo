@@ -59,6 +59,20 @@ RUN curl -L https://archive.apache.org/dist/spark/spark-${SPARK_VERSION}/spark-$
 
 ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${PATH}"
 
+# -----------------------------
+# 4. Add Hadoop AWS & AWS SDK
+# -----------------------------
+# Create JAR directory if needed
+RUN mkdir -p ${SPARK_HOME}/jars
+
+# Download hadoop-aws and aws-java-sdk-bundle JARs for S3 support
+RUN curl -L -o ${SPARK_HOME}/jars/hadoop-aws-3.3.4.jar https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar && \
+    curl -L -o ${SPARK_HOME}/jars/aws-java-sdk-bundle-1.11.1026.jar https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.11.1026/aws-java-sdk-bundle-1.11.1026.jar
+
+RUN mkdir -p ${SPARK_HOME}/conf && \
+    echo "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" >> ${SPARK_HOME}/conf/spark-defaults.conf && \
+    echo "spark.hadoop.fs.s3a.aws.credentials.provider=com.amazonaws.auth.DefaultAWSCredentialsProviderChain" >> ${SPARK_HOME}/conf/spark-defaults.conf
+
 
 ###
 ### Install Java
@@ -86,3 +100,8 @@ RUN poetry install -E example
 
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"
+
+COPY examples/entrypoint.sh /opt/entrypoint.sh
+RUN chmod +x /opt/entrypoint.sh
+
+ENTRYPOINT ["/opt/entrypoint.sh"]

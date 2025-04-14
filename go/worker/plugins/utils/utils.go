@@ -10,6 +10,24 @@ import (
 	"go.uber.org/yarpc/yarpcerrors"
 )
 
+// These are valid condition types of all Jobs
+const (
+	EnqueuedCondition      string = "Enqueued"
+	KillingCondition       string = "Killing"
+	KilledCondition        string = "Killed"
+	LaunchedCondition      string = "Launched"
+	PendingCondition       string = "Pending"
+	ScheduledCondition     string = "Scheduled"
+	SecretCreatedCondition string = "SecretCreated"
+	SucceededCondition     string = "Succeeded"
+)
+
+// These are valid condition types of a Spark Job
+const (
+	SparkAppRunningCondition string = "SparkAppRunning"
+	SparkAppFailedCondition  string = "SparkAppFailed"
+)
+
 const CadenceLongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
 
 var CadenceDefaultNonRetriableErrorReasons = []string{
