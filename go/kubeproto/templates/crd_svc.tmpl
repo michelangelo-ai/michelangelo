@@ -11,20 +11,20 @@ var {{.LowerKindName}}ApiHooks []{{.KindName}}APIHook
 
 // Register{{.KindName}}APIHook registers a new {{.KindName}}APIHook to be called by the {{.KindName}}ServiceHandler.
 func Register{{.KindName}}APIHook(hook {{.KindName}}APIHook) {
-    {{.LowerKindName}}ApiHooks = append({{.LowerKindName}}ApiHooks, hook)
+\t{{.LowerKindName}}ApiHooks = append({{.LowerKindName}}ApiHooks, hook)
 }
 
 // Get{{.KindName}}APIHooks returns the list of registered {{.KindName}}APIHooks.
 func Get{{.KindName}}APIHooks() []{{.KindName}}APIHook {
-    return {{.LowerKindName}}ApiHooks
+	return {{.LowerKindName}}ApiHooks
 }
 
 func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
 	return &{{.LowerKindName}}ServiceHandler{
-	    apiHandler:      params.Handler,
-	    MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),
-	    auth:            params.Auth,
-	    auditLogEmitter: params.AuditLog,
+		apiHandler:      params.Handler,
+		MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),
+		auth:            params.Auth,
+		auditLogEmitter: params.AuditLog,
 	}
 }
 
@@ -70,6 +70,14 @@ type {{.KindName}}APIHook interface {
 	// If this method returns an error, the Get{{.KindName}} gRPC call will return the error to the client.
 	OnGetSuccess(context.Context, *{{.KindName}}) error
 
+	// OnListSuccess is called after a successful K8s list, before the result is returned to the client.
+	//
+	// API developer may use this method to retrieve the data that was stored in another storage system (by BeforeCreate
+	// and BeforeUpdate), and fill back to the original fields in {{.KindName}}.
+	//
+	// If this method returns an error, the List{{.KindName}} gRPC call will return the error to the client.
+	OnListSuccess(context.Context, *List{{.KindName}}Request, *{{.KindName}}List) error
+
 	// BeforeDelete is called before a Delete{{.KindName}}Request is sent to the K8s API server.
 	//
 	// This method can be used to validate or modify the Delete{{.KindName}}Request, before it's sent to the k8s API
@@ -87,7 +95,7 @@ type {{.KindName}}APIHook interface {
 
 	// BeforeDeleteCollection is called before a Delete{{.KindName}}CollectionRequest is sent to the K8s API server.
 	//
-    // This method can be used to validate or modify the Delete{{.KindName}}CollectionRequest, before it's sent to the k8s API
+	// This method can be used to validate or modify the Delete{{.KindName}}CollectionRequest, before it's sent to the k8s API
 	// server. If this method returns an error, the Delete{{.KindName}}CollectionRequest will not be sent to the K8s API server
 	// and the error is returned to the gRPC client.
 	BeforeDeleteCollection(context.Context, *Delete{{.KindName}}CollectionRequest) error
@@ -114,6 +122,13 @@ func (n Noop{{.KindName}}APIHook) BeforeUpdate(context.Context, *Update{{.KindNa
 }
 
 func (n Noop{{.KindName}}APIHook) OnGetSuccess(context.Context, *{{.KindName}}) error {
+	return nil
+}
+
+func (n Noop{{.KindName}}APIHook) OnListSuccess(
+	context.Context,
+	*List{{.KindName}}Request,
+	*{{.KindName}}List) error {
 	return nil
 }
 
@@ -175,18 +190,18 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 		createOptions = request.CreateOptions
 	}
 
-    if err = api.Validate(request.{{.KindName}}); err != nil {
+	if err = api.Validate(request.{{.KindName}}); err != nil {
 		metric.Counter("fail").Inc(1)
 		return nil, err
 	}
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        if err = hook.BeforeCreate(ctx, request); err != nil {
-            logger.Error(err, "Error in BeforeCreate API hook", "error", err, "api_msg_tag", "Create{{.KindName}}")
-            metric.Counter("fail").Inc(1)
-            return nil, err
-        }
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		if err = hook.BeforeCreate(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeCreate API hook", "error", err, "api_msg_tag", "Create{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+	}
 
 	err = c.apiHandler.Create(ctx, request.{{.KindName}}, createOptions)
 
@@ -244,13 +259,13 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 	result.APIVersion = GroupVersion.String()
 	result.Kind = "{{.KindName}}"
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        if err = hook.OnGetSuccess(ctx, result); err != nil {
-            logger.Error(err, "Error in OnGetSuccess API hook", "error", err, "api_msg_tag", "Get{{.KindName}}")
-            metric.Counter("fail").Inc(1)
-            return nil, err
-        }
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		if err = hook.OnGetSuccess(ctx, result); err != nil {
+			logger.Error(err, "Error in OnGetSuccess API hook", "error", err, "api_msg_tag", "Get{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+	}
 
 	logger.Info("Get{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Get{{.KindName}}")
 
@@ -306,18 +321,18 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 		updateOptions = request.UpdateOptions
 	}
 
-    if err = api.Validate(request.{{.KindName}}); err != nil {
-    	metric.Counter("fail").Inc(1)
-    	return nil, err
-    }
+	if err = api.Validate(request.{{.KindName}}); err != nil {
+		metric.Counter("fail").Inc(1)
+		return nil, err
+	}
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        if err = hook.BeforeUpdate(ctx, request); err != nil {
-            logger.Error(err, "Error in BeforeUpdate API hook", "error", err, "api_msg_tag", "Update{{.KindName}}")
-            metric.Counter("fail").Inc(1)
-            return nil, err
-        }
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		if err = hook.BeforeUpdate(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeUpdate API hook", "error", err, "api_msg_tag", "Update{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+	}
 
 	err = c.apiHandler.Update(ctx, request.{{.KindName}}, updateOptions)
 
@@ -381,13 +396,13 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 	deleteObj := &{{.KindName}}{
 		ObjectMeta: metav1.ObjectMeta{Namespace: request.Namespace, Name: request.Name}}
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        if err = hook.BeforeDelete(ctx, request); err != nil {
-            logger.Error(err, "Error in BeforeDelete API hook", "error", err, "api_msg_tag", "Delete{{.KindName}}")
-            metric.Counter("fail").Inc(1)
-            return nil, err
-        }
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		if err = hook.BeforeDelete(ctx, request); err != nil {
+			logger.Error(err, "Error in BeforeDelete API hook", "error", err, "api_msg_tag", "Delete{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
+	}
 
 	err = c.apiHandler.Delete(ctx, deleteObj, deleteOptions)
 
@@ -397,9 +412,9 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 		return nil, err
 	}
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        hook.OnDeleteSuccess(ctx, request)
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		hook.OnDeleteSuccess(ctx, request)
+	}
 
 	logger.Info("Delete{{.KindName}} Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}")
 
@@ -472,9 +487,9 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 		return nil, err
 	}
 
-    for _, hook := range {{.LowerKindName}}ApiHooks {
-        hook.OnDeleteCollectionSuccess(ctx, request)
-    }
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		hook.OnDeleteCollectionSuccess(ctx, request)
+	}
 
 	logger.Info("Delete{{.KindName}}Collection Request Successfully Completed.", "api_msg_tag", "Delete{{.KindName}}Collection")
 
@@ -519,6 +534,14 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
 		logger.Error(err, "API Handler failed to List {{.KindName}}", "error", err, "api_msg_tag", "List{{.KindName}}")
 		metric.Counter("fail").Inc(1)
 		return nil, err
+	}
+
+	for _, hook := range {{.LowerKindName}}ApiHooks {
+		if err = hook.OnListSuccess(ctx, request, result); err != nil {
+			logger.Error(err, "Error in OnListSuccess API hook", "error", err, "api_msg_tag", "Get{{.KindName}}")
+			metric.Counter("fail").Inc(1)
+			return nil, err
+		}
 	}
 
 	logger.Info("List{{.KindName}} Request Successfully Completed.", "api_msg_tag", "List{{.KindName}}")
