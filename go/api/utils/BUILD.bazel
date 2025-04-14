@@ -2,7 +2,10 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["utils.go"],
+    srcs = [
+        "errors.go",
+        "utils.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/utils",
     visibility = ["//visibility:public"],
     deps = [
@@ -15,6 +18,8 @@ go_library(
         "@org_golang_google_grpc//codes:go_default_library",
         "@org_golang_google_grpc//status:go_default_library",
         "@org_uber_go_yarpc//:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf:go_default_library",
+        "@org_uber_go_yarpc//yarpcerrors:go_default_library",
     ],
 )
 
