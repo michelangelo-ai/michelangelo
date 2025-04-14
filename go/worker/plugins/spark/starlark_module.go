@@ -6,6 +6,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
+	"github.com/cadence-workflow/starlark-worker/star"
 	"go.starlark.net/starlark"
 	"go.uber.org/cadence"
 	"go.uber.org/cadence/workflow"
@@ -42,25 +43,34 @@ var timeout int64 = 0
 var poll int64 = 10
 
 type module struct {
-	attributes map[string]starlark.Value
+	attributes map[string]*starlark.Builtin
+	properties map[string]star.PropertyFactory
 }
 
 func newModule() starlark.Value {
 	m := &module{}
-	m.attributes = map[string]starlark.Value{
-		"create_job": starlark.NewBuiltin("create_job", m.createJob).BindReceiver(m),
-		"sensor_job": starlark.NewBuiltin("sensor_job", m.sensorJob).BindReceiver(m),
+	m.attributes = map[string]*starlark.Builtin{
+		"create_job": starlark.NewBuiltin("create_job", m.createJob),
+		"sensor_job": starlark.NewBuiltin("sensor_job", m.sensorJob),
+	}
+	m.properties = map[string]star.PropertyFactory{
+		"running_condition_type":   getRunningConditionType,
+		"succeeded_condition_type": getSucceededConditionType,
+		"killed_condition_type":    getKilledConditionType,
 	}
 	return m
 }
 
-func (r *module) String() string                        { return pluginID }
-func (r *module) Type() string                          { return pluginID }
-func (r *module) Freeze()                               {}
-func (r *module) Truth() starlark.Bool                  { return true }
-func (r *module) Hash() (uint32, error)                 { return 0, fmt.Errorf("no-hash") }
-func (r *module) Attr(n string) (starlark.Value, error) { return r.attributes[n], nil }
-func (r *module) AttrNames() []string                   { return ext.SortedKeys(r.attributes) }
+func (r *module) String() string        { return pluginID }
+func (r *module) Type() string          { return pluginID }
+func (r *module) Freeze()               {}
+func (r *module) Truth() starlark.Bool  { return true }
+func (r *module) Hash() (uint32, error) { return 0, fmt.Errorf("no-hash") }
+func (r *module) Attr(n string) (starlark.Value, error) {
+	return star.Attr(
+		r, n, r.attributes, r.properties)
+}
+func (r *module) AttrNames() []string { return ext.SortedKeys(r.attributes) }
 
 func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
 	ctx := cadstar.GetContext(t)
@@ -110,21 +120,16 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	logger := workflow.GetLogger(ctx)
 
 	var _job *starlark.Dict
-	var timeout int64
-	var poll int64 = _defaultPollSeconds
+	timeout := int64(utils.CadenceLongTimeout.Seconds())
+	poll := _defaultPollSeconds
 	var assertConditionType string = utils.SucceededCondition
 
 	if err := starlark.UnpackArgs("sensor_job", args, kwargs,
 		"job", &_job,
-		"timeout_seconds?", &timeout,
-		"poll_seconds?", &poll,
 		"assert_condition_type?", &assertConditionType,
 	); err != nil {
 		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
-	}
-	if timeout == 0 {
-		timeout = int64(utils.CadenceLongTimeout.Seconds())
 	}
 	var sparkJob v2pb.SparkJob
 	if err := utils.AsGo(_job, &sparkJob); err != nil {
