@@ -1,0 +1,25 @@
+// UnmarshalJSON unmarshals a JSON value into a {{.EnumTypeName}}.
+// Since {{.EnumTypeName}} is an integer in go, the standard JSON encoder marshals it as a number.
+// But as a protobuf enum, it is marshaled as a string. In different situations, a {{.EnumTypeName}} value
+// may be marshaled as either a number or a string. This function allows unmarshalling from both formats.
+func (m *{{.EnumTypeName}}) UnmarshalJSON(b []byte) error {
+	var num int32
+	err := json.Unmarshal(b, &num)
+	if err == nil {
+		*m = {{.EnumTypeName}}(num)
+		return nil
+	}
+	var s string
+    err = json.Unmarshal(b, &s)
+	if err != nil {
+		return err
+	}
+	// Check if the string exists in the map
+	val, exists := {{.EnumTypeName}}_value[s]
+	if !exists {
+		return fmt.Errorf("invalid DataType: %s", s)
+	}
+
+	*m = {{.EnumTypeName}}(val)
+	return nil
+}
