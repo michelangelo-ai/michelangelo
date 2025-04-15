@@ -136,9 +136,9 @@ def preprocess(
         head_cpu=1,
         head_gpu=1,
         head_memory="4Gi",
-        worker_cpu=1,
+        worker_cpu=2,
         worker_gpu=1,
-        worker_memory="4Gi",
+        worker_memory="12Gi",
         worker_instances=1,
     )
 )
