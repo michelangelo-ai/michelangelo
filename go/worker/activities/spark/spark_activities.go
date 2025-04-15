@@ -2,10 +2,12 @@ package spark
 
 import (
 	"context"
+	"fmt"
+	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/gogo/protobuf/proto"
-	"go.uber.org/cadence"
-	"go.uber.org/cadence/activity"
+
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
@@ -53,14 +55,14 @@ type activities struct {
 // - *v2pb.CreateSparkJobResponse: Response containing the created Spark job details.
 // - *cadence.CustomError: Error information if the operation fails.
 func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSparkJobRequest) (
-	*v2pb.CreateSparkJobResponse, *cadence.CustomError) {
-	logger := log.FromContext(ctx)
+	*v2pb.CreateSparkJobResponse, error) {
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	createSparkJobResponse, err := r.sparkJobService.CreateSparkJob(ctx, &request)
 	if err != nil || createSparkJobResponse == nil || createSparkJobResponse.SparkJob == nil ||
 		createSparkJobResponse.SparkJob.Name == "" {
-		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError(yarpcerrors.CodeUnavailable.String(), err.Error())
+		logger.Error("activity-error", zap.Any("error", err.Error()))
+		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeUnavailable.String(), err.Error())
 	}
 	return &v2pb.CreateSparkJobResponse{
 		SparkJob: createSparkJobResponse.SparkJob,
@@ -78,7 +80,7 @@ func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSpar
 // Returns:
 // - *v2pb.GetSparkJobResponse: Response containing the job details.
 // - *cadence.CustomError: Error information if the operation fails.
-func (r *activities) GetSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*v2pb.GetSparkJobResponse, *cadence.CustomError) {
+func (r *activities) GetSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*v2pb.GetSparkJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	getSparkJobRequest := &v2pb.GetSparkJobRequest{
@@ -89,7 +91,7 @@ func (r *activities) GetSparkJob(ctx context.Context, request v2pb.GetSparkJobRe
 	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, getSparkJobRequest)
 	if err != nil {
 		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError(err.Error())
+		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	return getSparkJobResponse, nil
 }
@@ -114,37 +116,40 @@ type SensorSparkJobResponse struct {
 }
 
 // SensorSparkJob is a sensor-like activity that is used to monitor the status of a SparkJob.
-func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*SensorSparkJobResponse, *cadence.CustomError) {
+func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*SensorSparkJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
 	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, &request)
 	if err != nil {
 		logger.Error(err, "activity-error")
-		return nil, cadence.NewCustomError(err.Error())
+		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	sparkJob := getSparkJobResponse.SparkJob
 	status := sparkJob.Status
 
 	// Check if the job has reached a terminal state
+	fmt.Printf("\n=========SparkJob  %s=========\n", sparkJob.Name)
 	terminal := hasSparkJobTerminalCondition(status)
 
 	if terminal {
+		fmt.Printf("\n====finished!!!====\n")
 		return &SensorSparkJobResponse{
 			SparkJob: sparkJob,
 			Terminal: terminal,
 		}, nil
 	}
-
-	return nil, cadence.NewCustomError(yarpcerrors.CodeFailedPrecondition.String(), status)
+	fmt.Printf("\n====no finished yet====\n")
+	return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), status)
 }
 
 func hasSparkJobTerminalCondition(state v2pb.SparkJobStatus) bool {
+	fmt.Printf("\n==============state %s==============\n", state.ApplicationId)
 	return state.ApplicationId == "FAILED" || state.ApplicationId == "COMPLETED"
 }
 
 // TerminateSparkJob kills a spark job
-func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSparkJobRequest) (*v2pb.UpdateSparkJobResponse, *cadence.CustomError) {
+func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSparkJobRequest) (*v2pb.UpdateSparkJobResponse, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.String("namespace", request.Namespace), zap.String("name", request.Name))
 
@@ -160,7 +165,7 @@ func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSpa
 			logger.Error("Spark Job Not Found", zap.String("error", err.Error()))
 			return nil, nil
 		}
-		return nil, cadence.NewCustomError(utils.GetCode(err), err.Error())
+		return nil, workflow.NewCustomError(ctx, utils.GetCode(err), err.Error())
 	}
 	sparkJob := response.SparkJob
 	succeeded := GetCondition(pluginutils.SucceededCondition, sparkJob.Status.GetStatusConditions())
@@ -176,7 +181,7 @@ func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSpa
 	updateResp, err := r.sparkJobService.UpdateSparkJob(ctx, &v2pb.UpdateSparkJobRequest{SparkJob: sparkJob})
 	if err != nil {
 		logger.Error("activity-error", ext.ZapError(err)...)
-		return nil, cadence.NewCustomError(utils.GetCode(err), err.Error())
+		return nil, workflow.NewCustomError(ctx, utils.GetCode(err), err.Error())
 	}
 	return updateResp, nil
 }
@@ -201,14 +206,14 @@ func _activity[REQ proto.Message, RES proto.Message](
 	delegate func(context.Context, REQ, ...yarpc.CallOption) (RES, error),
 ) (
 	RES,
-	*cadence.CustomError,
+	error,
 ) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	response, err := delegate(ctx, request)
 	if err != nil {
 		logger.Error(err, "activity-error")
-		return *new(RES), cadence.NewCustomError(err.Error())
+		return *new(RES), workflow.NewCustomError(ctx, err.Error())
 	}
 	return response, nil
 }

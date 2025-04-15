@@ -9,12 +9,10 @@ import (
 	"github.com/cadence-workflow/starlark-worker/star"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence"
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -33,7 +31,7 @@ const _reasonForCancel = "Canceled by request"
 // These are general const
 const (
 	_defaultPollSeconds  = 10
-	_maxJobSensorRetries = 20
+	_maxJobSensorRetries = 100
 )
 
 // TODO: andrii: implement Spark starlark plugin here
@@ -147,11 +145,11 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		Name:      sparkJob.Name,
 		Namespace: sparkJob.Namespace,
 	}
-	var getSparkJobResponse v2pb.GetSparkJobResponse
+	var getSparkJobResponse spark.SensorSparkJobResponse
 	maxSensorTries := _maxJobSensorRetries
 	for i := 0; i < maxSensorTries; i++ {
 		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest, &status).Get(ctx, &getSparkJobResponse); err != nil {
-			if cadence.IsCanceledError(err) {
+			if workflow.IsCanceledError(ctx, err) {
 				// killing spark job in cadence once workflow is cancelled
 				ctx, _ = workflow.NewDisconnectedContext(ctx)
 				terminateRequest := spark.TerminateSparkJobRequest{
@@ -177,17 +175,8 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		}
 		status = getSparkJobResponse.SparkJob.Status
 		// we will break as long as succeeded condition has been set
-		succeeded := spark.GetCondition(utils.SucceededCondition, status.GetStatusConditions())
-		if succeeded != nil && succeeded.Status != apipb.CONDITION_STATUS_UNKNOWN {
+		if getSparkJobResponse.Terminal {
 			break
-		}
-		// check the condition to assert
-		assertCondition := spark.GetCondition(assertConditionType, status.GetStatusConditions())
-		if assertCondition != nil && assertCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
-			// if the assertConditionType is RUNNING, we also want to ensure that the log url is also generated.
-			if assertCondition.Type == utils.SparkAppRunningCondition && status.JobUrl != "" {
-				break
-			}
 		}
 	}
 
