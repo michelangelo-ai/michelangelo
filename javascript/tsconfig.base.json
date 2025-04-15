@@ -12,6 +12,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
+    "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
       "@ma/gen-api/*": ["gen/grpc/michelangelo/api/*"],
