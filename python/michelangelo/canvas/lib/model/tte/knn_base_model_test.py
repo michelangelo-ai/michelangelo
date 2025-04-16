@@ -6,7 +6,7 @@ from torch import nn
 import pandas as pd
 import numpy as np
 import pyarrow as pa
-from michelangelo.sdk.core.models.tte.knn_base_model import (
+from michelangelo.canvas.lib.model.tte.knn_base_model import (
     KNNModel,
     MultiGPUKNNModel,
     MultiGPUKNNFFNModel,

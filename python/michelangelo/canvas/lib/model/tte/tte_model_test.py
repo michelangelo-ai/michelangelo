@@ -2,7 +2,7 @@ import unittest
 import tempfile
 import torch
 
-from michelangelo.sdk.core.models.tte.tte_model import (
+from michelangelo.canvas.lib.model.tte.tte_model import (
     AbstractTwoTowerModel,
     create_tte_model,
     SharedInBatchTwoTower,

@@ -8,7 +8,7 @@ from pytorch_lightning.utilities.deepspeed import (
     convert_zero_checkpoint_to_fp32_state_dict,
 )
 
-from michelangelo.sdk.core.models.tte.tte_model import (
+from michelangelo.canvas.lib.model.tte.tte_model import (
     AbstractTwoTowerModel,
     create_tte_model,
 )

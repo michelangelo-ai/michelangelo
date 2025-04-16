@@ -2,7 +2,7 @@ import unittest
 import tempfile
 
 import torch
-from michelangelo.sdk.core.models.tte.text_encoder import (
+from michelangelo.canvas.lib.model.tte.text_encoder import (
     Me5Encoder,
     NomicEncoder,
     QWenEncoder,

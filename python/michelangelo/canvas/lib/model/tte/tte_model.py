@@ -7,10 +7,10 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from michelangelo.sdk.core.lib.utils import get_class
+from michelangelo.canvas.lib.shared.utils import get_class
 
 if TYPE_CHECKING:
-    from michelangelo.sdk.core.models.tte.text_encoder import TextEncoder
+    from michelangelo.canvas.lib.model.tte.text_encoder import TextEncoder
 
 logger = logging.getLogger(__name__)
 
@@ -231,7 +231,7 @@ class SharedInBatchTwoTower(InBatchAbstractTwoTower):
             item_selection_prob_column=item_selection_prob_column,
         )
         model_class = (
-            f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+            f"michelangelo.canvas.lib.model.tte.text_encoder.{text_model_class_name}"
         )
         text_encoder_class = get_class(model_class)
         logger.info(f"Now create {text_model_class_name} object using {kwargs}")
@@ -297,7 +297,7 @@ class InBatchTwoTower(InBatchAbstractTwoTower, ABC):
             item_selection_prob_column=item_selection_prob_column,
         )
         model_class = (
-            f"michelangelo.sdk.core.models.tte.text_encoder.{text_model_class_name}"
+            f"michelangelo.canvas.lib.model.tte.text_encoder.{text_model_class_name}"
         )
         text_encoder_class = get_class(model_class)
         logger.info(f"Now create {text_model_class_name} object using {kwargs}")
@@ -333,7 +333,7 @@ def create_tte_model(tte_class_name, **kwargs) -> AbstractTwoTowerModel:
     """
     Create a TTE model from class name and kwargs
     """
-    model_class = f"michelangelo.sdk.core.models.tte.tte_model.{tte_class_name}"
+    model_class = f"michelangelo.canvas.lib.model.tte.tte_model.{tte_class_name}"
     tte_class = get_class(model_class)
     logger.info(f"Now create {tte_class_name} object using {kwargs}")
     tte_model = tte_class(**kwargs)

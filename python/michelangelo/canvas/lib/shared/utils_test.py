@@ -1,6 +1,6 @@
 import unittest
 
-from michelangelo.sdk.core.lib.utils import get_class
+from michelangelo.canvas.lib.shared.utils import get_class
 
 
 class DummyClass:
@@ -10,7 +10,7 @@ class DummyClass:
 
 class TestUtils(unittest.TestCase):
     def test_get_class(self):
-        klass = get_class("michelangelo.sdk.core.lib.utils_test.DummyClass")
+        klass = get_class("michelangelo.canvas.lib.shared.utils_test.DummyClass")
         assert klass().__class__.__name__ == "DummyClass"
 
         klass = get_class(DummyClass)

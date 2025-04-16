@@ -10,37 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class KNNModel:
-    """
-    The algorithm is well documented here:
-    https://docs.google.com/document/d/1Q-EiIE1i5R4BvotzbwWyeWKT4crc-ts1ndKTgHvI0QM/edit?tab=t.0#bookmark=id.cfnf8mwbrslh
-
-    The following code could be used as test run
-
-    fs_storage = TerrablobStorage()
-    fs_storage.download("/prod/michelangelo/deployable_models/projects/eats-shopping/item_embeddings/storefront_item_embedding_v0_index_g30_dedup",
-                        "/tmp/storefront_item_embedding_v0_index_g30_dedup")
-    item_knn_model = KNNRetrievalModel("hash_item_name", item_embedding_col="item_embedding",
-                                          set_filter_columns=["store_uuids", "section_uuids"],
-                                          set_filter_max_sizes={"store_uuids":30, "section_uuids":100})
-    item_knn_model.load_model("/tmp/storefront_item_embedding_v0_index_g30_dedup")
-
-    df= pd.read_parquet("/tmp/storefront_item_embedding_v0_index_g30_dedup/part-00000-e38250ca-3ad3-445b-a436-22cf67200002-c000.zstd.parquet")
-    B = 2
-    query_ids = list(df.original_item_name.iloc[0:B])
-    query_embedding = torch.tensor(df.item_embedding.iloc[0:B], dtype=torch.float32)
-    store_uuids = [vv for v in df.store_uuids.iloc[0:B] for vv in v]
-    section_uuids = [vv for v in df.section_uuids.iloc[0:B] for vv in v]
-    query_ids, query_embedding.shape, store_uuids, section_uuids
-
-    query_data = {
-        "embedding": query_embedding,
-        "query_id": query_ids,
-        "store_uuids": store_uuids,
-        "section_uuids": section_uuids,
-       "top_k": 10,
-    }
-    res = item_knn_model.predict_batch(query_data)
-    """
 
     def __init__(
         self,

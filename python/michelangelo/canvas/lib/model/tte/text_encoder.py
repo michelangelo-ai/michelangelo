@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 from transformers import AutoTokenizer, AutoModel
 
-from michelangelo.sdk.core.lib.utils import (
+from michelangelo.canvas.lib.shared.utils import (
     REDUCTION_SCRIP_MODEL_FILE,
     RESHAPE_LAYER_FILE,
 )
