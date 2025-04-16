@@ -4,13 +4,12 @@ package storage
 import (
 	"context"
 	"fmt"
+	"github.com/cadence-workflow/starlark-worker/activity"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
+	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
-	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 )
 
 // Activities is a package-level variable that holds the activities implementation.
@@ -27,7 +26,7 @@ type activities struct {
 // and wraps any errors using Cadence's CustomError for consistent error handling.
 func (a *activities) Read(ctx context.Context, protocol string, path string) (any, error) {
 	// Retrieve logger from context and log the start of the read activity.
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("path", path))
 
 	// Check if there is an implementation available for the requested protocol.

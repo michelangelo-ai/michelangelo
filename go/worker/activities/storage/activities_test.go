@@ -4,15 +4,52 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/cadence-workflow/starlark-worker/service"
+	"github.com/cadence-workflow/starlark-worker/test/types"
+	"github.com/stretchr/testify/suite"
+	"go.uber.org/yarpc/yarpcerrors"
 	"strings"
 	"testing"
 
 	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
-
-	"github.com/stretchr/testify/assert"
-
-	"go.uber.org/yarpc/yarpcerrors"
 )
+
+var act *activities
+var fake *fakeStorage
+
+type Suite struct {
+	suite.Suite
+	activitySuite types.StarTestActivitySuite
+}
+
+func TestITCadence(t *testing.T) {
+	suite.Run(t, &Suite{activitySuite: service.NewCadTestActivitySuite()})
+}
+
+func TestITTemporal(t *testing.T) {
+	suite.Run(t, &Suite{activitySuite: service.NewTempTestActivitySuite()})
+}
+
+func (r *Suite) SetupSuite() {
+	expected := "hello world"
+	fake = &fakeStorage{
+		protocol: "test",
+		readFn: func(ctx context.Context, path string) (any, error) {
+			return expected, nil
+		},
+	}
+	act = &activities{
+		impls: map[string]intf.Storage{
+			"test": fake,
+		},
+	}
+	r.activitySuite.RegisterActivity(act)
+}
+func (r *Suite) TearDownSuite() {}
+
+func (r *Suite) BeforeTest(_, _ string) {
+
+}
 
 // fakeStorage is a mock implementation of the Storage interface for testing.
 type fakeStorage struct {
@@ -32,91 +69,55 @@ func (fs *fakeStorage) Protocol() string {
 
 // TestActivities_Read_Success verifies that activities.Read returns the expected result
 // when the Storage implementation successfully reads the data.
-func TestActivities_Read_Success(t *testing.T) {
+func (r *Suite) TestActivities_Read_Success() {
 	expected := "hello world"
+	fake.readFn = func(ctx context.Context, path string) (any, error) {
+		return expected, nil
+	}
+	act.impls = map[string]intf.Storage{"test": fake}
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
 
-	// Create a fake storage that returns the expected result.
-	fake := &fakeStorage{
-		protocol: "test",
-		readFn: func(ctx context.Context, path string) (any, error) {
-			return expected, nil
-		},
-	}
+	r.Require().NoError(err)
 
-	// Initialize activities with the fake storage implementation.
-	acts := &activities{
-		impls: map[string]intf.Storage{
-			"test": fake,
-		},
-	}
-
-	ctx := context.Background()
-	result, err := acts.Read(ctx, "test", "dummyPath")
-	if err != nil {
-		t.Fatalf("expected no error, got %v", err)
-	}
-	if result != expected {
-		t.Errorf("expected result %v, got %v", expected, result)
-	}
+	var res string
+	result.Get(&res)
+	r.Require().Equal(res, expected)
 }
 
 // TestActivities_Read_Error verifies that activities.Read properly wraps errors
 // returned by the Storage implementation using cadence.CustomError.
-func TestActivities_Read_Error(t *testing.T) {
+func (r *Suite) TestActivities_Read_Error() {
 	expectedErr := errors.New("read error")
-
-	// Create a fake storage that returns an error.
-	fake := &fakeStorage{
-		protocol: "test",
-		readFn: func(ctx context.Context, path string) (any, error) {
-			return nil, expectedErr
-		},
+	fake.readFn = func(ctx context.Context, path string) (any, error) {
+		return "", expectedErr
 	}
-
-	acts := &activities{
-		impls: map[string]intf.Storage{
-			"test": fake,
-		},
-	}
-	ctx := context.Background()
-	result, err := acts.Read(ctx, "test", "dummyPath")
-	if result != nil {
-		t.Errorf("expected nil result, got %v", result)
-	}
-	if err == nil {
-		t.Fatal("expected error, got nil")
-	}
+	act.impls = map[string]intf.Storage{"test": fake}
+	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
 
 	// Verify that the returned error message contains the original error message.
-	errMsg := err.Error()
-	assert.Equal(t, errMsg, "unknown")
+	r.Require().Error(err)
 
 	// Verify that the error message includes the YARPC error code.
 	yarpcCode := yarpcerrors.FromError(expectedErr).Code().String()
-	if !strings.Contains(errMsg, yarpcCode) {
-		t.Errorf("expected error message to contain YARPC code %q, got %q", yarpcCode, errMsg)
+	if !strings.Contains(err.Error(), yarpcCode) {
+		r.Require().Fail("expected error message to contain YARPC code %q, got %q", yarpcCode, err.Error())
 	}
 }
 
 // TestActivities_Read_UnsupportedProtocol verifies that activities.Read returns an error
 // when an unsupported protocol is provided.
-func TestActivities_Read_UnsupportedProtocol(t *testing.T) {
+func (r *Suite) TestActivities_Read_UnsupportedProtocol() {
 	// Initialize activities with an empty storage implementation map.
-	acts := &activities{
-		impls: map[string]intf.Storage{},
-	}
-	ctx := context.Background()
-	result, err := acts.Read(ctx, "unsupported", "dummyPath")
+	act.impls = map[string]intf.Storage{}
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
 	if result != nil {
-		t.Errorf("expected nil result for unsupported protocol, got %v", result)
+		r.Require().Fail("expected nil result for unsupported protocol, got %v", result)
 	}
 	if err == nil {
-		t.Fatal("expected error for unsupported protocol, got nil")
+		r.Require().Fail("expected error for unsupported protocol, got nil")
 	}
 
 	// Verify the error message indicates the protocol is not supported.
-	expectedMsg := fmt.Sprintf("protocol %s is not supported", "unsupported")
-	if !strings.Contains(err.Error(), expectedMsg) {
-		t.Errorf("expected error message to contain %q, got %q", expectedMsg, err.Error())
-	}
+	expectedMsg := fmt.Sprintf("protocol %s is not supported", "test")
+	r.Require().Contains(err.Error(), expectedMsg)
 }

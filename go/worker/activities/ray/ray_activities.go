@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/cadence-workflow/starlark-worker/activity"
-
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/gogo/protobuf/proto"
 	"go.uber.org/yarpc"
@@ -102,7 +101,7 @@ func (r *activities) CreateRayCluster(ctx context.Context, request v2pb.CreateRa
 // - *v2pb.GetRayClusterResponse: Response containing the cluster details.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) GetRayCluster(ctx context.Context, request v2pb.GetRayClusterRequest) (*v2pb.GetRayClusterResponse, error) {
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	getRayClusterRequest := &v2pb.GetRayClusterRequest{
 		Name:       request.Name,
@@ -111,7 +110,7 @@ func (r *activities) GetRayCluster(ctx context.Context, request v2pb.GetRayClust
 	}
 	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, getRayClusterRequest)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	return getRayClusterResponse, nil
@@ -129,7 +128,7 @@ func (r *activities) GetRayCluster(ctx context.Context, request v2pb.GetRayClust
 // - *v2pb.GetRayJobResponse: Response containing the job details.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) GetRayJob(ctx context.Context, request v2pb.GetRayJobRequest) (*v2pb.GetRayJobResponse, error) {
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	getRayJobRequest := &v2pb.GetRayJobRequest{
 		Name:       request.Name,
@@ -138,7 +137,7 @@ func (r *activities) GetRayJob(ctx context.Context, request v2pb.GetRayJobReques
 	}
 	getRayJobResponse, err := r.rayJobService.GetRayJob(ctx, getRayJobRequest)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	return getRayJobResponse, nil
@@ -174,15 +173,15 @@ type SensorRayJobReadinessResponse struct {
 // - *SensorRayClusterReadinessResponse: Response indicating the readiness of the cluster.
 // - error: Error information if the operation fails.
 func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb.GetRayClusterRequest) (*SensorRayClusterReadinessResponse, error) {
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 	getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, &request)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	if getRayClusterResponse.RayCluster == nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err))
 		return nil, workflow.NewCustomError(ctx, "Failed to retrieve ray cluster from ray.io")
 	}
 	rayCluster := getRayClusterResponse.RayCluster
@@ -215,7 +214,7 @@ func (r *activities) SensorRayClusterReadiness(ctx context.Context, request v2pb
 // - *v2pb.UpdateRayClusterResponse: Response containing the updated cluster details.
 // - *workflow.CustomError: Error information if the operation fails.
 func (r *activities) TerminateCluster(ctx context.Context, request TerminateClusterRequest) (*v2pb.UpdateRayClusterResponse, error) {
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
 	var cluster *v2pb.RayCluster
@@ -227,7 +226,7 @@ func (r *activities) TerminateCluster(ctx context.Context, request TerminateClus
 		}
 		getRayClusterResponse, err := r.rayClusterService.GetRayCluster(ctx, getRayClusterRequest)
 		if err != nil {
-			logger.Error(err, "activity-error")
+			logger.Error("activity-error", zap.Any("error", err.Error()))
 			return err
 		}
 
@@ -248,7 +247,7 @@ func (r *activities) TerminateCluster(ctx context.Context, request TerminateClus
 		}
 		updateRayClusterResponse, err := r.rayClusterService.UpdateRayCluster(ctx, updateRayClusterRequest)
 		if err != nil {
-			logger.Error(err, "activity-error")
+			logger.Error("activity-error", zap.Any("error", err.Error()))
 			return err
 		}
 		if updateRayClusterResponse.RayCluster == nil {
@@ -258,7 +257,7 @@ func (r *activities) TerminateCluster(ctx context.Context, request TerminateClus
 	})
 
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 
@@ -287,12 +286,12 @@ type SensorRayJobResponse struct {
 
 // SensorRayJob is a sensor-like activity that is used to monitor the status of a RayJob.
 func (r *activities) SensorRayJob(ctx context.Context, request v2pb.GetRayJobRequest) (*SensorRayJobResponse, error) {
-	logger := log.FromContext(ctx)
+	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
 
 	getRayJobResponse, err := r.rayJobService.GetRayJob(ctx, &request)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error("activity-error", zap.Any("error", err.Error()))
 		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	rayJob := getRayJobResponse.RayJob
