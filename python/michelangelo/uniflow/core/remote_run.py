@@ -94,7 +94,7 @@ class RemoteRun:
             os.environ.get("UFC_CADENCE_TASK_LIST", "default"),
             "--workflow_type",
             os.environ.get(
-                "UFC_CADENCE_WORKFLOW_TYPE", "github.com/cadence-workflow/starlark-worker/service.(*Service).Run"
+                "UFC_CADENCE_WORKFLOW_TYPE", "starlark-worklow"
             ),
             "--execution_timeout",
             str(self.execution_timeout_seconds),
@@ -223,7 +223,7 @@ class RemoteRunTemporal:
             "--namespace", os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
             "--task-queue", os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
             "--type", os.environ.get(
-                "UFC_TEMPORAL_WORKFLOW_TYPE", "github.com/cadence-workflow/starlark-worker/service.(*Service).Run"
+                "UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"
             ),
             "--execution-timeout", f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
             "--workflow-id", workflow_id,
