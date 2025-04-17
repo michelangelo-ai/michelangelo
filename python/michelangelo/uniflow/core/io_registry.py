@@ -82,7 +82,12 @@ class IORegistry:
 
     def set(self, t: type, io: LazyIO, force: bool = False) -> "IORegistry":
         if not force and t in self._registry:
-            raise KeyError("IO already registered! type: %r, io: %r, conflicting io: %r", t, self._registry[t], io)
+            raise KeyError(
+                "IO already registered! type: %r, io: %r, conflicting io: %r",
+                t,
+                self._registry[t],
+                io,
+            )
 
         self._registry[t] = io
         return self

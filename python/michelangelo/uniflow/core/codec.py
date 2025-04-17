@@ -171,9 +171,9 @@ class CodecRegistry:
     def register(self, codec: Codec):
         codec_id = codec.id()
         assert codec_id
-        assert (
-            codec_id not in self._registry
-        ), f"codec registry conflict: id={codec_id}, codec1={codec}, codec2={self._registry[codec_id]}"
+        assert codec_id not in self._registry, (
+            f"codec registry conflict: id={codec_id}, codec1={codec}, codec2={self._registry[codec_id]}"
+        )
         log.info("register codec: %r", codec)
         self._registry[codec_id] = codec
 
@@ -207,7 +207,9 @@ class Encoder(JSONEncoder):
 
         log.debug("encode: codec=%s, value=%s", codec.id(), value)
         encoded = codec.encode(value)
-        assert _ATTR_CODEC not in encoded, f"invalid codec: {_ATTR_CODEC} is reserved property, {codec.id()}, {codec}"
+        assert _ATTR_CODEC not in encoded, (
+            f"invalid codec: {_ATTR_CODEC} is reserved property, {codec.id()}, {codec}"
+        )
         encoded[_ATTR_CODEC] = codec.id()
         return encoded
 

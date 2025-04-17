@@ -6,7 +6,11 @@ import uuid
 from dataclasses import dataclass
 
 from michelangelo.uniflow.core.io_registry import IORegistry
-from michelangelo.uniflow.core.utils import dataclass_dict, is_dataclass_instance, pydantic_dict
+from michelangelo.uniflow.core.utils import (
+    dataclass_dict,
+    is_dataclass_instance,
+    pydantic_dict,
+)
 
 log = logging.getLogger(__name__)
 
@@ -56,10 +60,13 @@ def unref(value, io: IORegistry):
         # logic to get the path from the metadata and import the module and class
         if isinstance(value_type, dict) and "path" in value_type:
             import importlib
+
             path = value_type["path"]
             log.debug(f"Resolving type for path: {path}")
             module_name, class_name = path.rsplit(".", 1)  # Split into module and class
-            module = importlib.import_module(module_name)  # Dynamically import the module
+            module = importlib.import_module(
+                module_name
+            )  # Dynamically import the module
             value_type = getattr(module, class_name)
         return io[value_type].read(value.url, value.metadata)
 

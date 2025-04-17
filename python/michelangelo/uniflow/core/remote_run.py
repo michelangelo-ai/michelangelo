@@ -17,9 +17,13 @@ from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 
-DEFAULT_EXECUTION_TIMEOUT_SECONDS = 60 * 60 * 24 * 365 * 10  # 3650 days, practically no timeout
+DEFAULT_EXECUTION_TIMEOUT_SECONDS = (
+    60 * 60 * 24 * 365 * 10
+)  # 3650 days, practically no timeout
 
-_RUN_ID_SEARCH_RE = re.compile(r"run[ _-]?id[:= ]{1,2}([0-9a-f-]+)", flags=re.IGNORECASE)  # Run ID is a UUID
+_RUN_ID_SEARCH_RE = re.compile(
+    r"run[ _-]?id[:= ]{1,2}([0-9a-f-]+)", flags=re.IGNORECASE
+)  # Run ID is a UUID
 
 
 @dataclass
@@ -93,9 +97,7 @@ class RemoteRun:
             "--tasklist",
             os.environ.get("UFC_CADENCE_TASK_LIST", "default"),
             "--workflow_type",
-            os.environ.get(
-                "UFC_CADENCE_WORKFLOW_TYPE", "starlark-worklow"
-            ),
+            os.environ.get("UFC_CADENCE_WORKFLOW_TYPE", "starlark-worklow"),
             "--execution_timeout",
             str(self.execution_timeout_seconds),
             "--workflow_id",
@@ -148,7 +150,9 @@ class RemoteRun:
             print("Dashboard:", dashboard_url)
             return
 
-        print("Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary")
+        print(
+            "Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary"
+        )
 
 
 @dataclass
@@ -202,7 +206,11 @@ class RemoteRunTemporal:
             '""',
             '""',
             json.dumps(self.args, separators=(",", ":"), default=encoder.default),
-            json.dumps(list(self.kwargs.items()), separators=(",", ":"), default=encoder.default),
+            json.dumps(
+                list(self.kwargs.items()),
+                separators=(",", ":"),
+                default=encoder.default,
+            ),
             json.dumps(environ, separators=(",", ":"), default=encoder.default),
         ]
 
@@ -220,13 +228,16 @@ class RemoteRunTemporal:
 
         # Set required parameters
         cmd += [
-            "--namespace", os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
-            "--task-queue", os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
-            "--type", os.environ.get(
-                "UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"
-            ),
-            "--execution-timeout", f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
-            "--workflow-id", workflow_id,
+            "--namespace",
+            os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+            "--task-queue",
+            os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
+            "--type",
+            os.environ.get("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"),
+            "--execution-timeout",
+            f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
+            "--workflow-id",
+            workflow_id,
         ]
 
         # Add optional parameters if set
@@ -281,4 +292,6 @@ class RemoteRunTemporal:
             print("Dashboard:", dashboard_url)
             return
 
-        print("Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary")
+        print(
+            "Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary"
+        )
