@@ -8,10 +8,15 @@ logging:
   encoding: console
 
 workflow-engine:
-#  host: 127.0.0.1:7833
-  host: 127.0.0.1:7233
+  # for cadence
+  host: 127.0.0.1:7833
+  # for temporal
+#  host: 127.0.0.1:7233
   transport: grpc
-  provider: temporal
+  # for cadence
+  provider: cadence
+    # for temporal
+#  provider: temporal
   workers:
     - domain: default
       taskList: default
