@@ -1,4 +1,4 @@
-package rayjob
+package job
 
 import (
 	"context"

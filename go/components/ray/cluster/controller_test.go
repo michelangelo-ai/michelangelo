@@ -1,11 +1,11 @@
-package raycluster
+package cluster
 
 import (
 	"context"
 	"testing"
 	"time"
 
-	"github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils"
+	"github.com/michelangelo-ai/michelangelo/go/components/testfakes"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	rayv1scheme "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/scheme"
@@ -324,12 +324,12 @@ func TestReconciler_Reconcile(t *testing.T) {
 				Name:      rayClusterName,
 				Namespace: testNamespace,
 			}
-			fakeClientWrapper := testutils.NewFakeClientWrapper(fakeClient)
+			fakeClientWrapper := testfakes.NewFakeClientWrapper(fakeClient)
 			// Set up a fake RayV1 client.
 			fakeRayV1Client := &rayv1fake.FakeRayV1{
 				Fake: &k8stesting.Fake{},
 			}
-			reactorManager := &testutils.ReactorManager{}
+			reactorManager := &testfakes.ReactorManager{}
 
 			// Add reusable reactors for "create" and "get"
 			fakeRayV1Client.Fake.AddReactor("create", "rayclusters", reactorManager.CreateReactor())

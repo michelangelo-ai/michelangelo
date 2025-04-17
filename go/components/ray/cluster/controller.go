@@ -1,4 +1,4 @@
-package raycluster
+package cluster
 
 import (
 	"context"

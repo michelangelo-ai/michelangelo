@@ -11,9 +11,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
-	"github.com/michelangelo-ai/michelangelo/go/controllers/raycluster"
-	"github.com/michelangelo-ai/michelangelo/go/controllers/rayjob"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -51,8 +50,7 @@ func options() fx.Option {
 		config.Module,
 		zapfx.Module,
 		fx.Provide(scheme),
-		raycluster.Module,
-		rayjob.Module,
+		ray.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
