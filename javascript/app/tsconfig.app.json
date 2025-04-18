@@ -6,6 +6,6 @@
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.app.tsbuildinfo",
     "jsx": "react-jsx"
   },
-  "include": ["src", "../michelangelo/gen/"],
+  "include": [".", "../michelangelo/gen/"],
   "references": [{ "path": "../packages/core" }]
 }
