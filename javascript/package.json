@@ -18,7 +18,8 @@
     "lint": "eslint .",
     "prebuild": "yarn generate",
     "setup": "yarn install && yarn generate",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "test": "yarn workspace @michelangelo/core test"
   },
   "dependencies": {},
   "devDependencies": {
@@ -42,6 +43,7 @@
   },
   "resolutions": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "vite": "^6.2.0"
   }
 }
