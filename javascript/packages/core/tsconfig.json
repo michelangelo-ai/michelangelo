@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src"],
+  "include": ["."],
   "compilerOptions": {
     "composite": true,
     "declaration": true,
@@ -9,10 +9,10 @@
     "noEmit": false,
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["./*"],
       "@ma/gen-api/*": ["../../gen/grpc/michelangelo/api/*"],
       "@ma/gen-k8s/*": ["../../gen/grpc/k8s.io/*"]
     }

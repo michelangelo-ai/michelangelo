@@ -70,7 +70,7 @@ export default [
 
   // App code
   {
-    files: ['app/src/**/*.{ts,tsx}'],
+    files: ['app/**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'module',
@@ -102,7 +102,7 @@ export default [
 
   // Core package
   {
-    files: ['packages/core/src/**/*.{ts,tsx}'],
+    files: ['packages/core/**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'module',
