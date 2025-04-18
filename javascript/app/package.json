@@ -4,13 +4,14 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "vite --config vite.config.ts"
+    "dev": "vite --config vite.config.ts",
+    "dev-production": "vite --config vite.config.production.ts"
   },
   "dependencies": {
     "@michelangelo/core": "*"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.4.0",
+    "@vitejs/plugin-react": "^4.4.1",
     "vite": "6.2.0"
   }
 }
