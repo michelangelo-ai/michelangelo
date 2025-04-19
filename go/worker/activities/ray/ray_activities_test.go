@@ -1,10 +1,11 @@
 package ray
 
 import (
+	"testing"
+
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/stretchr/testify/suite"
-	"testing"
 
 	"github.com/golang/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

@@ -9,7 +9,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
-	
+
 	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 )
 
