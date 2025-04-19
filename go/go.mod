@@ -3,7 +3,7 @@ module github.com/michelangelo-ai/michelangelo/go
 go 1.23.2
 
 require (
-	github.com/cadence-workflow/starlark-worker v1.0.3
+	github.com/cadence-workflow/starlark-worker v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/dave/dst v0.27.3
 	github.com/go-logr/logr v1.4.2
