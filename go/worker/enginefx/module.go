@@ -1,4 +1,4 @@
-// Package cadencefx configures and provides workers and clients for Cadence.
+// Package enginefx configures and provides workers and clients for Cadence and Temporal.
 // The configuration for the module is specified in YAML. See Config for reference.
 package enginefx
 
