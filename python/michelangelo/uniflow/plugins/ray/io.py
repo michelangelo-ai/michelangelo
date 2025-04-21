@@ -20,6 +20,7 @@ _DEFAULT_UF_PLUGIN_RAY_USE_FSSPEC = "0"
 
 
 class RayDatasetIO(IO[Dataset]):
+
     def write(self, url: str, ds: Dataset) -> Optional[Any]:
         fs, path = _fs_path(url)
         ds.write_parquet(path, filesystem=fs)
@@ -44,7 +45,6 @@ def _fs_path(url: str) -> tuple[Any, str]:
 def resolve_fs(protocol):
     if protocol == "s3":
         import pyarrow.fs
-
         # Configure PyArrow's S3FileSystem for MinIO
         return pyarrow.fs.S3FileSystem(
             access_key=os.getenv("AWS_ACCESS_KEY_ID"),

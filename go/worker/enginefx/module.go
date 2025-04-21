@@ -49,6 +49,7 @@ type Out struct {
 	Workers []sworker.Worker
 }
 
+// provide provides workers and clients for either Cadence or Temporal.
 func provide(in In) (Out, error) {
 	out := Out{}
 
@@ -70,6 +71,7 @@ func provide(in In) (Out, error) {
 	return out, nil
 }
 
+// newCadenceWorker creates a new Cadence worker.
 func newCadenceWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 	metrics := tally.NoopScope
 	ctx := context.Background()
@@ -126,6 +128,7 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 	return workflowserviceclient.New(dispatcher.ClientConfig(service)), nil
 }
 
+// newTemporalWorker creates a new Temporal worker.
 func newTemporalWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 	scope, _ := tallyv4.NewRootScope(tallyv4.ScopeOptions{
 		Prefix: "temporal",
@@ -154,28 +157,6 @@ func newTemporalWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 
 	return workers, nil
 }
-
-//
-//// startTemporalWorker manages Temporal worker startup and shutdown using fx.Lifecycle.
-//func startTemporalWorker(client tempclient.Client, lc fx.Lifecycle, tworker tempworker.Worker, logger *zap.Logger) {
-//	lc.Append(fx.Hook{
-//		OnStart: func(context.Context) error {
-//			logger.Info("Starting Temporal Client...")
-//
-//			go func(w tempworker.Worker) {
-//				if err := w.Run(tempworker.InterruptCh()); err != nil {
-//					logger.Fatal("Worker failed", zap.Error(err))
-//				}
-//			}(tworker)
-//			return nil
-//		},
-//		OnStop: func(context.Context) error {
-//			logger.Info("Stopping Temporal Client...")
-//			client.Close()
-//			return nil
-//		},
-//	})
-//}
 
 // start starts workers.
 func start(lc fx.Lifecycle, workers []sworker.Worker) {
