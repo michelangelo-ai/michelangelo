@@ -4,6 +4,7 @@ package crd
 import (
 	"context"
 	"fmt"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -157,6 +158,9 @@ func (r *gateway) hasInstances(ctx context.Context, crd *apiextv1.CustomResource
 		}
 		result, err := r.dynamicClient.Resource(gvr).List(ctx, metav1.ListOptions{Limit: 1})
 		if err != nil {
+			if utils.IsNotFoundError(err) {
+				continue
+			}
 			return false, fmt.Errorf("failed to list existing instances of CRD %s: %w", crd.Name, err)
 		}
 		if len(result.Items) > 0 {
