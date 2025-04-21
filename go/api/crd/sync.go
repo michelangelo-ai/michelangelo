@@ -3,9 +3,10 @@ package crd
 import (
 	"context"
 	"fmt"
-	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"slices"
 	"strings"
+
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 
 	"github.com/cenkalti/backoff"
 	"go.uber.org/config"
