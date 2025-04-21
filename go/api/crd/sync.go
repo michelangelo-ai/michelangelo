@@ -3,6 +3,7 @@ package crd
 import (
 	"context"
 	"fmt"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"slices"
 	"strings"
 
@@ -147,7 +148,7 @@ func syncCRDs(ctx context.Context, logger *zap.Logger, groups []string, enableIn
 		if !found {
 			if enableCRDDeletion {
 				logger.Info("CRD deletion enabled. Delete CRD", zap.String("name", crd.Name))
-				if err = gateway.Delete(ctx, &crd); err != nil {
+				if err = gateway.Delete(ctx, &crd); err != nil && !utils.IsNotFoundError(err) {
 					logger.Error("Fail to delete CRD", zap.String("name", crd.Name), zap.Error(err))
 					return err
 				}
