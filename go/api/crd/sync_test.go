@@ -127,7 +127,7 @@ func TestSyncCRDsFx(t *testing.T) {
 	assert.NoError(t, err)
 	crds, err := crdGateway.List(ctx)
 	assert.NoError(t, err)
-	assert.True(t, len(crds.Items) == 1)
+	assert.Len(t, crds.Items, 1)
 	assert.Equal(t, "test", crds.Items[0].Spec.Group)
 	assert.Equal(t, "v0", crds.Items[0].Spec.Versions[0].Name)
 	assert.Equal(t, "Project", crds.Items[0].Spec.Names.Kind)
@@ -144,6 +144,7 @@ func TestSyncCRDsFx(t *testing.T) {
 			return &Configuration{
 				EnableCRDUpdate:          true,
 				EnableIncompatibleUpdate: false,
+				EnableCRDDeletion:        true,
 			}
 		}),
 		SyncCRDs([]string{"test"}, map[string]string{
@@ -164,6 +165,7 @@ func TestSyncCRDsFx(t *testing.T) {
 	// delete a CRD while there are instances of the CRD in the cluster
 	crdGateway.dynamicClient = fakeClientWithResource
 
+	// CRD is not deleted when EnableCRDDeletion is set to false
 	app = fx.New(fx.Options(
 		fx.Provide(func() *zap.Logger {
 			return logger
@@ -175,6 +177,36 @@ func TestSyncCRDsFx(t *testing.T) {
 			return &Configuration{
 				EnableCRDUpdate:          true,
 				EnableIncompatibleUpdate: false,
+				EnableCRDDeletion:        false,
+			}
+		}),
+		fx.Invoke(func() error {
+			return nil
+		}),
+		SyncCRDs([]string{"test"}, map[string]string{}),
+	),
+	)
+	assert.NoError(t, app.Err())
+	err = app.Start(ctx)
+	assert.NoError(t, err)
+	crds, err = crdGateway.List(ctx)
+	assert.NoError(t, err)
+	assert.Len(t, crds.Items, 1)
+	assert.Equal(t, "Project", crds.Items[0].Spec.Names.Kind)
+
+	// expect error when deleting CRD with existing instances
+	app = fx.New(fx.Options(
+		fx.Provide(func() *zap.Logger {
+			return logger
+		}),
+		fx.Provide(func() Gateway {
+			return &crdGateway
+		}),
+		fx.Provide(func() *Configuration {
+			return &Configuration{
+				EnableCRDUpdate:          true,
+				EnableIncompatibleUpdate: false,
+				EnableCRDDeletion:        true,
 			}
 		}),
 		fx.Invoke(func() error {
@@ -201,6 +233,7 @@ func TestSyncCRDsFx(t *testing.T) {
 			return &Configuration{
 				EnableCRDUpdate:          true,
 				EnableIncompatibleUpdate: false,
+				EnableCRDDeletion:        true,
 			}
 		}),
 		fx.Invoke(func() error {
@@ -230,26 +263,26 @@ func TestSyncCRDs(t *testing.T) {
 	crdYaml, err := os.ReadFile(testCRDManifestDir + "/project.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, []string{"test"},
-		false, &crdGateway, map[string]string{"Project": string(crdYaml)})
+		false, true, &crdGateway, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err)
 
 	// incompatible change
 	crdYaml, err = os.ReadFile(testCRDManifestDir + "/project_delete_props.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, []string{"test"},
-		false, &crdGateway, map[string]string{"Project": string(crdYaml)})
+		false, true, &crdGateway, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD projects.test")
 
 	// fail to list existing CRDs
 	mockGateway := crdmocks.NewMockGateway(gomock.NewController(t))
 	mockGateway.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("test error"))
 	err = syncCRDs(context.Background(), logger, []string{"test"},
-		false, mockGateway, map[string]string{"Project": string(crdYaml)})
+		false, true, mockGateway, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to list existing CRDs: test error")
 
 	// do not update CRDs that are not in the specified groups
 	err = syncCRDs(context.Background(), logger, []string{"test1", "test2"},
-		false, &crdGateway, map[string]string{"Project": string(crdYaml)})
+		false, true, &crdGateway, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "CRD projects.test is not in the specified groups [test1, test2]")
 }
 
