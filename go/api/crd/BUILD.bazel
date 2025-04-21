@@ -11,6 +11,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/crd",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/api/utils:go_default_library",
         "@com_github_cenkalti_backoff//:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/client/clientset/clientset:go_default_library",

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+
 	"github.com/cenkalti/backoff"
 	"go.uber.org/config"
 	"go.uber.org/fx"
@@ -24,6 +26,7 @@ const (
 type Configuration struct {
 	EnableCRDUpdate          bool `yaml:"enableCRDUpdate"`
 	EnableIncompatibleUpdate bool `yaml:"enableIncompatibleUpdate"`
+	EnableCRDDeletion        bool `yaml:"enableCRDDeletion"`
 }
 
 func ParseConfig(provider config.Provider) (*Configuration, error) {
@@ -88,12 +91,13 @@ type SyncCRDsParams struct {
 //	   - Otherwise, it will return an error
 func SyncCRDs(groups []string, yamlSchemas ...map[string]string) fx.Option {
 	return fx.Invoke(func(p SyncCRDsParams) error {
+		logger := p.Logger.With(zap.String("module", moduleName))
+		logger.Info("CRD sync config", zap.Any("config", p.Config))
 		if p.Config.EnableCRDUpdate {
-			logger := p.Logger.With(zap.String("module", moduleName))
-
 			p.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
-					return syncCRDs(ctx, logger, groups, p.Config.EnableIncompatibleUpdate, p.Gateway, yamlSchemas...)
+					return syncCRDs(ctx, logger, groups, p.Config.EnableIncompatibleUpdate, p.Config.EnableCRDDeletion,
+						p.Gateway, yamlSchemas...)
 				},
 				OnStop: nil,
 			})
@@ -103,8 +107,8 @@ func SyncCRDs(groups []string, yamlSchemas ...map[string]string) fx.Option {
 	})
 }
 
-func syncCRDs(ctx context.Context, logger *zap.Logger, groups []string, enableIncompatibleUpdate bool, gateway Gateway,
-	yamlSchemas ...map[string]string) error {
+func syncCRDs(ctx context.Context, logger *zap.Logger, groups []string, enableIncompatibleUpdate bool,
+	enableCRDDeletion bool, gateway Gateway, yamlSchemas ...map[string]string) error {
 
 	var crdList []*apiextv1.CustomResourceDefinition
 	for _, schemaMap := range yamlSchemas {
@@ -143,9 +147,14 @@ func syncCRDs(ctx context.Context, logger *zap.Logger, groups []string, enableIn
 			}
 		}
 		if !found {
-			if err = gateway.Delete(ctx, &crd); err != nil {
-				logger.Error("Fail to delete CRD", zap.String("name", crd.Name), zap.Error(err))
-				return err
+			if enableCRDDeletion {
+				logger.Info("CRD deletion enabled. Delete CRD", zap.String("name", crd.Name))
+				if err = gateway.Delete(ctx, &crd); err != nil && !utils.IsNotFoundError(err) {
+					logger.Error("Fail to delete CRD", zap.String("name", crd.Name), zap.Error(err))
+					return err
+				}
+			} else {
+				logger.Info("CRD deletion disabled. Skip deleting CRD", zap.String("name", crd.Name))
 			}
 		}
 	}
