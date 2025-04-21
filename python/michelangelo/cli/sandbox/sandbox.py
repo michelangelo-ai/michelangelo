@@ -27,7 +27,7 @@ _kube_ports = [
     "9091:30007",  # MinIO
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
-    "8081:30010",  # Envoy gRPC --> gRPC-web proxy
+    "8081:30010", # Envoy gRPC --> gRPC-web proxy
 ]
 _cadence_domain = "default"
 
@@ -36,9 +36,7 @@ def init_arguments(p: argparse.ArgumentParser):
     sp = p.add_subparsers(dest="action", required=True)
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
-    create_p.add_argument(
-        "--exclude", help="Excludes the specified services.", nargs="+", default=[]
-    )
+    create_p.add_argument("--exclude", help="Excludes the specified services.", nargs="+", default=[])
 
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
@@ -55,10 +53,7 @@ def main(args=None):
 def run(ns: argparse.Namespace):
     # Assert prerequisites. Sandbox depends on the following tools:
     _assert_command("k3d", "k3d not found, please install it: https://k3d.io")
-    _assert_command(
-        "kubectl",
-        "kubectl not found, please install it: https://kubernetes.io/docs/tasks/tools/#kubectl",
-    )
+    _assert_command("kubectl", "kubectl not found, please install it: https://kubernetes.io/docs/tasks/tools/#kubectl")
 
     if ns.action == "create":
         return _create(ns)
@@ -121,13 +116,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    resources = [
-        "boot.yaml",
-        "mysql.yaml",
-        "cadence.yaml",
-        "minio.yaml",
-        "michelangelo-config.yaml",
-    ]
+    resources = ["boot.yaml", "mysql.yaml", "cadence.yaml", "minio.yaml", "michelangelo-config.yaml"]
     if "worker" not in ns.exclude:
         resources.append("michelangelo-worker.yaml")
     if "apiserver" not in ns.exclude:
@@ -140,50 +129,22 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
-    _exec(
-        "kubectl",
-        "create",
-        "-k",
-        "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0",
-    )
+    _exec("kubectl", "create", "-k", "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0")
 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
-    _exec(
-        "kubectl",
-        "-n",
-        "ray-system",
-        "wait",
-        "--all",
-        "deployments",
-        "--for=condition=available",
-        "--timeout=600s",
-    )
+    _exec("kubectl", "-n", "ray-system", "wait", "--all", "deployments", "--for=condition=available", "--timeout=600s")
 
     links = []
 
     _kube_run(
         image="ubercadence/cli:v1.2.6",
-        command=[
-            "cadence",
-            "--domain",
-            _cadence_domain,
-            "domain",
-            "register",
-            "--rd",
-            "1",
-        ],
+        command=["cadence", "--domain", _cadence_domain, "domain", "register", "--rd", "1"],
         env={
             "CADENCE_CLI_ADDRESS": "cadence:7933",
         },
         retry_attempts=3,
     )
-    links.append(
-        (
-            "Cadence Dashboard",
-            f"http://localhost:8088/domains/{_cadence_domain}/workflows",
-            "",
-        )
-    )
+    links.append(("Cadence Dashboard", f"http://localhost:8088/domains/{_cadence_domain}/workflows", ""))
 
     print()
     print("Sandbox created. To access the services, please use the following links:")

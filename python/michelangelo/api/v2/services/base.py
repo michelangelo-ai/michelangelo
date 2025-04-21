@@ -12,28 +12,26 @@ from michelangelo.gen.api.list_pb2 import Criterion, CriterionOperation
 
 _TIMEOUT_SECONDS = 60
 _DEFAULT_SERVICE_CONFIG = {
-    "methodConfig": [
-        {
-            "timeout": "{}s".format(_TIMEOUT_SECONDS),
-            "retryPolicy": {
-                "maxAttempts": 3,
-                "initialBackoff": "0.1s",
-                "maxBackoff": "10s",
-                "backoffMultiplier": 2,
-                "retryableStatusCodes": ["INTERNAL", "UNAVAILABLE", "UNKNOWN"],
-            },
+    'methodConfig': [{
+        'timeout': '{}s'.format(_TIMEOUT_SECONDS),
+        'retryPolicy': {
+            'maxAttempts': 3,
+            'initialBackoff': '0.1s',
+            'maxBackoff': '10s',
+            'backoffMultiplier': 2,
+            'retryableStatusCodes': ['INTERNAL', 'UNAVAILABLE', 'UNKNOWN'],
         }
-    ]
+    }]
 }
 _MAX_MESSAGE_LENGTH = 1 * 1024 * 1024 * 1024  # 1GB
-_HEADER_RPC_ENCODING = "rpc-encoding"
-_HEADER_RPC_SERVICE = "rpc-service"
-_HEADER_RPC_CALLER = "rpc-caller"
+_HEADER_RPC_ENCODING = 'rpc-encoding'
+_HEADER_RPC_SERVICE = 'rpc-service'
+_HEADER_RPC_CALLER = 'rpc-caller'
 # environment variable name of Michelangelo API server address in host:port format
-_MA_API_SERVER_ENV = "MA_API_SERVER"
+_MA_API_SERVER_ENV = 'MA_API_SERVER'
 # environment variable name of the gRPC service name of Michelangelo API server
-_API_SERVICE_ENV_VAR = "MA_API_SERVER_NAME"
-_DEFAULT_MA_API_SERVER_NAME = "ma-apiserver"
+_API_SERVICE_ENV_VAR = 'MA_API_SERVER_NAME'
+_DEFAULT_MA_API_SERVER_NAME = 'ma-apiserver'
 _channel = None
 
 
@@ -46,7 +44,7 @@ class HeaderProvider(ABC):
     """
 
     @abstractmethod
-    def get_headers(self, request_headers: Dict[str, str] = None):
+    def get_headers(self, request_headers: Dict[str, str]=None):
         """
         Returns updated headers in a Dict[str, str]
 
@@ -64,7 +62,7 @@ class DefaultHeaderProvider(HeaderProvider):
     def caller(self):
         if self._caller:
             return self._caller
-        raise ValueError("caller is not set")
+        raise ValueError('caller is not set')
 
     @caller.setter
     def caller(self, caller):
@@ -79,7 +77,7 @@ class DefaultHeaderProvider(HeaderProvider):
 
     def get_headers(self, request_headers=None):
         headers = request_headers or {}
-        headers[_HEADER_RPC_ENCODING] = "proto"
+        headers[_HEADER_RPC_ENCODING] = 'proto'
 
         if _HEADER_RPC_SERVICE not in headers:
             headers[_HEADER_RPC_SERVICE] = self.service
@@ -91,6 +89,7 @@ class DefaultHeaderProvider(HeaderProvider):
 
 
 class Context:
+
     def __init__(self):
         self._channel = None
         self._header_provider = None
@@ -122,22 +121,19 @@ class Context:
             server_address = os.getenv(_MA_API_SERVER_ENV)
 
             if not server_address:
-                raise ValueError(
-                    f"Environment variable '{_MA_API_SERVER_ENV}' is not set."
-                )
+                raise ValueError(f"Environment variable '{_MA_API_SERVER_ENV}' is not set.")
 
-            if ":" not in server_address:
+            if ':' not in server_address:
                 raise ValueError(
-                    f"Invalid server address format in '{_MA_API_SERVER_ENV}'. Expected format: 'IP:PORT'"
-                )
+                    f"Invalid server address format in '{_MA_API_SERVER_ENV}'. Expected format: 'IP:PORT'")
 
             channel = grpc.insecure_channel(
                 server_address,
                 options=[
-                    ("grpc.service_config", json.dumps(_DEFAULT_SERVICE_CONFIG)),
-                    ("grpc.max_send_message_length", _MAX_MESSAGE_LENGTH),
-                    ("grpc.max_receive_message_length", _MAX_MESSAGE_LENGTH),
-                ],
+                    ('grpc.service_config', json.dumps(_DEFAULT_SERVICE_CONFIG)),
+                    ('grpc.max_send_message_length', _MAX_MESSAGE_LENGTH),
+                    ('grpc.max_receive_message_length', _MAX_MESSAGE_LENGTH),
+                ]
             )
             atexit.register(channel.close)
             _channel = channel
@@ -145,6 +141,7 @@ class Context:
 
 
 class BaseService(object):
+
     def __init__(self, context, stub_clz):
         self._context = context
         self._service_stub = None
@@ -173,21 +170,19 @@ class BaseService(object):
 
     def _process_criterion_operation(self, operation):
         if isinstance(operation, dict):
-            criterion = operation.get("criterion", [])
+            criterion = operation.get('criterion', [])
             criterion_list = []
             for i in range(len(criterion)):
-                if isinstance(criterion[i]["match_value"], dict):
-                    any_value = json_format.ParseDict(
-                        criterion[i]["match_value"], Value()
-                    )
+                if isinstance(criterion[i]['match_value'], dict):
+                    any_value = json_format.ParseDict(criterion[i]['match_value'], Value())
                     value = any_pb2.Any()
                     value.Pack(any_value)
                 else:
-                    value = any_pb2.Any(value=criterion[i]["match_value"].encode())
+                    value = any_pb2.Any(value=criterion[i]['match_value'].encode())
                 c = Criterion(
-                    field_name=criterion[i]["field_name"],
+                    field_name=criterion[i]['field_name'],
                     match_value=value,
-                    operator=criterion[i]["operator"],
+                    operator=criterion[i]['operator']
                 )
                 criterion_list.append(c)
 
@@ -207,8 +202,8 @@ def _keys_to_camel(d):
     res = {}
 
     def to_camel_case(snake_case):
-        splits = snake_case.split("_")
-        joined = "".join([s.title() for s in splits[1:]])
+        splits = snake_case.split('_')
+        joined = ''.join([s.title() for s in splits[1:]])
         return splits[0] + joined
 
     for key in d.keys():

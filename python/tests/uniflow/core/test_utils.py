@@ -8,11 +8,7 @@ from unittest.mock import patch, MagicMock
 import fsspec
 import fsspec.core
 
-from michelangelo.uniflow.core.utils import (
-    dataclass_dict,
-    is_dataclass_instance,
-    encode_value_to_json,
-)
+from michelangelo.uniflow.core.utils import dataclass_dict, is_dataclass_instance, encode_value_to_json
 
 pwd = os.environ["PWD"]
 
@@ -101,9 +97,7 @@ class DataclassTestCase(unittest.TestCase):
     def test_is_dataclass_instance(self):
         instance = Resource(index=0, path="")
         self.assertTrue(is_dataclass_instance(instance))
-        self.assertFalse(
-            is_dataclass_instance(Resource)
-        )  # Resource is not a dataclass type, not an instance
+        self.assertFalse(is_dataclass_instance(Resource))  # Resource is not a dataclass type, not an instance
 
         # Standard Python dataclass.is_dataclass returns true for both type and instance.
         self.assertTrue(is_dataclass(instance))

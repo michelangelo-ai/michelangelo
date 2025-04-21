@@ -206,7 +206,7 @@ class {{crd_camel}}Service(BaseService):
 '''.lstrip()
 
 
-INIT_TEMPLATE = """
+INIT_TEMPLATE = '''
 import importlib
 import re
 
@@ -226,4 +226,4 @@ class ServicesGen(object):
             m = importlib.import_module('michelangelo.api.v2.services.gen.{}'.format(crd))
             setattr(cls, service, getattr(m, service)(context))
 
-""".lstrip()
+'''.lstrip()

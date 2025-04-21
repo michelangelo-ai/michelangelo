@@ -13,7 +13,6 @@ from transformers import AutoTokenizer
 
 log = logging.getLogger(__name__)
 
-
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
@@ -24,11 +23,11 @@ log = logging.getLogger(__name__)
     ),
 )
 def train(
-    train_data: Dataset,
-    validation_data: Dataset,
-    test_data: Dataset,
-    model_name="nomic-ai/nomic-bert-2048",
-    # breakpoint=True,
+        train_data: Dataset,
+        validation_data: Dataset,
+        test_data: Dataset,
+        model_name="nomic-ai/nomic-bert-2048",
+        # breakpoint=True,
 ) -> dict:
     log.info("Starting training...")
 
@@ -40,20 +39,18 @@ def train(
     class RayDatasetWrapper(torch.utils.data.Dataset):
         def __init__(self, ray_dataset):
             self.data = ray_dataset.take_all()
-
+            
         def __len__(self):
             return len(self.data)
-
+            
         def __getitem__(self, idx):
             item = self.data[idx]
             return {
-                "input_ids": torch.tensor(item["input_ids"]),
-                "attention_mask": torch.tensor(item["attention_mask"]),
+                'input_ids': torch.tensor(item['input_ids']),
+                'attention_mask': torch.tensor(item['attention_mask'])
             }
 
-    train_dataloader = DataLoader(
-        RayDatasetWrapper(train_data), batch_size=8, shuffle=True
-    )
+    train_dataloader = DataLoader(RayDatasetWrapper(train_data), batch_size=8, shuffle=True)
     val_dataloader = DataLoader(RayDatasetWrapper(validation_data), batch_size=8)
 
     model = HuggingFaceLightningModel(model_name)
