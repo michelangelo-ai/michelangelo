@@ -33,8 +33,8 @@ import (
 // See Config for the configuration reference.
 var Module = fx.Options(
 	fx.Provide(config.ProvideConfig[Config](configKey)),
-	fx.Provide(DefaultTemporalClientFactory{}),
-	fx.Provide(DefaultCadenceClientFactory{}),
+	fx.Provide(func() TemporalClientFactory { return DefaultTemporalClientFactory{} }),
+	fx.Provide(func() CadenceClientFactory { return DefaultCadenceClientFactory{} }),
 	fx.Provide(provide),
 	fx.Invoke(start),
 )
@@ -47,7 +47,7 @@ type TemporalClientFactory interface {
 // DefaultTemporalClientFactory implements TemporalClientFactory.
 type DefaultTemporalClientFactory struct{}
 
-func (f *DefaultTemporalClientFactory) NewTemporalClient(opts tempclient.Options) (tempclient.Client, error) {
+func (f DefaultTemporalClientFactory) NewTemporalClient(opts tempclient.Options) (tempclient.Client, error) {
 	return tempclient.Dial(opts)
 }
 
@@ -59,7 +59,7 @@ type CadenceClientFactory interface {
 // DefaultCadenceClientFactory implements CadenceClientFactory.
 type DefaultCadenceClientFactory struct{}
 
-func (f *DefaultCadenceClientFactory) NewCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
+func (f DefaultCadenceClientFactory) NewCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 	return newCadenceClient(conf)
 }
 
