@@ -7,12 +7,13 @@
   "private": true,
   "version": "0.0.0",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "app"
   ],
   "type": "module",
   "scripts": {
     "build": "yarn workspaces run build",
-    "dev": "vite --config app/vite.config.ts",
+    "dev": "yarn workspace @michelangelo/app dev",
     "format": "prettier --check .",
     "generate": "../tools/gen-grpc-client.sh --clients javascript",
     "lint": "eslint .",
@@ -27,7 +28,6 @@
     "@types/node": "^22.13.11",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
-    "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-baseui": "^13.0.0",
@@ -38,8 +38,7 @@
     "globals": "^15.15.0",
     "prettier": "^3.5.3",
     "typescript": "~5.7.2",
-    "typescript-eslint": "^8.24.1",
-    "vite": "^6.2.0"
+    "typescript-eslint": "^8.24.1"
   },
   "resolutions": {
     "react": "^18.3.1",
