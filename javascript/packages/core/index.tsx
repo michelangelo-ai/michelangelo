@@ -1,6 +1,7 @@
+import { AppNavBar } from 'baseui/app-nav-bar';
+
 import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/provider';
-import { AppNavBar } from 'baseui/app-nav-bar';
 
 import '#core/styles/main.css';
 

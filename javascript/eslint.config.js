@@ -27,9 +27,16 @@ const sharedRules = {
     'error',
     {
       groups: [
-        ['^react', '^@(?!ma/|/)', '^[^@./]'],
-        ['^#*/'],
+        // Group 1: React and third-party imports
+        ['^react', '^[^#./]'],
+
+        // Group 2: Internal imports (#) and relative imports
+        ['^#\\w+', '^\\.'],
+
+        // Group 3: Type imports (both third-party and local)
         ['^@?\\w.*\\u0000$', '^[^.].*\\u0000$', '^\\..*\\u0000$'],
+
+        // Group 4: Style imports
         ['^.*\\.(css|scss|sass|less)$'],
       ],
     },

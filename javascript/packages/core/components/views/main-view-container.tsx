@@ -1,8 +1,8 @@
 import { Cell, Grid } from 'baseui/layout-grid';
 
-import type { Props } from './types';
-
 import { BREADCRUMB_BAR_HEIGHT } from './constants';
+
+import type { Props } from './types';
 
 /**
  * MainViewContainer is a layout wrapper component that provides consistent padding and spacing

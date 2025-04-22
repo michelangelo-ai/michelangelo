@@ -1,7 +1,7 @@
+import { Wrappers } from './types';
+
 import type { RenderOptions } from '@testing-library/react';
 import type { ReactNode } from 'react';
-
-import { Wrappers } from './types';
 
 /**
  * Creates a testing wrapper that composes multiple React Testing Library wrappers.
