@@ -28,7 +28,7 @@ type dummyWorker struct {
 	registeredActivities []interface{}
 }
 
-func (w2 *dummyWorker) RegisterWorkflow(w interface{}, name string) {
+func (w2 *dummyWorker) RegisterWorkflow(w interface{}) {
 	panic("implement me")
 }
 

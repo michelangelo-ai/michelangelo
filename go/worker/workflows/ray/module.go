@@ -12,6 +12,6 @@ var Module = fx.Options(
 func register(workers []worker.Worker) {
 	ws := &workflows{}
 	for _, w := range workers {
-		w.RegisterWorkflow(ws.CreateRayCluster, "ray-workflow")
+		w.RegisterWorkflow(ws.CreateRayCluster)
 	}
 }
