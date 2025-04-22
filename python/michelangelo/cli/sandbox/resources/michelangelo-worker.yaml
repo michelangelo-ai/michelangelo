@@ -26,7 +26,7 @@ metadata:
 data:
   base.yaml: |
     worker:
-      address: host.docker.internal:14566
+      address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
 
     logging:
@@ -54,4 +54,4 @@ data:
       awsRegion: us-east-1
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
-      awsEndpointUrl: host.docker.internal:9091
+      awsEndpointUrl: minio:9091
