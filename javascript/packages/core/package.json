@@ -2,8 +2,6 @@
   "name": "@michelangelo/core",
   "license": "UNLICENSED",
   "version": "0.0.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "scripts": {
     "build": "vite build",
     "test": "vitest"
@@ -29,5 +27,13 @@
     "@types/jest": "^29.5.14",
     "jsdom": "^26.1.0",
     "vitest": "^3.1.1"
+  },
+  "exports": {
+    ".": "./index.tsx"
+  },
+  "imports": {
+    "#gen-api/*": "../../gen/grpc/michelangelo/api/*",
+    "#gen-k8s/*": "../../gen/grpc/k8s.io/*",
+    "#core/*": "./"
   }
 }

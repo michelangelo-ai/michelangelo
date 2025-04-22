@@ -1,8 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router';
-
-import useURLQueryString from '@/hooks/routing/use-url-query-string';
-import { Phase } from '@/types/common/studio-types';
+import useURLQueryString from '#core/hooks/routing/use-url-query-string';
+import { Phase } from '#core/types/common/studio-types';
 
 import type { QueryParams, RouteParams, StudioParamsView, ViewTypeToParamType } from './types';
 

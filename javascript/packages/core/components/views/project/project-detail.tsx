@@ -2,10 +2,9 @@ import { useEffect } from 'react';
 import { useState } from 'react';
 import { createClient, Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
-
-import { Project } from '@ma/gen-api/v2/project_pb';
-import { ProjectService } from '@ma/gen-api/v2/project_svc_pb';
-import { useStudioParams } from '@/hooks/routing/use-studio-params/use-studio-params';
+import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
+import { Project } from '#gen-api/v2/project_pb';
+import { ProjectService } from '#gen-api/v2/project_svc_pb';
 
 export function ProjectDetail() {
   const [project, setProject] = useState<Project>();

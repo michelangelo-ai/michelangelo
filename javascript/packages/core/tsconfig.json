@@ -9,12 +9,6 @@
     "noEmit": false,
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": ".",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"],
-      "@ma/gen-api/*": ["../../gen/grpc/michelangelo/api/*"],
-      "@ma/gen-k8s/*": ["../../gen/grpc/k8s.io/*"]
-    }
+    "rootDir": "."
   }
 }

@@ -1,6 +1,5 @@
+import { StudioParamsBase } from '#core/hooks/routing/use-studio-params/types';
 import pluralize from 'pluralize';
-
-import { StudioParamsBase } from '@/hooks/routing/use-studio-params/types';
 
 const ALWAYS_SINGULAR_ENTITIES = [
   'model-performance',
