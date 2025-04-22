@@ -136,8 +136,8 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	// Check if the object exists in MetadataStorage
 	if storage.EnableMetadataStorage(&handler.conf) {
+		// Check if the object exists in MetadataStorage
 		tmpObj := obj
 		err = handler.metadataStorage.GetByName(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
 		if err == nil {
@@ -612,7 +612,8 @@ func getSpec(object any) (any, error) {
 // handleUpdate updates the object in metadataStorage and blobStorage.
 func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
 	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
-	panic("not implemented")
+	// TODO: update the object in blob storage
+	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
 }
 
 // HandleDelete deletes the object in metadata storage and blob storage.
