@@ -367,8 +367,7 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 	if storage.EnableMetadataStorage(&handler.conf) {
 		return handler.metadataStorageList(ctx, namespace, opts, listOptionsExt, list)
 	} else if listOptionsExt != nil && !listOptionsExt.Equal(&apipb.ListOptionsExt{}) {
-		return status.Errorf(codes.Unimplemented,
-			"ListOptionsExt is not supported, when Metadata Storage is not enabled.")
+		log.Info("ListOptionsExt is ignored when metadata storage is not enabled", "listOptionsExt", listOptionsExt)
 	}
 
 	parsedListOptions, err := getCRTListOptions(namespace, opts)
