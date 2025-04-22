@@ -1,8 +1,7 @@
 import { renderHook } from '@testing-library/react';
-
-import useURLQueryString from '@/hooks/routing/use-url-query-string';
-import { buildWrapper } from '@/test/wrappers/build-wrapper';
-import { getRouterWrapper } from '@/test/wrappers/get-router-wrapper';
+import useURLQueryString from '#core/hooks/routing/use-url-query-string';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 
 describe('useURLQueryString', () => {
   describe('with no query parameters', () => {

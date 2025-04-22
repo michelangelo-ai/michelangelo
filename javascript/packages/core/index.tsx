@@ -1,9 +1,8 @@
+import { Router } from '#core/router/router';
+import { ThemeProvider } from '#core/themes/provider';
 import { AppNavBar } from 'baseui/app-nav-bar';
 
-import { Router } from '@/router/router';
-import { ThemeProvider } from '@/themes/provider';
-
-import '@/styles/main.css';
+import '#core/styles/main.css';
 
 export function CoreApp() {
   return (

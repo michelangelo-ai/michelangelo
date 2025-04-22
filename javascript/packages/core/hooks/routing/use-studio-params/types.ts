@@ -1,5 +1,5 @@
-import { Phase } from '@/types/common/studio-types';
-import { View } from '@/types/common/view-types';
+import { Phase } from '#core/types/common/studio-types';
+import { View } from '#core/types/common/view-types';
 
 /**
  * Parameters that can be extracted from the route path. These parameters
