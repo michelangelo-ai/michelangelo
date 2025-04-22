@@ -1,6 +1,6 @@
-// Package enginefx configures and provides workers and clients for Cadence and Temporal.
+// Package workflowfx configures and provides workers and clients for Cadence and Temporal.
 // The configuration for the module is specified in YAML. See Config for reference.
-package enginefx
+package workflowfx
 
 import (
 	"context"
@@ -33,14 +33,43 @@ import (
 // See Config for the configuration reference.
 var Module = fx.Options(
 	fx.Provide(config.ProvideConfig[Config](configKey)),
+	fx.Provide(DefaultTemporalClientFactory{}),
+	fx.Provide(DefaultCadenceClientFactory{}),
 	fx.Provide(provide),
 	fx.Invoke(start),
 )
+
+// TemporalClientFactory creates Temporal clients.
+type TemporalClientFactory interface {
+	NewTemporalClient(tempclient.Options) (tempclient.Client, error)
+}
+
+// DefaultTemporalClientFactory implements TemporalClientFactory.
+type DefaultTemporalClientFactory struct{}
+
+func (f *DefaultTemporalClientFactory) NewTemporalClient(opts tempclient.Options) (tempclient.Client, error) {
+	return tempclient.Dial(opts)
+}
+
+// CadenceClientFactory creates Cadence clients.
+type CadenceClientFactory interface {
+	NewCadenceClient(conf Config) (workflowserviceclient.Interface, error)
+}
+
+// DefaultCadenceClientFactory implements CadenceClientFactory.
+type DefaultCadenceClientFactory struct{}
+
+func (f *DefaultCadenceClientFactory) NewCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
+	return newCadenceClient(conf)
+}
 
 type In struct {
 	fx.In
 	Config Config
 	Logger *zap.Logger
+
+	CadenceFactory  CadenceClientFactory  `optional:"true"`
+	TemporalFactory TemporalClientFactory `optional:"true"`
 }
 
 type Out struct {
@@ -57,13 +86,13 @@ func provide(in In) (Out, error) {
 	out.Backend = service.BackendType(conf.Provider)
 	if conf.Provider == "cadence" {
 		var err error
-		out.Workers, err = newCadenceWorker(in.Config, in.Logger)
+		out.Workers, err = newCadenceWorker(in.CadenceFactory, in.Config, in.Logger)
 		if err != nil {
 			return out, err
 		}
 	} else if conf.Provider == "temporal" {
 		var err error
-		out.Workers, err = newTemporalWorker(in.Config, in.Logger)
+		out.Workers, err = newTemporalWorker(in.TemporalFactory, in.Config, in.Logger)
 		if err != nil {
 			return out, err
 		}
@@ -72,7 +101,7 @@ func provide(in In) (Out, error) {
 }
 
 // newCadenceWorker creates a new Cadence worker.
-func newCadenceWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
+func newCadenceWorker(factory CadenceClientFactory, conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 	metrics := tally.NoopScope
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, workflow.BackendContextKey, cadence.NewWorkflow())
@@ -83,7 +112,7 @@ func newCadenceWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 		BackgroundActivityContext: ctx,
 	}
 	// Create the Cadence client interface.
-	inter, err := newCadenceClient(conf)
+	inter, err := factory.NewCadenceClient(conf)
 	if err != nil {
 		return nil, err
 	}
@@ -129,12 +158,12 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 }
 
 // newTemporalWorker creates a new Temporal worker.
-func newTemporalWorker(conf Config, log *zap.Logger) ([]sworker.Worker, error) {
+func newTemporalWorker(factory TemporalClientFactory, conf Config, log *zap.Logger) ([]sworker.Worker, error) {
 	scope, _ := tallyv4.NewRootScope(tallyv4.ScopeOptions{
 		Prefix: "temporal",
 	}, time.Second)
 	// Create Temporal client
-	c, err := tempclient.Dial(tempclient.Options{
+	c, err := factory.NewTemporalClient(tempclient.Options{
 		HostPort:       conf.Host,
 		Namespace:      conf.Client.Domain,
 		DataConverter:  temporal.DataConverter{},

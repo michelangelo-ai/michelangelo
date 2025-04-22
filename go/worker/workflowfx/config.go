@@ -1,4 +1,4 @@
-package enginefx
+package workflowfx
 
 const configKey = "workflow-engine"
 
