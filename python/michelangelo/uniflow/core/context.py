@@ -6,10 +6,16 @@ from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 from michelangelo.uniflow.core.build import build
-from michelangelo.uniflow.core.remote_run import DEFAULT_EXECUTION_TIMEOUT_SECONDS, RemoteRun
+from michelangelo.uniflow.core.remote_run import (
+    DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+    RemoteRun,
+    RemoteRunTemporal,
+)
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, ArgparseEnvironAction
 
 log = logging.getLogger(__name__)
+cadence = "cadence"
+temporal = "temporal"
 
 
 @dataclass(frozen=True)
@@ -82,7 +88,9 @@ def create_context() -> Context:
 
     target, args = args[0], args[1:]
 
-    assert target in ["local-run", "remote-run"], f"Unsupported target: {target}; args: {sys.argv[1:]}"
+    assert target in ["local-run", "remote-run"], (
+        f"Unsupported target: {target}; args: {sys.argv[1:]}"
+    )
 
     ctx = Context(_args=args, _target=target)
     log.info("ctx: %r", ctx)
@@ -99,9 +107,7 @@ def _local_run(fn: Callable, *args, **kw):
     try:
         build(fn)
     except Exception as err:
-        err_message = (
-            "Error in building the @workflow function. Ensure it meets all required workflow code specifications."
-        )
+        err_message = "Error in building the @workflow function. Ensure it meets all required workflow code specifications."
         raise RuntimeError(err_message) from err
 
     os.environ["UF_LOCAL_RUN"] = "1"
@@ -126,15 +132,38 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser()
     p.add_argument(
-        "--storage-url", required=True, help="Persistent storage URL for saving and loading workflow checkpoints."
+        "--workflow",
+        default=cadence,
+        help="The workflow engine to use for remote execution. Options: cadence, temporal. Default is cadence.",
     )
-    p.add_argument("--image", required=True, help="Container image to use for running workflow tasks.")
-    p.add_argument("--execution-timeout-seconds", default=DEFAULT_EXECUTION_TIMEOUT_SECONDS, type=int)
-    p.add_argument("--cron", help="Cron expression for scheduling periodic workflow runs.")
-    p.add_argument("--yes", action="store_true", help="Automatically answer yes to confirmation prompts.")
+    p.add_argument(
+        "--storage-url",
+        required=True,
+        help="Persistent storage URL for saving and loading workflow checkpoints.",
+    )
+    p.add_argument(
+        "--image",
+        required=True,
+        help="Container image to use for running workflow tasks.",
+    )
+    p.add_argument(
+        "--execution-timeout-seconds",
+        default=DEFAULT_EXECUTION_TIMEOUT_SECONDS,
+        type=int,
+    )
+    p.add_argument(
+        "--cron", help="Cron expression for scheduling periodic workflow runs."
+    )
+    p.add_argument(
+        "--yes",
+        action="store_true",
+        help="Automatically answer yes to confirmation prompts.",
+    )
 
     if environ:
-        p.add_argument("--environ", "--env", action=ArgparseEnvironAction, nargs="*", default={})
+        p.add_argument(
+            "--environ", "--env", action=ArgparseEnvironAction, nargs="*", default={}
+        )
 
     return p
 
@@ -150,6 +179,7 @@ def _remote_run(
     storage_url: str = "",
     image: str = "",
     yes: bool = False,
+    workflow: str = cadence,
 ):
     """
     Execute a given workflow function in Remote Mode.
@@ -174,11 +204,18 @@ def _remote_run(
 
     assert isinstance(environ, dict)
 
-    rr = RemoteRun(
-        fn=fn,
-        image=image,
-        storage_url=storage_url,
-    )
+    if workflow == cadence:
+        rr = RemoteRun(
+            fn=fn,
+            image=image,
+            storage_url=storage_url,
+        )
+    elif workflow == temporal:
+        rr = RemoteRunTemporal(
+            fn=fn,
+            image=image,
+            storage_url=storage_url,
+        )
     rr.environ = environ
     rr.args = args
     rr.kwargs = kwargs

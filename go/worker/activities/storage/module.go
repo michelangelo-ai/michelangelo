@@ -1,7 +1,7 @@
 package storage
 
 import (
-	"go.uber.org/cadence/worker"
+	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 
 	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"

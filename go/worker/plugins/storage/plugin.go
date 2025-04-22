@@ -3,13 +3,13 @@ package storage
 import (
 	"fmt"
 
-	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
+	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
+	"github.com/cadence-workflow/starlark-worker/worker"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	jsoniter "github.com/json-iterator/go"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence/worker"
-	"go.uber.org/cadence/workflow"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"
 )
@@ -20,12 +20,12 @@ var Plugin = &plugin{}
 
 type plugin struct{}
 
-var _ cadstar.IPlugin = (*plugin)(nil)
+var _ service.IPlugin = (*plugin)(nil)
 
 func (r *plugin) ID() string {
 	return pluginID
 }
-func (r *plugin) Create(_ cadstar.RunInfo) starlark.Value {
+func (r *plugin) Create(_ service.RunInfo) starlark.Value {
 	return newModule()
 }
 func (r *plugin) Register(_ worker.Registry) {}
@@ -57,7 +57,7 @@ func newModule() starlark.Value {
 }
 
 func (m *module) read(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
 	var protocol string

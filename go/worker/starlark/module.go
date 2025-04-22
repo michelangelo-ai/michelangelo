@@ -3,23 +3,19 @@ package starlark
 import (
 	"fmt"
 
-	"github.com/uber-go/tally"
-	"go.uber.org/cadence/worker"
-	"go.uber.org/fx"
-	"go.uber.org/zap"
-
-	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/plugin"
+	"github.com/cadence-workflow/starlark-worker/service"
+	"github.com/cadence-workflow/starlark-worker/worker"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
+	"go.uber.org/fx"
 )
 
 var Module = fx.Options(
 	fx.Invoke(register),
-	fx.Provide(getDataConvertor),
 )
 
-func register(workers []worker.Worker) error {
+func register(workers []worker.Worker, backend service.BackendType) error {
 
 	if len(workers) == 0 {
 		return fmt.Errorf("no workers provided")
@@ -29,21 +25,13 @@ func register(workers []worker.Worker) error {
 	plugins[ray.Plugin.ID()] = ray.Plugin
 	plugins[storage.Plugin.ID()] = storage.Plugin
 
-	service := &cadstar.Service{
-		Plugins: plugins,
+	workerService, err := service.NewService(plugins, "", backend)
+	if err != nil {
+		return err
 	}
 	for _, w := range workers {
-		service.Register(w)
+		workerService.Register(w)
 	}
 
 	return nil
-}
-
-func getDataConvertor(logger *zap.Logger) worker.Options {
-	metrics := tally.NoopScope
-	return worker.Options{
-		MetricsScope:  metrics,
-		Logger:        logger,
-		DataConverter: &cadstar.DataConverter{Logger: logger},
-	}
 }

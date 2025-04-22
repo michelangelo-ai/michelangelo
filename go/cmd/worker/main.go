@@ -1,7 +1,6 @@
 package main
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/base/cadencefx"
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
@@ -20,6 +19,5 @@ func options() fx.Option {
 		env.Module,
 		config.Module,
 		zapfx.Module,
-		cadencefx.Module,
 	)
 }

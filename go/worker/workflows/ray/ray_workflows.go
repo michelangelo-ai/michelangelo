@@ -1,8 +1,8 @@
 package ray
 
 import (
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
-	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 )
 

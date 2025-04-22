@@ -1,24 +1,28 @@
-Worker is a Cadence [workflow worker](https://cadenceworkflow.io/docs/concepts/topology#workflow-worker)
-and [activity worker](https://cadenceworkflow.io/docs/concepts/topology#activity-worker).
-It hosts a set of Cadence workflows and activities required for different tasks within the Michelangelo platform.
+Worker is both a [Cadence workflow worker](https://cadenceworkflow.io/docs/concepts/topology#workflow-worker), [Cadence activity worker](https://cadenceworkflow.io/docs/concepts/topology#activity-worker), and now also supports [Temporal workflows and activities](https://docs.temporal.io/workflows).
+
+It hosts a set of workflows and activities required for various tasks within the Michelangelo platform.
 
 ## Developer Guide
 
-This section is intended for contributors. Below are the instructions for setting up the development environment and
-running test workflows.
+This section provides instructions for contributors to set up the development environment and run test workflows.
 
-1. **Run Sandbox**:
-   Run the Sandbox without the worker component (you will run the worker separately in the next step).
-    ```sh
-    sandbox create --exclude worker
-    ```
-   See the [sandbox README]() for more details.
+### 1. Run Sandbox
 
-2. **Run the Worker**:
-   Run the worker with the following command:
-    ```sh
-    bazel run //go/cmd/worker
-    ```
+Run the Sandbox without the worker component (you will start the worker separately in the next step):
+
+```sh
+sandbox create --exclude worker
+```
+
+Refer to the [sandbox README]() for more details.
+
+### 2. Run the Worker
+
+Run the worker using the following Bazel command, which starts both Cadence and Temporal workflow/activity workers:
+
+```sh
+bazel run //go/cmd/worker
+```
 
 3. **Run Workflows**:
    Now, as the worker is running, you can run test workflows.
