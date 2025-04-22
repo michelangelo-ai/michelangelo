@@ -3,6 +3,7 @@ package workflowfx
 import (
 	"testing"
 
+	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	tempclient "go.temporal.io/sdk/client"
@@ -47,59 +48,63 @@ func (m *MockCadenceClientFactory) NewCadenceClient(conf Config) (workflowservic
 
 // --- Tests ---
 
-func TestNewTemporalWorker(t *testing.T) {
-	mockClient := &MockTemporalClient{}
+// --- Test provide() function directly ---
 
-	mockFactory := &MockTemporalClientFactory{}
-
+func TestProvide_Temporal(t *testing.T) {
 	conf := Config{
 		Provider: "temporal",
 		Host:     "localhost:7233",
 		Client: ClientConfig{
 			Domain: "test-domain",
 		},
-		Workers: []WorkerConfig{
-			{TaskList: "test-tasklist"},
-		},
+		Workers: []WorkerConfig{{TaskList: "test-tasklist"}},
 	}
 
 	logger := zap.NewNop()
+	mockTemporalFactory := &MockTemporalClientFactory{}
 
-	workers, err := newTemporalWorker(mockFactory, conf, logger)
+	in := In{
+		Config:          conf,
+		Logger:          logger,
+		TemporalFactory: mockTemporalFactory,
+	}
+
+	out, err := provide(in)
 
 	assert.NoError(t, err)
-	assert.Len(t, workers, 1)
-
-	mockFactory.AssertExpectations(t)
-	mockClient.AssertExpectations(t)
+	assert.Equal(t, service.BackendType("temporal"), out.Backend)
+	assert.Len(t, out.Workers, 1)
 }
 
-func TestNewCadenceWorker(t *testing.T) {
-	mockClient := &MockCadenceClient{}
-
-	mockFactory := &MockCadenceClientFactory{}
-	mockFactory.
-		On("NewCadenceClient", mock.Anything).
-		Return(mockClient, nil)
-
+func TestProvide_Cadence(t *testing.T) {
 	conf := Config{
 		Provider:  "cadence",
 		Transport: "grpc",
 		Host:      "localhost:7833",
-		Workers: []WorkerConfig{
-			{
-				Domain:   "test-domain",
-				TaskList: "test-tasklist",
-			},
-		},
+		Workers: []WorkerConfig{{
+			Domain:   "test-domain",
+			TaskList: "test-tasklist",
+		}},
 	}
 
 	logger := zap.NewNop()
+	mockCadenceClient := &MockCadenceClient{}
+	mockCadenceFactory := &MockCadenceClientFactory{}
+	mockCadenceFactory.
+		On("NewCadenceClient", mock.Anything).
+		Return(mockCadenceClient, nil)
 
-	workers, err := newCadenceWorker(mockFactory, conf, logger)
+	in := In{
+		Config:         conf,
+		Logger:         logger,
+		CadenceFactory: mockCadenceFactory,
+	}
+
+	out, err := provide(in)
 
 	assert.NoError(t, err)
-	assert.Len(t, workers, 1)
+	assert.Equal(t, service.BackendType("cadence"), out.Backend)
+	assert.Len(t, out.Workers, 1)
 
-	mockFactory.AssertExpectations(t)
+	mockCadenceFactory.AssertExpectations(t)
 }
