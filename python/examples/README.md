@@ -167,4 +167,9 @@ For the remote run from sandbox, terminate the workflow in Cadence.
     visit http://localhost:8088/ 
     And terminate target workflow
 
+For temporal, terminate the workflow in Temporal UI.
+
+    visit http://localhost:8233/
+    And terminate target workflow
+
 

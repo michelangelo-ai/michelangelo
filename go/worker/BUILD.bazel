@@ -11,6 +11,7 @@ go_library(
     deps = [
         "//go/worker/activities:go_default_library",
         "//go/worker/starlark:go_default_library",
+        "//go/worker/workflowfx:go_default_library",
         "//go/worker/workflows:go_default_library",
         "//proto/api/v2:go_default_library",
         "@org_uber_go_config//:go_default_library",

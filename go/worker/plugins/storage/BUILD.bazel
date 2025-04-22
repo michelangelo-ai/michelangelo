@@ -7,12 +7,12 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/worker/activities/storage:go_default_library",
-        "@com_github_cadence_workflow_starlark_worker//cadstar:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//star:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
         "@com_github_json_iterator_go//:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
-        "@org_uber_go_cadence//worker:go_default_library",
-        "@org_uber_go_cadence//workflow:go_default_library",
     ],
 )

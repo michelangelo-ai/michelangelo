@@ -39,9 +39,21 @@ to https://docs.github.com/en/packages/working-with-a-github-packages-registry/w
 
 TODO: andrii: remove this section after the public release of Michelangelo
 
-### Install
+### Install Michelangelo CLI
 
-```
+```bash
 pip install michelangelo
 ma sandbox --help
 ```
+
+### Setting up Temporal Development Server
+
+To quickly set up a Temporal development server for local development and testing, follow these brief steps:
+
+```bash
+brew install temporal
+temporal server start-dev
+```
+
+For detailed instructions and additional setup options, please follow the [Temporal Development Environment Guide](https://learn.temporal.io/getting_started/typescript/dev_environment/).
+

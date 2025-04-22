@@ -4,18 +4,16 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cadence-workflow/starlark-worker/worker"
 	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
-
-	"go.uber.org/cadence/activity"
-	"go.uber.org/cadence/workflow"
-
-	"go.uber.org/cadence/worker"
 )
 
 // dummyStorage is a simple implementation of the Storage interface for testing.
 type dummyStorage struct {
 	proto string
 }
+
+var _ worker.Worker = (*dummyWorker)(nil)
 
 func (d *dummyStorage) Read(ctx context.Context, path string) (any, error) {
 	return nil, nil
@@ -30,15 +28,15 @@ type dummyWorker struct {
 	registeredActivities []interface{}
 }
 
-func (w2 *dummyWorker) RegisterWorkflow(w interface{}) {
+func (w2 *dummyWorker) RegisterWorkflow(w interface{}, name string) {
 	panic("implement me")
 }
 
-func (w2 *dummyWorker) RegisterWorkflowWithOptions(w interface{}, options workflow.RegisterOptions) {
+func (w2 *dummyWorker) RegisterWorkflowWithOptions(w interface{}, options worker.RegisterWorkflowOptions) {
 	panic("implement me")
 }
 
-func (w2 *dummyWorker) RegisterActivityWithOptions(a interface{}, options activity.RegisterOptions) {
+func (w2 *dummyWorker) RegisterActivityWithOptions(a interface{}, options worker.RegisterActivityOptions) {
 	panic("implement me")
 }
 
@@ -46,7 +44,7 @@ func (w2 *dummyWorker) Start() error {
 	panic("implement me")
 }
 
-func (w2 *dummyWorker) Run() error {
+func (w2 *dummyWorker) Run(interruptCh <-chan interface{}) error {
 	panic("implement me")
 }
 

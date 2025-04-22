@@ -1,7 +1,7 @@
 package ray
 
 import (
-	"go.uber.org/cadence/worker"
+	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 )
 
@@ -12,6 +12,6 @@ var Module = fx.Options(
 func register(workers []worker.Worker) {
 	ws := &workflows{}
 	for _, w := range workers {
-		w.RegisterWorkflow(ws.CreateRayCluster)
+		w.RegisterWorkflow(ws.CreateRayCluster, "ray-workflow")
 	}
 }

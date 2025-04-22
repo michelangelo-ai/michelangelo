@@ -9,10 +9,13 @@ from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.remote_run import (
     DEFAULT_EXECUTION_TIMEOUT_SECONDS,
     RemoteRun,
+    RemoteRunTemporal,
 )
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, ArgparseEnvironAction
 
 log = logging.getLogger(__name__)
+cadence = "cadence"
+temporal = "temporal"
 
 
 @dataclass(frozen=True)
@@ -129,6 +132,11 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
 
     p = argparse.ArgumentParser()
     p.add_argument(
+        "--workflow",
+        default=cadence,
+        help="The workflow engine to use for remote execution. Options: cadence, temporal. Default is cadence.",
+    )
+    p.add_argument(
         "--storage-url",
         required=True,
         help="Persistent storage URL for saving and loading workflow checkpoints.",
@@ -171,6 +179,7 @@ def _remote_run(
     storage_url: str = "",
     image: str = "",
     yes: bool = False,
+    workflow: str = cadence,
 ):
     """
     Execute a given workflow function in Remote Mode.
@@ -195,11 +204,18 @@ def _remote_run(
 
     assert isinstance(environ, dict)
 
-    rr = RemoteRun(
-        fn=fn,
-        image=image,
-        storage_url=storage_url,
-    )
+    if workflow == cadence:
+        rr = RemoteRun(
+            fn=fn,
+            image=image,
+            storage_url=storage_url,
+        )
+    elif workflow == temporal:
+        rr = RemoteRunTemporal(
+            fn=fn,
+            image=image,
+            storage_url=storage_url,
+        )
     rr.environ = environ
     rr.args = args
     rr.kwargs = kwargs
