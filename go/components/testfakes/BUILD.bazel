@@ -6,7 +6,7 @@ go_library(
         "fake_client_wrapper.go",
         "reactor_manager.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/testfakes",
     visibility = ["//visibility:public"],
     deps = [
         "@io_k8s_api//apps/v1:go_default_library",

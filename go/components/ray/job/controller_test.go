@@ -1,4 +1,4 @@
-package rayjob
+package job
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/michelangelo-ai/michelangelo/go/controllers/utils/testutils"
+	"github.com/michelangelo-ai/michelangelo/go/components/testfakes"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
@@ -265,9 +265,9 @@ func TestReconciler_Reconcile(t *testing.T) {
 			fakeRayV1Client := &rayv1fake.FakeRayV1{
 				Fake: &k8stesting.Fake{},
 			}
-			fakeClientWrapper := testutils.NewFakeClientWrapper(fakeClient)
+			fakeClientWrapper := testfakes.NewFakeClientWrapper(fakeClient)
 
-			reactorManager := &testutils.ReactorManager{}
+			reactorManager := &testfakes.ReactorManager{}
 
 			// Add reusable reactors for "create" and "get"
 			fakeRayV1Client.Fake.AddReactor("create", "rayjobs", reactorManager.CreateReactor())

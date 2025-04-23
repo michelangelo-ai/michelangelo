@@ -1,4 +1,4 @@
-package raycluster
+package cluster
 
 import (
 	"go.uber.org/config"
