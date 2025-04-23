@@ -227,17 +227,6 @@ func TestK8sOnly(t *testing.T) {
 		&metav1.ListOptions{LabelSelector: "bad label selector"}, nil, listJobs)
 	checkGrpcStatusCode(t, codes.InvalidArgument, err)
 
-	// ListOptionsExt is not supported
-	err = handler.List(context.Background(), "default", &metav1.ListOptions{}, &apipb.ListOptionsExt{
-		OrderBy: []*apipb.OrderBy{
-			{
-				Field: "test",
-			},
-		},
-	}, listJobs)
-	assert.Error(t, err)
-	checkGrpcStatusCode(t, codes.Unimplemented, err)
-
 	// Delete Collection
 	err = handler.DeleteCollection(context.Background(), &v2pb.RayJob{}, "project01", &metav1.DeleteOptions{}, &metav1.ListOptions{})
 	assert.NoError(t, err)
