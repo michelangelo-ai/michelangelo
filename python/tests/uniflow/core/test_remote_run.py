@@ -65,7 +65,9 @@ class Test(unittest.TestCase):
         self.assertTrue(my_workflow.__name__ in workflow_id)
 
         # Parse workflow input further
-        tarball, entrypoint_file, entrypoint_fn, args, keywords, env, _ = workflow_input.split("\n")
+        tarball, entrypoint_file, entrypoint_fn, args, keywords, env, _ = (
+            workflow_input.split("\n")
+        )
 
         # Assert input parts. All parts must be JSON serialized.
         # Tarball is a JSON string containing tarball bytes in base64.

@@ -14,14 +14,16 @@ tokenizer_path = "bert-base-cased"
 log = logging.getLogger(__name__)
 
 
-@uniflow.task(config=RayTask(
-    head_cpu=1,
-    head_memory="2Gi",
-    worker_cpu=1,
-    worker_memory="2Gi",
-    worker_instances=1, 
-    # breakpoint=True,
-    ))
+@uniflow.task(
+    config=RayTask(
+        head_cpu=1,
+        head_memory="2Gi",
+        worker_cpu=1,
+        worker_memory="2Gi",
+        worker_instances=1,
+        # breakpoint=True,
+    )
+)
 def load_data(
     path: str,
     name: str,
