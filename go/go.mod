@@ -3,7 +3,8 @@ module github.com/michelangelo-ai/michelangelo/go
 go 1.23.2
 
 require (
-	github.com/cadence-workflow/starlark-worker v1.0.3
+	github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20220615230608-94775cd89ca0
+	github.com/cadence-workflow/starlark-worker v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/dave/dst v0.27.3
 	github.com/go-logr/logr v1.4.2
@@ -16,7 +17,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
-	github.com/kubeflow/spark-operator v0.0.0-20250325114751-1905be6e1dbd
+	github.com/kubeflow/spark-operator v0.0.0-20250421083226-634b0c1a9fe5
 	github.com/michelangelo-ai/michelangelo/proto v0.0.0-00010101000000-000000000000
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/ray-project/kuberay/ray-operator v1.0.0
@@ -34,14 +35,14 @@ require (
 	go.uber.org/yarpc v1.75.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/tools v0.26.0
-	google.golang.org/genproto v0.0.0-20240903143218-8af14fe29dc1
+	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.6
-	k8s.io/api v0.32.1
-	k8s.io/apiextensions-apiserver v0.32.1
-	k8s.io/apimachinery v0.32.3
-	k8s.io/client-go v0.32.1
-	sigs.k8s.io/controller-runtime v0.20.4
+	k8s.io/api v0.24.2
+	k8s.io/apiextensions-apiserver v0.24.2
+	k8s.io/apimachinery v0.24.2
+	k8s.io/client-go v0.24.2
+	sigs.k8s.io/controller-runtime v0.12.2
 	sigs.k8s.io/yaml v1.4.0
 )
 
@@ -55,7 +56,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.12.1 // indirect
 	github.com/evanphx/json-patch/v5 v5.9.11 // indirect
 	github.com/facebookgo/clock v0.0.0-20150410010913-600d898af40a // indirect
-	github.com/fsnotify/fsnotify v1.7.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
@@ -92,7 +93,7 @@ require (
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
-	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
@@ -113,13 +114,13 @@ require (
 	golang.org/x/exp/typeparams v0.0.0-20221208152030-732eee02a75a // indirect
 	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.23.0 // indirect
-	golang.org/x/net v0.37.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
 	golang.org/x/oauth2 v0.25.0 // indirect
 	golang.org/x/sync v0.12.0 // indirect
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/term v0.30.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
-	golang.org/x/time v0.7.0 // indirect
+	golang.org/x/time v0.8.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250324211829-b45e905df463 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4 // indirect

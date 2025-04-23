@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"time"
 
+	sparkclientset "github.com/GoogleCloudPlatform/spark-on-k8s-operator/pkg/client/clientset/versioned"
 	"github.com/go-logr/logr"
 	sparkv1beta2 "github.com/kubeflow/spark-operator/api/v1beta2"
-	sparkclientset "github.com/kubeflow/spark-operator/pkg/client/clientset/versioned"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"

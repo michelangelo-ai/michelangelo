@@ -1,7 +1,7 @@
 package sparkjob
 
 import (
-	sparkclientset "github.com/kubeflow/spark-operator/pkg/client/clientset/versioned"
+	sparkclientset "github.com/GoogleCloudPlatform/spark-on-k8s-operator/pkg/client/clientset/versioned"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
