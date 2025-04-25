@@ -36,7 +36,7 @@ data:
 
     workflow-engine:
       # for cadence
-        host: 127.0.0.1:7833
+        host: cadence:7833
       # for temporal
       #  host: 127.0.0.1:7233
         transport: grpc
