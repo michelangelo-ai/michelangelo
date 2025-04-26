@@ -263,6 +263,9 @@ message PipelineStatus {
   // - Resource configuration issues
   // This helps users diagnose and fix pipeline build problems.
   string error_message = 6;
+
+  // The commit info for the pipeline.
+  CommitInfo commit = 7;
 }
 
 // Pipeline defines a machine learning pipeline resource that encapsulates:

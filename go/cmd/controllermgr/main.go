@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -55,6 +56,7 @@ func options() fx.Option {
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		ray.Module,
+		pipeline.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))

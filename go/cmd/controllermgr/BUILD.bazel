@@ -11,6 +11,7 @@ go_library(
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/base/zapfx:go_default_library",
+        "//go/components/pipeline:go_default_library",
         "//go/components/ray:go_default_library",
         "//go/components/spark:go_default_library",
         "//go/controllermgr:go_default_library",
