@@ -8,6 +8,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/controllermgr",
     visibility = ["//visibility:private"],
     deps = [
+        "//go/api/handler:go_default_library",
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/base/zapfx:go_default_library",
