@@ -9,6 +9,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
+	apiModule "github.com/michelangelo-ai/michelangelo/go/api/module"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
@@ -58,6 +59,7 @@ func options() fx.Option {
 		ray.Module,
 		pipeline.Module,
 		controllermgr.Module,
+		apiModule.CtrlMgrModule,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
