@@ -5,10 +5,9 @@ import (
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 )
-
 
 var (
 	// Module FX
@@ -24,8 +23,8 @@ func register(
 	logger *zap.Logger,
 ) error {
 	return (&Reconciler{
-		env:    env,
+		env:               env,
 		apiHandlerFactory: apiHandlerFactory,
-		logger: logger,
+		logger:            logger,
 	}).Register(mgr)
 }

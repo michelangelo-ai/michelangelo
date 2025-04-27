@@ -7,7 +7,6 @@ import (
 	"go.uber.org/config"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
-
 )
 
 const (

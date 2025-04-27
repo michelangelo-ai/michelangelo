@@ -16,6 +16,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
+	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"

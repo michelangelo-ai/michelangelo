@@ -5,26 +5,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"go.uber.org/zap/zaptest"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"k8s.io/apimachinery/pkg/types"
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap/zaptest"
+	"k8s.io/apimachinery/pkg/types"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestReconcile(t *testing.T) {
 	testCases := []struct {
-		name string
-		initialObjects []runtime.Object
-		env env.Context
-		expectedResult ctrl.Result
-		expectedError string
-		expectedStatusState v2pb.PipelineState
+		name                 string
+		initialObjects       []runtime.Object
+		env                  env.Context
+		expectedResult       ctrl.Result
+		expectedError        string
+		expectedStatusState  v2pb.PipelineState
 		expectedStatusCommit *v2pb.CommitInfo
 	}{
 		{
@@ -32,7 +32,7 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-pipeline",
+						Name:      "test-pipeline",
 						Namespace: "test-namespace",
 					},
 					Spec: v2pb.PipelineSpec{
@@ -43,9 +43,9 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult: ctrl.Result{RequeueAfter: reconcileInterval},
-			expectedError: "",
-			expectedStatusState: v2pb.PIPELINE_STATE_CREATED,
+			expectedResult:       ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedError:        "",
+			expectedStatusState:  v2pb.PIPELINE_STATE_CREATED,
 			expectedStatusCommit: nil,
 		},
 		{
@@ -53,7 +53,7 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-pipeline",
+						Name:      "test-pipeline",
 						Namespace: "test-namespace",
 					},
 					Spec: v2pb.PipelineSpec{
@@ -67,9 +67,9 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult: ctrl.Result{},
-			expectedError: "",
-			expectedStatusState: v2pb.PIPELINE_STATE_READY,
+			expectedResult:       ctrl.Result{},
+			expectedError:        "",
+			expectedStatusState:  v2pb.PIPELINE_STATE_READY,
 			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
 		},
 		{
@@ -77,7 +77,7 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-pipeline",
+						Name:      "test-pipeline",
 						Namespace: "test-namespace",
 					},
 					Spec: v2pb.PipelineSpec{
@@ -87,14 +87,14 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					Status: v2pb.PipelineStatus{
-						State: v2pb.PIPELINE_STATE_READY,
+						State:  v2pb.PIPELINE_STATE_READY,
 						Commit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
 					},
 				},
 			},
-			expectedResult: ctrl.Result{},
-			expectedError: "",
-			expectedStatusState: v2pb.PIPELINE_STATE_READY,
+			expectedResult:       ctrl.Result{},
+			expectedError:        "",
+			expectedStatusState:  v2pb.PIPELINE_STATE_READY,
 			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
 		},
 		{
@@ -102,7 +102,7 @@ func TestReconcile(t *testing.T) {
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-pipeline",
+						Name:      "test-pipeline",
 						Namespace: "test-namespace",
 					},
 					Spec: v2pb.PipelineSpec{
@@ -112,14 +112,14 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 					Status: v2pb.PipelineStatus{
-						State: v2pb.PIPELINE_STATE_READY,
+						State:  v2pb.PIPELINE_STATE_READY,
 						Commit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
 					},
 				},
 			},
-			expectedResult: ctrl.Result{RequeueAfter: reconcileInterval},
-			expectedError: "",
-			expectedStatusState: v2pb.PIPELINE_STATE_INVALID,
+			expectedResult:       ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedError:        "",
+			expectedStatusState:  v2pb.PIPELINE_STATE_INVALID,
 			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
 		},
 	}
@@ -147,14 +147,14 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func setUpReconciler(t *testing.T, initialObjects []runtime.Object, env env.Context, ) *Reconciler {
+func setUpReconciler(t *testing.T, initialObjects []runtime.Object, env env.Context) *Reconciler {
 	scheme := runtime.NewScheme()
 	err := v2pb.AddToScheme(scheme)
 	require.NoError(t, err)
 	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialObjects...).Build()
 	reconciler := &Reconciler{
-		Handler:           apiHandler.NewFakeAPIHandler(k8sClient),
-		logger:            zaptest.NewLogger(t),
+		Handler: apiHandler.NewFakeAPIHandler(k8sClient),
+		logger:  zaptest.NewLogger(t),
 	}
 	return reconciler
 }
