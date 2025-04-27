@@ -1,10 +1,13 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
 load("@rules_oci//oci:defs.bzl", "oci_image")
 load("@rules_pkg//pkg:tar.bzl", "pkg_tar")
 
 go_library(
     name = "go_default_library",
-    srcs = ["main.go"],
+    srcs = [
+        "config.go",
+        "main.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/cmd/controllermgr",
     visibility = ["//visibility:private"],
     deps = [
@@ -16,11 +19,15 @@ go_library(
         "//go/components/ray:go_default_library",
         "//go/components/spark:go_default_library",
         "//go/controllermgr:go_default_library",
+        "//go/storage:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//kubernetes/scheme:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
@@ -58,4 +65,14 @@ oci_image(
     base = "@distroless_base",
     entrypoint = ["/controllermgr"],
     tars = [":tar"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["config_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+    ],
 )
