@@ -1,9 +1,8 @@
 module github.com/michelangelo-ai/michelangelo/go
 
-go 1.23.2
+go 1.24.1
 
 require (
-	github.com/GoogleCloudPlatform/spark-on-k8s-operator v0.0.0-20220615230608-94775cd89ca0
 	github.com/cadence-workflow/starlark-worker v1.0.4
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/dave/dst v0.27.3
@@ -35,14 +34,14 @@ require (
 	go.uber.org/yarpc v1.75.3
 	go.uber.org/zap v1.27.0
 	golang.org/x/tools v0.26.0
-	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
+	google.golang.org/genproto v0.0.0-20240123012728-ef4313101c80
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.6
-	k8s.io/api v0.24.2
-	k8s.io/apiextensions-apiserver v0.24.2
-	k8s.io/apimachinery v0.24.2
-	k8s.io/client-go v0.24.2
-	sigs.k8s.io/controller-runtime v0.12.2
+	k8s.io/api v0.32.2
+	k8s.io/apiextensions-apiserver v0.32.2
+	k8s.io/apimachinery v0.32.3
+	k8s.io/client-go v0.32.2
+	sigs.k8s.io/controller-runtime v0.20.4
 	sigs.k8s.io/yaml v1.4.0
 )
 
