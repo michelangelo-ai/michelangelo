@@ -12,6 +12,7 @@ go_library(
         "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/base/env:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
@@ -29,6 +30,7 @@ go_test(
     deps = [
         "//go/api/handler:go_default_library",
         "//go/base/env:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//require:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",

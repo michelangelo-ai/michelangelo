@@ -2,7 +2,9 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -10,6 +12,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -45,9 +48,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		pipeline.Status.State = v2pb.PIPELINE_STATE_CREATED
 	case v2pb.PIPELINE_STATE_CREATED:
 		pipeline.Status.State = v2pb.PIPELINE_STATE_READY
-		pipeline.Status.Commit = &v2pb.CommitInfo{
-			GitRef: pipeline.Spec.Commit.GitRef,
-			Branch: pipeline.Spec.Commit.Branch,
+		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
+			Name:      formatRevisionName(pipeline),
+			Namespace: pipeline.Namespace,
 		}
 	case v2pb.PIPELINE_STATE_READY, v2pb.PIPELINE_STATE_ERROR:
 		if shouldUpdateStatus(pipeline) {
@@ -74,13 +77,21 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 	return result, nil
 }
 
+func formatRevisionName(pipeline *v2pb.Pipeline) string {
+	return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
+}
+
 func isTerminatedState(state v2pb.PipelineState) bool {
 	return state == v2pb.PIPELINE_STATE_READY ||
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
 func shouldUpdateStatus(pipeline *v2pb.Pipeline) bool {
-	return !reflect.DeepEqual(pipeline.Spec.Commit, pipeline.Status.Commit)
+	currentRevision := &apipb.ResourceIdentifier{
+		Name:      formatRevisionName(pipeline),
+		Namespace: pipeline.Namespace,
+	}
+	return !reflect.DeepEqual(currentRevision, pipeline.Status.LatestRevision)
 }
 
 // Register is used to register the controller with the manager.

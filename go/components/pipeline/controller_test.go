@@ -11,6 +11,7 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/types"
@@ -19,13 +20,13 @@ import (
 
 func TestReconcile(t *testing.T) {
 	testCases := []struct {
-		name                 string
-		initialObjects       []runtime.Object
-		env                  env.Context
-		expectedResult       ctrl.Result
-		expectedError        string
-		expectedStatusState  v2pb.PipelineState
-		expectedStatusCommit *v2pb.CommitInfo
+		name                         string
+		initialObjects               []runtime.Object
+		env                          env.Context
+		expectedResult               ctrl.Result
+		expectedError                string
+		expectedStatusState          v2pb.PipelineState
+		expectedStatusLatestRevision *apipb.ResourceIdentifier
 	}{
 		{
 			name: "Invalid -> Created",
@@ -43,10 +44,10 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult:       ctrl.Result{RequeueAfter: reconcileInterval},
-			expectedError:        "",
-			expectedStatusState:  v2pb.PIPELINE_STATE_CREATED,
-			expectedStatusCommit: nil,
+			expectedResult:               ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedError:                "",
+			expectedStatusState:          v2pb.PIPELINE_STATE_CREATED,
+			expectedStatusLatestRevision: nil,
 		},
 		{
 			name: "Created -> Ready",
@@ -67,10 +68,13 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult:       ctrl.Result{},
-			expectedError:        "",
-			expectedStatusState:  v2pb.PIPELINE_STATE_READY,
-			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
+			expectedResult:      ctrl.Result{},
+			expectedError:       "",
+			expectedStatusState: v2pb.PIPELINE_STATE_READY,
+			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-test-git-ref",
+				Namespace: "test-namespace",
+			},
 		},
 		{
 			name: "Ready -> Ready",
@@ -82,20 +86,26 @@ func TestReconcile(t *testing.T) {
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
-							GitRef: "test-git-ref",
+							GitRef: "123456",
 							Branch: "test-git-branch",
 						},
 					},
 					Status: v2pb.PipelineStatus{
-						State:  v2pb.PIPELINE_STATE_READY,
-						Commit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
+						State: v2pb.PIPELINE_STATE_READY,
+						LatestRevision: &apipb.ResourceIdentifier{
+							Name:      "pipeline-test-pipeline-123456",
+							Namespace: "test-namespace",
+						},
 					},
 				},
 			},
-			expectedResult:       ctrl.Result{},
-			expectedError:        "",
-			expectedStatusState:  v2pb.PIPELINE_STATE_READY,
-			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
+			expectedResult:      ctrl.Result{},
+			expectedError:       "",
+			expectedStatusState: v2pb.PIPELINE_STATE_READY,
+			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-123456",
+				Namespace: "test-namespace",
+			},
 		},
 		{
 			name: "Ready -> Invalid",
@@ -107,20 +117,26 @@ func TestReconcile(t *testing.T) {
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
-							GitRef: "test-git-ref-2",
+							GitRef: "234567",
 							Branch: "test-git-branch-2",
 						},
 					},
 					Status: v2pb.PipelineStatus{
-						State:  v2pb.PIPELINE_STATE_READY,
-						Commit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
+						State: v2pb.PIPELINE_STATE_READY,
+						LatestRevision: &apipb.ResourceIdentifier{
+							Name:      "pipeline-test-pipeline-123456",
+							Namespace: "test-namespace",
+						},
 					},
 				},
 			},
-			expectedResult:       ctrl.Result{RequeueAfter: reconcileInterval},
-			expectedError:        "",
-			expectedStatusState:  v2pb.PIPELINE_STATE_INVALID,
-			expectedStatusCommit: &v2pb.CommitInfo{GitRef: "test-git-ref", Branch: "test-git-branch"},
+			expectedResult:      ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedError:       "",
+			expectedStatusState: v2pb.PIPELINE_STATE_INVALID,
+			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
+				Name:      "pipeline-test-pipeline-123456",
+				Namespace: "test-namespace",
+			},
 		},
 	}
 	for _, tc := range testCases {
@@ -138,10 +154,10 @@ func TestReconcile(t *testing.T) {
 			err = reconciler.Get(context.Background(), "test-namespace", "test-pipeline", &metav1.GetOptions{}, pipeline)
 			require.NoError(t, err)
 			require.Equal(t, tc.expectedStatusState, pipeline.Status.State)
-			if tc.expectedStatusCommit != nil {
-				require.Equal(t, tc.expectedStatusCommit, pipeline.Status.Commit)
+			if tc.expectedStatusLatestRevision != nil {
+				require.Equal(t, tc.expectedStatusLatestRevision, pipeline.Status.LatestRevision)
 			} else {
-				require.Nil(t, pipeline.Status.Commit)
+				require.Nil(t, pipeline.Status.LatestRevision)
 			}
 		})
 	}
