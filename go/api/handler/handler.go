@@ -263,7 +263,7 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 
 	setUpdateTimestamp(obj, false)
 
-	err := handler.k8sClient.Update(ctx, obj, &ctrlRTClient.UpdateOptions{
+	err := handler.k8sClient.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
 		DryRun:       opts.DryRun,
 		FieldManager: opts.FieldManager,
 		Raw:          opts,
