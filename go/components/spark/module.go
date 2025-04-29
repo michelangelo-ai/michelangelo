@@ -9,7 +9,7 @@ import (
 var (
 	// Module FX
 	Module = fx.Options(
-		fx.Invoke(client.Module),
-		fx.Invoke(job.Module),
+		client.Module,
+		job.Module,
 	)
 )

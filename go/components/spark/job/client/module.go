@@ -15,7 +15,7 @@ import (
 var (
 	// Module FX
 	Module = fx.Options(
-		fx.Invoke(register),
+		fx.Provide(register),
 	)
 )
 
