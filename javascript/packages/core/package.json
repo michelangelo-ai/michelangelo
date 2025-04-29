@@ -35,12 +35,11 @@
     ".": {
       "development": "./index.tsx",
       "production": "./dist/core.js",
-      "default": "./dist/core.js"
+      "default": "./dist/core.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "imports": {
-    "#gen-api/*": "../../gen/grpc/michelangelo/api/*",
-    "#gen-k8s/*": "../../gen/grpc/k8s.io/*",
     "#core/*": "./"
   }
 }

@@ -8,7 +8,8 @@
     "dev-production": "vite --config vite.config.production.ts"
   },
   "dependencies": {
-    "@michelangelo/core": "*"
+    "@michelangelo/core": "*",
+    "@michelangelo/rpc": "*"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",

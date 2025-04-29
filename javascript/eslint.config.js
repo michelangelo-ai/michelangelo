@@ -27,8 +27,8 @@ const sharedRules = {
     'error',
     {
       groups: [
-        // Group 1: React and third-party imports
-        ['^react', '^[^#./]'],
+        // Group 1: React and third-party imports (React first)
+        ['^react', '^@?\\w', '^[^#./]'],
 
         // Group 2: Internal imports (#) and relative imports
         ['^#\\w+', '^\\.'],
@@ -117,6 +117,23 @@ export default [
       parserOptions: {
         project: new URL('./packages/core/tsconfig.json', import.meta.url).pathname,
         tsconfigRootDir: new URL('./packages/core', import.meta.url).pathname,
+      },
+      globals: globals.browser,
+    },
+    plugins: sharedPlugins,
+    rules: sharedRules,
+  },
+
+  // RPC package
+  {
+    files: ['packages/rpc/**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      sourceType: 'module',
+      parser: tseslint.parser,
+      parserOptions: {
+        project: new URL('./packages/rpc/tsconfig.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./packages/rpc', import.meta.url).pathname,
       },
       globals: globals.browser,
     },

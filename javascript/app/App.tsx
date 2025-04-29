@@ -1,5 +1,12 @@
 import { CoreApp } from '@michelangelo/core';
+import { buildRPCQueryHooks, RpcProvider } from '@michelangelo/rpc';
 
 export function App() {
-  return <CoreApp />;
+  const { useQuery } = buildRPCQueryHooks();
+
+  return (
+    <RpcProvider>
+      <CoreApp useQuery={useQuery} />
+    </RpcProvider>
+  );
 }
