@@ -1,0 +1,25 @@
+{
+  "name": "@michelangelo/rpc",
+  "license": "UNLICENSED",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "vite build"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "vite": "6.2.0"
+  },
+  "dependencies": {
+    "@connectrpc/connect": "^2.0.2",
+    "@connectrpc/connect-web": "^2.0.2",
+    "@tanstack/react-query": "^5.74.7"
+  },
+  "exports": {
+    ".": {
+      "default": "./index.ts"
+    }
+  },
+  "imports": {
+    "#rpc/*": "./"
+  }
+}

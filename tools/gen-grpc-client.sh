@@ -16,7 +16,7 @@ move_generated_files() {
     local src_k8s="${TMP_DIR}/gen/${client}/k8s"
     local src_api="${TMP_DIR}/gen/${client}/michelangelo/api"
   elif [ "$client" == "javascript" ]; then
-    client_dir="${WORKSPACE_ROOT}/${client}/gen/grpc"
+    client_dir="${WORKSPACE_ROOT}/${client}/packages/rpc/gen"
     local src_k8s="${TMP_DIR}/gen/${client}/k8s.io"
     local src_api="${TMP_DIR}/gen/${client}/michelangelo"
   else

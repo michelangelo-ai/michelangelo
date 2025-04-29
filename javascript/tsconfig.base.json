@@ -15,9 +15,8 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
-      "#gen-api/*": ["gen/grpc/michelangelo/api/*"],
-      "#gen-k8s/*": ["gen/grpc/k8s.io/*"],
-      "#core/*": ["packages/core/*"]
+      "#core/*": ["packages/core/*"],
+      "#rpc/*": ["packages/rpc/*"]
     }
   }
 }
