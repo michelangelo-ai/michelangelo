@@ -38,8 +38,8 @@ func register(
 	if err != nil {
 		panic("failed to create REST client: " + err.Error())
 	}
-
 	return &SparkClient{
-		K8sClient: restClient,
+		K8sClient:      restClient,
+		ParameterCodec: runtime.NewParameterCodec(scheme),
 	}
 }

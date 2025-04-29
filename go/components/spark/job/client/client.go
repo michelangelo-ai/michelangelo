@@ -9,21 +9,17 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/rest"
 )
 
 type SparkClient struct {
-	K8sClient rest.Interface
+	K8sClient      rest.Interface
+	ParameterCodec runtime.ParameterCodec
 }
 
 var _ job.Client = &SparkClient{}
 
-var Scheme = runtime.NewScheme()
-var Codecs = serializer.NewCodecFactory(Scheme)
-var ParameterCodec = runtime.NewParameterCodec(Scheme)
-
-// createJob creates a new Spark job
+// CreateJob creates a new Spark job
 func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	spec := job.Spec
 
@@ -60,12 +56,12 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 		}
 	}
 
-	opts := metav1.GetOptions{}
+	opts := metav1.CreateOptions{}
 	result := &sparkv1beta2.SparkApplication{}
 	err := r.K8sClient.Post().
 		Namespace(job.Namespace).
 		Resource("sparkapplications").
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, r.ParameterCodec).
 		Body(sparkApplication).
 		Do(ctx).
 		Into(result)
@@ -89,7 +85,7 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 		Namespace(job.Namespace).
 		Resource("sparkapplications").
 		Name(job.Name).
-		VersionedParams(&options, ParameterCodec).
+		VersionedParams(&options, r.ParameterCodec).
 		Do(ctx).
 		Into(result)
 	if err != nil {
@@ -154,6 +150,7 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 	}
 }
 
+// stringPtr converts a string to a pointer, returning nil if the string is empty and emptyIsNil is true
 func stringPtr(s string, emptyIsNil bool) *string {
 	if s == "" && emptyIsNil {
 		return nil
@@ -161,6 +158,7 @@ func stringPtr(s string, emptyIsNil bool) *string {
 	return &s
 }
 
+// int32Ptr converts an int32 to a pointer
 func int32Ptr(s int32) *int32 {
 	return &s
 }

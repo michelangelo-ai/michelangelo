@@ -80,53 +80,6 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 // createJob creates a new Spark job
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	return r.SparkClient.CreateJob(ctx, log, job)
-	//spec := job.Spec
-	//
-	//app := &sparkv1beta2.SparkApplication{
-	//	ObjectMeta: metav1.ObjectMeta{
-	//		Name:      job.Name,
-	//		Namespace: job.Namespace,
-	//	},
-	//	Spec: sparkv1beta2.SparkApplicationSpec{
-	//		Type:                sparkv1beta2.SparkApplicationTypePython,
-	//		SparkVersion:        spec.SparkVersion,
-	//		Mode:                sparkv1beta2.DeployModeCluster,
-	//		Image:               &spec.Driver.Pod.Image,
-	//		ImagePullPolicy:     &spec.Driver.Pod.ImagePullingPolicy,
-	//		MainClass:           stringPtr(spec.MainClass, true),
-	//		MainApplicationFile: stringPtr(spec.MainApplicationFile, true),
-	//		Arguments:           spec.MainArgs,
-	//		SparkConf:           spec.SparkConf,
-	//		Driver: sparkv1beta2.DriverSpec{
-	//			SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, stringPtr("spark-operator-spark", true)),
-	//		},
-	//		Executor: sparkv1beta2.ExecutorSpec{
-	//			SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod, nil),
-	//			Instances:    int32Ptr(spec.Executor.Instances),
-	//		},
-	//	},
-	//}
-	//
-	//if spec.Deps != nil {
-	//	app.Spec.Deps = sparkv1beta2.Dependencies{
-	//		Jars:    spec.Deps.Jars,
-	//		Files:   spec.Deps.Files,
-	//		PyFiles: spec.Deps.PyFiles,
-	//	}
-	//}
-	//
-	//created, err := r.SparkClient.SparkoperatorV1beta2().
-	//	SparkApplications(job.Namespace).
-	//	Create(ctx, app, metav1.CreateOptions{})
-	//if err != nil {
-	//	log.Error(err, "Failed to create SparkApplication")
-	//	return err
-	//}
-	//
-	//job.Status.ApplicationId = string(created.UID)
-	//job.Status.JobUrl = created.Status.DriverInfo.WebUIIngressAddress
-	//log.Info("Created SparkApplication", "id", job.Status.ApplicationId, "jobUrl", job.Status.JobUrl)
-	//return nil
 }
 
 // getJobStatus retrieves the status of the Spark job
