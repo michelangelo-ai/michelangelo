@@ -40,7 +40,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	status, message, err := r.getJobStatus(ctx, logger, &sparkJob)
 	if err != nil {
 		logger.Info("SparkApplication not found, creating new one")
-		if err := r.createJob(ctx, logger, &sparkJob); err != nil {
+		if err = r.createJob(ctx, logger, &sparkJob); err != nil {
 			logger.Error(err, "failed to create SparkApplication")
 			sparkJob.Status.StatusConditions = nil
 			sparkJob.Status.JobUrl = ""
@@ -85,16 +85,4 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.S
 // getJobStatus retrieves the status of the Spark job
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, error) {
 	return r.SparkClient.GetJobStatus(ctx, logger, job)
-	//app, err := r.SparkClient.SparkoperatorV1beta2().SparkApplications(job.Namespace).Get(ctx, job.Name, metav1.GetOptions{})
-	//if err != nil {
-	//	return nil, "", err
-	//}
-	//
-	//appID := app.Status.AppState.State
-	//url := app.Status.DriverInfo.WebUIIngressAddress
-	//
-	//job.Status.ApplicationId = string(app.UID)
-	//job.Status.JobUrl = url
-	//
-	//return stringPtr(string(appID), true), url, nil
 }
