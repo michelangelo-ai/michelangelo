@@ -19,6 +19,11 @@ func Get{{.KindName}}APIHooks() []{{.KindName}}APIHook {
 	return {{.LowerKindName}}ApiHooks
 }
 
+// Clear{{.KindName}}APIHooks clears the registered {{.KindName}}APIHooks.
+func Clear{{.KindName}}APIHooks() {
+	{{.LowerKindName}}ApiHooks = []{{.KindName}}APIHook{}
+}
+
 func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
 	return &{{.LowerKindName}}ServiceHandler{
 		apiHandler:      params.Handler,
