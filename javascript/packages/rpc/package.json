@@ -1,6 +1,7 @@
 {
   "name": "@michelangelo/rpc",
   "license": "UNLICENSED",
+  "type": "module",
   "version": "0.0.0",
   "scripts": {
     "build": "vite build"

@@ -4,7 +4,6 @@
   "version": "0.0.0",
   "type": "module",
   "main": "dist/core.js",
-  "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && vite build",
     "test": "vitest"
@@ -34,6 +33,7 @@
   },
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "development": "./index.tsx",
       "production": "./dist/core.js",
       "default": "./dist/core.js"
