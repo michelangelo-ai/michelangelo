@@ -86,9 +86,6 @@ class RemoteRun:
         if cadence_env := os.environ.get("UFC_CADENCE_ENV"):
             cmd += ["--env", cadence_env]
 
-        cadence_proxy_region = os.environ.get("UFC_CADENCE_PROXY_REGION")
-
-
         if cadence_proxy_region := os.environ.get("UFC_CADENCE_PROXY_REGION"):
             cmd += ["--proxy_region", cadence_proxy_region]
         else:
