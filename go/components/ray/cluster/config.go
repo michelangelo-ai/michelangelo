@@ -5,13 +5,13 @@ import (
 )
 
 const (
-	configKey = "controllers.rayCluster"
+	configKey = "controllermgr.k8s"
 )
 
 type (
 	Config struct {
-		QPS   float32 `yaml:"k8sQps"`
-		Burst int     `yaml:"k8sBurst"`
+		QPS   float32 `yaml:"Qps"`
+		Burst int     `yaml:"Burst"`
 	}
 )
 

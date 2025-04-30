@@ -29,7 +29,7 @@ func TestReconcile(t *testing.T) {
 		expectedStatusLatestRevision *apipb.ResourceIdentifier
 	}{
 		{
-			name: "Invalid -> Created",
+			name: "Invalid -> READY",
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
@@ -38,46 +38,22 @@ func TestReconcile(t *testing.T) {
 					},
 					Spec: v2pb.PipelineSpec{
 						Commit: &v2pb.CommitInfo{
-							GitRef: "test-git-ref",
+							GitRef: "1234556",
 							Branch: "test-git-branch",
 						},
 					},
 				},
 			},
-			expectedResult:               ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedResult:               ctrl.Result{},
 			expectedError:                "",
-			expectedStatusState:          v2pb.PIPELINE_STATE_CREATED,
-			expectedStatusLatestRevision: nil,
-		},
-		{
-			name: "Created -> Ready",
-			initialObjects: []runtime.Object{
-				&v2pb.Pipeline{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
-					},
-					Spec: v2pb.PipelineSpec{
-						Commit: &v2pb.CommitInfo{
-							GitRef: "test-git-ref",
-							Branch: "test-git-branch",
-						},
-					},
-					Status: v2pb.PipelineStatus{
-						State: v2pb.PIPELINE_STATE_CREATED,
-					},
-				},
-			},
-			expectedResult:      ctrl.Result{},
-			expectedError:       "",
-			expectedStatusState: v2pb.PIPELINE_STATE_READY,
+			expectedStatusState:          v2pb.PIPELINE_STATE_READY,
 			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
-				Name:      "pipeline-test-pipeline-test-git-ref",
+				Name:      "pipeline-test-pipeline-1234556",
 				Namespace: "test-namespace",
 			},
 		},
 		{
-			name: "Ready -> Ready",
+			name: "Ready -> should not reconcile",
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
@@ -108,7 +84,7 @@ func TestReconcile(t *testing.T) {
 			},
 		},
 		{
-			name: "Ready -> Invalid",
+			name: "Ready -> should reconcile",
 			initialObjects: []runtime.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
@@ -130,11 +106,11 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult:      ctrl.Result{RequeueAfter: reconcileInterval},
+			expectedResult:      ctrl.Result{},
 			expectedError:       "",
-			expectedStatusState: v2pb.PIPELINE_STATE_INVALID,
+			expectedStatusState: v2pb.PIPELINE_STATE_READY,
 			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
-				Name:      "pipeline-test-pipeline-123456",
+				Name:      "pipeline-test-pipeline-234567",
 				Namespace: "test-namespace",
 			},
 		},

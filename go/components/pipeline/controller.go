@@ -42,22 +42,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
-	// TODO: add logic to handle different states
-	switch state {
-	case v2pb.PIPELINE_STATE_INVALID:
-		pipeline.Status.State = v2pb.PIPELINE_STATE_CREATED
-	case v2pb.PIPELINE_STATE_CREATED:
-		pipeline.Status.State = v2pb.PIPELINE_STATE_READY
+	if shouldReconcile(pipeline) {
 		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
 			Name:      formatRevisionName(pipeline),
 			Namespace: pipeline.Namespace,
 		}
-	case v2pb.PIPELINE_STATE_READY, v2pb.PIPELINE_STATE_ERROR:
-		if shouldUpdateStatus(pipeline) {
-			pipeline.Status.State = v2pb.PIPELINE_STATE_INVALID
-		}
+		pipeline.Status.State = v2pb.PIPELINE_STATE_READY
+		return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
 	}
-	return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+	return ctrl.Result{}, nil
 }
 
 func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pipeline, originalPipeline *v2pb.Pipeline, logger *zap.Logger) (ctrl.Result, error) {
@@ -86,7 +79,7 @@ func isTerminatedState(state v2pb.PipelineState) bool {
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
-func shouldUpdateStatus(pipeline *v2pb.Pipeline) bool {
+func shouldReconcile(pipeline *v2pb.Pipeline) bool {
 	currentRevision := &apipb.ResourceIdentifier{
 		Name:      formatRevisionName(pipeline),
 		Namespace: pipeline.Namespace,
