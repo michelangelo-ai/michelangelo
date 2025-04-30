@@ -10,7 +10,6 @@ import (
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -82,12 +81,7 @@ func (r *activities) CreateSparkJob(ctx context.Context, request v2pb.CreateSpar
 func (r *activities) GetSparkJob(ctx context.Context, request v2pb.GetSparkJobRequest) (*v2pb.GetSparkJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("activity-start", zap.Any("request", request))
-	getSparkJobRequest := &v2pb.GetSparkJobRequest{
-		Name:       request.Name,
-		Namespace:  request.Namespace,
-		GetOptions: &metav1.GetOptions{},
-	}
-	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, getSparkJobRequest)
+	getSparkJobResponse, err := r.sparkJobService.GetSparkJob(ctx, &request)
 	if err != nil {
 		logger.Error(err, "activity-error")
 		return nil, workflow.NewCustomError(ctx, err.Error())

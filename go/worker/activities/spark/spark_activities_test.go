@@ -43,7 +43,7 @@ func (r *Suite) SetupSuite() {
 	}
 	r.activitySuite.RegisterActivity(r.act)
 }
-func (r *Suite) TearDownSuite() { r.server.Close() }
+func (r *Suite) TearDownSuite() {}
 
 func (r *Suite) BeforeTest(_, _ string) {}
 
@@ -75,25 +75,27 @@ func (r *Suite) Test_CreateSparkJob_Success() {
 
 func (r *Suite) Test_GetSparkJob_Success() {
 	jobName := "job_name"
-	request := &v2pb.CreateSparkJobRequest{
-		SparkJob: &v2pb.SparkJob{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
-				Namespace: "default",
-			},
-			Spec: v2pb.SparkJobSpec{
-				MainClass: "test",
-			},
+	sparkJob := &v2pb.SparkJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      jobName,
+			Namespace: "default",
+		},
+		Spec: v2pb.SparkJobSpec{
+			MainClass: "test",
 		},
 	}
-	r.mockSparkJob.EXPECT().CreateSparkJob(gomock.Any(), request).Return(&v2pb.CreateSparkJobResponse{
-		SparkJob: request.SparkJob,
+	request := &v2pb.GetSparkJobRequest{
+		Name:      jobName,
+		Namespace: "default",
+	}
+	r.mockSparkJob.EXPECT().GetSparkJob(gomock.Any(), request).Return(&v2pb.GetSparkJobResponse{
+		SparkJob: sparkJob,
 	}, nil)
-	val, err := r.activitySuite.ExecuteActivity(Activities.CreateSparkJob, *request)
+	val, err := r.activitySuite.ExecuteActivity(Activities.GetSparkJob, *request)
 	r.Require().NoError(err)
 	r.Require().True(val.HasValue())
 
-	var res v2pb.CreateSparkJobResponse
+	var res v2pb.GetSparkJobResponse
 	r.Require().NoError(val.Get(&res))
 	r.Require().Equal(jobName, res.SparkJob.Name)
 	r.Require().Equal("default", res.SparkJob.Namespace)
