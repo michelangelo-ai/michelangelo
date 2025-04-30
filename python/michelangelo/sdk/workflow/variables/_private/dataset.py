@@ -30,7 +30,6 @@ def has_ray() -> bool:
     return ray.is_initialized()
 
 
-
 @dataclass
 class DatasetVariable(Variable):
     """
@@ -100,4 +99,3 @@ class DatasetVariable(Variable):
         Save the value as Ray Dataset.
         """
         self._save_value_using_io(RayDatasetIO)
-

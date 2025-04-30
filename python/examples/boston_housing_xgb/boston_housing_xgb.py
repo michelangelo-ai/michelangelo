@@ -123,7 +123,9 @@ def preprocess(
     validation_dv_pr = DatasetVariable.create(validation_data_pr)
     validation_dv_pr.save_spark_dataframe()
 
-    log.info("Processed Train Spark schema:\n%s", train_data_pr._jdf.schema().treeString())
+    log.info(
+        "Processed Train Spark schema:\n%s", train_data_pr._jdf.schema().treeString()
+    )
 
     return PreprocessResult(
         train_data=train_dv_pr,
@@ -166,9 +168,9 @@ def train(
     log.info("Train dataset sample: %s", train_data.take(1))
 
     def create_scaling_config(
-            *,
-            cpu_per_worker: int,
-            trainer_cpu: Optional[int] = None,
+        *,
+        cpu_per_worker: int,
+        trainer_cpu: Optional[int] = None,
     ) -> ScalingConfig:
         """
         Creates a ScalingConfig object for a Ray trainer, optimized to utilize the maximum available resources of the cluster.
@@ -197,7 +199,9 @@ def train(
         # Retrieve the total resources available in the current Ray cluster
         cluster_resources = ray.cluster_resources()
         cluster_cpu = cluster_resources["CPU"]
-        cluster_gpu = cluster_resources.get("GPU", 0.0)  # Default to 0 if no GPUs are found
+        cluster_gpu = cluster_resources.get(
+            "GPU", 0.0
+        )  # Default to 0 if no GPUs are found
         reserved_cpu = int(cluster_cpu * 0.5)
         available_cpu = cluster_cpu - reserved_cpu
 
@@ -219,7 +223,11 @@ def train(
         num_workers = (available_cpu - trainer_cpu) // cpu_per_worker
 
         # Adjust the number of workers based on GPU availability, if necessary
-        num_workers = min(num_workers, cluster_gpu // gpu_per_worker) if gpu_per_worker > 0 else num_workers
+        num_workers = (
+            min(num_workers, cluster_gpu // gpu_per_worker)
+            if gpu_per_worker > 0
+            else num_workers
+        )
 
         return ScalingConfig(
             trainer_resources=trainer_resources,
@@ -227,7 +235,6 @@ def train(
             use_gpu=gpu_per_worker > 0,
             resources_per_worker={"CPU": cpu_per_worker, "GPU": gpu_per_worker},
         )
-
 
     scaling_config = create_scaling_config(
         trainer_cpu=None,
@@ -307,7 +314,7 @@ if __name__ == "__main__":
     ctx = uniflow.create_context()
 
     dataset_url = "file://examples/boston_housing_xgb/dl_example_datasets_boston_housing_fp64_label"
-    ctx.environ['IMAGE_PULL_POLICY'] ='Never'
+    ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.run(
         train_workflow,
         dataset_url=dataset_url,
@@ -318,4 +325,3 @@ if __name__ == "__main__":
 # Tentatively reserve 50% CPUs for Ray data tasks.
 RAY_DATA_CPU_RESERVE_RATIO = 0.5
 log = logging.getLogger(__name__)
-

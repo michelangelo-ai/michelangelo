@@ -38,7 +38,9 @@ class Variable(ABC):
         """
         A factory method to create a variable with the given value.
         """
-        path = f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
+        path = (
+            f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
+        )
         res = cls(path=path, metadata=None)
         res._value = value
         return res
