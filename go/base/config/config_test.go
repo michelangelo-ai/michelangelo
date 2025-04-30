@@ -142,3 +142,30 @@ apiserver:
 	_, err = GetK8sConfig(provider2, "apiserver.k8s")
 	assert.Error(t, err)
 }
+
+
+func TestGetMetadataStorageConfig(t *testing.T) {
+	file, _ := os.CreateTemp(t.TempDir(), "metadata-storage-conf")
+	os.Setenv("KUBECONFIG", file.Name())
+
+	yamlStr := `
+controllermgr:
+  metadataStorage:
+    enableMetadataStorage: true
+`
+	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
+	assert.NoError(t, err)
+	conf, err := GetMetadataStorageConfig(provider, "controllermgr.metadataStorage")
+	assert.NoError(t, err)
+	assert.True(t, conf.EnableMetadataStorage)
+
+	yamlStrInvalid := `
+controllermgr:
+  metadataStorage:
+    enableMetadataStorage: invalid
+`
+	providerInvalid, err := config.NewYAML(config.Source(strings.NewReader(yamlStrInvalid)))
+	assert.NoError(t, err)
+	_, err = GetMetadataStorageConfig(providerInvalid, "controllermgr.metadataStorage")
+	assert.Error(t, err) // error when the content of the configuration file is invalid
+}

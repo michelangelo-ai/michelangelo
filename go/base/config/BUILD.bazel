@@ -12,6 +12,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/env:go_default_library",
+        "//go/storage:go_default_library",
         "@io_k8s_client_go//rest:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@org_uber_go_config//:go_default_library",

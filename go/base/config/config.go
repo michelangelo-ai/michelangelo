@@ -11,6 +11,7 @@ import (
 	"go.uber.org/fx"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"k8s.io/client-go/rest"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 )
 
 const (
@@ -87,9 +88,9 @@ func GetK8sConfig(provider config.Provider, configKey string) (*rest.Config, err
 }
 
 // GetMetadataStorageConfig parses the configuration file and returns the metadata storage configuration
-func GetMetadataStorageConfig(provider config.Provider, configKey string) (*MetadataStorageConfig, error) {
+func GetMetadataStorageConfig(provider config.Provider, configKey string) (storage.MetadataStorageConfig, error) {
 	storageConfig := storage.MetadataStorageConfig{}
-	err := provider.Get(storageConfigKey).Populate(&storageConfig)
+	err := provider.Get(configKey).Populate(&storageConfig)
 	return storageConfig, err
 }
 
