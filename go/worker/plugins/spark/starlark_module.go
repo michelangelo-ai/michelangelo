@@ -8,12 +8,10 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	"go.starlark.net/starlark"
-	"go.uber.org/zap"
-
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.starlark.net/starlark"
 )
 
 // These are some error reasons
@@ -74,27 +72,46 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var spec *starlark.Dict
-	if err := starlark.UnpackArgs("createJob", args, kwargs, "spec", &spec); err != nil {
-		logger.Error("error", zap.Error(err))
+	var _job *starlark.Dict
+	var timeout int64
+
+	if err := starlark.UnpackArgs("create_job", args, kwargs,
+		"job", &_job,
+		"timeout_seconds?", &timeout,
+	); err != nil {
+		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
+	if timeout == 0 {
+		timeout = int64(utils.CadenceLongTimeout.Seconds())
+	}
+
+	//var spec *starlark.Dict
+	//if err := starlark.UnpackArgs("createJob", args, kwargs, "spec", &spec); err != nil {
+	//	logger.Error("error", zap.Error(err))
+	//	return nil, err
+	//}
 
 	var sparkJob v2pb.SparkJob
-	if err := utils.AsGo(spec, &sparkJob); err != nil {
+	if err := utils.AsGo(_job, &sparkJob); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
 
+	srp := utils.CadenceDefaultRetryPolicy
+	srp.ExpirationInterval = time.Second * time.Duration(timeout)
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	createCtx := workflow.WithRetryPolicy(ctx, srp)
+
 	var createRes v2pb.CreateSparkJobResponse
-	if err := workflow.ExecuteActivity(ctx, spark.Activities.CreateSparkJob, v2pb.CreateSparkJobRequest{
+	if err := workflow.ExecuteActivity(createCtx, spark.Activities.CreateSparkJob, v2pb.CreateSparkJobRequest{
 		SparkJob: &sparkJob,
 	}).Get(ctx, &createRes); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
 
-	job := *createRes.SparkJob
+	job := createRes.SparkJob
 
 	var res starlark.Value
 	if err := utils.AsStar(job, &res); err != nil {
@@ -139,7 +156,6 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
-	var status v2pb.SparkJobStatus
 
 	getSparkJobRequest := v2pb.GetSparkJobRequest{
 		Name:      sparkJob.Name,
@@ -148,7 +164,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	var getSparkJobResponse spark.SensorSparkJobResponse
 	maxSensorTries := _maxJobSensorRetries
 	for i := 0; i < maxSensorTries; i++ {
-		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest, &status).Get(ctx, &getSparkJobResponse); err != nil {
+		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest).Get(ctx, &getSparkJobResponse); err != nil {
 			if workflow.IsCanceledError(ctx, err) {
 				// killing spark job in cadence once workflow is cancelled
 				ctx, _ = workflow.NewDisconnectedContext(ctx)
@@ -173,7 +189,6 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 			logger.Error(_errorReasonSensorJob, ext.ZapError(err)...)
 			continue
 		}
-		status = getSparkJobResponse.SparkJob.Status
 		// we will break as long as succeeded condition has been set
 		if getSparkJobResponse.Terminal {
 			break

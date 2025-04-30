@@ -2,7 +2,6 @@ package spark
 
 import (
 	"context"
-	"fmt"
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/gogo/protobuf/proto"
@@ -129,22 +128,18 @@ func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJo
 	status := sparkJob.Status
 
 	// Check if the job has reached a terminal state
-	fmt.Printf("\n=========SparkJob  %s=========\n", sparkJob.Name)
 	terminal := hasSparkJobTerminalCondition(status)
 
 	if terminal {
-		fmt.Printf("\n====finished!!!====\n")
 		return &SensorSparkJobResponse{
 			SparkJob: sparkJob,
 			Terminal: terminal,
 		}, nil
 	}
-	fmt.Printf("\n====no finished yet====\n")
 	return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), status)
 }
 
 func hasSparkJobTerminalCondition(state v2pb.SparkJobStatus) bool {
-	fmt.Printf("\n==============state %s==============\n", state.ApplicationId)
 	return state.ApplicationId == "FAILED" || state.ApplicationId == "COMPLETED"
 }
 

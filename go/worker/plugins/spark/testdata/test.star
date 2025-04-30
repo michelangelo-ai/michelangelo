@@ -2,88 +2,69 @@ load("@plugin", "spark")
 
 def test_create_job():
     spec = {
+        "kind": "SparkJob",
         "metadata": {
-            "name": "uf-ray-test",
-            "namespace": "default",
+            "namespace": "test-namespace",
+            "name": "test-name",
         },
         "spec": {
-            "user": {"name": "test-user"},
-            "rayVersion": "2.3.1",  # Keeping original version
-            "head": {
-                "serviceType": "ClusterIP",
-                "rayStartParams": {
-                    "block": "true",
-                    "dashboard-host": "0.0.0.0",
-                },
-                "pod": {
-                    "spec": {
-                        "containers": [
-                            {
-                                "name": "head",
-                                "image": "test-image",
-                                "envFrom": [
-                                    {
-                                        "configMapRef": {
-                                            "localObjectReference": {
-                                                "name": "michelangelo-config",
-                                            },
-                                        },
-                                    },
-                                ],
-                                "lifecycle": {
-                                    "postStart": {
-                                        "exec": {
-                                            "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Head'"],
-                                        },
-                                    },
-                                },
-                            },
-                        ],
-                    },
-                },
+            "user": {
+                "name": "michelangelo",
+                "proxyUser": "michelangelo",
             },
-            "workers": [
-                {
-                    "minInstances": 1,
-                    "maxInstances": 2,
-                    "nodeType": "worker-group-1",
-                    "objectStoreMemoryRatio": 0.0,
-                    "rayStartParams": {
-                        "block": "true",
-                        "dashboard-host": "0.0.0.0",
-                    },
-                    "pod": {
-                        "spec": {
-                            "containers": [
-                                {
-                                    "name": "worker",
-                                    "image": "test-image",
-                                    "envFrom": [
-                                        {
-                                            "configMapRef": {
-                                                "localObjectReference": {
-                                                    "name": "michelangelo-config",
-                                                },
-                                            },
-                                        },
-                                    ],
-                                    "lifecycle": {
-                                        "postStart": {
-                                            "exec": {
-                                                "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Worker'"],
-                                            },
-                                        },
-                                    },
-                                },
-                            ],
+            "affinity": {
+                "resourceAffinity": {
+                    "selector": {
+                        "matchLabels": {
+                            "resourcepool.michelangelo/zone": "dca60",
+                            "resourcepool.michelangelo/cluster": "dca11-batch01",
+                            "resourcepool.michelangelo/cluster_type": "peloton",
+                            "resourcepool.michelangelo/name": "uberai-default-dca11-batch01",
+                            "resourcepool.michelangelo/path": "/UberAI/Michelangelo/IntegrationTests",
                         },
                     },
                 },
-            ],
-            "rayConf": {},
+            },
+            "driver": {
+                "pod": {
+                    "resource": {
+                        "cpu": 2,
+                        "memory": "8G",
+                    },
+                    "image": "127.0.0.1:5055/uber-system/sparkdocker:bkt1-produ-1698057657-38ca7",
+                },
+            },
+            "executor": {
+                "pod": {
+                    "resource": {
+                        "cpu": 2,
+                        "memory": "8G",
+                    },
+                    "image": "127.0.0.1:5055/uber-system/sparkdocker:bkt1-produ-1698057657-38ca7",
+                },
+                "instances": 2,
+            },
+            "sparkConf": {
+                "spark.peloton.run-as-user": "true",
+                "spark.peloton.driver.docker.image": "127.0.0.1:5055/uber-system/sparkdocker:bkt1-produ-1698057657-38ca7",
+                "spark.peloton.executor.docker.image": "127.0.0.1:5055/uber-system/sparkdocker:bkt1-produ-1698057657-38ca7",
+            },
+            "mainApplicationFile": "http://localhost:18839/prod/personal/andrii/pyspark_test.py",
+            "mainArgs": ["--execution_run_id=test"],
+            "deps": {},
+            "scheduling": {},
+            "sparkVersion": "SPARK_3",
         },
     }
-    return ray.create_cluster(spec)
+    spark.create_job(job = spec)
 
-def test_create_job():
-    return ray.create_job("python3 -m michelangelo.uniflow.core.run_task --task 'examples.bert_cola.data.load_data' --args '[\"glue\",\"cola\"]' --kwargs '{\"tokenizer_max_length\":128}' --result-url 's3://default/d47efe2f682f4965bcf119f9d9a06eb1.json'", "default", "test-ray-job")
+def test_sensor_job():
+    spec = {
+        "kind": "SparkJob",
+        "metadata": {
+            "namespace": "test-namespace",
+            "name": "test-name",
+        },
+    }
+
+    spark.sensor_job(spec, assert_condition_type = "Succeeded")
