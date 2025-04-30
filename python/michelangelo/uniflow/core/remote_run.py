@@ -90,10 +90,11 @@ class RemoteRun:
             cmd += ["--proxy_region", cadence_proxy_region]
         else:
             log.info("No proxy region set, using default")
-            # cadence_transport = os.environ.get("UFC_CADENCE_TRANSPORT")
-            # cadence_address = os.environ.get("UFC_CADENCE_ADDRESS")
-            # # if proxy region is not set, use the transport and address from the environment
-            # cmd += ["--transport", cadence_transport, "--address", cadence_address]
+            cadence_transport = os.environ.get("UFC_CADENCE_TRANSPORT")
+            cadence_address = os.environ.get("UFC_CADENCE_ADDRESS")
+            if cadence_transport and cadence_address:
+                # if proxy region is not set, use the transport and address from the environment
+                cmd += ["--transport", cadence_transport, "--address", cadence_address]
 
         cmd += [
             "--domain",
