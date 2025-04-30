@@ -1,6 +1,8 @@
 import { Message } from '@bufbuild/protobuf';
 import { UseQueryResult } from '@tanstack/react-query';
 
+import { RpcHandlers } from './handlers';
+
 /**
  * @description
  * Picks the request type from the RPC handler.
@@ -29,9 +31,6 @@ export type RpcRequest<
  * @remarks
  * Expects the response type to be wrapped in a `Promise`.
  *
- * Leverages `OmitTypeName` to remove the `$typeName` and `$unknown` properties from the response type.
- * This is necessary because the protobuf-es library adds these properties to the response type.
- *
  * @example
  * ```ts
  * type MyResponse = RpcResponse<{ myRpc: (args: any) => Promise<{ myField: string }> }, 'myRpc'>;
@@ -41,7 +40,7 @@ export type RpcRequest<
 export type RpcResponse<
   TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>>,
   RpcId extends keyof TRpcHandlers,
-> = OmitTypeName<Awaited<ReturnType<TRpcHandlers[RpcId]>>>;
+> = Awaited<ReturnType<TRpcHandlers[RpcId]>>;
 
 export type BuildRPCQueryHooksReturn<
   TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>>,
@@ -54,6 +53,11 @@ export type BuildRPCQueryHooksReturn<
     args: RpcId extends keyof TRpcHandlers ? RpcRequest<TRpcHandlers, RpcId> : unknown
   ) => UseQueryResult<TData>;
 };
+
+/**
+ * @see {@link RpcHandlers}
+ */
+export type RpcHandlerType = ReturnType<typeof RpcHandlers>;
 
 /**
  * @description
