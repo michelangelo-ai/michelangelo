@@ -1,6 +1,7 @@
 package config
 
 import (
+	"flag"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"go.uber.org/config"
 
@@ -8,12 +9,21 @@ import (
 	"strings"
 
 	"go.uber.org/fx"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"k8s.io/client-go/rest"
 )
 
 const (
 	_configKeySeparator = ":"
 	_defaultConfigDir   = "config"
 )
+
+
+// K8sConfig is the configuration for k8s REST client.
+type K8sConfig struct {
+	QPS   float32 `yaml:"qps"`
+	Burst int     `yaml:"burst"`
+}
 
 // Params defines the dependencies of the config fx module.
 type Params struct {
@@ -58,3 +68,28 @@ func getConfigDirs(env env.Context) []string {
 	}
 	return []string{_defaultConfigDir}
 }
+
+// GetK8sConfig parses the configuration file and returns the k8s REST client configuration
+func GetK8sConfig(provider config.Provider, configKey string) (*rest.Config, error) {
+	flag.Parse()
+	conf, err := ctrl.GetConfig()
+	if err != nil {
+		return nil, err
+	}
+	k8sConfig := K8sConfig{}
+	err = provider.Get(configKey).Populate(&k8sConfig)
+	if err != nil {
+		return nil, err
+	}
+	conf.QPS = k8sConfig.QPS
+	conf.Burst = k8sConfig.Burst
+	return conf, nil
+}
+
+// GetMetadataStorageConfig parses the configuration file and returns the metadata storage configuration
+func GetMetadataStorageConfig(provider config.Provider, configKey string) (*MetadataStorageConfig, error) {
+	storageConfig := storage.MetadataStorageConfig{}
+	err := provider.Get(storageConfigKey).Populate(&storageConfig)
+	return storageConfig, err
+}
+
