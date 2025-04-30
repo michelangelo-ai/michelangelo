@@ -1,12 +1,10 @@
 package main
 
 import (
-	"flag"
-
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"go.uber.org/config"
 	"k8s.io/client-go/rest"
-	ctrl "sigs.k8s.io/controller-runtime"
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 )
 
 const (

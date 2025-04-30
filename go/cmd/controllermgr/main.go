@@ -9,7 +9,7 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	baseconfig"github.com/michelangelo-ai/michelangelo/go/base/config"
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
@@ -17,6 +17,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"k8s.io/client-go/rest"
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 )
 
 const (
@@ -55,7 +56,6 @@ func scheme() (*runtime.Scheme, error) {
 func options() fx.Option {
 	return fx.Options(
 		env.Module,
-		config.Module,
 		zapfx.Module,
 		fx.Provide(scheme),
 		spark.Module,
@@ -74,7 +74,7 @@ func getK8sConfig(provider uberconfig.Provider) (*rest.Config, error) {
 	return baseconfig.GetK8sConfig(provider, k8sConfigKey)
 }
 
-func getMetadataStorageConfig(provider uberconfig.Provider) (*storage.MetadataStorageConfig, error) {
+func getMetadataStorageConfig(provider uberconfig.Provider) (storage.MetadataStorageConfig, error) {
 	return baseconfig.GetMetadataStorageConfig(provider, metadataStorageConfigKey)
 }
 
