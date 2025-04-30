@@ -2,8 +2,9 @@ package spark
 
 import (
 	"context"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"testing"
+
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"

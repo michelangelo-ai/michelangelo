@@ -2,6 +2,7 @@ package spark
 
 import (
 	"context"
+
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/gogo/protobuf/proto"
