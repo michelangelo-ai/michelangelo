@@ -162,15 +162,13 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     links = []
 
     if ns.workflow == "temporal":
+        _setup_temporal(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
-        _setup_temporal(links)
     else:
+        _setup_cadence(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
-        _kube_create(_dir / "resources" / "cadence.yaml")
-        _kube_create(_dir / "resources/michelangelo-worker.yaml")
-        _setup_cadence(links)
 
     print("\nSandbox created successfully.")
 
@@ -214,6 +212,8 @@ def _setup_temporal(links):
 
 
 def _setup_cadence(links):
+    _kube_create(_dir / "resources" / "cadence.yaml")
+    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
     _kube_run(
         image="ubercadence/cli:v1.2.6",
         command=[
@@ -230,7 +230,6 @@ def _setup_cadence(links):
         },
         retry_attempts=3,
     )
-    _exec("kubectl", "wait", "--all", "deployment", "--for=condition=available", "--timeout=600s")
     links.append(
         (
             "Cadence Dashboard",
