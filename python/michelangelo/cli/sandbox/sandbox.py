@@ -23,6 +23,7 @@ _kube_name = "michelangelo-sandbox"
 _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
+    "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
 ]
@@ -201,6 +202,11 @@ def _setup_temporal(links):
     # Automatically port-forward Temporal Web UI in the background
     subprocess.Popen(
         ["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
+    subprocess.Popen(
+        ["kubectl", "port-forward", "svc/temporaltest-frontend", "7233:7233"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL
     )
