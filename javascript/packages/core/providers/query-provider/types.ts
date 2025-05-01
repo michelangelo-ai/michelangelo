@@ -1,3 +1,5 @@
+import type { QueryOptions, QueryResult } from '#core/types/query-types';
+
 /**
  * @description
  * The hooks provided to the application to connect to the services injected
@@ -8,9 +10,5 @@
  * return types are unknown.
  */
 export type QueryContextType = {
-  useQuery: <TData>(
-    queryId: string,
-    args: unknown,
-    options?: { enabled?: boolean }
-  ) => { data: TData | undefined };
+  useQuery: <TData>(queryId: string, args: unknown, options?: QueryOptions) => QueryResult<TData>;
 };
