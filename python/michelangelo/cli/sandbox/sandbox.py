@@ -157,16 +157,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     )
 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
-    # _exec(
-    #     "kubectl",
-    #     "-n",
-    #     "ray-system",
-    #     "wait",
-    #     "--all",
-    #     "deployments",
-    #     "--for=condition=available",
-    #     "--timeout=600s",
-    # )
 
     links = []
 
@@ -209,7 +199,11 @@ def _setup_temporal(links):
         "tctl", "--address", "temporaltest-frontend:7233", "namespace", "register", "default", "--retention", "72"
     )
     # Automatically port-forward Temporal Web UI in the background
-    subprocess.Popen(["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"])
+    subprocess.Popen(
+        ["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
+    )
     links.append(("Temporal Web UI", "http://localhost:8080", ""))
 
 
