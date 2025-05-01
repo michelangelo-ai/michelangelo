@@ -6,8 +6,11 @@ import {
 } from '@tanstack/react-query';
 
 import { useRpcProvider } from '#rpc/providers/rpc-provider/use-rpc-provider';
+import { extractEntityFromResponse } from '#rpc/transformations/common';
+import { isSingularResponse } from '#rpc/transformations/guards';
 import { RpcHandlers } from './handlers';
 
+import type { ExtractEntityFromResponse } from '#rpc/transformations/types';
 import type { RpcRequest, RpcResponse } from './types';
 
 /**
@@ -31,11 +34,14 @@ export function buildRPCQueryHooks<
   useQuery: <
     RpcId extends string,
     TData = RpcId extends keyof TRpcHandlers ? RpcResponse<TRpcHandlers, RpcId> : unknown,
+    TTransformedData = ExtractEntityFromResponse<TData>,
   >(
     rpcId: RpcId,
     args: RpcId extends keyof TRpcHandlers ? RpcRequest<TRpcHandlers, RpcId> : unknown,
-    options?: Omit<UseQueryOptions<TData>, 'queryKey' | 'queryFn'>
-  ) => UseQueryResult<TData>;
+    options?: Partial<
+      Omit<UseQueryOptions<TData, Error, TTransformedData>, 'queryKey' | 'queryFn' | 'select'>
+    >
+  ) => UseQueryResult<TTransformedData>;
 } {
   const useRpcQueryKey = <RpcId extends string>(
     rpcId: RpcId,
@@ -47,11 +53,14 @@ export function buildRPCQueryHooks<
   const useQuery = <
     RpcId extends string,
     TData = RpcId extends keyof TRpcHandlers ? RpcResponse<TRpcHandlers, RpcId> : unknown,
+    TTransformedData = ExtractEntityFromResponse<TData>,
   >(
     rpcId: RpcId,
     args: RpcId extends keyof TRpcHandlers ? RpcRequest<TRpcHandlers, RpcId> : unknown,
-    options?: Omit<UseQueryOptions<TData>, 'queryKey' | 'queryFn'>
-  ): UseQueryResult<TData> => {
+    options?: Partial<
+      Omit<UseQueryOptions<TData, Error, TTransformedData>, 'queryKey' | 'queryFn' | 'select'>
+    >
+  ): UseQueryResult<TTransformedData> => {
     const rpcProvider = useRpcProvider();
     const rpcHandler = rpcProvider[String(rpcId)];
     if (!rpcHandler) {
@@ -63,6 +72,12 @@ export function buildRPCQueryHooks<
       queryKey,
       queryFn: () => rpcHandler(args) as Promise<TData>,
       ...options,
+      select: (data: TData) => {
+        if (isSingularResponse(data)) {
+          return extractEntityFromResponse(data) as TTransformedData;
+        }
+        return data as unknown as TTransformedData;
+      },
     });
   };
 
