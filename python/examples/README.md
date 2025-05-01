@@ -53,6 +53,10 @@ setup sandbox, see /python/michelangelo/sandbox/README.md
     cd python
     poetry run ma sandbox create
 
+Create temporal sandbox
+    
+    poetry run ma sandbox create --workflow temporal
+
 The create setup dependencies for Uniflow including
 
 - Michelangelo-ai API
@@ -109,6 +113,16 @@ Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
     poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
 <hr/>
+
+User `--workflow temporal` to run the workflow in Temporal mode.
+
+    poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
+
+    poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
+
+    poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes --workflow temporal
+
+    poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 
 ***Check your workflow in cadence***
 

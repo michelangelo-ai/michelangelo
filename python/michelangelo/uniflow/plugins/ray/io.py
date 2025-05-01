@@ -50,5 +50,6 @@ def resolve_fs(protocol):
             access_key=os.getenv("AWS_ACCESS_KEY_ID"),
             secret_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
             endpoint_override=os.getenv("AWS_ENDPOINT_URL"),
+            allow_bucket_creation=os.getenv("S3_ALLOW_BUCKET_CREATION")
         )
     return None
