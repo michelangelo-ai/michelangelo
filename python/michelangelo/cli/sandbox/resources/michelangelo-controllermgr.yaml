@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:main
+      image: ghcr.io/michelangelo-ai/controllermgr:baoquan-shared-config-logic
       volumeMounts:
         - name: config-volume
           mountPath: /config

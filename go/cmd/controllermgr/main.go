@@ -4,7 +4,6 @@ import (
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	uberconfig "go.uber.org/config"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -57,6 +56,7 @@ func options() fx.Option {
 	return fx.Options(
 		env.Module,
 		zapfx.Module,
+		baseconfig.Module,
 		fx.Provide(scheme),
 		spark.Module,
 		uberconfig.Module,

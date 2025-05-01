@@ -23,8 +23,8 @@ type (
 
 // getK8sRestConfig parses the configuration file and returns the k8s REST client configuration
 // for Michelangelo API server.
-func getK8sRestConfig(provider config.Provider, configKey string) (*rest.Config, error) {
-	return baseconfig.GetK8sConfig(provider, configKey)
+func getK8sRestConfig(provider config.Provider) (*rest.Config, error) {
+	return baseconfig.GetK8sConfig(provider, k8sConfigKey)
 }
 
 // getYARPCConfig parses the configuration file and returns the YARPC server configuration
