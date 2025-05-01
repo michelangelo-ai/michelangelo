@@ -4,6 +4,7 @@ import sys
 import argparse
 import shutil
 import subprocess
+import shutil
 import tempfile
 import time
 import uuid
@@ -21,13 +22,16 @@ _dir = Path(__file__).parent
 _kube_name = "michelangelo-sandbox"
 _kube_ports = [
     "3306:30001",  # MySQL
+    "9091:30007",  # MinIO
+    "14566:30009",  # Michelangelo API Server
+    "8081:30010",  # Envoy gRPC --> gRPC-web proxy
+]
+
+# Workflow engine ports
+_cadence_ports = [
     "7833:30002",  # Cadence gRPC
     "7933:30003",  # Cadence TChannel
     "8088:30004",  # Cadence Web
-    "9091:30007",  # MinIO
-    "9090:30008",  # MinIO
-    "14566:30009",  # Michelangelo API Server
-    "8081:30010",  # Envoy gRPC --> gRPC-web proxy
 ]
 _cadence_domain = "default"
 
@@ -37,7 +41,13 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
-        "--exclude", help="Excludes the specified services.", nargs="+", default=[]
+        "--exclude", help="Excludes specified services.", nargs="+", default=[]
+    )
+    create_p.add_argument(
+        "--workflow",
+        choices=["cadence", "temporal"],
+        default="cadence",
+        help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
 
     _ = sp.add_parser("delete", help="Delete the cluster.")
@@ -74,8 +84,10 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
+    ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
     args = ["k3d", "cluster", "create", _kube_name, "--servers", "1", "--agents", "1"]
-    for p in _kube_ports:
+
+    for p in ports:
         args += ["-p", f"{p}@agent:0"]
 
     # TODO: andrii: Remove the following block once Michelangelo is publicly accessible.
@@ -124,12 +136,9 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     resources = [
         "boot.yaml",
         "mysql.yaml",
-        "cadence.yaml",
         "minio.yaml",
         "michelangelo-config.yaml",
     ]
-    if "worker" not in ns.exclude:
-        resources.append("michelangelo-worker.yaml")
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
     if "controllermgr" not in ns.exclude:
@@ -148,19 +157,63 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     )
 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
-    _exec(
-        "kubectl",
-        "-n",
-        "ray-system",
-        "wait",
-        "--all",
-        "deployments",
-        "--for=condition=available",
-        "--timeout=600s",
-    )
+    # _exec(
+    #     "kubectl",
+    #     "-n",
+    #     "ray-system",
+    #     "wait",
+    #     "--all",
+    #     "deployments",
+    #     "--for=condition=available",
+    #     "--timeout=600s",
+    # )
 
     links = []
 
+    if ns.workflow == "temporal":
+        if "worker" not in ns.exclude:
+            _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
+        _setup_temporal(links)
+    else:
+        if "worker" not in ns.exclude:
+            _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        _kube_create(_dir / "resources" / "cadence.yaml")
+        _kube_create(_dir / "resources/michelangelo-worker.yaml")
+        _setup_cadence(links)
+
+    print("\nSandbox created successfully.")
+
+
+def _setup_temporal(links):
+    _assert_command("helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/")
+
+    _exec("helm", "repo", "add", "temporal", "https://temporalio.github.io/helm-charts")
+    _exec("helm", "repo", "update")
+
+    values_file = _dir / "resources" / "temporal.mysql.yaml"
+
+    _exec(
+        "helm", "install", "temporaltest", "temporal",
+        "--repo", "https://go.temporal.io/helm-charts",
+        "-f", str(values_file),
+        "--set", "elasticsearch.enabled=false",
+        "--set", "prometheus.enabled=false",
+        "--set", "grafana.enabled=false",
+    )
+
+    _exec("kubectl", "-n", "default", "wait", "--for=condition=available", "deployment", "--all", "--timeout=600s")
+
+    # Register the default namespace in Temporal
+    _exec(
+        "kubectl", "exec", "deploy/temporaltest-admintools", "--",
+        "tctl", "--address", "temporaltest-frontend:7233", "namespace", "register", "default", "--retention", "72"
+    )
+    # Automatically port-forward Temporal Web UI in the background
+    subprocess.Popen(["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"])
+    links.append(("Temporal Web UI", "http://localhost:8080", ""))
+
+
+def _setup_cadence(links):
     _kube_run(
         image="ubercadence/cli:v1.2.6",
         command=[
@@ -177,6 +230,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         },
         retry_attempts=3,
     )
+    _exec("kubectl", "wait", "--all", "deployment", "--for=condition=available", "--timeout=600s")
     links.append(
         (
             "Cadence Dashboard",
@@ -184,14 +238,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
             "",
         )
     )
-
-    print()
-    print("Sandbox created. To access the services, please use the following links:")
-    for title, url, comment in links:
-        print(f"  - {title}: {url} {comment}")
-
-    print()
-    print("ok.")
 
 
 def _delete(ns: argparse.Namespace):

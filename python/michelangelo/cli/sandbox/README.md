@@ -46,14 +46,5 @@ pip install michelangelo
 ma sandbox --help
 ```
 
-### Setting up Temporal Development Server
-
-To quickly set up a Temporal development server for local development and testing, follow these brief steps:
-
-```bash
-brew install temporal
-temporal server start-dev
-```
-
 For detailed instructions and additional setup options, please follow the [Temporal Development Environment Guide](https://learn.temporal.io/getting_started/typescript/dev_environment/).
 

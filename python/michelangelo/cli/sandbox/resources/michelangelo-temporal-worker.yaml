@@ -1,0 +1,53 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+spec:
+  containers:
+    - name: app
+      image: ghcr.io/michelangelo-ai/worker:main
+      volumeMounts:
+        - name: worker-config-volume
+          mountPath: /config
+  volumes:
+    - name: worker-config-volume
+      configMap:
+        name: michelangelo-worker-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-worker-config
+  labels:
+    app: michelangelo-worker
+data:
+  base.yaml: |
+    worker:
+      address: michelangelo-apiserver:14566
+      maApiServiceName: ma-apiserver
+
+    logging:
+      level: info
+      development: true
+      encoding: console
+
+    workflow-engine:
+      # for temporal
+        host: temporaltest-frontend:7233
+        transport: grpc
+        # for temporal
+        provider: temporal
+        workers:
+          - domain: default
+            taskList: default
+        client:
+          domain: default
+
+    minio:
+      awsRegion: us-east-1
+      awsAccessKeyId: minioadmin
+      awsSecretAccessKey: minioadmin
+      awsEndpointUrl: minio:9091
