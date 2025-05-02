@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 
-import { QueryProvider } from '#core/providers/query-provider/query-provider';
-import { QueryContextType } from '#core/providers/query-provider/types';
+import { ServiceProvider } from '#core/providers/service-provider/service-provider';
+import { ServiceContextType } from '#core/providers/service-provider/types';
 import { WrapperComponentProps } from './types';
 
 /**
@@ -22,7 +22,7 @@ import { WrapperComponentProps } from './types';
  * expect(mockUseQuery).toHaveBeenCalledWith('queryId', { queryKey: ['queryId'] });
  * ```
  */
-export function getQueryProviderWrapper(queryProvider: QueryContextType) {
+export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContextType>) {
   const mockUseQuery = vi.fn();
 
   const base = {
@@ -31,9 +31,9 @@ export function getQueryProviderWrapper(queryProvider: QueryContextType) {
 
   return function QueryProviderWrapper({ children }: WrapperComponentProps) {
     return (
-      <QueryProvider {...base} {...queryProvider}>
+      <ServiceProvider {...base} {...serviceProvider}>
         {children}
-      </QueryProvider>
+      </ServiceProvider>
     );
   };
 }

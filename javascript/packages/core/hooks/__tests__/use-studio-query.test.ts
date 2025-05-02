@@ -3,8 +3,8 @@ import { vi } from 'vitest';
 
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
-import { getQueryProviderWrapper } from '#core/test/wrappers/get-query-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
 
 describe('useStudioQuery', () => {
   const mockUseQuery = vi.fn().mockReturnValue({ data: null, error: null, isLoading: false });
@@ -21,7 +21,7 @@ describe('useStudioQuery', () => {
 
       const { result: _result } = renderHook(
         () => useStudioQuery({ queryName: 'ListAnything', serviceOptions: {} }),
-        buildWrapper([getRouterWrapper(), getQueryProviderWrapper({ useQuery: mockUseQuery })])
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ useQuery: mockUseQuery })])
       );
 
       result = _result.current;
@@ -49,7 +49,7 @@ describe('useStudioQuery', () => {
             queryName: 'ListAnything',
             serviceOptions: {},
           }),
-        buildWrapper([getRouterWrapper(), getQueryProviderWrapper({ useQuery: mockUseQuery })])
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ useQuery: mockUseQuery })])
       );
 
       result = _result.current;
@@ -75,7 +75,7 @@ describe('useStudioQuery', () => {
         () => useStudioQuery({ queryName: 'GetDataset', serviceOptions: {} }),
         buildWrapper([
           getRouterWrapper({ location: '/ma-dev-test' }),
-          getQueryProviderWrapper({ useQuery: mockUseQuery }),
+          getServiceProviderWrapper({ useQuery: mockUseQuery }),
         ])
       );
 
@@ -95,7 +95,7 @@ describe('useStudioQuery', () => {
           }),
         buildWrapper([
           getRouterWrapper({ location: '/ma-dev-test' }),
-          getQueryProviderWrapper({ useQuery: mockUseQuery }),
+          getServiceProviderWrapper({ useQuery: mockUseQuery }),
         ])
       );
 
