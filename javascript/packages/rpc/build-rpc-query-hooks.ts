@@ -8,7 +8,7 @@ import {
 import { useRpcProvider } from '#rpc/providers/rpc-provider/use-rpc-provider';
 import { extractEntityFromResponse } from '#rpc/transformations/common';
 import { isSingularResponse } from '#rpc/transformations/guards';
-import { RpcHandlers } from './handlers';
+import { RPC_HANDLERS } from './handlers';
 
 import type { ExtractEntityFromResponse } from '#rpc/transformations/types';
 import type { RpcRequest, RpcResponse } from './types';
@@ -25,9 +25,7 @@ import type { RpcRequest, RpcResponse } from './types';
  * A set of query hooks for the given RPC handler.
  */
 export function buildRPCQueryHooks<
-  TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>> = ReturnType<
-    typeof RpcHandlers
-  >,
+  TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>> = typeof RPC_HANDLERS,
 >(): {
   // This explicit specification of the return type is necessary because the `useQuery` hook
   // is generic and cannot be inferred.
