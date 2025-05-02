@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark/job"
-	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/components/spark/job/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
+	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,6 +23,7 @@ var _ job.Client = &SparkClient{}
 // CreateJob creates a new Spark job
 func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	spec := job.Spec
+	serviceAcount := "spark-operator-spark"
 
 	sparkApplication := &sparkv1beta2.SparkApplication{
 		ObjectMeta: metav1.ObjectMeta{
@@ -35,16 +36,16 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			Mode:                sparkv1beta2.ClusterMode,
 			Image:               &spec.Driver.Pod.Image,
 			ImagePullPolicy:     &spec.Driver.Pod.ImagePullingPolicy,
-			MainClass:           stringPtr(spec.MainClass, true),
-			MainApplicationFile: stringPtr(spec.MainApplicationFile, true),
+			MainClass:           &(spec.MainClass),
+			MainApplicationFile: &(spec.MainApplicationFile),
 			Arguments:           spec.MainArgs,
 			SparkConf:           spec.SparkConf,
 			Driver: sparkv1beta2.DriverSpec{
-				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, stringPtr("spark-operator-spark", true)),
+				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, &serviceAcount),
 			},
 			Executor: sparkv1beta2.ExecutorSpec{
 				SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod, nil),
-				Instances:    int32Ptr(spec.Executor.Instances),
+				Instances:    &(spec.Executor.Instances),
 			},
 		},
 	}
@@ -99,7 +100,8 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 	job.Status.ApplicationId = string(result.UID)
 	job.Status.JobUrl = url
 
-	return stringPtr(string(appID), true), url, nil
+	appIDStr := string(appID)
+	return &appIDStr, url, nil
 }
 
 // toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec
@@ -139,8 +141,8 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 	}
 
 	return sparkv1beta2.SparkPodSpec{
-		Cores:  int32Ptr(pod.Resource.Cpu),
-		Memory: stringPtr(pod.Resource.Memory, true),
+		Cores:  &(pod.Resource.Cpu),
+		Memory: &(pod.Resource.Memory),
 		GPU: &sparkv1beta2.GPUSpec{
 			Name:     pod.Resource.GpuSku,
 			Quantity: int64(pod.Resource.Gpu),
@@ -149,17 +151,4 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 		EnvFrom:        envFrom,
 		ServiceAccount: serviceAccount,
 	}
-}
-
-// stringPtr converts a string to a pointer, returning nil if the string is empty and emptyIsNil is true
-func stringPtr(s string, emptyIsNil bool) *string {
-	if s == "" && emptyIsNil {
-		return nil
-	}
-	return &s
-}
-
-// int32Ptr converts an int32 to a pointer
-func int32Ptr(s int32) *int32 {
-	return &s
 }

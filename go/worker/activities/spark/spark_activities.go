@@ -155,7 +155,7 @@ func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSpa
 			logger.Error("Spark Job Not Found", zap.String("error", err.Error()))
 			return nil, nil
 		}
-		return nil, workflow.NewCustomError(ctx, utils.GetCode(err), err.Error())
+		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	sparkJob := response.SparkJob
 	succeeded := GetCondition(pluginutils.SucceededCondition, sparkJob.Status.GetStatusConditions())
@@ -171,7 +171,7 @@ func (r *activities) TerminateSparkJob(ctx context.Context, request TerminateSpa
 	updateResp, err := r.sparkJobService.UpdateSparkJob(ctx, &v2pb.UpdateSparkJobRequest{SparkJob: sparkJob})
 	if err != nil {
 		logger.Error("activity-error", ext.ZapError(err)...)
-		return nil, workflow.NewCustomError(ctx, utils.GetCode(err), err.Error())
+		return nil, workflow.NewCustomError(ctx, err.Error())
 	}
 	return updateResp, nil
 }

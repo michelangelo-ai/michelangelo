@@ -86,12 +86,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		timeout = int64(utils.CadenceLongTimeout.Seconds())
 	}
 
-	//var spec *starlark.Dict
-	//if err := starlark.UnpackArgs("createJob", args, kwargs, "spec", &spec); err != nil {
-	//	logger.Error("error", zap.Error(err))
-	//	return nil, err
-	//}
-
 	var sparkJob v2pb.SparkJob
 	if err := utils.AsGo(_job, &sparkJob); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)

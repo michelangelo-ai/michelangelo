@@ -2,7 +2,7 @@ package client
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/components/spark/job"
-	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/components/spark/job/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
+	sparkv1beta2 "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"

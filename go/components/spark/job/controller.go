@@ -39,23 +39,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	status, message, err := r.getJobStatus(ctx, logger, &sparkJob)
 	if err != nil {
-		logger.Info("SparkApplication not found, creating new one")
-		if err = r.createJob(ctx, logger, &sparkJob); err != nil {
-			logger.Error(err, "failed to create SparkApplication")
-			sparkJob.Status.StatusConditions = nil
+		if utils.IsNotFoundError(err) {
+			logger.Info("SparkApplication not found, creating new one")
+			if err = r.createJob(ctx, logger, &sparkJob); err != nil {
+				logger.Error(err, "failed to create SparkApplication")
+				sparkJob.Status.StatusConditions = nil
+				sparkJob.Status.JobUrl = ""
+				sparkJob.Status.ApplicationId = ""
+				res.RequeueAfter = requeueAfter
+				return res, err
+			}
 			sparkJob.Status.JobUrl = ""
 			sparkJob.Status.ApplicationId = ""
 			res.RequeueAfter = requeueAfter
+		} else {
+			res.RequeueAfter = requeueAfter
 			return res, err
 		}
-		sparkJob.Status.JobUrl = ""
-		sparkJob.Status.ApplicationId = ""
-		res.RequeueAfter = requeueAfter
 	} else if status != nil {
 		logger.Info("Found SparkApplication", "ID", sparkJob.Status.ApplicationId, "status", *status)
 		sparkJob.Status.JobUrl = message
 		sparkJob.Status.ApplicationId = *status
 		res.RequeueAfter = requeueAfter
+	} else {
+		logger.Info("No status for SparkApplication, retrying")
+		res.RequeueAfter = requeueAfter
+		return res, nil
 	}
 
 	if !reflect.DeepEqual(original, sparkJob) {

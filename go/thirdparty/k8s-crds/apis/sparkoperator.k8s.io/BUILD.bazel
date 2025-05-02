@@ -3,6 +3,6 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["register.go"],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/components/spark/job/k8s-crds/apis/sparkoperator.k8s.io",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io",
     visibility = ["//visibility:public"],
 )

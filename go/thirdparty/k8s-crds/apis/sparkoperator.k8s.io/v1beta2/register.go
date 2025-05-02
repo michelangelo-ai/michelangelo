@@ -17,7 +17,7 @@ limitations under the License.
 package v1beta2
 
 import (
-	sparkoperator "github.com/michelangelo-ai/michelangelo/go/components/spark/job/k8s-crds/apis/sparkoperator.k8s.io"
+	sparkoperator "github.com/michelangelo-ai/michelangelo/go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"

@@ -3,6 +3,8 @@ package job
 import (
 	"context"
 	"errors"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"testing"
 	"time"
 
@@ -60,7 +62,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 		getMessage     string
 	}{
 		{
-			name: "No Spark job",
+			name: "Spark job deleted",
 			setup: func() []client.Object {
 				return []client.Object{}
 			},
@@ -80,7 +82,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 				}
 				return []client.Object{sparkJob}
 			},
-			getStatusErr:   errors.New(`spark job "test-spark-job" not found`),
+			getStatusErr:   status.Error(codes.NotFound, "resource not found"),
 			createErr:      errors.New("some error"),
 			errorAssertion: require.Error,
 			postCheck: func(res ctrl.Result) {
@@ -104,7 +106,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 			postCheck: func(res ctrl.Result) {
 				assert.Equal(t, requeueAfter, res.RequeueAfter)
 			},
-			getStatusErr: errors.New("some error"),
+			getStatusErr: status.Error(codes.NotFound, "resource not found"),
 			getMessage:   "",
 			getStatus:    nil,
 		},
