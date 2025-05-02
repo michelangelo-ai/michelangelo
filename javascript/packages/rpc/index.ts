@@ -30,5 +30,4 @@ export * from './gen/michelangelo/api/v2/trigger_run_pb';
 export * from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 export * from './gen/michelangelo/api/v2/user_pb';
 
-export { buildRPCQueryHooks } from './build-rpc-query-hooks';
-export { RpcProvider } from './providers/rpc-provider/rpc-provider';
+export { request } from './request';

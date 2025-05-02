@@ -12,6 +12,7 @@
     "@bufbuild/protobuf": "^2.2.5",
     "@connectrpc/connect": "^2.0.2",
     "@connectrpc/connect-web": "^2.0.2",
+    "@tanstack/react-query": "^5.75.1",
     "@types/pluralize": "^0.0.33",
     "baseui": "^13.0.0",
     "pluralize": "^8.0.0",

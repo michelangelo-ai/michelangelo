@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "@connectrpc/connect": "^2.0.2",
-    "@connectrpc/connect-web": "^2.0.2",
-    "@tanstack/react-query": "^5.74.7"
+    "@connectrpc/connect-web": "^2.0.2"
   },
   "exports": {
     ".": {

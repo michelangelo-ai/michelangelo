@@ -1,16 +1,12 @@
 import { CoreApp } from '@michelangelo/core';
-import { buildRPCQueryHooks, RpcProvider } from '@michelangelo/rpc';
+import { request } from '@michelangelo/rpc';
 
 const dependencies = {
   service: {
-    ...buildRPCQueryHooks(),
+    request,
   },
 };
 
 export function App() {
-  return (
-    <RpcProvider>
-      <CoreApp dependencies={dependencies} />
-    </RpcProvider>
-  );
+  return <CoreApp dependencies={dependencies} />;
 }

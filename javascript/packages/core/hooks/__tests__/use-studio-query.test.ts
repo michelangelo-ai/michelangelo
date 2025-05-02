@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
 import { useStudioQuery } from '#core/hooks/use-studio-query';
@@ -6,87 +6,104 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
 
+import type { QueryOptions } from '#core/types/query-types';
+
 describe('useStudioQuery', () => {
-  const mockUseQuery = vi.fn().mockReturnValue({ data: null, error: null, isLoading: false });
+  const mockRequest = vi.fn().mockResolvedValue(null);
 
   beforeEach(() => {
-    mockUseQuery.mockClear();
+    mockRequest.mockClear();
   });
 
   describe('when query returns no data', () => {
-    let result: ReturnType<typeof useStudioQuery>;
+    test('returns data as is', async () => {
+      mockRequest.mockResolvedValue(null);
 
-    beforeAll(() => {
-      mockUseQuery.mockReturnValue({ data: null, error: null, isLoading: false });
-
-      const { result: _result } = renderHook(
+      const { result } = renderHook(
         () => useStudioQuery({ queryName: 'ListAnything', serviceOptions: {} }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ useQuery: mockUseQuery })])
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
       );
 
-      result = _result.current;
+      await waitFor(() => {
+        expect(result.current.data).toBe(null);
+      });
     });
 
-    test('returns data as is', () => {
-      expect(result.data).toBe(null);
-    });
+    test('returns other properties as-is', async () => {
+      mockRequest.mockResolvedValue(null);
 
-    test('returns other properties as-is', () => {
-      expect(result.error).toBe(null);
-      expect(result.isLoading).toBe(false);
+      const { result } = renderHook(
+        () => useStudioQuery({ queryName: 'ListAnything', serviceOptions: {} }),
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).toBe(null);
+        expect(result.current.isLoading).toBe(false);
+      });
     });
   });
 
-  describe('when clientOptions is not provided', () => {
-    let result: ReturnType<typeof useStudioQuery>;
+  describe('when query returns data', () => {
+    test('returns data as is', async () => {
+      mockRequest.mockResolvedValue({ test: 'data' });
 
-    beforeAll(() => {
-      mockUseQuery.mockReturnValue({ data: { test: 'data' }, error: null, isLoading: false });
-
-      const { result: _result } = renderHook(
+      const { result } = renderHook(
         () =>
           useStudioQuery({
             queryName: 'ListAnything',
             serviceOptions: {},
           }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ useQuery: mockUseQuery })])
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
       );
 
-      result = _result.current;
+      await waitFor(() => {
+        expect(result.current.data).toEqual({ test: 'data' });
+      });
     });
 
-    test('returns data as is', () => {
-      expect(result.data).toEqual({ test: 'data' });
-    });
+    test('returns other properties as-is', async () => {
+      mockRequest.mockResolvedValue({ test: 'data' });
 
-    test('returns other properties as-is', () => {
-      expect(result.error).toBe(null);
-      expect(result.isLoading).toBe(false);
+      const { result } = renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'ListAnything',
+            serviceOptions: {},
+          }),
+        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).toBe(null);
+        expect(result.current.isLoading).toBe(false);
+      });
     });
   });
 
-  describe('query options passed to useRpcQuery', () => {
+  describe('query options passed to useStudioQuery', () => {
     beforeEach(() => {
-      mockUseQuery.mockReturnValue({ data: {}, isLoading: false });
+      mockRequest.mockResolvedValue({});
     });
 
-    test('defaults namespace to projectId when omitted from serviceOptions args', () => {
+    test('defaults namespace to projectId when omitted from serviceOptions args', async () => {
       renderHook(
         () => useStudioQuery({ queryName: 'GetDataset', serviceOptions: {} }),
         buildWrapper([
           getRouterWrapper({ location: '/ma-dev-test' }),
-          getServiceProviderWrapper({ useQuery: mockUseQuery }),
+          getServiceProviderWrapper({ request: mockRequest }),
         ])
       );
 
-      expect(mockUseQuery).toHaveBeenCalledWith(
-        'GetDataset',
-        expect.objectContaining({ namespace: 'ma-dev-test' }),
-        undefined
-      );
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith(
+          'GetDataset',
+          expect.objectContaining({ namespace: 'ma-dev-test' })
+        );
+      });
     });
 
-    test('prefers provided namespace', () => {
+    test('prefers provided namespace', async () => {
       renderHook(
         () =>
           useStudioQuery({
@@ -95,15 +112,66 @@ describe('useStudioQuery', () => {
           }),
         buildWrapper([
           getRouterWrapper({ location: '/ma-dev-test' }),
-          getServiceProviderWrapper({ useQuery: mockUseQuery }),
+          getServiceProviderWrapper({ request: mockRequest }),
         ])
       );
 
-      expect(mockUseQuery).toHaveBeenCalledWith(
-        'GetDataset',
-        expect.objectContaining({ namespace: 'provided-namespace' }),
-        undefined
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith(
+          'GetDataset',
+          expect.objectContaining({ namespace: 'provided-namespace' })
+        );
+      });
+    });
+
+    test('passes clientOptions to useQuery', async () => {
+      const clientOptions: QueryOptions = {
+        enabled: false,
+      };
+
+      renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'GetDataset',
+            serviceOptions: {},
+            clientOptions,
+          }),
+        buildWrapper([
+          getRouterWrapper({ location: '/ma-dev-test' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
+
+      await waitFor(() => {
+        expect(mockRequest).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('queryFn implementation', () => {
+    beforeEach(() => {
+      mockRequest.mockResolvedValue({ test: 'data' });
+    });
+
+    test('calls request with correct arguments', async () => {
+      renderHook(
+        () =>
+          useStudioQuery({
+            queryName: 'GetDataset',
+            serviceOptions: { filter: 'active' },
+          }),
+        buildWrapper([
+          getRouterWrapper({ location: '/ma-dev-test' }),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(mockRequest).toHaveBeenCalledWith('GetDataset', {
+          filter: 'active',
+          namespace: 'ma-dev-test',
+        });
+      });
     });
   });
 });
