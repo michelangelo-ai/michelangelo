@@ -1,27 +1,33 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 import { ServiceContext } from './service-context';
 
 import type { ServiceContextType } from './types';
 
+const queryClient = new QueryClient();
+
 /**
  * @description
- * Provides the query context to the application. This configuration provided to the
- * {@link QueryProvider} should be able to connect to the Michelangelo API yarpc server.
+ * Provides the ability to request data from or send data to a server.
  *
  * @remarks
- * Leverages {@link QueryContext} to provide the query context to the application.
+ * Internally, the `ServiceProvider` uses Tanstack Query QueryClient to manage data fetching,
+ * so this provider also provides Tanstack Query's QueryClientProvider.
  *
  * @example
  * ```tsx
- * <QueryProvider
- *   useQuery={useQuery}
- * >
- *   <App />
- * </QueryProvider>
+ * <ServiceProvider request={request}>
+ *   <MyComponent />
+ * </ServiceProvider>
  * ```
  */
 export const ServiceProvider = ({
   children,
   ...serviceContext
 }: { children: React.ReactNode } & ServiceContextType) => {
-  return <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>;
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>
+    </QueryClientProvider>
+  );
 };

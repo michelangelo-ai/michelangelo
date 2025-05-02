@@ -1,58 +1,6 @@
 import { Message } from '@bufbuild/protobuf';
-import { UseQueryResult } from '@tanstack/react-query';
 
 import { RPC_HANDLERS } from './handlers';
-
-/**
- * @description
- * Picks the request type from the RPC handler.
- *
- * @remarks
- * Expects the request type to be the first parameter of the RPC handler.
- *
- * Leverages `OmitTypeName` to remove the `$typeName` and `$unknown` properties from the request type.
- * This is necessary because the protobuf-es library adds these properties to the request type.
- *
- * @example
- * ```ts
- * type MyRequest = RpcRequest<{ myRpc: (args: { myField: string }) => Promise<void> }, 'myRpc'>;
- * const myRequest: MyRequest = { myField: 'hello' };
- * ```
- */
-export type RpcRequest<
-  TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>>,
-  RpcId extends keyof TRpcHandlers,
-> = OmitTypeName<Parameters<TRpcHandlers[RpcId]>[0]>;
-
-/**
- * @description
- * Picks the response type from the RPC handler.
- *
- * @remarks
- * Expects the response type to be wrapped in a `Promise`.
- *
- * @example
- * ```ts
- * type MyResponse = RpcResponse<{ myRpc: (args: any) => Promise<{ myField: string }> }, 'myRpc'>;
- * const myResponse: MyResponse = { myField: 'hello' };
- * ```
- */
-export type RpcResponse<
-  TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>>,
-  RpcId extends keyof TRpcHandlers,
-> = Awaited<ReturnType<TRpcHandlers[RpcId]>>;
-
-export type BuildRPCQueryHooksReturn<
-  TRpcHandlers extends Record<string, (args: unknown) => Promise<unknown>>,
-> = {
-  useQuery: <
-    RpcId extends string,
-    TData = RpcId extends keyof TRpcHandlers ? RpcResponse<TRpcHandlers, RpcId> : unknown,
-  >(
-    rpcId: RpcId,
-    args: RpcId extends keyof TRpcHandlers ? RpcRequest<TRpcHandlers, RpcId> : unknown
-  ) => UseQueryResult<TData>;
-};
 
 /**
  * @see {@link RPC_HANDLERS}
@@ -78,7 +26,7 @@ export type RpcHandlerType = typeof RPC_HANDLERS;
  *
  * @see https://github.com/bufbuild/protobuf-es/issues/1016
  */
-type OmitTypeName<T> = {
+export type OmitTypeName<T> = {
   [P in keyof T as P extends '$typeName' | '$unknown' ? never : P]: Recurse<T[P]>;
 };
 
