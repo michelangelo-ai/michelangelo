@@ -1,6 +1,6 @@
-import { QueryContext } from './query-context';
+import { ServiceContext } from './service-context';
 
-import type { QueryContextType } from './types';
+import type { ServiceContextType } from './types';
 
 /**
  * @description
@@ -19,9 +19,9 @@ import type { QueryContextType } from './types';
  * </QueryProvider>
  * ```
  */
-export const QueryProvider = ({
+export const ServiceProvider = ({
   children,
-  ...queryContext
-}: { children: React.ReactNode } & QueryContextType) => {
-  return <QueryContext.Provider value={queryContext}>{children}</QueryContext.Provider>;
+  ...serviceContext
+}: { children: React.ReactNode } & ServiceContextType) => {
+  return <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>;
 };

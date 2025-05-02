@@ -9,6 +9,6 @@ import type { QueryOptions, QueryResult } from '#core/types/query-types';
  * Since the available queryIds are injected into the application, the parameters and
  * return types are unknown.
  */
-export type QueryContextType = {
+export type ServiceContextType = {
   useQuery: <TData>(queryId: string, args: unknown, options?: QueryOptions) => QueryResult<TData>;
 };

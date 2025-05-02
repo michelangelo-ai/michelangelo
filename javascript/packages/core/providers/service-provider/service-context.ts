@@ -1,8 +1,8 @@
 import { createContext } from 'react';
 
-import type { QueryContextType } from './types';
+import type { ServiceContextType } from './types';
 
-export const QueryContext = createContext<QueryContextType>({
+export const ServiceContext = createContext<ServiceContextType>({
   useQuery: () => {
     throw new Error('useQuery must be used within a QueryProvider');
   },
