@@ -1,16 +1,3 @@
-"""
-Local Run
-=========
-
-1. Download data: bazel run //uber/ai/michelangelo/sandbox:download_example_data
-2. Run: bazel run //uber/ai/michelangelo/sandbox/boston_housing_xgb
-
-Remote Run
-==========
-
-1. Run: bazel run //uber/ai/michelangelo/sandbox/boston_housing_xgb -- remote-run --ubuild-revision-id bkt1-test-1730087881-fa9b5
-"""
-
 from dataclasses import dataclass
 
 import fsspec
