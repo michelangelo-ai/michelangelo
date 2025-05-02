@@ -29,6 +29,7 @@ const (
 )
 
 const CadenceLongTimeout = time.Hour * 24 * 365 * 10 // 10 years, practically - no timeout
+const CadenceLongRetry = time.Hour * 24 * 365 * 10   // 10 years, practically - no timeout
 
 var CadenceDefaultNonRetriableErrorReasons = []string{
 	"cadenceInternal:Panic",                  // panics
@@ -63,7 +64,7 @@ var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
 	BackoffCoefficient:       1,
 	ExpirationInterval:       CadenceLongTimeout,
 	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
-	MaximumAttempts:          500000,
+	MaximumAttempts:          0,
 }
 
 func AsStar(source any, out any) error {
