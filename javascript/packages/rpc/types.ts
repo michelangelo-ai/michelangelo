@@ -1,7 +1,7 @@
 import { Message } from '@bufbuild/protobuf';
 import { UseQueryResult } from '@tanstack/react-query';
 
-import { RpcHandlers } from './handlers';
+import { RPC_HANDLERS } from './handlers';
 
 /**
  * @description
@@ -55,9 +55,9 @@ export type BuildRPCQueryHooksReturn<
 };
 
 /**
- * @see {@link RpcHandlers}
+ * @see {@link RPC_HANDLERS}
  */
-export type RpcHandlerType = ReturnType<typeof RpcHandlers>;
+export type RpcHandlerType = typeof RPC_HANDLERS;
 
 /**
  * @description
