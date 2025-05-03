@@ -1,18 +1,18 @@
 from dataclasses import dataclass
 
+import datasets
 import fsspec
+import logging
+from typing import Optional
+import pandas as pd
+import numpy as np
+import ray
 import ray.data
 import xgboost
 import xgboost_ray
-import logging
-from typing import Optional
-
-import ray
-from ray.train import RunConfig, ScalingConfig
 from pyspark.sql import DataFrame
-from ray.train import CheckpointConfig
+from ray.train import RunConfig, ScalingConfig, CheckpointConfig
 from ray.train.xgboost import XGBoostTrainer
-
 from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.uniflow.plugins.spark import SparkTask
@@ -51,21 +51,22 @@ class TrainResult:
     )
 )
 def feature_prep(
-    url: str,
-    columns: list[str],
-    test_size: float = 0.25,
-    seed: int = 1,
-) -> tuple[
-    DatasetVariable,
-    DatasetVariable,
-]:
-    fs, path = fsspec.core.url_to_fs(url)
-    data = ray.data.read_parquet(path, filesystem=fs).select_columns(columns)
+        columns: list[str],
+        test_size: float = 0.25,
+        seed: int = 1,
+) -> tuple[DatasetVariable, DatasetVariable]:
+    data_url = "http://lib.stat.cmu.edu/datasets/boston"
+    raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
+    X = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])
+    y = raw_df.values[1::2, 2]
+
+    feature_names = columns[:-1]  # assuming the last column is 'target'
+
+    dataset = [dict(zip(feature_names, features), target=target) for features, target in zip(X, y)]
+    data = ray.data.from_items(dataset).select_columns(columns)
 
     train_data, validation_data = data.train_test_split(
-        test_size=test_size,
-        shuffle=True,
-        seed=seed,
+        test_size=test_size, shuffle=True, seed=seed
     )
 
     train_dv = DatasetVariable.create(train_data)
@@ -261,7 +262,6 @@ def train(
 
 @uniflow.workflow()
 def train_workflow(
-    dataset_url: str,
     dataset_cols: str,
 ):
     _dataset_cols = dataset_cols.split(",")
@@ -273,7 +273,6 @@ def train_workflow(
     #     ),
     # )
     train_dv, validation_dv = feature_prep(
-        url=dataset_url,
         columns=_dataset_cols,
     )
     # pr = preprocess.with_overrides(alias="preprocess_overrides", config=SparkTask(executor_cpu=1, driver_cpu=1))(
@@ -300,15 +299,8 @@ def train_workflow(
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
-    dataset_url = "file://examples/boston_housing_xgb/dl_example_datasets_boston_housing_fp64_label"
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.run(
         train_workflow,
-        dataset_url=dataset_url,
-        dataset_cols="age,b,chas,crim,dis,indus,lstat,nox,ptratio,rad,rm,tax,zn,medv",
+        dataset_cols="CRIM,ZN,INDUS,CHAS,NOX,RM,AGE,DIS,RAD,TAX,PTRATIO,B,LSTAT,target",
     )
-
-
-# Tentatively reserve 50% CPUs for Ray data tasks.
-RAY_DATA_CPU_RESERVE_RATIO = 0.5
-log = logging.getLogger(__name__)
