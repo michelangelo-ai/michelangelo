@@ -35,7 +35,6 @@ const (
 // TODO: andrii: implement Spark starlark plugin here
 
 var _ starlark.HasAttrs = (*module)(nil)
-var timeout int64 = 0
 var poll int64 = 10
 
 type module struct {

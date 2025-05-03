@@ -64,7 +64,6 @@ var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
 	BackoffCoefficient:       1,
 	ExpirationInterval:       CadenceLongTimeout,
 	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
-	MaximumAttempts:          0,
 }
 
 func AsStar(source any, out any) error {

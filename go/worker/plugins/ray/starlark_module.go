@@ -21,7 +21,6 @@ import (
 // TODO: andrii: implement Ray starlark plugin here
 
 var _ starlark.HasAttrs = (*module)(nil)
-var timeout int64 = 0
 var poll int64 = 10
 
 type module struct {
@@ -74,7 +73,6 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	cluster = *response.RayCluster
 
 	srp := utils.CadenceDefaultSensorRetryPolicy
-	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
@@ -178,7 +176,6 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 
 	var sensorRes ray.SensorRayJobResponse
 	srp := utils.CadenceDefaultSensorRetryPolicy
-	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayJob, v2pb.GetRayJobRequest{
@@ -220,7 +217,6 @@ func (r *module) terminateCluster(t *starlark.Thread, _ *starlark.Builtin, args 
 
 	var res v2pb.UpdateRayClusterResponse
 	srp := utils.CadenceDefaultSensorRetryPolicy
-	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
