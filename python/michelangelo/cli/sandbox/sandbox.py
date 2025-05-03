@@ -160,9 +160,11 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
 
     links = []
+    _assert_command("helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/")
+    helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
 
     if ns.workflow == "temporal":
-        _setup_temporal(links)
+        _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
     else:
@@ -170,14 +172,23 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
 
+    _create_spark_operator(helm_existing_repos)
     print("\nSandbox created successfully.")
 
+def _create_spark_operator(helm_existing_repos):
+    if "spark-operator" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "spark-operator", "https://googlecloudplatform.github.io/spark-on-k8s-operator")
+        _exec("helm", "repo", "update")
 
-def _setup_temporal(links):
-    _assert_command("helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/")
+    _exec(
+        "helm", "install", "spark-operator", "spark-operator/spark-operator",
+        "--namespace", "spark-operator", "--create-namespace", "--wait"
+    )
 
-    _exec("helm", "repo", "add", "temporal", "https://temporalio.github.io/helm-charts")
-    _exec("helm", "repo", "update")
+def _setup_temporal(links, helm_existing_repos):
+    if "temporal" not in helm_existing_repos:
+        _exec("helm", "repo", "add", "temporal", "https://temporalio.github.io/helm-charts")
+        _exec("helm", "repo", "update")
 
     values_file = _dir / "resources" / "temporal.mysql.yaml"
 
