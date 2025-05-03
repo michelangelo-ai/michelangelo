@@ -12,6 +12,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
+	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -50,6 +51,7 @@ func options() fx.Option {
 		config.Module,
 		zapfx.Module,
 		fx.Provide(scheme),
+		spark.Module,
 		ray.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {

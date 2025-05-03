@@ -120,7 +120,7 @@ message Environment {
 // - Horovod worker pods with custom training images
 // - Parameter server pods with environment config
 message PodSpec {
-  // Optional name of the Pod. This field specifies:
+  // name of the Pod. This field specifies:
   // - A unique identifier for this Pod instance
   // - Used for logging and monitoring purposes
   // - Helps identify specific Pods in a distributed job
@@ -147,6 +147,14 @@ message PodSpec {
   // For example: "uber/michelangelo-training:v1.2.3", "nvidia/cuda:11.0-base"
   string image = 3;
 
+  // Docker image pulling policy for the Pod container. This field specifies:
+  // Value	          Description
+  // --------------------------------
+  // Always	          Always pulls the image from the registry every time the pod is started. Recommended for mutable tags like latest.
+  // IfNotPresent	    Pulls the image only if it is not already present on the node. Recommended for versioned images (e.g., myapp:v1.2.3).
+  // Never	          Never pulls the image; uses the local image only. Fails if the image isn’t already available on the node.
+  string imagePullingPolicy = 8;
+
   // Environment variables for the Pod container. This field specifies:
   // - Key-value pairs that configure the container environment
   // - Used to pass configuration to applications
@@ -158,6 +166,14 @@ message PodSpec {
   // - Feature flags and debug settings
   // - Path and library configurations
   repeated Environment env = 4;
+
+  // List of sources to populate environment variables in the container.
+  // The keys defined within a source must be a C_IDENTIFIER. All invalid keys
+  // will be reported as an event when the container is starting. When a key exists in multiple
+  // sources, the value associated with the last source will take precedence.
+  // Values defined by an Env with a duplicate key will take precedence.
+  // Cannot be updated.
+  repeated EnvFromSource envFrom =9;
 
   // Security token used to authenticate and authorize access to secure HDFS.
   // This field specifies:
@@ -189,4 +205,65 @@ message PodSpec {
   // - Model serving commands: ["tritonserver", "--model-repository=/models"]
   // - Data processing jobs: ["spark-submit", "process.py", "--input=/data"]
   repeated string command = 7;
+}
+// EnvFromSource represents the source of a set of ConfigMaps or Secrets
+message EnvFromSource {
+  // text to prepend to the name of each environment variable. Must be a C_IDENTIFIER.
+  string prefix = 1;
+
+  // The ConfigMap to select from
+  ConfigMapEnvSource configMapRef = 2;
+
+  // The Secret to select from
+  SecretEnvSource secretRef = 3;
+}
+
+// ConfigMapEnvSource selects a ConfigMap to populate the environment
+// variables with.
+//
+// The contents of the target ConfigMap's Data field will represent the
+// key-value pairs as environment variables.
+message ConfigMapEnvSource {
+  // The ConfigMap to select from.
+  LocalObjectReference localObjectReference = 1;
+
+  // Specify whether the ConfigMap must be defined
+  bool optional = 2;
+}
+
+
+// SecretEnvSource selects a Secret to populate the environment
+// variables with.
+//
+// The contents of the target Secret's Data field will represent the
+// key-value pairs as environment variables.
+message SecretEnvSource {
+  // The Secret to select from.
+  LocalObjectReference localObjectReference = 1;
+
+  // Specify whether the Secret must be defined
+  bool optional = 2;
+}
+
+// LocalObjectReference contains enough information to let you locate the
+// referenced object inside the same namespace.
+// ---
+// New uses of this type are discouraged because of difficulty describing its usage when embedded in APIs.
+//  1. Invalid usage help.  It is impossible to add specific help for individual usage.  In most embedded usages, there are particular
+//     restrictions like, "must refer only to types A and B" or "UID not honored" or "name must be restricted".
+//     Those cannot be well described when embedded.
+//  2. Inconsistent validation.  Because the usages are different, the validation rules are different by usage, which makes it hard for users to predict what will happen.
+//  3. We cannot easily change it.  Because this type is embedded in many locations, updates to this type
+//     will affect numerous schemas.  Don't make new APIs embed an underspecified API type they do not control.
+//
+// Instead of using this type, create a locally provided and used type that is well-focused on your reference.
+// For example, ServiceReferences for admission registration: https://github.com/kubernetes/api/blob/release-1.17/admissionregistration/v1/types.go#L533 .
+message LocalObjectReference {
+  // Name of the referent.
+  // This field is effectively required, but due to backwards compatibility is
+  // allowed to be empty. Instances of this type with an empty value here are
+  // almost certainly wrong.
+  // More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+  // TODO: Drop `kubebuilder:default` when controller-gen doesn't need it https://github.com/kubernetes-sigs/kubebuilder/issues/3896.
+  string name = 1;
 }

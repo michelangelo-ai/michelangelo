@@ -1,0 +1,70 @@
+apiVersion: michelangelo.api/v2
+kind: SparkJob
+metadata:
+  labels:
+    michelangelo/SpecUpdateTimestamp: "1744590526751754"
+    michelangelo/UpdateTimestamp: "1744590526751754"
+  name: spark-app
+  namespace: default
+spec:
+  deps: {}
+  driver:
+    pod:
+      env:
+        - name: UF_REMOTE_RUN
+          value: "1"
+        - name: IMAGE_PULL_POLICY
+          value: Never
+        - name: UF_TASK_IMAGE
+          value: docker.io/library/examples:latest
+        - name: UF_STORAGE_URL
+          value: s3://default
+      image: docker.io/library/examples:latest
+      imagePullingPolicy: Never
+      resource:
+        cpu: 1
+        diskSize: 512G
+        memory: 16G
+  executor:
+    instances: 1
+    pod:
+      env:
+        - name: UF_REMOTE_RUN
+          value: "1"
+        - name: IMAGE_PULL_POLICY
+          value: Never
+        - name: UF_TASK_IMAGE
+          value: docker.io/library/examples:latest
+        - name: UF_STORAGE_URL
+          value: s3://default
+      image: docker.io/library/examples:latest
+      imagePullingPolicy: Never
+      resource:
+        cpu: 1
+        diskSize: 512G
+        memory: 16G
+  mainApplicationFile: local:///app/michelangelo/uniflow/core/run_task.py
+  mainArgs:
+    - --task
+    - examples.boston_housing_xgb.boston_housing_xgb.preprocess
+    - --args
+    - '[]'
+    - --kwargs
+    - '{"cast_float_columns":["age","b","chas","crim","dis","indus","lstat","nox","ptratio","rad","rm","tax","zn","medv"],"train_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/96ba8765ec3d450b94ad00377b580b72"},"validation_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/3db3242eeb7b4c1fa39f2f601afea20e"}}'
+    - --result-url
+    - s3://default/e8f24f7434a34c7a913074f804305baf.json
+  mainClass: org.apache.spark.deploy.PythonRunner
+  scheduling:
+    preemptible: true
+  sparkConf:
+    spark.driver.extraJavaOptions: -Dcontainer.log.enableTerraBlobIntegration=true
+    spark.executor.extraJavaOptions: -Dcontainer.log.enableTerraBlobIntegration=true
+    spark.peloton.driver.docker.image: docker.io/library/examples:latest
+    spark.peloton.executor.docker.image: docker.io/library/examples:latest
+    spark.peloton.run-as-user: "true"
+    spark.peloton.usecrets.enable: "true"
+    spark.sql.adaptive.enabled: "false"
+    spark.sql.optimizer.excludedRules: org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries
+  sparkVersion: 3.5.5
+  user:
+    name: test

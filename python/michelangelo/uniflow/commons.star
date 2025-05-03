@@ -53,11 +53,17 @@ def get_task_name(task_path, alias):
         return alias
     return task_path.split(".")[-1]
 
-def resource_dict(cpu, memory):
+def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
     res = {
         "cpu": cpu,
         "memory": memory,
     }
+    if disk:
+        res["diskSize"] = disk
+    if gpu:
+        res["gpu"] = gpu
+    if gpu_sku:
+        res["gpu_sku"] = gpu_sku
     return res
 
 def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = ""):
