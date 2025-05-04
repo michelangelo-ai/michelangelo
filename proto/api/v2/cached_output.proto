@@ -24,9 +24,7 @@ enum CachedOutputType {
 
 enum StorageType {
   STORAGE_TYPE_INVALID = 0;
-  STORAGE_TYPE_HDFS = 1;
-  STORAGE_TYPE_TERRA_BLOB = 2;
-  STORAGE_TYPE_CFS = 3;
+  STORAGE_TYPE_S3 = 1;
 }
 
 enum VariableType {

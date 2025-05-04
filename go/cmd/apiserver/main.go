@@ -46,6 +46,7 @@ func opts() fx.Option {
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
 		v2pb.SparkJobSvcModule,
+		v2pb.CachedOutputSvcModule,
 		crd.Module,
 		crd.SyncCRDs([]string{v2pb.GroupVersion.Group}, v2pb.YamlSchemas),
 		fx.Invoke(registerProcedures),

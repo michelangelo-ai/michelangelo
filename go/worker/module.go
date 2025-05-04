@@ -8,8 +8,15 @@ import (
 	"go.uber.org/fx"
 )
 
+// Module provides YARPC client instances.
 var Module = fx.Options(
-	fx.Provide(getYARPCClients),
+	fx.Provide(NewConfig, NewYARPCDispatcher),
+	fx.Provide(
+		NewRayClusterServiceClient,
+		NewRayJobServiceClient,
+		NewSparkJobServiceClient,
+		NewCachedOutputServiceClient,
+	),
 	workflowfx.Module,
 	activities.Module,
 	workflows.Module,

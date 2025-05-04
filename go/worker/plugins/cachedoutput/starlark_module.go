@@ -4,45 +4,42 @@ import (
 	"fmt"
 	"time"
 
-	"code.uber.internal/uberai/michelangelo/starlark/activity/uapi"
-	"code.uber.internal/uberai/michelangelo/starlark/plugin/utils"
-	"github.com/cadence-workflow/starlark-worker/cadstar"
 	"github.com/cadence-workflow/starlark-worker/ext"
+	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/gogo/protobuf/types"
+
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence/workflow"
-	v2beta1 "michelangelo/api/v2beta1"
 )
 
-// Module is the Ray module.
-type Module struct {
-	info *workflow.Info
+var _ starlark.HasAttrs = (*module)(nil)
+
+type module struct {
+	attributes map[string]starlark.Value
 }
 
-var _ starlark.HasAttrs = &Module{}
+func newModule() starlark.Value {
+	m := &module{}
+	m.attributes = map[string]starlark.Value{
+		"get":   starlark.NewBuiltin("get", m.get).BindReceiver(m),
+		"put":   starlark.NewBuiltin("put", m.put).BindReceiver(m),
+		"query": starlark.NewBuiltin("query", m.query).BindReceiver(m),
+	}
+	return m
+}
 
-// String returns the module name.
-func (f *Module) String() string { return pluginID }
-
-// Type returns the module type.
-func (f *Module) Type() string { return pluginID }
-
-// Freeze freezes the module.
-func (f *Module) Freeze() {}
-
-// Truth returns starlark boolean type
-func (f *Module) Truth() starlark.Bool { return true }
-
-// Hash returns the module hash.
-func (f *Module) Hash() (uint32, error) { return 0, fmt.Errorf("no-hash") }
-
-// Attr returns the module attribute.
-func (f *Module) Attr(n string) (starlark.Value, error) { return star.Attr(f, n, builtins, properties) }
-
-// AttrNames returns the module attribute names.
-func (f *Module) AttrNames() []string { return star.AttrNames(builtins, properties) }
+func (r *module) String() string                        { return pluginID }
+func (r *module) Type() string                          { return pluginID }
+func (r *module) Freeze()                               {}
+func (r *module) Truth() starlark.Bool                  { return true }
+func (r *module) Hash() (uint32, error)                 { return 0, fmt.Errorf("no-hash") }
+func (r *module) Attr(n string) (starlark.Value, error) { return r.attributes[n], nil }
+func (r *module) AttrNames() []string                   { return ext.SortedKeys(r.attributes) }
 
 var properties = map[string]star.PropertyFactory{}
 
@@ -52,12 +49,6 @@ const (
 	_errorReasonConvertStarlarkValue = "ConvertStarlarkValueError"
 )
 
-var builtins = map[string]*starlark.Builtin{
-	"get":   starlark.NewBuiltin("get", get),
-	"put":   starlark.NewBuiltin("put", put),
-	"query": starlark.NewBuiltin("query", query),
-}
-
 // get returns a cachedoutput obj by namespace and name
 //
 //	get(namespace=namespace, name=name) -> cachedoutput
@@ -66,8 +57,8 @@ var builtins = map[string]*starlark.Builtin{
 //	  name: the name of the cachedoutput
 //
 //	  return: dict: cachedoutput crd as a dict
-func get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+func (r *module) get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 	var namespace string
 	var name string
@@ -80,14 +71,14 @@ func get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []
 		return nil, err
 	}
 
-	request := v2beta1.GetCachedOutputRequest{
+	request := v2pb.GetCachedOutputRequest{
 		Namespace: namespace,
 		Name:      name,
 	}
-	response := v2beta1.GetCachedOutputResponse{}
+	response := v2pb.GetCachedOutputResponse{}
 	retryPolicy := utils.CadenceDefaultRetryPolicy
 	getCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
-	if err := workflow.ExecuteActivity(getCtx, uapi.Activities.GetCachedOutput, request).Get(ctx, &response); err != nil {
+	if err := workflow.ExecuteActivity(getCtx, cachedoutput.Activities.GetCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to get CachedOutput", ext.ZapError(err)...)
 		return nil, err
 	}
@@ -105,8 +96,8 @@ func get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []
 //
 //	cachedoutput: a cachedoutput CRD in json format
 //	return dict of the created cachedoutput
-func put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+func (r *module) put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 	var cachedOutputDict starlark.Value
 
@@ -117,19 +108,19 @@ func put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []
 		return nil, err
 	}
 
-	cachedOutput := v2beta1.CachedOutput{}
-	if err := utils.AsGo(cachedOutputDict, &cachedOutput); err != nil {
+	co := v2pb.CachedOutput{}
+	if err := utils.AsGo(cachedOutputDict, &co); err != nil {
 		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
-	request := v2beta1.CreateCachedOutputRequest{
-		CachedOutput: &cachedOutput,
+	request := v2pb.CreateCachedOutputRequest{
+		CachedOutput: &co,
 	}
-	response := v2beta1.CreateCachedOutputResponse{}
+	response := v2pb.CreateCachedOutputResponse{}
 	retryPolicy := utils.CadenceDefaultRetryPolicy
 	createCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
-	if err := workflow.ExecuteActivity(createCtx, uapi.Activities.CreateCachedOutput, request).Get(ctx, &response); err != nil {
+	if err := workflow.ExecuteActivity(createCtx, cachedoutput.Activities.CreateCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to put CachedOutput", ext.ZapError(err)...)
 		return nil, err
 	}
@@ -150,8 +141,8 @@ func put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []
 //		lookback_days: int, the number of days to look back
 //		limit: int, the number of cachedoutputs to return
 //	 return: a list of cachedoutput crd in json dict
-func query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
-	ctx := cadstar.GetContext(t)
+func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 	var matchCritrionDict starlark.Value
 	var orderByValue starlark.Value
@@ -226,7 +217,7 @@ func query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs 
 
 	criterion = append(criterion, createTimeCriterion)
 
-	request := v2beta1.ListCachedOutputRequest{
+	request := v2pb.ListCachedOutputRequest{
 		Namespace: namespace,
 		ListOptionsExt: &apipb.ListOptionsExt{
 			OrderBy: orderBy,
@@ -239,10 +230,10 @@ func query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs 
 		},
 	}
 
-	response := v2beta1.ListCachedOutputResponse{}
+	response := v2pb.ListCachedOutputResponse{}
 	retryPolicy := utils.CadenceDefaultRetryPolicy
 	listCtx := workflow.WithRetryPolicy(ctx, retryPolicy)
-	if err := workflow.ExecuteActivity(listCtx, uapi.Activities.ListCachedOutput, request).Get(ctx, &response); err != nil {
+	if err := workflow.ExecuteActivity(listCtx, cachedoutput.Activities.ListCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to list CachedOutput", ext.ZapError(err)...)
 		return nil, err
 	}
