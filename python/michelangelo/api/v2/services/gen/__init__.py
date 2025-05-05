@@ -3,6 +3,7 @@ import re
 
 
 class ServicesGen(object):
+    CachedOutputService = None
     ModelService = None
     PipelineService = None
     PipelineRunService = None

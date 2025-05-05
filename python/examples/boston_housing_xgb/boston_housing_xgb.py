@@ -126,12 +126,13 @@ def preprocess(
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_gpu=1,
-        head_memory="4Gi",
+        head_gpu=0,
+        head_memory="12Gi",
         worker_cpu=2,
-        worker_gpu=1,
+        worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
+        breakpoint=True,
     )
 )
 def train(

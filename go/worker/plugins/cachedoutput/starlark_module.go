@@ -2,13 +2,12 @@ package cachedoutput
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	"github.com/gogo/protobuf/types"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
@@ -192,42 +191,47 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
-
-	criterion := []*apipb.Criterion{}
+	labelSelectors := []string{}
+	//criterion := []*apipb.Criterion{}
 	for k, v := range matchCriterion {
-		criterion = append(criterion, &apipb.Criterion{
-			FieldName: k,
-			Operator:  apipb.CRITERION_OPERATOR_EQUAL,
-			MatchValue: &types.Any{
-				Value: []byte(fmt.Sprintf("%v", v)),
-			},
-		})
+		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%v", strings.TrimPrefix(k, "cached_output.label."), v))
+		//criterion = append(criterion, &apipb.Criterion{
+		//	FieldName: k,
+		//	Operator:  apipb.CRITERION_OPERATOR_EQUAL,
+		//	MatchValue: &types.Any{
+		//		Value: []byte(fmt.Sprintf("%v", v)),
+		//	},
+		//})
 	}
+	// TODO : add support for other operators
+	//earliestCreationTime := workflow.Now(ctx).Add(time.Duration(-1) * time.Duration(lookbackDays) * 24 * time.Hour)
+	//earlistCreationTimestr := earliestCreationTime.Format("2006-01-02")
 
-	earliestCreationTime := workflow.Now(ctx).Add(time.Duration(-1) * time.Duration(lookbackDays) * 24 * time.Hour)
-	earlistCreationTimestr := earliestCreationTime.Format("2006-01-02")
+	//createTimeCriterion := &apipb.Criterion{
+	//	FieldName: "cached_output.metadata.creation_timestamp",
+	//	Operator:  apipb.CRITERION_OPERATOR_GREATER_THAN,
+	//	MatchValue: &types.Any{
+	//		Value: []byte(fmt.Sprintf("%s", earlistCreationTimestr)),
+	//	},
+	//}
 
-	createTimeCriterion := &apipb.Criterion{
-		FieldName: "cached_output.metadata.creation_timestamp",
-		Operator:  apipb.CRITERION_OPERATOR_GREATER_THAN,
-		MatchValue: &types.Any{
-			Value: []byte(fmt.Sprintf("%s", earlistCreationTimestr)),
-		},
-	}
-
-	criterion = append(criterion, createTimeCriterion)
+	//criterion = append(criterion, createTimeCriterion)
 
 	request := v2pb.ListCachedOutputRequest{
 		Namespace: namespace,
-		ListOptionsExt: &apipb.ListOptionsExt{
-			OrderBy: orderBy,
-			Operation: &apipb.CriterionOperation{
-				Criterion: criterion,
-			},
-			Pagination: &apipb.PaginationSpec{
-				Limit: int32(limit),
-			},
+		ListOptions: &metav1.ListOptions{
+			LabelSelector: strings.Join(labelSelectors, ","),
+			Limit:         int64(limit),
 		},
+		//ListOptionsExt: &apipb.ListOptionsExt{
+		//	OrderBy: orderBy,
+		//	Operation: &apipb.CriterionOperation{
+		//		Criterion: criterion,
+		//	},
+		//	Pagination: &apipb.PaginationSpec{
+		//		Limit: int32(limit),
+		//	},
+		//},
 	}
 
 	response := v2pb.ListCachedOutputResponse{}

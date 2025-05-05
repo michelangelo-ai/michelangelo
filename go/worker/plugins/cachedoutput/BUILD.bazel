@@ -19,6 +19,7 @@ go_library(
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
     ],
 )
