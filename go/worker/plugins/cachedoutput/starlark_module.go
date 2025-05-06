@@ -2,13 +2,14 @@ package cachedoutput
 
 import (
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/star"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"sort"
-	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
