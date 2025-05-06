@@ -1,11 +1,11 @@
-from michelangelo.gen.api.v2.project_svc_pb2_grpc import ProjectServiceStub
-from michelangelo.gen.api.v2.project_svc_pb2 import (
-    CreateProjectRequest,
-    GetProjectRequest,
-    UpdateProjectRequest,
-    DeleteProjectRequest,
-    DeleteProjectCollectionRequest,
-    ListProjectRequest,
+from michelangelo.gen.api.v2.model_svc_pb2_grpc import ModelServiceStub
+from michelangelo.gen.api.v2.model_svc_pb2 import (
+    CreateModelRequest,
+    GetModelRequest,
+    UpdateModelRequest,
+    DeleteModelRequest,
+    DeleteModelCollectionRequest,
+    ListModelRequest,
 )
 from michelangelo.gen.api.list_pb2 import CriterionOperation, ListOptionsExt
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import (
@@ -19,17 +19,17 @@ from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import 
 from ..base import BaseService, _TIMEOUT_SECONDS
 
 
-class ProjectService(BaseService):
+class ModelService(BaseService):
 
     def __init__(self, context):
-        super(ProjectService, self).__init__(context, ProjectServiceStub)
+        super(ModelService, self).__init__(context, ModelServiceStub)
 
-    def create_project(self, project, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def create_model(self, model, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Create project
+        Create model
 
-        :param project: project object
-        :type project: Project
+        :param model: model object
+        :type model: Model
         :param create_options: create options
         :type create_options: Optional[Union[CreateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -37,30 +37,30 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: created project
-        :rtype: Project
+        :returns: created model
+        :rtype: Model
 
         :example:
 
-        >>> from michelangelo.gen.api.v2.project_pb2 import Project
-        >>> project = Project()
-        >>> project.namespace = 'my-project'
-        >>> project.name = 'my-project'
-        >>> APIClient.ProjectService.create_project(project)
+        >>> from michelangelo.gen.api.v2.model_pb2 import Model
+        >>> model = Model()
+        >>> model.namespace = 'my-project'
+        >>> model.name = 'my-model'
+        >>> APIClient.ModelService.create_model(model)
         """
-        req = CreateProjectRequest(project=project)
+        req = CreateModelRequest(model=model)
         create_options = self._process_message_or_dict(create_options, CreateOptions)
         req.create_options.CopyFrom(create_options)
-        resp = self._stub.CreateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.CreateModel(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.model
 
-    def get_project(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def get_model(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Get project
+        Get model
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: model object name
         :type name: str
         :param get_options: get options
         :type get_options: Optional[Union[GetOptions, Dict[str, Any]]]
@@ -69,25 +69,25 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: project
-        :rtype: Project
+        :returns: model
+        :rtype: Model
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
+        >>> model = APIClient.ModelService.get_model(namespace='my-project', name='my-object')
         """
-        req = GetProjectRequest(name=name, namespace=namespace)
+        req = GetModelRequest(name=name, namespace=namespace)
         get_options = self._process_message_or_dict(get_options, GetOptions)
         req.get_options.CopyFrom(get_options)
-        resp = self._stub.GetProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.GetModel(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.model
 
-    def update_project(self, project, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def update_model(self, model, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Update project
+        Update model
 
-        :param project: project object
-        :type project: Project
+        :param model: model object
+        :type model: Model
         :param update_options: update options
         :type update_options: Optional[Union[UpdateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -95,28 +95,28 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: updated project
-        :rtype: Project
+        :returns: updated model
+        :rtype: Model
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
-        >>> project.spec.some_field = 'some_value'
-        >>> APIClient.ProjectService.update_project(project)
+        >>> model = APIClient.ModelService.get_model(namespace='my-project', name='my-object')
+        >>> model.spec.some_field = 'some_value'
+        >>> APIClient.ModelService.update_model(model)
         """
-        req = UpdateProjectRequest(project=project)
+        req = UpdateModelRequest(model=model)
         update_options = self._process_message_or_dict(update_options, UpdateOptions)
         req.update_options.CopyFrom(update_options)
-        resp = self._stub.UpdateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.UpdateModel(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.model
 
-    def delete_project(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_model(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project
+        Delete model
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: model object name
         :type name: str
         :param delete_options: delete options
         :type delete_options: Optional[Union[DeleteOptions, Dict[str, Any]]]
@@ -127,16 +127,16 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project(namespace='my-project', name='my-object')
+        >>> APIClient.ModelService.delete_model(namespace='my-project', name='my-object')
         """
-        req = DeleteProjectRequest(namespace=namespace, name=name)
+        req = DeleteModelRequest(namespace=namespace, name=name)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
-        self._stub.DeleteProject(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteModel(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def delete_project_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_model_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project collection
+        Delete model collection
 
         :param namespace: project name
         :type namespace: str
@@ -151,18 +151,18 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project_collection(namespace='my-project')
+        >>> APIClient.ModelService.delete_model_collection(namespace='my-project')
         """
-        req = DeleteProjectCollectionRequest(namespace=namespace)
+        req = DeleteModelCollectionRequest(namespace=namespace)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
-        self._stub.DeleteProjectCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteModelCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def list_project(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def list_model(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        List project
+        List model
 
         :param namespace: project name
         :type namespace: str
@@ -175,15 +175,15 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: list of project
-        :rtype: ProjectList
+        :returns: list of model
+        :rtype: ModelList
 
         :example:
 
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project').items
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project', list_options={'limit': 5}).items
+        >>> models = APIClient.ModelService.list_model(namespace='my-project').items
+        >>> models = APIClient.ModelService.list_model(namespace='my-project', list_options={'limit': 5}).items
         """
-        req = ListProjectRequest(namespace=namespace)
+        req = ListModelRequest(namespace=namespace)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
 
@@ -199,5 +199,5 @@ class ProjectService(BaseService):
             list_options_ext.operation.CopyFrom(operation)
             req.list_options_ext.CopyFrom(list_options_ext)
 
-        resp = self._stub.ListProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project_list
+        resp = self._stub.ListModel(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.model_list

@@ -1,11 +1,11 @@
-from michelangelo.gen.api.v2.project_svc_pb2_grpc import ProjectServiceStub
-from michelangelo.gen.api.v2.project_svc_pb2 import (
-    CreateProjectRequest,
-    GetProjectRequest,
-    UpdateProjectRequest,
-    DeleteProjectRequest,
-    DeleteProjectCollectionRequest,
-    ListProjectRequest,
+from michelangelo.gen.api.v2.pipeline_run_svc_pb2_grpc import PipelineRunServiceStub
+from michelangelo.gen.api.v2.pipeline_run_svc_pb2 import (
+    CreatePipelineRunRequest,
+    GetPipelineRunRequest,
+    UpdatePipelineRunRequest,
+    DeletePipelineRunRequest,
+    DeletePipelineRunCollectionRequest,
+    ListPipelineRunRequest,
 )
 from michelangelo.gen.api.list_pb2 import CriterionOperation, ListOptionsExt
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import (
@@ -19,17 +19,17 @@ from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import 
 from ..base import BaseService, _TIMEOUT_SECONDS
 
 
-class ProjectService(BaseService):
+class PipelineRunService(BaseService):
 
     def __init__(self, context):
-        super(ProjectService, self).__init__(context, ProjectServiceStub)
+        super(PipelineRunService, self).__init__(context, PipelineRunServiceStub)
 
-    def create_project(self, project, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def create_pipeline_run(self, pipeline_run, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Create project
+        Create pipeline run
 
-        :param project: project object
-        :type project: Project
+        :param pipeline_run: pipeline run object
+        :type pipeline_run: PipelineRun
         :param create_options: create options
         :type create_options: Optional[Union[CreateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -37,30 +37,30 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: created project
-        :rtype: Project
+        :returns: created pipeline run
+        :rtype: PipelineRun
 
         :example:
 
-        >>> from michelangelo.gen.api.v2.project_pb2 import Project
-        >>> project = Project()
-        >>> project.namespace = 'my-project'
-        >>> project.name = 'my-project'
-        >>> APIClient.ProjectService.create_project(project)
+        >>> from michelangelo.gen.api.v2.pipeline_run_pb2 import PipelineRun
+        >>> pipeline_run = PipelineRun()
+        >>> pipeline_run.namespace = 'my-project'
+        >>> pipeline_run.name = 'my-pipeline_run'
+        >>> APIClient.PipelineRunService.create_pipeline_run(pipeline_run)
         """
-        req = CreateProjectRequest(project=project)
+        req = CreatePipelineRunRequest(pipeline_run=pipeline_run)
         create_options = self._process_message_or_dict(create_options, CreateOptions)
         req.create_options.CopyFrom(create_options)
-        resp = self._stub.CreateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.CreatePipelineRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.pipeline_run
 
-    def get_project(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def get_pipeline_run(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Get project
+        Get pipeline run
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: pipeline run object name
         :type name: str
         :param get_options: get options
         :type get_options: Optional[Union[GetOptions, Dict[str, Any]]]
@@ -69,25 +69,25 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: project
-        :rtype: Project
+        :returns: pipeline run
+        :rtype: PipelineRun
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
+        >>> pipeline_run = APIClient.PipelineRunService.get_pipeline_run(namespace='my-project', name='my-object')
         """
-        req = GetProjectRequest(name=name, namespace=namespace)
+        req = GetPipelineRunRequest(name=name, namespace=namespace)
         get_options = self._process_message_or_dict(get_options, GetOptions)
         req.get_options.CopyFrom(get_options)
-        resp = self._stub.GetProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.GetPipelineRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.pipeline_run
 
-    def update_project(self, project, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def update_pipeline_run(self, pipeline_run, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Update project
+        Update pipeline run
 
-        :param project: project object
-        :type project: Project
+        :param pipeline_run: pipeline run object
+        :type pipeline_run: PipelineRun
         :param update_options: update options
         :type update_options: Optional[Union[UpdateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -95,28 +95,28 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: updated project
-        :rtype: Project
+        :returns: updated pipeline run
+        :rtype: PipelineRun
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
-        >>> project.spec.some_field = 'some_value'
-        >>> APIClient.ProjectService.update_project(project)
+        >>> pipeline_run = APIClient.PipelineRunService.get_pipeline_run(namespace='my-project', name='my-object')
+        >>> pipeline_run.spec.some_field = 'some_value'
+        >>> APIClient.PipelineRunService.update_pipeline_run(pipeline_run)
         """
-        req = UpdateProjectRequest(project=project)
+        req = UpdatePipelineRunRequest(pipeline_run=pipeline_run)
         update_options = self._process_message_or_dict(update_options, UpdateOptions)
         req.update_options.CopyFrom(update_options)
-        resp = self._stub.UpdateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.UpdatePipelineRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.pipeline_run
 
-    def delete_project(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_pipeline_run(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project
+        Delete pipeline run
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: pipeline run object name
         :type name: str
         :param delete_options: delete options
         :type delete_options: Optional[Union[DeleteOptions, Dict[str, Any]]]
@@ -127,16 +127,16 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project(namespace='my-project', name='my-object')
+        >>> APIClient.PipelineRunService.delete_pipeline_run(namespace='my-project', name='my-object')
         """
-        req = DeleteProjectRequest(namespace=namespace, name=name)
+        req = DeletePipelineRunRequest(namespace=namespace, name=name)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
-        self._stub.DeleteProject(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeletePipelineRun(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def delete_project_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_pipeline_run_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project collection
+        Delete pipeline run collection
 
         :param namespace: project name
         :type namespace: str
@@ -151,18 +151,18 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project_collection(namespace='my-project')
+        >>> APIClient.PipelineRunService.delete_pipeline_run_collection(namespace='my-project')
         """
-        req = DeleteProjectCollectionRequest(namespace=namespace)
+        req = DeletePipelineRunCollectionRequest(namespace=namespace)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
-        self._stub.DeleteProjectCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeletePipelineRunCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def list_project(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def list_pipeline_run(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        List project
+        List pipeline run
 
         :param namespace: project name
         :type namespace: str
@@ -175,15 +175,15 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: list of project
-        :rtype: ProjectList
+        :returns: list of pipeline run
+        :rtype: PipelineRunList
 
         :example:
 
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project').items
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project', list_options={'limit': 5}).items
+        >>> pipeline_runs = APIClient.PipelineRunService.list_pipeline_run(namespace='my-project').items
+        >>> pipeline_runs = APIClient.PipelineRunService.list_pipeline_run(namespace='my-project', list_options={'limit': 5}).items
         """
-        req = ListProjectRequest(namespace=namespace)
+        req = ListPipelineRunRequest(namespace=namespace)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
 
@@ -199,5 +199,5 @@ class ProjectService(BaseService):
             list_options_ext.operation.CopyFrom(operation)
             req.list_options_ext.CopyFrom(list_options_ext)
 
-        resp = self._stub.ListProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project_list
+        resp = self._stub.ListPipelineRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.pipeline_run_list

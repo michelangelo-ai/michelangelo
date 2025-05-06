@@ -3,10 +3,14 @@ import re
 
 
 class ServicesGen(object):
+    ModelService = None
+    PipelineService = None
+    PipelineRunService = None
     ProjectService = None
     RayClusterService = None
     RayJobService = None
     SparkJobService = None
+    TriggerRunService = None
 
     @classmethod
     def init(cls, context):
