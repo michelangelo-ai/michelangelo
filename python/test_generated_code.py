@@ -2,6 +2,15 @@
 import sys
 import os
 
+from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import (
+    CreateOptions,
+    GetOptions,
+    UpdateOptions,
+    DeleteOptions,
+    ListOptions,
+)
+
+
 # Ensure that the generated code is in the module search path
 # Adjust the path to point to the correct location where the generated code is located
 sys.path.insert(
@@ -13,14 +22,6 @@ from michelangelo.api.v2.client import APIClient
 
 # Initialize the API client
 APIClient.set_caller("test-client")
-
-# List existing projects (replace with an actual namespace if needed)
-try:
-    projects = APIClient.ProjectService.list_project(namespace="default")
-    print("Existing projects:")
-    print(projects)
-except Exception as e:
-    print(f"Error listing projects: {e}")
 
 # Create a new project
 try:
@@ -48,3 +49,24 @@ try:
     print(project)
 except Exception as e:
     print(f"Error retrieving project: {e}")
+
+
+# List existing cached outputs
+list_options = {"label_selector": "michelangelo/uniflow-task-path=examples.boston_housing_xgb.boston_housing_xgb.train,michelangelo/uniflow-input-hash=e785ff77d774f62fec5907044bc02c5c",
+                }
+
+try:
+    cached_outputs = APIClient.CachedOutputService.list_cached_output(namespace="default", list_options=list_options)
+    print("Existing cached:")
+    print(cached_outputs)
+except Exception as e:
+    print(f"Error listing projects: {e}")
+
+exit(0)
+# List existing projects (replace with an actual namespace if needed)
+try:
+    projects = APIClient.ProjectService.list_project(namespace="default")
+    print("Existing projects:")
+    print(projects)
+except Exception as e:
+    print(f"Error listing projects: {e}")

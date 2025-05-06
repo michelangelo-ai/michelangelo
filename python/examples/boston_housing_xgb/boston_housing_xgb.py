@@ -132,7 +132,6 @@ def preprocess(
         worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
-        breakpoint=True,
     )
 )
 def train(

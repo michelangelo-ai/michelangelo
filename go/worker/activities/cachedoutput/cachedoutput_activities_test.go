@@ -1,6 +1,7 @@
 package cachedoutput
 
 import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
 	"net/http/httptest"
 	"testing"
@@ -10,7 +11,6 @@ import (
 	"github.com/golang/mock/gomock"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/suite"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type Suite struct {
@@ -49,27 +49,25 @@ func (r *Suite) TearDownSuite() {}
 func (r *Suite) BeforeTest(_, _ string) {}
 
 func (r *Suite) Test_Get_Success() {
-	jobName := "job_name"
-	request := &v2pb.CreateSparkJobRequest{
-		SparkJob: &v2pb.SparkJob{
+	request := &v2pb.GetCachedOutputRequest{
+		Name:       "test",
+		Namespace:  "default",
+		GetOptions: nil,
+	}
+	r.mockCachedOutput.EXPECT().GetCachedOutput(gomock.Any(), request).Return(&v2pb.GetCachedOutputResponse{
+		CachedOutput: &v2pb.CachedOutput{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      jobName,
+				Name:      "test",
 				Namespace: "default",
 			},
-			Spec: v2pb.SparkJobSpec{
-				MainClass: "test",
-			},
 		},
-	}
-	r.mockCachedOutput.EXPECT().GetCachedOutput(gomock.Any(), request).Return(&v2pb.CreateSparkJobResponse{
-		SparkJob: request.SparkJob,
 	}, nil)
 	val, err := r.activitySuite.ExecuteActivity(Activities.GetCachedOutput, *request)
 	r.Require().NoError(err)
 	r.Require().True(val.HasValue())
 
-	var res v2pb.CreateSparkJobResponse
+	var res v2pb.GetCachedOutputResponse
 	r.Require().NoError(val.Get(&res))
-	r.Require().Equal(jobName, res.SparkJob.Name)
-	r.Require().Equal("default", res.SparkJob.Namespace)
+	r.Require().Equal("test", res.GetCachedOutput().Name)
+	r.Require().Equal("default", res.GetCachedOutput().Namespace)
 }

@@ -192,30 +192,10 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 		return nil, err
 	}
 	labelSelectors := []string{}
-	//criterion := []*apipb.Criterion{}
 	for k, v := range matchCriterion {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%v", strings.TrimPrefix(k, "cached_output.label."), v))
-		//criterion = append(criterion, &apipb.Criterion{
-		//	FieldName: k,
-		//	Operator:  apipb.CRITERION_OPERATOR_EQUAL,
-		//	MatchValue: &types.Any{
-		//		Value: []byte(fmt.Sprintf("%v", v)),
-		//	},
-		//})
 	}
 	// TODO : add support for other operators
-	//earliestCreationTime := workflow.Now(ctx).Add(time.Duration(-1) * time.Duration(lookbackDays) * 24 * time.Hour)
-	//earlistCreationTimestr := earliestCreationTime.Format("2006-01-02")
-
-	//createTimeCriterion := &apipb.Criterion{
-	//	FieldName: "cached_output.metadata.creation_timestamp",
-	//	Operator:  apipb.CRITERION_OPERATOR_GREATER_THAN,
-	//	MatchValue: &types.Any{
-	//		Value: []byte(fmt.Sprintf("%s", earlistCreationTimestr)),
-	//	},
-	//}
-
-	//criterion = append(criterion, createTimeCriterion)
 
 	request := v2pb.ListCachedOutputRequest{
 		Namespace: namespace,
@@ -223,15 +203,6 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 			LabelSelector: strings.Join(labelSelectors, ","),
 			Limit:         int64(limit),
 		},
-		//ListOptionsExt: &apipb.ListOptionsExt{
-		//	OrderBy: orderBy,
-		//	Operation: &apipb.CriterionOperation{
-		//		Criterion: criterion,
-		//	},
-		//	Pagination: &apipb.PaginationSpec{
-		//		Limit: int32(limit),
-		//	},
-		//},
 	}
 
 	response := v2pb.ListCachedOutputResponse{}
