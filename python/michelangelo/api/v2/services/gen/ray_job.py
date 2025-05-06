@@ -188,6 +188,9 @@ class RayJobService(BaseService):
         req.list_options.CopyFrom(list_options)
 
         if list_options_ext is not None:
+            # use _process_criterion_operation() to process operation
+            # Criterion.match_value is a protobuf Any field, which is not handled
+            # properly with _process_message_or_dict()
             operation = CriterionOperation()
             if isinstance(list_options_ext, dict) and 'operation' in list_options_ext:
                 operation = self._process_criterion_operation(list_options_ext['operation'])

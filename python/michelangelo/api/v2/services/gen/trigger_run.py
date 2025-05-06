@@ -1,11 +1,11 @@
-from michelangelo.gen.api.v2.project_svc_pb2_grpc import ProjectServiceStub
-from michelangelo.gen.api.v2.project_svc_pb2 import (
-    CreateProjectRequest,
-    GetProjectRequest,
-    UpdateProjectRequest,
-    DeleteProjectRequest,
-    DeleteProjectCollectionRequest,
-    ListProjectRequest,
+from michelangelo.gen.api.v2.trigger_run_svc_pb2_grpc import TriggerRunServiceStub
+from michelangelo.gen.api.v2.trigger_run_svc_pb2 import (
+    CreateTriggerRunRequest,
+    GetTriggerRunRequest,
+    UpdateTriggerRunRequest,
+    DeleteTriggerRunRequest,
+    DeleteTriggerRunCollectionRequest,
+    ListTriggerRunRequest,
 )
 from michelangelo.gen.api.list_pb2 import CriterionOperation, ListOptionsExt
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import (
@@ -19,17 +19,17 @@ from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1.generated_pb2 import 
 from ..base import BaseService, _TIMEOUT_SECONDS
 
 
-class ProjectService(BaseService):
+class TriggerRunService(BaseService):
 
     def __init__(self, context):
-        super(ProjectService, self).__init__(context, ProjectServiceStub)
+        super(TriggerRunService, self).__init__(context, TriggerRunServiceStub)
 
-    def create_project(self, project, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def create_trigger_run(self, trigger_run, create_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Create project
+        Create trigger run
 
-        :param project: project object
-        :type project: Project
+        :param trigger_run: trigger run object
+        :type trigger_run: TriggerRun
         :param create_options: create options
         :type create_options: Optional[Union[CreateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -37,30 +37,30 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: created project
-        :rtype: Project
+        :returns: created trigger run
+        :rtype: TriggerRun
 
         :example:
 
-        >>> from michelangelo.gen.api.v2.project_pb2 import Project
-        >>> project = Project()
-        >>> project.namespace = 'my-project'
-        >>> project.name = 'my-project'
-        >>> APIClient.ProjectService.create_project(project)
+        >>> from michelangelo.gen.api.v2.trigger_run_pb2 import TriggerRun
+        >>> trigger_run = TriggerRun()
+        >>> trigger_run.namespace = 'my-project'
+        >>> trigger_run.name = 'my-trigger_run'
+        >>> APIClient.TriggerRunService.create_trigger_run(trigger_run)
         """
-        req = CreateProjectRequest(project=project)
+        req = CreateTriggerRunRequest(trigger_run=trigger_run)
         create_options = self._process_message_or_dict(create_options, CreateOptions)
         req.create_options.CopyFrom(create_options)
-        resp = self._stub.CreateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.CreateTriggerRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.trigger_run
 
-    def get_project(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def get_trigger_run(self, namespace, name, get_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Get project
+        Get trigger run
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: trigger run object name
         :type name: str
         :param get_options: get options
         :type get_options: Optional[Union[GetOptions, Dict[str, Any]]]
@@ -69,25 +69,25 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: project
-        :rtype: Project
+        :returns: trigger run
+        :rtype: TriggerRun
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
+        >>> trigger_run = APIClient.TriggerRunService.get_trigger_run(namespace='my-project', name='my-object')
         """
-        req = GetProjectRequest(name=name, namespace=namespace)
+        req = GetTriggerRunRequest(name=name, namespace=namespace)
         get_options = self._process_message_or_dict(get_options, GetOptions)
         req.get_options.CopyFrom(get_options)
-        resp = self._stub.GetProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.GetTriggerRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.trigger_run
 
-    def update_project(self, project, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def update_trigger_run(self, trigger_run, update_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Update project
+        Update trigger run
 
-        :param project: project object
-        :type project: Project
+        :param trigger_run: trigger run object
+        :type trigger_run: TriggerRun
         :param update_options: update options
         :type update_options: Optional[Union[UpdateOptions, Dict[str, Any]]]
         :param headers: request headers
@@ -95,28 +95,28 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: updated project
-        :rtype: Project
+        :returns: updated trigger run
+        :rtype: TriggerRun
 
         :example:
 
-        >>> project = APIClient.ProjectService.get_project(namespace='my-project', name='my-object')
-        >>> project.spec.some_field = 'some_value'
-        >>> APIClient.ProjectService.update_project(project)
+        >>> trigger_run = APIClient.TriggerRunService.get_trigger_run(namespace='my-project', name='my-object')
+        >>> trigger_run.spec.some_field = 'some_value'
+        >>> APIClient.TriggerRunService.update_trigger_run(trigger_run)
         """
-        req = UpdateProjectRequest(project=project)
+        req = UpdateTriggerRunRequest(trigger_run=trigger_run)
         update_options = self._process_message_or_dict(update_options, UpdateOptions)
         req.update_options.CopyFrom(update_options)
-        resp = self._stub.UpdateProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project
+        resp = self._stub.UpdateTriggerRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.trigger_run
 
-    def delete_project(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_trigger_run(self, namespace, name, delete_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project
+        Delete trigger run
 
         :param namespace: project name
         :type namespace: str
-        :param name: project object name
+        :param name: trigger run object name
         :type name: str
         :param delete_options: delete options
         :type delete_options: Optional[Union[DeleteOptions, Dict[str, Any]]]
@@ -127,16 +127,16 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project(namespace='my-project', name='my-object')
+        >>> APIClient.TriggerRunService.delete_trigger_run(namespace='my-project', name='my-object')
         """
-        req = DeleteProjectRequest(namespace=namespace, name=name)
+        req = DeleteTriggerRunRequest(namespace=namespace, name=name)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
-        self._stub.DeleteProject(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteTriggerRun(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def delete_project_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def delete_trigger_run_collection(self, namespace, delete_options=None, list_options=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        Delete project collection
+        Delete trigger run collection
 
         :param namespace: project name
         :type namespace: str
@@ -151,18 +151,18 @@ class ProjectService(BaseService):
 
         :example:
 
-        >>> APIClient.ProjectService.delete_project_collection(namespace='my-project')
+        >>> APIClient.TriggerRunService.delete_trigger_run_collection(namespace='my-project')
         """
-        req = DeleteProjectCollectionRequest(namespace=namespace)
+        req = DeleteTriggerRunCollectionRequest(namespace=namespace)
         delete_options = self._process_message_or_dict(delete_options, DeleteOptions)
         req.delete_options.CopyFrom(delete_options)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
-        self._stub.DeleteProjectCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
+        self._stub.DeleteTriggerRunCollection(req, metadata=self._get_metadata(headers), timeout=timeout)
 
-    def list_project(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
+    def list_trigger_run(self, namespace, list_options=None, list_options_ext=None, headers=None, timeout=_TIMEOUT_SECONDS):
         """
-        List project
+        List trigger run
 
         :param namespace: project name
         :type namespace: str
@@ -175,15 +175,15 @@ class ProjectService(BaseService):
         :param timeout: timeout in seconds, default is 60
         :type timeout: int
 
-        :returns: list of project
-        :rtype: ProjectList
+        :returns: list of trigger run
+        :rtype: TriggerRunList
 
         :example:
 
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project').items
-        >>> projects = APIClient.ProjectService.list_project(namespace='my-project', list_options={'limit': 5}).items
+        >>> trigger_runs = APIClient.TriggerRunService.list_trigger_run(namespace='my-project').items
+        >>> trigger_runs = APIClient.TriggerRunService.list_trigger_run(namespace='my-project', list_options={'limit': 5}).items
         """
-        req = ListProjectRequest(namespace=namespace)
+        req = ListTriggerRunRequest(namespace=namespace)
         list_options = self._process_message_or_dict(list_options, ListOptions)
         req.list_options.CopyFrom(list_options)
 
@@ -199,5 +199,5 @@ class ProjectService(BaseService):
             list_options_ext.operation.CopyFrom(operation)
             req.list_options_ext.CopyFrom(list_options_ext)
 
-        resp = self._stub.ListProject(req, metadata=self._get_metadata(headers), timeout=timeout)
-        return resp.project_list
+        resp = self._stub.ListTriggerRun(req, metadata=self._get_metadata(headers), timeout=timeout)
+        return resp.trigger_run_list
