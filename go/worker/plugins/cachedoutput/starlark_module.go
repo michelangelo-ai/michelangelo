@@ -7,6 +7,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/star"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sort"
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
@@ -195,7 +196,7 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	for k, v := range matchCriterion {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%v", strings.TrimPrefix(k, "cached_output.label."), v))
 	}
-	// TODO : add support for other operators
+	// TODO : add support for listOptionExt for orderBy and lookbackDays
 
 	request := v2pb.ListCachedOutputRequest{
 		Namespace: namespace,
@@ -211,6 +212,14 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	if err := workflow.ExecuteActivity(listCtx, cachedoutput.Activities.ListCachedOutput, request).Get(ctx, &response); err != nil {
 		logger.Error("Failed to list CachedOutput", ext.ZapError(err)...)
 		return nil, err
+	}
+
+	// Sort the result by creationTimestamp descending and return only the limit
+	sort.Slice(response.CachedOutputList.Items, func(i, j int) bool {
+		return response.CachedOutputList.Items[i].CreationTimestamp.After(response.CachedOutputList.Items[j].CreationTimestamp.Time)
+	})
+	if len(response.CachedOutputList.Items) > int(limit) {
+		response.CachedOutputList.Items = response.CachedOutputList.Items[:limit]
 	}
 
 	var responseValue starlark.Value
