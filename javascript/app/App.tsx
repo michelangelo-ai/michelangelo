@@ -1,4 +1,5 @@
-import { CoreApp } from '@michelangelo/core';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
+import { CoreApp } from '@uber/michelangelo-core';
 import { request } from '@michelangelo/rpc';
 
 const dependencies = {
@@ -8,5 +9,11 @@ const dependencies = {
 };
 
 export function App() {
-  return <CoreApp dependencies={dependencies} />;
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/*" element={<CoreApp dependencies={dependencies} />} />
+      </Routes>
+    </BrowserRouter>
+  );
 }
