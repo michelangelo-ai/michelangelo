@@ -107,9 +107,27 @@ export default [
     },
   },
 
+  // Core package tests
+  {
+    files: ['packages/core/**/__tests__/**/*.{ts,tsx}'],
+    languageOptions: {
+      ecmaVersion: 2020,
+      sourceType: 'module',
+      parser: tseslint.parser,
+      parserOptions: {
+        project: new URL('./packages/core/tsconfig.test.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('./packages/core', import.meta.url).pathname,
+      },
+      globals: globals.browser,
+    },
+    plugins: sharedPlugins,
+    rules: sharedRules,
+  },
+
   // Core package
   {
     files: ['packages/core/**/*.{ts,tsx}'],
+    ignores: ['packages/core/**/__tests__/**/*.{ts,tsx}'],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: 'module',

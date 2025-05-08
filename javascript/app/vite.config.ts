@@ -8,6 +8,8 @@ export const baseConfig = defineConfig({
 
 export default defineConfig(() => {
   return mergeConfig(baseConfig, {
-    mode: 'development',
+    resolve: {
+      conditions: ['workspace'],
+    },
   });
 });

@@ -14,14 +14,14 @@
   "scripts": {
     "build": "yarn workspaces run build",
     "dev": "yarn workspace @michelangelo/app dev",
-    "dev-production": "yarn workspace @michelangelo/core build && yarn workspace @michelangelo/app dev-production",
+    "dev-production": "yarn workspace @uber/michelangelo-core build && yarn workspace @michelangelo/app dev-production",
     "format": "prettier --check .",
     "generate": "../tools/gen-grpc-client.sh --clients javascript",
     "lint": "eslint .",
     "prebuild": "yarn generate",
     "setup": "yarn install && yarn generate",
     "typecheck": "tsc -b",
-    "test": "yarn workspace @michelangelo/core test"
+    "test": "yarn workspace @uber/michelangelo-core test"
   },
   "dependencies": {},
   "devDependencies": {

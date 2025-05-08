@@ -8,8 +8,10 @@
     "dev-production": "vite --config vite.config.production.ts"
   },
   "dependencies": {
-    "@michelangelo/core": "*",
-    "@michelangelo/rpc": "*"
+    "@michelangelo/rpc": "*",
+    "@uber/michelangelo-core": "*",
+    "react-router": "6.29.0",
+    "react-router-dom": "6.29.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",
