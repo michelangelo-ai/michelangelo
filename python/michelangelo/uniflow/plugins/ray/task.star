@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -86,6 +86,30 @@ def task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
+        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+        if final_cache_enabled:  # Check if the result is cached
+            cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
+            print("ray | cache enabled with key", "key:", cache_keys)
+            cached_output = get_cached_output(namespace, cache_keys)
+            if cached_output != None:
+                cached_result_json_url = cached_output.get("spec", {}).get("storageUri", "")
+                if cached_result_json_url != "":
+                    print("ray | found cache output", "cached_result_json_url:", cached_result_json_url)
+                    end_time_seconds = time.time()
+                    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+                    report_progress(
+                        task_path = task_path,
+                        task_name = task_name,
+                        task_log = "",
+                        task_message = "Ray Task Skipped with Cache Hit",
+                        task_state = TASK_STATE_SKIPPED,
+                        start_time = start_time_formated_str,
+                        end_time = end_time_formated_str,
+                        output = cached_output.get("metadata", {}).get("name", ""),
+                    )
+                    result = io_read_json(cached_result_json_url)
+                    print("ray | cached", "result:", result)
+                    return result
 
         # Apply resource overrides
         _head_cpu = os.environ.get("RAY_OVERRIDE_HEAD_CPU." + task_path, head_cpu)
@@ -219,6 +243,16 @@ def task(
         if job["status"]["state"] != "RAY_JOB_STATE_SUCCEEDED":
             fail("internal:", "message:bad job status:", job["status"]["state"], job)
 
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
+        cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
         report_progress(
@@ -229,7 +263,9 @@ def task(
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
         )
-        return io_read_json(result_url)
+        result = io_read_json(result_url)
+        print("ray | caching", "result:", result)
+        return result
 
     def with_overrides(alias = alias):
         return task(

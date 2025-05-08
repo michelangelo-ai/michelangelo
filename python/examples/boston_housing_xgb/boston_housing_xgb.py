@@ -48,7 +48,8 @@ class TrainResult:
         worker_memory="4Gi",
         worker_instances=0,
         # breakpoint=True,
-    )
+    ),
+    cache_enabled=True,
 )
 def feature_prep(
         columns: list[str],
@@ -85,7 +86,8 @@ def feature_prep(
     config=SparkTask(
         driver_cpu=1,
         executor_cpu=1,
-    )
+    ),
+    cache_enabled=True,
 )
 def preprocess(
     cast_float_columns: list[str],
@@ -124,10 +126,10 @@ def preprocess(
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_gpu=1,
-        head_memory="4Gi",
+        head_gpu=0,
+        head_memory="12Gi",
         worker_cpu=2,
-        worker_gpu=1,
+        worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
     )

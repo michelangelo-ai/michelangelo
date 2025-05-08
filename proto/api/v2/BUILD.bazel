@@ -11,6 +11,8 @@ load("//bazel/rules/proto:kube_proto_yaml.bzl", "kube_proto_yaml")
 proto_library(
     name = "v2_proto",
     srcs = [
+        "cached_output.proto",
+        "cached_output_svc.proto",
         "git.proto",
         "groupversion_info.proto",
         "job.proto",
@@ -94,6 +96,7 @@ gomock(
         "RayClusterServiceYARPCClient",
         "RayJobServiceYARPCClient",
         "SparkJobServiceYARPCClient",
+        "CachedOutputServiceYARPCClient",
     ],
     library = ":go_default_library",
     package = "v2mock",

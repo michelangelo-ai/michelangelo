@@ -6,6 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/starlark",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/plugins/cachedoutput:go_default_library",
         "//go/worker/plugins/ray:go_default_library",
         "//go/worker/plugins/spark:go_default_library",
         "//go/worker/plugins/storage:go_default_library",

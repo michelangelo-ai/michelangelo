@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
-load("../../commons.star", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
 }
@@ -34,8 +34,28 @@ def spark_task(
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
-
-        # TODO check cache enabled
+        final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+        if final_cache_enabled:  # Check if the result is cached
+            cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
+            cached_output = get_cached_output(namespace, cache_keys)
+            if cached_output != None:
+                cached_result_json_url = cached_output.get("spec", {}).get("storageUri", "")
+                if cached_result_json_url != "":
+                    end_time_seconds = time.time()
+                    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+                    report_progress(
+                        task_name = task_name,
+                        task_path = task_path,
+                        task_state = TASK_STATE_SKIPPED,
+                        start_time = start_time_formated_str,
+                        task_message = "Spark Task skipped due to Cache Hit",
+                        task_log = "",
+                        end_time = end_time_formated_str,
+                        output = cached_output.get("metadata", {}).get("name", ""),
+                    )
+                    result = io_read_json(cached_result_json_url)
+                    print("spark | cached", "result:", result)
+                    return result
 
         # Apply resource overrides
         _driver_cpu = os.environ.get("SPARK_OVERRIDE_DRIVER_CPU." + task_path, driver_cpu)
@@ -119,6 +139,16 @@ def spark_task(
         if report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str) == True:
             atexit.unregister(check_spark_job_final_state_at_workflow_exit)
 
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        print("spark | caching with key", "key:", cache_keys)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
         report_progress(
@@ -130,7 +160,9 @@ def spark_task(
             end_time = end_time_formated_str,
             task_message = "Spark job succeeded",
         )
-        return io_read_json(result_url)
+        result = io_read_json(result_url)
+        print("spark | caching", "result:", result)
+        return result
 
     def with_overrides(alias = alias, config = spark_config()):
         return spark_task(
