@@ -17,6 +17,8 @@ import (
 const (
 	_configKeySeparator = ":"
 	_defaultConfigDir   = "config"
+	_k8sConfigKey      = "k8s"
+	_metadataStorageConfigKey = "metadataStorage"
 )
 
 
@@ -71,14 +73,14 @@ func getConfigDirs(env env.Context) []string {
 }
 
 // GetK8sConfig parses the configuration file and returns the k8s REST client configuration
-func GetK8sConfig(provider config.Provider, configKey string) (*rest.Config, error) {
+func GetK8sConfig(provider config.Provider) (*rest.Config, error) {
 	flag.Parse()
 	conf, err := ctrl.GetConfig()
 	if err != nil {
 		return nil, err
 	}
 	k8sConfig := K8sConfig{}
-	err = provider.Get(configKey).Populate(&k8sConfig)
+	err = provider.Get(_k8sConfigKey).Populate(&k8sConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -88,9 +90,9 @@ func GetK8sConfig(provider config.Provider, configKey string) (*rest.Config, err
 }
 
 // GetMetadataStorageConfig parses the configuration file and returns the metadata storage configuration
-func GetMetadataStorageConfig(provider config.Provider, configKey string) (storage.MetadataStorageConfig, error) {
+func GetMetadataStorageConfig(provider config.Provider) (storage.MetadataStorageConfig, error) {
 	storageConfig := storage.MetadataStorageConfig{}
-	err := provider.Get(configKey).Populate(&storageConfig)
+	err := provider.Get(_metadataStorageConfigKey).Populate(&storageConfig)
 	return storageConfig, err
 }
 

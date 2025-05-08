@@ -7,7 +7,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
-	uberconfig "go.uber.org/config"
 
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -16,13 +15,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"k8s.io/client-go/rest"
-	"github.com/michelangelo-ai/michelangelo/go/storage"
-)
-
-const (
-	k8sConfigKey           = "controllermgr.k8s"
-	metadataStorageConfigKey = "controllermgr.metadataStorage"
 )
 
 // scheme provides a Kubernetes runtime.Scheme object.
@@ -61,22 +53,14 @@ func options() fx.Option {
 		fx.Provide(scheme),
 		spark.Module,
 		uberconfig.Module,
-		fx.Provide(getK8sConfig),
-		fx.Provide(getMetadataStorageConfig),
+		fx.Provide(baseconfig.GetK8sConfig),
+		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		ray.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
 	)
-}
-
-func getK8sConfig(provider uberconfig.Provider) (*rest.Config, error) {
-	return baseconfig.GetK8sConfig(provider, k8sConfigKey)
-}
-
-func getMetadataStorageConfig(provider uberconfig.Provider) (storage.MetadataStorageConfig, error) {
-	return baseconfig.GetMetadataStorageConfig(provider, metadataStorageConfigKey)
 }
 
 // main initializes and runs the application.

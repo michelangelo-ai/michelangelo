@@ -1,11 +1,12 @@
 controllermgr:
-  k8s:
-    qps: 300
-    burst: 600
-  metadataStorage:
-    enableMetadataStorage: false
   metricsBindAddress: ${METRICS_ADDRESS::8080}
   healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
   port: 9443
+
+k8s:
+  qps: 300
+  burst: 600
+metadataStorage:
+  enableMetadataStorage: false

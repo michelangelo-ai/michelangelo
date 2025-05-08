@@ -108,24 +108,23 @@ func TestGetK8sConfig(t *testing.T) {
 	os.Setenv("KUBECONFIG", file.Name())
 
 	yamlStr := `
-apiserver:
-  k8s:
-    qps: 300
-    burst: 600
+k8s:
+  qps: 300
+  burst: 600
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
 	assert.NoError(t, err)
 
 	file.WriteString("invalid conf")
 	file.Sync()
-	conf, err := GetK8sConfig(provider, "apiserver.k8s")
+	conf, err := GetK8sConfig(provider)
 	assert.Error(t, err) // error when the content of the configuration file is invalid
 
 	file.Seek(0, 0)
 	file.WriteString(k8sConf)
 	file.Close()
 
-	conf, err = GetK8sConfig(provider, "apiserver.k8s")
+	conf, err = GetK8sConfig(provider)
 	assert.NoError(t, err)
 	assert.Equal(t, float32(300), conf.QPS)
 	assert.Equal(t, 600, conf.Burst)
@@ -133,13 +132,12 @@ apiserver:
 
 	// invalid k8s configuration
 	yamlStr2 := `
-apiserver:
-  k8s:
-    qps: "invalid"
+k8s:
+  qps: "invalid"
 `
 	provider2, err := config.NewYAML(config.Source(strings.NewReader(yamlStr2)))
 	assert.NoError(t, err)
-	_, err = GetK8sConfig(provider2, "apiserver.k8s")
+	_, err = GetK8sConfig(provider2)
 	assert.Error(t, err)
 }
 
@@ -149,23 +147,21 @@ func TestGetMetadataStorageConfig(t *testing.T) {
 	os.Setenv("KUBECONFIG", file.Name())
 
 	yamlStr := `
-controllermgr:
-  metadataStorage:
-    enableMetadataStorage: true
+metadataStorage:
+  enableMetadataStorage: true
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
 	assert.NoError(t, err)
-	conf, err := GetMetadataStorageConfig(provider, "controllermgr.metadataStorage")
+	conf, err := GetMetadataStorageConfig(provider)
 	assert.NoError(t, err)
 	assert.True(t, conf.EnableMetadataStorage)
 
 	yamlStrInvalid := `
-controllermgr:
-  metadataStorage:
-    enableMetadataStorage: invalid
+metadataStorage:
+  enableMetadataStorage: invalid
 `
 	providerInvalid, err := config.NewYAML(config.Source(strings.NewReader(yamlStrInvalid)))
 	assert.NoError(t, err)
-	_, err = GetMetadataStorageConfig(providerInvalid, "controllermgr.metadataStorage")
+	_, err = GetMetadataStorageConfig(providerInvalid)
 	assert.Error(t, err) // error when the content of the configuration file is invalid
 }

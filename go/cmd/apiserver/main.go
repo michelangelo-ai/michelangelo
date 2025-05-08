@@ -4,7 +4,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
-	"github.com/michelangelo-ai/michelangelo/go/base/config"
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
@@ -36,9 +36,9 @@ func opts() fx.Option {
 		auth.DummyAuthModule,
 		logging.DummyAuditLogModule,
 		fx.Provide(getTallyScope),
-		fx.Provide(getK8sRestConfig),
+		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(getYARPCConfig),
-		fx.Provide(getMetadataStorageConfig),
+		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
