@@ -52,7 +52,6 @@ func options() fx.Option {
 		baseconfig.Module,
 		fx.Provide(scheme),
 		spark.Module,
-		uberconfig.Module,
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		ray.Module,

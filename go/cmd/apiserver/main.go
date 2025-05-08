@@ -29,7 +29,7 @@ func main() {
 func opts() fx.Option {
 	return fx.Options(
 		env.Module,
-		config.Module,
+		baseconfig.Module,
 		zapfx.Module,
 		fx.Invoke(printConfig),
 		apihandler.APIServerModule,
