@@ -1,6 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { CoreApp } from '@uber/michelangelo-core';
 import { request } from '@michelangelo/rpc';
+import { CoreApp } from '@uber/michelangelo-core';
 
 const dependencies = {
   service: {
