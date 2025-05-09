@@ -10,3 +10,8 @@ k8s:
   burst: 600
 metadataStorage:
   enableMetadataStorage: false
+
+controllers:
+  rayCluster:
+    k8sQps: 300
+    k8sBurst: 600
