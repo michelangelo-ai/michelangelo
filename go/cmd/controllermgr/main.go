@@ -10,7 +10,7 @@ import (
 
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	apiModule "github.com/michelangelo-ai/michelangelo/go/api/module"
-	apiHandler"github.com/michelangelo-ai/michelangelo/go/api/handler"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
