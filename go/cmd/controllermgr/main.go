@@ -8,7 +8,7 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/config"
+	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
@@ -48,10 +48,12 @@ func scheme() (*runtime.Scheme, error) {
 func options() fx.Option {
 	return fx.Options(
 		env.Module,
-		config.Module,
 		zapfx.Module,
+		baseconfig.Module,
 		fx.Provide(scheme),
 		spark.Module,
+		fx.Provide(baseconfig.GetK8sConfig),
+		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		ray.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {

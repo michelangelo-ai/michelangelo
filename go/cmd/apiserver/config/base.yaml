@@ -2,11 +2,12 @@ apiserver:
   yarpc:
     host: "localhost"
     port: 14566
-  k8s:
-    qps: 300
-    burst: 600
-  metadataStorage:
-    enableMetadataStorage: false
   crdSync:
     enableCRDUpdate: true
     enableIncompatibleUpdate: false
+
+k8s:
+  qps: 300
+  burst: 600
+metadataStorage:
+  enableMetadataStorage: false
