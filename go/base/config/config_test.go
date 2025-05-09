@@ -80,7 +80,6 @@ func setEnv(key, value string) func() {
 	return res
 }
 
-
 var k8sConf = `
 apiVersion: v1
 clusters:
@@ -140,7 +139,6 @@ k8s:
 	_, err = GetK8sConfig(provider2)
 	assert.Error(t, err)
 }
-
 
 func TestGetMetadataStorageConfig(t *testing.T) {
 	file, _ := os.CreateTemp(t.TempDir(), "metadata-storage-conf")

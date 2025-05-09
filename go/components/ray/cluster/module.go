@@ -7,7 +7,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 	"k8s.io/client-go/rest"
-
 )
 
 var (

@@ -5,7 +5,7 @@ import (
 )
 
 const (
-	yarpcConfigKey   = "apiserver.yarpc"
+	yarpcConfigKey = "apiserver.yarpc"
 )
 
 type (

@@ -2,25 +2,25 @@ package config
 
 import (
 	"flag"
+
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"go.uber.org/config"
 
 	"os"
 	"strings"
 
-	"go.uber.org/fx"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"k8s.io/client-go/rest"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	"go.uber.org/fx"
+	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
-	_configKeySeparator = ":"
-	_defaultConfigDir   = "config"
-	_k8sConfigKey      = "k8s"
+	_configKeySeparator       = ":"
+	_defaultConfigDir         = "config"
+	_k8sConfigKey             = "k8s"
 	_metadataStorageConfigKey = "metadataStorage"
 )
-
 
 // K8sConfig is the configuration for k8s REST client.
 type K8sConfig struct {
@@ -95,4 +95,3 @@ func GetMetadataStorageConfig(provider config.Provider) (storage.MetadataStorage
 	err := provider.Get(_metadataStorageConfigKey).Populate(&storageConfig)
 	return storageConfig, err
 }
-
