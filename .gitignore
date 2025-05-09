@@ -1,5 +1,5 @@
-# https://gitignore.io/ (hosted by domain www.toptal.com) has commonly used library sets under python category set. 
-# 
+# https://gitignore.io/ (hosted by domain www.toptal.com) has commonly used library sets under python category set.
+#
 # Created by https://www.toptal.com/developers/gitignore/api/vim,bazel,macos,visualstudiocode,python
 # Edit at https://www.toptal.com/developers/gitignore?templates=vim,bazel,macos,visualstudiocode,python
 
@@ -139,7 +139,7 @@ ipython_config.py
 # pyenv
 #   For a library or package, you might want to ignore these files since the code is
 #   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+.python-version
 
 # pipenv
 #   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
