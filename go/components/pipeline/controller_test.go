@@ -44,9 +44,9 @@ func TestReconcile(t *testing.T) {
 					},
 				},
 			},
-			expectedResult:               ctrl.Result{},
-			expectedError:                "",
-			expectedStatusState:          v2pb.PIPELINE_STATE_READY,
+			expectedResult:      ctrl.Result{},
+			expectedError:       "",
+			expectedStatusState: v2pb.PIPELINE_STATE_READY,
 			expectedStatusLatestRevision: &apipb.ResourceIdentifier{
 				Name:      "pipeline-test-pipeline-1234556",
 				Namespace: "test-namespace",

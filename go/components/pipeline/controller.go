@@ -42,15 +42,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
 	logger.Info("Reconciling pipeline", zap.Any("PipelineStatusState", state.String()))
-	if shouldReconcile(pipeline) {
-		pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
-			Name:      formatRevisionName(pipeline),
-			Namespace: pipeline.Namespace,
-		}
-		pipeline.Status.State = v2pb.PIPELINE_STATE_READY
-		return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
+	pipeline.Status.LatestRevision = &apipb.ResourceIdentifier{
+		Name:      formatRevisionName(pipeline),
+		Namespace: pipeline.Namespace,
 	}
-	return ctrl.Result{}, nil
+	pipeline.Status.State = v2pb.PIPELINE_STATE_READY
+	return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
 }
 
 func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pipeline, originalPipeline *v2pb.Pipeline, logger *zap.Logger) (ctrl.Result, error) {
@@ -77,14 +74,6 @@ func formatRevisionName(pipeline *v2pb.Pipeline) string {
 func isTerminatedState(state v2pb.PipelineState) bool {
 	return state == v2pb.PIPELINE_STATE_READY ||
 		state == v2pb.PIPELINE_STATE_ERROR
-}
-
-func shouldReconcile(pipeline *v2pb.Pipeline) bool {
-	currentRevision := &apipb.ResourceIdentifier{
-		Name:      formatRevisionName(pipeline),
-		Namespace: pipeline.Namespace,
-	}
-	return !reflect.DeepEqual(currentRevision, pipeline.Status.LatestRevision)
 }
 
 // Register is used to register the controller with the manager.
