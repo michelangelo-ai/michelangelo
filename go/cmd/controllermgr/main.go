@@ -8,14 +8,19 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/uber-go/tally"
 )
+
+const serverName = "ma-controllermgr"
 
 // scheme provides a Kubernetes runtime.Scheme object.
 //
@@ -36,6 +41,13 @@ func scheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
+func getTallyScope() (tally.Scope, error) {
+	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
+		Prefix: serverName,
+	})
+	return s, nil
+}
+
 // options provides the FX modules and configurations used by the application.
 //
 // This function defines the dependencies and lifecycle management for the application by:
@@ -54,7 +66,10 @@ func options() fx.Option {
 		spark.Module,
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
+		fx.Provide(getTallyScope),
+		apiHandler.CtrlMgrModule,
 		ray.Module,
+		pipeline.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))

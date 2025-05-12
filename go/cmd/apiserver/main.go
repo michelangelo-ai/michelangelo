@@ -43,6 +43,7 @@ func opts() fx.Option {
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		v2pb.ProjectSvcModule,
+		v2pb.PipelineSvcModule,
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
 		v2pb.SparkJobSvcModule,
