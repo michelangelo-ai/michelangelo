@@ -3,7 +3,7 @@ import tempfile
 from unittest.mock import patch
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler
-from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
+from michelangelo._internal.testing.spark import SparkTestCase
 from michelangelo.lib.model_manager.constants import ModelKind
 from michelangelo.lib.model_manager.schema import (
     ModelSchema,

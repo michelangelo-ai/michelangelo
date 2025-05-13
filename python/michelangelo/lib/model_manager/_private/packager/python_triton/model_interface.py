@@ -1,7 +1,7 @@
 import os
 import shutil
 import michelangelo.lib.model_manager.interface.custom_model as custom_model
-from uber.ai.michelangelo.shared.utils.reflection_utils import get_module_attr
+from michelangelo._internal.utils.reflection_utils import get_module_attr
 
 module_path = os.path.join("uber", "ai", "michelangelo", "sdk", "model_manager", "interface", "custom_model.py")
 

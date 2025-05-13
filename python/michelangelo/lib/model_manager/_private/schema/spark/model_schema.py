@@ -7,7 +7,7 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.shared.utils.palette_utils import get_palette_expressions
+from michelangelo._internal.utils.palette_utils import get_palette_expressions
 from michelangelo.lib.model_manager._private.schema.spark.input_schema import (
     populate_stage_input_schema,
 )

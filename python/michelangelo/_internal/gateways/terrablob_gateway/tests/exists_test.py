@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import path_exists
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import path_exists
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobFileNotFoundError,
     TerrablobFailedPreconditionError,
@@ -9,8 +9,8 @@ from uber.ai.michelangelo.shared.errors.terrablob_error import (
 
 
 class ExistsTest(TestCase):
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.exists.get_blob_info")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.exists.list_terrablob_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.exists.get_blob_info")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.exists.list_terrablob_dir")
     def test_path_exists(self, mock_list_terrablob_dir, mock_get_blob_info):
         self.assertTrue(path_exists("test"))
 

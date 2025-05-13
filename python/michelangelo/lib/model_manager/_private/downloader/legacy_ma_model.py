@@ -3,7 +3,7 @@ import shutil
 import tempfile
 from typing import Optional
 from michelangelo.lib.model_manager.utils.terrablob_paths import get_v1_projects_model_zip_path
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
+from michelangelo._internal.gateways.terrablob_gateway import download_from_terrablob
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_download_multipart_options
 
 

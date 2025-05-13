@@ -3,8 +3,8 @@ from unittest import TestCase
 from unittest.mock import patch, call
 import tempfile
 import os
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import download_from_terrablob
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobPermissionError,
     TerrablobFileNotFoundError,
@@ -19,8 +19,8 @@ def tb_cli_get(cmd: list[str]):
 
 
 class DownloadTest(TestCase):
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
     def test_download_from_terrablob_success(
         self,
         mock_tb_cli_get,
@@ -52,8 +52,8 @@ class DownloadTest(TestCase):
             )
             self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
     def test_download_from_terrablob_failure(
         self,
         mock_path_is_dir,
@@ -72,8 +72,8 @@ class DownloadTest(TestCase):
         with self.assertRaises(TerrablobFileNotFoundError):
             download_from_terrablob("src", "dest")
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.list_terrablob_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
     def test_download_dir_from_terrablob(
         self,
         mock_list_terrablob_dir,
@@ -82,7 +82,7 @@ class DownloadTest(TestCase):
         mock_path_is_dir.return_value = True
         mock_list_terrablob_dir.return_value = ["src/file1", "src/sub/file2", "src/sub/file3", "src/file4"]
         with patch(
-            "uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
+            "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
             wraps=tb_cli_get,
         ) as mock_tb_cli_get:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -108,9 +108,9 @@ class DownloadTest(TestCase):
                     any_order=True,
                 )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
     def test_download_dir_from_terrablob_single_thread(
         self,
         mock_tb_cli_get,
@@ -142,8 +142,8 @@ class DownloadTest(TestCase):
                 any_order=True,
             )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.list_terrablob_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
     def test_download_dir_from_terrablob_staging(
         self,
         mock_list_terrablob_dir,
@@ -152,7 +152,7 @@ class DownloadTest(TestCase):
         mock_path_is_dir.return_value = True
         mock_list_terrablob_dir.return_value = ["src/file1", "src/sub/file2", "src/sub/file3", "src/file4"]
         with patch(
-            "uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
+            "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
             wraps=tb_cli_get,
         ) as mock_tb_cli_get:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -179,8 +179,8 @@ class DownloadTest(TestCase):
                 )
 
     @patch("time.sleep")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.download.path_is_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
     def test_download_from_terrablob_retry(
         self,
         mock_path_is_dir,

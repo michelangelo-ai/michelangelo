@@ -1,14 +1,14 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import path_is_dir
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import path_is_dir
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobFailedPreconditionError,
 )
 
 
 class IsDirTest(TestCase):
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.is_dir.list_terrablob_dir")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.is_dir.list_terrablob_dir")
     def test_path_is_dir(self, mock_list_terrablob_dir):
         self.assertTrue(path_is_dir("test"))
 

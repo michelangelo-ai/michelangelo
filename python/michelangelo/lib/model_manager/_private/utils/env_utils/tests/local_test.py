@@ -1,5 +1,5 @@
 import os
-from uber.ai.michelangelo.shared.testing.env import EnvTestCase
+from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager._private.utils.env_utils import is_local
 
 

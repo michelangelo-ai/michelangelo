@@ -1,7 +1,7 @@
 import logging
 from typing import Optional, Callable
-from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import list_terrablob_dir, path_exists
+from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
+from michelangelo._internal.gateways.terrablob_gateway import list_terrablob_dir, path_exists
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 
 _logger = logging.getLogger(__name__)

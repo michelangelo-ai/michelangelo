@@ -1,6 +1,6 @@
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common import validate_kwargs
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.list import list_terrablob_dir
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway.common import validate_kwargs
+from michelangelo._internal.gateways.terrablob_gateway.list import list_terrablob_dir
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobFailedPreconditionError,
 )
 

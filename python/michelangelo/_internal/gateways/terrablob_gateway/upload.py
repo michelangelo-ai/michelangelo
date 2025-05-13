@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common import (
+from michelangelo._internal.gateways.terrablob_gateway.common import (
     construct_terrablob_cmd,
     execute_terrablob_cmd_with_exception,
     TerrablobOptions,

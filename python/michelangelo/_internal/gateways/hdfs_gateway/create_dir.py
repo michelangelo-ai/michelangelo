@@ -1,6 +1,6 @@
 import logging
-from uber.ai.michelangelo.shared.errors.hdfs_error import HDFSError
-from uber.ai.michelangelo.shared.utils.cmd_utils import execute_cmd, decode_output
+from michelangelo._internal.errors.hdfs_error import HDFSError
+from michelangelo._internal.utils.cmd_utils import execute_cmd, decode_output
 
 _logger = logging.getLogger(__name__)
 

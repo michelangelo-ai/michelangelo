@@ -1,8 +1,8 @@
 import subprocess
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.errors.hdfs_error import HDFSError
-from uber.ai.michelangelo.shared.gateways.hdfs_gateway import create_dir_in_hdfs
+from michelangelo._internal.errors.hdfs_error import HDFSError
+from michelangelo._internal.gateways.hdfs_gateway import create_dir_in_hdfs
 
 
 class CreateDirTest(TestCase):

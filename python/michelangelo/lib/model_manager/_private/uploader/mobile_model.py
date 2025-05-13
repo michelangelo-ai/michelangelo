@@ -6,7 +6,7 @@ from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_c
 from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_deployable_model_path,
 )
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import upload_to_terrablob
+from michelangelo._internal.gateways.terrablob_gateway import upload_to_terrablob
 from michelangelo.lib.model_manager._private.uploader.generic_deployable_model import upload_generic_deployable_model
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 

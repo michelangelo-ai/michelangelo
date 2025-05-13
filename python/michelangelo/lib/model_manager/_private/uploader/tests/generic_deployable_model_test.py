@@ -2,7 +2,7 @@ import os
 import yaml
 import tempfile
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.testing.env import EnvTestCase
+from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager.constants import PackageType, StorageType
 from michelangelo.lib.model_manager._private.uploader import upload_generic_deployable_model
 from michelangelo.lib.model_manager._private.constants import Placeholder

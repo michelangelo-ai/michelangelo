@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch, call
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import list_terrablob_dir
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import list_terrablob_dir
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobPermissionError,
     TerrablobFileNotFoundError,
@@ -33,7 +33,7 @@ class ListTest(TestCase):
             ),
         ]
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (
             b'{"result": [{"type": "dir", "name": "dir1"},{"type": "blob", "name": "file1"}]}',
@@ -82,7 +82,7 @@ class ListTest(TestCase):
         )
         self.assertEqual(paths, ["test/file1"])
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_recursively(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
         paths = list_terrablob_dir("test", recursive=True)
@@ -104,7 +104,7 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_recursively_output_relative_path(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
@@ -127,7 +127,7 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_recursively_include_dir(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
@@ -154,7 +154,7 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_recursively_oupout_relative_path_include_dir(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
@@ -181,7 +181,7 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_failure(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"", b"error", 1)
         with self.assertRaises(TerrablobError):
@@ -196,7 +196,7 @@ class ListTest(TestCase):
             list_terrablob_dir("dir")
 
     @patch("time.sleep")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_list_terrablob_dir_retry(self, mock_execute_terrablob_cmd, mock_time_sleep):
         mock_execute_terrablob_cmd.return_value = (
             b"",

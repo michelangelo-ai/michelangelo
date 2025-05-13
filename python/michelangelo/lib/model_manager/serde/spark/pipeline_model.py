@@ -5,7 +5,7 @@ from typing import Optional
 from pyspark.ml import PipelineModel
 from uber.ai.michelangelo.sdk.compat.pyspark.utils.session import get_spark_session
 from uber.ai.michelangelo.sdk.compat.pyspark.ml.pipeline import MichelangeloPipelineModel
-from uber.ai.michelangelo.shared.gateways.hdfs_gateway import (
+from michelangelo._internal.gateways.hdfs_gateway import (
     create_dir_in_hdfs,
     upload_to_hdfs,
     download_from_hdfs,

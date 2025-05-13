@@ -5,7 +5,7 @@ from typing import Optional
 from michelangelo.lib.model_manager._private.utils.file_utils import cd
 from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_decompress
 from michelangelo.lib.model_manager.utils.terrablob_paths import get_v2_projects_model_jar_path
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
+from michelangelo._internal.gateways.terrablob_gateway import download_from_terrablob
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_download_multipart_options
 
 

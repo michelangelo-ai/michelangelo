@@ -4,8 +4,8 @@ import logging
 from typing import Optional
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager._private.packager.common import download_model
-from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError
-from uber.ai.michelangelo.shared.errors.hdfs_error import HDFSError
+from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError
+from michelangelo._internal.errors.hdfs_error import HDFSError
 
 _logger = logging.getLogger(__name__)
 

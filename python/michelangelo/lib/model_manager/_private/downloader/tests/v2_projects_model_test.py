@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.testing.env import EnvTestCase
+from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_compress
 from michelangelo.lib.model_manager._private.downloader import download_v2_projects_model
 from .utils.env import mimic_local_env, mimic_remote_env

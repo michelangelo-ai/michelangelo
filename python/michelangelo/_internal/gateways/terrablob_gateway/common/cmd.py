@@ -1,14 +1,14 @@
 from retrying import retry
 import logging
-from uber.ai.michelangelo.shared.utils.cmd_utils import (
+from michelangelo._internal.utils.cmd_utils import (
     execute_cmd,
     decode_output,
 )
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.error import (
+from michelangelo._internal.gateways.terrablob_gateway.common.error import (
     get_terrablob_error,
 )
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.option import TerrablobOptions
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway.common.option import TerrablobOptions
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobRetriableError,
     TerrablobError,
 )

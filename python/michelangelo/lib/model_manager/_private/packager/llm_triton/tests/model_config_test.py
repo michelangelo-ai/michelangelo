@@ -5,7 +5,7 @@ from typing import Optional
 from unittest import TestCase
 from unittest.mock import patch
 from michelangelo.lib.model_manager.constants import StorageType
-from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError
+from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError
 from michelangelo.lib.model_manager._private.packager.llm_triton import download_model_config
 
 

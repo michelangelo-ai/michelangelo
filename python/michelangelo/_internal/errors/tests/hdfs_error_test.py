@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.shared.errors.hdfs_error import (
+from michelangelo._internal.errors.hdfs_error import (
     HDFSError,
 )
 

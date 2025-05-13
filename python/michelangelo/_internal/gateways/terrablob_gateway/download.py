@@ -2,14 +2,14 @@ import logging
 import os
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common import (
+from michelangelo._internal.gateways.terrablob_gateway.common import (
     construct_terrablob_cmd,
     execute_terrablob_cmd_with_exception,
     TerrablobOptions,
     validate_kwargs,
 )
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.is_dir import path_is_dir
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.list import list_terrablob_dir
+from michelangelo._internal.gateways.terrablob_gateway.is_dir import path_is_dir
+from michelangelo._internal.gateways.terrablob_gateway.list import list_terrablob_dir
 
 _logger = logging.getLogger(__name__)
 

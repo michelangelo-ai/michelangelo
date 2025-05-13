@@ -3,7 +3,7 @@ import yaml
 import tempfile
 import shutil
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.testing.env import EnvTestCase
+from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager.constants import PackageType, StorageType
 from michelangelo.lib.model_manager._private.downloader import download_generic_deployable_model
 from .utils.env import mimic_local_env, mimic_remote_env

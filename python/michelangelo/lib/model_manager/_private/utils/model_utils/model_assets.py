@@ -2,8 +2,8 @@ import os
 import yaml
 import shutil
 from typing import Optional
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import get_blob_info
-from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
+from michelangelo._internal.gateways.terrablob_gateway import get_blob_info
+from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
 from michelangelo.lib.model_manager.constants import StorageType, PackageType
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode

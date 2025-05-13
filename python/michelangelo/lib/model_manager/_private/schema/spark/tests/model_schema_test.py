@@ -1,7 +1,7 @@
 from pyspark.ml.linalg import Vectors
 from pyspark.ml import Pipeline
 from unittest.mock import MagicMock
-from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
+from michelangelo._internal.testing.spark import SparkTestCase
 from michelangelo.lib.model_manager.schema import (
     ModelSchemaItem,
     DataType,

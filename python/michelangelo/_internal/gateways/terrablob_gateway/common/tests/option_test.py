@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway.common import (
+from michelangelo._internal.gateways.terrablob_gateway.common import (
     TerrablobOptions,
     validate_kwargs,
 )

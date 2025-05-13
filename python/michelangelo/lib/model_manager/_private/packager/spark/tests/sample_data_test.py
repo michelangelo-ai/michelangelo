@@ -1,7 +1,7 @@
 import os
 import tempfile
 from pyspark.ml.linalg import Vectors
-from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
+from michelangelo._internal.testing.spark import SparkTestCase
 from michelangelo.lib.model_manager._private.packager.spark import create_sample_data_csv
 
 

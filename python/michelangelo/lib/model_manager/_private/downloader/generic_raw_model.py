@@ -1,5 +1,5 @@
 from typing import Optional
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
+from michelangelo._internal.gateways.terrablob_gateway import download_from_terrablob
 from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_raw_model_main_path,
     get_raw_model_base_path,

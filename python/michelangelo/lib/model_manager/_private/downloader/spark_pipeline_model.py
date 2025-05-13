@@ -1,5 +1,5 @@
 from typing import Optional
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import path_exists
+from michelangelo._internal.gateways.terrablob_gateway import path_exists
 from michelangelo.lib.model_manager._private.downloader.v2_projects_model import download_v2_projects_model
 from michelangelo.lib.model_manager._private.downloader.legacy_ma_model import download_legacy_ma_model
 from michelangelo.lib.model_manager.utils.terrablob_paths import (

@@ -6,7 +6,7 @@ from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_deployable_model_base_path,
     get_deployable_model_tar_path,
 )
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
+from michelangelo._internal.gateways.terrablob_gateway import download_from_terrablob
 from michelangelo.lib.model_manager.utils.model import retrieve_model_assets
 from michelangelo.lib.model_manager._private.utils.terrablob_utils import (
     get_terrablob_auth_mode,

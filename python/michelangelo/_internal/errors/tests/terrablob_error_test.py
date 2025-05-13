@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobPermissionError,
     TerrablobFileNotFoundError,

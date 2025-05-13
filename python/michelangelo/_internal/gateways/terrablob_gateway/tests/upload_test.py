@@ -2,8 +2,8 @@ from unittest import TestCase
 from unittest.mock import patch, call
 import os
 import tempfile
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import upload_to_terrablob
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import upload_to_terrablob
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobPermissionError,
     TerrablobFileNotFoundError,
@@ -14,7 +14,7 @@ class UploadTest(TestCase):
     @patch("os.stat")
     @patch("os.path.exists")
     @patch("os.path.isfile")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_upload_one_file_to_terrablob_success(
         self,
         mock_execute_terrablob_cmd,
@@ -56,7 +56,7 @@ class UploadTest(TestCase):
     @patch("os.stat")
     @patch("os.path.exists")
     @patch("os.path.isfile")
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_upload_to_terrablob_failure(
         self,
         mock_execute_terrablob_cmd,
@@ -84,7 +84,7 @@ class UploadTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             upload_to_terrablob("src_path", "dest")
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_upload_dir_to_terrablob(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"pass", b"", 0)
 
@@ -137,7 +137,7 @@ class UploadTest(TestCase):
                 any_order=True,
             )
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_upload_to_terrablob_single_thread(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"pass", b"", 0)
 

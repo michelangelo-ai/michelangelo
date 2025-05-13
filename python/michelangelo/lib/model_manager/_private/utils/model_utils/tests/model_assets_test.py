@@ -4,7 +4,7 @@ import shutil
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch, call
-from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
+from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
 from michelangelo.lib.model_manager.constants import StorageType, PackageType
 from michelangelo.lib.model_manager._private.utils.model_utils import (
     download_assets_given_download_yaml,

@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.shared.gateways.terrablob_gateway import get_blob_info
-from uber.ai.michelangelo.shared.errors.terrablob_error import (
+from michelangelo._internal.gateways.terrablob_gateway import get_blob_info
+from michelangelo._internal.errors.terrablob_error import (
     TerrablobError,
     TerrablobPermissionError,
     TerrablobFileNotFoundError,
@@ -10,7 +10,7 @@ from uber.ai.michelangelo.shared.errors.terrablob_error import (
 
 
 class BlobInfoTest(TestCase):
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_get_blob_info(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (
             b'{"result":{"size": 100}}',
@@ -26,7 +26,7 @@ class BlobInfoTest(TestCase):
 
         self.assertEqual(blob_info, {"size": 100})
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_get_blob_info_with_options(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (
             b'{"result":{"size": 100}}',
@@ -54,7 +54,7 @@ class BlobInfoTest(TestCase):
         )
         self.assertEqual(blob_info, {"size": 100})
 
-    @patch("uber.ai.michelangelo.shared.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
     def test_get_blob_info_failure(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"", b"error", 1)
         with self.assertRaises(TerrablobError):
