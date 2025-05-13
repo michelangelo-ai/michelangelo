@@ -1,0 +1,17 @@
+schema:
+  version: 1
+---
+reviewers:
+  groups:
+    - michelangelo-canvas-reviewers
+owner:
+  # https://uown.uberinternal.com/assets/4f1b329f-218b-4c88-986e-5e0dc70c57e2
+  assetUuid: 4f1b329f-218b-4c88-986e-5e0dc70c57e2
+  # Owner information updated from uOwn by assetUuid value.
+  # "managerEmail" retrieved from "Accountable" role on uOwn.
+  name: michelangelo-canvas
+  managerEmail: sally.lee@uber.com
+code-quality:
+  coverage:
+    min: 100
+    modified: 100

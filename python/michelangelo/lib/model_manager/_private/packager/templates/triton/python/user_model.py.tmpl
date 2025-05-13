@@ -1,0 +1,45 @@
+#TODO: use Jinja template
+
+import numpy
+
+import triton_python_backend_utils as pb_utils
+
+
+class Model():
+    def __init__(self):
+        # Here we initialize the model, this initialization is called once
+        # when the model is loaded.
+        self.logger = pb_utils.Logger
+
+    def execute(self, inputs):
+        questions = []
+
+        # Logging using self.logger will allow logs to show up in the the triton log.
+        if len(inputs) == 0:
+            self.logger.log_info("Inputs are empty, no responses will be generated.")
+
+        # Inputs is a map of a tensor. Since the 0th axis corresponds to the batch, we loop through
+        # the 0th index to get the entire list of questions.
+        questions = [str(prompt) for prompt in inputs.get("prompt")]
+
+        # The following inputs are required for the unified gen AI input that's compatible
+        # with the open AI standard. Since these properties are assumed to be identical for
+        # each request in the batch, we only look at the first element for each.
+        max_tokens = inputs.get("max_tokens")[0, 0]
+        top_p = float(inputs.get("top_p")[0, 0])
+        temperature = float(inputs.get("temperature")[0, 0])
+        num_return_sequences = int(inputs.get("n")[0, 0])
+
+        # Here, we generate a numpy array with the number outputs as the number of elements in the batch.
+        results = numpy.array([], dtype=object)
+        for question in questions:
+            results = numpy.append(results, "Input is {}, max_tokens: {}, top_p: {}, temperature: {}, n: {}".format(
+                question, max_tokens, top_p, temperature, num_return_sequences))
+        results = results.reshape(len(questions), 1)
+
+        # The expected output is a map of input name to the numpy ndarray.
+        return {"text_json": results}
+
+
+def get_model():
+    return Model()

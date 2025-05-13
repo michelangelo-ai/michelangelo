@@ -1,0 +1,2 @@
+[arguments."*"]
+visibility = ["//uber/ai/michelangelo:__pkg__", "//uber/ai/michelangelo/sdk/model_manager:__subpackages__"]

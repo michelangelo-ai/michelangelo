@@ -1,0 +1,82 @@
+import json
+import numpy
+import os
+import triton_python_backend_utils as pb_utils
+
+from transformers import T5Tokenizer, T5ForConditionalGeneration
+
+
+class Model():
+    def __init__(self):
+        self.logger = pb_utils.Logger
+
+        # We have pre-downloaded the model binary to the below model path.
+        # Here we load the model and set up the HuggingFace pipeline.
+        model_path = os.path.dirname(os.path.realpath(__file__))
+
+        self.tokenizer = T5Tokenizer.from_pretrained(model_path, pad_token="<pad>")
+        self.model = T5ForConditionalGeneration.from_pretrained(model_path).to("cuda:0")
+        self.default_max_tokens = 128
+
+    def execute(self, inputs):
+        questions = []
+
+        # Logging using self.logger will allow logs to show up in the the triton log.
+        if len(inputs) == 0:
+            self.logger.log_info("Inputs are empty, no responses will be generated.")
+
+        # Inputs is a map of a tensor. Since the 0th axis corresponds to the batch, we loop through
+        # the 0th index to get the entire list of questions.
+        questions = [str(prompt[0]) for prompt in inputs.get("prompt")]
+
+        max_tokens = inputs.get("max_tokens")[0, 0] if "max_tokens" in inputs else self.default_max_tokens
+        max_tokens = self.default_max_tokens if max_tokens < 1 or max_tokens > 512 else max_tokens
+
+        answers = []
+        results = responses = numpy.array([], dtype=object)
+        try:
+            inputs = self.tokenizer(questions, return_tensors="pt", padding=True).to("cuda:0")
+            outputs = self.model.generate(
+                input_ids=inputs["input_ids"],
+                attention_mask=inputs["attention_mask"],
+                max_new_tokens=max_tokens,
+                do_sample=False,  # disable sampling to test if batching affects output
+            )
+            answers = self.tokenizer.batch_decode(outputs, skip_special_tokens=True)
+        except (ValueError, Exception) as e:
+            error = str(e)
+            self.logger.log_error("Exception during text generation: " + error)
+            error_type = "USER" if isinstance(e, ValueError) else "SYSTEM"
+            for _ in range(len(questions)):
+                results = numpy.append(results, "")
+            response = {
+                "exception": error,
+                "cause": error_type
+            }
+            responses = numpy.append(responses, json.dumps(response))
+        else:
+            for answer in answers:
+                results = numpy.append(results, answer)
+
+                prompt_tokens = len(inputs)
+                response = {
+                    "choices": [
+                        {
+                            "text": answer,
+                        }
+                    ],
+                    "usage": {
+                        "prompt_tokens": prompt_tokens,
+                    },
+                }
+                responses = numpy.append(responses, json.dumps(response))
+
+            responses = responses.reshape(len(questions), 1)
+        results = results.reshape(len(questions), 1)
+
+        # The expected output is a map of input name to the numpy ndarray.
+        return {"text_json": results, "response": responses}
+
+
+def get_model():
+    return Model()

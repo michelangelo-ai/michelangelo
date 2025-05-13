@@ -1,0 +1,34 @@
+import os
+import tempfile
+from unittest import TestCase
+from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
+from uber.ai.michelangelo.sdk.model_manager._private.serde.model import get_raw_model_type
+
+
+def create_model_package(model_path: str, raw_model_type: str):
+    os.makedirs(os.path.join(model_path, "metadata"), exist_ok=True)
+    with open(os.path.join(model_path, "metadata", "type.yaml"), "w") as f:
+        f.write(f"type: {raw_model_type}")
+
+
+class RawModelTypeTest(TestCase):
+    def test_get_raw_model_type(self):
+        with tempfile.TemporaryDirectory() as model_path:
+            create_model_package(model_path, "custom-python")
+            self.assertEqual(get_raw_model_type(model_path), RawModelType.CUSTOM_PYTHON)
+
+            create_model_package(model_path, "huggingface")
+            self.assertEqual(get_raw_model_type(model_path), RawModelType.HUGGINGFACE)
+
+            create_model_package(model_path, "abc")
+            with self.assertRaisesRegex(ValueError, "Invalid model type abc"):
+                get_raw_model_type(model_path)
+
+            create_model_package(model_path, "")
+            with self.assertRaisesRegex(ValueError, "Model type is empty"):
+                get_raw_model_type(model_path)
+
+    def test_get_raw_model_type_no_type_yaml(self):
+        with tempfile.TemporaryDirectory() as model_path:
+            with self.assertRaisesRegex(FileNotFoundError, "type.yaml file not found"):
+                get_raw_model_type(model_path)

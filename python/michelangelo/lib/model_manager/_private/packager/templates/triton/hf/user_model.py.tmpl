@@ -1,0 +1,126 @@
+import json
+import numpy
+import os
+import transformers
+import triton_python_backend_utils as pb_utils
+
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+
+class Model():
+    def __init__(self):
+        self.logger = pb_utils.Logger
+
+        # Here we initialize the default parameters for the HuggingFace pipeline model.
+        self.default_max_tokens = 200
+        self.default_top_p = 1
+        self.default_temperature = 1
+        self.num_return_sequences = 1
+        self.batch_size = int(os.environ.get('HF_PIPE_BATCHSIZE', 16))
+
+        # We have pre-downloaded the model binary to the below model path.
+        # Here we load the model and set up the HuggingFace pipeline.
+        model_path = os.path.dirname(os.path.realpath(__file__))
+        self.tokenizer = AutoTokenizer.from_pretrained(pretrained_model_name_or_path=model_path)
+        model = AutoModelForCausalLM.from_pretrained(
+            pretrained_model_name_or_path=model_path,
+            device_map="auto",
+            trust_remote_code=True,
+            offload_folder="offload",
+        )
+        self.pipeline = transformers.pipeline(
+            "text-generation",
+            model=model,
+            tokenizer=self.tokenizer,
+        )
+        self.pipeline.tokenizer.pad_token_id = self.pipeline.model.config.eos_token_id
+
+    def execute(self, inputs):
+        questions = []
+
+        # Logging using self.logger will allow logs to show up in the the triton log.
+        if len(inputs) == 0:
+            self.logger.log_info("Inputs are empty, no responses will be generated.")
+
+        # Inputs is a map of a tensor. Since the 0th axis corresponds to the batch, we loop through
+        # the 0th index to get the entire list of questions.
+        questions = [str(prompt[0], encoding='unicode-escape') for prompt in inputs.get("prompt")]
+
+        # The following inputs are required for the unified gen AI input that's compatible
+        # with the open AI standard. Since these properties are assumed to be identical for
+        # each request in the batch, we only look at the first element for each.
+        max_tokens = int(inputs.get("max_tokens")[0, 0])
+        max_tokens = self.default_max_tokens if max_tokens < 1 or max_tokens > 512 else max_tokens
+        top_p = float(inputs.get("top_p")[0, 0])
+        top_p = self.default_top_p if top_p < 0.001 or top_p > 1. else top_p
+        temperature = float(inputs.get("temperature")[0, 0])
+        temperature = self.default_temperature if temperature < 0.001 or temperature > 1. else temperature
+        num_return_sequences = int(inputs.get("n")[0, 0])
+        num_return_sequences = self.num_return_sequences if num_return_sequences < 1 or num_return_sequences > 32 else num_return_sequences
+
+        # We invoke the pipeline model generated in the model constructor.
+        answers = []
+        results = responses = numpy.array([], dtype=object)
+        try:
+            answers = self.pipeline(
+                questions,
+                batch_size=self.batch_size,
+                max_new_tokens=max_tokens,
+                do_sample=True,
+                top_p=top_p,
+                temperature=temperature,
+                num_return_sequences=num_return_sequences,
+                eos_token_id=self.tokenizer.eos_token_id
+            )
+        except (ValueError, Exception) as e:
+            error = str(e)
+            self.logger.log_error("Exception during text generation: " + error)
+            error_type = "USER" if isinstance(e, ValueError) else "SYSTEM"
+            for _ in range(len(questions)):
+                results = numpy.append(results, "")
+            response = {
+                "exception": error,
+                "cause": error_type
+            }
+            responses = numpy.append(responses, json.dumps(response))
+        else:
+            # Here, we generate a numpy array with the number outputs as the number of elements in the batch.
+            for i, question in enumerate(questions):
+                input_tokens = self.tokenizer.encode(question)
+                input_tokens_count = len(input_tokens)
+                choices = []
+
+                if type(answers[i]) is list:
+                    # when a batch of prompts is processed, the pipeline output will be a list of lists,
+                    # with the inner lists containing dicts containing "generated_text"
+                    for a in answers[i]:
+                        results, responses = self.generate_result_response(a, input_tokens_count, choices, results, responses)
+                else:
+                    # the pipeline output is a list of dicts containing "generated_text"
+                    results, responses = self.generate_result_response(answers[i], input_tokens_count, choices, results, responses)
+
+            responses = responses.reshape(len(questions), num_return_sequences)
+        results = results.reshape(len(questions), num_return_sequences)
+
+        # The expected output is a map of input name to the numpy ndarray.
+        return {"text_json": results, "response": responses}
+
+    def generate_result_response(self, answer, input_tokens_count, choices, results, responses):
+        response = {"exception": "", "cause": ""}
+        usage = {"prompt_tokens": input_tokens_count}
+
+        results = numpy.append(results, answer["generated_text"])
+        choices.append({"text": answer["generated_text"]})
+        response["choices"] = choices
+        output_tokens = self.tokenizer.encode(answer["generated_text"])
+        output_tokens_count = len(output_tokens)
+        usage["completion_tokens"] = output_tokens_count
+        usage["total_tokens"] = input_tokens_count + output_tokens_count
+        response["usage"] = usage
+        responses = numpy.append(responses, json.dumps(response))
+
+        return (results, responses)
+
+
+def get_model():
+    return Model()

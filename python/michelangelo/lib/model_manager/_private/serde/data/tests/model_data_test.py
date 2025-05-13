@@ -1,0 +1,90 @@
+import os
+import tempfile
+import numpy as np
+from unittest import TestCase
+from uber.ai.michelangelo.sdk.model_manager._private.serde.data import (
+    dump_model_data,
+    load_model_data,
+    get_model_data,
+)
+
+
+class ModelDataTest(TestCase):
+    def setUp(self):
+        self.record = {
+            "feature1": np.array([1, 2, 3]),
+            "feature2": np.array(["a", "b", "c"]),
+        }
+        self.json_record = r'{"feature1": [1, 2, 3], "feature2": ["a", "b", "c"]}'
+        self.data = [
+            self.record,
+            {
+                "feature1": np.array([4, 5, 6]),
+                "feature2": np.array(["d", "e", "f"]),
+            },
+        ]
+        self.json_data = r'[{"feature1": [1, 2, 3], "feature2": ["a", "b", "c"]}, {"feature1": [4, 5, 6], "feature2": ["d", "e", "f"]}]'
+
+    def assertRecordEqual(self, record1, record2):
+        self.assertEqual(set(record1.keys()), set(record2.keys()))
+        for key in record1:
+            self.assertTrue(np.array_equal(record1[key], record2[key]))
+
+    def assertDataEqual(self, data1, data2):
+        self.assertEqual(len(data1), len(data2))
+        for record1, record2 in zip(data1, data2):
+            self.assertRecordEqual(record1, record2)
+
+    def test_dump_model_data_single_record(self):
+        self.assertEqual(dump_model_data(self.record), self.json_record)
+
+    def test_get_model_data_single_record(self):
+        model_data = get_model_data(self.json_record)
+        self.assertRecordEqual(model_data, self.record)
+
+    def test_dump_model_data_single_record_to_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file = os.path.join(temp_dir, "data.json")
+            with open(file, "w") as f:
+                dump_model_data(self.record, f)
+
+            with open(file) as f:
+                content = f.read()
+                self.assertEqual(content, self.json_record)
+
+    def test_load_model_data_single_record(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file = os.path.join(temp_dir, "data.json")
+            with open(file, "w") as f:
+                dump_model_data(self.record, f)
+
+            with open(file) as f:
+                model_data = load_model_data(f)
+                self.assertRecordEqual(model_data, self.record)
+
+    def test_dump_model_data_multiple_records(self):
+        self.assertEqual(dump_model_data(self.data), self.json_data)
+
+    def test_get_model_data_multiple_records(self):
+        model_data = get_model_data(self.json_data)
+        self.assertDataEqual(model_data, self.data)
+
+    def test_dump_model_data_multiple_records_to_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file = os.path.join(temp_dir, "data.json")
+            with open(file, "w") as f:
+                dump_model_data(self.data, f)
+
+            with open(file) as f:
+                content = f.read()
+                self.assertEqual(content, self.json_data)
+
+    def test_load_model_data_multiple_records(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            file = os.path.join(temp_dir, "data.json")
+            with open(file, "w") as f:
+                dump_model_data(self.data, f)
+
+            with open(file) as f:
+                model_data = load_model_data(f)
+                self.assertDataEqual(model_data, self.data)
