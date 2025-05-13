@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.api_client import APIClient
+from michelangelo.lib.model_manager._private.utils.api_client import APIClient
 
 
 class APIClientTest(TestCase):

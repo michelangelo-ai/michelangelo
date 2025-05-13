@@ -5,12 +5,12 @@ import tempfile
 import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton import PythonTritonPackager
-from uber.ai.michelangelo.sdk.model_manager._private.serde.model import load_custom_raw_model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
+from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
+from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict import Predict
 
 
 class CustomRawModelTest(TestCase):
@@ -43,7 +43,7 @@ class CustomRawModelTest(TestCase):
             else:
                 sys.modules["__main__"].__dict__[key] = self.main_dict[key]
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.serde.model.custom_raw_model._logger.info")
+    @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_external(self, mock_logger_info):
         model_path = "uber/ai/michelangelo/sdk/model_manager/_private/serde/model/tests/testdata/external_custom_raw_model_package"
         model = load_custom_raw_model(model_path)
@@ -65,9 +65,9 @@ class CustomRawModelTest(TestCase):
             response, "feature: test_feature and content: test_content and deps: package.fn1 and package.fn2 and folder.fn1 and deps: folder.fn2"
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.serde.model.custom_raw_model._logger.info")
+    @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_internal(self, mock_logger_info):
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -108,11 +108,11 @@ class CustomRawModelTest(TestCase):
         with tempfile.TemporaryDirectory() as model_package:
             os.makedirs(os.path.join(model_package, "defs"))
             with open(os.path.join(model_package, "defs", "model_class.txt"), "w") as f:
-                f.write("uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.InvalidPredict")
+                f.write("michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.InvalidPredict")
 
             with self.assertRaisesRegex(
                 AttributeError,
-                "Class InvalidPredict not found in module uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.",
+                "Class InvalidPredict not found in module michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.",
             ):
                 load_custom_raw_model(model_package)
 
@@ -135,7 +135,7 @@ class CustomRawModelTest(TestCase):
                 load_custom_raw_model(model_package)
 
     def test_load_custom_raw_model_with_pickle(self):
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -175,10 +175,10 @@ class CustomRawModelTest(TestCase):
 
             self.assertEqual(response, "test_feature")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
+    @patch("michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
     def test_load_custom_raw_model_with_pickle_def_in_main(self, mock_walk_pickle_definitions_in_dir):
         mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")

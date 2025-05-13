@@ -2,12 +2,12 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import upload_mobile_model
+from michelangelo.lib.model_manager._private.uploader import upload_mobile_model
 
 
 class MobileModelTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.mobile_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.mobile_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_mobile_model_with_one_file(
         self,
         mock_upload_tar_to_terrablob,
@@ -42,8 +42,8 @@ class MobileModelTest(TestCase):
 
             mock_upload_tar_to_terrablob.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.mobile_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.mobile_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_mobile_model_with_multiple_files(
         self,
         mock_upload_tar_to_terrablob,
@@ -69,8 +69,8 @@ class MobileModelTest(TestCase):
             mock_upload_tar_to_terrablob.assert_called()
             mock_upload_gz_to_terrablob.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.mobile_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.mobile_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_mobile_model_with_one_dir(
         self,
         mock_upload_tar_to_terrablob,
@@ -93,8 +93,8 @@ class MobileModelTest(TestCase):
             mock_upload_tar_to_terrablob.assert_called()
             mock_upload_gz_to_terrablob.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.mobile_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.mobile_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_mobile_model_with_empty_dir(
         self,
         mock_upload_tar_to_terrablob,

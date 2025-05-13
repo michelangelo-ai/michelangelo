@@ -4,9 +4,9 @@ import tempfile
 from typing import Optional
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.constants import StorageType
 from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import download_model_config
+from michelangelo.lib.model_manager._private.packager.llm_triton import download_model_config
 
 
 def download_model(
@@ -24,7 +24,7 @@ def download_model(
 class ModelConfigTest(TestCase):
     def test_download_model_config(self):
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_config.download_model"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.model_config.download_model"),
             wraps=download_model,
         ) as mock_download_model:
             config_file = download_model_config("model_path")
@@ -40,7 +40,7 @@ class ModelConfigTest(TestCase):
 
     def test_download_model_config_with_dest_file_path(self):
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_config.download_model"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.model_config.download_model"),
             wraps=download_model,
         ) as mock_download_model:
             with tempfile.NamedTemporaryFile() as fp:
@@ -57,7 +57,7 @@ class ModelConfigTest(TestCase):
 
     def test_download_model_config_not_found(self):
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_config.download_model"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.model_config.download_model"),
             side_effect=TerrablobFileNotFoundError("error"),
         ):
             config_file = download_model_config("model_path")

@@ -1,6 +1,6 @@
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils import list_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.utils.asset_utils import list_assets
 
 
 def generate_download_yaml_content(

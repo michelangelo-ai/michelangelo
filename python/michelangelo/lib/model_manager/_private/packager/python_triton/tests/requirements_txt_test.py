@@ -1,6 +1,6 @@
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import generate_requirements_txt
+from michelangelo.lib.model_manager._private.packager.python_triton import generate_requirements_txt
 
 
 class RequirementsTxtTest(TestCase):

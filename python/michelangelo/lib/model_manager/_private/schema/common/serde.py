@@ -1,6 +1,6 @@
 import yaml
 from dataclasses import asdict, fields
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 def schema_to_yaml(schema: ModelSchema) -> str:

@@ -2,16 +2,16 @@ import os
 import tempfile
 from typing import Optional, Union
 from numpy import ndarray
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
-from uber.ai.michelangelo.sdk.model_manager._private.schema.common import schema_to_yaml
-from uber.ai.michelangelo.sdk.model_manager._private.serde.data import dump_model_data
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_class import serialize_model_class
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.type_yaml import generate_type_yaml
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.requirements_txt import generate_requirements_txt
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.pickled_model_binary import serialize_pickle_dependencies
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.constants import MODEL_CLASS_FILE_NAME
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
+from michelangelo.lib.model_manager._private.serde.data import dump_model_data
+from michelangelo.lib.model_manager._private.packager.python_triton.model_class import serialize_model_class
+from michelangelo.lib.model_manager._private.packager.python_triton.type_yaml import generate_type_yaml
+from michelangelo.lib.model_manager._private.packager.python_triton.requirements_txt import generate_requirements_txt
+from michelangelo.lib.model_manager._private.packager.python_triton.pickled_model_binary import serialize_pickle_dependencies
+from michelangelo.lib.model_manager._private.packager.python_triton.constants import MODEL_CLASS_FILE_NAME
 
 
 def generate_raw_model_package_content(

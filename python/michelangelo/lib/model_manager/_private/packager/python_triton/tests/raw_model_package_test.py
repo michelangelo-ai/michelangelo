@@ -2,19 +2,19 @@ import re
 import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import generate_raw_model_package_content
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.packager.python_triton import generate_raw_model_package_content
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
+import michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
 
 
 class RawModelPackageTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model")
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model")
     def test_generate_raw_model_package_content(self, mock_download_model):
         content = generate_raw_model_package_content(
             "test_model_path",
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
+            "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             ModelSchema(),
             [{"input": np.array([1, 2])}],
             include_import_prefixes=["uber"],
@@ -34,11 +34,11 @@ class RawModelPackageTest(TestCase):
         self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/defs", defs))
         self.assertNotIn("dependencies", content)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model")
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model")
     def test_generate_raw_model_package_content_with_batch_inference(self, mock_download_model):
         content = generate_raw_model_package_content(
             "test_model_path",
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
+            "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             ModelSchema(),
             [{"input": np.array([1, 2])}],
             include_import_prefixes=["uber"],
@@ -59,11 +59,11 @@ class RawModelPackageTest(TestCase):
         self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/defs", defs))
         self.assertNotIn("dependencies", content)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model")
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model")
     def test_generate_raw_model_package_content_with_requirements(self, mock_download_model):
         content = generate_raw_model_package_content(
             "test_model_path",
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
+            "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             ModelSchema(),
             [{"input": np.array([1, 2])}],
             requirements=["numpy", "torch"],

@@ -2,11 +2,11 @@ import os
 from unittest import TestCase
 from unittest.mock import patch
 from pathlib import Path
-from uber.ai.michelangelo.sdk.model_manager.packager.llm_triton_fireworks import LLMTritonFireworksPackager
+from michelangelo.lib.model_manager.packager.llm_triton_fireworks import LLMTritonFireworksPackager
 
 
 class LLMTritonFireworksPackagerTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
     def test_llm_online_trt_triton_packager(self, mock_list_terrablob_dir):
         mock_list_terrablob_dir.return_value = ["a", "b"]
 

@@ -2,8 +2,8 @@ import sys
 import inspect
 import logging
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder import find_dependency_files
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_utils import save_module_files
+from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
 
 _logger = logging.getLogger(__name__)
 

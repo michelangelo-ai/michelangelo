@@ -2,7 +2,7 @@ import logging
 from typing import Optional, Callable
 from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import list_terrablob_dir, path_exists
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 
 _logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ def get_latest_model_revision_id(
         The latest revision id. If the model is not found, return -1.
     """
     try:
-        from uber.ai.michelangelo.sdk.model_manager._private.utils.api_client import APIClient
+        from michelangelo.lib.model_manager._private.utils.api_client import APIClient
 
         model_crd = APIClient.ModelService.get_model(project_name, model_name)
     except Exception:

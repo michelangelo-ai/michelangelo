@@ -2,13 +2,13 @@ import os
 import tempfile
 from typing import Union, Optional
 from numpy import ndarray
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager.serde.model import load_raw_model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.data_utils import (
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.serde.model import load_raw_model
+from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_output_data,
     validate_output_data_with_model_schema,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils import get_module_attr
+from michelangelo.lib.model_manager._private.utils.reflection_utils import get_module_attr
 
 
 def validate_raw_model_package(

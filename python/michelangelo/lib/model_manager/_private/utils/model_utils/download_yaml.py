@@ -1,7 +1,7 @@
 import os
 import yaml
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.utils.terrablob_paths import get_raw_model_main_path
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.utils.terrablob_paths import get_raw_model_main_path
 
 
 def convert_download_yamls_to_deployable(model_path: str, project_name: str, model_name: str, model_revision: str):

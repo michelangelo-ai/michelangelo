@@ -2,14 +2,14 @@ from unittest import TestCase
 from unittest.mock import patch
 from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError, TerrablobError
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     get_latest_model_revision_id,
     get_latest_uploaded_model_revision,
 )
 
 
 class ModelRevisionIDTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
     def test_get_latest_model_revision_id(
         self,
         mock_get_model,
@@ -44,10 +44,10 @@ class ModelRevisionIDTest(TestCase):
 
         self.assertEqual(revision_id, -1)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     def test_get_latest_uploaded_model_revision(
         self,
         mock_get_terrablob_auth_mode,
@@ -124,10 +124,10 @@ class ModelRevisionIDTest(TestCase):
 
         self.assertEqual(revision, "a")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     def test_get_latest_uploaded_model_revision_with_params(
         self,
         mock_get_terrablob_auth_mode,
@@ -176,10 +176,10 @@ class ModelRevisionIDTest(TestCase):
             auth_mode=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     def test_get_latest_uploaded_model_revision_with_exception(
         self,
         mock_get_terrablob_auth_mode,

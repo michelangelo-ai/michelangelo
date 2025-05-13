@@ -1,10 +1,10 @@
 import os
 import shutil
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.constants import StorageType
 from uber.ai.michelangelo.shared.gateways.hdfs_gateway import download_from_hdfs
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 
 
 def download_assets(

@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils import get_root_import_path
+from michelangelo.lib.model_manager._private.utils.reflection_utils import get_root_import_path
 
 
 class RootImportPathTest(TestCase):

@@ -2,7 +2,7 @@ import os
 import tempfile
 from unittest.mock import patch, call
 from uber.ai.michelangelo.shared.testing.env import EnvTestCase
-from uber.ai.michelangelo.sdk.model_manager._private.downloader import download_generic_raw_model
+from michelangelo.lib.model_manager._private.downloader import download_generic_raw_model
 from .utils.env import mimic_local_env, mimic_remote_env
 
 
@@ -21,11 +21,11 @@ def download_from_terrablob(
 
 
 class GenericRawModelTest(EnvTestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
     def test_download_generic_raw_model_local_env(
         self,
         mock_get_terrablob_auth_mode,
@@ -56,11 +56,11 @@ class GenericRawModelTest(EnvTestCase):
             auth_mode=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
     def test_download_generic_raw_model_remote_env(
         self,
         mock_get_terrablob_auth_mode,
@@ -89,8 +89,8 @@ class GenericRawModelTest(EnvTestCase):
             auth_mode=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.get_terrablob_auth_mode", return_value=None)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.get_terrablob_auth_mode", return_value=None)
     def test_download_generic_raw_model_with_model_revision(self, mock_get_terrablob_auth_model, mock_download_from_terrablob):
         mimic_remote_env()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -109,8 +109,8 @@ class GenericRawModelTest(EnvTestCase):
             auth_mode=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_raw_model.get_latest_model_revision", return_value=None)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.get_latest_model_revision", return_value=None)
     def test_download_generic_raw_model_with_invalid_model_revision(self, mock_get_latest_model_revision, mock_download_from_terrablob):
         with tempfile.TemporaryDirectory() as temp_dir:
             dest_model_path = os.path.join(temp_dir, "model")

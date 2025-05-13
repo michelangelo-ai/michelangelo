@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from uber.ai.michelangelo.sdk.model_manager.schema.model_schema_item import ModelSchemaItem
+from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem
 
 
 @dataclass

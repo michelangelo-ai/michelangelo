@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.constants import LLMModelType
 
 LLAMA2_MODELS = {
     "LLAMA-2-7b",

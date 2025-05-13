@@ -4,8 +4,8 @@ import tempfile
 import shutil
 from unittest.mock import patch
 from uber.ai.michelangelo.shared.testing.env import EnvTestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType, StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.downloader import download_generic_deployable_model
+from michelangelo.lib.model_manager.constants import PackageType, StorageType
+from michelangelo.lib.model_manager._private.downloader import download_generic_deployable_model
 from .utils.env import mimic_local_env, mimic_remote_env
 
 
@@ -56,12 +56,12 @@ def make_download_from_terrablob_with_yaml(source: str):
 
 
 class GenericDeployableModelTest(EnvTestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
+        "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
     def test_download_generic_deployable_model_local_env(
         self,
@@ -109,12 +109,12 @@ class GenericDeployableModelTest(EnvTestCase):
             with open(os.path.join(dest_model_path, "file.txt")) as f:
                 self.assertEqual(f.read(), "file_content")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
+        "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
     def test_download_generic_deployable_model_remote_env(
         self,
@@ -162,12 +162,12 @@ class GenericDeployableModelTest(EnvTestCase):
             with open(os.path.join(dest_model_path, "file.txt")) as f:
                 self.assertEqual(f.read(), "file_content")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
+        "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
     def test_download_generic_deployable_model_with_no_model_revision(
         self,
@@ -214,12 +214,12 @@ class GenericDeployableModelTest(EnvTestCase):
             )
             mock_download_from_terrablob.assert_called_once()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
+        "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
     def test_download_generic_deployable_model_with_model_revision_as_empty_str(
         self,
@@ -251,12 +251,12 @@ class GenericDeployableModelTest(EnvTestCase):
 
         mock_download_from_terrablob.assert_called_once()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
+        "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
     def test_download_generic_deployable_model_with_no_model_revision_and_no_model_found(
         self,
@@ -287,7 +287,7 @@ class GenericDeployableModelTest(EnvTestCase):
             )
         mock_download_from_terrablob.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.get_latest_uploaded_model_revision")
+    @patch("michelangelo.lib.model_manager._private.downloader.generic_deployable_model.get_latest_uploaded_model_revision")
     def test_download_generic_deployable_model_retrieve_model_assets(self, mock_get_latest_uploaded_model_revision):
         mock_get_latest_uploaded_model_revision.return_value = "0"
         project_name = "test_project"
@@ -305,7 +305,7 @@ class GenericDeployableModelTest(EnvTestCase):
                 f.write("b")
 
             with patch(
-                "uber.ai.michelangelo.sdk.model_manager._private.downloader.generic_deployable_model.download_from_terrablob",
+                "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob",
                 wraps=make_download_from_terrablob_with_yaml(source),
             ) as mock_download_from_terrablob:
                 download_generic_deployable_model(

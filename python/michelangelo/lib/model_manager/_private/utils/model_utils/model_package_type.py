@@ -1,7 +1,7 @@
 import os
 import yaml
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
+from michelangelo.lib.model_manager.constants import PackageType
 
 
 def infer_model_package_type(model_path: str) -> str:

@@ -1,5 +1,5 @@
 import os
-from uber.ai.michelangelo.sdk.model_manager._private.constants import Placeholder
+from michelangelo.lib.model_manager._private.constants import Placeholder
 
 
 def replace_model_name_placeholder(model_path: str, model_name: str):

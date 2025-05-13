@@ -2,7 +2,7 @@ import os
 import tempfile
 import numpy as np
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.serde.data import (
+from michelangelo.lib.model_manager._private.serde.data import (
     dump_model_data,
     load_model_data,
     get_model_data,

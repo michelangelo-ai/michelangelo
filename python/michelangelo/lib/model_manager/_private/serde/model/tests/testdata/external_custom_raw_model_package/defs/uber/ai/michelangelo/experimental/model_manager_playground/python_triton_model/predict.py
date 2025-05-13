@@ -1,7 +1,7 @@
 from __future__ import annotations
 import os
 import numpy as np
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager.interface.custom_model import Model
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.package import fn1
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.folder.fn2 import fn2
 

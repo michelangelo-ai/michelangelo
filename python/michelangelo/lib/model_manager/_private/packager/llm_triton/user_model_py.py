@@ -1,5 +1,5 @@
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
 
 
 def generate_user_model_content(

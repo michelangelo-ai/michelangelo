@@ -1,5 +1,5 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton.data_type_mapping import DATA_TYPE_MAPPING
+from michelangelo.lib.model_manager.schema import DataType
+from michelangelo.lib.model_manager._private.schema.triton.data_type_mapping import DATA_TYPE_MAPPING
 
 
 def convert_data_type(data_type: DataType) -> str:

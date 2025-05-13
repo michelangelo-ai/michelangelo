@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.utils.terrablob_paths import (
+from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_v1_projects_model_path,
     get_v1_projects_model_zip_path,
 )

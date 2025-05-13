@@ -1,6 +1,6 @@
 import yaml
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import generate_download_yaml_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.common import generate_download_yaml_content
 
 
 def generate_model_package_content(

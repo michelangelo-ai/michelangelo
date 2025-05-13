@@ -1,6 +1,6 @@
 import os
 import yaml
-from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
+from michelangelo.lib.model_manager._private.constants import RawModelType
 
 
 def get_raw_model_type(model_path: str) -> str:

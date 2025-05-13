@@ -1,11 +1,11 @@
 from typing import Optional
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
-from uber.ai.michelangelo.sdk.model_manager.utils.terrablob_paths import (
+from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_raw_model_main_path,
     get_raw_model_base_path,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import (
+from michelangelo.lib.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import (
     get_terrablob_auth_mode,
     get_download_multipart_options,
 )

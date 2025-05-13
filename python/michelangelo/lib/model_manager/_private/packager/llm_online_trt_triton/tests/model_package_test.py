@@ -1,11 +1,11 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_online_trt_triton import generate_model_package_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_online_trt_triton import generate_model_package_content
 
 
 class ModelPackageTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
     def test_generate_model_package_content(
         self,
         mock_list_terrablob_dir,

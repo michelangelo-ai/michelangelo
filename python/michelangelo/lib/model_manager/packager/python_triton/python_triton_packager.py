@@ -1,19 +1,19 @@
 import tempfile
 from typing import Optional, Union
 from numpy import ndarray
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.constants import Placeholder
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import (
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.constants import Placeholder
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.python_triton import (
     generate_model_package_content,
     generate_raw_model_package_content,
     validate_model_class,
     validate_raw_model_package,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import generate_model_package_folder
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton import validate_model_schema, convert_model_schema
-from uber.ai.michelangelo.sdk.model_manager._private.utils.data_utils import (
+from michelangelo.lib.model_manager._private.packager.common import generate_model_package_folder
+from michelangelo.lib.model_manager._private.schema.triton import validate_model_schema, convert_model_schema
+from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_sample_data,
     validate_sample_data_with_model_schema,
 )

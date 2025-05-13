@@ -2,15 +2,15 @@ import os
 import tempfile
 from pyspark.ml import PipelineModel
 from pyspark.sql import DataFrame
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.model_zip import create_model_zip
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.sample_data import create_sample_data_csv
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.model_jar import create_model_jar
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.project_yaml import generate_project_yaml
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.trained_model_yaml import generate_trained_model_yaml
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark.model_metadata import generate_model_metadata_content
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils.gzip import gzip_compress
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager._private.packager.spark.model_zip import create_model_zip
+from michelangelo.lib.model_manager._private.packager.spark.sample_data import create_sample_data_csv
+from michelangelo.lib.model_manager._private.packager.spark.model_jar import create_model_jar
+from michelangelo.lib.model_manager._private.packager.spark.project_yaml import generate_project_yaml
+from michelangelo.lib.model_manager._private.packager.spark.trained_model_yaml import generate_trained_model_yaml
+from michelangelo.lib.model_manager._private.packager.spark.model_metadata import generate_model_metadata_content
+from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_compress
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
 
 
 def generate_model_package_content(

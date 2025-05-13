@@ -1,6 +1,6 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import get_llm_model_type_from_pretrained_model_name
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.utils.model_utils import get_llm_model_type_from_pretrained_model_name
 
 LLAMA2_MODELS = {
     "LLAMA-2-7b",

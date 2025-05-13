@@ -2,9 +2,9 @@ import os
 import pickle
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils import walk_pickle_definitions_in_dir
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep import B
+from michelangelo.lib.model_manager._private.utils.pickle_utils import walk_pickle_definitions_in_dir
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep import B
 
 
 class TestClass:
@@ -44,32 +44,32 @@ class PickleDefinitionWalkerTest(TestCase):
                 defs,
                 {
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.pickle_definition_walker_test",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.pickle_definition_walker_test",
                         "TestClass",
                         os.path.join(temp_dir, "subdir1", "file1.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
                         "func",
                         os.path.join(temp_dir, "subdir1", "file2.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
                         "A",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file3.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep",
                         "B",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file4.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
                         "A",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file5.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.pickle_definition_walker_test",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.pickle_definition_walker_test",
                         "TestClass",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file5.pkl"),
                     ),
@@ -86,12 +86,12 @@ class PickleDefinitionWalkerTest(TestCase):
                 defs,
                 {
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
                         "A",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file3.pkl"),
                     ),
                     (
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
+                        "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod",
                         "A",
                         os.path.join(temp_dir, "subdir1", "subsubdir1", "file5.pkl"),
                     ),

@@ -2,10 +2,10 @@ import os
 import tempfile
 import numpy as np
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton import PythonTritonPackager
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation import Predict
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
+from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation import Predict
 
 
 class ValidationTest(TestCase):
@@ -33,7 +33,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.Predict"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -43,7 +43,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package_predict_error(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithPredictError"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithPredictError"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -54,7 +54,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package_invalid_output(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithInvalidOutput"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithInvalidOutput"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -66,7 +66,7 @@ class ValidationTest(TestCase):
     def test_validate_raw_model_package_output_not_matching_schema(self):
         predict = Predict("test_content")
         model_class = (
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithOutputNotMatchingSchema"
+            "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithOutputNotMatchingSchema"
         )
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
@@ -80,7 +80,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package_with_save_error(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithSaveError"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithSaveError"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -91,7 +91,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package_with_reload_error(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithReloadError"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithReloadError"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -104,7 +104,7 @@ class ValidationTest(TestCase):
 
     def test_validate_raw_model_package_with_invalid_model_class_after_reload(self):
         predict = Predict("test_content")
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithMismatchingLoad"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.model_for_validation.ModelWithMismatchingLoad"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")

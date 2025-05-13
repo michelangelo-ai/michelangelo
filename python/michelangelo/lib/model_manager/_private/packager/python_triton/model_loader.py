@@ -1,6 +1,6 @@
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder import find_dependency_files
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_utils import save_module_files
-from uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
 
 
 def serialize_model_loader(target_dir: str):

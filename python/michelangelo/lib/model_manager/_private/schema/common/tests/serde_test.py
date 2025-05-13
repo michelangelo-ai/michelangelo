@@ -1,11 +1,11 @@
 import yaml
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.common import schema_to_yaml, schema_to_dict
+from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml, schema_to_dict
 
 
 class SerdeTest(TestCase):

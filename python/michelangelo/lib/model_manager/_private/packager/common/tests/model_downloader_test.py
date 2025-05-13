@@ -2,14 +2,14 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch, call
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.packager.common import download_model
 
 
 class ModelDownloaderTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
     def test_download_model(
         self,
         mock_get_terrablob_auth_mode,
@@ -48,9 +48,9 @@ class ModelDownloaderTest(TestCase):
         dest_model_path = download_model("test_model_path", model_path_source_type=None)
         self.assertIsNone(dest_model_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
     def test_download_model_with_include(
         self,
         mock_get_terrablob_auth_mode,

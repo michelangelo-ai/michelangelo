@@ -1,6 +1,6 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind as ModelKindConst
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils import convert_model_kind
+from michelangelo.lib.model_manager.constants import ModelKind as ModelKindConst
+from michelangelo.lib.model_manager._private.uploader.crd_utils import convert_model_kind
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     MODEL_KIND_CUSTOM,
     MODEL_KIND_REGRESSION,

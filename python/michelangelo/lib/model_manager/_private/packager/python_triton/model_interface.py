@@ -1,6 +1,6 @@
 import os
 import shutil
-import uber.ai.michelangelo.sdk.model_manager.interface.custom_model as custom_model
+import michelangelo.lib.model_manager.interface.custom_model as custom_model
 from uber.ai.michelangelo.shared.utils.reflection_utils import get_module_attr
 
 module_path = os.path.join("uber", "ai", "michelangelo", "sdk", "model_manager", "interface", "custom_model.py")
@@ -39,6 +39,6 @@ def validate_model_class(model_class: str) -> tuple[bool, Exception]:
         return False, e
 
     if not issubclass(Model, custom_model.Model):
-        return False, TypeError(f"Model class {model_class} must be a subclass of uber.ai.michelangelo.sdk.model_manager.interface.custom_model.Model")
+        return False, TypeError(f"Model class {model_class} must be a subclass of michelangelo.lib.model_manager.interface.custom_model.Model")
 
     return True, None

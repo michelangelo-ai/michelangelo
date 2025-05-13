@@ -1,13 +1,13 @@
 import grpc
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import create_model_family
+from michelangelo.lib.model_manager._private.uploader import create_model_family
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_family_proto import ModelFamily
 
 
 class ModelFamilyTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
     def test_create_model_family(
         self,
         mock_get_model_family,
@@ -24,8 +24,8 @@ class ModelFamilyTest(TestCase):
         mock_get_model_family.assert_not_called()
         self.assertEqual(model_family, expected_model_family)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
     def test_create_model_family_already_exists(
         self,
         mock_get_model_family,
@@ -44,8 +44,8 @@ class ModelFamilyTest(TestCase):
 
         self.assertIsNone(model_family)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
     def test_create_model_family_already_exists_in_different_namespace(
         self,
         mock_get_model_family,
@@ -62,8 +62,8 @@ class ModelFamilyTest(TestCase):
         with self.assertRaises(RuntimeError):
             create_model_family("project_name", "model_family_name")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
     def test_create_model_family_get_error(
         self,
         mock_get_model_family,
@@ -80,8 +80,8 @@ class ModelFamilyTest(TestCase):
         with self.assertRaises(RuntimeError):
             create_model_family("project_name", "model_family_name")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.get_model_family")
     def test_create_model_family_other_error(
         self,
         mock_get_model_family,

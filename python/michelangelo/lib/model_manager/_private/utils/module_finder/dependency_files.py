@@ -3,7 +3,7 @@ import inspect
 import importlib
 import pkgutil
 import os
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.import_parser import get_imports
+from michelangelo.lib.model_manager._private.utils.module_finder.import_parser import get_imports
 
 
 def find_dependency_files(

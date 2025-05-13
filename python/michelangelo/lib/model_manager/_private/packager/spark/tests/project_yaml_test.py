@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import generate_project_yaml
+from michelangelo.lib.model_manager._private.packager.spark import generate_project_yaml
 
 
 class ProjectYamlTest(TestCase):

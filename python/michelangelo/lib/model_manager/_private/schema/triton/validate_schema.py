@@ -1,8 +1,8 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton.data_type_mapping import DATA_TYPE_MAPPING
+from michelangelo.lib.model_manager._private.schema.triton.data_type_mapping import DATA_TYPE_MAPPING
 
 
 def validate_model_schema(model_schema: ModelSchema) -> tuple[bool, Exception]:

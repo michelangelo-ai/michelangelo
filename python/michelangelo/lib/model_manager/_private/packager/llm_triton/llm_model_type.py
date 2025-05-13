@@ -2,10 +2,10 @@ import os
 import json
 import tempfile
 from collections.abc import Sequence
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import get_llm_model_type_from_pretrained_model_name
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_config import (
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.utils.model_utils import get_llm_model_type_from_pretrained_model_name
+from michelangelo.lib.model_manager._private.packager.llm_triton.model_config import (
     download_model_config,
     CONFIG_FILE_NAME,
 )

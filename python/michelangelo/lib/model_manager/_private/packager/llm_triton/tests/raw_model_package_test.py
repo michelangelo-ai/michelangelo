@@ -1,10 +1,10 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import generate_raw_model_package_content
+from michelangelo.lib.model_manager._private.packager.llm_triton import generate_raw_model_package_content
 
 
 class RawModelPackageTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.raw_model_package.download_model")
+    @patch("michelangelo.lib.model_manager._private.packager.llm_triton.raw_model_package.download_model")
     def test_generate_raw_model_package_content(self, mock_download_model):
         content = generate_raw_model_package_content("test_model_path")
         self.assertIsNotNone(content)

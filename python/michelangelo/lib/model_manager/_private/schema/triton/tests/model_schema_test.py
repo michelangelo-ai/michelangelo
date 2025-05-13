@@ -1,10 +1,10 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     DataType,
     ModelSchema,
     ModelSchemaItem,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton import convert_model_schema
+from michelangelo.lib.model_manager._private.schema.triton import convert_model_schema
 
 
 class ModelSchemaTest(TestCase):

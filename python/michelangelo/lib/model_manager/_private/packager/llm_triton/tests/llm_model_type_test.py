@@ -2,8 +2,8 @@ import json
 from typing import Optional
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import infer_llm_model_type
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.packager.llm_triton import infer_llm_model_type
 
 
 class LLMModelTypeTest(TestCase):
@@ -24,7 +24,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -47,7 +47,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -70,7 +70,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -93,7 +93,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -106,7 +106,7 @@ class LLMModelTypeTest(TestCase):
             self.assertTrue(kwargs["dest_file_path"].endswith("config.json"))
 
     @patch(
-        "uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config",
+        "michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config",
         return_value=None,
     )
     def test_infer_llm_model_type_no_config_file(self, mock_download_model_config):
@@ -130,7 +130,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -153,7 +153,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"
@@ -176,7 +176,7 @@ class LLMModelTypeTest(TestCase):
             return dest_file_path
 
         with patch(
-            ("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
+            ("michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type.download_model_config"),
             wraps=download_model_config,
         ) as mock_download_model_config:
             model_path = "model_path"

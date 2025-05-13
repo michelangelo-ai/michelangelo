@@ -1,6 +1,6 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import upload_model_crd
+from michelangelo.lib.model_manager._private.uploader import upload_model_crd
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     Model,
     MODEL_KIND_CUSTOM,
@@ -9,8 +9,8 @@ from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto imp
 
 
 class ModelCrdTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.model_crd.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.uploader.model_crd.create_model_family")
     def test_upload_model_crd(
         self,
         mock_create_model_family,
@@ -35,8 +35,8 @@ class ModelCrdTest(TestCase):
         mock_create_model_family.assert_not_called()
         self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.model_crd.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.uploader.model_crd.create_model_family")
     def test_upload_model_crd_with_training_framework(
         self,
         mock_create_model_family,
@@ -63,8 +63,8 @@ class ModelCrdTest(TestCase):
         mock_create_model_family.assert_not_called()
         self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.model_crd.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.uploader.model_crd.create_model_family")
     def test_upload_model_crd_with_model_family(
         self,
         mock_create_model_family,
@@ -92,9 +92,9 @@ class ModelCrdTest(TestCase):
         mock_create_model.assert_called_once_with(expected_model)
         self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.update_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.update_model")
     def test_upload_model_crd_with_update_model(
         self,
         mock_update_model,
@@ -128,9 +128,9 @@ class ModelCrdTest(TestCase):
         mock_create_model.assert_not_called()
         self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.update_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.update_model")
     def test_upload_model_crd_with_missing_previous_model(
         self,
         mock_update_model,

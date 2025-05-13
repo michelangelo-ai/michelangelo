@@ -2,8 +2,8 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils import cd
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import create_model_jar
+from michelangelo.lib.model_manager._private.utils.file_utils import cd
+from michelangelo.lib.model_manager._private.packager.spark import create_model_jar
 
 
 class ModelJarTest(TestCase):
@@ -35,7 +35,7 @@ class ModelJarTest(TestCase):
                 content_b = f.read()
                 self.assertEqual(content_b, "content_b")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.spark.model_jar.execute_cmd")
+    @patch("michelangelo.lib.model_manager._private.packager.spark.model_jar.execute_cmd")
     def test_create_model_jar_error(self, mock_execute_cmd):
         mock_execute_cmd.return_value = (None, b"error", 1)
 

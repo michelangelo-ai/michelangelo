@@ -1,7 +1,7 @@
 from __future__ import annotations
 import tempfile
 from uber.ai.michelangelo.shared.utils.cmd_utils import execute_cmd, decode_output
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import (
+from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_package_folder,
 )
 

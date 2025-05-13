@@ -4,12 +4,12 @@ from unittest.mock import patch
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.constants import ModelKind
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
 )
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import generate_model_package_content
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager._private.packager.spark import generate_model_package_content
 
 trained_model_yaml = """training_job_id: '0'
 use_new: true

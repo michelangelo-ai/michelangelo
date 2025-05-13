@@ -2,7 +2,7 @@ import os
 import yaml
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     convert_to_deployable_download_yaml_content,
     convert_to_deployable_download_yaml,
     is_deployable_download_yaml_content,

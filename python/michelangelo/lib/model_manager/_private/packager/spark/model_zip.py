@@ -2,7 +2,7 @@ import os
 import tempfile
 import shutil
 from pyspark.ml import PipelineModel
-from uber.ai.michelangelo.sdk.model_manager.serde.spark import save_spark_pipeline_model
+from michelangelo.lib.model_manager.serde.spark import save_spark_pipeline_model
 
 
 def create_model_zip(

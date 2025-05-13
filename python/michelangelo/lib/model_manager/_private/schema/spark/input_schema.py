@@ -1,6 +1,6 @@
 import logging
 from collections.abc import Iterable
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
+from michelangelo.lib.model_manager.schema import DataType
 
 _logger = logging.getLogger(__name__)
 

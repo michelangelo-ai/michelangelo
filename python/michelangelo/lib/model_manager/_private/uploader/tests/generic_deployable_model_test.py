@@ -3,14 +3,14 @@ import yaml
 import tempfile
 from unittest.mock import patch
 from uber.ai.michelangelo.shared.testing.env import EnvTestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType, StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import upload_generic_deployable_model
-from uber.ai.michelangelo.sdk.model_manager._private.constants import Placeholder
+from michelangelo.lib.model_manager.constants import PackageType, StorageType
+from michelangelo.lib.model_manager._private.uploader import upload_generic_deployable_model
+from michelangelo.lib.model_manager._private.constants import Placeholder
 from .utils.env import mimic_local_env, mimic_remote_env
 
 
 class GenericDeployableModelTest(EnvTestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_generic_deployable_model_local_env(self, mock_upload_to_terrablob):
         mimic_local_env()
         project_name = "project_name"
@@ -43,7 +43,7 @@ class GenericDeployableModelTest(EnvTestCase):
             self.assertIsNone(kwargs["source_entity"])
             self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_generic_deployable_model_remote_env(self, mock_upload_to_terrablob):
         mimic_remote_env()
         project_name = "project_name"
@@ -76,7 +76,7 @@ class GenericDeployableModelTest(EnvTestCase):
             self.assertIsNone(kwargs["source_entity"])
             self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
     def test_upload_generic_deployable_model_with_replace_model_name_placeholder_and_params(self, mock_upload_to_terrablob):
         project_name = "project_name"
         model_name = "model_name"
@@ -114,8 +114,8 @@ class GenericDeployableModelTest(EnvTestCase):
             with open(os.path.join(model_path, "config.pbtxt")) as f:
                 self.assertEqual(f.read(), "model_name: model_name")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
     def test_upload_generic_deployable_model_with_download_yaml(self, mock_get_blob_info, mock_upload_to_terrablob):
         project_name = "project_name"
         model_name = "model_name"
@@ -175,8 +175,8 @@ class GenericDeployableModelTest(EnvTestCase):
 
         mock_get_blob_info.assert_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
     def test_upload_generic_deployable_model_with_download_yaml_no_conversion(self, mock_get_blob_info, mock_upload_to_terrablob):
         project_name = "project_name"
         model_name = "model_name"
@@ -227,7 +227,7 @@ class GenericDeployableModelTest(EnvTestCase):
 
         mock_get_blob_info.assert_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.validate_deployable_model_assets")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.validate_deployable_model_assets")
     def test_upload_generic_deployable_model_validation_error(self, mock_validate_deployable_model_assets):
         mock_validate_deployable_model_assets.side_effect = RuntimeError("error")
         project_name = "project_name"
@@ -246,9 +246,9 @@ class GenericDeployableModelTest(EnvTestCase):
                     PackageType.TRITON,
                 )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.validate_deployable_model_assets")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.convert_assets_to_download_yaml")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.validate_deployable_model_assets")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.convert_assets_to_download_yaml")
     def test_upload_generic_deployable_model_download_yaml_source_prefix(
         self, mock_convert_assets_to_download_yaml, mock_validate_deployable_model_assets, mock_upload_to_terrablob
     ):

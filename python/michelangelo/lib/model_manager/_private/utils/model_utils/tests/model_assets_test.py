@@ -5,8 +5,8 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import patch, call
 from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType, PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager.constants import StorageType, PackageType
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     download_assets_given_download_yaml,
     validate_deployable_download_yaml,
     validate_deployable_model_assets,
@@ -83,8 +83,8 @@ class ModelAssetsTest(TestCase):
             with open(os.path.join(target_dir, "x/y/b")) as f:
                 self.assertEqual(f.read(), "b")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_download_yaml_success(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -100,8 +100,8 @@ class ModelAssetsTest(TestCase):
                 ]
             )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_download_yaml_incorrect_source_type(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -115,8 +115,8 @@ class ModelAssetsTest(TestCase):
             mock_get_blob_info.assert_not_called()
             mock_get_terrablob_auth_mode.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_download_yaml_asset_not_exist(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         mock_get_blob_info.side_effect = TerrablobFileNotFoundError("error")
@@ -130,8 +130,8 @@ class ModelAssetsTest(TestCase):
 
             mock_get_blob_info.assert_called_once_with("/root/a", timeout=None, source_entity=None, auth_mode=None)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_model_assets_asset_is_dir(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         mock_get_blob_info.side_effect = TerrablobFailedPreconditionError("error")
@@ -145,8 +145,8 @@ class ModelAssetsTest(TestCase):
 
             mock_get_blob_info.assert_called_once_with("/root/a", timeout=None, source_entity=None, auth_mode=None)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_model_assets_success(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         with tempfile.TemporaryDirectory() as model_package:
@@ -162,13 +162,13 @@ class ModelAssetsTest(TestCase):
             ]
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_terrablob_auth_mode")
     def test_validate_deployable_model_assets_error(self, mock_get_terrablob_auth_mode, mock_get_blob_info):
         mock_get_terrablob_auth_mode.return_value = None
         with tempfile.TemporaryDirectory() as model_package:
             self.create_yaml_files(self.deployable_download_yaml_content, model_package)
-            with patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_assets.get_blob_info") as mock_get_blob_info:
+            with patch("michelangelo.lib.model_manager._private.utils.model_utils.model_assets.get_blob_info") as mock_get_blob_info:
                 mock_get_blob_info.side_effect = TerrablobFileNotFoundError("error")
                 with self.assertRaisesRegex(RuntimeError, "Error validating remote assets in the deployable model package"):
                     validate_deployable_model_assets(model_package)

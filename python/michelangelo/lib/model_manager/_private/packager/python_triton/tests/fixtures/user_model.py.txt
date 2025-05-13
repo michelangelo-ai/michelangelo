@@ -2,7 +2,7 @@ import os
 import numpy as np
 import importlib
 import triton_python_backend_utils as pb_utils
-from uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
 
 
 def load_model(model_path):

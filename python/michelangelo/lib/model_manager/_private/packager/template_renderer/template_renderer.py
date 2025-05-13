@@ -3,7 +3,7 @@ from jinja2 import (
     Environment,
     PackageLoader,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.templates import (
+from michelangelo.lib.model_manager._private.packager.templates import (
     __package__ as TEMPLATE_PACKAGE,
 )
 

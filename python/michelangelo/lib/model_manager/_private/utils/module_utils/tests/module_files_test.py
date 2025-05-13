@@ -1,16 +1,16 @@
 import os
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder import find_dependency_files
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_utils import save_module_files
+from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports  # noqa:F401
+import michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports  # noqa:F401
 
 
 class ModuleFilesTest(TestCase):
     def test_save_module_files(self):
-        files = find_dependency_files("uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports")
+        files = find_dependency_files("michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports")
         with tempfile.TemporaryDirectory() as target_dir:
             save_module_files(files, target_dir)
             saved_files = sorted(

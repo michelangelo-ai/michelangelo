@@ -1,7 +1,7 @@
 import os
 import shutil
 from pathlib import PurePath
-from uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils import get_root_import_path
+from michelangelo.lib.model_manager._private.utils.reflection_utils import get_root_import_path
 
 
 def save_module_files(files: list[str], target_dir: str):

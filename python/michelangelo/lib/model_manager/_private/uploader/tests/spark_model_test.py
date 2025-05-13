@@ -1,11 +1,11 @@
 from unittest.mock import patch
 from uber.ai.michelangelo.shared.testing.env import EnvTestCase
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import upload_spark_model
+from michelangelo.lib.model_manager._private.uploader import upload_spark_model
 from .utils.env import mimic_local_env, mimic_remote_env
 
 
 class SparkModelTest(EnvTestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.spark_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.spark_model.upload_to_terrablob")
     def test_upload_spark_model(
         self,
         mock_upload_to_terrablob,
@@ -40,7 +40,7 @@ class SparkModelTest(EnvTestCase):
 
         self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.spark_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.spark_model.upload_to_terrablob")
     def test_upload_spark_model_remote_env(
         self,
         mock_upload_to_terrablob,

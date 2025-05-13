@@ -2,8 +2,8 @@ import os
 import sys
 import logging
 import importlib
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
-from uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
 
 _logger = logging.getLogger(__name__)
 

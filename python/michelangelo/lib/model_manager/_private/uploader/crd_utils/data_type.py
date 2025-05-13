@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType as SchemaDataType
+from michelangelo.lib.model_manager.schema import DataType as SchemaDataType
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.schema_proto import DataType
 
 

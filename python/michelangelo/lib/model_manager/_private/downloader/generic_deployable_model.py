@@ -2,17 +2,17 @@ import os
 import shutil
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.utils.terrablob_paths import (
+from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_deployable_model_base_path,
     get_deployable_model_tar_path,
 )
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import download_from_terrablob
-from uber.ai.michelangelo.sdk.model_manager.utils.model import retrieve_model_assets
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import (
+from michelangelo.lib.model_manager.utils.model import retrieve_model_assets
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import (
     get_terrablob_auth_mode,
     get_download_multipart_options,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
+from michelangelo.lib.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
 
 
 def download_generic_deployable_model(

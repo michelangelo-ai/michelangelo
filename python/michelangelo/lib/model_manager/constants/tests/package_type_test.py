@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
+from michelangelo.lib.model_manager.constants import PackageType
 
 
 class PackageTypeTest(TestCase):

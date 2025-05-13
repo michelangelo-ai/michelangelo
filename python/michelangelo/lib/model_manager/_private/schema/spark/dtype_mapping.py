@@ -1,5 +1,5 @@
 from __future__ import annotations
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
+from michelangelo.lib.model_manager.schema import DataType
 
 
 DTYPE_MAPPING: dict[str, DataType] = {

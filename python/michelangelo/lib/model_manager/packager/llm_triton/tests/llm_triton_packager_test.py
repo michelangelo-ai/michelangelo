@@ -4,16 +4,16 @@ import tempfile
 from unittest import TestCase
 from unittest.mock import patch
 from pathlib import PurePath
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.packager.llm_triton import LLMTritonPackager
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.tests.fixtures.sample_config_pbtxt import SAMPLE_CONFIG_PBTXT
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.packager.llm_triton import LLMTritonPackager
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_triton.tests.fixtures.sample_config_pbtxt import SAMPLE_CONFIG_PBTXT
 
 
 class LLMTritonPackagerTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
     def test_create_model_package(
         self,
         mock_infer_llm_model_type,
@@ -37,8 +37,8 @@ class LLMTritonPackagerTest(TestCase):
         )
         self.assertEqual(files, ["0/download.yaml", "0/model.py", "0/user_model.py", "config.pbtxt"])
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
     def test_create_model_package_with_model_name(
         self,
         mock_infer_llm_model_type,

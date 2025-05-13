@@ -1,6 +1,6 @@
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.downloader import download_generic_raw_model
+from michelangelo.lib.model_manager._private.downloader import download_generic_raw_model
 
 
 def download_raw_model(

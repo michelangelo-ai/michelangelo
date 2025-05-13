@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager._private.utils.env_utils import is_local
+from michelangelo.lib.model_manager._private.utils.env_utils import is_local
 
 
 def get_download_multipart_options() -> dict:

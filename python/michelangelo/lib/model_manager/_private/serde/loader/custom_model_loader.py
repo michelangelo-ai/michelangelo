@@ -1,8 +1,8 @@
 import sys
 import itertools
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils import walk_pickle_definitions_in_dir
-from uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils import find_attr_from_dir
+from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager._private.utils.pickle_utils import walk_pickle_definitions_in_dir
+from michelangelo.lib.model_manager._private.utils.reflection_utils import find_attr_from_dir
 
 
 def load_custom_model(model_bin_path: str, ModelClass: type, defs_path: str) -> Model:

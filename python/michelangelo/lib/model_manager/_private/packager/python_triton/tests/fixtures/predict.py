@@ -1,9 +1,9 @@
 import numpy as np
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.simple_module import module_attr
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.folder.fn1 import fn1
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.folder.fn2 import fn2
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.package import fn1 as pfn1
+from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module import module_attr
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn1 import fn1
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn2 import fn2
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.package import fn1 as pfn1
 
 
 class Predict(Model):

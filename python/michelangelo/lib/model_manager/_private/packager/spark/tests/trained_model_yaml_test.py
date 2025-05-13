@@ -1,13 +1,13 @@
 import yaml
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.constants import ModelKind
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import generate_trained_model_yaml
+from michelangelo.lib.model_manager._private.packager.spark import generate_trained_model_yaml
 
 
 class TrainedModelYamlTest(TestCase):

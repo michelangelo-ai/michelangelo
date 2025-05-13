@@ -2,16 +2,16 @@ import tempfile
 from typing import Optional
 from pyspark.ml.pipeline import PipelineModel
 from pyspark.sql import DataFrame
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import (
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.constants import ModelKind
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_package_folder,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import (
+from michelangelo.lib.model_manager._private.packager.spark import (
     generate_model_package_content,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.spark import (
+from michelangelo.lib.model_manager._private.schema.spark import (
     create_model_schema,
 )
 

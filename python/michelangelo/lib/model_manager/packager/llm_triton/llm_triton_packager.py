@@ -1,13 +1,13 @@
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.constants import Placeholder
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import (
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.constants import Placeholder
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_triton import (
     generate_model_package_content,
     generate_raw_model_package_content,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import (
+from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_package_folder,
 )
 

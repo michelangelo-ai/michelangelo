@@ -1,6 +1,6 @@
 # flake8: noqa:TID252
 import numpy as np
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager.interface.custom_model import Model
 from ....._private.utils.module_finder.tests.fixtures.simple_module import module_attr
 from ....._private.utils.module_finder.tests.fixtures.folder.fn1 import fn1
 from ....._private.utils.module_finder.tests.fixtures.folder.fn2 import fn2

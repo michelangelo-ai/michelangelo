@@ -1,9 +1,9 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     DataType,
     ModelSchemaItem,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton import convert_schema_to_dict
+from michelangelo.lib.model_manager._private.schema.triton import convert_schema_to_dict
 
 
 class SchemaToDictTest(TestCase):

@@ -1,8 +1,8 @@
 import os
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.type_yaml import generate_type_yaml
+from michelangelo.lib.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager._private.packager.llm_triton.type_yaml import generate_type_yaml
 
 
 def generate_raw_model_package_content(

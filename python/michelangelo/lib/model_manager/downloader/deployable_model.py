@@ -1,7 +1,7 @@
 from typing import Optional
 import tempfile
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.downloader import (
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager._private.downloader import (
     download_spark_pipeline_model,
     download_generic_deployable_model,
 )

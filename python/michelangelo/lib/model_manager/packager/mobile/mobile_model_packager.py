@@ -1,7 +1,7 @@
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.packager.common import download_model
 
 
 class MobileModelPackager:

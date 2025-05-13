@@ -1,8 +1,8 @@
 import numpy as np
 from unittest import TestCase
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchemaItem, DataType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.data_utils.numpy_data import (
+from michelangelo.lib.model_manager.schema import ModelSchemaItem, DataType
+from michelangelo.lib.model_manager._private.utils.data_utils.numpy_data import (
     validate_numpy_data,
     validate_numpy_data_with_model_schema,
     validate_numpy_data_record_with_model_schema,

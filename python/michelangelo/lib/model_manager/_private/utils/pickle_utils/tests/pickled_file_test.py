@@ -2,7 +2,7 @@ import os
 import pickle
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils import is_pickled_file, find_pickled_files
+from michelangelo.lib.model_manager._private.utils.pickle_utils import is_pickled_file, find_pickled_files
 
 
 class PickledFileTest(TestCase):

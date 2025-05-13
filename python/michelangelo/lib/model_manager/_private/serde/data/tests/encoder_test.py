@@ -1,7 +1,7 @@
 import json
 import numpy as np
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.serde.data import DataEncoder
+from michelangelo.lib.model_manager._private.serde.data import DataEncoder
 
 
 class EncoderTest(TestCase):

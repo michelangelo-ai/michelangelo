@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils import cd
+from michelangelo.lib.model_manager._private.utils.file_utils import cd
 import os
 
 

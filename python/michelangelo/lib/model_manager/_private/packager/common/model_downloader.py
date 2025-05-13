@@ -1,8 +1,8 @@
 import os
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 
 
 def download_model(

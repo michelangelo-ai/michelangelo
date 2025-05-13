@@ -1,5 +1,5 @@
 import numpy as np
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 class CustomModel(Model):

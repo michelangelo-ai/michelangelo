@@ -4,9 +4,9 @@ import pickle
 import pickletools
 from unittest import TestCase
 from unittest.mock import patch, MagicMock, create_autospec
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils import find_pickle_definitions
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep import B
+from michelangelo.lib.model_manager._private.utils.pickle_utils import find_pickle_definitions
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep import B
 
 
 class PickleDefinitionTest(TestCase):
@@ -18,13 +18,13 @@ class PickleDefinitionTest(TestCase):
                 pickle.dump(A(), f)
 
             defs = find_pickle_definitions(fn)
-            self.assertEqual(defs, ["uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A"])
+            self.assertEqual(defs, ["michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A"])
 
             with open(fn, "wb") as f:
                 pickle.dump(func, f)
 
             defs = find_pickle_definitions(fn)
-            self.assertEqual(defs, ["uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func"])
+            self.assertEqual(defs, ["michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func"])
 
             with open(fn, "wb") as f:
                 pickle.dump({"b": A(), "func": func}, f)
@@ -33,8 +33,8 @@ class PickleDefinitionTest(TestCase):
             self.assertEqual(
                 set(defs),
                 {
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
                 },
             )
 
@@ -45,8 +45,8 @@ class PickleDefinitionTest(TestCase):
             self.assertEqual(
                 set(defs),
                 {
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep.B",
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep.B",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
                 },
             )
 
@@ -57,9 +57,9 @@ class PickleDefinitionTest(TestCase):
             self.assertEqual(
                 set(defs),
                 {
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep.B",
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.dep.B",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.func",
                 },
             )
 
@@ -70,11 +70,11 @@ class PickleDefinitionTest(TestCase):
             self.assertEqual(
                 defs,
                 [
-                    "uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
+                    "michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package.mod.A",
                 ],
             )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.pickle_definition.pickletools.genops")
+    @patch("michelangelo.lib.model_manager._private.utils.pickle_utils.pickle_definition.pickletools.genops")
     def test_find_pickle_definitions_proto_3(self, mock_genops):
         op1 = MagicMock()
         op1.name = "GLOBAL"

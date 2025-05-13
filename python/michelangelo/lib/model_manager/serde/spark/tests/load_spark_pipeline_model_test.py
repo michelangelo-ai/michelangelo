@@ -4,8 +4,8 @@ from unittest.mock import patch
 from pyspark.ml import PipelineModel
 from pyspark.ml.feature import VectorAssembler
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager.serde.spark import load_spark_pipeline_model
-from uber.ai.michelangelo.sdk.model_manager._private.constants.hdfs_paths import (
+from michelangelo.lib.model_manager.serde.spark import load_spark_pipeline_model
+from michelangelo.lib.model_manager._private.constants.hdfs_paths import (
     HDFS_TMP_MODELS_DIR,
 )
 
@@ -27,10 +27,10 @@ class LoadSparkPipelineModelTest(SparkTestCase):
             self.assertEqual(loaded_model.stages[0].getInputCols(), ["test1", "test2"])
             self.assertEqual(loaded_model.stages[0].getOutputCol(), "outputTestVector")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.get_spark_session")
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.create_dir_in_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.upload_to_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.MichelangeloPipelineModel.load")
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.get_spark_session")
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.create_dir_in_hdfs")
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.upload_to_hdfs")
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.MichelangeloPipelineModel.load")
     def test_load_spark_pipeline_model_hdfs(
         self,
         mock_model_load,

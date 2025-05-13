@@ -1,5 +1,5 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchemaItem
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton.data_type import convert_data_type
+from michelangelo.lib.model_manager.schema import ModelSchemaItem
+from michelangelo.lib.model_manager._private.schema.triton.data_type import convert_data_type
 
 
 def convert_schema_to_dict(schema: list[ModelSchemaItem]):

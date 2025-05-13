@@ -2,8 +2,8 @@ from unittest import TestCase
 import os
 import tempfile
 import yaml
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     infer_model_package_type,
     infer_raw_model_package_type,
 )

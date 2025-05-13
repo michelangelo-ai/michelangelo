@@ -1,16 +1,16 @@
 import os
 import tempfile
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.config_pbtxt import generate_config_pbtxt_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_py import generate_model_py_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.user_model_py import generate_user_model_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_class import serialize_model_class
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.pickled_model_binary import serialize_pickle_dependencies
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_loader import serialize_model_loader
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.constants import MODEL_CLASS_FILE_NAME
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager._private.packager.python_triton.config_pbtxt import generate_config_pbtxt_content
+from michelangelo.lib.model_manager._private.packager.python_triton.model_py import generate_model_py_content
+from michelangelo.lib.model_manager._private.packager.python_triton.user_model_py import generate_user_model_content
+from michelangelo.lib.model_manager._private.packager.python_triton.model_class import serialize_model_class
+from michelangelo.lib.model_manager._private.packager.python_triton.pickled_model_binary import serialize_pickle_dependencies
+from michelangelo.lib.model_manager._private.packager.python_triton.model_loader import serialize_model_loader
+from michelangelo.lib.model_manager._private.packager.python_triton.constants import MODEL_CLASS_FILE_NAME
 
 
 def generate_model_package_content(

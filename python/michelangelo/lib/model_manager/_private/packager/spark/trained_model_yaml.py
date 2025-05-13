@@ -1,11 +1,11 @@
 import uuid
 import yaml
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind
+from michelangelo.lib.model_manager.constants import ModelKind
 
 
 def generate_trained_model_yaml(

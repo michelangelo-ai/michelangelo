@@ -4,15 +4,15 @@ import tempfile
 import shutil
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils import (
+from michelangelo.lib.model_manager._private.utils.reflection_utils import (
     get_module_attr,
     find_attr_from_sys_modules,
     find_attr_from_dir,
 )
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils.tests.fixtures.simple_module
-import uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.simple_module  # noqa:F401
+import michelangelo.lib.model_manager._private.utils.reflection_utils.tests.fixtures.simple_module
+import michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module  # noqa:F401
 
 
 class ModuleAttrTest(TestCase):
@@ -23,7 +23,7 @@ class ModuleAttrTest(TestCase):
         sys.path = self.sys_path
 
     def test_get_module_attr(self):
-        module_attr = get_module_attr("uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils.tests.fixtures.simple_module.module_attr")
+        module_attr = get_module_attr("michelangelo.lib.model_manager._private.utils.reflection_utils.tests.fixtures.simple_module.module_attr")
 
         self.assertIsNotNone(module_attr)
         self.assertEqual(module_attr.__name__, "module_attr")
@@ -32,7 +32,7 @@ class ModuleAttrTest(TestCase):
         attributes = find_attr_from_sys_modules("module_attr")
         attr_names = sorted([attr.__name__ for attr in attributes])
 
-        self.assertEqual(attr_names, ["module_attr"] * 2 + ["uber.ai.michelangelo.sdk.model_manager._private.utils.reflection_utils.module_attr"])
+        self.assertEqual(attr_names, ["module_attr"] * 2 + ["michelangelo.lib.model_manager._private.utils.reflection_utils.module_attr"])
 
     def test_find_attr_from_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:

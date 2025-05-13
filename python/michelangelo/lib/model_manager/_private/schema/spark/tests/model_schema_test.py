@@ -2,11 +2,11 @@ from pyspark.ml.linalg import Vectors
 from pyspark.ml import Pipeline
 from unittest.mock import MagicMock
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.spark import create_model_schema
+from michelangelo.lib.model_manager._private.schema.spark import create_model_schema
 from uber.ai.michelangelo.sdk.compat.pyspark.ml.feature import (
     DecisionThresholdTransformer,
     MichelangeloResultPacker,

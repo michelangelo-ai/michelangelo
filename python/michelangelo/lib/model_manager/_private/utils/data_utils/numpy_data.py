@@ -1,6 +1,6 @@
 from typing import Optional
 from numpy import ndarray
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchemaItem, DataType
+from michelangelo.lib.model_manager.schema import ModelSchemaItem, DataType
 
 
 def validate_numpy_data(data: list[dict[str, ndarray]]) -> tuple[bool, Optional[Exception]]:

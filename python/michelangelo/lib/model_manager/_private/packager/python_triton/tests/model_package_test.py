@@ -1,15 +1,15 @@
 from unittest import TestCase
 from unittest.mock import patch
 import re
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import generate_model_package_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.python_triton import generate_model_package_content
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
+import michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
 
 
 class ModelPackageTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model")
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model")
     def test_generate_model_package_content(self, mock_download_model):
         mock_download_model.return_value = None
         gen = TritonTemplateRenderer()
@@ -31,7 +31,7 @@ class ModelPackageTest(TestCase):
             "test_model_path",
             "test_model_name",
             "test_model_revision",
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
+            "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             input_schema,
             output_schema,
             include_import_prefixes=["uber"],

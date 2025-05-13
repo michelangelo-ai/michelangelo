@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
+from michelangelo.lib.model_manager.constants import PackageType
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     DeployableModelPackageType,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE,

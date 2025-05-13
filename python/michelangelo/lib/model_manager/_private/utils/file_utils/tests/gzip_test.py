@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils.gzip import (
+from michelangelo.lib.model_manager._private.utils.file_utils.gzip import (
     gzip_compress,
     gzip_decompress,
 )

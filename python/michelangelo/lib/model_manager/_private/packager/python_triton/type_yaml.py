@@ -1,6 +1,6 @@
 import yaml
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
+from michelangelo.lib.model_manager._private.constants import RawModelType
 
 
 def generate_type_yaml(batch_inference: Optional[bool] = False) -> str:

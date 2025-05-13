@@ -1,6 +1,6 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils import get_deployable_artifact_uri
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager._private.uploader.crd_utils import get_deployable_artifact_uri
 
 
 class DeployableArtifactUriTest(TestCase):

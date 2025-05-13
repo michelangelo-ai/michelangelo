@@ -2,14 +2,14 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils import list_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.utils.asset_utils import list_assets
 
 
 class ListTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.ls_files")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.ls_files")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.get_terrablob_auth_mode")
     def test_list_assets_terrablob(self, mock_get_terrablob_auth_mode, mock_ls_files, mock_list_terrablob_dir):
         mock_list_terrablob_dir.return_value = ["a", "b"]
         mock_get_terrablob_auth_mode.return_value = None
@@ -24,8 +24,8 @@ class ListTest(TestCase):
             auth_mode=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.ls_files")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.ls_files")
     def test_list_assets_hdfs(self, mock_ls_files, mock_list_terrablob_dir):
         mock_ls_files.return_value = ["a", "b"]
         assets = list_assets("root", StorageType.HDFS)
@@ -43,8 +43,8 @@ class ListTest(TestCase):
         mock_list_terrablob_dir.assert_not_called()
         mock_ls_files.assert_called_with("gcs://root", recursive=True, output_relative_path=True)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.ls_files")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.ls_files")
     def test_list_assets_local(self, mock_ls_files, mock_list_terrablob_dir):
         with tempfile.TemporaryDirectory() as root:
             with open(os.path.join(root, "file1.txt"), "w") as f:

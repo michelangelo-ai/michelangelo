@@ -1,9 +1,9 @@
 import yaml
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
 
 
 def generate_model_metadata_content(

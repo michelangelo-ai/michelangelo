@@ -1,14 +1,14 @@
 import os
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import (
+from michelangelo.lib.model_manager._private.packager.python_triton import (
     serialize_model_interface,
     validate_model_class,
 )
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager.interface.tests.fixtures.custom_model
-import uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.invalid_model  # noqa:F401
+import michelangelo.lib.model_manager.interface.tests.fixtures.custom_model
+import michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.invalid_model  # noqa:F401
 
 module_path = os.path.join("uber", "ai", "michelangelo", "sdk", "model_manager", "interface", "custom_model.py")
 
@@ -32,7 +32,7 @@ class ModelInterfaceTest(TestCase):
                 self.assertEqual(f.read(), "content")
 
     def test_validate_model_class(self):
-        valid, error = validate_model_class("uber.ai.michelangelo.sdk.model_manager.interface.tests.fixtures.custom_model.CustomModel")
+        valid, error = validate_model_class("michelangelo.lib.model_manager.interface.tests.fixtures.custom_model.CustomModel")
         self.assertTrue(valid)
         self.assertIsNone(error)
 
@@ -45,6 +45,6 @@ class ModelInterfaceTest(TestCase):
         self.assertFalse(valid)
         self.assertIsInstance(error, ValueError)
 
-        valid, error = validate_model_class("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.invalid_model.Model")
+        valid, error = validate_model_class("michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.invalid_model.Model")
         self.assertFalse(valid)
         self.assertIsInstance(error, TypeError)

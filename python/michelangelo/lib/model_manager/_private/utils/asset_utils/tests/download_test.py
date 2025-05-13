@@ -2,29 +2,29 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 
 
 class DownloadTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
     def test_download_assets_hdfs(self, mock_download_from_terrablob, mock_download_from_hdfs):
         download_assets("src_path", "des_path", StorageType.HDFS)
         mock_download_from_terrablob.assert_not_called()
         mock_download_from_hdfs.assert_called_once_with("src_path", "des_path")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.get_terrablob_auth_mode")
     def test_download_assets_terrablob(self, mock_get_terrablob_auth_mode, mock_download_from_terrablob, mock_download_from_hdfs):
         mock_get_terrablob_auth_mode.return_value = None
         download_assets("src_path", "des_path", StorageType.TERRABLOB)
         mock_download_from_terrablob.assert_called_once_with("src_path", "des_path", source_entity=None, auth_mode=None, timeout=None)
         mock_download_from_hdfs.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
     def test_download_assets_local(self, mock_download_from_terrablob, mock_download_from_hdfs):
         with (
             tempfile.TemporaryDirectory() as src_path,
@@ -60,8 +60,8 @@ class DownloadTest(TestCase):
                 ],
             )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
     def test_download_assets_local_single_file(self, mock_download_from_terrablob, mock_download_from_hdfs):
         with tempfile.TemporaryDirectory() as temp_dir:
             source = os.path.join(temp_dir, "source")
@@ -78,8 +78,8 @@ class DownloadTest(TestCase):
             mock_download_from_terrablob.assert_not_called()
             mock_download_from_hdfs.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_hdfs")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.download.download_from_terrablob")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_hdfs")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.download.download_from_terrablob")
     def test_download_assets_unknown_source_type(self, mock_download_from_terrablob, mock_download_from_hdfs):
         with tempfile.TemporaryDirectory() as des_path:
             download_assets("src_path", des_path, "unknown")

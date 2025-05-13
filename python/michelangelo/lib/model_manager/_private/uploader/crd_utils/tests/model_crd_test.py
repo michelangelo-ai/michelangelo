@@ -1,14 +1,14 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import (
+from michelangelo.lib.model_manager.constants import (
     ModelKind,
     PackageType,
 )
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     DataType,
     ModelSchema,
     ModelSchemaItem,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils import create_model_crd
+from michelangelo.lib.model_manager._private.uploader.crd_utils import create_model_crd
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     Model,
     MODEL_KIND_CUSTOM,

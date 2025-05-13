@@ -1,15 +1,15 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import generate_model_package_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.tests.fixtures.sample_config_pbtxt import SAMPLE_CONFIG_PBTXT
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_triton import generate_model_package_content
+from michelangelo.lib.model_manager._private.packager.llm_triton.tests.fixtures.sample_config_pbtxt import SAMPLE_CONFIG_PBTXT
 
 
 class ModelPackageTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
+    @patch("michelangelo.lib.model_manager._private.utils.asset_utils.list.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.packager.llm_triton.model_package.infer_llm_model_type")
     def test_generate_model_package_content(
         self,
         mock_infer_llm_model_type,

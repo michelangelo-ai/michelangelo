@@ -1,13 +1,13 @@
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import (
+from michelangelo.lib.model_manager.constants import (
     ModelKind,
     PackageType,
 )
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils.model_kind import convert_model_kind
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils.package_type import convert_package_type
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils.model_schema import set_model_schema
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils.deployable_artifact_uri import (
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.uploader.crd_utils.model_kind import convert_model_kind
+from michelangelo.lib.model_manager._private.uploader.crd_utils.package_type import convert_package_type
+from michelangelo.lib.model_manager._private.uploader.crd_utils.model_schema import set_model_schema
+from michelangelo.lib.model_manager._private.uploader.crd_utils.deployable_artifact_uri import (
     get_deployable_artifact_uri,
 )
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model

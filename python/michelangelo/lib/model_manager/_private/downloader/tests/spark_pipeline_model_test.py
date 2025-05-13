@@ -4,8 +4,8 @@ import os
 import shutil
 import tempfile
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils.gzip import gzip_compress
-from uber.ai.michelangelo.sdk.model_manager._private.downloader import download_spark_pipeline_model
+from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_compress
+from michelangelo.lib.model_manager._private.downloader import download_spark_pipeline_model
 
 
 def make_download_from_terrablob_v2_projects(project_name: str):
@@ -62,11 +62,11 @@ def download_from_terrablob_v1_projects(
 
 
 class SparkPipelineModelTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.spark_pipeline_model.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
     def test_download_spark_pipeline_model_with_v2_projects(
         self,
         mock_path_exists,
@@ -85,7 +85,7 @@ class SparkPipelineModelTest(TestCase):
 
         with (
             patch(
-                "uber.ai.michelangelo.sdk.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
+                "michelangelo.lib.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
                 wraps=make_download_from_terrablob_v2_projects(project_name),
             ) as mock_download_from_terrablob,
             tempfile.TemporaryDirectory() as temp_dir,
@@ -103,11 +103,11 @@ class SparkPipelineModelTest(TestCase):
 
             mock_download_from_terrablob.assert_called_once()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.spark_pipeline_model.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
     def test_download_spark_pipeline_model_with_v2_projects_with_no_revision(
         self,
         mock_path_exists,
@@ -126,7 +126,7 @@ class SparkPipelineModelTest(TestCase):
 
         with (
             patch(
-                "uber.ai.michelangelo.sdk.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
+                "michelangelo.lib.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
                 wraps=make_download_from_terrablob_v2_projects(project_name),
             ) as mock_download_from_terrablob,
             tempfile.TemporaryDirectory() as temp_dir,
@@ -160,11 +160,11 @@ class SparkPipelineModelTest(TestCase):
 
             mock_download_from_terrablob.assert_called_once()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.spark_pipeline_model.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_terrablob_auth_mode")
+    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
     def test_download_spark_pipeline_model_with_v2_projects_with_empty_revision(
         self,
         mock_path_exists,
@@ -183,7 +183,7 @@ class SparkPipelineModelTest(TestCase):
 
         with (
             patch(
-                "uber.ai.michelangelo.sdk.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
+                "michelangelo.lib.model_manager._private.downloader.v2_projects_model.download_from_terrablob",
                 wraps=make_download_from_terrablob_v2_projects(project_name),
             ) as mock_download_from_terrablob,
             tempfile.TemporaryDirectory() as temp_dir,
@@ -201,12 +201,12 @@ class SparkPipelineModelTest(TestCase):
 
         mock_download_from_terrablob.assert_called_once()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.spark_pipeline_model.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
+    @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
     def test_download_spark_pipeline_model_with_legacy_ma(
         self,
         mock_download_from_terrablob,
@@ -255,12 +255,12 @@ class SparkPipelineModelTest(TestCase):
             source_entity=None,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.spark_pipeline_model.path_exists")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
+    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
+    @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
     def test_download_spark_pipeline_model_with_legacy_ma_no_revision(
         self,
         mock_download_from_terrablob,

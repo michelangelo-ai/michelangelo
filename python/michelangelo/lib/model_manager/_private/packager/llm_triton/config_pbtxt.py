@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
 
 
 def generate_config_pbtxt_content(

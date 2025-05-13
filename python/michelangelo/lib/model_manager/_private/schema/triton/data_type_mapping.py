@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
+from michelangelo.lib.model_manager.schema import DataType
 
 
 # Mapping from ModelSchema data types to Triton data types.

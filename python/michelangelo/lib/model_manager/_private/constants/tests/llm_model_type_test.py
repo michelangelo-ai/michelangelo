@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.constants import LLMModelType
+from michelangelo.lib.model_manager._private.constants import LLMModelType
 
 
 class LLMModelTypeTest(TestCase):

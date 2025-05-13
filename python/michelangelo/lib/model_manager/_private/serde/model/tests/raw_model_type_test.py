@@ -1,8 +1,8 @@
 import os
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
-from uber.ai.michelangelo.sdk.model_manager._private.serde.model import get_raw_model_type
+from michelangelo.lib.model_manager._private.constants import RawModelType
+from michelangelo.lib.model_manager._private.serde.model import get_raw_model_type
 
 
 def create_model_package(model_path: str, raw_model_type: str):

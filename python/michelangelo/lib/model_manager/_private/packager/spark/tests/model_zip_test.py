@@ -4,7 +4,7 @@ import shutil
 from pyspark.ml import PipelineModel
 from pyspark.ml.feature import VectorAssembler
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import create_model_zip
+from michelangelo.lib.model_manager._private.packager.spark import create_model_zip
 
 
 class ModelZipTest(SparkTestCase):

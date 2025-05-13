@@ -1,4 +1,4 @@
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind as ModelKindConst
+from michelangelo.lib.model_manager.constants import ModelKind as ModelKindConst
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     ModelKind,
     MODEL_KIND_CUSTOM,

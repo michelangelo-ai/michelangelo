@@ -6,14 +6,14 @@ from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler
 from pyspark.ml.linalg import Vectors
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager.packager.spark import SparkModelPackager
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils.gzip import gzip_decompress
-from uber.ai.michelangelo.sdk.model_manager._private.utils.file_utils import cd
+from michelangelo.lib.model_manager.packager.spark import SparkModelPackager
+from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_decompress
+from michelangelo.lib.model_manager._private.utils.file_utils import cd
 from uber.ai.michelangelo.sdk.compat.pyspark.ml.feature import (
     MichelangeloResultPacker,
     MichelangeloDSL,

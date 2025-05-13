@@ -1,11 +1,11 @@
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import (
+from michelangelo.lib.model_manager.constants import (
     ModelKind,
     PackageType,
 )
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils import create_model_crd
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.model_family import create_model_family
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.uploader.crd_utils import create_model_crd
+from michelangelo.lib.model_manager._private.uploader.model_family import create_model_family
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
 
 
@@ -59,7 +59,7 @@ def upload_model_crd(
     Returns:
         Model: Model CRD object.
     """
-    from uber.ai.michelangelo.sdk.model_manager._private.utils.api_client import APIClient
+    from michelangelo.lib.model_manager._private.utils.api_client import APIClient
 
     if model_family:
         create_model_family(project_name, model_family)

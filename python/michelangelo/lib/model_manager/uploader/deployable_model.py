@@ -1,10 +1,10 @@
 from __future__ import annotations
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     get_latest_model_revision_id,
     infer_model_package_type,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import (
+from michelangelo.lib.model_manager._private.uploader import (
     upload_generic_deployable_model,
     upload_spark_model,
     upload_mobile_model,

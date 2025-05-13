@@ -4,8 +4,8 @@ from unittest.mock import patch
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler
 from uber.ai.michelangelo.shared.testing.spark import SparkTestCase
-from uber.ai.michelangelo.sdk.model_manager.serde.spark import save_spark_pipeline_model
-from uber.ai.michelangelo.sdk.model_manager._private.constants.hdfs_paths import (
+from michelangelo.lib.model_manager.serde.spark import save_spark_pipeline_model
+from michelangelo.lib.model_manager._private.constants.hdfs_paths import (
     HDFS_TMP_MODELS_DIR,
 )
 
@@ -41,8 +41,8 @@ class SaveSparkPipelineModelTest(SparkTestCase):
             model_path = save_spark_pipeline_model(self.model, dest_model_path=dest_model_path)
             self.assertTrue(os.listdir(model_path), ["metadata", "stages"])
 
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.get_spark_session")
-    @patch("uber.ai.michelangelo.sdk.model_manager.serde.spark.pipeline_model.download_from_hdfs", wraps=download_from_hdfs)
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.get_spark_session")
+    @patch("michelangelo.lib.model_manager.serde.spark.pipeline_model.download_from_hdfs", wraps=download_from_hdfs)
     def test_save_spark_pipeline_model_hdfs(
         self,
         mock_download_from_hdfs,

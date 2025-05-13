@@ -2,12 +2,12 @@ import os
 import tempfile
 import numpy as np
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton import PythonTritonPackager
-from uber.ai.michelangelo.sdk.model_manager.serde.model import load_raw_model
-from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
+from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager.serde.model import load_raw_model
+from michelangelo.lib.model_manager._private.constants import RawModelType
+from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict import Predict
 
 
 class RawModelTest(TestCase):
@@ -31,7 +31,7 @@ class RawModelTest(TestCase):
         self.sample_data = [{"input": np.array([1])}]
 
     def create_model_package(self, directory: str):
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         src_model_path = os.path.join(directory, "model")
         dest_model_path = os.path.join(directory, "model_package")
         os.makedirs(src_model_path)

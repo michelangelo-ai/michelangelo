@@ -1,10 +1,10 @@
 import yaml
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.config_pbtxt import generate_config_pbtxt_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.model_py import generate_model_py_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.user_model_py import generate_user_model_content
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton.llm_model_type import infer_llm_model_type
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import generate_download_yaml_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_triton.config_pbtxt import generate_config_pbtxt_content
+from michelangelo.lib.model_manager._private.packager.llm_triton.model_py import generate_model_py_content
+from michelangelo.lib.model_manager._private.packager.llm_triton.user_model_py import generate_user_model_content
+from michelangelo.lib.model_manager._private.packager.llm_triton.llm_model_type import infer_llm_model_type
+from michelangelo.lib.model_manager._private.packager.common import generate_download_yaml_content
 
 
 def generate_model_package_content(

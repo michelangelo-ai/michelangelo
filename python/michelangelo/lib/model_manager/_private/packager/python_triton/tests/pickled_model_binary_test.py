@@ -5,12 +5,12 @@ import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
 from pathlib import Path
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import (
+from michelangelo.lib.model_manager._private.packager.python_triton import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict import Predict
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.invalid_model import Model
+from michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.invalid_model import Model
 
 
 class PickledModelBinaryTest(TestCase):
@@ -56,7 +56,7 @@ class PickledModelBinaryTest(TestCase):
                 ],
             )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.pickled_model_binary.find_pickle_definitions")
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.pickled_model_binary.find_pickle_definitions")
     def test_serialize_pickle_dependencies_with_main(self, mock_find_pickle_definitions):
         mock_find_pickle_definitions.return_value = ["__main__.test"]
         with tempfile.TemporaryDirectory() as temp_dir:

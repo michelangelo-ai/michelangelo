@@ -10,7 +10,7 @@ from uber.ai.michelangelo.shared.gateways.hdfs_gateway import (
     upload_to_hdfs,
     download_from_hdfs,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.constants.hdfs_paths import (
+from michelangelo.lib.model_manager._private.constants.hdfs_paths import (
     HDFS_TMP_MODELS_DIR,
 )
 

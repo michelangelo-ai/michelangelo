@@ -1,11 +1,11 @@
 from typing import Optional
 from uber.ai.michelangelo.sdk.api_client.v2beta1.utils import generate_random_name
-from uber.ai.michelangelo.sdk.model_manager.constants import ModelKind
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model import upload_deployable_model
-from uber.ai.michelangelo.sdk.model_manager.uploader.raw_model import upload_raw_model
-from uber.ai.michelangelo.sdk.model_manager._private.uploader import upload_model_crd
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import (
+from michelangelo.lib.model_manager.constants import ModelKind
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.uploader.deployable_model import upload_deployable_model
+from michelangelo.lib.model_manager.uploader.raw_model import upload_raw_model
+from michelangelo.lib.model_manager._private.uploader import upload_model_crd
+from michelangelo.lib.model_manager._private.utils.model_utils import (
     get_latest_model_revision_id,
     infer_model_package_type,
     infer_raw_model_package_type,

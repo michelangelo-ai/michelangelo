@@ -1,11 +1,11 @@
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager.downloader import download_deployable_model
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager.downloader import download_deployable_model
 
 
 class DeployableModelTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager.downloader.deployable_model.download_spark_pipeline_model")
+    @patch("michelangelo.lib.model_manager.downloader.deployable_model.download_spark_pipeline_model")
     def test_download_spark_pipeline_model(
         self,
         mock_download_spark_pipeline_model,
@@ -40,7 +40,7 @@ class DeployableModelTest(TestCase):
         self.assertEqual(args[4], None)
         self.assertEqual(args[5], None)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager.downloader.deployable_model.download_generic_deployable_model")
+    @patch("michelangelo.lib.model_manager.downloader.deployable_model.download_generic_deployable_model")
     def test_download_generic_deployable_model(
         self,
         mock_download_generic_deployable_model,

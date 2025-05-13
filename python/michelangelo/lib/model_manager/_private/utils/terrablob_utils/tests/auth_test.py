@@ -1,6 +1,6 @@
 import os
 from uber.ai.michelangelo.shared.testing.env import EnvTestCase
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 
 
 class AuthTest(EnvTestCase):

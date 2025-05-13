@@ -1,6 +1,6 @@
 from typing import Optional
 from uber.ai.michelangelo.shared.utils.palette_utils import get_palette_expressions
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
+from michelangelo.lib.model_manager.schema import DataType
 
 DSL_PREFIX = "derived_"
 

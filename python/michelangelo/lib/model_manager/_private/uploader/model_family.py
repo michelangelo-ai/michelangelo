@@ -19,7 +19,7 @@ def create_model_family(project_name: str, model_family_name: str) -> ModelFamil
     Returns:
         Model family object if the model family is created successfully, otherwise None.
     """
-    from uber.ai.michelangelo.sdk.model_manager._private.utils.api_client import APIClient
+    from michelangelo.lib.model_manager._private.utils.api_client import APIClient
 
     model_family = ModelFamily()
     model_family.metadata.namespace = project_name

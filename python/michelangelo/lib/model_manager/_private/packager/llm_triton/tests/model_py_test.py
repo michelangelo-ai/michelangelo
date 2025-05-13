@@ -1,6 +1,6 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from uber.ai.michelangelo.sdk.model_manager._private.packager.llm_triton import generate_model_py_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.llm_triton import generate_model_py_content
 
 
 class ModelPyTest(TestCase):

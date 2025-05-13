@@ -1,5 +1,5 @@
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils.data_type import convert_data_type
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.uploader.crd_utils.data_type import convert_data_type
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.schema_proto import DataSchemaItem
 

@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema.data_type import DataType
+from michelangelo.lib.model_manager.schema.data_type import DataType
 
 
 class DataTypeTest(TestCase):

@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.constants import RawModelType
+from michelangelo.lib.model_manager._private.constants import RawModelType
 
 
 class RawModelTypeTest(TestCase):

@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import download_assets_given_download_yaml
+from michelangelo.lib.model_manager._private.utils.model_utils import download_assets_given_download_yaml
 
 
 def retrieve_model_assets(model_package: str, timeout: Optional[str] = None, source_entity: Optional[str] = None):

@@ -1,7 +1,7 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import DataType
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton import convert_data_type
-from uber.ai.michelangelo.sdk.model_manager._private.schema.triton import DATA_TYPE_MAPPING
+from michelangelo.lib.model_manager.schema import DataType
+from michelangelo.lib.model_manager._private.schema.triton import convert_data_type
+from michelangelo.lib.model_manager._private.schema.triton import DATA_TYPE_MAPPING
 
 
 class DataTypeTest(TestCase):

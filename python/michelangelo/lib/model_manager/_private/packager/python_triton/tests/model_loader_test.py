@@ -1,7 +1,7 @@
 import os
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import serialize_model_loader
+from michelangelo.lib.model_manager._private.packager.python_triton import serialize_model_loader
 
 
 class ModelLoaderTest(TestCase):

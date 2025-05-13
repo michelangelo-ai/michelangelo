@@ -2,15 +2,15 @@ from unittest import TestCase
 import os
 import tempfile
 from pathlib import Path
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton import serialize_model_class
+from michelangelo.lib.model_manager._private.packager.python_triton import serialize_model_class
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
+import michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict  # noqa:F401
 
 
 class ModelClassTest(TestCase):
     def test_serialize_model_class(self):
-        model_class = "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict"
 
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = os.path.join(temp_dir, "package")

@@ -1,12 +1,12 @@
 import logging
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils import (
+from michelangelo.lib.model_manager._private.utils.pickle_utils import (
     find_pickled_files,
     find_pickle_definitions,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder import find_dependency_files
-from uber.ai.michelangelo.sdk.model_manager._private.utils.module_utils import save_module_files
-from uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.main_module import serialize_main_module
+from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
+from michelangelo.lib.model_manager._private.packager.python_triton.main_module import serialize_main_module
 
 _logger = logging.getLogger(__name__)
 

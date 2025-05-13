@@ -1,12 +1,12 @@
 from typing import Optional
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import path_exists
-from uber.ai.michelangelo.sdk.model_manager._private.downloader.v2_projects_model import download_v2_projects_model
-from uber.ai.michelangelo.sdk.model_manager._private.downloader.legacy_ma_model import download_legacy_ma_model
-from uber.ai.michelangelo.sdk.model_manager.utils.terrablob_paths import (
+from michelangelo.lib.model_manager._private.downloader.v2_projects_model import download_v2_projects_model
+from michelangelo.lib.model_manager._private.downloader.legacy_ma_model import download_legacy_ma_model
+from michelangelo.lib.model_manager.utils.terrablob_paths import (
     get_v2_projects_model_jar_path,
     get_v2_projects_model_base_path,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
+from michelangelo.lib.model_manager._private.utils.model_utils import get_latest_uploaded_model_revision
 
 
 def download_spark_pipeline_model(
@@ -45,7 +45,7 @@ def download_spark_pipeline_model(
             source_entity=source_entity,
         )
     else:
-        from uber.ai.michelangelo.sdk.model_manager._private.utils.api_client import APIClient
+        from michelangelo.lib.model_manager._private.utils.api_client import APIClient
 
         model_crd = APIClient.ModelService.get_model(project_name, model_name)
         project_id = model_crd.spec.legacy_model_spec.project_id

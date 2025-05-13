@@ -1,11 +1,11 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
-from uber.ai.michelangelo.sdk.model_manager._private.packager.spark import generate_model_metadata_content
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager._private.packager.spark import generate_model_metadata_content
 
 
 class ModelMetadataContentTest(TestCase):

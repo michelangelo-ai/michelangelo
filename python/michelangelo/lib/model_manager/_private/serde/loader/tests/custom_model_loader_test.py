@@ -5,13 +5,13 @@ import tempfile
 import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton import PythonTritonPackager
-from uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader import load_custom_model
-from uber.ai.michelangelo.sdk.model_manager._private.serde.model import load_custom_raw_model
-from uber.ai.michelangelo.sdk.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
+from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
+from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict import Predict
 
 
 class CustomModelLoaderTest(TestCase):
@@ -45,7 +45,7 @@ class CustomModelLoaderTest(TestCase):
                 sys.modules["__main__"].__dict__[key] = self.main_dict[key]
 
     def test_load_custom_raw_model_with_pickle(self):
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -85,10 +85,10 @@ class CustomModelLoaderTest(TestCase):
 
             self.assertEqual(response, "test_feature")
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
+    @patch("michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
     def test_load_custom_raw_model_with_pickle_def_in_main(self, mock_walk_pickle_definitions_in_dir):
         mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -129,7 +129,7 @@ class CustomModelLoaderTest(TestCase):
             self.assertEqual(response, "test_feature")
 
     def test_load_custom_model_with_pickle_def_in_main_with_load_error(self):
-        model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -167,7 +167,7 @@ class CustomModelLoaderTest(TestCase):
 
             with (
                 patch(
-                    "uber.ai.michelangelo.sdk.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir"
+                    "michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir"
                 ) as mock_walk_pickle_definitions_in_dir,
                 patch.object(Predict, "load", side_effect=AttributeError("error")) as mock_load,
                 self.assertRaises(RuntimeError),

@@ -7,21 +7,21 @@ from unittest import TestCase
 from unittest.mock import patch
 from typing import Optional
 from pathlib import Path
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton import PythonTritonPackager
-from uber.ai.michelangelo.sdk.model_manager._private.schema.common import schema_to_yaml
-from uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.model import Model
+from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
+from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.model import Model
 
 # enable metabuild to build bazel dependencies
-import uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict  # noqa:F401
+import michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict  # noqa:F401
 
-model_class = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
-model_class_with_relative_imports = "uber.ai.michelangelo.sdk.model_manager.packager.python_triton.tests.fixtures.predict_with_relative_import.Predict"
+model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict_with_relative_import.Predict"
 
 
 def download_model(
@@ -168,7 +168,7 @@ class PythonTritonPackagerTest(TestCase):
         expected_files = sorted(package_files + self.model_loader_files)
         self.assertEqual(files, expected_files)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_model)
     def test_create_model_package(self, mock_download_model):
         packager = PythonTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -200,7 +200,7 @@ class PythonTritonPackagerTest(TestCase):
             predict_obj = Predict()
             self.assertEqual(predict_obj.predict(self.sample_data[0]), {"response": self.sample_data[0].get("input")})
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_model)
     def test_create_model_package_with_custom_batch_processing(self, mock_download_model):
         packager = PythonTritonPackager(custom_batch_processing=True)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -261,7 +261,7 @@ class PythonTritonPackagerTest(TestCase):
     def test_create_model_package_with_default_dest_model_path(self):
         packager = PythonTritonPackager()
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model",
             wraps=download_model,
         ) as mock_download_model:
             dest_model_path = packager.create_model_package(
@@ -293,7 +293,7 @@ class PythonTritonPackagerTest(TestCase):
     def test_create_model_package_with_altered_include_import_prefixes(self):
         packager = PythonTritonPackager()
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model",
             wraps=download_model,
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -304,8 +304,8 @@ class PythonTritonPackagerTest(TestCase):
                     model_schema=self.model_schema,
                     dest_model_path=dest_model_path,
                     include_import_prefixes=[
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.package",
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.simple_module",
+                        "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.package",
+                        "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module",
                     ],
                 )
 
@@ -340,7 +340,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model",
             wraps=download_model,
         ) as mock_download_model:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -447,7 +447,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model",
             wraps=download_model_with_pickle,
         ) as mock_download_model:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -499,7 +499,7 @@ class PythonTritonPackagerTest(TestCase):
                 expected_files = sorted(package_files + self.model_loader_files)
                 self.assertEqual(files, expected_files)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_empty_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.model_package.download_model", wraps=download_empty_model)
     def test_create_model_package_with_empty_model(self, mock_download_model):
         packager = PythonTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -613,7 +613,7 @@ class PythonTritonPackagerTest(TestCase):
             expected_files,
         )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_model)
     def test_create_raw_model_package(self, mock_download_model):
         packager = PythonTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -627,7 +627,7 @@ class PythonTritonPackagerTest(TestCase):
             )
             self.assertRawModelPackage(dest_model_path, mock_download_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_model)
     def test_create_raw_model_package_with_custom_batch_processing(self, mock_download_model):
         packager = PythonTritonPackager(custom_batch_processing=True)
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -713,7 +713,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model",
             wraps=download_model,
         ) as mock_download_model:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -732,7 +732,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model",
             wraps=download_model,
         ) as mock_download_model:
             dest_model_path = packager.create_raw_model_package(
@@ -747,7 +747,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model",
             wraps=download_model,
         ):
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -759,8 +759,8 @@ class PythonTritonPackagerTest(TestCase):
                     sample_data=self.sample_data,
                     dest_model_path=dest_model_path,
                     include_import_prefixes=[
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.package",
-                        "uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.simple_module",
+                        "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.package",
+                        "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module",
                     ],
                 )
 
@@ -795,7 +795,7 @@ class PythonTritonPackagerTest(TestCase):
         packager = PythonTritonPackager()
 
         with patch(
-            "uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model",
+            "michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model",
             wraps=download_model_with_pickle,
         ) as mock_download_model:
             with tempfile.TemporaryDirectory() as temp_dir:
@@ -847,7 +847,7 @@ class PythonTritonPackagerTest(TestCase):
                     ],
                 )
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_empty_model)
+    @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model", wraps=download_empty_model)
     def test_create_raw_model_package_with_empty_model(self, mock_download_model):
         packager = PythonTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:

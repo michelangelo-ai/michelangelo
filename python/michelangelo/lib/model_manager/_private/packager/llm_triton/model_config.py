@@ -2,8 +2,8 @@ import os
 import tempfile
 import logging
 from typing import Optional
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager._private.packager.common import download_model
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager._private.packager.common import download_model
 from uber.ai.michelangelo.shared.errors.terrablob_error import TerrablobFileNotFoundError
 from uber.ai.michelangelo.shared.errors.hdfs_error import HDFSError
 

@@ -1,5 +1,5 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.utils.model import SparkModelMetadata
+from michelangelo.lib.model_manager.utils.model import SparkModelMetadata
 
 
 class SparkModelMetadataTest(TestCase):

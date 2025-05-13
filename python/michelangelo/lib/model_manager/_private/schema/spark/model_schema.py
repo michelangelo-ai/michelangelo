@@ -2,19 +2,19 @@ import logging
 from typing import Optional
 from pyspark.ml.pipeline import PipelineModel
 from pyspark.sql import DataFrame
-from uber.ai.michelangelo.sdk.model_manager.schema import (
+from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
     DataType,
 )
 from uber.ai.michelangelo.shared.utils.palette_utils import get_palette_expressions
-from uber.ai.michelangelo.sdk.model_manager._private.schema.spark.input_schema import (
+from michelangelo.lib.model_manager._private.schema.spark.input_schema import (
     populate_stage_input_schema,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.spark.feature_store_features_schema import (
+from michelangelo.lib.model_manager._private.schema.spark.feature_store_features_schema import (
     populate_stage_feature_store_features_schema,
 )
-from uber.ai.michelangelo.sdk.model_manager._private.schema.spark.dtype_mapping import DTYPE_MAPPING
+from michelangelo.lib.model_manager._private.schema.spark.dtype_mapping import DTYPE_MAPPING
 
 _logger = logging.getLogger(__name__)
 

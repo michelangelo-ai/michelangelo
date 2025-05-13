@@ -1,6 +1,6 @@
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
-from uber.ai.michelangelo.sdk.model_manager._private.uploader.crd_utils import convert_package_type
+from michelangelo.lib.model_manager.constants import PackageType
+from michelangelo.lib.model_manager._private.uploader.crd_utils import convert_package_type
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     DEPLOYABLE_MODEL_PACKAGE_TYPE_INVALID,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE,

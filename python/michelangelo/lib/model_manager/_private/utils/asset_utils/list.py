@@ -1,10 +1,10 @@
 import os
 import re
 from pathlib import PurePath
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.constants import StorageType
 from uber.ai.michelangelo.shared.gateways.terrablob_gateway import list_terrablob_dir
 from uber.ai.michelangelo.shared.utils.fsspec_utils import ls_files
-from uber.ai.michelangelo.sdk.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
+from michelangelo.lib.model_manager._private.utils.terrablob_utils import get_terrablob_auth_mode
 
 URL_PATTERN = r"^\w+://.*"
 

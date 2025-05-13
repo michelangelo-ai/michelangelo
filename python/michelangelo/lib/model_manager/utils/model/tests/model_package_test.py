@@ -2,8 +2,8 @@ import os
 import yaml
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager.constants import StorageType
-from uber.ai.michelangelo.sdk.model_manager.utils.model import retrieve_model_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.utils.model import retrieve_model_assets
 
 
 def create_download_yaml_content(source: str):

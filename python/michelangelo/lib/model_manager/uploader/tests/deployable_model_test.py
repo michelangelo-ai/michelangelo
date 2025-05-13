@@ -2,14 +2,14 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.uploader import upload_deployable_model
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType
+from michelangelo.lib.model_manager.uploader import upload_deployable_model
+from michelangelo.lib.model_manager.constants import PackageType
 
 
 class DeployableModelTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.spark_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.spark_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_spark_deployable_model(
         self,
         mock_infer_model_package_type,
@@ -42,9 +42,9 @@ class DeployableModelTest(TestCase):
 
         self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_triton_and_raw_deployable_model(
         self,
         mock_infer_model_package_type,
@@ -81,9 +81,9 @@ class DeployableModelTest(TestCase):
 
                 self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_deployable_model_with_package_type_param(
         self,
         mock_infer_model_package_type,
@@ -119,10 +119,10 @@ class DeployableModelTest(TestCase):
 
             self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.mobile_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.mobile_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_mobile_deployable_model(
         self,
         mock_infer_model_package_type,
@@ -163,9 +163,9 @@ class DeployableModelTest(TestCase):
 
             mock_upload_tar_to_terrablob.assert_not_called()
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_deployable_model_with_revision_id_param(
         self,
         mock_infer_model_package_type,
@@ -202,9 +202,9 @@ class DeployableModelTest(TestCase):
 
             self.assertEqual(tb_path, expected_tb_path)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
     def test_upload_deployable_model_with_source_entity_param(
         self,
         mock_infer_model_package_type,

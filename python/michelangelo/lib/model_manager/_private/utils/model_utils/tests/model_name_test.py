@@ -1,8 +1,8 @@
 import os
 import tempfile
 from unittest import TestCase
-from uber.ai.michelangelo.sdk.model_manager._private.constants import Placeholder
-from uber.ai.michelangelo.sdk.model_manager._private.utils.model_utils import replace_model_name_placeholder
+from michelangelo.lib.model_manager._private.constants import Placeholder
+from michelangelo.lib.model_manager._private.utils.model_utils import replace_model_name_placeholder
 
 
 class ModelNameTest(TestCase):

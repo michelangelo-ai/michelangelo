@@ -3,9 +3,9 @@ import yaml
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from uber.ai.michelangelo.sdk.model_manager.constants import PackageType, ModelKind
-from uber.ai.michelangelo.sdk.model_manager.schema import ModelSchema
-from uber.ai.michelangelo.sdk.model_manager.uploader import upload_model
+from michelangelo.lib.model_manager.constants import PackageType, ModelKind
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.uploader import upload_model
 from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
     Model,
     MODEL_KIND_CUSTOM,
@@ -14,12 +14,12 @@ from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto imp
 
 
 class ModelTest(TestCase):
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.raw_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.infer_model_package_type")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
     def test_upload_model(
         self,
         mock_create_model_family,
@@ -111,12 +111,12 @@ class ModelTest(TestCase):
             self.assertEqual(tb_raw_model, expected_tb_raw_path)
             self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.raw_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.infer_model_package_type")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
     def test_upload_model_with_no_raw_model(
         self,
         mock_create_model_family,
@@ -186,12 +186,12 @@ class ModelTest(TestCase):
             self.assertIsNone(tb_raw_model)
             self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.raw_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.infer_model_package_type")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.generate_random_name")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager.uploader.model.generate_random_name")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
     def test_upload_model_with_autogen_params(
         self,
         mock_create_model,
@@ -250,12 +250,12 @@ class ModelTest(TestCase):
             self.assertEqual(tb_raw_model, expected_tb_raw_path)
             self.assertEqual(model, expected_model)
 
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.raw_model.upload_to_terrablob")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.get_latest_model_revision_id")
-    @patch("uber.ai.michelangelo.sdk.model_manager.uploader.model.infer_model_package_type")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
-    @patch("uber.ai.michelangelo.sdk.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch("michelangelo.lib.model_manager.uploader.model.get_latest_model_revision_id")
+    @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
     def test_upload_model_with_source_entity(
         self,
         mock_create_model_family,
