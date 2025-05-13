@@ -70,7 +70,7 @@ print(project)
 - Run tests: `poetry run pytest`
 - Run examples:
   - Install dependencies for example (ML libs for BERT model): `poetry install -E example`
-  - Run example: `poetry run python ./examples/bert_cola/bert_cola.py`
+  - Run example: `$ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py`
 - Format code: `poetry run ruff format .`
 - Run Michelangelo CLI: `poetry run ma --help`
 
