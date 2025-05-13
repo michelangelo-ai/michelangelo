@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 import subprocess
-from michelangelo._internal.utils.cmd_utils import execute_cmd
+from michelangelo._internal.utils.cmd import execute_cmd
 
 
 class ExecuteTest(TestCase):

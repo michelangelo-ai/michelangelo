@@ -1,6 +1,6 @@
 from retrying import retry
 import logging
-from michelangelo._internal.utils.cmd_utils import (
+from michelangelo._internal.utils.cmd import (
     execute_cmd,
     decode_output,
 )

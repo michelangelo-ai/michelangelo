@@ -1,13 +1,13 @@
 from unittest import TestCase
-from michelangelo._internal.utils.reflection_utils import get_module_attr
+from michelangelo._internal.utils.reflection import get_module_attr
 
 # enable metabuild to build bazel dependencies
-import michelangelo._internal.utils.reflection_utils.tests.fixtures.simple_module  # noqa:F401
+import michelangelo._internal.utils.reflection.tests.fixtures.simple_module  # noqa:F401
 
 
 class ModuleAttrTest(TestCase):
     def test_get_module_attr(self):
-        module_attr = get_module_attr("michelangelo._internal.utils.reflection_utils.tests.fixtures.simple_module.module_attr")
+        module_attr = get_module_attr("michelangelo._internal.utils.reflection.tests.fixtures.simple_module.module_attr")
 
         self.assertIsNotNone(module_attr)
         self.assertEqual(module_attr.__name__, "module_attr")

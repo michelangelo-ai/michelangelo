@@ -1,6 +1,6 @@
 import logging
 from michelangelo._internal.errors.hdfs_error import HDFSError
-from michelangelo._internal.utils.cmd_utils import execute_cmd, decode_output
+from michelangelo._internal.utils.cmd import execute_cmd, decode_output
 
 _logger = logging.getLogger(__name__)
 

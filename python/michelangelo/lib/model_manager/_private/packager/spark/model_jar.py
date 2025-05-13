@@ -1,6 +1,6 @@
 from __future__ import annotations
 import tempfile
-from michelangelo._internal.utils.cmd_utils import execute_cmd, decode_output
+from michelangelo._internal.utils.cmd import execute_cmd, decode_output
 from michelangelo.lib.model_manager._private.packager.common import (
     generate_model_package_folder,
 )

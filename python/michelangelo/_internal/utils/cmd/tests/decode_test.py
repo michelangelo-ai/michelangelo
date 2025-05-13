@@ -1,5 +1,5 @@
 from unittest import TestCase
-from michelangelo._internal.utils.cmd_utils import decode_output
+from michelangelo._internal.utils.cmd import decode_output
 
 
 class DecodeTest(TestCase):
