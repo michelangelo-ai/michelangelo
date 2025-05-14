@@ -34,10 +34,12 @@ Install dependencies depending on your environment:
 
 Workflows run locally as an ordinary Python program. Just use relevant `py_binary` poetry run to a workflow in the local mode. Ex:
 
-    poetry run python ./examples/bert_cola/bert_cola.py
-    poetry run python ./examples/nomic_ai/nomic_ai.py
-    poetry run python ./examples/llm_prediction/vllm_prediction.py
-    poetry run python ./examples/llm_prediction/hf_prediction.py
+```
+$ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py
+$ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py
+$ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py
+$ PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py
+```
 
 For IDE users to access ray dashboard,
 - Command + Cmd Shift + P
@@ -104,25 +106,25 @@ In your browser, open http://localhost:9090/buckets, click "Create Bucket" and c
 
 Use `.remote_run` Bazel target to run a workflow in the remote mode. Ex:
 
-    poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+    $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
-    poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+    $ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
-    poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes
+    $ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes
 
-    poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
+    $ PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
 <hr/>
 
 User `--workflow temporal` to run the workflow in Temporal mode.
 
-    poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
+    $ PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 
-    poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
+    $ PYTHONPATH="." poetry run python ./examples/nomic_ai/nomic_ai.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 
-    poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes --workflow temporal
+    $ PYTHONPATH="." poetry run python ./examples/llm_prediction/vllm_prediction.py remote-run --image docker.io/library/vllm:latest --storage-url s3://default --yes --workflow temporal
 
-    poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
+    $ PYTHONPATH="." poetry run python ./examples/llm_prediction/hf_prediction.py remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes --workflow temporal
 
 ***Check your workflow in cadence***
 
