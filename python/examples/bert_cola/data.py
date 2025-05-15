@@ -22,7 +22,8 @@ log = logging.getLogger(__name__)
         worker_memory="2Gi",
         worker_instances=1,
         # breakpoint=True,
-    )
+    ),
+    cache_enabled=True,
 )
 def load_data(
     path: str,

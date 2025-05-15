@@ -1,5 +1,6 @@
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
+from examples.bert_cola.pusher import pusher
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -18,6 +19,7 @@ def train_workflow():
         validation_data,
         test_data,
     )
+    pusher(result[0])
     print("result:", result)
     print("ok.")
 
