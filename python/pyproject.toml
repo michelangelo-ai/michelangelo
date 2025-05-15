@@ -67,6 +67,7 @@ vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "
 mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
 [tool.pytest.ini_options]
+addopts = "--import-mode=importlib"
 pythonpath = [
   "."
 ]
