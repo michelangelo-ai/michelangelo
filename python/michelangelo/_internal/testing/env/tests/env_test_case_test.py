@@ -1,7 +1,7 @@
 import os
 import uuid
 from unittest import TestCase
-from uber.ai.michelangelo.shared.testing.env import EnvTestCase
+from michelangelo.lib._internal.testing.env import EnvTestCase
 
 
 class EnvTestCaseTest(TestCase):
