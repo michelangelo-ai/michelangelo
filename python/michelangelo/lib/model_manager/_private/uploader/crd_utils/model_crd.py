@@ -10,7 +10,7 @@ from michelangelo.lib.model_manager._private.uploader.crd_utils.model_schema imp
 from michelangelo.lib.model_manager._private.uploader.crd_utils.deployable_artifact_uri import (
     get_deployable_artifact_uri,
 )
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
+from michelangelo.gen.api.v2.model_pb2 import Model
 
 
 def create_model_crd(

@@ -9,12 +9,12 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchemaItem,
 )
 from michelangelo.lib.model_manager._private.uploader.crd_utils import create_model_crd
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
+from michelangelo.gen.api.v2.model_pb2 import (
     Model,
     MODEL_KIND_CUSTOM,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON,
 )
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.schema_proto import (
+from michelangelo.gen.api.v2.model_pb2 import (
     DataSchemaItem,
     DATA_TYPE_NUMERIC,
     DATA_TYPE_STRING,

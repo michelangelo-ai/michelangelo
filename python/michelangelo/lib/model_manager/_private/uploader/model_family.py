@@ -1,6 +1,6 @@
 import grpc
 import logging
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_family_proto import ModelFamily
+from michelangelo.gen.api.v2.model_family_pb2 import ModelFamily
 
 _logger = logging.getLogger(__name__)
 

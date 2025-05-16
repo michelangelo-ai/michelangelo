@@ -1,5 +1,5 @@
 from michelangelo.lib.model_manager.constants import ModelKind as ModelKindConst
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
+from michelangelo.gen.api.v2.model_pb2 import (
     ModelKind,
     MODEL_KIND_CUSTOM,
     MODEL_KIND_REGRESSION,

@@ -3,7 +3,7 @@ from unittest.mock import patch
 import os
 import shutil
 import tempfile
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
+from michelangelo.gen.api.v2.model_pb2 import Model
 from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_compress
 from michelangelo.lib.model_manager._private.downloader import download_spark_pipeline_model
 

@@ -1,7 +1,7 @@
 from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager._private.uploader.crd_utils.data_type import convert_data_type
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.schema_proto import DataSchemaItem
+from michelangelo.gen.api.v2.model_pb2 import Model
+from michelangelo.gen.api.v2.schema_pb2 import DataSchemaItem
 
 
 def set_model_schema(model: Model, model_schema: ModelSchema):

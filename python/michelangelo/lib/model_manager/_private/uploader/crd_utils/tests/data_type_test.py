@@ -1,7 +1,7 @@
 from unittest import TestCase
 from michelangelo.lib.model_manager.schema import DataType as SchemaDataType
 from michelangelo.lib.model_manager._private.uploader.crd_utils import convert_data_type
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.schema_proto import DataType
+from michelangelo.gen.api.v2.schema_pb2 import DataType
 
 
 class DataTypeTest(TestCase):
