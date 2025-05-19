@@ -2,6 +2,7 @@ package activities
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"
@@ -13,4 +14,5 @@ var Module = fx.Options(
 	spark.Module,
 	storage.Module,
 	cachedoutput.Module,
+	deployment.Module,
 )

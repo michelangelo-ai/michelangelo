@@ -3,34 +3,35 @@ import logging
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 import fsspec
-import torch
 import mlflow.pytorch
 from transformers import AutoTokenizer
+from michelangelo.gen.api.v2.model_pb2 import Model, ModelKind
+from michelangelo.api.v2.client import APIClient
 
 log = logging.getLogger(__name__)
 
 CONFIG_PBTXT = """
-name: "bert_cola"
+name: "{model_name}"
 platform: "pytorch_libtorch"
 max_batch_size: 32
 input [
-  {
+  {{
     name: "input_ids"
     data_type: TYPE_INT64
     dims: [-1]
-  },
-  {
+  }},
+  {{
     name: "attention_mask"
     data_type: TYPE_INT64
     dims: [-1]
-  }
+  }}
 ]
 output [
-  {
+  {{
     name: "output__0"
     data_type: TYPE_FP32
     dims: [2]
-  }
+  }}
 ]
 """
 
@@ -41,9 +42,11 @@ output [
         worker_cpu=1,
         worker_memory="4Gi",
         worker_instances=1,
+        breakpoint=False,
     ),
+    cache_enabled=False,
 )
-def pusher(model_uri: str):
+def pusher(model_uri: str, deployed_model_name: str):
     model = mlflow.pytorch.load_model(model_uri, map_location="cpu")
     model.eval()
 
@@ -54,7 +57,6 @@ def pusher(model_uri: str):
 
     import torch
     import torch.nn as nn
-    from transformers import AutoModelForSequenceClassification
 
     class TritonBertModel(nn.Module):
         def __init__(self, model):
@@ -76,7 +78,7 @@ def pusher(model_uri: str):
     )
 
     # Prepare local Triton-compatible directory structure
-    local_model_dir = "/tmp/bert_cola"
+    local_model_dir = f"/tmp/{deployed_model_name}"
     version_dir = os.path.join(local_model_dir, "1")
     os.makedirs(version_dir, exist_ok=True)
 
@@ -85,14 +87,16 @@ def pusher(model_uri: str):
     traced_model.save(traced_model_path)
 
     # Save config.pbtxt
+    model_folder = 'bert-cola'
     config_path = os.path.join(local_model_dir, "config.pbtxt")
     with open(config_path, "w") as config_file:
-        config_file.write(CONFIG_PBTXT.strip())
+        config_file.write(CONFIG_PBTXT.format(model_name=model_folder).strip())
 
     # Define deployment bucket and paths
     deploy_bucket = "deploy-models"
+
     # the first bert_cola is project name, the second one is the model name matched to the config.pbtxt
-    base_s3_path = f"s3://{deploy_bucket}/bert_cola/bert_cola"
+    base_s3_path = f"s3://{deploy_bucket}/{deployed_model_name}/{model_folder}"
 
     # Upload files to S3 using fsspec
     for local_file, s3_suffix in [
@@ -111,10 +115,62 @@ def pusher(model_uri: str):
     os.rmdir(version_dir)
     os.rmdir(local_model_dir)
 
-    return {
-        "traced_model_s3_uri": f"{base_s3_path}/1/model.pt",
-        "config_s3_uri": f"{base_s3_path}/config.pbtxt",
-    }
+    namespace = "default"
+    name = deployed_model_name
+
+    # Retrieve and verify the created model
+    retrieved_model = None
+    APIClient.set_caller("uniflow-client")
+    try:
+        retrieved_model = APIClient.ModelService.get_model(namespace=namespace, name=name)
+        print("Retrieved created model:")
+        print(retrieved_model)
+    except Exception as e:
+        print(f"Error retrieving model: {e}")
+
+    if not retrieved_model:
+        # Define model metadata
+        model = Model()
+        model.metadata.namespace = namespace
+        model.metadata.name = name
+
+        # Define model spec
+        model.spec.owner.name = "default-user"
+        model.spec.description = "Demo ML model creation"
+        model.spec.kind = ModelKind.MODEL_KIND_BINARY_CLASSIFICATION
+        model.spec.algorithm = "transformer model"
+        model.spec.training_framework = "pytorch"
+        model.spec.source = "Michelangelo V2"
+
+        # Example package type and artifacts
+        model.spec.deployable_artifact_uri.extend([
+            deployed_model_name,
+            model_uri
+        ])
+
+        # Create the model
+        try:
+            response = APIClient.ModelService.create_model(model)
+            print("Created model successfully:")
+            print(response)
+        except Exception as e:
+            raise e
+    else:
+        retrieved_model.spec.ClearField("deployable_artifact_uri")
+        retrieved_model.spec.deployable_artifact_uri.extend([
+            deployed_model_name,
+            model_uri,
+        ])
+        # Retrieve and verify the created model
+        try:
+            response = APIClient.ModelService.update_model(retrieved_model)
+            print("Updated model:")
+            print(response)
+        except Exception as e:
+            print(f"Error updating model: {e}")
+            raise e
+
+    return name
 
 # Example usage:
-print(pusher("s3://mlflow/cf6b9898ed9e48168fc0280db114f8d1/artifacts/bert_model"))
+# print(pusher("s3://mlflow/cf6b9898ed9e48168fc0280db114f8d1/artifacts/bert_model", "bert-cola-test"))

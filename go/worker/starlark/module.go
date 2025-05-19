@@ -6,6 +6,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
