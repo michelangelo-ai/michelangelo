@@ -3,6 +3,7 @@ from examples.bert_cola.data import load_data
 from examples.bert_cola.pusher import pusher
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
+from michelangelo.uniflow.task.deployment import deploy
 
 
 @uniflow.workflow()
@@ -14,13 +15,15 @@ def train_workflow():
         data_name,
         tokenizer_max_length=128,
     )
-    result = train(
+    model_uri, train_result, best_checkpoint = train(
         train_data,
         validation_data,
         test_data,
     )
-    pusher(result[0])
-    print("result:", result)
+    deployed_model_name = "bert-cola2"
+    model_name = pusher(model_uri, deployed_model_name)
+    deploy(namespace="default", name="bert-cola-deployment", model_name=model_name)
+    print("result:", train_result)
     print("ok.")
 
 
@@ -39,4 +42,8 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
+    ctx.environ["MA_API_SERVER"] = "host.docker.internal:14567"
+    ctx.environ["MLFLOW_TRACKING_URI"] = "mysql+pymysql://root:root@mysql:3306/mlflow_db"
+    # ctx.environ["MLFLOW_TRACKING_URI"] = "mysql+pymysql://root:root@localhost:3306/mlflow_db"
+
     ctx.run(train_workflow)

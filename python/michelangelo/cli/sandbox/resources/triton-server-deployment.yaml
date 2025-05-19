@@ -5,6 +5,8 @@ metadata:
   namespace: default
 spec:
   predictor:
+    annotations:
+      model: "bert-cola"
     triton:
       runtimeVersion: 24.04-py3
       resources:
@@ -14,9 +16,10 @@ spec:
         limits:
           cpu: "1"
           memory: "2Gi"
+
 #      storageUri: "s3://deploy-models/bert-cola"
       storage:
         key: localMinIO
-        path: bert_cola
+        path: bert_cola/revision2
         parameters:
           bucket: deploy-models
