@@ -73,3 +73,8 @@ func NewSparkJobServiceClient(p ClientParams) v2pb.SparkJobServiceYARPCClient {
 func NewCachedOutputServiceClient(p ClientParams) v2pb.CachedOutputServiceYARPCClient {
 	return v2pb.NewCachedOutputServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
 }
+
+// NewDeploymentServiceClient creates a DeploymentService YARPC client.
+func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClient {
+	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
+}

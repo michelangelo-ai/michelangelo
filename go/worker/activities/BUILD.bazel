@@ -7,6 +7,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/worker/activities/cachedoutput:go_default_library",
+        "//go/worker/activities/deployment:go_default_library",
         "//go/worker/activities/ray:go_default_library",
         "//go/worker/activities/spark:go_default_library",
         "//go/worker/activities/storage:go_default_library",

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-logr/zapr"
+	"github.com/michelangelo-ai/michelangelo/go/deployment"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -63,12 +64,13 @@ func options() fx.Option {
 		zapfx.Module,
 		baseconfig.Module,
 		fx.Provide(scheme),
-		spark.Module,
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
 		ray.Module,
+		spark.Module,
+		deployment.Module,
 		pipeline.Module,
 		controllermgr.Module,
 		fx.Invoke(func(logger *zap.Logger) {

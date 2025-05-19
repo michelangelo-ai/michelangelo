@@ -16,6 +16,7 @@ var Module = fx.Options(
 		NewRayJobServiceClient,
 		NewSparkJobServiceClient,
 		NewCachedOutputServiceClient,
+		NewDeploymentServiceClient,
 	),
 	workflowfx.Module,
 	activities.Module,
