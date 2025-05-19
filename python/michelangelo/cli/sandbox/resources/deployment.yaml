@@ -1,0 +1,42 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  namespace: default
+  labels:
+    app: bert-cola
+spec:
+  desiredRevision:
+    name: model-revision-v1
+    namespace: default
+  inferenceServer:
+    name: inference-server-example
+    namespace: default
+  selector:
+    matchLabels:
+      environment: production
+  deletionSpec:
+    deleted: false
+  strategy:
+    rolling:
+      incrementPercentage: 20
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+    subType: realtime-serving
+  modelFamily:
+    name: model-family-example
+    namespace: default
+  owner:
+    name: "user-1234"
+  shadowSpec:
+    trafficPercentage: 10
+    duration: 3600s  # 1 hour
+    enabled: true
+    metrics:
+      - metricType: SHADOW_METRIC_TYPE_PREDICTION_SCORE_DRIFT_METRIC
+        decisions:
+          - columnName: prediction_score
+            thresholdValue: 0.1
+            thresholdCondition: SHADOW_METRIC_THRESHOLD_CONDITION_GREATER_THAN
+  resourceLinks:
+    monitoringDashboard: "https://example.com/monitoring"

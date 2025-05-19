@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//go/worker/plugins/cachedoutput:go_default_library",
         "//go/worker/plugins/model:go_default_library",
+        "//go/worker/plugins/deployment:go_default_library",
         "//go/worker/plugins/ray:go_default_library",
         "//go/worker/plugins/spark:go_default_library",
         "//go/worker/plugins/storage:go_default_library",
