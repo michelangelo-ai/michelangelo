@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 import datasets
@@ -132,7 +133,8 @@ def preprocess(
         worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
-    )
+        breakpoint=False,
+    ),
 )
 def train(
     pr: PreprocessResult,
@@ -233,6 +235,7 @@ def train(
     log.info("scaling_config: %r", scaling_config)
 
     run_config = RunConfig(
+        storage_path=os.environ.get("STORAGE_PATH"),
         checkpoint_config=CheckpointConfig(
             checkpoint_at_end=True,
         ),
@@ -301,6 +304,7 @@ def train_workflow(
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
+    ctx.environ["STORAGE_PATH"] = "s3://default/ray_results/"
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.run(
         train_workflow,
