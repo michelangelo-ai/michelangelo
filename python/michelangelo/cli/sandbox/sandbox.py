@@ -177,7 +177,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
 def _create_spark_operator(helm_existing_repos):
     if "spark-operator" not in helm_existing_repos:
-        _exec("helm", "repo", "add", "spark-operator", "https://googlecloudplatform.github.io/spark-on-k8s-operator")
+        _exec("helm", "repo", "add", "spark-operator", "https://kubeflow.github.io/spark-operator")
         _exec("helm", "repo", "update")
 
     _exec(
