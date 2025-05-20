@@ -5,6 +5,7 @@ import re
 class ServicesGen(object):
     CachedOutputService = None
     ModelService = None
+    ModelFamilyService = None
     PipelineService = None
     PipelineRunService = None
     ProjectService = None
