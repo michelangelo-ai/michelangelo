@@ -1,0 +1,59 @@
+// This file defines the Model Family related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+// Defines the status of a Model Family.
+message ModelFamilyStatus {}
+
+// Defines the spec of a Model Family.
+message ModelFamilySpec {
+  // Name of the model family.
+  // Cannot use metadata.name because we need to be backward compatible with MA 1.0 project id.
+  // we limit this to only 40 characters, due to the name size of derived entities like alert/dashboard will have issue
+  string name = 1 [
+    (michelangelo.api.validation) = {pattern: "[a-zA-Z0-9][\\w-]*", msg: "must be alphanumeric, underscore or dash"},
+    (michelangelo.api.validation) = {max_length: "40"}
+  ];
+
+  string description = 2;
+}
+
+// ModelFamily is a sub-problem in a project.
+message ModelFamily {
+  option (michelangelo.api.resource) = {
+    immutable: false
+  };
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "spec.name",
+    key: "model_family_name",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the ModelFamily.
+  ModelFamilySpec spec = 3;
+
+  // Most recently observed status of the ModelFamily.
+  ModelFamilyStatus status = 4;
+}
+
+// A list of ModelFamily objects.
+message ModelFamilyList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of ModelFamilies
+  repeated ModelFamily items = 3;
+}
