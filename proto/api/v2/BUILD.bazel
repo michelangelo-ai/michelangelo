@@ -17,6 +17,8 @@ proto_library(
         "groupversion_info.proto",
         "job.proto",
         "model.proto",
+        "model_family.proto",
+        "model_family_svc.proto",
         "model_svc.proto",
         "notification.proto",
         "parameter.proto",
