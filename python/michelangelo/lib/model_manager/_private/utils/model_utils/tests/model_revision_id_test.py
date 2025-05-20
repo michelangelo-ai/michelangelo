@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 from michelangelo._internal.errors.terrablob_error import TerrablobFileNotFoundError, TerrablobFailedPreconditionError, TerrablobError
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
+from michelangelo.gen.api.v2.model_pb2 import Model
 from michelangelo.lib.model_manager._private.utils.model_utils import (
     get_latest_model_revision_id,
     get_latest_uploaded_model_revision,

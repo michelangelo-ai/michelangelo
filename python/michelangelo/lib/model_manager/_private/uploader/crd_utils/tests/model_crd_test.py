@@ -14,9 +14,9 @@ from michelangelo.gen.api.v2.model_pb2 import (
     MODEL_KIND_CUSTOM,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON,
 )
-from michelangelo.gen.api.v2.model_pb2 import (
+from michelangelo.gen.api.v2.schema_pb2 import (
     DataSchemaItem,
-    DATA_TYPE_NUMERIC,
+    DATA_TYPE_INT,
     DATA_TYPE_STRING,
 )
 
@@ -27,13 +27,13 @@ class ModelCrdTest(TestCase):
 
         model_schema = ModelSchema()
         model_schema.input_schema = [
-            ModelSchemaItem(name="input1", data_type=DataType.NUMERIC, shape=[1, 2]),
+            ModelSchemaItem(name="input1", data_type=DataType.INT, shape=[1, 2]),
         ]
         model_schema.feature_store_features_schema = [
             ModelSchemaItem(name="feature1", data_type=DataType.STRING),
         ]
         model_schema.output_schema = [
-            ModelSchemaItem(name="output1", data_type=DataType.NUMERIC, shape=[1]),
+            ModelSchemaItem(name="output1", data_type=DataType.INT, shape=[1]),
         ]
         self.model_schema = model_schema
 
@@ -106,13 +106,13 @@ class ModelCrdTest(TestCase):
         expected_model.spec.model_artifact_uri.append("raw_model_artifact_uri")
         expected_model.spec.description = model_desc
         expected_model.spec.input_schema.schema_items.append(
-            DataSchemaItem(name="input1", data_type=DATA_TYPE_NUMERIC, shape=[1, 2]),
+            DataSchemaItem(name="input1", data_type=DATA_TYPE_INT, shape=[1, 2]),
         )
         expected_model.spec.palette_features.schema_items.append(
             DataSchemaItem(name="feature1", data_type=DATA_TYPE_STRING),
         )
         expected_model.spec.output_schema.schema_items.append(
-            DataSchemaItem(name="output1", data_type=DATA_TYPE_NUMERIC, shape=[1]),
+            DataSchemaItem(name="output1", data_type=DATA_TYPE_INT, shape=[1]),
         )
         expected_model.spec.performance_evaluation_report.name = performance_report_name
         expected_model.spec.feature_evaluation_report.name = feature_report_name

@@ -6,7 +6,7 @@ from michelangelo.lib.model_manager.constants import (
 from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager._private.uploader.crd_utils import create_model_crd
 from michelangelo.lib.model_manager._private.uploader.model_family import create_model_family
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
+from michelangelo.gen.api.v2.model_pb2 import Model
 
 
 def upload_model_crd(

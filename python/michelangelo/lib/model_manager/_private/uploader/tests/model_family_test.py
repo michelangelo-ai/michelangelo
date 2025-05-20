@@ -2,7 +2,7 @@ import grpc
 from unittest import TestCase
 from unittest.mock import patch
 from michelangelo.lib.model_manager._private.uploader import create_model_family
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_family_proto import ModelFamily
+from michelangelo.gen.api.v2.model_family_pb2 import ModelFamily
 
 
 class ModelFamilyTest(TestCase):

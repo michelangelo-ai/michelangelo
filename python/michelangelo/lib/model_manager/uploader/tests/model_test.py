@@ -6,7 +6,7 @@ from unittest.mock import patch
 from michelangelo.lib.model_manager.constants import PackageType, ModelKind
 from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager.uploader import upload_model
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
+from michelangelo.gen.api.v2.model_pb2 import (
     Model,
     MODEL_KIND_CUSTOM,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON,

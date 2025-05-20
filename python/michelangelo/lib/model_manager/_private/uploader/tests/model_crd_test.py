@@ -1,7 +1,7 @@
 from unittest import TestCase
 from unittest.mock import patch
 from michelangelo.lib.model_manager._private.uploader import upload_model_crd
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import (
+from michelangelo.gen.api.v2.model_pb2 import (
     Model,
     MODEL_KIND_CUSTOM,
     DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON,

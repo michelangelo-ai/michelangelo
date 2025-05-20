@@ -1,5 +1,5 @@
 from typing import Optional
-from uber.ai.michelangelo.sdk.api_client.v2beta1.utils import generate_random_name
+from michelangelo.api.v2.util import generate_random_name
 from michelangelo.lib.model_manager.constants import ModelKind
 from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager.uploader.deployable_model import upload_deployable_model
@@ -10,7 +10,7 @@ from michelangelo.lib.model_manager._private.utils.model_utils import (
     infer_model_package_type,
     infer_raw_model_package_type,
 )
-from uber.gen.code_uber_internal.uberai.michelangelo.api.v2beta1.model_proto import Model
+from michelangelo.gen.api.v2.model_pb2 import Model
 
 
 def upload_model(
