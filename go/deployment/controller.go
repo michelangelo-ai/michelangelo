@@ -54,21 +54,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				if utils.IsNotFoundError(err) {
 					deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 					logger.Info("Model not found, skipping rollout", "model", modelNamespacedName.String())
-					return res, nil
+				} else {
+					logger.Error(err, "failed to get Model")
+					res.RequeueAfter = requeueAfter
 				}
-				logger.Error(err, "failed to get Model")
-				res.RequeueAfter = requeueAfter
-				return res, err
 			}
 			if err = r.rollout(ctx, logger, &deployment, &model); err != nil {
 				logger.Error(err, "failed to rollout")
 				res.RequeueAfter = requeueAfter
-				return res, err
+			} else {
+				res.RequeueAfter = requeueAfter
 			}
-			res.RequeueAfter = requeueAfter
 		} else {
+			logger.Error(err, "failed to get status")
 			res.RequeueAfter = requeueAfter
-			return res, err
 		}
 	} else {
 		logger.Info("Found Deployment", "state", deployment.Status.State, "stage", deployment.Status.Stage)
@@ -84,32 +83,28 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				if utils.IsNotFoundError(err) {
 					deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 					logger.Info("Model not found, skipping rollout")
-					return res, nil
+				} else {
+					logger.Error(err, "failed to get Model")
+					res.RequeueAfter = requeueAfter
 				}
-				logger.Error(err, "failed to get Model")
+			} else {
 				res.RequeueAfter = requeueAfter
-				return res, err
-			}
-			res.RequeueAfter = requeueAfter
-			err = r.updateDeployment(ctx, logger, &deployment, &model)
-			if err != nil {
-				logger.Error(err, "failed to update Deployment")
-				return res, err
+				err = r.updateDeployment(ctx, logger, &deployment, &model)
+				if err != nil {
+					logger.Error(err, "failed to update Deployment")
+				}
 			}
 		}
 		// When reach to healthy or unhealthy state, we don't need to requeue
 		if deployment.Status.State == v2pb.DEPLOYMENT_STATE_HEALTHY {
 			deployment.Status.CurrentRevision = deployment.Spec.DesiredRevision
-			return res, nil
+		} else if deployment.Status.State != v2pb.DEPLOYMENT_STATE_UNHEALTHY {
+			res.RequeueAfter = requeueAfter
 		}
-		if deployment.Status.State == v2pb.DEPLOYMENT_STATE_UNHEALTHY {
-			return res, nil
-		}
-		res.RequeueAfter = requeueAfter
 	}
 
 	if !reflect.DeepEqual(original, deployment) {
-		if err := r.Status().Update(ctx, &deployment); err != nil {
+		if err = r.Status().Update(ctx, &deployment); err != nil {
 			logger.Error(err, "failed to update Deployment status")
 			res.RequeueAfter = requeueAfter
 			return res, err
@@ -118,7 +113,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	logger.Info("Deployment reconciled", "name", deployment.Name, "namespace", deployment.Namespace)
 
-	return res, nil
+	return res, err
 }
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
