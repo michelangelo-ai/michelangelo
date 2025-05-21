@@ -13,13 +13,17 @@ class TestUniflowDevRunFileBuilder(unittest.TestCase):
         class TestableFileBuilder(UniflowDevRunFileBuilder):
             def get_git_sha(self):
                 return "0241feca9a6a681c917c3bb712dcb62918522aed"
+
             def upload_tarball(self, local_path: str, remote_path: str):
                 pass
+
         self.builder = TestableFileBuilder(
             project="my_project",
             pipeline="my_pipeline",
         )
-        os.environ["UF_BASE_PROJECTS_PATH"] = "/prod/michelangelo/uniflow/uniflow_dev_run/projects"
+        os.environ["UF_BASE_PROJECTS_PATH"] = (
+            "/prod/michelangelo/uniflow/uniflow_dev_run/projects"
+        )
 
     def test_get_random_file_name(self):
         file_name = self.builder.get_random_file_name()
@@ -33,11 +37,17 @@ class TestUniflowDevRunFileBuilder(unittest.TestCase):
 
     def test_get_remote_file_path(self):
         remote_file_path = self.builder.get_remote_file_path()
-        self.assertTrue(remote_file_path.startswith("/prod/michelangelo/uniflow/uniflow_dev_run/projects/my_project/"))
+        self.assertTrue(
+            remote_file_path.startswith(
+                "/prod/michelangelo/uniflow/uniflow_dev_run/projects/my_project/"
+            )
+        )
         self.assertTrue(remote_file_path.endswith(".tar.gz"))
 
     def test_create_diff_tarball_bytes(self):
-        self.builder.get_git_sha = MagicMock(return_value="0241feca9a6a681c917c3bb712dcb62918522aed")
+        self.builder.get_git_sha = MagicMock(
+            return_value="0241feca9a6a681c917c3bb712dcb62918522aed"
+        )
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tmp_dir_path = Path(tmp_dir)
@@ -49,9 +59,14 @@ class TestUniflowDevRunFileBuilder(unittest.TestCase):
             with (
                 patch("michelangelo.uniflow.core.dev_run.subprocess.run") as mock_run,
                 patch("pathlib.Path.exists", return_value=True),
-                patch("michelangelo.uniflow.core.dev_run.Path", side_effect=lambda p: tmp_dir_path / p),
+                patch(
+                    "michelangelo.uniflow.core.dev_run.Path",
+                    side_effect=lambda p: tmp_dir_path / p,
+                ),
             ):
-                mock_run.return_value = MagicMock(stdout="file1.py\nfile2.py", returncode=0)
+                mock_run.return_value = MagicMock(
+                    stdout="file1.py\nfile2.py", returncode=0
+                )
                 tarball_bytes = self.builder.create_diff_tarball_bytes()
                 self.assertIsNotNone(tarball_bytes)
                 self.assertTrue(isinstance(tarball_bytes, bytes))
@@ -62,7 +77,10 @@ class TestUniflowDevRunFileBuilder(unittest.TestCase):
                 "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.create_diff_tarball_bytes",
                 return_value=b"fake-bytes",
             ) as mock_tarball,
-            patch("michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.get_file_name", return_value="fake.tar.gz") as mock_filename,
+            patch(
+                "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.get_file_name",
+                return_value="fake.tar.gz",
+            ) as mock_filename,
             patch(
                 "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.get_remote_file_path",
                 return_value="/remote/path/fake.tar.gz",
@@ -78,9 +96,12 @@ class TestUniflowDevRunFileBuilder(unittest.TestCase):
     def test_create_and_upload_tarball_no_tarball(self):
         with (
             patch(
-                "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.create_diff_tarball_bytes", return_value=None
+                "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.create_diff_tarball_bytes",
+                return_value=None,
             ) as mock_tarball,
-            patch("michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.upload_tarball") as mock_upload,
+            patch(
+                "michelangelo.uniflow.core.dev_run.UniflowDevRunFileBuilder.upload_tarball"
+            ) as mock_upload,
         ):
             result = self.builder.create_and_upload_tarball()
             self.assertEqual(result, "")

@@ -43,10 +43,12 @@ class UniflowDevRunFileBuilder(ABC):
         base_path = os.environ.get("UF_BASE_PROJECTS_PATH")
         if self._remote_file_path is None:
             if self._project:
-                self._remote_file_path = f"{base_path}/{self._project}/{self.get_file_name()}"
+                self._remote_file_path = (
+                    f"{base_path}/{self._project}/{self.get_file_name()}"
+                )
             else:
                 tmp_path = os.path.join(base_path, "../tmp", uuid.uuid4().hex[:8])
-                self._remote_file_path = f"{tmp_path}/{self.get_file_name()}"    
+                self._remote_file_path = f"{tmp_path}/{self.get_file_name()}"
         return self._remote_file_path
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
