@@ -2,9 +2,23 @@
 
  poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 
+### Create folder in Minio
+create those buckets in Minio
+```
+default
+mlflow
+deploy-models
+```
+### install kserve
+```bash
+ curl -s "https://raw.githubusercontent.com/kserve/kserve/release-0.15/hack/quick_install.sh" | bash
+```
+
 ### get the predictor pod
 
 ```bash
+kubectl apply -f michelangelo/cli/sandbox/resource/deployment.yaml
+kubectl apply -f michelangelo/cli/sandbox/resource/secret.yaml
 kubectl get pods -n default
 ```
 Example returns

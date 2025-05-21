@@ -144,14 +144,16 @@ func (r KserveProvider) Retire(ctx context.Context, log logr.Logger, deployment 
 }
 
 func (r KserveProvider) updateDeploymentStatus(result *unstructured.Unstructured, logger logr.Logger, deployment *v2pb.Deployment) error {
-	model, foundModel, err := unstructured.NestedString(result.Object, "spec", "predictor", "annotations", "model")
+	model, foundModel, err := unstructured.NestedString(result.Object, "spec", "predictor", "model", "storage", "path")
 	if err != nil {
 		logger.Error(err, "Failed to retrieve InferenceService status")
 		return err
 	}
 	if foundModel {
-		deployment.Status.CurrentRevision.Name = model
-		deployment.Status.CurrentRevision.Namespace = deployment.Namespace
+		deployment.Status.CurrentRevision = &apipb.ResourceIdentifier{
+			Namespace: deployment.Namespace,
+			Name:      model,
+		}
 	}
 	conditions, found, _ := unstructured.NestedSlice(result.Object, "status", "conditions")
 	if found {
