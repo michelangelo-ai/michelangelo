@@ -2,6 +2,7 @@ package storage
 
 import (
 	"github.com/cadence-workflow/starlark-worker/worker"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"go.uber.org/fx"
 )
 
@@ -15,6 +16,7 @@ type storagesIn struct {
 // Module provides the fx dependency injection options,
 // including the MinIO module and activity registration.
 var Module = fx.Options(
+	blobstore.Module,
 	fx.Invoke(register), // Register storage activities with Cadence workers.
 )
 
