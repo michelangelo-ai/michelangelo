@@ -1,3 +1,4 @@
+import os
 from dataclasses import dataclass
 
 import datasets
@@ -86,6 +87,8 @@ def feature_prep(
     config=SparkTask(
         driver_cpu=1,
         executor_cpu=1,
+        driver_memory='1024',
+        executor_memory='1024',
     ),
     cache_enabled=True,
 )
@@ -127,10 +130,10 @@ def preprocess(
     config=RayTask(
         head_cpu=1,
         head_gpu=0,
-        head_memory="12Gi",
+        head_memory="4Gi",
         worker_cpu=2,
         worker_gpu=0,
-        worker_memory="12Gi",
+        worker_memory="4Gi",
         worker_instances=1,
     )
 )
@@ -233,6 +236,7 @@ def train(
     log.info("scaling_config: %r", scaling_config)
 
     run_config = RunConfig(
+        storage_path=os.environ.get("STORAGE_PATH"),
         checkpoint_config=CheckpointConfig(
             checkpoint_at_end=True,
         ),
@@ -301,6 +305,7 @@ def train_workflow(
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
+    ctx.environ["STORAGE_PATH"] = "s3://default/ray_results/"
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.run(
         train_workflow,

@@ -54,8 +54,9 @@ def spark_task(
                         output = cached_output.get("metadata", {}).get("name", ""),
                     )
                     result = io_read_json(cached_result_json_url)
-                    print("spark | cached", "result:", result)
-                    return result
+                    if result != None :
+                        print("spark | cached", "result:", result)
+                        return result
 
         # Apply resource overrides
         _driver_cpu = os.environ.get("SPARK_OVERRIDE_DRIVER_CPU." + task_path, driver_cpu)

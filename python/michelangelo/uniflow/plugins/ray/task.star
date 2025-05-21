@@ -108,8 +108,9 @@ def task(
                         output = cached_output.get("metadata", {}).get("name", ""),
                     )
                     result = io_read_json(cached_result_json_url)
-                    print("ray | cached", "result:", result)
-                    return result
+                    if result != None:
+                        print("ray | cached", "result:", result)
+                        return result
 
         # Apply resource overrides
         _head_cpu = os.environ.get("RAY_OVERRIDE_HEAD_CPU." + task_path, head_cpu)
@@ -264,8 +265,9 @@ def task(
             task_message = "Ray Task Completed Successfully",
         )
         result = io_read_json(result_url)
-        print("ray | caching", "result:", result)
-        return result
+        if result != None:
+            print("ray | caching", "result:", result)
+            return result
 
     def with_overrides(alias = alias):
         return task(

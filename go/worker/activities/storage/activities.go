@@ -4,7 +4,6 @@ package storage
 import (
 	"context"
 	"fmt"
-
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
@@ -35,6 +34,11 @@ func (a *activities) Read(ctx context.Context, protocol string, path string) (an
 		// Attempt to read from the storage using the protocol's implementation.
 		result, err := impl.Read(ctx, path)
 		if err != nil {
+			if impl.IsNotFoundError(err) {
+				logger.Error("activity-error", zap.Error(err))
+				// If the error is a "not found" error, return empty result
+				return nil, nil
+			}
 			// Wrap the error in a Cadence CustomError using YARPC error codes.
 			return nil, workflow.NewCustomError(
 				ctx,
