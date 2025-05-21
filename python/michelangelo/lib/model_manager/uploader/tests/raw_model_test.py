@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager.uploader import upload_raw_model
@@ -5,6 +6,7 @@ from .utils.env import mimic_local_env, mimic_remote_env
 
 
 class RawModelTest(EnvTestCase):
+    @patch.dict(os.environ, {"_LOCAL_RUN": "1"})
     @patch("michelangelo.lib.model_manager.uploader.raw_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
     def test_upload_raw_model_local_env(self, mock_upload_to_terrablob, mock_get_latest_model_revision_id):
@@ -33,10 +35,10 @@ class RawModelTest(EnvTestCase):
         )
         self.assertEqual(tb_model_path, "/prod/michelangelo/raw_models/projects/test_project/models/test_model/revisions/1/main")
 
+    @patch.dict(os.environ, {"_LOCAL_RUN": ""})
     @patch("michelangelo.lib.model_manager.uploader.raw_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
     def test_upload_raw_model_remote_env(self, mock_upload_to_terrablob, mock_get_latest_model_revision_id):
-        mimic_remote_env()
         mock_get_latest_model_revision_id.return_value = 0
 
         tb_model_path = upload_raw_model(
