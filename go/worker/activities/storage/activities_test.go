@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/yarpc/yarpcerrors"
 
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
 var act *activities
@@ -34,15 +34,15 @@ func TestITTemporal(t *testing.T) {
 func (r *Suite) SetupSuite() {
 	expected := "hello world"
 	fake = &fakeStorage{
-		protocol: "test",
+		scheme: "test",
 		readFn: func(ctx context.Context, path string) (any, error) {
 			return expected, nil
 		},
 	}
+	blobStore := blobstore.BlobStore{}
+	blobStore.RegisterClient(fake)
 	act = &activities{
-		impls: map[string]intf.Storage{
-			"test": fake,
-		},
+		blobStore: &blobStore,
 	}
 	r.activitySuite.RegisterActivity(act)
 }
@@ -54,18 +54,18 @@ func (r *Suite) BeforeTest(_, _ string) {
 
 // fakeStorage is a mock implementation of the Storage interface for testing.
 type fakeStorage struct {
-	protocol string
+	scheme string
 	readFn   func(ctx context.Context, path string) (any, error)
 }
 
 // Read calls the fake read function.
-func (fs *fakeStorage) Read(ctx context.Context, path string) (any, error) {
+func (fs *fakeStorage) Get(ctx context.Context, path string) (any, error) {
 	return fs.readFn(ctx, path)
 }
 
-// Protocol returns the protocol identifier of the fake storage.
-func (fs *fakeStorage) Protocol() string {
-	return fs.protocol
+// Scheme returns the scheme identifier of the fake storage.
+func (fs *fakeStorage) Scheme() string {
+	return fs.scheme
 }
 
 // TestActivities_Read_Success verifies that activities.Read returns the expected result
@@ -75,7 +75,6 @@ func (r *Suite) TestActivities_Read_Success() {
 	fake.readFn = func(ctx context.Context, path string) (any, error) {
 		return expected, nil
 	}
-	act.impls = map[string]intf.Storage{"test": fake}
 	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
 
 	r.Require().NoError(err)
@@ -92,7 +91,6 @@ func (r *Suite) TestActivities_Read_Error() {
 	fake.readFn = func(ctx context.Context, path string) (any, error) {
 		return "", expectedErr
 	}
-	act.impls = map[string]intf.Storage{"test": fake}
 	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
 
 	// Verify that the returned error message contains the original error message.
@@ -101,24 +99,22 @@ func (r *Suite) TestActivities_Read_Error() {
 	// Verify that the error message includes the YARPC error code.
 	yarpcCode := yarpcerrors.FromError(expectedErr).Code().String()
 	if !strings.Contains(err.Error(), yarpcCode) {
-		r.Require().Fail("expected error message to contain YARPC code %q, got %q", yarpcCode, err.Error())
+		r.Require().Fail(fmt.Sprintf("expected error message to contain YARPC code %q, got %q", yarpcCode, err.Error()))
 	}
 }
 
 // TestActivities_Read_UnsupportedProtocol verifies that activities.Read returns an error
 // when an unsupported protocol is provided.
 func (r *Suite) TestActivities_Read_UnsupportedProtocol() {
-	// Initialize activities with an empty storage implementation map.
-	act.impls = map[string]intf.Storage{}
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test2", "dummyPath")
 	if result != nil {
-		r.Require().Fail("expected nil result for unsupported protocol, got %v", result)
+		r.Require().Fail(fmt.Sprintf("expected nil result for unsupported protocol, got %s", result))
 	}
 	if err == nil {
 		r.Require().Fail("expected error for unsupported protocol, got nil")
 	}
 
 	// Verify the error message indicates the protocol is not supported.
-	expectedMsg := fmt.Sprintf("protocol %s is not supported", "test")
+	expectedMsg := fmt.Sprintf("scheme %s is not supported", "test2")
 	r.Require().Contains(err.Error(), expectedMsg)
 }

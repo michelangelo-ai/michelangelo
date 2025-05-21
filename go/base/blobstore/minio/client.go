@@ -13,12 +13,13 @@ import (
 // It provides methods to interact with S3-compatible storage.
 type minioClient struct {
 	s3Client *minio.Client
+	scheme   string
 }
 
-// Read retrieves an object from S3 storage, reads its content,
+// Get retrieves an object from S3 storage, reads its content,
 // unmarshals the JSON data, and returns the result.
 // It expects the path format "bucket/filePath".
-func (a *minioClient) Read(ctx context.Context, path string) (any, error) {
+func (a *minioClient) Get(ctx context.Context, path string) (any, error) {
 	// Split the path into bucket and file path.
 	parts := strings.SplitN(path, "/", 2)
 	bucket := parts[0]
@@ -49,7 +50,7 @@ func (a *minioClient) Read(ctx context.Context, path string) (any, error) {
 	return res, nil
 }
 
-// Protocol returns the protocol identifier used by this client.
-func (a *minioClient) Protocol() string {
-	return "s3"
+// Scheme returns the scheme identifier used by this client.
+func (a *minioClient) Scheme() string {
+	return a.scheme
 }

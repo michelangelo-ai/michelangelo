@@ -10,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
 var (
@@ -17,6 +18,7 @@ var (
 	// It uses Fx for dependency injection to initialize configurations, create the manager,
 	// and set up the lifecycle hooks for the application.
 	Module = fx.Options(
+		blobstore.Module,
 		fx.Provide(newConfig),
 		fx.Provide(create),
 		fx.Invoke(start),

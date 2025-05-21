@@ -5,12 +5,12 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"
 
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
-type StorageOut struct {
+type BlobStoreClientOut struct {
 	fx.Out
-	Storage intf.Storage `group:"storages"`
+	BlobStoreClient blobstore.BlobStoreClient `group:"blobstore_clients"`
 }
 
 // Module sets up dependency injection for the MinIO client.
@@ -23,15 +23,15 @@ var Module = fx.Options(
 // newClient initializes a new minioClient using the provided configuration.
 // It creates an underlying S3 client with static credentials.
 // Returns a pointer to minioClient or an error if initialization fails.
-func newClient(config Config) (StorageOut, error) {
+func newClient(config Config) (BlobStoreClientOut, error) {
 	s3Client, err := minio.New(config.AwsEndpointUrl, &minio.Options{
 		Creds:  credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, ""),
 		Secure: false,
 	})
 	if err != nil {
-		return StorageOut{}, err
+		return BlobStoreClientOut{}, err
 	}
-	return StorageOut{
-		Storage: &minioClient{s3Client: s3Client},
+	return BlobStoreClientOut{
+		BlobStoreClient: &minioClient{s3Client: s3Client, scheme: "s3"},
 	}, nil
 }
