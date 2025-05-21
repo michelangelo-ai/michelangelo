@@ -37,6 +37,7 @@ func (a *activities) Read(ctx context.Context, protocol string, path string) (an
 			if impl.IsNotFoundError(err) {
 				logger.Error("activity-error", zap.Error(err))
 				// If the error is a "not found" error, return empty result
+				// Due to starlark code can't handle errors from worker, so we return nil
 				return nil, nil
 			}
 			// Wrap the error in a Cadence CustomError using YARPC error codes.
