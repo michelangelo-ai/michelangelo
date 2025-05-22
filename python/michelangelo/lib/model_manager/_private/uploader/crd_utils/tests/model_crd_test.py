@@ -108,9 +108,6 @@ class ModelCrdTest(TestCase):
         expected_model.spec.input_schema.schema_items.append(
             DataSchemaItem(name="input1", data_type=DATA_TYPE_INT, shape=[1, 2]),
         )
-        expected_model.spec.palette_features.schema_items.append(
-            DataSchemaItem(name="feature1", data_type=DATA_TYPE_STRING),
-        )
         expected_model.spec.output_schema.schema_items.append(
             DataSchemaItem(name="output1", data_type=DATA_TYPE_INT, shape=[1]),
         )

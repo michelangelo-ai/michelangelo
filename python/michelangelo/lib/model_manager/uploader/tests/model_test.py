@@ -45,7 +45,6 @@ class ModelTest(TestCase):
         expected_model.spec.package_type = DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
         expected_model.spec.sealed = True
         expected_model.spec.input_schema.schema_items.extend([])
-        expected_model.spec.palette_features.schema_items.extend([])
         expected_model.spec.output_schema.schema_items.extend([])
         expected_model.spec.deployable_artifact_uri.append(expected_tb_deployable_path)
         expected_model.spec.model_artifact_uri.append(expected_tb_raw_path)
@@ -141,7 +140,6 @@ class ModelTest(TestCase):
         expected_model.spec.package_type = DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON
         expected_model.spec.sealed = True
         expected_model.spec.input_schema.schema_items.extend([])
-        expected_model.spec.palette_features.schema_items.extend([])
         expected_model.spec.output_schema.schema_items.extend([])
         expected_model.spec.deployable_artifact_uri.append(expected_tb_deployable_path)
         expected_model.spec.performance_evaluation_report.name = "performance_report_name"

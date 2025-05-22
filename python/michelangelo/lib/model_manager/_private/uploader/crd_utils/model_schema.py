@@ -26,17 +26,6 @@ def set_model_schema(model: Model, model_schema: ModelSchema):
         ]
     )
 
-    model.spec.palette_features.schema_items.extend(
-        [
-            DataSchemaItem(
-                name=item.name,
-                data_type=convert_data_type(item.data_type),
-                shape=item.shape,
-            )
-            for item in model_schema.feature_store_features_schema
-        ]
-    )
-
     model.spec.output_schema.schema_items.extend(
         [
             DataSchemaItem(
