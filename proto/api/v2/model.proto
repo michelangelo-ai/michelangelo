@@ -80,7 +80,7 @@ message LLMSpec {
   // - Available model capabilities
   // - Deployment constraints
   string vendor = 1;
-  
+
   // The name of the base LLM model (e.g. gpt-4, claude-2, llama-2).
   // This identifies the specific model variant and determines:
   // - Model capabilities and limitations
@@ -88,7 +88,7 @@ message LLMSpec {
   // - Pricing tiers
   // - Performance characteristics
   string model_name = 2;
-  
+
   // The ID that uniquely identifies this fine-tuned model variant.
   // For models that have been fine-tuned from a base model, this ID:
   // - Links to the specific fine-tuning run
@@ -119,7 +119,7 @@ message ModelSpec {
 
   // The description of the trained model that provides context about:
   // - Model purpose and use cases
-  // - Training data and methodology 
+  // - Training data and methodology
   // - Performance characteristics
   // - Known limitations or biases
   // - Deployment considerations
@@ -408,6 +408,9 @@ message ModelSpec {
   // - Contribution metrics for each feature
   // Used for model interpretation and feature selection.
   repeated FeatureImportanceMap feature_importance_list = 31;
+
+  // Output schema defines the schema of the output of the model.
+  DataSchema output_schema = 32 [(michelangelo.api.external_storage) = true];
 }
 
 // IncrementalTrainingSpec defines configuration for incremental model training.
@@ -692,7 +695,7 @@ message FeatureImportanceMap {
 // BaselineValue represents a reference value used as a baseline for feature attribution calculations.
 // It supports different value types to handle various feature data types:
 // - float_value: For continuous numeric features
-// - string_value: For categorical/text features 
+// - string_value: For categorical/text features
 // - bool_value: For binary/boolean features
 // - int_value: For discrete numeric features
 // The baseline provides a reference point for measuring feature contributions and:
