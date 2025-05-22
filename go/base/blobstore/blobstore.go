@@ -13,9 +13,8 @@ type BlobStoreClient interface {
 	Scheme() string
 }
 
-
 type BlobStore struct {
-	logger *zap.Logger
+	logger  *zap.Logger
 	clients map[string]BlobStoreClient
 }
 
@@ -45,7 +44,3 @@ func (b *BlobStore) RegisterClient(client BlobStoreClient) {
 	}
 	b.clients[client.Scheme()] = client
 }
-
-
-
-

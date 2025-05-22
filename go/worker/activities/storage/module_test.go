@@ -70,7 +70,7 @@ func TestRegister(t *testing.T) {
 	blobStore.RegisterClient(&dummyStorage{scheme: "s1"})
 	blobStore.RegisterClient(&dummyStorage{scheme: "s2"})
 	params := storagesIn{
-		Workers:  workers,
+		Workers:   workers,
 		BlobStore: &blobStore,
 	}
 	// Call the register function.

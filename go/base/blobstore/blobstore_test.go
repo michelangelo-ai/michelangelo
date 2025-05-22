@@ -11,7 +11,6 @@ type mockBlobStoreClient struct {
 	readFn func(ctx context.Context, path string) (any, error)
 }
 
-
 func (m *mockBlobStoreClient) Get(ctx context.Context, path string) (any, error) {
 	return m.readFn(ctx, path)
 }

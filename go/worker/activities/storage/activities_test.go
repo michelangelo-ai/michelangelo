@@ -55,7 +55,7 @@ func (r *Suite) BeforeTest(_, _ string) {
 // fakeStorage is a mock implementation of the Storage interface for testing.
 type fakeStorage struct {
 	scheme string
-	readFn   func(ctx context.Context, path string) (any, error)
+	readFn func(ctx context.Context, path string) (any, error)
 }
 
 // Read calls the fake read function.

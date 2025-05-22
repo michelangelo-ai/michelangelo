@@ -9,7 +9,7 @@ import (
 // Define an fx.In struct to receive the group.
 type storagesIn struct {
 	fx.In
-	Workers  []worker.Worker
+	Workers   []worker.Worker
 	BlobStore *blobstore.BlobStore
 }
 

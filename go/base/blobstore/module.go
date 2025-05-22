@@ -18,7 +18,7 @@ type blobstoreClientsIn struct {
 func NewBlobStore(in blobstoreClientsIn, logger *zap.Logger) *BlobStore {
 	blobStore := BlobStore{
 		clients: make(map[string]BlobStoreClient),
-		logger: logger.With(zap.String("component", "blobstore")),
+		logger:  logger.With(zap.String("component", "blobstore")),
 	}
 	for _, client := range in.BlobStoreClients {
 		blobStore.RegisterClient(client)
