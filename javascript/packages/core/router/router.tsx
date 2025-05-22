@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router';
 
 import { MainViewContainer } from '#core/components/views/main-view-container';
 import { ProjectDetail } from '#core/components/views/project/project-detail';

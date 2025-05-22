@@ -21,6 +21,7 @@ export default defineConfig({
         'pluralize',
         'styletron-engine-monolithic',
         'styletron-react',
+        '@tanstack/react-query',
       ],
     },
     outDir: 'dist',

@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@michelangelo/rpc": "*",
+    "@tanstack/react-query": "5.39.0",
     "@uber/michelangelo-core": "*",
     "react-router": "6.29.0",
     "react-router-dom": "6.29.0"
