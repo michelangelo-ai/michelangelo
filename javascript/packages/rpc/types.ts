@@ -9,6 +9,26 @@ export type RpcHandlerType = typeof RPC_HANDLERS;
 
 /**
  * @description
+ * Extracts the unary-unary function type from the RPC handler type.
+ *
+ * @remarks
+ * The Connect Client type generates a type that includes unary-unary, unary-server-streaming,
+ * unary-client-streaming, and unary-bidi-streaming functions.  We want to extract the
+ * unary-unary function type from the RPC handler type.
+ *
+ * @example
+ * ```ts
+ * getProject: (args: { projectId: string }) => Promise<Project> | AsyncIterable<Project>;
+ * ExtractUnaryRpc<getProject>
+ * // => (args: { projectId: string }) => Promise<Project>
+ * ```
+ */
+export type ExtractUnaryRpc<T> = T extends (args: Record<string, unknown>) => Promise<infer R>
+  ? (args: Record<string, unknown>) => Promise<R>
+  : never;
+
+/**
+ * @description
  * Removes the `$typeName` and `$unknown` properties from a message. These are properties
  * that are added by the protobuf-es library. We don't need them for our RPC calls.
  *
