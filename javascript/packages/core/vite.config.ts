@@ -7,7 +7,8 @@ export default defineConfig({
     lib: {
       entry: path.resolve(__dirname, 'index.tsx'),
       name: 'MichelangeloCore',
-      formats: ['es'],
+      formats: ['es', 'cjs'],
+      fileName: (format) => `michelangelo-core.${format === 'es' ? 'js' : 'cjs'}`,
     },
     rollupOptions: {
       external: [

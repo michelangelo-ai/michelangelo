@@ -1,8 +1,11 @@
 {
   "name": "@uber/michelangelo-core",
   "license": "UNLICENSED",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
+  "main": "./dist/michelangelo-core.cjs",
+  "module": "./dist/michelangelo-core.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist"
   ],
@@ -42,6 +45,8 @@
     ".": {
       "types": "./dist/index.d.ts",
       "workspace": "./index.tsx",
+      "import": "./dist/michelangelo-core.js",
+      "require": "./dist/michelangelo-core.cjs",
       "default": "./dist/michelangelo-core.js"
     }
   },
