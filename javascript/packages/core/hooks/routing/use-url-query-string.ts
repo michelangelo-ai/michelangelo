@@ -1,4 +1,4 @@
-import { useLocation } from 'react-router';
+import { useLocation } from 'react-router-dom-v5-compat';
 
 export default function useURLQueryString<T extends Record<string, string>>(): Partial<T> {
   const location = useLocation();

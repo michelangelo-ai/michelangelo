@@ -1,4 +1,4 @@
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter, Route, Routes } from 'react-router-dom-v5-compat';
 
 import { WrapperComponentProps } from './types';
 
