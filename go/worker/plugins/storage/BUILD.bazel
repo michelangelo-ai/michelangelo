@@ -1,4 +1,4 @@
-load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
@@ -7,12 +7,25 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/worker/activities/storage:go_default_library",
+        "//go/worker/plugins/utils:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
-        "@com_github_cadence_workflow_starlark_worker//star:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
-        "@com_github_json_iterator_go//:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["plugin_test.go"],
+    data = glob(["testdata/**"]),
+    embed = [":go_default_library"],
+    deps = [
+        "//go/worker/activities/storage:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_stretchr_testify//mock:go_default_library",
+        "@com_github_stretchr_testify//suite:go_default_library",
         "@net_starlark_go//starlark:go_default_library",
     ],
 )

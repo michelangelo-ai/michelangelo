@@ -38,7 +38,4 @@ type Storage interface {
 	// Returns:
 	//   - string: A protocol identifier that represents the storage system.
 	Protocol() string
-
-	// IsNotFoundError checks the error type to see if this is not found error
-	IsNotFoundError(err error) bool
 }

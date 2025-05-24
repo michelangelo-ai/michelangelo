@@ -3,6 +3,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/cadence-workflow/starlark-worker/activity"
@@ -12,6 +13,8 @@ import (
 
 	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
 )
+
+var ErrNotFound = errors.New("not found")
 
 // Activities is a package-level variable that holds the activities implementation.
 var Activities = (*activities)(nil)
@@ -35,12 +38,7 @@ func (a *activities) Read(ctx context.Context, protocol string, path string) (an
 		// Attempt to read from the storage using the protocol's implementation.
 		result, err := impl.Read(ctx, path)
 		if err != nil {
-			if impl.IsNotFoundError(err) {
-				logger.Error("activity-error", zap.Error(err))
-				// If the error is a "not found" error, return empty result
-				// Due to starlark code can't handle errors from worker, so we return nil
-				return nil, nil
-			}
+			logger.Error("activity-error", zap.Error(err))
 			// Wrap the error in a Cadence CustomError using YARPC error codes.
 			return nil, workflow.NewCustomError(
 				ctx,

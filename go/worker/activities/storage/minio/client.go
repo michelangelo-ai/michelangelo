@@ -53,11 +53,3 @@ func (a *minioClient) Read(ctx context.Context, path string) (any, error) {
 func (a *minioClient) Protocol() string {
 	return "s3"
 }
-
-// IsNotFoundError checks if the provided error is a "not found" error.
-func (a *minioClient) IsNotFoundError(err error) bool {
-	if minioErr, ok := err.(minio.ErrorResponse); ok {
-		return minioErr.Code == "NoSuchKey" || minioErr.StatusCode == 404
-	}
-	return false
-}
