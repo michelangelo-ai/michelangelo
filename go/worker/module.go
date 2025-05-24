@@ -1,12 +1,12 @@
 package worker
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
 	"github.com/michelangelo-ai/michelangelo/go/worker/starlark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"go.uber.org/fx"
 )
 
