@@ -2,8 +2,9 @@ package storage
 
 import (
 	"errors"
-	"github.com/stretchr/testify/mock"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"

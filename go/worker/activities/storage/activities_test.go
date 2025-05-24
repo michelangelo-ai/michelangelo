@@ -54,9 +54,8 @@ func (r *Suite) BeforeTest(_, _ string) {
 
 // fakeStorage is a mock implementation of the Storage interface for testing.
 type fakeStorage struct {
-	protocol   string
-	readFn     func(ctx context.Context, path string) (any, error)
-	isNotFound bool
+	protocol string
+	readFn   func(ctx context.Context, path string) (any, error)
 }
 
 // Read calls the fake read function.
@@ -67,10 +66,6 @@ func (fs *fakeStorage) Read(ctx context.Context, path string) (any, error) {
 // Protocol returns the protocol identifier of the fake storage.
 func (fs *fakeStorage) Protocol() string {
 	return fs.protocol
-}
-
-func (fs *fakeStorage) IsNotFoundError(err error) bool {
-	return fs.isNotFound
 }
 
 // TestActivities_Read_Success verifies that activities.Read returns the expected result
@@ -88,21 +83,6 @@ func (r *Suite) TestActivities_Read_Success() {
 	var res string
 	result.Get(&res)
 	r.Require().Equal(res, expected)
-}
-
-// TestActivities_Read_Notfound verifies that activities.Read returns the expected result not found
-func (r *Suite) TestActivities_Read_Notfound() {
-	fake.isNotFound = true
-	fake.readFn = func(ctx context.Context, path string) (any, error) {
-		return nil, errors.New("error")
-	}
-	act.impls = map[string]intf.Storage{"test": fake}
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
-
-	r.Require().NoError(err)
-	var res string
-	result.Get(&res)
-	r.Require().Equal(res, "")
 }
 
 // TestActivities_Read_Error verifies that activities.Read properly wraps errors
