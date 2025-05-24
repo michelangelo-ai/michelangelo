@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -19,6 +20,7 @@ var (
 	// and set up the lifecycle hooks for the application.
 	Module = fx.Options(
 		blobstore.Module,
+		minio.Module,
 		fx.Provide(newConfig),
 		fx.Provide(create),
 		fx.Invoke(start),

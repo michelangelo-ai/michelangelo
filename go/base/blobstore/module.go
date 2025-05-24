@@ -3,12 +3,12 @@ package blobstore
 import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 )
 
-var Module = fx.Options(
-	minio.Module,
-	fx.Provide(NewBlobStore),
+var (
+	Module = fx.Options(
+		fx.Provide(NewBlobStore),
+	)
 )
 
 // Define an fx.In struct to receive the group.
