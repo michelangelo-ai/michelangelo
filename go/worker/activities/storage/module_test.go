@@ -23,10 +23,6 @@ func (d *dummyStorage) Protocol() string {
 	return d.proto
 }
 
-func (d *dummyStorage) IsNotFoundError(err error) bool {
-	return false
-}
-
 // dummyWorker is a mock worker that records activities registered with it.
 type dummyWorker struct {
 	registeredActivities []interface{}
