@@ -3,6 +3,7 @@ package storage
 import (
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
 // Define an fx.In struct to receive the group.
