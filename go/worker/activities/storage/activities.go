@@ -25,13 +25,13 @@ type activities struct {
 // Read attempts to read data from the specified path using the given protocol.
 // It logs the start of the activity, checks for a valid protocol implementation,
 // and wraps any errors using Cadence's CustomError for consistent error handling.
-func (a *activities) Read(ctx context.Context, scheme string, path string) (any, error) {
+func (a *activities) Read(ctx context.Context, url string) (any, error) {
 	// Retrieve logger from context and log the start of the read activity.
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.Any("scheme", scheme), zap.Any("path", path))
+	logger.Info("activity-start", zap.Any("url", url))
 
 	// Check if there is an implementation available for the requested protocol.
-	result, err := a.blobStore.Get(ctx, fmt.Sprintf("%s://%s", scheme, path))
+	result, err := a.blobStore.Get(ctx, url)
 	if err != nil {
 		// Wrap the error in a Cadence CustomError using YARPC error codes.
 		return nil, workflow.NewCustomError(

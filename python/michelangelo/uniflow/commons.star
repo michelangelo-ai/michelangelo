@@ -32,12 +32,9 @@ def get_result_url():
     result_url = "{}/{}.json".format(metadata_storage_url, uuid.uuid4().hex)
     return result_url
 
+# The url is expected to be in format of scheme://host/path
 def io_read_json(url):
-    url_parts = url.split("://")
-    protocol = url_parts[0]
-    path = url_parts[1]
-
-    return storage.read(protocol, path)
+    return storage.read(protocol, url)
 
 # Get the task image for the task.
 # Args:
