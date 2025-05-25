@@ -75,7 +75,7 @@ func (r *Suite) TestActivities_Read_Success() {
 	fake.readFn = func(ctx context.Context, path string) (any, error) {
 		return expected, nil
 	}
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
 
 	r.Require().NoError(err)
 
@@ -91,7 +91,7 @@ func (r *Suite) TestActivities_Read_Error() {
 	fake.readFn = func(ctx context.Context, path string) (any, error) {
 		return "", expectedErr
 	}
-	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test", "dummyPath")
+	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
 
 	// Verify that the returned error message contains the original error message.
 	r.Require().Error(err)
@@ -106,7 +106,7 @@ func (r *Suite) TestActivities_Read_Error() {
 // TestActivities_Read_UnsupportedProtocol verifies that activities.Read returns an error
 // when an unsupported protocol is provided.
 func (r *Suite) TestActivities_Read_UnsupportedProtocol() {
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test2", "dummyPath")
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test2://dummyPath")
 	if result != nil {
 		r.Require().Fail(fmt.Sprintf("expected nil result for unsupported protocol, got %s", result))
 	}
