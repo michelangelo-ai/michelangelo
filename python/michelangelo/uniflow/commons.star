@@ -34,7 +34,7 @@ def get_result_url():
 
 # The url is expected to be in format of scheme://host/path
 def io_read_json(url):
-    return storage.read(protocol, url)
+    return storage.read(url)
 
 # Get the task image for the task.
 # Args:
