@@ -2,8 +2,9 @@ package minio
 
 import (
 	"context"
+	"fmt"
 	"io"
-	"strings"
+	"net/url"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/minio/minio-go/v7"
@@ -13,16 +14,23 @@ import (
 // It provides methods to interact with S3-compatible storage.
 type minioClient struct {
 	s3Client *minio.Client
+	scheme   string
 }
 
-// Read retrieves an object from S3 storage, reads its content,
+// Get retrieves an object from S3 storage, reads its content,
 // unmarshals the JSON data, and returns the result.
-// It expects the path format "bucket/filePath".
-func (a *minioClient) Read(ctx context.Context, path string) (any, error) {
+// The blobURI is expected to be in the format "s3://bucket/path".
+func (a *minioClient) Get(ctx context.Context, blobURI string) (any, error) {
 	// Split the path into bucket and file path.
-	parts := strings.SplitN(path, "/", 2)
-	bucket := parts[0]
-	filePath := parts[1]
+	parsedURL, err := url.Parse(blobURI)
+	if err != nil {
+		return nil, err
+	}
+	if parsedURL.Scheme != a.scheme {
+		return nil, fmt.Errorf("scheme %s is not supported by minio client", parsedURL.Scheme)
+	}
+	bucket := parsedURL.Host
+	filePath := parsedURL.Path[1:]
 
 	// Retrieve the object from the specified bucket and file path.
 	output, err := a.s3Client.GetObject(ctx, bucket, filePath, minio.GetObjectOptions{})
@@ -49,7 +57,7 @@ func (a *minioClient) Read(ctx context.Context, path string) (any, error) {
 	return res, nil
 }
 
-// Protocol returns the protocol identifier used by this client.
-func (a *minioClient) Protocol() string {
-	return "s3"
+// Scheme returns the scheme identifier used by this client.
+func (a *minioClient) Scheme() string {
+	return a.scheme
 }

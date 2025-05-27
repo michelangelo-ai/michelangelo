@@ -7,10 +7,10 @@ go_library(
         "config.go",
         "module.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/minio",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/worker/activities/storage/interface:go_default_library",
+        "//go/base/blobstore:go_default_library",
         "@com_github_json_iterator_go//:go_default_library",
         "@com_github_minio_minio_go_v7//:go_default_library",
         "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",

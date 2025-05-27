@@ -5,22 +5,23 @@ import (
 	"testing"
 
 	"github.com/cadence-workflow/starlark-worker/worker"
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
 // dummyStorage is a simple implementation of the Storage interface for testing.
 type dummyStorage struct {
-	proto string
+	scheme string
 }
 
 var _ worker.Worker = (*dummyWorker)(nil)
 
-func (d *dummyStorage) Read(ctx context.Context, path string) (any, error) {
+func (d *dummyStorage) Get(ctx context.Context, uri string) (any, error) {
 	return nil, nil
 }
 
-func (d *dummyStorage) Protocol() string {
-	return d.proto
+func (d *dummyStorage) Scheme() string {
+	return d.scheme
 }
 
 // dummyWorker is a mock worker that records activities registered with it.
@@ -59,20 +60,18 @@ func (w *dummyWorker) RegisterActivity(activity interface{}) {
 // TestRegister verifies that the register function maps Storage implementations by protocol
 // and registers the resulting activities with each Cadence worker.
 func TestRegister(t *testing.T) {
-	// Create dummy Storage implementations with distinct protocols.
-	storages := []intf.Storage{
-		&dummyStorage{proto: "s1"},
-		&dummyStorage{proto: "s2"},
-	}
 
 	// Create two dummy workers.
 	worker1 := &dummyWorker{}
 	worker2 := &dummyWorker{}
 	workers := []worker.Worker{worker1, worker2}
 
+	blobStore := blobstore.BlobStore{}
+	blobStore.RegisterClient(&dummyStorage{scheme: "s1"})
+	blobStore.RegisterClient(&dummyStorage{scheme: "s2"})
 	params := storagesIn{
-		Workers:  workers,
-		Storages: storages,
+		Workers:   workers,
+		BlobStore: &blobStore,
 	}
 	// Call the register function.
 	register(params)
@@ -92,14 +91,22 @@ func TestRegister(t *testing.T) {
 		}
 
 		// Check that the impls map has the expected protocols.
-		if len(act.impls) != 2 {
-			t.Errorf("worker %d: expected 2 storage implementations in activities.impls, got %d", i, len(act.impls))
+		if act.blobStore == nil {
+			t.Errorf("worker %d: expected blobstore in activities.blobStore, got nil", i)
 		}
-		if _, ok := act.impls["s1"]; !ok {
-			t.Errorf("worker %d: activities.impls does not contain key 's1'", i)
+		client, err := act.blobStore.GetClient("s1")
+		if err != nil {
+			t.Errorf("worker %d: expected blobstore to contain client for scheme 's1', got error: %v", i, err)
 		}
-		if _, ok := act.impls["s2"]; !ok {
-			t.Errorf("worker %d: activities.impls does not contain key 's2'", i)
+		if client == nil {
+			t.Errorf("worker %d: expected blobstore to contain client for scheme 's1', got nil", i)
+		}
+		client, err = act.blobStore.GetClient("s2")
+		if err != nil {
+			t.Errorf("worker %d: expected blobstore to contain client for scheme 's2', got error: %v", i, err)
+		}
+		if client == nil {
+			t.Errorf("worker %d: expected blobstore to contain client for scheme 's2', got nil", i)
 		}
 	}
 }

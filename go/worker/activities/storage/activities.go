@@ -10,7 +10,7 @@ import (
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
 
-	intf "github.com/michelangelo-ai/michelangelo/go/worker/activities/storage/interface"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
 
 // Activities is a package-level variable that holds the activities implementation.
@@ -19,36 +19,26 @@ var Activities = (*activities)(nil)
 // activities holds implementations for different storage protocols.
 // The map keys represent protocol names, and the values are Storage implementations.
 type activities struct {
-	impls map[string]intf.Storage
+	blobStore *blobstore.BlobStore
 }
 
 // Read attempts to read data from the specified path using the given protocol.
 // It logs the start of the activity, checks for a valid protocol implementation,
 // and wraps any errors using Cadence's CustomError for consistent error handling.
-func (a *activities) Read(ctx context.Context, protocol string, path string) (any, error) {
+func (a *activities) Read(ctx context.Context, url string) (any, error) {
 	// Retrieve logger from context and log the start of the read activity.
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.Any("path", path))
+	logger.Info("activity-start", zap.Any("url", url))
 
 	// Check if there is an implementation available for the requested protocol.
-	if impl, ok := a.impls[protocol]; ok {
-		// Attempt to read from the storage using the protocol's implementation.
-		result, err := impl.Read(ctx, path)
-		if err != nil {
-			// Wrap the error in a Cadence CustomError using YARPC error codes.
-			return nil, workflow.NewCustomError(
-				ctx,
-				yarpcerrors.FromError(err).Code().String(),
-				err.Error(),
-			)
-		}
-		// Return the successful result.
-		return result, nil
+	result, err := a.blobStore.Get(ctx, url)
+	if err != nil {
+		// Wrap the error in a Cadence CustomError using YARPC error codes.
+		return nil, workflow.NewCustomError(
+			ctx,
+			fmt.Sprintf("%s: %s", yarpcerrors.FromError(err).Code().String(), err.Error()),
+		)
 	}
-	// Return an error if the protocol is not supported.
-	return nil, workflow.NewCustomError(
-		ctx,
-		fmt.Sprintf("protocol %s is not supported", protocol),
-		"",
-	)
+	// Return the successful result.
+	return result, nil
 }
