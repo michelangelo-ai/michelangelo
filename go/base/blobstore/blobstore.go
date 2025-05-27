@@ -8,11 +8,16 @@ import (
 	"go.uber.org/zap"
 )
 
+// BlobStoreClient is an interface for a blob store client.
 type BlobStoreClient interface {
+	// Get retrieves the content of a blob from the blob store.
+	// The blobURL is expected to be in the format "scheme://host(optional)/path".
 	Get(ctx context.Context, url string) (any, error)
+	// Scheme returns the scheme of the blob store client. For example, "s3" or "gs".
 	Scheme() string
 }
 
+// BlobStore is a wrapper around a map of BlobStoreClient implementations.
 type BlobStore struct {
 	logger  *zap.Logger
 	clients map[string]BlobStoreClient
