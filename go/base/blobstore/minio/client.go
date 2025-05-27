@@ -19,10 +19,10 @@ type minioClient struct {
 
 // Get retrieves an object from S3 storage, reads its content,
 // unmarshals the JSON data, and returns the result.
-// The blobURL is expected to be in the format "s3://bucket/path".
-func (a *minioClient) Get(ctx context.Context, blobURL string) (any, error) {
+// The blobURI is expected to be in the format "s3://bucket/path".
+func (a *minioClient) Get(ctx context.Context, blobURI string) (any, error) {
 	// Split the path into bucket and file path.
-	parsedURL, err := url.Parse(blobURL)
+	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
 		return nil, err
 	}

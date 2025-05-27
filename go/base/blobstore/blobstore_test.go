@@ -21,7 +21,7 @@ func (m *mockBlobStoreClient) Scheme() string {
 
 func TestBlobStore_Get(t *testing.T) {
 	bs := BlobStore{}
-	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, url string) (any, error) {
+	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) (any, error) {
 		return "test", nil
 	}})
 	result, err := bs.Get(context.Background(), "test://test")
@@ -35,7 +35,7 @@ func TestBlobStore_Get(t *testing.T) {
 
 func TestBlobStore_Get_Error(t *testing.T) {
 	bs := BlobStore{}
-	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, url string) (any, error) {
+	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) (any, error) {
 		return nil, errors.New("test error")
 	}})
 	result, err := bs.Get(context.Background(), "test://test")
