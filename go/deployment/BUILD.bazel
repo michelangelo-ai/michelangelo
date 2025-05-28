@@ -12,7 +12,7 @@ go_library(
         "//go/api/utils:go_default_library",
         "//go/base/env:go_default_library",
         "//go/deployment/provider:go_default_library",
-        "//go/deployment/provider/kserve:go_default_library",
+        "//go/deployment/provider/tritoninferenceserver:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@io_k8s_apimachinery//pkg/types:go_default_library",

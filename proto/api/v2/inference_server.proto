@@ -1,0 +1,173 @@
+// This file defines the Inference Server related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2beta1;
+
+option go_package = "michelangelo/api/v2beta1;v2beta1pb";
+option java_multiple_files = true;
+option java_outer_classname = "InferenceServerProto";
+option java_package = "com.michelangelo.api.v2beta1";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2beta1/conditions.proto";
+import "michelangelo/api/v2beta1/feature_store_spec.proto";
+import "michelangelo/api/v2beta1/pod.proto";
+import "michelangelo/api/v2beta1/project.proto";
+import "michelangelo/api/v2beta1/user.proto";
+
+// ServingSpec encapsulates serving service specification.
+message ServingSpec {
+  // optional version to deploy. This can either be a semver or the git sha of
+  // the prediction service. If no version is specified the service will use its
+  // own heuristics to pick a version.
+  string version = 1;
+
+  // optional template to use when generating container (pinocchio) files. If not specified then
+  // a default template will be used.
+  string container_build_template = 2;
+
+  // TODO serving time dependencies etc
+}
+
+// Ownership spec for the InferenceServer. Used for capacity attribution and
+// tier information.
+message OwnerSpec {
+  // optional owner information of the inference server. If not provided, it is
+  // inferred from the legacy_project_name.
+  OwnerInfo owner_info = 1;
+  // optional tier of the inference server. Valid values range from 1-4, with
+  // 1 being the highest and 4 being the lowest. If not provided, it is inferred
+  // from the legacy_project_name.
+  int32 tier = 2;
+  // optional legacy project name. If specified this is used to get the ownership
+  // information for the InferenceServer.
+  // TODO: Remove once we migrate all projects to MA 2.0
+  string legacy_project_name = 1000;
+}
+
+// Initialization spec for provisioning the InferenceServer.
+// Only used during the initialization of the resource.
+message InitSpec {
+  // initial resource spec.
+  ResourceSpec resource_spec = 1;
+  // serving spec.
+  ServingSpec serving_spec = 2;
+  // number of instances
+  int32 num_instances = 3;
+}
+
+// DecomSpec for decommissioning an InferenceServer. This acts a soft-delete.
+message DecomSpec {
+  // Whether or not to decommission this InferenceServer. Defaults to false.
+  bool decommission = 1;
+}
+
+// TenancyType specifies the Inference Server tenancy type.
+enum TenancyType {
+  TENANCY_TYPE_INVALID = 0;
+  // Dedicated InferenceServer only support 1 project. For such InferenceServers,
+  // the ownership spec can be inferred via the project namespace they belong
+  // in.
+  TENANCY_TYPE_DEDICATED = 1;
+  // Multi tenant InferenceServers can support more than 1 use case. For such InferenceServers
+  // the ownership spec must be specified.
+  TENANCY_TYPE_MULTI_TENANT = 2;
+}
+
+// Inference Server spec.
+message InferenceServerSpec {
+  // Tenancy type of this InferenceServer.
+  TenancyType tenancy_type = 1;
+  // Owner spec for this project.
+  OwnerSpec owner_spec = 2;
+  // optional initialization spec used for provisioning.
+  InitSpec init_spec = 3;
+  // optional decommissioning spec.
+  DecomSpec decom_spec = 4;
+
+  reserved 5;
+  reserved "serving_group_override_spec";
+
+  // optional feature store spec
+  OnlineFeatureStoreSpec online_feature_store_spec = 6;
+
+  // Information about the most recent user to update the inference-server
+  // The inference-server's owner is the user who update the inference-server, not the really owner, we use owner to keep the consistency
+  UserInfo owner = 7;
+}
+
+// The state of the Inference Server.
+enum InferenceServerState {
+  INFERENCE_SERVER_STATE_INVALID = 0;
+  INFERENCE_SERVER_STATE_INITIALIZED = 1;
+  INFERENCE_SERVER_STATE_CREATE_PENDING = 2;
+  INFERENCE_SERVER_STATE_SERVING = 3;
+  INFERENCE_SERVER_STATE_FAILED = 4;
+  INFERENCE_SERVER_STATE_DELETE_PENDING = 5;
+  INFERENCE_SERVER_STATE_CREATING = 6;
+  INFERENCE_SERVER_STATE_DELETING = 7;
+  INFERENCE_SERVER_STATE_DELETED = 8;
+}
+
+// The status of the InferenceServer.
+message InferenceServerStatus {
+  // The uuid of the InferenceServer.
+  string inference_server_id = 1;
+  // Observed generation is the most recent generation observed for this InferenceServer. It corresponds to the
+  // InferenceServer's generation, which is updated on mutation by the API Server.
+  int64 observed_generation = 2;
+  // The state of the IngerenceServer.
+  InferenceServerState state = 3;
+  // The provider specific meta data about the InferenceServer state. This is intended to be used by
+  // the InferenceServer provider as an optimization to build the current state.
+  string provider_metadata = 4;
+  // The time when the InferenceServer was created. The time is represented in
+  // RFC3339 form with UTC timezone.
+  string create_time = 5;
+  // The time when the InferenceServer was last updated. The time
+  // is represented in RFC3339 form with UTC timezone.
+  string update_time = 6;
+
+  // TODO: Output only: The models served by this InferenceServer.
+  // repeated Deployable deployables;
+
+  // conditions refer to the conditions that are relevant for the InferenceServer
+  repeated Condition conditions = 7;
+
+  // available_environments correspond to the list of environments that are available for
+  // this InferenceServer resource.
+  repeated string available_environments = 8;
+}
+
+// Defines a managed InferenceServer service for model serving.
+message InferenceServer {
+  option (michelangelo.api.resource) = {};
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "status.state",
+    key: "state",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the InferenceServer.
+  InferenceServerSpec spec = 3;
+
+  // Most recently observed status of the InferenceServer.
+  InferenceServerStatus status = 4;
+}
+
+// A list of InferenceServer objects.
+message InferenceServerList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of inference server objects
+  repeated InferenceServer items = 3;
+}

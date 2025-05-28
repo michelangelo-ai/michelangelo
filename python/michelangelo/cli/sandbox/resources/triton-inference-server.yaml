@@ -1,0 +1,101 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  labels:
+    app: bert-cola-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bert-cola-deployment
+  template:
+    metadata:
+      labels:
+        app: bert-cola-deployment
+        component: predictor
+    spec:
+      containers:
+        - name: triton
+          image: nvcr.io/nvidia/tritonserver:23.12-py3
+          args:
+            - tritonserver
+            - "--model-store=/mnt/models"
+            - "--grpc-port=8001"
+            - "--http-port=8000"
+            - "--allow-grpc=true"
+            - "--allow-http=true"
+            - "--allow-metrics=true"
+            - "--metrics-port=8002"
+            - "--model-control-mode=poll"
+            - "--repository-poll-secs=60"
+            - "--exit-on-error=true"
+            - "--log-error=true"
+            - "--log-warning=true"
+            - "--log-verbose=0"
+          resources:
+            limits:
+              cpu: 1
+              memory: 2Gi
+            requests:
+              cpu: 1
+              memory: 2Gi
+          ports:
+            - containerPort: 8000
+            - containerPort: 8001
+            - containerPort: 8002
+          volumeMounts:
+            - name: workdir
+              mountPath: /mnt/models
+
+        - name: model-sync
+          image: amazon/aws-cli:2.15.50
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              yum install -y jq && \
+              CONFIG_FILE=/secret/localMinIO.json
+              ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
+              SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
+              ENDPOINT=$(jq -r '.endpoint_url' $CONFIG_FILE)
+              REGION=$(jq -r '.region' $CONFIG_FILE)
+              aws configure set aws_access_key_id $ACCESS_KEY
+              aws configure set aws_secret_access_key $SECRET_KEY
+              aws configure set default.region $REGION
+              aws configure set default.s3.endpoint_url $ENDPOINT
+
+              while true; do
+                cp /config/model-list.json /tmp/model-list.json
+                jq -c '.[]' /tmp/model-list.json | while read model; do
+                  name=$(echo "$model" | jq -r '.name')
+                  s3_path=$(echo "$model" | jq -r '.s3_path')
+                  aws s3 sync "$s3_path" /mnt/models/ --delete --exact-timestamps --endpoint-url "$ENDPOINT"
+                done
+
+                sleep 600
+              done
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+          volumeMounts:
+            - name: workdir
+              mountPath: /mnt/models
+            - name: model-config
+              mountPath: /config
+            - name: storage-secret
+              mountPath: /secret
+              readOnly: true
+
+      volumes:
+        - name: workdir
+          emptyDir: {}
+        - name: model-config
+          configMap:
+            name: triton-models
+        - name: storage-secret
+          secret:
+            secretName: storage-config
+            items:
+              - key: localMinIO
+                path: localMinIO.json

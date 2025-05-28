@@ -6,13 +6,14 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/provider"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/kserve"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/tritoninferenceserver"
 )
 
 var (
 	// Module FX
 	Module = fx.Options(
-		kserve.Module,
+		//kserve.Module,
+		tritoninferenceserver.Module,
 		fx.Invoke(register),
 	)
 )

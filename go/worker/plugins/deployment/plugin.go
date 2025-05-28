@@ -56,7 +56,8 @@ func AsStar(source any, out any) error {
 func newModule() starlark.Value {
 	m := &module{}
 	m.attributes = map[string]starlark.Value{
-		"deploy": starlark.NewBuiltin("deploy", m.deploy).BindReceiver(m),
+		"deploy":            starlark.NewBuiltin("deploy", m.deploy).BindReceiver(m),
+		"create_deployment": starlark.NewBuiltin("create_deployment", m.createDeployment).BindReceiver(m),
 	}
 	return m
 }
@@ -88,6 +89,40 @@ func (m *module) deploy(t *starlark.Thread, _ *starlark.Builtin, args starlark.T
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 	if err := workflow.ExecuteActivity(sensorCtx, deployment.Activities.SensorRollout, request).Get(ctx, &res); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+
+	dep := res.GetDeployment()
+	var ret starlark.Value
+	if err := AsStar(dep, &ret); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+	return ret, nil
+}
+
+func (m *module) createDeployment(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tuple, kwargs []starlark.Tuple) (starlark.Value, error) {
+	ctx := service.GetContext(t)
+	logger := workflow.GetLogger(ctx)
+
+	var newDeployment v2pb.Deployment
+	if err := starlark.UnpackArgs("create_deployment", args, kwargs,
+		"deployment", &newDeployment,
+	); err != nil {
+		logger.Error("builtin-error", ext.ZapError(err)...)
+		return nil, err
+	}
+
+	var res v2pb.CreateDeploymentResponse
+	request := v2pb.CreateDeploymentRequest{
+		Deployment: &newDeployment,
+	}
+
+	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
+	if err := workflow.ExecuteActivity(sensorCtx, deployment.Activities.CreateDeployment, request).Get(ctx, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
