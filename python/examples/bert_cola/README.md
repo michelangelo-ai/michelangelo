@@ -9,6 +9,12 @@ default
 mlflow
 deploy-models
 ```
+### Create mysql db
+```bash
+kubectl exec -it mysql -- bash
+
+mysql> mysql -u root -p
+mysql> CREATE DATABASE mlflow_db;
 ### install kserve
 ```bash
  curl -s "https://raw.githubusercontent.com/kserve/kserve/release-0.15/hack/quick_install.sh" | bash
@@ -35,7 +41,7 @@ kubectl port-forward deploy/bert-cola-deployment-predictor-00001-deployment 8080
 ### Test the predictor
 ```bash
 
-curl -X POST http://localhost:8080/v2/models/bert-cola/infer \
+curl -X POST http://localhost:8000/v2/models/bert-cola/infer \
 -H "Content-Type: application/json" \
 -d '{
   "inputs": [

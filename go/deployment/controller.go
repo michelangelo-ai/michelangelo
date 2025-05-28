@@ -58,12 +58,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 					logger.Error(err, "failed to get Model")
 					res.RequeueAfter = requeueAfter
 				}
-			}
-			if err = r.rollout(ctx, logger, &deployment, &model); err != nil {
-				logger.Error(err, "failed to rollout")
-				res.RequeueAfter = requeueAfter
 			} else {
-				res.RequeueAfter = requeueAfter
+				if err = r.createDeployment(ctx, logger, &deployment, &model); err != nil {
+					logger.Error(err, "failed to rollout")
+					res.RequeueAfter = requeueAfter
+				} else {
+					res.RequeueAfter = requeueAfter
+				}
 			}
 		} else {
 			logger.Error(err, "failed to get status")
@@ -89,7 +90,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 				}
 			} else {
 				res.RequeueAfter = requeueAfter
-				err = r.updateDeployment(ctx, logger, &deployment, &model)
+				err = r.rollout(ctx, logger, &deployment, &model)
 				if err != nil {
 					logger.Error(err, "failed to update Deployment")
 				}
@@ -123,12 +124,12 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 // createJob creates a new Spark job
-func (r *Reconciler) rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
-	return r.servingProvider.Rollout(ctx, log, deployment, model)
+func (r *Reconciler) createDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
+	return r.servingProvider.CreateDeployment(ctx, log, deployment, model)
 }
 
-func (r *Reconciler) updateDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
-	return r.servingProvider.Update(ctx, log, deployment, model)
+func (r *Reconciler) rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
+	return r.servingProvider.Rollout(ctx, log, deployment, model)
 }
 
 // getJobStatus retrieves the status of the Spark job

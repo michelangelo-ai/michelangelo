@@ -1,0 +1,433 @@
+{
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+        "annotations": {
+            "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+            "autoscaling.knative.dev/initial-scale": "1",
+            "autoscaling.knative.dev/max-scale": "0",
+            "autoscaling.knative.dev/min-scale": "1",
+            "deployment.kubernetes.io/revision": "1",
+            "internal.serving.kserve.io/storage-initializer-sourceuri": "\u003cscheme-placeholder\u003e://bert-cola3",
+            "internal.serving.kserve.io/storage-spec": "true",
+            "internal.serving.kserve.io/storage-spec-key": "localMinIO",
+            "internal.serving.kserve.io/storage-spec-param": "{\"bucket\":\"deploy-models\"}",
+            "prometheus.kserve.io/path": "/metrics",
+            "prometheus.kserve.io/port": "8002",
+            "serving.knative.dev/creator": "system:serviceaccount:kserve:kserve-controller-manager"
+        },
+        "creationTimestamp": "2025-05-25T04:15:07Z",
+        "generation": 2,
+        "labels": {
+            "app": "bert-cola-deployment-predictor-00001",
+            "component": "predictor",
+            "service.istio.io/canonical-name": "bert-cola-deployment-predictor",
+            "service.istio.io/canonical-revision": "bert-cola-deployment-predictor-00001",
+            "serving.knative.dev/configuration": "bert-cola-deployment-predictor",
+            "serving.knative.dev/configurationGeneration": "1",
+            "serving.knative.dev/configurationUID": "811e4034-c32a-4a7f-b419-827a9459ac8c",
+            "serving.knative.dev/revision": "bert-cola-deployment-predictor-00001",
+            "serving.knative.dev/revisionUID": "d9acd4d5-bff5-4373-b69a-737e73673f36",
+            "serving.knative.dev/service": "bert-cola-deployment-predictor",
+            "serving.knative.dev/serviceUID": "f35d9e1b-1105-4220-aa1b-67254c5e505d",
+            "serving.kserve.io/inferenceservice": "bert-cola-deployment"
+        },
+        "name": "bert-cola-deployment-predictor-00001-deployment",
+        "namespace": "default",
+        "ownerReferences": [
+            {
+                "apiVersion": "serving.knative.dev/v1",
+                "blockOwnerDeletion": true,
+                "controller": true,
+                "kind": "Revision",
+                "name": "bert-cola-deployment-predictor-00001",
+                "uid": "d9acd4d5-bff5-4373-b69a-737e73673f36"
+            }
+        ],
+        "resourceVersion": "15700",
+        "uid": "02aa9c72-1379-4806-b2a6-d71936f9b8e1"
+    },
+    "spec": {
+        "progressDeadlineSeconds": 600,
+        "replicas": 0,
+        "revisionHistoryLimit": 10,
+        "selector": {
+            "matchLabels": {
+                "serving.knative.dev/revisionUID": "d9acd4d5-bff5-4373-b69a-737e73673f36"
+            }
+        },
+        "strategy": {
+            "rollingUpdate": {
+                "maxSurge": "25%",
+                "maxUnavailable": 0
+            },
+            "type": "RollingUpdate"
+        },
+        "template": {
+            "metadata": {
+                "annotations": {
+                    "autoscaling.knative.dev/class": "kpa.autoscaling.knative.dev",
+                    "autoscaling.knative.dev/initial-scale": "1",
+                    "autoscaling.knative.dev/max-scale": "0",
+                    "autoscaling.knative.dev/min-scale": "1",
+                    "internal.serving.kserve.io/storage-initializer-sourceuri": "\u003cscheme-placeholder\u003e://bert-cola3",
+                    "internal.serving.kserve.io/storage-spec": "true",
+                    "internal.serving.kserve.io/storage-spec-key": "localMinIO",
+                    "internal.serving.kserve.io/storage-spec-param": "{\"bucket\":\"deploy-models\"}",
+                    "prometheus.kserve.io/path": "/metrics",
+                    "prometheus.kserve.io/port": "8002",
+                    "serving.knative.dev/creator": "system:serviceaccount:kserve:kserve-controller-manager"
+                },
+                "creationTimestamp": null,
+                "labels": {
+                    "app": "bert-cola-deployment-predictor-00001",
+                    "component": "predictor",
+                    "service.istio.io/canonical-name": "bert-cola-deployment-predictor",
+                    "service.istio.io/canonical-revision": "bert-cola-deployment-predictor-00001",
+                    "serving.knative.dev/configuration": "bert-cola-deployment-predictor",
+                    "serving.knative.dev/configurationGeneration": "1",
+                    "serving.knative.dev/configurationUID": "811e4034-c32a-4a7f-b419-827a9459ac8c",
+                    "serving.knative.dev/revision": "bert-cola-deployment-predictor-00001",
+                    "serving.knative.dev/revisionUID": "d9acd4d5-bff5-4373-b69a-737e73673f36",
+                    "serving.knative.dev/service": "bert-cola-deployment-predictor",
+                    "serving.knative.dev/serviceUID": "f35d9e1b-1105-4220-aa1b-67254c5e505d",
+                    "serving.kserve.io/inferenceservice": "bert-cola-deployment"
+                }
+            },
+            "spec": {
+                "affinity": {
+                    "podAntiAffinity": {
+                        "preferredDuringSchedulingIgnoredDuringExecution": [
+                            {
+                                "podAffinityTerm": {
+                                    "labelSelector": {
+                                        "matchLabels": {
+                                            "serving.knative.dev/revision": "bert-cola-deployment-predictor-00001"
+                                        }
+                                    },
+                                    "topologyKey": "kubernetes.io/hostname"
+                                },
+                                "weight": 100
+                            }
+                        ]
+                    }
+                },
+                "containers": [
+                    {
+                        "args": [
+                            "tritonserver",
+                            "--model-store=/mnt/models",
+                            "--grpc-port=9000",
+                            "--http-port=8080",
+                            "--allow-grpc=true",
+                            "--allow-http=true"
+                        ],
+                        "env": [
+                            {
+                                "name": "PORT",
+                                "value": "8080"
+                            },
+                            {
+                                "name": "K_REVISION",
+                                "value": "bert-cola-deployment-predictor-00001"
+                            },
+                            {
+                                "name": "K_CONFIGURATION",
+                                "value": "bert-cola-deployment-predictor"
+                            },
+                            {
+                                "name": "K_SERVICE",
+                                "value": "bert-cola-deployment-predictor"
+                            }
+                        ],
+                        "image": "nvcr.io/nvidia/tritonserver@sha256:26eed9e361cb193a1969f63d608a0e5c0506287e2613413ec8f361b25b0eac3c",
+                        "imagePullPolicy": "IfNotPresent",
+                        "lifecycle": {
+                            "preStop": {
+                                "httpGet": {
+                                    "path": "/wait-for-drain",
+                                    "port": 8022,
+                                    "scheme": "HTTP"
+                                }
+                            }
+                        },
+                        "name": "kserve-container",
+                        "ports": [
+                            {
+                                "containerPort": 8080,
+                                "name": "user-port",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "resources": {
+                            "limits": {
+                                "cpu": "1",
+                                "memory": "2Gi"
+                            },
+                            "requests": {
+                                "cpu": "1",
+                                "memory": "2Gi"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "runAsNonRoot": true,
+                            "runAsUser": 1000
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "FallbackToLogsOnError"
+                    },
+                    {
+                        "env": [
+                            {
+                                "name": "SERVING_NAMESPACE",
+                                "value": "default"
+                            },
+                            {
+                                "name": "SERVING_SERVICE",
+                                "value": "bert-cola-deployment-predictor"
+                            },
+                            {
+                                "name": "SERVING_CONFIGURATION",
+                                "value": "bert-cola-deployment-predictor"
+                            },
+                            {
+                                "name": "SERVING_REVISION",
+                                "value": "bert-cola-deployment-predictor-00001"
+                            },
+                            {
+                                "name": "QUEUE_SERVING_PORT",
+                                "value": "8012"
+                            },
+                            {
+                                "name": "QUEUE_SERVING_TLS_PORT",
+                                "value": "8112"
+                            },
+                            {
+                                "name": "CONTAINER_CONCURRENCY",
+                                "value": "0"
+                            },
+                            {
+                                "name": "REVISION_TIMEOUT_SECONDS",
+                                "value": "300"
+                            },
+                            {
+                                "name": "REVISION_RESPONSE_START_TIMEOUT_SECONDS",
+                                "value": "0"
+                            },
+                            {
+                                "name": "REVISION_IDLE_TIMEOUT_SECONDS",
+                                "value": "0"
+                            },
+                            {
+                                "name": "SERVING_POD",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "metadata.name"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "SERVING_POD_IP",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "status.podIP"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "SERVING_LOGGING_CONFIG"
+                            },
+                            {
+                                "name": "SERVING_LOGGING_LEVEL"
+                            },
+                            {
+                                "name": "SERVING_REQUEST_LOG_TEMPLATE",
+                                "value": "{\"httpRequest\": {\"requestMethod\": \"{{.Request.Method}}\", \"requestUrl\": \"{{js .Request.RequestURI}}\", \"requestSize\": \"{{.Request.ContentLength}}\", \"status\": {{.Response.Code}}, \"responseSize\": \"{{.Response.Size}}\", \"userAgent\": \"{{js .Request.UserAgent}}\", \"remoteIp\": \"{{js .Request.RemoteAddr}}\", \"serverIp\": \"{{.Revision.PodIP}}\", \"referer\": \"{{js .Request.Referer}}\", \"latency\": \"{{.Response.Latency}}s\", \"protocol\": \"{{.Request.Proto}}\"}, \"traceId\": \"{{index .Request.Header \"X-B3-Traceid\"}}\"}"
+                            },
+                            {
+                                "name": "SERVING_ENABLE_REQUEST_LOG",
+                                "value": "false"
+                            },
+                            {
+                                "name": "SERVING_REQUEST_METRICS_BACKEND",
+                                "value": "prometheus"
+                            },
+                            {
+                                "name": "SERVING_REQUEST_METRICS_REPORTING_PERIOD_SECONDS",
+                                "value": "5"
+                            },
+                            {
+                                "name": "TRACING_CONFIG_BACKEND",
+                                "value": "none"
+                            },
+                            {
+                                "name": "TRACING_CONFIG_ZIPKIN_ENDPOINT"
+                            },
+                            {
+                                "name": "TRACING_CONFIG_DEBUG",
+                                "value": "false"
+                            },
+                            {
+                                "name": "TRACING_CONFIG_SAMPLE_RATE",
+                                "value": "0.1"
+                            },
+                            {
+                                "name": "USER_PORT",
+                                "value": "8080"
+                            },
+                            {
+                                "name": "SYSTEM_NAMESPACE",
+                                "value": "knative-serving"
+                            },
+                            {
+                                "name": "METRICS_DOMAIN",
+                                "value": "knative.dev/internal/serving"
+                            },
+                            {
+                                "name": "SERVING_READINESS_PROBE",
+                                "value": "{\"tcpSocket\":{\"port\":8080,\"host\":\"127.0.0.1\"},\"successThreshold\":1}"
+                            },
+                            {
+                                "name": "ENABLE_PROFILING",
+                                "value": "false"
+                            },
+                            {
+                                "name": "SERVING_ENABLE_PROBE_REQUEST_LOG",
+                                "value": "false"
+                            },
+                            {
+                                "name": "METRICS_COLLECTOR_ADDRESS"
+                            },
+                            {
+                                "name": "HOST_IP",
+                                "valueFrom": {
+                                    "fieldRef": {
+                                        "apiVersion": "v1",
+                                        "fieldPath": "status.hostIP"
+                                    }
+                                }
+                            },
+                            {
+                                "name": "ENABLE_HTTP2_AUTO_DETECTION",
+                                "value": "false"
+                            },
+                            {
+                                "name": "ENABLE_HTTP_FULL_DUPLEX",
+                                "value": "false"
+                            },
+                            {
+                                "name": "ROOT_CA"
+                            },
+                            {
+                                "name": "ENABLE_MULTI_CONTAINER_PROBES",
+                                "value": "false"
+                            }
+                        ],
+                        "image": "gcr.io/knative-releases/knative.dev/serving/cmd/queue@sha256:56142833a9f87213e055045f0ea59c3f00f024d095c052f7669f7b9d77c55e54",
+                        "imagePullPolicy": "IfNotPresent",
+                        "name": "queue-proxy",
+                        "ports": [
+                            {
+                                "containerPort": 8022,
+                                "name": "http-queueadm",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 9090,
+                                "name": "http-autometric",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 9091,
+                                "name": "http-usermetric",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 8012,
+                                "name": "queue-port",
+                                "protocol": "TCP"
+                            },
+                            {
+                                "containerPort": 8112,
+                                "name": "https-port",
+                                "protocol": "TCP"
+                            }
+                        ],
+                        "readinessProbe": {
+                            "failureThreshold": 3,
+                            "httpGet": {
+                                "httpHeaders": [
+                                    {
+                                        "name": "K-Network-Probe",
+                                        "value": "queue"
+                                    }
+                                ],
+                                "path": "/",
+                                "port": 8012,
+                                "scheme": "HTTP"
+                            },
+                            "periodSeconds": 10,
+                            "successThreshold": 1,
+                            "timeoutSeconds": 1
+                        },
+                        "resources": {
+                            "requests": {
+                                "cpu": "25m"
+                            }
+                        },
+                        "securityContext": {
+                            "allowPrivilegeEscalation": false,
+                            "capabilities": {
+                                "drop": [
+                                    "ALL"
+                                ]
+                            },
+                            "readOnlyRootFilesystem": true,
+                            "runAsNonRoot": true,
+                            "seccompProfile": {
+                                "type": "RuntimeDefault"
+                            }
+                        },
+                        "terminationMessagePath": "/dev/termination-log",
+                        "terminationMessagePolicy": "File"
+                    }
+                ],
+                "dnsPolicy": "ClusterFirst",
+                "enableServiceLinks": false,
+                "restartPolicy": "Always",
+                "schedulerName": "default-scheduler",
+                "securityContext": {},
+                "terminationGracePeriodSeconds": 300
+            }
+        }
+    },
+    "status": {
+        "conditions": [
+            {
+                "lastTransitionTime": "2025-05-25T04:20:42Z",
+                "lastUpdateTime": "2025-05-25T04:20:42Z",
+                "message": "Deployment has minimum availability.",
+                "reason": "MinimumReplicasAvailable",
+                "status": "True",
+                "type": "Available"
+            },
+            {
+                "lastTransitionTime": "2025-05-25T04:15:07Z",
+                "lastUpdateTime": "2025-05-25T04:20:42Z",
+                "message": "ReplicaSet \"bert-cola-deployment-predictor-00001-deployment-7b47f9bd74\" has successfully progressed.",
+                "reason": "NewReplicaSetAvailable",
+                "status": "True",
+                "type": "Progressing"
+            }
+        ],
+        "observedGeneration": 2
+    }
+}

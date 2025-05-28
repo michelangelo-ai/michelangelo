@@ -87,7 +87,7 @@ def pusher(model_uri: str, deployed_model_name: str):
     traced_model.save(traced_model_path)
 
     # Save config.pbtxt
-    model_folder = 'bert-cola'
+    model_folder = deployed_model_name
     config_path = os.path.join(local_model_dir, "config.pbtxt")
     with open(config_path, "w") as config_file:
         config_file.write(CONFIG_PBTXT.format(model_name=model_folder).strip())

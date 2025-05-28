@@ -1,0 +1,29 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "client.go",
+        "module.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/provider/tritoninferenceserver",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/base/env:go_default_library",
+        "//go/deployment/provider:go_default_library",
+        "//go/thirdparty/k8s-crds/apis/sparkoperator.k8s.io/v1beta2:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/serializer:go_default_library",
+        "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
+)
