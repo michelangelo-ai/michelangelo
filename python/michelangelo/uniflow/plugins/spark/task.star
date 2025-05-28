@@ -53,8 +53,8 @@ def spark_task(
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                     )
-                    result = io_read_json(cached_result_json_url)
-                    if result != None :
+                    result, err = io_read_json(cached_result_json_url)
+                    if err == None:
                         print("spark | cached", "result:", result)
                         return result
 
@@ -161,7 +161,9 @@ def spark_task(
             end_time = end_time_formated_str,
             task_message = "Spark job succeeded",
         )
-        result = io_read_json(result_url)
+        result, err = io_read_json(result_url)
+        if err != None:
+            fail("internal:", "message:fail to cache :", err)
         print("spark | caching", "result:", result)
         return result
 

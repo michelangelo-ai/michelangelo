@@ -37,13 +37,7 @@ def io_read_json(url):
     protocol = url_parts[0]
     path = url_parts[1]
 
-    result = storage.read(protocol, path)
-    if len(result) == 2:
-        # result is a tuple (data, error)
-        if result[1]:
-            return None
-        return result[0]
-    return result
+    return storage.read(protocol, path)
 
 # Get the task image for the task.
 # Args:

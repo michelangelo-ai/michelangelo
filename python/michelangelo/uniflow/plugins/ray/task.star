@@ -107,8 +107,8 @@ def task(
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                     )
-                    result = io_read_json(cached_result_json_url)
-                    if result != None:
+                    result, err = io_read_json(cached_result_json_url)
+                    if err == None:
                         print("ray | cached", "result:", result)
                         return result
 
@@ -264,10 +264,11 @@ def task(
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
         )
-        result = io_read_json(result_url)
-        if result != None:
-            print("ray | caching", "result:", result)
-            return result
+        result, err = io_read_json(result_url)
+        if err != None:
+            fail("internal:", "message:fail to cache :", err)
+        print("ray | caching", "result:", result)
+        return result
 
     def with_overrides(alias = alias):
         return task(
