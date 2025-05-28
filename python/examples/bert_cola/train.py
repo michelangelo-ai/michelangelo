@@ -29,11 +29,11 @@ def create_model(
 
 @uniflow.task(
     config=RayTask(
-        head_cpu=4,
-        head_memory="8Gi",
-        worker_cpu=4,
-        worker_memory="8Gi",
-        worker_instances=0,
+        head_cpu=1,
+        head_memory="4Gi",
+        worker_cpu=1,
+        worker_memory="4Gi",
+        worker_instances=1,
         # breakpoint=True,
     ),
 )
