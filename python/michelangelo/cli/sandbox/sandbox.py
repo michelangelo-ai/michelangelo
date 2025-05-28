@@ -160,8 +160,16 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--timeout=600s")
 
     links = []
-    _assert_command("helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/")
-    helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    _assert_command(
+        "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
+    )
+
+    # Handle the case when helm repo list returns non-zero exit status (no repositories)
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        # helm repo list returns non-zero exit status when no repositories are configured
+        helm_existing_repos = ""
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
@@ -175,49 +183,96 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _create_spark_operator(helm_existing_repos)
     print("\nSandbox created successfully.")
 
+
 def _create_spark_operator(helm_existing_repos):
     if "spark-operator" not in helm_existing_repos:
-        _exec("helm", "repo", "add", "spark-operator", "https://kubeflow.github.io/spark-operator")
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "spark-operator",
+            "https://kubeflow.github.io/spark-operator",
+        )
         _exec("helm", "repo", "update")
 
     _exec(
-        "helm", "install", "spark-operator", "spark-operator/spark-operator",
-        "--namespace", "spark-operator", "--create-namespace", "--wait"
+        "helm",
+        "install",
+        "spark-operator",
+        "spark-operator/spark-operator",
+        "--namespace",
+        "spark-operator",
+        "--create-namespace",
+        "--wait",
     )
+
 
 def _setup_temporal(links, helm_existing_repos):
     if "temporal" not in helm_existing_repos:
-        _exec("helm", "repo", "add", "temporal", "https://temporalio.github.io/helm-charts")
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "temporal",
+            "https://temporalio.github.io/helm-charts",
+        )
         _exec("helm", "repo", "update")
 
     values_file = _dir / "resources" / "temporal.mysql.yaml"
 
     _exec(
-        "helm", "install", "temporaltest", "temporal",
-        "--repo", "https://go.temporal.io/helm-charts",
-        "-f", str(values_file),
-        "--set", "elasticsearch.enabled=false",
-        "--set", "prometheus.enabled=false",
-        "--set", "grafana.enabled=false",
+        "helm",
+        "install",
+        "temporaltest",
+        "temporal",
+        "--repo",
+        "https://go.temporal.io/helm-charts",
+        "-f",
+        str(values_file),
+        "--set",
+        "elasticsearch.enabled=false",
+        "--set",
+        "prometheus.enabled=false",
+        "--set",
+        "grafana.enabled=false",
     )
 
-    _exec("kubectl", "-n", "default", "wait", "--for=condition=available", "deployment", "--all", "--timeout=600s")
+    _exec(
+        "kubectl",
+        "-n",
+        "default",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--all",
+        "--timeout=600s",
+    )
 
     # Register the default namespace in Temporal
     _exec(
-        "kubectl", "exec", "deploy/temporaltest-admintools", "--",
-        "tctl", "--address", "temporaltest-frontend:7233", "namespace", "register", "default", "--retention", "72"
+        "kubectl",
+        "exec",
+        "deploy/temporaltest-admintools",
+        "--",
+        "tctl",
+        "--address",
+        "temporaltest-frontend:7233",
+        "namespace",
+        "register",
+        "default",
+        "--retention",
+        "72",
     )
     # Automatically port-forward Temporal Web UI in the background
     subprocess.Popen(
         ["kubectl", "port-forward", "svc/temporaltest-web", "8080:8080"],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stderr=subprocess.DEVNULL,
     )
     subprocess.Popen(
         ["kubectl", "port-forward", "svc/temporaltest-frontend", "7233:7233"],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL
+        stderr=subprocess.DEVNULL,
     )
     links.append(("Temporal Web UI", "http://localhost:8080", ""))
 
