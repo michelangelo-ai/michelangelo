@@ -20,7 +20,7 @@ type KserveProvider struct {
 
 var _ provider.Provider = &KserveProvider{}
 
-func (r KserveProvider) Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
+func (r KserveProvider) CreateDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "serving.kserve.io",
 		Version:  "v1beta1",
@@ -71,7 +71,7 @@ func (r KserveProvider) Rollout(ctx context.Context, log logr.Logger, deployment
 	return r.updateDeploymentStatus(result, log, deployment)
 }
 
-func (r KserveProvider) Update(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
+func (r KserveProvider) Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "serving.kserve.io",
 		Version:  "v1beta1",
