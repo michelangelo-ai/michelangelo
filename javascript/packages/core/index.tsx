@@ -26,3 +26,6 @@ export function CoreApp({ dependencies }: Props) {
     </ThemeProvider>
   );
 }
+
+export { useStudioQuery } from '#core/hooks/use-studio-query';
+export { ServiceProvider } from '#core/providers/service-provider/service-provider';

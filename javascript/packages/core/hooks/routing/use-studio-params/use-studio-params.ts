@@ -1,5 +1,5 @@
 import React from 'react';
-import { useParams } from 'react-router';
+import { useParams } from 'react-router-dom-v5-compat';
 
 import useURLQueryString from '#core/hooks/routing/use-url-query-string';
 import { Phase } from '#core/types/common/studio-types';

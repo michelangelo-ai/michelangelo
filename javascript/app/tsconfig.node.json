@@ -2,7 +2,7 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "allowSyntheticDefaultImports": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": true,
     "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2022",

@@ -6,10 +6,13 @@
     "composite": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": false,
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": "."
+    "rootDir": ".",
+    "declarationMap": true,
+    "sourceMap": true,
+    "preserveSymlinks": true
   }
 }

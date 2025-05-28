@@ -5,7 +5,7 @@
     "composite": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "noEmit": false,
     "jsx": "react-jsx",
     "outDir": "dist",
