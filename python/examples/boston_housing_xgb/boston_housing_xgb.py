@@ -49,7 +49,7 @@ class TrainResult:
         worker_instances=0,
         # breakpoint=True,
     ),
-    cache_enabled=True,
+    #cache_enabled=True,
 )
 def feature_prep(
         columns: list[str],
@@ -87,7 +87,7 @@ def feature_prep(
         driver_cpu=1,
         executor_cpu=1,
     ),
-    cache_enabled=True,
+    #cache_enabled=True,
 )
 def preprocess(
     cast_float_columns: list[str],
@@ -267,18 +267,20 @@ def train_workflow(
     dataset_cols: str,
 ):
     _dataset_cols = dataset_cols.split(",")
-    # feature_prep_overrides = feature_prep.with_overrides(
-    #     alias="feature_prep_overrides",
-    #     config=RayTask(
-    #         head_cpu=2,
-    #         worker_instances=1,
-    #     ),
-    # )
-    train_dv, validation_dv = feature_prep(
+    feature_prep_overrides = feature_prep.with_overrides(
+         alias="feature_prep_overrides",
+         config=RayTask(
+             head_cpu=2,
+             worker_instances=1,
+         ),
+     )
+    train_dv, validation_dv = feature_prep_overrides(
         columns=_dataset_cols,
     )
-    # pr = preprocess.with_overrides(alias="preprocess_overrides", config=SparkTask(executor_cpu=1, driver_cpu=1))(
-    pr = preprocess(
+    pr = preprocess.with_overrides(
+        alias="preprocess_overrides",
+        config=SparkTask(executor_cpu=1, driver_cpu=1),
+    )(
         cast_float_columns=_dataset_cols,
         train_dv=train_dv,
         validation_dv=validation_dv,
