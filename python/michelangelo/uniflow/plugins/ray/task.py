@@ -45,7 +45,7 @@ class RayTask(TaskConfig):
 
     def get_binding(self) -> TaskBinding:
         return _binding
-    
+
     @classmethod
     def get_config_binding(cls) -> TaskBinding:
         return _config_binding

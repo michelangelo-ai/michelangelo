@@ -19,12 +19,22 @@ def main():
     p.add_argument("--result-url", required=True, type=str)
     p.add_argument("--overrides", type=decoder.decode)
     ns = p.parse_args()
-    
-    assert type(ns.task).__name__ == 'TaskFunction', f"Expected task to be a TaskFunction instance, but got instance of {type(ns.task)}"
-    assert isinstance(ns.args, list), f"Expected args to be a list, but got {type(ns.args)}"
-    assert isinstance(ns.kwargs, dict), f"Expected kwargs to be a dict, but got {type(ns.kwargs)}"
-    assert isinstance(ns.result_url, str), f"Expected result_url to be a string, but got {type(ns.result_url)}"
-    assert ns.result_url.endswith(".json"), f"Expected result_url to end with .json, but got {ns.result_url}"
+
+    assert type(ns.task).__name__ == "TaskFunction", (
+        f"Expected task to be a TaskFunction instance, but got instance of {type(ns.task)}"
+    )
+    assert isinstance(ns.args, list), (
+        f"Expected args to be a list, but got {type(ns.args)}"
+    )
+    assert isinstance(ns.kwargs, dict), (
+        f"Expected kwargs to be a dict, but got {type(ns.kwargs)}"
+    )
+    assert isinstance(ns.result_url, str), (
+        f"Expected result_url to be a string, but got {type(ns.result_url)}"
+    )
+    assert ns.result_url.endswith(".json"), (
+        f"Expected result_url to end with .json, but got {ns.result_url}"
+    )
 
     task = ns.task
     if ns.overrides:

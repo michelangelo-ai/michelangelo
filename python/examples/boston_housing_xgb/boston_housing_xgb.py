@@ -49,12 +49,12 @@ class TrainResult:
         worker_instances=0,
         # breakpoint=True,
     ),
-    #cache_enabled=True,
+    # cache_enabled=True,
 )
 def feature_prep(
-        columns: list[str],
-        test_size: float = 0.25,
-        seed: int = 1,
+    columns: list[str],
+    test_size: float = 0.25,
+    seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
     data_url = "http://lib.stat.cmu.edu/datasets/boston"
     raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
@@ -63,7 +63,10 @@ def feature_prep(
 
     feature_names = columns[:-1]  # assuming the last column is 'target'
 
-    dataset = [dict(zip(feature_names, features), target=target) for features, target in zip(X, y)]
+    dataset = [
+        dict(zip(feature_names, features), target=target)
+        for features, target in zip(X, y)
+    ]
     data = ray.data.from_items(dataset).select_columns(columns)
 
     train_data, validation_data = data.train_test_split(
@@ -87,7 +90,7 @@ def feature_prep(
         driver_cpu=1,
         executor_cpu=1,
     ),
-    #cache_enabled=True,
+    # cache_enabled=True,
 )
 def preprocess(
     cast_float_columns: list[str],
@@ -268,12 +271,12 @@ def train_workflow(
 ):
     _dataset_cols = dataset_cols.split(",")
     feature_prep_overrides = feature_prep.with_overrides(
-         alias="feature_prep_overrides",
-         config=RayTask(
-             head_cpu=2,
-             worker_instances=1,
-         ),
-     )
+        alias="feature_prep_overrides",
+        config=RayTask(
+            head_cpu=2,
+            worker_instances=1,
+        ),
+    )
     train_dv, validation_dv = feature_prep_overrides(
         columns=_dataset_cols,
     )
