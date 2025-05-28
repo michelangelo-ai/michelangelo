@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: triton-models
+data:
+  model-list.json: |
+    [
+      {
+        "name": "bert-cola-4",
+        "s3_path": "s3://deploy-models/bert-cola-4"
+      }
+    ]

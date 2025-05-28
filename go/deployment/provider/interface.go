@@ -21,9 +21,9 @@ type Provider interface {
 	//
 	// Returns:
 	// - An error if the job creation fails.
-	Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
+	CreateDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
 
-	Update(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
+	Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
 
 	// GetJobStatus retrieves the status of a Spark job.
 	//
