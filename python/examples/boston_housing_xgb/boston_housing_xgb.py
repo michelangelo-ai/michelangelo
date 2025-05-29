@@ -135,7 +135,12 @@ def preprocess(
         worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
-    )
+        runtime_env={
+            "env_vars": {
+                "TEST_ENV_VAR": "test_value",
+            },
+        },
+    ),
 )
 def train(
     pr: PreprocessResult,
