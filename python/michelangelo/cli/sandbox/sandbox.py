@@ -163,7 +163,13 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
     )
-    helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+
+    # Handle the case when helm repo list returns non-zero exit status (no repositories)
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        # helm repo list returns non-zero exit status when no repositories are configured
+        helm_existing_repos = ""
 
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
