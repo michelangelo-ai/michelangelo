@@ -103,10 +103,28 @@ class TaskFunction(Generic[P, R]):
         self,
         *,
         alias: Optional[str] = None,
+        config: Optional[TaskConfig] = None,
     ) -> "TaskFunction[P, R]":
+        """
+        Creates a new TaskFunction instance with overridden alias and/or config.
+
+        This method allows you to create a new TaskFunction instance that shares the same
+        function, IO registry, and cache settings as the original, but with a different
+        alias and/or configuration.
+
+        Parameters:
+            alias (Optional[str]): An optional alias for the task. If not provided, the original alias is used.
+            config (Optional[TaskConfig]): An optional TaskConfig object.
+                                           This object will be merged the original configuration in the decorator.
+                                           For example, if the original configuration specifies a head_cpu = 4, head_memory = 16GB,
+                                           and the new configuration specifies a CPU count of 8,
+                                           the resulting configuration will have a head_cpu = 8 and a head_memory = 16GB.
+        Returns:
+            TaskFunction[P, R]: A new TaskFunction instance with the specified overrides.
+        """
         return TaskFunction(
             fn=self._fn,
-            config=self._config,
+            config=config or self._config,
             alias=alias or self._alias,
             io=self._io,
             cache_enabled=self._cache_enabled,

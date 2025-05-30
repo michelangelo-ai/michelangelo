@@ -11,13 +11,13 @@ packages = [
 
 
 [tool.poetry.dependencies]
-fsspec = "2024.9.0"
-grpcio = "^1.70.0"
-protobuf = "^5.29.3"
-pydantic = "^2.10.6"
+fsspec = ">=2023.10.0"
+grpcio = ">=1.66.1"
+protobuf = ">=5.27.1"
+pydantic = ">=2.10.6"
 python = "^3.9.0"
-typing-extensions = "^4.12.2"
 pyspark = "3.5.5"
+typing-extensions = ">=4.12.2"
 
 ### Optional dependencies
 # For plugin
