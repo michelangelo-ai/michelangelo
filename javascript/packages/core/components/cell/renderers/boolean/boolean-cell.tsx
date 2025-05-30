@@ -18,7 +18,7 @@ export const BooleanCell = ({ value, column }: CellRendererProps<boolean>) => {
         ...theme.typography.ParagraphSmall,
       })}
     >
-      <Check size={14} />
+      <Check size={20} />
       {BooleanCell.toString({ column, value })}
     </div>
   );
