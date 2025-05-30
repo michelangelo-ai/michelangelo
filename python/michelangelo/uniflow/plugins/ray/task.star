@@ -54,7 +54,7 @@ IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 #     gpu_sku (str, optional): The SKU for GPUs.
 #     zone (str, optional): The deployment zone for the cluster.
 #     breakpoint (bool, optional): If True, runs the task till completion or failure, however the cluster is not immediately terminated afterwards, allowing time for debugging and profiling the cluster's state.
-#
+#     runtime_env (dict, optional): The runtime environment for the cluster. https://docs.ray.io/en/latest/ray-core/api/doc/ray.runtime_env.RuntimeEnv.html
 # Returns:
 #     callable: A callable function that, when executed, runs the specified Ray job on the configured Ray cluster,
 #     monitors its execution, and handles cleanup and reporting.
@@ -80,7 +80,8 @@ def task(
         worker_instances = RAY_DEFAULT_WORKER_INSTANCES,
         gpu_sku = RAY_DEFAULT_GPU_SKU,
         zone = RAY_DEFAULT_ZONE,
-        breakpoint = False):
+        breakpoint = False,
+        runtime_env = None):
     def callable(*args, **kwargs):
         task_name = get_task_name(task_path, alias)
         namespace = os.environ.get("MA_NAMESPACE", "default")
@@ -151,6 +152,7 @@ def task(
             ),
             worker_instances = _worker_instances,
             debug_enabled = breakpoint,
+            runtime_env = runtime_env,
         )
         cluster = ray.create_cluster(cluster)
         cluster_name = cluster["metadata"]["name"]
@@ -267,26 +269,27 @@ def task(
         print("ray | caching", "result:", result)
         return result
 
-    def with_overrides(alias = alias):
+    def with_overrides(alias = alias, config=ray_config()):
         return task(
             task_path = task_path,
             alias = alias,
             cache_version = cache_version,
             cache_enabled = cache_enabled,
-            head_cpu = head_cpu,
-            head_memory = head_memory,
-            head_disk = head_disk,
-            head_gpu = head_gpu,
-            head_object_store_memory = head_object_store_memory,
-            worker_cpu = worker_cpu,
-            worker_memory = worker_memory,
-            worker_disk = worker_disk,
-            worker_gpu = worker_gpu,
-            worker_object_store_memory = worker_object_store_memory,
-            worker_instances = worker_instances,
-            gpu_sku = gpu_sku,
-            zone = zone,
-            breakpoint = breakpoint,
+            head_cpu = head_cpu if "head_cpu" not in config else config["head_cpu"],
+            head_memory = head_memory if "head_memory" not in config else config["head_memory"],
+            head_disk = head_disk if "head_disk" not in config else config["head_disk"],
+            head_gpu = head_gpu if "head_gpu" not in config else config["head_gpu"],
+            head_object_store_memory = head_object_store_memory if "head_object_store_memory" not in config else config["head_object_store_memory"],
+            worker_cpu = worker_cpu if "worker_cpu" not in config else config["worker_cpu"],
+            worker_memory = worker_memory if "worker_memory" not in config else config["worker_memory"],
+            worker_disk = worker_disk if "worker_disk" not in config else config["worker_disk"],
+            worker_gpu = worker_gpu if "worker_gpu" not in config else config["worker_gpu"],
+            worker_object_store_memory = worker_object_store_memory if "worker_object_store_memory" not in config else config["worker_object_store_memory"],
+            worker_instances = worker_instances if "worker_instances" not in config else config["worker_instances"],
+            gpu_sku = gpu_sku if "gpu_sku" not in config else config["gpu_sku"],
+            zone = zone if "zone" not in config else config["zone"],
+            breakpoint = breakpoint if "breakpoint" not in config else config["breakpoint"],
+            runtime_env = runtime_env if "runtime_env" not in config else config["runtime_env"],
         )
 
     callable = callable_object(callable)
@@ -329,6 +332,9 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
 #         - Includes additional debugging utilities such as SYS_PTRACE capability.
 #         - Defaults to False.
 #
+#     runtime_env (dict, optional):
+#         - The runtime environment for the cluster. https://docs.ray.io/en/latest/ray-core/api/doc/ray.runtime_env.RuntimeEnv.html
+#
 # Returns:
 #     dict: A dictionary representing the RayJob CRD.
 def ray_cluster_spec(
@@ -337,10 +343,14 @@ def ray_cluster_spec(
         head_resource,
         worker_resource,
         worker_instances,
-        debug_enabled = False):
+        debug_enabled = False,
+        runtime_env = None):
+    ray_init_kwargs = os.environ.get("_RAY_INIT_KWARGS", {})
+    ray_init_kwargs["runtime_env"] = runtime_env
     env = dict(COMMONS_ENV.items())
     env.update(RAY_ENV)
     env.update(os.environ)
+    env.update({"_RAY_INIT_KWARGS": str(ray_init_kwargs)})
     env = [
         {"name": k, "value": v}
         for k, v in env.items()
@@ -447,3 +457,34 @@ def ray_cluster_spec(
             "rayConf": {},
         },
     }
+
+def ray_config(
+        head_cpu = None,
+        head_memory = None,
+        head_disk = None,
+        head_gpu = None,
+        head_object_store_memory = None,
+        worker_cpu = None,
+        worker_memory = None,
+        worker_disk = None,
+        worker_gpu = None,
+        worker_object_store_memory = None,
+        worker_instances = None,
+        breakpoint = None, 
+        runtime_env = None):
+    config_overrides = {
+        "head_cpu": head_cpu,
+        "head_memory": head_memory,
+        "head_disk": head_disk,
+        "head_gpu": head_gpu,
+        "head_object_store_memory": head_object_store_memory,
+        "worker_cpu": worker_cpu,
+        "worker_memory": worker_memory,
+        "worker_disk": worker_disk,
+        "worker_gpu": worker_gpu,
+        "worker_object_store_memory": worker_object_store_memory,
+        "worker_instances": worker_instances,
+        "breakpoint": breakpoint,
+        "runtime_env": runtime_env,
+    }
+    return {key: value for key, value in config_overrides.items() if value != None}

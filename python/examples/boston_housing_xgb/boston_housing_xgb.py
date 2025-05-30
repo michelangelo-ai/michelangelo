@@ -52,9 +52,9 @@ class TrainResult:
     cache_enabled=True,
 )
 def feature_prep(
-        columns: list[str],
-        test_size: float = 0.25,
-        seed: int = 1,
+    columns: list[str],
+    test_size: float = 0.25,
+    seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
     data_url = "http://lib.stat.cmu.edu/datasets/boston"
     raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
@@ -63,7 +63,10 @@ def feature_prep(
 
     feature_names = columns[:-1]  # assuming the last column is 'target'
 
-    dataset = [dict(zip(feature_names, features), target=target) for features, target in zip(X, y)]
+    dataset = [
+        dict(zip(feature_names, features), target=target)
+        for features, target in zip(X, y)
+    ]
     data = ray.data.from_items(dataset).select_columns(columns)
 
     train_data, validation_data = data.train_test_split(
@@ -132,7 +135,12 @@ def preprocess(
         worker_gpu=0,
         worker_memory="12Gi",
         worker_instances=1,
-    )
+        runtime_env={
+            "env_vars": {
+                "TEST_ENV_VAR": "test_value",
+            },
+        },
+    ),
 )
 def train(
     pr: PreprocessResult,
@@ -267,18 +275,20 @@ def train_workflow(
     dataset_cols: str,
 ):
     _dataset_cols = dataset_cols.split(",")
-    # feature_prep_overrides = feature_prep.with_overrides(
-    #     alias="feature_prep_overrides",
-    #     config=RayTask(
-    #         head_cpu=2,
-    #         worker_instances=1,
-    #     ),
-    # )
-    train_dv, validation_dv = feature_prep(
+    feature_prep_overrides = feature_prep.with_overrides(
+        alias="feature_prep_overrides",
+        config=RayTask(
+            head_cpu=2,
+            worker_instances=1,
+        ),
+    )
+    train_dv, validation_dv = feature_prep_overrides(
         columns=_dataset_cols,
     )
-    # pr = preprocess.with_overrides(alias="preprocess_overrides", config=SparkTask(executor_cpu=1, driver_cpu=1))(
-    pr = preprocess(
+    pr = preprocess.with_overrides(
+        alias="preprocess_overrides",
+        config=SparkTask(executor_cpu=1, driver_cpu=1),
+    )(
         cast_float_columns=_dataset_cols,
         train_dv=train_dv,
         validation_dv=validation_dv,

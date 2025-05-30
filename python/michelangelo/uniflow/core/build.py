@@ -18,7 +18,7 @@ from michelangelo.uniflow.core.decorator import (
     get_star_plugin_binding,
     TaskFunction,
 )
-from michelangelo.uniflow.core.task_config import Dependencies
+from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
 from michelangelo.uniflow.core.utils import (
     LOGGING_FORMAT,
     import_attribute,
@@ -392,6 +392,16 @@ class FunctionTransformer(ast.NodeTransformer):
         if is_workflow(v):
             self.deps.add_py_function(node.id, v)
             return node
+
+        if issubclass(v, TaskConfig):
+            config_binding = v.get_config_binding()
+            self.deps.add_star_attribute(
+                config_binding.export,
+                config_binding.star_file,
+                config_binding.function,
+            )
+            ast_node = ast.Name(id=config_binding.export, ctx=ast.Load())
+            return ast_node
 
         raise NameError(f"unsupported global variable: {self._module} {node.id}")
 
