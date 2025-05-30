@@ -44,3 +44,30 @@ export enum Phase {
   /** Monitoring of generative AI model performance */
   GenaiMonitor = 'genai-monitor',
 }
+
+/**
+ * @description
+ * Defines a way to access a specific property or value from an object.
+ * This can be either a string representing a dot-notation path, or a function
+ * that directly extracts the value.
+ *
+ * @remarks
+ * When `Accessor` is a string, it represents a path using dot notation (e.g., `'name'`, `'address.street'`)
+ * and can include array indexing (e.g., `'users[0].name'`). A utility function is typically used to
+ * interpret this string path against an object.
+ *
+ * @example
+ * ```ts
+ * const accessor: Accessor = 'name';
+ * accessor({ name: 'John' }); // 'John'
+ *
+ * const accessor: Accessor = 'users[0].name';
+ * accessor({ users: [{ name: 'John' }] }); // 'John'
+ *
+ * const accessor: Accessor<string> = (object) => object.name;
+ * accessor({ name: 'John' }); // 'John'
+ * ```
+ */
+export type Accessor<K = unknown> = AccessorFn<K> | string;
+
+export type AccessorFn<T = unknown> = (object: unknown) => T;
