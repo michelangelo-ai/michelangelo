@@ -21,9 +21,7 @@
     "baseui": "^13.0.0",
     "pluralize": "^8.0.0",
     "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "styletron-engine-monolithic": "^1.0.0",
-    "styletron-react": "^6.1.1"
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",
@@ -39,7 +37,9 @@
   "peerDependencies": {
     "react-router-dom": "^5.3.4",
     "react-router-dom-v5-compat": "^6.29.0",
-    "@tanstack/react-query": "^5.0.0"
+    "@tanstack/react-query": "^5.0.0",
+    "styletron-engine-atomic": "^1.0.0",
+    "styletron-react": "^6.1.1"
   },
   "exports": {
     ".": {
