@@ -12,11 +12,11 @@ export function ProjectDetail() {
     },
   });
 
-  // The project type will not be directly exposed to the @michelangelo/core package.
-  // eslint-disable-next-line @typescript-eslint/dot-notation
   return (
     <div>
       <BooleanCell column={{ id: 'spec.bool' }} record={{ spec: { bool: true } }} value={true} />
+      {/* The project type will not be directly exposed to the @michelangelo/core package. */}
+      {/* eslint-disable-next-line @typescript-eslint/dot-notation */}
       Project Name: {data?.project?.metadata?.['name']}
     </div>
   );
