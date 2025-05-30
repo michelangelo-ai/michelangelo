@@ -32,3 +32,4 @@ export { ServiceProvider } from '#core/providers/service-provider/service-provid
 
 export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
 export { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
+export { DateCell } from '#core/components/cell/renderers/date/date-cell';
