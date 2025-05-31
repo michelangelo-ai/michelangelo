@@ -1,5 +1,7 @@
 import { useStyletron } from 'baseui';
-import { Check } from 'baseui/icon';
+
+import { Icon } from '#core/components/icon/icon';
+import { IconKind } from '#core/components/icon/types';
 
 import type { CellRendererProps } from '#core/components/cell/types';
 
@@ -18,7 +20,7 @@ export const BooleanCell = ({ value, column }: CellRendererProps<boolean>) => {
         ...theme.typography.ParagraphSmall,
       })}
     >
-      <Check size={20} />
+      <Icon name="circleCheckFilled" kind={IconKind.ACCENT} size={14} />
       {BooleanCell.toString({ column, value })}
     </div>
   );

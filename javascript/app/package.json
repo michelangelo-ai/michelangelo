@@ -8,7 +8,11 @@
     "dev-production": "vite --config vite.config.production.ts"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
     "@michelangelo/rpc": "*",
+    "@mui/icons-material": "^7.1.0",
+    "@mui/material": "^7.1.0",
     "@tanstack/react-query": "5.39.0",
     "@uber/michelangelo-core": "*",
     "react-router-dom": "5.3.4",
