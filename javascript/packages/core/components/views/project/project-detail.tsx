@@ -2,6 +2,8 @@ import { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cel
 import { DateCell } from '#core/components/cell/renderers/date/date-cell';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
 import { DescriptionCell } from '#core/components/cell/renderers/description/description-cell';
+import { Icon } from '#core/components/icon/icon';
+import { IconKind } from '#core/components/icon/types';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
@@ -29,6 +31,8 @@ export function ProjectDetail() {
         record={{ spec: { description: 'Descriptive text in the column' } }}
         value={'Descriptive text in the column'}
       />
+      <br />
+      <Icon name="arrowLaunch" kind={IconKind.ACCENT} size={24} />
       <br />
       {/* The project type will not be directly exposed to the @michelangelo/core package. */}
       {/* eslint-disable-next-line @typescript-eslint/dot-notation */}
