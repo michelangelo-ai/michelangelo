@@ -1,6 +1,8 @@
 package controllermgr
 
-import "go.uber.org/config"
+import (
+	"go.uber.org/config"
+)
 
 const (
 	configKey = "controllermgr"

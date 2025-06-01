@@ -1,6 +1,10 @@
 package workflowfx
 
-const configKey = "workflow-engine"
+const (
+	ConfigKey        = "workflow-engine"
+	ProviderCadence  = "cadence"
+	ProviderTemporal = "temporal"
+)
 
 // Config is the configuration for the module. YAML looks like this:
 //

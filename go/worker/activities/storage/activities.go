@@ -7,6 +7,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/workflow"
+	jsoniter "github.com/json-iterator/go"
 	"go.uber.org/yarpc/yarpcerrors" // YARPC errors for standardized error codes.
 	"go.uber.org/zap"               // Logger for structured logging.
 
@@ -31,7 +32,18 @@ func (a *activities) Read(ctx context.Context, url string) (any, error) {
 	logger.Info("activity-start", zap.Any("url", url))
 
 	// Check if there is an implementation available for the requested protocol.
-	result, err := a.blobStore.Get(ctx, url)
+	data, err := a.blobStore.Get(ctx, url)
+	if err != nil {
+		// Wrap the error in a Cadence CustomError using YARPC error codes.
+		return nil, workflow.NewCustomError(
+			ctx,
+			fmt.Sprintf("%s: %s", yarpcerrors.FromError(err).Code().String(), err.Error()),
+		)
+	}
+
+	// Unmarshal the JSON data into a generic interface.
+	var result any
+	err = jsoniter.Unmarshal(data, &result)
 	if err != nil {
 		// Wrap the error in a Cadence CustomError using YARPC error codes.
 		return nil, workflow.NewCustomError(

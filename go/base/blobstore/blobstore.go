@@ -12,21 +12,21 @@ import (
 type BlobStoreClient interface {
 	// Get retrieves the content of a blob from the blob store.
 	// The blobURI is expected to be in the format "scheme://host(optional)/path".
-	Get(ctx context.Context, blobURI string) (any, error)
+	Get(ctx context.Context, blobURI string) ([]byte, error)
 	// Scheme returns the scheme of the blob store client. For example, "s3" or "gs".
 	Scheme() string
 }
 
 // BlobStore is a wrapper around a map of BlobStoreClient implementations.
 type BlobStore struct {
-	logger  *zap.Logger
-	clients map[string]BlobStoreClient
+	Logger  *zap.Logger
+	Clients map[string]BlobStoreClient
 }
 
 // Get retrieves the content of a blob from the blob store.
 // The blobURI is expected to be in the format "scheme://host(optional)/path".
 // It parses the URL to extract the scheme, host, and path, then delegates to the appropriate client.
-func (b *BlobStore) Get(ctx context.Context, blobURI string) (any, error) {
+func (b *BlobStore) Get(ctx context.Context, blobURI string) ([]byte, error) {
 	parsedURL, err := url.Parse(blobURI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse url: %w", err)
@@ -39,7 +39,7 @@ func (b *BlobStore) Get(ctx context.Context, blobURI string) (any, error) {
 }
 
 func (b *BlobStore) GetClient(scheme string) (BlobStoreClient, error) {
-	client, ok := b.clients[scheme]
+	client, ok := b.Clients[scheme]
 	if !ok {
 		return nil, fmt.Errorf("scheme %s is not supported", scheme)
 	}
@@ -47,8 +47,8 @@ func (b *BlobStore) GetClient(scheme string) (BlobStoreClient, error) {
 }
 
 func (b *BlobStore) RegisterClient(client BlobStoreClient) {
-	if b.clients == nil {
-		b.clients = make(map[string]BlobStoreClient)
+	if b.Clients == nil {
+		b.Clients = make(map[string]BlobStoreClient)
 	}
-	b.clients[client.Scheme()] = client
+	b.Clients[client.Scheme()] = client
 }

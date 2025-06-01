@@ -5,6 +5,12 @@ controllermgr:
   leaderElectionID: decaf1259.michelangelo.uber.com
   port: 9443
 
+workflowClient:
+  service: cadence-frontend
+  host: michelangelo-worker:7833
+  transport: grpc
+  domain: default
+    
 k8s:
   qps: 300
   burst: 600

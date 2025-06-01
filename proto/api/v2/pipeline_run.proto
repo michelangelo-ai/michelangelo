@@ -266,6 +266,12 @@ message PipelineRunStatus {
   // user error (invalid inputs, configuration mistakes).
   // Used for error classification, reporting and handling.
   PipelineRunExceptionType exception_type = 11;
+
+  // The ID of the workflow for this pipeline run.
+  string workflow_id = 12;
+
+  // The ID of the workflow execution for this pipeline run.
+  string workflow_run_id = 13;
 }
 
 // PipelineRunExceptionType indicates the category of failure for a failed PipelineRun.

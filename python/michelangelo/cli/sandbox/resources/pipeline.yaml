@@ -1,0 +1,13 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: baoquan-pipeline-0608-04
+  namespace: default
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  commit:
+    gitRef: 123456abcefg
+    branch: main
+  manifest:
+    uniflowTar: s3://default/bert_local.tar

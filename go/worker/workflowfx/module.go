@@ -32,7 +32,7 @@ import (
 // Module provides workers and clients for Cadence.
 // See Config for the configuration reference.
 var Module = fx.Options(
-	fx.Provide(config.ProvideConfig[Config](configKey)),
+	fx.Provide(config.ProvideConfig[Config](ConfigKey)),
 	fx.Provide(func() TemporalClientFactory { return DefaultTemporalClientFactory{} }),
 	fx.Provide(func() CadenceClientFactory { return DefaultCadenceClientFactory{} }),
 	fx.Provide(provide),
@@ -84,13 +84,13 @@ func provide(in In) (Out, error) {
 
 	conf := in.Config
 	out.Backend = service.BackendType(conf.Provider)
-	if conf.Provider == "cadence" {
+	if conf.Provider == ProviderCadence {
 		var err error
 		out.Workers, err = newCadenceWorker(in.CadenceFactory, in.Config, in.Logger)
 		if err != nil {
 			return out, err
 		}
-	} else if conf.Provider == "temporal" {
+	} else if conf.Provider == ProviderTemporal {
 		var err error
 		out.Workers, err = newTemporalWorker(in.TemporalFactory, in.Config, in.Logger)
 		if err != nil {

@@ -163,3 +163,24 @@ metadataStorage:
 	_, err = GetMetadataStorageConfig(providerInvalid)
 	assert.Error(t, err) // error when the content of the configuration file is invalid
 }
+
+func TestGetWorkflowClientConfig(t *testing.T) {
+	file, _ := os.CreateTemp(t.TempDir(), "workflow-client-conf")
+	os.Setenv("KUBECONFIG", file.Name())
+
+	yamlStr := `
+workflowClient:
+  host: https://10.1.130.1:1234
+  domain: default
+  transport: grpc
+  service: cadence-frontend
+`
+	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlStr)))
+	assert.NoError(t, err)
+	conf, err := GetWorkflowClientConfig(provider)
+	assert.NoError(t, err)
+	assert.Equal(t, "https://10.1.130.1:1234", conf.Host)
+	assert.Equal(t, "default", conf.Domain)
+	assert.Equal(t, "grpc", conf.Transport)
+	assert.Equal(t, "cadence-frontend", conf.Service)
+}

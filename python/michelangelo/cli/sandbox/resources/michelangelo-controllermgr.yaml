@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:main
+      image: ghcr.io/michelangelo-ai/controllermgr:baoquan-pipeline-run-controller-2
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -36,3 +36,15 @@ data:
       rayCluster:
         k8sQps: 300
         k8sBurst: 600
+
+    minio:
+      awsRegion: us-east-1
+      awsAccessKeyId: minioadmin
+      awsSecretAccessKey: minioadmin
+      awsEndpointUrl: minio:9091
+    
+    workflowClient:
+      service: cadence-frontend
+      host: cadence:7833
+      transport: grpc
+      domain: default
