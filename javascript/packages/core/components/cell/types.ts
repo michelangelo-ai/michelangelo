@@ -123,7 +123,7 @@ export interface CellRendererProps<T = any, CellConfig = SharedCell<T>> {
    * @remarks
    * This is the value that will be displayed in the cell.
    */
-  value: T;
+  value: T | undefined;
 
   /**
    * @description

@@ -1,4 +1,5 @@
 import { BooleanCell } from './renderers/boolean/boolean-cell';
+import { DateCell } from './renderers/date/date-cell';
 
 import type { CellRenderer } from './types';
 
@@ -73,4 +74,5 @@ export enum CellType {
 
 export const CELL_RENDERERS: Record<string, CellRenderer<any>> = {
   [CellType.BOOLEAN]: BooleanCell,
+  [CellType.DATE]: DateCell,
 };
