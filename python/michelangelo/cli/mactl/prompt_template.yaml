@@ -1,0 +1,44 @@
+apiVersion: michelangelo.uber.com/v2beta1
+kind: PromptTemplate
+metadata:
+  name: mactl-pt-test-001
+  namespace: ma-integration-test
+spec:
+  features:
+    - name: user_name
+      value: albert greenberg
+  instruction: |-
+    Prompt for AI: "Given a list of usernames, your task is to classify each username into one of the following categories based on the criteria provided. Please read each username carefully and apply the criteria consistently to ensure accurate classification:
+    - 'Valid' if the name appears to be a real, plausible name of a person.
+    - 'Gibberish' if the name consists of a random sequence of characters and letters and sounds nonsensical.
+
+    Examples for classification:
+    - Borhan Sanandaji: Valid
+    - Djfickdjhgfudkfklkfjsgagsjdo dofisjckvfGzkflcjsjjxhshsyj: Gibberish
+    - Rebecca Sondike: Valid
+    - gchiisag chhouih: Gibberish
+    - Jackie Smith: Valid
+    - Jkjvfdkj Jordan: Gibberish
+    - John g: Valid
+    - sam akhtar: Valid
+
+    Classify the following user's name: '{{user_name}}'
+    Sentiment: [Your Classification Here]"
+
+    Instructions for AI:
+    1. Read the user's name provided.
+    2. Compare it against the criteria mentioned above.
+    3. Classify the name into one of the two categories.
+    4. Provide your classification in the 'Sentiment' section.
+  messages:
+    - content: Please classify user's name..
+      role: user
+  model: azure-openai-gpt4
+  model_params:
+    max_tokens: 1024
+    temperature: 0.01
+    top_k: 40
+    top_p: 0.8
+  suffix: ""
+  traffic_type: PROMPT_TEMPLATE_TRAFFIC_TYPE_PRODUCTION
+  type: PROMPT_TEMPLATE_TYPE_LLM_CHAT_COMPLETION

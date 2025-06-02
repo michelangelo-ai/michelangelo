@@ -48,6 +48,11 @@ xgboost = {version = "2.1.4", optional = true }
 setuptools = { version = "74.1.1", optional = true }
 vllm = { version = "0.8.1", optional = true }
 
+# For MACTL
+grpcio-reflection = { version = ">=1.66.1", optional = true }
+PyYAML = { version = "6.0.2", optional = true }
+GitPython = { version = ">=3.1.44", optional = true }
+
 
 [tool.poetry.scripts]
 ma = 'michelangelo.cli.cli:main'
@@ -58,6 +63,7 @@ dev = ["pytest", "ruff", "jinja2", "pre-commit", "torch", "pandas", "numpy", "tr
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
+mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
 [tool.pytest.ini_options]
 pythonpath = [
