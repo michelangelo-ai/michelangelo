@@ -97,7 +97,7 @@ plugins:
     out: gen/python
     include_imports: true
 
-  - remote: buf.build/bufbuild/es
+  - remote: buf.build/bufbuild/es:v2.2.5
     out: gen/javascript
     include_imports: true
 EOF

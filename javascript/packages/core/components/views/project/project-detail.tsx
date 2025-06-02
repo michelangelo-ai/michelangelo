@@ -1,3 +1,4 @@
+import { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
@@ -11,7 +12,12 @@ export function ProjectDetail() {
     },
   });
 
-  // The project type will not be directly exposed to the @michelangelo/core package.
-  // eslint-disable-next-line @typescript-eslint/dot-notation
-  return <div>Project Name: {data?.project?.metadata?.['name']}</div>;
+  return (
+    <div>
+      <BooleanCell column={{ id: 'spec.bool' }} record={{ spec: { bool: true } }} value={true} />
+      {/* The project type will not be directly exposed to the @michelangelo/core package. */}
+      {/* eslint-disable-next-line @typescript-eslint/dot-notation */}
+      Project Name: {data?.project?.metadata?.['name']}
+    </div>
+  );
 }
