@@ -3825,10 +3825,10 @@ strip-json-comments@^3.1.1:
   resolved "https://registry.yarnpkg.com/strip-json-comments/-/strip-json-comments-3.1.1.tgz#31f1281b3832630434831c310c01cccda8cbe006"
   integrity sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig==
 
-styletron-engine-monolithic@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/styletron-engine-monolithic/-/styletron-engine-monolithic-1.0.0.tgz#41e2bbf9dcbdddff2ff2165f38b563c60f6015e3"
-  integrity sha512-9x+RMLbjf6rzK7mLp5bWzh/wwLbgO0xrU07sW9p9SWu18d+lkfnE8SLDm+jf4NamehQv86etX0X+Zx4PvaeJyA==
+styletron-engine-atomic@^1.6.2:
+  version "1.6.2"
+  resolved "https://registry.yarnpkg.com/styletron-engine-atomic/-/styletron-engine-atomic-1.6.2.tgz#9cfdaecb5ce27266c0d46436350df78178e6c6bb"
+  integrity sha512-vWSIxpCkYbVD3xhnxYwnJDJePD8p8pJCu7g1zFxdQIM4z34Eo1zj3LgXJI6yeNMrJ7PkE56SYK6ZOo3hpTOBzA==
   dependencies:
     inline-style-prefixer "^5.1.0"
     styletron-standard "^3.1.0"

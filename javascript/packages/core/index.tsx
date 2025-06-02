@@ -29,3 +29,6 @@ export function CoreApp({ dependencies }: Props) {
 
 export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
+
+export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
+export { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
