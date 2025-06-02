@@ -3,5 +3,7 @@ import type { IconProps } from 'baseui/icon';
 import type { ComponentType } from 'react';
 
 export const createMuiIconAdapter = (Icon: ComponentType<SvgIconProps>) => {
-  return (props: IconProps) => <Icon sx={{ color: props.color, fontSize: props.size }} />;
+  return (props: IconProps) => (
+    <Icon sx={{ ...props.style, color: props.color, fontSize: props.size }} />
+  );
 };
