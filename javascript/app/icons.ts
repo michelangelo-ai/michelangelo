@@ -1,5 +1,5 @@
 import CheckCircle from '@mui/icons-material/CheckCircle';
-import Launch from '@mui/icons-material/launch';
+import Launch from '@mui/icons-material/Launch';
 
 export const ICONS = {
   arrowLaunch: Launch,
