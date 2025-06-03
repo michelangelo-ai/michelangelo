@@ -1,6 +1,5 @@
 import { memo } from 'react';
 import { useStyletron } from 'baseui';
-import { Icon as BaseIcon } from 'baseui/icon';
 
 import { useIconProvider } from '#core/providers/icon-provider/use-icon-provider';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
@@ -18,13 +17,12 @@ export const Icon = memo<Props>(function Icon(props: Props) {
   if (!IconComponent) return null;
 
   return (
-    <BaseIcon
+    <IconComponent
       {...props}
       color={
         color ?? theme.colors[`content${capitalizeFirstLetter(kind)}` as keyof typeof theme.colors]
       }
-    >
-      <IconComponent style={{ minWidth: 'fit-content' }} />
-    </BaseIcon>
+      style={{ minWidth: 'fit-content' }}
+    />
   );
 });
