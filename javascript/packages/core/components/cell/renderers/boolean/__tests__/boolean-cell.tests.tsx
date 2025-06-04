@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
+import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { BooleanCell } from '../boolean-cell';
 
 describe('BooleanCell', () => {
@@ -9,7 +10,8 @@ describe('BooleanCell', () => {
         column={{ id: 'spec.bool', label: 'ColumnLabel' }}
         record={{ spec: { bool: false } }}
         value={false}
-      />
+      />,
+      { wrapper: getIconProviderWrapper() }
     );
 
     expect(screen.queryByText('ColumnLabel')).toBeNull();
@@ -17,7 +19,8 @@ describe('BooleanCell', () => {
 
   test('Renders nothing for falsy value', () => {
     render(
-      <BooleanCell column={{ id: 'spec.bool' }} record={{ spec: { bool: false } }} value={false} />
+      <BooleanCell column={{ id: 'spec.bool' }} record={{ spec: { bool: false } }} value={false} />,
+      { wrapper: getIconProviderWrapper() }
     );
 
     expect(screen.queryByText('ColumnLabel')).toBeNull();
@@ -29,7 +32,8 @@ describe('BooleanCell', () => {
         column={{ id: 'spec.bool', label: 'ColumnLabel' }}
         record={{ spec: { bool: true } }}
         value={true}
-      />
+      />,
+      { wrapper: getIconProviderWrapper() }
     );
 
     expect(screen.getByText('ColumnLabel')).toBeInTheDocument();
