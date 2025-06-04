@@ -8,6 +8,8 @@ import { MultiCell } from '#core/components/cell/renderers/multi/multi-cell';
 import { Icon } from '#core/components/icon/icon';
 import { IconKind } from '#core/components/icon/types';
 import { Link } from '#core/components/link/link';
+import { BEHAVIOR, COLOR, SIZE } from '#core/components/tag/constants';
+import { Tag } from '#core/components/tag/tag';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
@@ -75,6 +77,11 @@ export function ProjectDetail() {
           },
         }}
       />
+      <br />
+      Tag:{' '}
+      <Tag closeable={false} size={SIZE.xSmall} color={COLOR.gray} behavior={BEHAVIOR.display}>
+        Tag
+      </Tag>
       <br />
       {/* The project type will not be directly exposed to the @michelangelo/core package. */}
       {/* eslint-disable-next-line @typescript-eslint/dot-notation */}

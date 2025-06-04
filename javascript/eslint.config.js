@@ -41,12 +41,17 @@ const sharedRules = {
       ],
     },
   ],
-  'baseui/deprecated-theme-api': 'warn',
+  // Disabled due to BaseUI 15 compatibility issues
+  // 'baseui/deprecated-theme-api': 'warn',
   'baseui/deprecated-component-api': 'warn',
   'baseui/no-deep-imports': 'warn',
   '@typescript-eslint/array-type': 'off',
   '@typescript-eslint/consistent-type-definitions': 'off',
   '@typescript-eslint/no-unsafe-call': 'off',
+  '@typescript-eslint/no-unused-vars': [
+    'error',
+    { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+  ],
 };
 
 export default [
