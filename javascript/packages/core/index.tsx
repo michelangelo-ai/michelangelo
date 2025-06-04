@@ -33,3 +33,8 @@ export { ServiceProvider } from '#core/providers/service-provider/service-provid
 export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
 export { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
 export { DateCell } from '#core/components/cell/renderers/date/date-cell';
+export { DescriptionCell } from '#core/components/cell/renderers/description/description-cell';
+export { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
+
+export { DescriptionText } from '#core/components/description-text';
+export { TruncatedText } from '#core/components/truncated-text/truncated-text';
