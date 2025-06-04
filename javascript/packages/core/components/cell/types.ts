@@ -96,8 +96,21 @@ export interface SharedCell<T = unknown> {
 }
 
 export type CellTooltip = {
+  /**
+   * @description
+   * The content to be displayed in the tooltip.
+   *
+   * @remarks
+   * If a function is provided, it will be called with the cell renderer props.
+   */
   content: string | ((params: CellRendererProps) => React.ReactNode);
-  action: 'filter' | 'custom';
+
+  /**
+   * @description
+   * The action to be performed when the tooltip is clicked. When omitted, the
+   * tooltip will be display only.
+   */
+  action?: 'filter' | 'custom';
 };
 
 /**
