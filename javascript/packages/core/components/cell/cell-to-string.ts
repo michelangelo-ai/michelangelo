@@ -3,7 +3,7 @@ import { getCellRenderer } from '#core/components/cell/get-cell-renderer';
 import type { CellRendererProps } from '#core/components/cell/types';
 
 export function cellToString(props: CellRendererProps<unknown>): string | undefined | null {
-  const renderer = getCellRenderer(props.column.type ?? '');
+  const renderer = getCellRenderer(props);
   if (renderer && Object.prototype.hasOwnProperty.call(renderer, 'toString') && renderer.toString)
     return renderer.toString(props);
 

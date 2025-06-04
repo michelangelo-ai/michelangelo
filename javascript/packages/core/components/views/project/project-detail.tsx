@@ -1,11 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
-import { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
-import { DateCell } from '#core/components/cell/renderers/date/date-cell';
+import { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
-import { DescriptionCell } from '#core/components/cell/renderers/description/description-cell';
-import { LinkCell } from '#core/components/cell/renderers/link/link-cell';
-import { MultiCell } from '#core/components/cell/renderers/multi/multi-cell';
-import { StateCell } from '#core/components/cell/renderers/state/state-cell';
 import { Icon } from '#core/components/icon/icon';
 import { IconKind } from '#core/components/icon/types';
 import { Link } from '#core/components/link/link';
@@ -26,23 +21,27 @@ export function ProjectDetail() {
 
   return (
     <div>
-      <BooleanCell column={{ id: 'spec.bool' }} record={{ spec: { bool: true } }} value={true} />
-      <DateCell
-        column={{ id: 'spec.date' }}
+      <DefaultCellRenderer
+        column={{ id: 'spec.bool', type: CellType.BOOLEAN }}
+        record={{ spec: { bool: true } }}
+        value={true}
+      />
+      <DefaultCellRenderer
+        column={{ id: 'spec.date', type: CellType.DATE }}
         record={{ spec: { date: Date.now() / 1000 } }}
         value={String(Date.now() / 1000)}
       />
       <br />
-      <DescriptionCell
-        column={{ id: 'spec.description', hierarchy: DescriptionHierarchy.SECONDARY }}
+      <DefaultCellRenderer
+        column={{ id: 'spec.description', type: CellType.DESCRIPTION }}
         record={{ spec: { description: 'Descriptive text in the column' } }}
         value={'Descriptive text in the column'}
       />
       <br />
       <Icon name="arrowLaunch" kind={IconKind.ACCENT} size={24} />
       <br />
-      <LinkCell
-        column={{ id: 'spec.link', url: 'https://www.google.com' }}
+      <DefaultCellRenderer
+        column={{ id: 'spec.link', type: CellType.LINK, url: 'https://www.google.com' }}
         record={{ spec: { link: 'https://www.google.com' } }}
         value={'https://www.google.com'}
       />
@@ -53,7 +52,7 @@ export function ProjectDetail() {
       <Link href="/">Home</Link>
       <br />
       Multi cell:
-      <MultiCell
+      <DefaultCellRenderer
         column={{
           id: 'spec.multi',
           type: CellType.MULTI,
@@ -84,8 +83,12 @@ export function ProjectDetail() {
         Tag
       </Tag>
       <br />
-      <StateCell
-        column={{ id: 'spec.state', stateColorMap: { PIPELINE_STATE_BUILDING: 'blue' } }}
+      <DefaultCellRenderer
+        column={{
+          id: 'spec.state',
+          type: CellType.STATE,
+          stateColorMap: { PIPELINE_STATE_BUILDING: 'blue' },
+        }}
         record={{ spec: { state: 'PIPELINE_STATE_BUILDING' } }}
         value="PIPELINE_STATE_BUILDING"
       />
