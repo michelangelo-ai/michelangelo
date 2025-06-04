@@ -1,9 +1,24 @@
 import type { Theme } from 'baseui';
 import type { ReactNode } from 'react';
 import type { StyleObject } from 'styletron-react';
+import type { DescriptionCellConfig } from '#core/components/cell/renderers/description/types';
+import type { LinkCellConfig } from '#core/components/cell/renderers/link/types';
+import type { MultiCellConfig } from '#core/components/cell/renderers/multi/types';
 import type { Accessor } from '#core/types/common/studio-types';
 
-export interface SharedCell<T = any> {
+/**
+ * @description
+ * A union type of all cell configurations. This type extends the {@link SharedCell} type
+ * with cell configurations for the different cell renderers. For example, the {@link DescriptionCellConfig}
+ * type extends the {@link SharedCell} type with a `hierarchy` property.
+ *
+ * @see {@link DescriptionCellConfig}
+ * @see {@link LinkCellConfig}
+ * @see {@link MultiCellConfig}
+ */
+export type Cell = SharedCell & (DescriptionCellConfig | LinkCellConfig | MultiCellConfig);
+
+export interface SharedCell<T = unknown> {
   /**
    * @description Unique identifier for the column
    * If no accessor is provided, this id will be used to access the data
@@ -16,7 +31,7 @@ export interface SharedCell<T = any> {
    * @example 'spec.content.metadata.name'
    * @example (row) => `Revision ${row?.spec?.revisionId}`,
    */
-  accessor?: Accessor;
+  accessor?: Accessor<T>;
 
   /**
    * @description Label to be displayed in the table header
@@ -93,7 +108,7 @@ export type CellTooltip = {
  */
 export type CellStyleFunction = (args: { record: unknown; theme: Theme }) => StyleObject;
 
-export type CellRenderer<T, CellConfig = SharedCell> = {
+export type CellRenderer<T, CellConfig = SharedCell<T>> = {
   (props: CellRendererProps<T, CellConfig>): ReactNode | null;
 
   /**
@@ -103,7 +118,7 @@ export type CellRenderer<T, CellConfig = SharedCell> = {
   toString?: (props: CellRendererProps<T, CellConfig>) => string;
 };
 
-export interface CellRendererProps<T = any, CellConfig = SharedCell<T>> {
+export interface CellRendererProps<T = unknown, CellConfig = SharedCell<T>> {
   column: CellConfig;
 
   /**
@@ -141,7 +156,7 @@ export interface CellRendererProps<T = any, CellConfig = SharedCell<T>> {
   CellComponent?: CellRenderer<T>;
 }
 
-export type CellToStringParams<T = any, CellConfig = SharedCell> = Pick<
+export type CellToStringParams<T = unknown, CellConfig = SharedCell> = Pick<
   CellRendererProps<T, CellConfig>,
   'column' | 'value'
 >;
