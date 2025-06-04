@@ -3,6 +3,7 @@ import { DateCell } from './renderers/date/date-cell';
 import { DescriptionCell } from './renderers/description/description-cell';
 import { LinkCell } from './renderers/link/link-cell';
 import { MultiCell } from './renderers/multi/multi-cell';
+import { StateCell } from './renderers/state/state-cell';
 import { TagCell } from './renderers/tag/tag-cell';
 
 import type { CellRenderer } from './types';
@@ -88,5 +89,6 @@ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
   [CellType.LINK]: LinkCell,
   [CellType.MULTI]: MultiCell,
   [CellType.REPEATED_ITEMS]: MultiCell,
+  [CellType.STATE]: StateCell as CellRenderer<string>,
   [CellType.TAG]: TagCell,
 };

@@ -5,6 +5,7 @@ import { DescriptionHierarchy } from '#core/components/cell/renderers/descriptio
 import { DescriptionCell } from '#core/components/cell/renderers/description/description-cell';
 import { LinkCell } from '#core/components/cell/renderers/link/link-cell';
 import { MultiCell } from '#core/components/cell/renderers/multi/multi-cell';
+import { StateCell } from '#core/components/cell/renderers/state/state-cell';
 import { Icon } from '#core/components/icon/icon';
 import { IconKind } from '#core/components/icon/types';
 import { Link } from '#core/components/link/link';
@@ -82,6 +83,12 @@ export function ProjectDetail() {
       <Tag closeable={false} size={SIZE.xSmall} color={COLOR.gray} behavior={BEHAVIOR.display}>
         Tag
       </Tag>
+      <br />
+      <StateCell
+        column={{ id: 'spec.state', stateColorMap: { PIPELINE_STATE_BUILDING: 'blue' } }}
+        record={{ spec: { state: 'PIPELINE_STATE_BUILDING' } }}
+        value="PIPELINE_STATE_BUILDING"
+      />
       <br />
       {/* The project type will not be directly exposed to the @michelangelo/core package. */}
       {/* eslint-disable-next-line @typescript-eslint/dot-notation */}
