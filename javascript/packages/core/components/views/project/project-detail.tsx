@@ -1,13 +1,27 @@
+import { Box } from '#core/components/box/box';
+import { CellType } from '#core/components/cell/constants';
 import { Row } from '#core/components/row/row';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { CellType } from '#core/components/cell/constants';
-import { useStyletron } from 'baseui';
+
+import type { Theme } from 'baseui';
 
 export function ProjectDetail() {
-  const [css, theme] = useStyletron();
   const { projectId } = useStudioParams('base');
-  const { data } = useStudioQuery<{ project: Record<string, string> }>({
+  const { data } = useStudioQuery<{
+    project: {
+      metadata: {
+        name: string;
+      };
+      spec: {
+        description: string;
+        owner: {
+          owningTeam: string;
+        };
+        tier: string;
+      };
+    };
+  }>({
     queryName: 'GetProject',
     serviceOptions: {
       name: projectId,
@@ -16,22 +30,20 @@ export function ProjectDetail() {
   });
 
   return (
-    <div className={css({ marginTop: theme.sizing.scale400 })}>
+    <Box
+      description={data?.project?.spec?.description}
+      title={data?.project?.metadata?.name}
+      overrides={{
+        BoxContainer: {
+          style: ({ $theme }: { $theme: Theme }) => ({
+            backgroundColor: $theme.colors.backgroundSecondary,
+            marginTop: $theme.sizing.scale400,
+          }),
+        },
+      }}
+    >
       <Row
         items={[
-          {
-            id: 'metadata.name',
-            label: 'Name',
-            items: [
-              {
-                id: 'metadata.name',
-              },
-              {
-                id: 'spec.description',
-                type: CellType.DESCRIPTION,
-              },
-            ],
-          },
           {
             id: 'metadata.creationTimestamp.seconds',
             label: 'Created',
@@ -49,6 +61,6 @@ export function ProjectDetail() {
         ]}
         record={data?.project}
       />
-    </div>
+    </Box>
   );
 }
