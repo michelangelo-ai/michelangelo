@@ -13,6 +13,7 @@
     "rootDir": ".",
     "declarationMap": true,
     "sourceMap": true,
-    "preserveSymlinks": true
+    "preserveSymlinks": true,
+    "types": ["vitest/globals"]
   }
 }

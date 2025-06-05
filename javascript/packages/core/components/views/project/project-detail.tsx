@@ -22,7 +22,11 @@ export function ProjectDetail() {
   return (
     <div>
       <DefaultCellRenderer
-        column={{ id: 'spec.bool', type: CellType.BOOLEAN }}
+        column={{
+          tooltip: { content: 'Tooltip content' },
+          id: 'spec.bool',
+          type: CellType.BOOLEAN,
+        }}
         record={{ spec: { bool: true } }}
         value={true}
       />
