@@ -315,6 +315,45 @@ def _setup_cadence(links):
     )
 
 
+def _create_demo_crs(_: argparse.Namespace):
+    """Create demo Custom Resources (CRs) for the sandbox environment."""
+    # Check if cluster exists
+    try:
+        _exec("k3d", "cluster", "get", _kube_name, raise_error=True)
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Cluster {_kube_name} not found. Please run 'ma sandbox create' first."
+        )
+
+    # Check if cluster is running
+    try:
+        _exec("kubectl", "cluster-info", raise_error=True)
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Cluster {_kube_name} is not running. Please run 'ma sandbox start' first."
+        )
+
+    demo_dir = _dir / "demo"
+    project_yaml_path = demo_dir / "project.yaml"
+
+    # Extract namespace from project.yaml
+    with open(project_yaml_path) as f:
+        project_yaml = yaml.safe_load(f)
+    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
+
+    # Create namespace
+    _exec("kubectl", "create", "namespace", namespace)
+
+    # Create project first
+    _kube_create(project_yaml_path)
+
+    # Create pipelines
+    _kube_create(demo_dir / "training-pipeline.yaml")
+    _kube_create(demo_dir / "eval-pipeline.yaml")
+
+    print(f"\nDemo CRs created in namespace {namespace}.")
+
+
 def _delete(ns: argparse.Namespace):
     assert ns
     _exec("k3d", "cluster", "delete", _kube_name)
@@ -423,29 +462,6 @@ def _err_exit(err_message: str, code: int = 1):
     # Print the error message in red and bold.
     print(f"\033[91m\033[1mERROR: {err_message}\nexit {code}\033[0m")
     sys.exit(code)
-
-
-def _create_demo_crs(ns: argparse.Namespace):
-    """Create demo Custom Resources (CRs) for the UI environment."""
-    crds_dir = _dir / "crds"
-    project_yaml_path = crds_dir / "project.yaml"
-
-    # Extract namespace from project.yaml
-    with open(project_yaml_path) as f:
-        project_yaml = yaml.safe_load(f)
-    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
-
-    # Create namespace
-    _exec("kubectl", "create", "namespace", namespace)
-
-    # Create project first
-    _kube_create(project_yaml_path)
-
-    # Create pipelines
-    _kube_create(crds_dir / "training-pipeline.yaml")
-    _kube_create(crds_dir / "eval-pipeline.yaml")
-
-    print(f"\nDemo CRs created in namespace {namespace}.")
 
 
 if __name__ == "__main__":
