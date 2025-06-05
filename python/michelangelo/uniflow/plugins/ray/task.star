@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -67,6 +67,7 @@ def task(
         alias = None,
         cache_version = None,
         cache_enabled = False,
+        retry_attempts = DEFAULT_RETRY_ATTEMPTS,
         head_cpu = RAY_DEFAULT_HEAD_CPU,
         head_memory = RAY_DEFAULT_HEAD_MEMORY,
         head_disk = RAY_DEFAULT_HEAD_DISK,
@@ -127,12 +128,16 @@ def task(
         _gpu_sku = os.environ.get("RAY_OVERRIDE_GPU_SKU." + task_path, gpu_sku)
         _zone = os.environ.get("RAY_OVERRIDE_ZONE." + task_path, zone)
 
+        _retry_attempts = retry_attempts
+
         # Apply resource types
         _head_cpu = int(_head_cpu)
         _head_gpu = int(_head_gpu)
         _worker_cpu = int(_worker_cpu)
         _worker_gpu = int(_worker_gpu)
         _worker_instances = int(_worker_instances)
+
+        result_url = get_result_url()
 
         # Create cluster
         cluster_namespace = namespace
@@ -154,96 +159,80 @@ def task(
             debug_enabled = breakpoint,
             runtime_env = runtime_env,
         )
-        cluster = ray.create_cluster(cluster)
-        cluster_name = cluster["metadata"]["name"]
-        cluster_namespace = cluster["metadata"]["namespace"]
 
-        print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name)
-        report_progress(
+        total_retry_attempt = retry_attempts
+        for retry_attempt_id in range(1, total_retry_attempt + 1):
+
+            job_state, job = execute_ray_task(
+                task_path=task_path,
+                task_name=task_name,
+                cluster=cluster,
+                cluster_namespace=cluster_namespace,
+                runtime_env=runtime_env,
+                start_time_formated_str=start_time_formated_str,
+                result_url=result_url,
+                args=args,
+                kwargs=kwargs,
+                retry_attempt_id=retry_attempt_id,
+                total_retry_attempt=total_retry_attempt,
+                breakpoint=breakpoint,
+            )
+
+            retryable = process_terminated_ray_job(
+                job_state,
+                job,
+                task_name,
+                task_path,
+                args,
+                kwargs,
+                cache_version,
+                namespace,
+                result_url,
+                start_time_formated_str,
+                retry_attempt_id,
+                total_retry_attempt,
+            )
+
+            if retryable == False:
+                break
+
+        result = io_read_json(result_url)
+        print("ray | caching", "result:", result)
+        return result
+
+    def with_overrides(alias = alias, config = ray_config(), retry_attempts = DEFAULT_RETRY_ATTEMPTS):
+        return task(
             task_path = task_path,
-            task_name = task_name,
-            task_message = "Ray Cluster Created Successfully",
-            task_state = TASK_STATE_RUNNING,
-            start_time = start_time_formated_str,
-            end_time = "",
+            alias = alias,
+            cache_version = cache_version,
+            cache_enabled = cache_enabled,
+            retry_attempts = retry_attempts,
+            head_cpu = head_cpu if "head_cpu" not in config else config["head_cpu"],
+            head_memory = head_memory if "head_memory" not in config else config["head_memory"],
+            head_disk = head_disk if "head_disk" not in config else config["head_disk"],
+            head_gpu = head_gpu if "head_gpu" not in config else config["head_gpu"],
+            head_object_store_memory = head_object_store_memory if "head_object_store_memory" not in config else config["head_object_store_memory"],
+            worker_cpu = worker_cpu if "worker_cpu" not in config else config["worker_cpu"],
+            worker_memory = worker_memory if "worker_memory" not in config else config["worker_memory"],
+            worker_disk = worker_disk if "worker_disk" not in config else config["worker_disk"],
+            worker_gpu = worker_gpu if "worker_gpu" not in config else config["worker_gpu"],
+            worker_object_store_memory = worker_object_store_memory if "worker_object_store_memory" not in config else config["worker_object_store_memory"],
+            worker_instances = worker_instances if "worker_instances" not in config else config["worker_instances"],
+            gpu_sku = gpu_sku if "gpu_sku" not in config else config["gpu_sku"],
+            zone = zone if "zone" not in config else config["zone"],
+            breakpoint = breakpoint if "breakpoint" not in config else config["breakpoint"],
+            runtime_env = runtime_env if "runtime_env" not in config else config["runtime_env"],
         )
 
-        def terminate_cluster():
-            ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
-            print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
+    callable = callable_object(callable)
+    callable.with_overrides = with_overrides
+    return callable
 
-        atexit.register(terminate_cluster)
+def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt):
 
-        # Run job
-        result_url = get_result_url()
-        entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
-        print("ray | run job:", "task_path=" + task_path)
-        job = ray.create_job(
-            entrypoint,
-            ray_job_namespace = cluster_namespace,
-            ray_job_name = cluster_name,
-        )
-        print("ray | +run job: job=" + str(job))
+    retryable = False
 
-        def report_ray_task_result():
-            end_time_seconds = time.time()
-            end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-            if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
-                report_progress(
-                    task_path = task_path,
-                    task_name = task_name,
-                    task_message = "Ray Job Succeeded",
-                    task_state = TASK_STATE_SUCCEEDED,
-                    start_time = start_time_formated_str,
-                    end_time = end_time_formated_str,
-                )
-            elif job["status"]["state"] == "RAY_JOB_STATE_KILLED":
-                message = job.get("message", "unknown reason")
-                task_message = "Ray Job killed with {}".format(message)
-                report_progress(
-                    task_path = task_path,
-                    task_name = task_name,
-                    task_message = task_message,
-                    task_state = TASK_STATE_KILLED,
-                    start_time = start_time_formated_str,
-                    end_time = end_time_formated_str,
-                )
-            else:
-                error_type = job.get("errorType", "internal")
-                message = job.get("message", "unknown error")
-                task_message = "Ray Job Failed with {} Error: {}".format(error_type, message)
-                report_progress(
-                    task_path = task_path,
-                    task_name = task_name,
-                    task_message = task_message,
-                    task_state = TASK_STATE_FAILED,
-                    start_time = start_time_formated_str,
-                    end_time = end_time_formated_str,
-                )
-
-        atexit.register(report_ray_task_result)
-
-        if breakpoint:
-            print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
-
-            time.sleep(seconds = 60 * 60 * 24)
-            err_message = "internal: breakpoint timeout"
-            print("ray | error:", err_message)
-            fail(err_message)
-
-        # Terminate cluster
-        if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
-            ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
-        else:
-            ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
-
-        report_ray_task_result()
-        atexit.unregister(terminate_cluster)
-        atexit.unregister(report_ray_task_result)
-
-        # Read result from the storage
-        if job["status"]["state"] != "RAY_JOB_STATE_SUCCEEDED":
-            fail("internal:", "message:bad job status:", job["status"]["state"], job)
+    if job_state == TASK_STATE_SUCCEEDED:
 
         cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
         created_cached_output = create_cached_output(
@@ -265,36 +254,121 @@ def task(
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
         )
-        result = io_read_json(result_url)
-        print("ray | caching", "result:", result)
-        return result
+        print("Ray job succeeded, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") succeeded")
 
-    def with_overrides(alias = alias, config=ray_config()):
-        return task(
+    elif job_state == TASK_STATE_KILLED:
+        print("Ray task killed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ").  no retry should be performed")
+        fail("Ray task killed, no retry should be performed")
+
+    elif job_state == TASK_STATE_FAILED:
+        print("Ray task failed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") failed")
+        if retry_attempt_id < total_retry_attempt:
+            retryable = True
+        else:
+            print("Ray task failed after all (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") attempts were exhausted")
+            fail("Ray task failed after all retry attempts were exhausted ", "internal:", "message:bad job status:", job["status"]["state"], job)
+
+    return retryable
+
+
+def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
+
+    print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
+
+    cluster = ray.create_cluster(cluster)
+    cluster_name = cluster["metadata"]["name"]
+    cluster_namespace = cluster["metadata"]["namespace"]
+
+    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name)
+    report_progress(
+        task_path = task_path,
+        task_name = task_name,
+        task_message = "Ray Cluster Created Successfully",
+        task_state = TASK_STATE_RUNNING,
+        start_time = start_time_formated_str,
+        end_time = "",
+    )
+
+    atexit.register(terminate_cluster, cluster_namespace, cluster_name)
+
+    # Run job
+    entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
+    print("ray | run job:", "task_path=" + task_path)
+    job = ray.create_job(
+        entrypoint,
+        ray_job_namespace = cluster_namespace,
+        ray_job_name = cluster_name,
+    )
+    print("ray | +run job: job=" + str(job))
+
+    atexit.register(report_ray_task_result, job, task_path, task_name, start_time_formated_str, retry_attempt_id)
+
+    if breakpoint:
+        print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
+
+        time.sleep(seconds = 60 * 60 * 24)
+        err_message = "internal: breakpoint timeout"
+        print("ray | error:", err_message)
+        fail(err_message)
+
+    # Terminate cluster
+    job_state = report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id)
+    if job_state == TASK_STATE_SUCCEEDED:
+        ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
+    else:
+        ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
+
+    atexit.unregister(terminate_cluster)
+    atexit.unregister(report_ray_task_result)
+
+    return(job_state, job)
+
+def terminate_cluster(cluster_namespace, cluster_name):
+    ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
+    print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
+
+def report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id):
+
+    end_time_seconds = time.time()
+    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+    if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
+        report_progress(
             task_path = task_path,
-            alias = alias,
-            cache_version = cache_version,
-            cache_enabled = cache_enabled,
-            head_cpu = head_cpu if "head_cpu" not in config else config["head_cpu"],
-            head_memory = head_memory if "head_memory" not in config else config["head_memory"],
-            head_disk = head_disk if "head_disk" not in config else config["head_disk"],
-            head_gpu = head_gpu if "head_gpu" not in config else config["head_gpu"],
-            head_object_store_memory = head_object_store_memory if "head_object_store_memory" not in config else config["head_object_store_memory"],
-            worker_cpu = worker_cpu if "worker_cpu" not in config else config["worker_cpu"],
-            worker_memory = worker_memory if "worker_memory" not in config else config["worker_memory"],
-            worker_disk = worker_disk if "worker_disk" not in config else config["worker_disk"],
-            worker_gpu = worker_gpu if "worker_gpu" not in config else config["worker_gpu"],
-            worker_object_store_memory = worker_object_store_memory if "worker_object_store_memory" not in config else config["worker_object_store_memory"],
-            worker_instances = worker_instances if "worker_instances" not in config else config["worker_instances"],
-            gpu_sku = gpu_sku if "gpu_sku" not in config else config["gpu_sku"],
-            zone = zone if "zone" not in config else config["zone"],
-            breakpoint = breakpoint if "breakpoint" not in config else config["breakpoint"],
-            runtime_env = runtime_env if "runtime_env" not in config else config["runtime_env"],
+            task_name = task_name,
+            task_message = "Ray Job Succeeded",
+            task_state = TASK_STATE_SUCCEEDED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
         )
-
-    callable = callable_object(callable)
-    callable.with_overrides = with_overrides
-    return callable
+        return TASK_STATE_SUCCEEDED
+    elif job["status"]["state"] == "RAY_JOB_STATE_KILLED":
+        message = job.get("message", "unknown reason")
+        task_message = "Ray Job killed with {}".format(message)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_message = task_message,
+            task_state = TASK_STATE_KILLED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
+        )
+        return TASK_STATE_KILLED
+    else:
+        error_type = job.get("errorType", "internal")
+        message = job.get("message", "unknown error")
+        task_message = "Ray Job Failed with {} Error: {}".format(error_type, message)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_message = task_message,
+            task_state = TASK_STATE_FAILED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
+        )
+        return TASK_STATE_FAILED
 
 def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
     args = json.dumps(args) if args else "[]"

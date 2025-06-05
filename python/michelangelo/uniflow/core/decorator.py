@@ -29,6 +29,8 @@ task_context = threading.local()
 task_context.config = None
 task_context.alias = None
 
+DEFAULT_RETRY_ATTEMPTS = 1
+
 
 class TaskFunction(Generic[P, R]):
     def __init__(
@@ -40,6 +42,7 @@ class TaskFunction(Generic[P, R]):
         io: IORegistry,
         cache_enabled: bool = False,
         cache_version: Optional[str] = None,
+        retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     ):
         self._fn = fn
         self._config = config
@@ -47,6 +50,7 @@ class TaskFunction(Generic[P, R]):
         self._io = io
         self._cache_enabled = cache_enabled
         self._cache_version = cache_version
+        self._retry_attempts = retry_attempts
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         fn_path = dot_path(self._fn)
@@ -104,6 +108,7 @@ class TaskFunction(Generic[P, R]):
         *,
         alias: Optional[str] = None,
         config: Optional[TaskConfig] = None,
+        retry_attempts: Optional[int] = None,
     ) -> "TaskFunction[P, R]":
         """
         Creates a new TaskFunction instance with overridden alias and/or config.
@@ -129,6 +134,7 @@ class TaskFunction(Generic[P, R]):
             io=self._io,
             cache_enabled=self._cache_enabled,
             cache_version=self._cache_version,
+            retry_attempts=retry_attempts or self._retry_attempts,
         )
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
@@ -171,6 +177,7 @@ class TaskFunction(Generic[P, R]):
 
         keywords.append(ast.keyword("cache_enabled", ast.Constant(self._cache_enabled)))
         keywords.append(ast.keyword("cache_version", ast.Constant(self._cache_version)))
+        keywords.append(ast.keyword("retry_attempts", ast.Constant(self._retry_attempts)))
 
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)
@@ -187,6 +194,7 @@ def task(
     io: IORegistry = default_io,
     cache_enabled: bool = False,
     cache_version: Optional[str] = None,
+    retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
 ):
     """
     Decorator for defining a task function. Usage example:
@@ -207,6 +215,7 @@ def task(
         cache_version: Optional[str]: Cache version for the task. Default is None.
             We can use this to save multiple versions of caches for the same task and specify the cache version used to
             skip the task. If it is None, the default cached version will be calculated by the docker image id of the task.
+        retry_attempts: int: Number of retry attempts for the task. Default is 1 (no retries).
     """
 
     def decorator(fn: Callable[P, R]) -> TaskFunction[P, R]:
@@ -217,6 +226,7 @@ def task(
             io=io,
             cache_enabled=cache_enabled,
             cache_version=cache_version,
+            retry_attempts=retry_attempts,
         )
         update_wrapper(task_fn, fn)
 

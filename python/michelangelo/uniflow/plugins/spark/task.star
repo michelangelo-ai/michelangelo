@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
 }
@@ -20,6 +20,7 @@ def spark_task(
         alias = None,
         cache_version = None,
         cache_enabled = False,
+        retry_attempts = DEFAULT_RETRY_ATTEMPTS,
         driver_cpu = SPARK_DEFAULT_DRIVER_CPU,
         driver_memory = SPARK_DEFAULT_DRIVER_MEMORY,
         driver_disk = SPARK_DEFAULT_DRIVER_DISK,
@@ -69,6 +70,8 @@ def spark_task(
         _executor_gpu = os.environ.get("SPARK_OVERRIDE_EXECUTOR_GPU." + task_path, executor_gpu)
         _executor_instances = os.environ.get("SPARK_OVERRIDE_EXECUTOR_INSTANCES." + task_path, executor_instances)
 
+        _retry_attempts = retry_attempts
+
         # Apply resource types
         _driver_cpu = int(_driver_cpu)
         _driver_gpu = int(_driver_gpu)
@@ -102,74 +105,48 @@ def spark_task(
             executor_instances = _executor_instances,
         )
 
-        # submit spark job
-        print("spark | submit job. ns:", namespace, "task_name:", task_name)
-        created_spark_job = spark.create_job(spark_job)
+        total_retry_attempt = retry_attempts
+        for retry_attempt_id in range(1, total_retry_attempt + 1):
 
-        # report task as pending
-        report_progress(
-            task_name = task_name,
-            task_path = task_path,
-            task_state = TASK_STATE_PENDING,
-            start_time = start_time_formated_str,
-            task_message = "Spark job has been submitted",
-            task_log = created_spark_job.get("status", {}).get("jobUrl", ""),
-            end_time = "",
-        )
+            job_state, terminated_job = execute_spark_task(
+                namespace=namespace,
+                task_name=task_name,
+                task_path=task_path,
+                spark_job=spark_job,
+                start_time_formated_str=start_time_formated_str,
+                retry_attempt_id=retry_attempt_id,
+                total_retry_attempt=total_retry_attempt,
+            )
 
-        def check_spark_job_final_state_at_workflow_exit():
-            """
-            Check the final state of the spark job
-            """
-            final_job = spark.sensor_job(job = created_spark_job)
-            report_spark_job_terminated(final_job, task_name, task_path, start_time_formated_str)
-            return
+            retryable = process_terminated_spark_job(
+                job_state,
+                terminated_job,
+                task_name,
+                task_path,
+                args,
+                kwargs,
+                cache_version,
+                namespace,
+                result_url,
+                start_time_formated_str,
+                retry_attempt_id,
+                total_retry_attempt,
+            )
 
-        # register the check_spark_job function to be called at the end of the workflow.
-        # this is to ensure that the task state is reported correctly even if the workflow is killed
-        atexit.register(check_spark_job_final_state_at_workflow_exit)
+            if retryable == False:
+                break
 
-        # senosr spark job until it is running and driver log url is available
-        terminated_job = spark.sensor_job(job = created_spark_job)
-
-        driver_log_url = ""
-
-        # senosr spark job until it is terminated
-        terminated_job = spark.sensor_job(job = created_spark_job)
-        if report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str) == True:
-            atexit.unregister(check_spark_job_final_state_at_workflow_exit)
-
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        print("spark | caching with key", "key:", cache_keys)
-        created_cached_output = create_cached_output(
-            namespace = namespace,
-            cache_keys = cache_keys,
-            zone = "",
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
-        end_time_seconds = time.time()
-        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-        report_progress(
-            task_name = task_name,
-            task_path = task_path,
-            task_state = TASK_STATE_SUCCEEDED,
-            start_time = start_time_formated_str,
-            task_log = driver_log_url,
-            end_time = end_time_formated_str,
-            task_message = "Spark job succeeded",
-        )
         result = io_read_json(result_url)
         print("spark | caching", "result:", result)
         return result
 
-    def with_overrides(alias = alias, config = spark_config()):
+    def with_overrides(alias = alias, config = spark_config(), retry_attempts = DEFAULT_RETRY_ATTEMPTS):
         return spark_task(
             task_path = task_path,
             alias = alias,
             cache_version = cache_version,
             cache_enabled = cache_enabled,
+            retry_attempts = retry_attempts,
             driver_cpu = driver_cpu if "driver_cpu" not in config else config["driver_cpu"],
             driver_memory = driver_memory if "driver_memory" not in config else config["driver_memory"],
             driver_disk = driver_disk if "driver_disk" not in config else config["driver_disk"],
@@ -185,7 +162,106 @@ def spark_task(
     callable.with_overrides = with_overrides
     return callable
 
-def report_spark_job_terminated(job, task_name, task_path, start_time_formated_str):
+def process_terminated_spark_job(job_state, terminated_job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+
+    retryable = False
+
+    if job_state == TASK_STATE_SUCCEEDED:
+
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        print("spark | caching with key", "key:", cache_keys)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
+        end_time_seconds = time.time()
+        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+
+        driver_log_url = ""
+        if type(terminated_job) == "dict":
+            driver_log_url = terminated_job.get("status", {}).get("jobUrl", "")
+
+        report_progress(
+            task_name = task_name,
+            task_path = task_path,
+            task_state = TASK_STATE_SUCCEEDED,
+            start_time = start_time_formated_str,
+            task_log = driver_log_url,
+            end_time = end_time_formated_str,
+            task_message = "Spark job succeeded",
+            output = created_cached_output.get("metadata", {}).get("name", ""),
+            retry_attempt_id = retry_attempt_id,
+        )
+        print("Spark job succeeded, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") succeeded")
+
+    elif job_state == TASK_STATE_KILLED:
+        print("Spark job killed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + "). no retry should be performed")
+        fail("Spark job killed, no retry should be performed")
+
+    # If job failed or was killed, check if we have retries left
+    elif job_state == TASK_STATE_FAILED:
+        print("Spark job failed, attemp (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") failed")
+        if retry_attempt_id < total_retry_attempt:
+            retryable = True
+        else:
+            print("Spark job failed after all (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") attempts were exhausted")
+            fail("Spark job failed after all attempts were exhausted")
+
+    return retryable
+
+def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+
+    print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
+    
+    driver_log_url = ""
+
+    # submit spark job
+    print("spark | submit job. ns:", namespace, "task_name:", task_name)
+    created_spark_job = spark.create_job(spark_job)
+
+    if type(created_spark_job) == "dict":
+        driver_log_url = created_spark_job.get("status", {}).get("jobUrl", "")
+
+    # report task as pending
+    report_progress(
+        task_name = task_name,
+        task_path = task_path,
+        task_state = TASK_STATE_PENDING,
+        start_time = start_time_formated_str,
+        task_message = "Spark job has been submitted",
+        task_log = driver_log_url,
+        retry_attempt_id = retry_attempt_id,
+    )
+
+    # register the check_spark_job function to be called at the end of the workflow.
+    # this is to ensure that the task state is reported correctly even if the workflow is killed
+    atexit.register(check_spark_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
+
+    # senosr spark job until it is running and driver log url is available
+    running_job = spark.sensor_job(job = created_spark_job, assert_condition_type = spark.running_condition_type)
+
+    # senosr spark job until it is terminated
+    terminated_job = spark.sensor_job(job = created_spark_job)
+
+    job_state = report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
+    if job_state == TASK_STATE_SUCCEEDED:
+        atexit.unregister(check_spark_job_final_state_at_workflow_exit)
+
+    return (job_state, terminated_job)
+
+def check_spark_job_final_state_at_workflow_exit(created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id):
+    """
+    Check the final state of the spark job
+    """
+    final_job = spark.sensor_job(job = created_spark_job)
+    report_spark_job_terminated(final_job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=True)
+    return
+
+def report_spark_job_terminated(job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=False):
     """
     Report task progress based on the succeeded condition of the spark job
 
@@ -201,8 +277,8 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
     if type(job) != "dict":
         return False
 
-    conditions = job.get("status", {}).get("applicationId", "FAILED")
-    return conditions == "COMPLETED"
+    job_state = job.get("status", {}).get("applicationId", "FAILED")
+    return job_state
 
 # TODO add env label for spark job
 # Get the match labels for the spark job.
