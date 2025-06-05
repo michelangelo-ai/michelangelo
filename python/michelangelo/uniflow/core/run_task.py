@@ -13,16 +13,13 @@ def main():
         log.info("sys.argv: %s", a)
 
     p = argparse.ArgumentParser()
-    p.add_argument("--task", required=True, type=import_attribute)
+    p.add_argument("--task", required=True, type=str)
     p.add_argument("--args", required=True, type=decoder.decode)
     p.add_argument("--kwargs", required=True, type=decoder.decode)
     p.add_argument("--result-url", required=True, type=str)
     p.add_argument("--overrides", type=decoder.decode)
     ns = p.parse_args()
 
-    assert type(ns.task).__name__ == "TaskFunction", (
-        f"Expected task to be a TaskFunction instance, but got instance of {type(ns.task)}"
-    )
     assert isinstance(ns.args, list), (
         f"Expected args to be a list, but got {type(ns.args)}"
     )
@@ -36,7 +33,12 @@ def main():
         f"Expected result_url to end with .json, but got {ns.result_url}"
     )
 
-    task = ns.task
+    task = import_attribute(ns.task)
+
+    assert type(task).__name__ == "TaskFunction", (
+        f"Expected task to be a TaskFunction instance, but got instance of {type(task)}"
+    )
+
     if ns.overrides:
         assert isinstance(ns.overrides, dict)
         task = task.with_overrides(**ns.overrides)
