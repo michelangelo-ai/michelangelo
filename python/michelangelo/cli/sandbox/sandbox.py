@@ -8,6 +8,7 @@ import shutil
 import tempfile
 import time
 import uuid
+import yaml
 from pathlib import Path
 
 short_description = "Manage the sandbox cluster."
@@ -42,7 +43,7 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
-        "--exclude", help="Excludes specified services.", nargs="+", default=[]
+        "--exclude", help="Excludes specified services. Available options: apiserver, controllermgr, ui, crds, worker", nargs="+", default=[]
     )
     create_p.add_argument(
         "--workflow",
@@ -181,7 +182,32 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
 
     _create_spark_operator(helm_existing_repos)
+
+    if "crds" not in ns.exclude:
+        _create_project_and_pipelines()
+
     print("\nSandbox created successfully.")
+
+
+def _create_project_and_pipelines():
+    """Create a default project and pipelines in the sandbox environment."""
+    crds_dir = _dir / "crds"
+    project_yaml_path = crds_dir / "project.yaml"
+
+    # Extract namespace from project.yaml
+    with open(project_yaml_path) as f:
+        project_yaml = yaml.safe_load(f)
+    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
+
+    # Create namespace
+    _exec("kubectl", "create", "namespace", namespace)
+
+    # Create project first
+    _kube_create(project_yaml_path)
+
+    # Create pipelines
+    _kube_create(crds_dir / "training-pipeline.yaml")
+    _kube_create(crds_dir / "eval-pipeline.yaml")
 
 
 def _create_spark_operator(helm_existing_repos):

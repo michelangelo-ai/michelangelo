@@ -1,0 +1,15 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: eval-pipeline
+  namespace: ma-dev-test
+spec:
+  description: Evaluation pipeline for my ML project
+  owner:
+    name: craig.marker
+  type: PIPELINE_TYPE_EVAL
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_YAML
+  commit:
+    gitRef: "main"
+    branch: "main"
