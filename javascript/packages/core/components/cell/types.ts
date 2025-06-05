@@ -5,6 +5,8 @@ import type { DescriptionCellConfig } from '#core/components/cell/renderers/desc
 import type { LinkCellConfig } from '#core/components/cell/renderers/link/types';
 import type { MultiCellConfig } from '#core/components/cell/renderers/multi/types';
 import type { Accessor } from '#core/types/common/studio-types';
+import type { StateCellConfig } from './renderers/state/types';
+import type { TypeCellConfig } from './renderers/type/types';
 
 /**
  * @description
@@ -16,7 +18,8 @@ import type { Accessor } from '#core/types/common/studio-types';
  * @see {@link LinkCellConfig}
  * @see {@link MultiCellConfig}
  */
-export type Cell = SharedCell & (DescriptionCellConfig | LinkCellConfig | MultiCellConfig);
+export type Cell = SharedCell &
+  (DescriptionCellConfig | LinkCellConfig | MultiCellConfig | StateCellConfig | TypeCellConfig);
 
 export interface SharedCell<T = unknown> {
   /**

@@ -5,6 +5,7 @@ import { LinkCell } from './renderers/link/link-cell';
 import { MultiCell } from './renderers/multi/multi-cell';
 import { StateCell } from './renderers/state/state-cell';
 import { TagCell } from './renderers/tag/tag-cell';
+import { TextCell } from './renderers/text/text-cell';
 import { TypeCell } from './renderers/type/type-cell';
 
 import type { CellRenderer } from './types';
@@ -93,4 +94,5 @@ export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
   [CellType.STATE]: StateCell as CellRenderer<string>,
   [CellType.TAG]: TagCell,
   [CellType.TYPE]: TypeCell,
+  [CellType.TEXT]: TextCell,
 };

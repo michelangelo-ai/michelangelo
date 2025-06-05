@@ -1,15 +1,15 @@
 import { useStyletron } from 'baseui';
 
+import { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 import { Icon } from '#core/components/icon/icon';
 import { getObjectValue } from '#core/utils/object-utils';
-import { getCellRenderer } from '../../get-cell-renderer';
 
 import type { CellRenderer } from '#core/components/cell/types';
 import type { MultiCellConfig } from './types';
 
 export const MultiCell: CellRenderer<unknown, MultiCellConfig> = (props) => {
   const [css] = useStyletron();
-  const { column, record } = props;
+  const { column, record, CellComponent = DefaultCellRenderer } = props;
   const { items } = column;
 
   if (!columnHasData(column, record)) {
@@ -22,12 +22,6 @@ export const MultiCell: CellRenderer<unknown, MultiCellConfig> = (props) => {
       <div className={css(ITEMS_WRAPPER)}>
         {items.map((item, index) => {
           const value = getObjectValue<unknown>(record, item.accessor ?? item.id);
-
-          // TODO: Add default cell renderer
-          const CellComponent =
-            getCellRenderer(item.type ?? '') ??
-            (({ value }: { value: unknown }) => <div>{String(value)}</div>);
-
           return <CellComponent key={index} {...props} column={item} value={value ?? ''} />;
         })}
       </div>
