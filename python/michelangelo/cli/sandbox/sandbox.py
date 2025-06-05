@@ -43,7 +43,7 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
-        "--exclude", help="Excludes specified services. Available options: apiserver, controllermgr, ui, crds, worker", nargs="+", default=[]
+        "--exclude", help="Excludes specified services. Available options: apiserver, controllermgr, ui, worker", nargs="+", default=[]
     )
     create_p.add_argument(
         "--workflow",
@@ -52,6 +52,7 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
 
+    _ = sp.add_parser("demo", help="Create demo project and pipelines in the sandbox cluster.")
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
@@ -80,6 +81,8 @@ def run(ns: argparse.Namespace):
         return _start(ns)
     if ns.action == "stop":
         return _stop(ns)
+    if ns.action == "demo":
+        return _create_demo_crs(ns)
 
     raise ValueError(f"Unsupported action: {ns.action}")
 
@@ -183,31 +186,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _create_spark_operator(helm_existing_repos)
 
-    if "crds" not in ns.exclude:
-        _create_project_and_pipelines()
-
     print("\nSandbox created successfully.")
-
-
-def _create_project_and_pipelines():
-    """Create a default project and pipelines in the sandbox environment."""
-    crds_dir = _dir / "crds"
-    project_yaml_path = crds_dir / "project.yaml"
-
-    # Extract namespace from project.yaml
-    with open(project_yaml_path) as f:
-        project_yaml = yaml.safe_load(f)
-    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
-
-    # Create namespace
-    _exec("kubectl", "create", "namespace", namespace)
-
-    # Create project first
-    _kube_create(project_yaml_path)
-
-    # Create pipelines
-    _kube_create(crds_dir / "training-pipeline.yaml")
-    _kube_create(crds_dir / "eval-pipeline.yaml")
 
 
 def _create_spark_operator(helm_existing_repos):
@@ -439,6 +418,29 @@ def _err_exit(err_message: str, code: int = 1):
     # Print the error message in red and bold.
     print(f"\033[91m\033[1mERROR: {err_message}\nexit {code}\033[0m")
     sys.exit(code)
+
+
+def _create_demo_crs(ns: argparse.Namespace):
+    """Create demo Custom Resources (CRs) for the UI environment."""
+    crds_dir = _dir / "crds"
+    project_yaml_path = crds_dir / "project.yaml"
+
+    # Extract namespace from project.yaml
+    with open(project_yaml_path) as f:
+        project_yaml = yaml.safe_load(f)
+    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
+
+    # Create namespace
+    _exec("kubectl", "create", "namespace", namespace)
+
+    # Create project first
+    _kube_create(project_yaml_path)
+
+    # Create pipelines
+    _kube_create(crds_dir / "training-pipeline.yaml")
+    _kube_create(crds_dir / "eval-pipeline.yaml")
+
+    print(f"\nDemo CRs created in namespace {namespace}.")
 
 
 if __name__ == "__main__":
