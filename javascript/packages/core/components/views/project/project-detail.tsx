@@ -2,8 +2,10 @@ import { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cel
 import { DateCell } from '#core/components/cell/renderers/date/date-cell';
 import { DescriptionHierarchy } from '#core/components/cell/renderers/description/constants';
 import { DescriptionCell } from '#core/components/cell/renderers/description/description-cell';
+import { LinkCell } from '#core/components/cell/renderers/link/link-cell';
 import { Icon } from '#core/components/icon/icon';
 import { IconKind } from '#core/components/icon/types';
+import { Link } from '#core/components/link/link';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 
@@ -33,6 +35,16 @@ export function ProjectDetail() {
       />
       <br />
       <Icon name="arrowLaunch" kind={IconKind.ACCENT} size={24} />
+      <br />
+      <LinkCell
+        column={{ id: 'spec.link', url: 'https://www.google.com' }}
+        record={{ spec: { link: 'https://www.google.com' } }}
+        value={'https://www.google.com'}
+      />
+      <br />
+      <Link href="https://www.google.com">Google</Link>
+      <br />
+      <Link href="/">Home</Link>
       <br />
       {/* The project type will not be directly exposed to the @michelangelo/core package. */}
       {/* eslint-disable-next-line @typescript-eslint/dot-notation */}
