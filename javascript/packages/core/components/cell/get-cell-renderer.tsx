@@ -31,6 +31,7 @@ export function getCellRenderer(args: CellRendererProps<unknown>): CellRenderer<
 function getType(args: CellRendererProps): string | undefined {
   const { column } = args;
 
+  if ('items' in column) return CellType.MULTI;
   if ('url' in column) return CellType.LINK;
 
   return column.type;
