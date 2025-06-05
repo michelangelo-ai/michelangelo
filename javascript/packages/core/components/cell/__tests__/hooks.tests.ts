@@ -34,6 +34,6 @@ describe('useCellStyles', () => {
       () => useCellStyles({ record, style }),
       buildWrapper([getBaseProviderWrapper()])
     );
-    expect(result.current).toEqual({ backgroundColor: '#048848' });
+    expect(result.current).toEqual({ backgroundColor: '#0E8345' });
   });
 });

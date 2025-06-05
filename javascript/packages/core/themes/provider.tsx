@@ -8,7 +8,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const engine = new Styletron();
   return (
     <StyletronProvider value={engine}>
-      <BaseProvider theme={createTheme({}, GRID_OVERRIDES)}>{children}</BaseProvider>
+      <BaseProvider theme={createTheme(GRID_OVERRIDES)}>{children}</BaseProvider>
     </StyletronProvider>
   );
 }
