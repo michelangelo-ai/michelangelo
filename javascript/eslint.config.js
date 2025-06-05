@@ -44,8 +44,8 @@ const sharedRules = {
   'baseui/deprecated-theme-api': 'warn',
   'baseui/deprecated-component-api': 'warn',
   'baseui/no-deep-imports': 'warn',
+  '@typescript-eslint/array-type': 'off',
   '@typescript-eslint/consistent-type-definitions': 'off',
-  '@typescript-eslint/no-explicit-any': 'off',
   '@typescript-eslint/no-unsafe-call': 'off',
 };
 

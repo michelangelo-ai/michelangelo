@@ -1,5 +1,8 @@
 import { BooleanCell } from './renderers/boolean/boolean-cell';
 import { DateCell } from './renderers/date/date-cell';
+import { DescriptionCell } from './renderers/description/description-cell';
+import { LinkCell } from './renderers/link/link-cell';
+import { MultiCell } from './renderers/multi/multi-cell';
 
 import type { CellRenderer } from './types';
 
@@ -39,6 +42,11 @@ export enum CellType {
   /**
    * @description Renders column items in a vertical list
    */
+  MULTI = 'MULTI',
+
+  /**
+   * @description Renders a **Multi** with formatted text
+   */
   REPEATED_ITEMS = 'REPEATED_ITEMS',
 
   /**
@@ -72,7 +80,11 @@ export enum CellType {
   TYPE = 'TYPE',
 }
 
-export const CELL_RENDERERS: Record<string, CellRenderer<any>> = {
-  [CellType.BOOLEAN]: BooleanCell,
-  [CellType.DATE]: DateCell,
+export const CELL_RENDERERS: Record<string, CellRenderer<unknown>> = {
+  [CellType.BOOLEAN]: BooleanCell as CellRenderer<boolean>,
+  [CellType.DATE]: DateCell as CellRenderer<string>,
+  [CellType.DESCRIPTION]: DescriptionCell,
+  [CellType.LINK]: LinkCell,
+  [CellType.MULTI]: MultiCell,
+  [CellType.REPEATED_ITEMS]: MultiCell,
 };
