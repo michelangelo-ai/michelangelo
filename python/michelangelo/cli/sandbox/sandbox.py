@@ -43,7 +43,10 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
-        "--exclude", help="Excludes specified services. Available options: apiserver, controllermgr, ui, worker", nargs="+", default=[]
+        "--exclude",
+        help="Excludes specified services. Available options: apiserver, controllermgr, ui, worker",
+        nargs="+",
+        default=[],
     )
     create_p.add_argument(
         "--workflow",
@@ -52,7 +55,9 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
 
-    _ = sp.add_parser("demo", help="Create demo project and pipelines in the sandbox cluster.")
+    _ = sp.add_parser(
+        "demo", help="Create demo project and pipelines in the sandbox cluster."
+    )
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
