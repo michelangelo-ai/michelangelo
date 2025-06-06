@@ -38,9 +38,17 @@ func (r TritonProvider) GetStatus(ctx context.Context, log logr.Logger, deployme
 	}
 
 	var rolloutCondition *apipb.Condition
-	for _, c := range deployment.Status.Conditions {
-		if c.Type == "DeploymentStatus" {
-			rolloutCondition = c
+	if deployment.Status.Conditions == nil {
+		deployment.Status.Conditions = make([]*apipb.Condition, 0)
+		rolloutCondition = &apipb.Condition{
+			Type: "DeploymentStatus",
+		}
+		deployment.Status.Conditions = append(deployment.Status.Conditions, rolloutCondition)
+	} else {
+		for _, c := range deployment.Status.Conditions {
+			if c.Type == "DeploymentStatus" {
+				rolloutCondition = c
+			}
 		}
 	}
 
@@ -48,6 +56,13 @@ func (r TritonProvider) GetStatus(ctx context.Context, log logr.Logger, deployme
 		rolloutCondition.Status = apipb.CONDITION_STATUS_TRUE
 		rolloutCondition.Message = fmt.Sprintf("Triton error: %s", string(body))
 		rolloutCondition.LastUpdatedTimestamp = time.Now().Unix()
+		deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+		if deployment.Status.CurrentRevision == nil {
+			deployment.Status.CurrentRevision = &apipb.ResourceIdentifier{
+				Name:      deployment.Spec.DesiredRevision.Name,
+				Namespace: deployment.Spec.DesiredRevision.Namespace,
+			}
+		}
 	}
 	return nil
 }
@@ -171,7 +186,7 @@ func (r TritonProvider) updateEndpoint(ctx context.Context, log logr.Logger, dep
 	}
 
 	// Dynamic prefix construction
-	targetPrefix := fmt.Sprintf("/%s/%s/production", model.Name, deployment.Name)
+	targetPrefix := fmt.Sprintf("/%s/%s/production", deployment.Status.CurrentRevision.Name, deployment.Name)
 
 	for _, route := range httpRoutes {
 		routeMap, ok := route.(map[string]interface{})
@@ -203,6 +218,7 @@ func (r TritonProvider) updateEndpoint(ctx context.Context, log logr.Logger, dep
 						log.Error(err, "Failed to set rewrite uri")
 						return err
 					}
+					break
 				}
 			}
 		}

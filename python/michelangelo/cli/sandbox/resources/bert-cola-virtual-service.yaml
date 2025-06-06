@@ -13,7 +13,7 @@ spec:
     - uri:
         prefix: /bert-cola-endpoint/bert-cola-deployment/production
     rewrite:
-      uri: /v2/models/bert-cola-6
+      uri: /v2/models/bert-cola-10
     route:
     - destination:
         host: bert-cola-deployment-service.default.svc.cluster.local
@@ -22,10 +22,10 @@ spec:
   - match:
     - uri:
         prefix: /bert-cola-endpoint/bert-cola-deployment/
-      rewrite:
-        uri: /
+    rewrite:
+      uri: /
     route:
-      - destination:
-          host: bert-cola-deployment-service.default.svc.cluster.local
-          port:
-            number: 80
+    - destination:
+        host: bert-cola-deployment-service.default.svc.cluster.local
+        port:
+          number: 80
