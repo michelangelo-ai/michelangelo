@@ -106,7 +106,7 @@ func TestGen(t *testing.T) {
 	c = testObjectFile.GetContent()
 	assert.Contains(t, c, `func (m *DataType) UnmarshalJSON(b []byte) error {`)
 	assert.Contains(t, c, `func (m *TestObjectSpec_ClusterType) UnmarshalJSON(b []byte) error {`)
-	
+
 	// Test external enum handling: verify that external enum types do NOT have UnmarshalJSON methods generated
 	// This tests our fix for external package enum marshaling
 	assert.NotContains(t, c, `func (m *TestExtEnum) UnmarshalJSON(b []byte) error {`)
@@ -482,18 +482,17 @@ func TestCrdObjectsMap(t *testing.T) {
 	assert.Equal(t, "TestObject", testObj.GetObjectKind().GroupVersionKind().Kind)
 }
 
-
 func TestFindEnumTypeFields_ExternalPackageHandling(t *testing.T) {
 	// Test that findEnumTypeFields correctly filters out external package enums
 	// This directly tests our fix for external package enum marshaling
-	
+
 	// This test uses the existing test protobuf data to verify that:
 	// 1. Internal enums (same package) are included in enumTypeFields
 	// 2. External enums (different package) are excluded from enumTypeFields
-	
+
 	data := testpb.GetProtocReqData()
 	resp := generate(data)
-	
+
 	// Find the testobject file content
 	var testObjectContent string
 	for _, f := range resp.GetFile() {
@@ -502,11 +501,11 @@ func TestFindEnumTypeFields_ExternalPackageHandling(t *testing.T) {
 			break
 		}
 	}
-	
+
 	// Verify internal enums have UnmarshalJSON methods (same package enums should be processed)
 	assert.Contains(t, testObjectContent, "func (m *DataType) UnmarshalJSON")
 	assert.Contains(t, testObjectContent, "func (m *TestObjectSpec_ClusterType) UnmarshalJSON")
-	
+
 	// Verify that if there were external enums, they would NOT have UnmarshalJSON methods
 	// (our fix prevents generation of UnmarshalJSON for external package enums)
 	lines := strings.Split(testObjectContent, "\n")
@@ -516,10 +515,10 @@ func TestFindEnumTypeFields_ExternalPackageHandling(t *testing.T) {
 			unmarshalJSONMethods = append(unmarshalJSONMethods, strings.TrimSpace(line))
 		}
 	}
-	
+
 	// Debug: print what UnmarshalJSON methods are being generated
 	t.Logf("Found UnmarshalJSON methods: %v", unmarshalJSONMethods)
-	
+
 	// We should have UnmarshalJSON methods for internal enums only
 	// Let's verify we have the expected internal enums and no external ones
 	foundInternalEnums := 0
@@ -528,10 +527,10 @@ func TestFindEnumTypeFields_ExternalPackageHandling(t *testing.T) {
 			foundInternalEnums++
 		}
 	}
-	
+
 	// Verify we have at least our known internal enums
 	assert.GreaterOrEqual(t, foundInternalEnums, 2, "Should have UnmarshalJSON for internal enums DataType and ClusterType")
-	
+
 	// Most importantly: verify no external enum methods are generated
 	for _, method := range unmarshalJSONMethods {
 		assert.NotContains(t, method, "TestExtEnum", "Should not generate UnmarshalJSON for external enum TestExtEnum")
