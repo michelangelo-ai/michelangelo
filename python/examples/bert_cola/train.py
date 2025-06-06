@@ -1,5 +1,4 @@
 import logging
-import os
 import mlflow
 import mlflow.pytorch  # For logging PyTorch models
 from datasets import Dataset as HFDataset
@@ -12,8 +11,11 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
+
 # Model creation function
-def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClassification:
+def create_model(
+    lr: float, eps: float
+) -> transformers.AutoModelForSequenceClassification:
     return transformers.AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
     )
@@ -31,9 +33,9 @@ def create_model(lr: float, eps: float) -> transformers.AutoModelForSequenceClas
     cache_enabled=True,
 )
 def train(
-        train_data: Dataset,
-        validation_data: Dataset,
-        test_data: Dataset,
+    train_data: Dataset,
+    validation_data: Dataset,
+    test_data: Dataset,
 ):
     log.info("Starting training...")
 
@@ -45,7 +47,9 @@ def train(
 
     if experiment is None:
         # Create if it does not exist
-        mlflow.create_experiment(name=experiment_name, artifact_location=artifact_location)
+        mlflow.create_experiment(
+            name=experiment_name, artifact_location=artifact_location
+        )
         print(f"Experiment '{experiment_name}' created.")
     else:
         print(f"Experiment '{experiment_name}' already exists.")

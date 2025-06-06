@@ -35,6 +35,7 @@ output [
 ]
 """
 
+
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
@@ -68,52 +69,47 @@ def pusher(model_uri: str, deployed_model_name: str):
             logits = outputs.logits
             return logits  # explicitly return a tensor, NOT a dict
 
-
     # Convert to TorchScript (Triton compatible)
     triton_model = TritonBertModel(model).eval()
     traced_model = torch.jit.trace(
-        triton_model,
-        (input_ids, attention_mask),
-        strict=False
+        triton_model, (input_ids, attention_mask), strict=False
     )
 
-    # Prepare local Triton-compatible directory structure
-    local_model_dir = f"/tmp/{deployed_model_name}"
-    version_dir = os.path.join(local_model_dir, "1")
-    os.makedirs(version_dir, exist_ok=True)
+    # Prepare local Triton-compatible directory structure using temporary directory
+    with tempfile.TemporaryDirectory() as temp_dir:
+        local_model_dir = os.path.join(temp_dir, deployed_model_name)
+        version_dir = os.path.join(local_model_dir, "1")
+        os.makedirs(version_dir, exist_ok=True)
 
-    # Save traced model
-    traced_model_path = os.path.join(version_dir, "model.pt")
-    traced_model.save(traced_model_path)
+        # Save traced model
+        traced_model_path = os.path.join(version_dir, "model.pt")
+        traced_model.save(traced_model_path)
 
-    # Save config.pbtxt
-    model_folder = deployed_model_name
-    config_path = os.path.join(local_model_dir, "config.pbtxt")
-    with open(config_path, "w") as config_file:
-        config_file.write(CONFIG_PBTXT.format(model_name=model_folder).strip())
+        # Save config.pbtxt
+        model_folder = deployed_model_name
+        config_path = os.path.join(local_model_dir, "config.pbtxt")
+        with open(config_path, "w") as config_file:
+            config_file.write(CONFIG_PBTXT.format(model_name=model_folder).strip())
 
-    # Define deployment bucket and paths
-    deploy_bucket = "deploy-models"
+        # Define deployment bucket and paths
+        deploy_bucket = "deploy-models"
 
-    # the first bert_cola is project name, the second one is the model name matched to the config.pbtxt
-    base_s3_path = f"s3://{deploy_bucket}/{deployed_model_name}/{model_folder}"
+        # the first bert_cola is project name, the second one is the model name matched to the config.pbtxt
+        base_s3_path = f"s3://{deploy_bucket}/{deployed_model_name}/{model_folder}"
 
-    # Upload files to S3 using fsspec
-    for local_file, s3_suffix in [
-        (traced_model_path, "1/model.pt"),
-        (config_path, "config.pbtxt"),
-    ]:
-        s3_uri = f"{base_s3_path}/{s3_suffix}"
-        with fsspec.open(s3_uri, mode="wb") as s3_file:
-            with open(local_file, "rb") as local_f:
-                s3_file.write(local_f.read())
-        print(f"Uploaded {local_file} to {s3_uri}")
+        # Upload files to S3 using fsspec
+        for local_file, s3_suffix in [
+            (traced_model_path, "1/model.pt"),
+            (config_path, "config.pbtxt"),
+        ]:
+            s3_uri = f"{base_s3_path}/{s3_suffix}"
+            with fsspec.open(s3_uri, mode="wb") as s3_file:
+                with open(local_file, "rb") as local_f:
+                    s3_file.write(local_f.read())
+            print(f"Uploaded {local_file} to {s3_uri}")
 
-    # Clean up local files
-    os.remove(traced_model_path)
-    os.remove(config_path)
-    os.rmdir(version_dir)
-    os.rmdir(local_model_dir)
+        print(f"Model files uploaded from {local_model_dir}")
+        # No need to manually clean up - tempfile.TemporaryDirectory handles it automatically
 
     namespace = "default"
     name = deployed_model_name
@@ -122,7 +118,9 @@ def pusher(model_uri: str, deployed_model_name: str):
     retrieved_model = None
     APIClient.set_caller("uniflow-client")
     try:
-        retrieved_model = APIClient.ModelService.get_model(namespace=namespace, name=name)
+        retrieved_model = APIClient.ModelService.get_model(
+            namespace=namespace, name=name
+        )
         print("Retrieved created model:")
         print(retrieved_model)
     except Exception as e:
@@ -143,10 +141,7 @@ def pusher(model_uri: str, deployed_model_name: str):
         model.spec.source = "Michelangelo V2"
 
         # Example package type and artifacts
-        model.spec.deployable_artifact_uri.extend([
-            deployed_model_name,
-            model_uri
-        ])
+        model.spec.deployable_artifact_uri.extend([deployed_model_name, model_uri])
 
         # Create the model
         try:
@@ -157,10 +152,12 @@ def pusher(model_uri: str, deployed_model_name: str):
             raise e
     else:
         retrieved_model.spec.ClearField("deployable_artifact_uri")
-        retrieved_model.spec.deployable_artifact_uri.extend([
-            deployed_model_name,
-            model_uri,
-        ])
+        retrieved_model.spec.deployable_artifact_uri.extend(
+            [
+                deployed_model_name,
+                model_uri,
+            ]
+        )
         # Retrieve and verify the created model
         try:
             response = APIClient.ModelService.update_model(retrieved_model)
@@ -171,6 +168,7 @@ def pusher(model_uri: str, deployed_model_name: str):
             raise e
 
     return name
+
 
 # Example usage:
 # print(pusher("s3://mlflow/cf6b9898ed9e48168fc0280db114f8d1/artifacts/bert_model", "bert-cola-test"))
