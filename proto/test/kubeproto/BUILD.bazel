@@ -21,7 +21,6 @@ proto_library(
     deps = [
         "//proto/api:api_proto",
         "//proto/api/v2:v2_proto",
-        "//proto/test/extpackage:extpackage_proto",
         "@com_google_protobuf//:any_proto",
         "@com_google_protobuf//:duration_proto",
         "@com_google_protobuf//:struct_proto",
@@ -44,7 +43,6 @@ go_proto_library(
     deps = [
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
-        "//proto/test/extpackage:go_default_library",
         "@io_k8s_api//core/v1:core",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
