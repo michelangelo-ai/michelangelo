@@ -69,6 +69,7 @@ spec:
                 jq -c '.[]' /tmp/model-list.json | while read model; do
                   name=$(echo "$model" | jq -r '.name')
                   s3_path=$(echo "$model" | jq -r '.s3_path')
+                  echo "Syncing model $name from $s3_path to /mnt/models/"
                   aws s3 sync "$s3_path" /mnt/models/ --delete --exact-timestamps --endpoint-url "$ENDPOINT"
                 done
 

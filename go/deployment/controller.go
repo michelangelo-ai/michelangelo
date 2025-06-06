@@ -2,6 +2,10 @@ package deployment
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"time"
 
@@ -72,7 +76,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	} else {
 		logger.Info("Found Deployment", "state", deployment.Status.State, "stage", deployment.Status.Stage)
-		if deployment.Status.CurrentRevision != nil && deployment.Status.CurrentRevision.Equal(deployment.Spec.DesiredRevision) {
+		if deployment.Status.CurrentRevision != nil && !deployment.Status.CurrentRevision.Equal(deployment.Spec.DesiredRevision) {
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
 			var model v2pb.Model
 			modelNamespacedName := types.NamespacedName{
@@ -89,10 +93,17 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 					res.RequeueAfter = requeueAfter
 				}
 			} else {
-				res.RequeueAfter = requeueAfter
-				err = r.rollout(ctx, logger, &deployment, &model)
-				if err != nil {
-					logger.Error(err, "failed to update Deployment")
+				_, found, configErr := r.getConfig(ctx, &deployment, model.Name)
+				if configErr != nil {
+					return res, fmt.Errorf("failed to get ConfigMap: %w", err)
+				}
+				if !found {
+					logger.Info("Model not found, update the configMap")
+					res.RequeueAfter = requeueAfter
+					err = r.updateConfig(ctx, &deployment, &model)
+					if err != nil {
+						logger.Error(err, "failed to update Deployment")
+					}
 				}
 			}
 		}
@@ -128,11 +139,81 @@ func (r *Reconciler) createDeployment(ctx context.Context, log logr.Logger, depl
 	return r.servingProvider.CreateDeployment(ctx, log, deployment, model)
 }
 
-func (r *Reconciler) rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
-	return r.servingProvider.Rollout(ctx, log, deployment, model)
-}
-
 // getJobStatus retrieves the status of the Spark job
 func (r *Reconciler) getStatus(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
 	return r.servingProvider.GetStatus(ctx, logger, deployment)
+}
+
+func (r *Reconciler) updateConfig(ctx context.Context, deployment *v2pb.Deployment, model *v2pb.Model) error {
+	logger := log.FromContext(ctx)
+
+	modelList := []map[string]string{
+		{
+			"name":    model.Name,
+			"s3_path": fmt.Sprintf("s3://deploy-models/%s", model.Spec.DeployableArtifactUri[0]),
+		},
+	}
+
+	modelListJSON, err := json.MarshalIndent(modelList, "", "  ")
+	if err != nil {
+		logger.Error(err, "Failed to marshal model list")
+		return err
+	}
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "triton-models",
+			Namespace: deployment.Namespace,
+		},
+		Data: map[string]string{
+			"model-list.json": string(modelListJSON),
+		},
+	}
+
+	if err := r.Update(ctx, cm); err != nil {
+		logger.Error(err, "Failed to update ConfigMap")
+		return err
+	}
+
+	logger.Info("ConfigMap updated successfully")
+	return nil
+}
+
+func (r *Reconciler) getConfig(ctx context.Context, deployment *v2pb.Deployment, modelName string) ([]map[string]string, bool, error) {
+	logger := log.FromContext(ctx)
+
+	cm := &corev1.ConfigMap{}
+	cmKey := client.ObjectKey{
+		Name:      "triton-models",
+		Namespace: deployment.Namespace,
+	}
+
+	if err := r.Get(ctx, cmKey, cm); err != nil {
+		logger.Error(err, "Failed to fetch ConfigMap")
+		return nil, false, err
+	}
+
+	data, exists := cm.Data["model-list.json"]
+	if !exists {
+		err := fmt.Errorf("model-list.json not found in ConfigMap")
+		logger.Error(err, "Key missing in ConfigMap")
+		return nil, false, err
+	}
+
+	var modelList []map[string]string
+	if err := json.Unmarshal([]byte(data), &modelList); err != nil {
+		logger.Error(err, "Failed to unmarshal model list")
+		return nil, false, err
+	}
+
+	found := false
+	for _, model := range modelList {
+		if model["name"] == modelName {
+			found = true
+			break
+		}
+	}
+
+	logger.Info("ConfigMap fetched and unmarshalled successfully")
+	return modelList, found, nil
 }
