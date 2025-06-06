@@ -1,41 +1,78 @@
-# Spark Job Client
+# Deployment Provider
 
-This client is a **demo implementation** of the `Client` interface defined in `interface.go`. It is designed to interact with a specific version of the Spark Operator and its corresponding Kubernetes Custom Resource Definitions (CRDs). The client provides methods to create Spark jobs and retrieve their statuses by leveraging the Spark Operator's API.
+This package defines the provider interface and implementations for ML model deployment in Michelangelo. The provider system enables support for multiple inference serving platforms through a common abstraction layer.
 
 ## Overview
 
-The `SparkClient` implementation in this package demonstrates how to:
+The `Provider` interface in `interface.go` defines the contract for deployment providers that handle the lifecycle of ML model deployments. Each provider implementation is responsible for:
 
-1. **Create Spark Jobs**: Converts the `SparkJob` specification into a `SparkApplication` resource and submits it to the Kubernetes API.
-2. **Retrieve Job Status**: Fetches the status of a submitted `SparkApplication` from the Kubernetes API and updates the `SparkJob` status accordingly.
+1. **Create Deployments**: Deploy ML models to specific inference serving platforms
+2. **Rollout Updates**: Handle model version updates and traffic routing changes
+3. **Status Monitoring**: Retrieve and update deployment status from the underlying platform
+4. **Retirement**: Clean up and retire model deployments
 
-This implementation is tightly coupled with the Spark Operator's CRD definitions and assumes the use of a specific version of the Spark Operator.
+## Available Providers
 
-## Limitations
+### Triton Inference Server (`tritoninferenceserver/`)
+- **Purpose**: Deploys models to NVIDIA Triton Inference Server
+- **Features**: 
+  - Dynamic model configuration via ConfigMaps
+  - Istio VirtualService integration for traffic routing
+  - Support for PyTorch traced models
+- **Use Case**: High-performance inference for deep learning models
 
-- This client is **not generic** and is tailored to work with the Spark Operator's API and CRDs.
-- It assumes the presence of the Spark Operator in the Kubernetes cluster and the correct configuration of the CRDs.
+### KServe (`kserve/`)
+- **Purpose**: Deploys models using the KServe serving platform
+- **Features**: 
+  - Kubernetes-native model serving
+  - Built-in autoscaling and monitoring
+  - Multi-framework support
+- **Use Case**: Cloud-native ML model serving with enterprise features
 
-## Custom Implementation
+## Provider Interface
 
-If you need to connect to your own control plane or API (e.g., a custom compute team's API), you will need to provide your own implementation of the `Client` interface. This custom implementation should:
+```go
+type Provider interface {
+    // CreateDeployment creates a new model deployment
+    CreateDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
+    
+    // Rollout handles model version updates and traffic routing changes
+    Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error
+    
+    // GetStatus retrieves current deployment status from the platform
+    GetStatus(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error
+    
+    // Retire cleans up and removes the deployment
+    Retire(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error
+}
+```
 
-1. **Adapt to Your API**: Replace the Spark Operator-specific logic with calls to your compute team's API.
-2. **Handle Custom Specifications**: Map the `SparkJob` specification to your API's job definition format.
-3. **Retrieve Job Status**: Implement logic to fetch job statuses from your control plane.
+## Key Components
 
-## How to Use
+- **`interface.go`**: Defines the `Provider` interface for deployment lifecycle management
+- **Provider implementations**: Each subdirectory contains a specific provider implementation
+- **`BUILD.bazel`**: Build configuration for the provider package
 
-1. **Demo Usage**: This client can be used as a reference or for testing purposes in environments where the Spark Operator is deployed.
-2. **Custom Implementation**: To connect to your own control plane, implement the `Client` interface defined in `interface.go` and replace the `SparkClient` with your custom implementation.
+## Usage
 
-## Key Files
+Providers are registered with the deployment controller through dependency injection. The controller selects the appropriate provider based on the deployment specification and delegates lifecycle operations to the chosen provider.
 
-- `interface.go`: Defines the `Client` interface for managing Spark jobs.
-- `client.go`: Contains the `SparkClient` implementation, which interacts with the Spark Operator's API.
-- `module.go`: Registers the `SparkClient` with the dependency injection framework.
+## Adding New Providers
 
-## Notes
+To add support for a new inference serving platform:
 
-- Ensure that the Spark Operator and its CRDs are installed and configured in your Kubernetes cluster if you plan to use this demo client.
-- For production use, adapt the `Client` interface to your specific requirements and implement a custom client to interact with your compute team's API.
+1. Create a new subdirectory for your provider (e.g., `myplatform/`)
+2. Implement the `Provider` interface in `client.go`
+3. Create a `module.go` file for dependency injection registration
+4. Add appropriate `BUILD.bazel` configuration
+5. Update the deployment controller to recognize your provider
+
+## Architecture
+
+The provider system follows a plugin architecture where:
+- The deployment controller orchestrates the overall deployment lifecycle
+- Providers handle platform-specific implementation details
+- Common deployment logic is abstracted in the controller layer
+- Each provider can have its own configuration and dependencies
+
+This design allows Michelangelo to support multiple inference serving platforms while maintaining a consistent deployment API and user experience.

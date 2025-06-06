@@ -6,7 +6,7 @@ data:
   model-list.json: |
     [
       {
-        "name": "bert-cola-4",
-        "s3_path": "s3://deploy-models/bert-cola-4"
+        "name": "bert-cola-6",
+        "s3_path": "s3://deploy-models/bert-cola-6"
       }
     ]
