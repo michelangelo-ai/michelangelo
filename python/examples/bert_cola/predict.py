@@ -20,14 +20,14 @@ payload = {
             "name": "input_ids",
             "shape": [len(input_ids), len(input_ids[0])],
             "datatype": "INT64",
-            "data": sum(input_ids, [])  # flatten the list
+            "data": sum(input_ids, []),  # flatten the list
         },
         {
             "name": "attention_mask",
             "shape": [len(attention_mask), len(attention_mask[0])],
             "datatype": "INT64",
-            "data": sum(attention_mask, [])  # flatten the list
-        }
+            "data": sum(attention_mask, []),  # flatten the list
+        },
     ]
 }
 

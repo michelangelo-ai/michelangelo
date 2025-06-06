@@ -4,6 +4,7 @@ from michelangelo.uniflow.core import star_plugin
 
 log = logging.getLogger(__name__)
 
+
 @star_plugin("deployment.deploy")
 def deploy(namespace, name, model_name):
     """
