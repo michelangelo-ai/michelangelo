@@ -45,7 +45,7 @@ xgboost_ray = {version = "0.1.19", optional = true }
 xgboost = {version = "2.1.4", optional = true }
 mlflow = "2.22.0"
 mlflow-skinny = "2.22.0"
-boto3 = "1.28.0"
+boto3 = "1.28.0"  # Required for S3 access by MLflow
 pymysql = "1.1.1"
 
 # For VLLM

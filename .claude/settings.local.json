@@ -1,7 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh api:*)",
+      "Bash(poetry run ruff format:*)",
+      "Bash(poetry run ruff check:*)",
+      "Bash(python:*)",
+      "Bash(./tools/run_ruff.sh:*)",
+      "Bash(gh pr edit:*)"
     ],
     "deny": []
   }

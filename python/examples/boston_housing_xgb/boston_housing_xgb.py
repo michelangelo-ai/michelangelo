@@ -52,9 +52,9 @@ class TrainResult:
     cache_enabled=True,
 )
 def feature_prep(
-        columns: list[str],
-        test_size: float = 0.25,
-        seed: int = 1,
+    columns: list[str],
+    test_size: float = 0.25,
+    seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
     data_url = "http://lib.stat.cmu.edu/datasets/boston"
     raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
@@ -63,7 +63,10 @@ def feature_prep(
 
     feature_names = columns[:-1]  # assuming the last column is 'target'
 
-    dataset = [dict(zip(feature_names, features), target=target) for features, target in zip(X, y)]
+    dataset = [
+        dict(zip(feature_names, features), target=target)
+        for features, target in zip(X, y)
+    ]
     data = ray.data.from_items(dataset).select_columns(columns)
 
     train_data, validation_data = data.train_test_split(

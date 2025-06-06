@@ -43,7 +43,9 @@ if __name__ == "__main__":
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
     ctx.environ["MA_API_SERVER"] = "host.docker.internal:14567"
-    ctx.environ["MLFLOW_TRACKING_URI"] = "mysql+pymysql://root:root@mysql:3306/mlflow_db"
+    ctx.environ["MLFLOW_TRACKING_URI"] = (
+        "mysql+pymysql://root:root@mysql:3306/mlflow_db"
+    )
     # ctx.environ["MLFLOW_TRACKING_URI"] = "mysql+pymysql://root:root@localhost:3306/mlflow_db"
 
     ctx.run(train_workflow)
