@@ -43,32 +43,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	original := deployment.DeepCopy()
 
-	err := r.getStatus(ctx, logger, &deployment)
+	var model v2pb.Model
+	modelNamespacedName := types.NamespacedName{
+		Namespace: deployment.Namespace,
+		Name:      deployment.Spec.DesiredRevision.Name,
+	}
+	err := r.Get(ctx, modelNamespacedName, &model)
+	if err != nil {
+		if utils.IsNotFoundError(err) {
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
+			logger.Info("Model not found, skipping rollout")
+		} else {
+			logger.Error(err, "failed to get Model")
+			res.RequeueAfter = requeueAfter
+		}
+		return res, err
+	}
+
+	err = r.getStatus(ctx, logger, &deployment)
 	if err != nil {
 		deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
 		if utils.IsNotFoundError(err) {
 			logger.Info("Deployment not found, starting rolling out")
-			var model v2pb.Model
-			modelNamespacedName := types.NamespacedName{
-				Namespace: deployment.Namespace,
-				Name:      deployment.Spec.DesiredRevision.Name,
-			}
-			err = r.Get(ctx, modelNamespacedName, &model)
-			if err != nil {
-				if utils.IsNotFoundError(err) {
-					deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-					logger.Info("Model not found, skipping rollout", "model", modelNamespacedName.String())
-				} else {
-					logger.Error(err, "failed to get Model")
-					res.RequeueAfter = requeueAfter
-				}
+			if err = r.createDeployment(ctx, logger, &deployment, &model); err != nil {
+				logger.Error(err, "failed to rollout")
+				res.RequeueAfter = requeueAfter
 			} else {
-				if err = r.createDeployment(ctx, logger, &deployment, &model); err != nil {
-					logger.Error(err, "failed to rollout")
-					res.RequeueAfter = requeueAfter
-				} else {
-					res.RequeueAfter = requeueAfter
-				}
+				res.RequeueAfter = requeueAfter
 			}
 		} else {
 			logger.Error(err, "failed to get status")
@@ -76,40 +77,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	} else {
 		logger.Info("Found Deployment", "state", deployment.Status.State, "stage", deployment.Status.Stage)
-		if deployment.Status.CurrentRevision != nil && !deployment.Status.CurrentRevision.Equal(deployment.Spec.DesiredRevision) {
-			deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
-			var model v2pb.Model
-			modelNamespacedName := types.NamespacedName{
-				Namespace: deployment.Namespace,
-				Name:      deployment.Spec.DesiredRevision.Name,
+		if deployment.Status.CurrentRevision == nil || (deployment.Status.CurrentRevision != nil && !deployment.Status.CurrentRevision.Equal(deployment.Spec.DesiredRevision)) {
+			_, found, configErr := r.getConfig(ctx, &deployment, model.Name)
+			if configErr != nil {
+				return res, fmt.Errorf("failed to get ConfigMap: %w", err)
 			}
-			err = r.Get(ctx, modelNamespacedName, &model)
-			if err != nil {
-				if utils.IsNotFoundError(err) {
-					deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-					logger.Info("Model not found, skipping rollout")
-				} else {
-					logger.Error(err, "failed to get Model")
-					res.RequeueAfter = requeueAfter
-				}
-			} else {
-				_, found, configErr := r.getConfig(ctx, &deployment, model.Name)
-				if configErr != nil {
-					return res, fmt.Errorf("failed to get ConfigMap: %w", err)
-				}
-				if !found {
-					logger.Info("Model not found, update the configMap")
-					res.RequeueAfter = requeueAfter
-					err = r.updateConfig(ctx, &deployment, &model)
-					if err != nil {
-						logger.Error(err, "failed to update Deployment")
-					}
+			if !found {
+				deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
+				logger.Info("Model not found, update the configMap")
+				res.RequeueAfter = requeueAfter
+				err = r.updateConfig(ctx, &deployment, &model)
+				if err != nil {
+					logger.Error(err, "failed to update Deployment")
 				}
 			}
 		}
 		// When reach to healthy or unhealthy state, we don't need to requeue
 		if deployment.Status.State == v2pb.DEPLOYMENT_STATE_HEALTHY {
+			err = r.servingProvider.Rollout(ctx, logger, &deployment, &model)
+			if err != nil {
+				logger.Error(err, "failed to rollout")
+				deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED
+			} else {
+				logger.Info("Deployment rolled out successfully", "model", model.Name)
+			}
 			deployment.Status.CurrentRevision = deployment.Spec.DesiredRevision
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		} else if deployment.Status.State != v2pb.DEPLOYMENT_STATE_UNHEALTHY {
 			res.RequeueAfter = requeueAfter
 		}
@@ -214,6 +207,5 @@ func (r *Reconciler) getConfig(ctx context.Context, deployment *v2pb.Deployment,
 		}
 	}
 
-	logger.Info("ConfigMap fetched and unmarshalled successfully")
 	return modelList, found, nil
 }
