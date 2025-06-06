@@ -38,8 +38,8 @@ go_test(
     embed = [":go_default_library"],
     embedsrcs = ["test/expected_go_code.txt"],
     deps = [
-        "//proto/test/kubeproto:go_default_library",
         "//proto/test/extpackage:go_default_library",
+        "//proto/test/kubeproto:go_default_library",
         "@com_github_dave_dst//:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",
         "@com_github_gogo_protobuf//protoc-gen-gogo/plugin:go_default_library",
