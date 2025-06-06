@@ -2,7 +2,6 @@ package tritoninferenceserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/provider"
@@ -22,7 +21,8 @@ type TritonProvider struct {
 }
 
 func (r TritonProvider) GetStatus(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error {
-	url := fmt.Sprintf("http://triton-server-service.%s.svc.cluster.local:8000/v2/models/%s", deployment.Namespace, deployment.Spec.DesiredRevision.Name)
+	//url := fmt.Sprintf("http://%s-service.%s.svc.cluster.local:8000/v2/models/%s", deployment.Name, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
+	url := fmt.Sprintf("http://localhost:8888/%s/%s/v2/models/%s", "bert-cola-endpoint", deployment.Name, deployment.Spec.DesiredRevision.Name)
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -60,7 +60,7 @@ func (r TritonProvider) Retire(ctx context.Context, log logr.Logger, deployment 
 var _ provider.Provider = &TritonProvider{}
 
 func (r TritonProvider) Rollout(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
-	return r.updateConfigMap(ctx, log, deployment, model)
+	return r.updateEndpoint(ctx, log, deployment, model)
 }
 
 func (r TritonProvider) CreateDeployment(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
@@ -151,46 +151,74 @@ func (r TritonProvider) CreateDeployment(ctx context.Context, log logr.Logger, d
 	return nil
 }
 
-func (r TritonProvider) updateConfigMap(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
+func (r TritonProvider) updateEndpoint(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment, model *v2pb.Model) error {
 	gvr := schema.GroupVersionResource{
-		Group:    "",
-		Version:  "v1",
-		Resource: "configmaps",
+		Group:    "networking.istio.io",
+		Version:  "v1beta1",
+		Resource: "virtualservices",
 	}
 
-	modelList := []map[string]string{
-		{
-			"name":    model.Name,
-			"s3_path": model.Spec.DeployableArtifactUri[0],
-		},
-	}
-
-	modelListJSON, err := json.MarshalIndent(modelList, "", "  ")
+	vs, err := r.DynamicClient.Resource(gvr).Namespace(deployment.Namespace).Get(ctx, "bert-cola-virtualservice", metav1.GetOptions{})
 	if err != nil {
-		log.Error(err, "Failed to marshal model list")
+		log.Error(err, "Failed to fetch VirtualService")
 		return err
 	}
 
-	cm := &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": "v1",
-			"kind":       "ConfigMap",
-			"metadata": map[string]interface{}{
-				"name":      "triton-models",
-				"namespace": deployment.Namespace,
-			},
-			"data": map[string]interface{}{
-				"model-list.json": string(modelListJSON),
-			},
-		},
+	httpRoutes, found, err := unstructured.NestedSlice(vs.Object, "spec", "http")
+	if err != nil || !found {
+		log.Error(err, "Failed to get http routes from VirtualService")
+		return fmt.Errorf("http routes not found")
 	}
 
-	_, err = r.DynamicClient.Resource(gvr).Namespace(deployment.Namespace).Update(ctx, cm, metav1.UpdateOptions{})
-	if err != nil {
-		log.Error(err, "Failed to update ConfigMap")
+	// Dynamic prefix construction
+	targetPrefix := fmt.Sprintf("/%s/%s/production", model.Name, deployment.Name)
+
+	for _, route := range httpRoutes {
+		routeMap, ok := route.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		matches, found, _ := unstructured.NestedSlice(routeMap, "match")
+		if !found {
+			continue
+		}
+
+		for _, match := range matches {
+			matchMap, ok := match.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			uriMap, found, _ := unstructured.NestedMap(matchMap, "uri")
+			if !found {
+				continue
+			}
+
+			if prefix, ok := uriMap["prefix"]; ok {
+				prefixStr, ok := prefix.(string)
+				if ok && prefixStr == targetPrefix {
+					newUri := fmt.Sprintf("/v2/models/%s", deployment.Spec.DesiredRevision.Name)
+					if err = unstructured.SetNestedField(routeMap, newUri, "rewrite", "uri"); err != nil {
+						log.Error(err, "Failed to set rewrite uri")
+						return err
+					}
+				}
+			}
+		}
+	}
+
+	if err = unstructured.SetNestedSlice(vs.Object, httpRoutes, "spec", "http"); err != nil {
+		log.Error(err, "Failed to update http routes in VirtualService")
 		return err
 	}
 
-	log.Info("ConfigMap updated successfully")
+	_, err = r.DynamicClient.Resource(gvr).Namespace(deployment.Namespace).Update(ctx, vs, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error(err, "Failed to update VirtualService")
+		return err
+	}
+
+	log.Info("VirtualService updated successfully with new production route")
 	return nil
 }

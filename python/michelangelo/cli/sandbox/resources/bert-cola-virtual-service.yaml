@@ -1,0 +1,31 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: bert-cola-virtualservice
+  namespace: default
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - ma-gateway
+  http:
+  - match:
+    - uri:
+        prefix: /bert-cola-endpoint/bert-cola-deployment/production
+    rewrite:
+      uri: /v2/models/bert-cola-6
+    route:
+    - destination:
+        host: bert-cola-deployment-service.default.svc.cluster.local
+        port:
+          number: 80
+  - match:
+    - uri:
+        prefix: /bert-cola-endpoint/bert-cola-deployment/
+      rewrite:
+        uri: /
+    route:
+      - destination:
+          host: bert-cola-deployment-service.default.svc.cluster.local
+          port:
+            number: 80

@@ -6,10 +6,9 @@ metadata:
 spec:
   selector:
     app: bert-cola-deployment
-    color: blue
   ports:
     - name: http
-      port: 8000
+      port: 80
       targetPort: 8000
     - name: grpc
       port: 8001
