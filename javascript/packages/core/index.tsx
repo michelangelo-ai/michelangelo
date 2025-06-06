@@ -1,8 +1,10 @@
 import { AppNavBar } from 'baseui/app-nav-bar';
+import { Block } from 'baseui/block';
 
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 import { Router } from '#core/router/router';
 import { ThemeProvider } from '#core/themes/provider';
+import { Sidebar } from '#core/components/navigation/sidebar';
 
 import type { ServiceContextType } from '#core/providers/service-provider/types';
 
@@ -21,7 +23,12 @@ export function CoreApp({ dependencies }: Props) {
     <ThemeProvider>
       <ServiceProvider {...dependencies.service}>
         <AppNavBar title="Michelangelo Studio" />
-        <Router />
+        <Block display="flex">
+          <Sidebar />
+          <Block marginLeft="240px" width="calc(100% - 240px)">
+            <Router />
+          </Block>
+        </Block>
       </ServiceProvider>
     </ThemeProvider>
   );

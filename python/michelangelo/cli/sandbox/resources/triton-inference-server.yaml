@@ -35,11 +35,11 @@ spec:
             - "--log-verbose=0"
           resources:
             limits:
-              cpu: 1
-              memory: 2Gi
+              cpu: 2
+              memory: 4Gi
             requests:
               cpu: 1
-              memory: 2Gi
+              memory: 4Gi
           ports:
             - containerPort: 8000
             - containerPort: 8001
@@ -73,7 +73,7 @@ spec:
                   aws s3 sync "$s3_path" /mnt/models/ --delete --exact-timestamps --endpoint-url "$ENDPOINT"
                 done
 
-                sleep 600
+                sleep 60
               done
           resources:
             requests:

@@ -1,11 +1,14 @@
 /* main.css - Global base styles and resets */
 html {
-  font-family: sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
 }
 
 body {
   /* Remove default body margin */
   margin: 0;
+  background-color: #FAFBFC;
 
   /* Improve text rendering */
   -webkit-font-smoothing: antialiased;
@@ -17,7 +20,7 @@ button:focus,
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid Highlight;
+  outline: 2px solid #1B7CFC;
   outline-offset: 2px;
 }
 
@@ -28,4 +31,101 @@ input[type='search']::-webkit-search-cancel-button,
 input[type='search']::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F1F5F9;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+/* Smooth transitions for interactive elements */
+.interactive-element {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Card hover effects */
+.card-hover {
+  transition: box-shadow 0.2s ease-in-out, transform 0.1s ease-in-out;
+}
+
+.card-hover:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+/* Status indicators */
+.status-healthy {
+  color: #00B44A;
+  background-color: #F0FDF4;
+  border: 1px solid #BBF7D0;
+}
+
+.status-warning {
+  color: #F59E0B;
+  background-color: #FFFBEB;
+  border: 1px solid #FED7AA;
+}
+
+.status-error {
+  color: #EF4444;
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+}
+
+/* Utility classes */
+.text-gradient {
+  background: linear-gradient(135deg, #1B7CFC 0%, #8B5CF6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Animation keyframes */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.pulse {
+  animation: pulse 2s infinite;
 }
