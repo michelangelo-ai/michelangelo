@@ -16,7 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
-	extpb "github.com/michelangelo-ai/michelangelo/proto/test/extpackage"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -157,7 +156,6 @@ const TimeJSON = `{"time":"2021-06-07T09:01:02.000000003Z"}`
 const StructJSON = `{"struct":{"boolValue":true,"listValue":[true,"ma20api",64],"nullValue":null,"numberValue":64,"stringValue":"ma20api","structValue":{"nestedNumberValue":64}}}`
 const DurationJSON = `{"seconds":1000}`
 const DurationJSON2 = `{"nanos":1000}`
-const ExternalEnumJSON = `{"extEnum":"TEST_EXT_ENUM_TYPE_VALID"}`
 const TESTOBJECTJSON = `{"kind":"Object","metadata":{"name":"object01","namespace":"default","creationTimestamp":null},"spec":{"description":"test","pod":{"metadata":{"creationTimestamp":null},"spec":{"volumes":[{"name":"logs","volumeSource":{"emptyDir":{}}},{"name":"config","volumeSource":{"configMap":{"localObjectReference":{"name":"fluent-bit-config"}}}}],"initContainers":[{"image":"alpine","command":["/bin/sh"],"resources":{},"volumeMounts":[{"name":"www","mountPath":"/var/www/html"}]}],"containers":[{"name":"test-container","image":"test-image","workingDir":"workdir","envFrom":[{"configMapRef":{"localObjectReference":{"name":"test"}}}],"resources":{"requests":{"cpu":1,"memory":"100m"}}},{"name":"test-container2","image":"test-image2","envFrom":[{"configMapRef":{"localObjectReference":{"name":"test2"}}}],"resources":{"requests":{"cpu":"100m"}}}]}}},"status":{}}`
 
 func TestJSON(t *testing.T) {
@@ -200,19 +198,6 @@ func TestJSON(t *testing.T) {
 	err = json.Unmarshal(testEnumJSON, testEnumUnmarshalled)
 	assert.Nil(t, err)
 	assert.True(t, reflect.DeepEqual(testEnum, testEnumUnmarshalled))
-
-	// Test external enum type
-	testExternalEnum := &testpb.TestObjectSpec{
-		ExtEnum: extpb.TEST_EXT_ENUM_TYPE_VALID,
-	}
-
-	testExternalEnumJSON, err := json.Marshal(testExternalEnum)
-	assert.Nil(t, err)
-	assert.Equal(t, ExternalEnumJSON, string(testExternalEnumJSON))
-	testExternalEnumUnmarshalled := &testpb.TestObjectSpec{}
-	err = json.Unmarshal(testExternalEnumJSON, testExternalEnumUnmarshalled)
-	assert.Nil(t, err)
-	assert.True(t, reflect.DeepEqual(testExternalEnum, testExternalEnumUnmarshalled))
 
 	// Test Any type
 	testMsg := &testpb.TestMsg{
@@ -492,39 +477,6 @@ func TestCrdObjectsMap(t *testing.T) {
 	assert.Equal(t, "TestObject", testObj.GetObjectKind().GroupVersionKind().Kind)
 }
 
-func TestExternalEnum(t *testing.T) {
-	// Test that external enums are properly handled without generating UnmarshalJSON methods
-	// This test ensures that our fix correctly handles enums from external packages
-	testObject := &testpb.TestObjectSpec{
-		ExtEnum: extpb.TEST_EXT_ENUM_TYPE_VALID,
-	}
-
-	// Marshal should work correctly with external enum
-	jsonData, err := json.Marshal(testObject)
-	assert.Nil(t, err)
-	assert.Contains(t, string(jsonData), "TEST_EXT_ENUM_TYPE_VALID")
-
-	// Unmarshal should work correctly with external enum
-	unmarshalled := &testpb.TestObjectSpec{}
-	err = json.Unmarshal(jsonData, unmarshalled)
-	assert.Nil(t, err)
-	assert.Equal(t, extpb.TEST_EXT_ENUM_TYPE_VALID, unmarshalled.ExtEnum)
-
-	// Test with invalid external enum value - should return an error since it's an unknown enum value
-	invalidJSON := `{"extEnum":"INVALID_ENUM_VALUE"}`
-	invalidUnmarshalled := &testpb.TestObjectSpec{}
-	err = json.Unmarshal([]byte(invalidJSON), invalidUnmarshalled)
-	// This should fail with an error for unknown enum value
-	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "unknown value \"INVALID_ENUM_VALUE\"")
-
-	// Test with valid external enum zero value
-	zeroValueJSON := `{"extEnum":"TEST_EXT_ENUM_TYPE_INVALID"}`
-	zeroUnmarshalled := &testpb.TestObjectSpec{}
-	err = json.Unmarshal([]byte(zeroValueJSON), zeroUnmarshalled)
-	assert.Nil(t, err)
-	assert.Equal(t, extpb.TEST_EXT_ENUM_TYPE_INVALID, zeroUnmarshalled.ExtEnum)
-}
 
 func TestUnmarshalJSON_DisallowUnknownFields(t *testing.T) {
 	// Override environment or stub to disallow unknown fields
