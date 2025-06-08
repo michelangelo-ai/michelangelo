@@ -95,6 +95,11 @@ def _create(ns: argparse.Namespace):
     assert ns
     ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
     args = ["k3d", "cluster", "create", _kube_name, "--servers", "1", "--agents", "1"]
+    env_custom_ca = "CUSTOM_CA"
+    custom_ca = os.environ.get(env_custom_ca)
+    if custom_ca:
+        ca_file_name = custom_ca.split("/")[-1]
+        args += ["--volume", f"{custom_ca}:/etc/ssl/certs/{ca_file_name}"]
 
     for p in ports:
         args += ["-p", f"{p}@agent:0"]
