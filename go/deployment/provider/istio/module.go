@@ -1,25 +1,22 @@
-package tritoninferenceserver
+package istio
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/proxy"
 	"go.uber.org/fx"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
-
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider"
 )
 
-var (
-	// Module FX
-	Module = fx.Options(
-		fx.Provide(register),
-	)
+// Module provides the Istio proxy provider
+var Module = fx.Module("istio",
+	fx.Provide(NewIstioProvider),
 )
 
-func register(
+func NewIstioProvider(
 	env env.Context,
 	mgr manager.Manager,
-) provider.Provider {
+) proxy.ProxyProvider {
 
 	config := mgr.GetConfig()
 
@@ -27,8 +24,7 @@ func register(
 	if err != nil {
 		panic("failed to create dynamic client: " + err.Error())
 	}
-
-	return &TritonProvider{
+	return &IstioProvider{
 		DynamicClient: dynamicClient,
 	}
 }
