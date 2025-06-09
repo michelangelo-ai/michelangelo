@@ -11,5 +11,5 @@ def serialize_model_loader(target_dir: str):
     Args:
         target_dir: The target dir to save the module files.
     """
-    files = find_dependency_files(load_custom_model.__module__, prefixes=["uber"])
+    files = find_dependency_files(load_custom_model.__module__, prefixes=["michelangelo"])
     save_module_files(files, target_dir)

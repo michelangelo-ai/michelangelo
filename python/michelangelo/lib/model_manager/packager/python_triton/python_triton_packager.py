@@ -94,7 +94,7 @@ class PythonTritonPackager:
             dest_model_path = tempfile.mkdtemp()
 
         if include_import_prefixes is None:
-            include_import_prefixes = ["uber"]
+            include_import_prefixes = ["michelangelo", "uber"]
 
         content = generate_model_package_content(
             self.gen,
@@ -184,7 +184,7 @@ class PythonTritonPackager:
             dest_model_path = tempfile.mkdtemp()
 
         if include_import_prefixes is None:
-            include_import_prefixes = ["uber"]
+            include_import_prefixes = ["michelangelo", "uber"]
 
         content = generate_raw_model_package_content(
             model_path,
