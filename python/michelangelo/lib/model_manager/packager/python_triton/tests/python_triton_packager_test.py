@@ -379,10 +379,8 @@ class PythonTritonPackagerTest(TestCase):
                     os.path.join(
                         dest_model_path,
                         "0",
-                        "uber",
-                        "ai",
                         "michelangelo",
-                        "sdk",
+                        "lib",
                         "model_manager",
                         "packager",
                         "python_triton",
@@ -526,6 +524,7 @@ class PythonTritonPackagerTest(TestCase):
             self.assertEqual(len(os.listdir(os.path.join(dest_model_path, "0", "model"))), 0)
 
     def assertRawModelPackage(self, dest_model_path, mock_download_model, with_requirements=False, batch_inference=False):
+        self.maxDiff = None
         mock_download_model.assert_called_once_with(
             "test_model_path",
             os.path.join(dest_model_path, "model"),
@@ -540,10 +539,8 @@ class PythonTritonPackagerTest(TestCase):
             os.path.join(
                 dest_model_path,
                 "defs",
-                "uber",
-                "ai",
                 "michelangelo",
-                "sdk",
+                "lib",
                 "model_manager",
                 "packager",
                 "python_triton",
@@ -589,16 +586,16 @@ class PythonTritonPackagerTest(TestCase):
 
         expected_files = [
             "defs/model_class.txt",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
-            "defs/uber/ai/michelangelo/sdk/model_manager/packager/python_triton/tests/fixtures/predict.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+            "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+            "defs/michelangelo/lib/model_manager/interface/custom_model.py",
+            "defs/michelangelo/lib/model_manager/packager/python_triton/tests/fixtures/predict.py",
             "metadata/sample_data.json",
             "metadata/schema.yaml",
             "metadata/type.yaml",
@@ -607,6 +604,9 @@ class PythonTritonPackagerTest(TestCase):
 
         if with_requirements:
             expected_files.insert(-4, "dependencies/requirements.txt")
+
+        for file in files:
+            print(file)
 
         self.assertEqual(
             files,
