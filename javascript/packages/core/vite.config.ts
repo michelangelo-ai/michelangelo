@@ -20,13 +20,20 @@ export default defineConfig({
         '@connectrpc/connect',
         '@connectrpc/connect-web',
         'pluralize',
-        'styletron-engine-monolithic',
         'styletron-react',
+        'styletron-engine-atomic',
         '@tanstack/react-query',
       ],
     },
+    commonjsOptions: {
+      include: ['styletron-react', /node_modules/],
+      esmExternals: true,
+    },
     outDir: 'dist',
     emptyOutDir: true,
+  },
+  optimizeDeps: {
+    include: ['styletron-react'],
   },
   plugins: [react()],
 });
