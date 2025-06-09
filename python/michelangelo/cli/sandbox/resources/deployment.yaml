@@ -4,13 +4,13 @@ metadata:
   name: bert-cola-deployment
   namespace: default
   labels:
-    app: bert-cola
+    app: bert-cola-23
 spec:
   desiredRevision:
-    name: model-revision-v1
+    name: bert-cola-23
     namespace: default
   inferenceServer:
-    name: inference-server-example
+    name: inference-server-bert-cola
     namespace: default
   selector:
     matchLabels:
@@ -24,19 +24,7 @@ spec:
     type: TARGET_TYPE_INFERENCE_SERVER
     subType: realtime-serving
   modelFamily:
-    name: model-family-example
+    name: bert-cola-family
     namespace: default
   owner:
     name: "user-1234"
-  shadowSpec:
-    trafficPercentage: 10
-    duration: 3600s  # 1 hour
-    enabled: true
-    metrics:
-      - metricType: SHADOW_METRIC_TYPE_PREDICTION_SCORE_DRIFT_METRIC
-        decisions:
-          - columnName: prediction_score
-            thresholdValue: 0.1
-            thresholdCondition: SHADOW_METRIC_THRESHOLD_CONDITION_GREATER_THAN
-  resourceLinks:
-    monitoringDashboard: "https://example.com/monitoring"

@@ -1,19 +1,18 @@
 package deployment
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/proxy"
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/tritoninferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/istio"
 )
 
 var (
 	// Module FX
 	Module = fx.Options(
-		//kserve.Module,
-		tritoninferenceserver.Module,
+		istio.Module,
 		fx.Invoke(register),
 	)
 )
@@ -21,13 +20,11 @@ var (
 func register(
 	env env.Context,
 	mgr manager.Manager,
-	provider provider.Provider,
+	proxyProvider proxy.ProxyProvider,
 ) error {
-	//restConfig := mgr.GetConfig()
-	// Create SparkApplication client
 	return (&Reconciler{
-		Client:          mgr.GetClient(),
-		servingProvider: provider,
-		env:             env,
+		Client:        mgr.GetClient(),
+		proxyProvider: proxyProvider,
+		env:           env,
 	}).Register(mgr)
 }
