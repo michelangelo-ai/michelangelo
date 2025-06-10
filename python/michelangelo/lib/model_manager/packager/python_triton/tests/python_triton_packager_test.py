@@ -146,19 +146,19 @@ class PythonTritonPackagerTest(TestCase):
         )
 
         package_files = [
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+            "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+            "0/michelangelo/lib/model_manager/interface/custom_model.py",
+            "0/michelangelo/lib/model_manager/packager/python_triton/tests/fixtures/predict.py",
             "0/model.py",
             "0/model/file.txt",
             "0/model_class.txt",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
-            "0/uber/ai/michelangelo/sdk/model_manager/packager/python_triton/tests/fixtures/predict.py",
             "0/user_model.py",
             "config.pbtxt",
         ]
@@ -181,7 +181,7 @@ class PythonTritonPackagerTest(TestCase):
 
             self.assertModelPackage(dest_model_path, mock_download_model)
 
-            with open("uber/ai/michelangelo/sdk/model_manager/packager/python_triton/tests/fixtures/config.pbtxt") as expected_f:
+            with open("michelangelo/lib/model_manager/packager/python_triton/tests/fixtures/config.pbtxt") as expected_f:
                 with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
                     expected_config = expected_f.read()
                     config = f.read()
@@ -213,7 +213,7 @@ class PythonTritonPackagerTest(TestCase):
 
             self.assertModelPackage(dest_model_path, mock_download_model)
 
-            with open("uber/ai/michelangelo/sdk/model_manager/packager/python_triton/tests/fixtures/config.pbtxt") as expected_f:
+            with open("michelangelo/lib/model_manager/packager/python_triton/tests/fixtures/config.pbtxt") as expected_f:
                 with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
                     expected_config = expected_f.read()
                     config = f.read()
@@ -318,15 +318,15 @@ class PythonTritonPackagerTest(TestCase):
                 )
 
                 package_files = [
+                    "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                    "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                    "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                    "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+                    "0/michelangelo/lib/model_manager/interface/custom_model.py",
+                    "0/michelangelo/lib/model_manager/packager/python_triton/tests/fixtures/predict.py",
                     "0/model.py",
                     "0/model/file.txt",
                     "0/model_class.txt",
-                    "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-                    "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-                    "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-                    "0/uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-                    "0/uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
-                    "0/uber/ai/michelangelo/sdk/model_manager/packager/python_triton/tests/fixtures/predict.py",
                     "0/user_model.py",
                     "config.pbtxt",
                 ]
