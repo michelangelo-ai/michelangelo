@@ -83,6 +83,7 @@ class RawModelTest(EnvTestCase):
 
     @patch("michelangelo.lib.model_manager.uploader.raw_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_raw_model_with_source_entity(self, mock_upload_to_terrablob, mock_get_latest_model_revision_id):
         mock_get_latest_model_revision_id.return_value = 0
 
