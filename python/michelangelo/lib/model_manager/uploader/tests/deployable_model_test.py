@@ -10,6 +10,7 @@ class DeployableModelTest(TestCase):
     @patch("michelangelo.lib.model_manager._private.uploader.spark_model.upload_to_terrablob")
     @patch("michelangelo.lib.model_manager.uploader.deployable_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.deployable_model.infer_model_package_type")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_spark_deployable_model(
         self,
         mock_infer_model_package_type,

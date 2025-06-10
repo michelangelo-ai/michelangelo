@@ -44,6 +44,7 @@ class GenericDeployableModelTest(EnvTestCase):
             self.assertEqual(tb_path, expected_tb_path)
 
     @patch("michelangelo.lib.model_manager._private.uploader.generic_deployable_model.upload_to_terrablob")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_generic_deployable_model_remote_env(self, mock_upload_to_terrablob):
         mimic_remote_env()
         project_name = "project_name"

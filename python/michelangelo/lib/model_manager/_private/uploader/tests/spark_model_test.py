@@ -1,3 +1,4 @@
+import os
 from unittest.mock import patch
 from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager._private.uploader import upload_spark_model
@@ -41,6 +42,7 @@ class SparkModelTest(EnvTestCase):
         self.assertEqual(tb_path, expected_tb_path)
 
     @patch("michelangelo.lib.model_manager._private.uploader.spark_model.upload_to_terrablob")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_spark_model_remote_env(
         self,
         mock_upload_to_terrablob,

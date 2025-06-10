@@ -20,6 +20,7 @@ class ModelTest(TestCase):
     @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
     @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
     @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_model(
         self,
         mock_create_model_family,
@@ -190,6 +191,7 @@ class ModelTest(TestCase):
     @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
     @patch("michelangelo.lib.model_manager.uploader.model.generate_random_name")
     @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_model_with_autogen_params(
         self,
         mock_create_model,
@@ -254,6 +256,7 @@ class ModelTest(TestCase):
     @patch("michelangelo.lib.model_manager.uploader.model.infer_model_package_type")
     @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.create_model")
     @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelFamilyService.create_model_family")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_model_with_source_entity(
         self,
         mock_create_model_family,

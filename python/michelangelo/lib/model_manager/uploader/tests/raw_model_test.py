@@ -35,7 +35,7 @@ class RawModelTest(EnvTestCase):
         )
         self.assertEqual(tb_model_path, "/prod/michelangelo/raw_models/projects/test_project/models/test_model/revisions/1/main")
 
-    @patch.dict(os.environ, {"_LOCAL_RUN": ""})
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     @patch("michelangelo.lib.model_manager.uploader.raw_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
     def test_upload_raw_model_remote_env(self, mock_upload_to_terrablob, mock_get_latest_model_revision_id):
@@ -62,6 +62,7 @@ class RawModelTest(EnvTestCase):
 
     @patch("michelangelo.lib.model_manager.uploader.raw_model.get_latest_model_revision_id")
     @patch("michelangelo.lib.model_manager.uploader.raw_model.upload_to_terrablob")
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_upload_raw_model_with_revision_id(self, mock_upload_to_terrablob, mock_get_latest_model_revision_id):
         tb_model_path = upload_raw_model(
             "model_path",
