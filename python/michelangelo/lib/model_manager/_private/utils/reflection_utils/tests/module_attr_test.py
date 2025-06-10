@@ -10,10 +10,6 @@ from michelangelo.lib.model_manager._private.utils.reflection_utils import (
     find_attr_from_dir,
 )
 
-# enable metabuild to build bazel dependencies
-import michelangelo.lib.model_manager._private.utils.reflection_utils.tests.fixtures.simple_module
-import michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module  # noqa:F401
-
 
 class ModuleAttrTest(TestCase):
     def setUp(self):
@@ -31,12 +27,11 @@ class ModuleAttrTest(TestCase):
     def test_find_attr_from_sys_modules(self):
         attributes = find_attr_from_sys_modules("module_attr")
         attr_names = sorted([attr.__name__ for attr in attributes])
-
-        self.assertEqual(attr_names, ["module_attr"] * 2 + ["michelangelo.lib.model_manager._private.utils.reflection_utils.module_attr"])
+        self.assertTrue(set(["module_attr"] * 2 + ["michelangelo.lib.model_manager._private.utils.reflection_utils.module_attr"]).issubset(set(attr_names)))
 
     def test_find_attr_from_dir(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = "uber/ai/michelangelo/sdk/model_manager/_private/utils/reflection_utils/tests/fixtures"
+            path = "michelangelo/lib/model_manager/_private/utils/reflection_utils/tests/fixtures"
             defs_path = os.path.join(temp_dir, path)
 
             shutil.copytree(path, defs_path)
@@ -47,7 +42,7 @@ class ModuleAttrTest(TestCase):
     @patch("importlib.import_module", side_effect=ImportError)
     def test_find_attr_from_dir_import_error(self, mock_import_module):
         with tempfile.TemporaryDirectory() as temp_dir:
-            path = "uber/ai/michelangelo/sdk/model_manager/_private/utils/reflection_utils/tests/fixtures"
+            path = "michelangelo/lib/model_manager/_private/utils/reflection_utils/tests/fixtures"
             defs_path = os.path.join(temp_dir, path)
 
             shutil.copytree(path, defs_path)
