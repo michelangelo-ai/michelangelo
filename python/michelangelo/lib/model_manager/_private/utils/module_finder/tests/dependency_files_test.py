@@ -89,7 +89,7 @@ class DependencyFilesTest(TestCase):
     def test_find_imported_module_files_with_faulty_package(self):
         files = find_dependency_files(
             "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_faulty_imports",
-            prefixes=["uber"],
+            prefixes=["michelangelo"],
         )
 
         clean_paths = sorted(

@@ -9,5 +9,5 @@ def is_local() -> bool:
         bool: True if the current environment is local, False otherwise
     """
     _LOCAL_RUN = os.getenv("_LOCAL_RUN")
-
-    return _LOCAL_RUN == "1"
+    UF_TASK_IMAGE = os.getenv("UF_TASK_IMAGE")
+    return _LOCAL_RUN == "1" or not UF_TASK_IMAGE
