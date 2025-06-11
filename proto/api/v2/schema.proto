@@ -41,6 +41,9 @@ message DataSchemaItem {
   // This determines the validation rules, serialization format, and compatible operations
   // for values in this field. The type must be one of the defined DataType enum values.
   DataType data_type = 2;
+
+  // The shape of the data, e.g. [1, 2] indicates the shape is a 2D array with shape (1, 2)
+  repeated int32 shape = 3;
 }
 
 // DataType enumerates the supported data types for schema fields.
