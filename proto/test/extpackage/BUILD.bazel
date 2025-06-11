@@ -1,0 +1,34 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "extpackage_proto",
+    srcs = ["enum_ut.proto"],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:api_proto",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
+    ],
+)
+
+go_proto_library(
+    name = "extpackage_go_proto",
+    compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/extpackage",
+    proto = ":extpackage_proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    embed = [":extpackage_go_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/extpackage",
+    visibility = ["//visibility:public"],
+)

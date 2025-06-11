@@ -1,0 +1,14 @@
+
+syntax = "proto3";
+
+package michelangelo.test.extpackage;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "extpackage";
+
+enum TestExtEnum {
+    TEST_EXT_ENUM_TYPE_INVALID = 0;
+    TEST_EXT_ENUM_TYPE_VALID = 1;
+}

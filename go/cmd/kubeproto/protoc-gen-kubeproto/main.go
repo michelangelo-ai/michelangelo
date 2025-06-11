@@ -596,11 +596,15 @@ func findEnumTypeFields(curMsg *protogen.Message, pathPrefix string, enumTypeFie
 	for _, field := range curMsg.Fields {
 		// Check if this field is an enum
 		if field.Enum != nil {
-			key := fmt.Sprintf("%s.%s", field.Enum.GoIdent.GoImportPath, field.Enum.GoIdent.GoName)
-			if _, found := (*processedGoPackageList)[key]; !found {
-				(*processedGoPackageList)[key] = true
-				newPrefix := strings.Trim(field.Enum.GoIdent.GoName, ".")
-				*enumTypeFields = append(*enumTypeFields, newPrefix)
+			// Only include enums that are declared in the same package (e.g. michelangelo.test.kubeproto)
+			// to avoid generating UnmarshalJSON methods for external package enums that are not imported
+			if field.Enum.GoIdent.GoImportPath == curMsg.GoIdent.GoImportPath {
+				key := fmt.Sprintf("%s.%s", field.Enum.GoIdent.GoImportPath, field.Enum.GoIdent.GoName)
+				if _, found := (*processedGoPackageList)[key]; !found {
+					(*processedGoPackageList)[key] = true
+					newPrefix := strings.Trim(field.Enum.GoIdent.GoName, ".")
+					*enumTypeFields = append(*enumTypeFields, newPrefix)
+				}
 			}
 		}
 		// Continue processing nested messages
