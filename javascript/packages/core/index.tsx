@@ -38,6 +38,7 @@ export { cellToString } from '#core/components/cell/cell-to-string';
 export { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
 export * from '#core/components/cell/types';
+export { CellType } from '#core/components/cell/constants';
 
 export { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
 export { DateCell } from '#core/components/cell/renderers/date/date-cell';
@@ -50,10 +51,12 @@ export { TextCell } from '#core/components/cell/renderers/text/text-cell';
 export { TypeCell } from '#core/components/cell/renderers/type/type-cell';
 
 export { Box } from '#core/components/box/box';
+export * from '#core/components/box/styled-components';
 export { DateTime } from '#core/components/date-time/date-time';
 export { DescriptionText } from '#core/components/description-text';
 export { HelpTooltip } from '#core/components/help-tooltip';
 export { Link } from '#core/components/link/link';
+export * from '#core/components/link/styled-components';
 export { Markdown } from '#core/components/markdown/markdown';
 export { Row } from '#core/components/row/row';
 export { Tag } from '#core/components/tag/tag';

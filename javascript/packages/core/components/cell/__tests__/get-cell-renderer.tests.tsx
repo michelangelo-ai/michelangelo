@@ -63,6 +63,23 @@ describe('getCellRenderer', () => {
     expect(link).toHaveTextContent('Click here');
   });
 
+  it('should return text cell renderer for URL values without protocol', () => {
+    const props: CellRendererProps<string> = {
+      column: { id: 'test' },
+      record: {},
+      value: 'example.com',
+    };
+
+    const CellComponent = getCellRenderer(props);
+    render(
+      <CellComponent {...props} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByText('example.com')).toBeInTheDocument();
+  });
+
   it('should return text cell renderer for unknown type', () => {
     const props: CellRendererProps<string> = {
       column: { id: 'test', type: 'unknown' },
