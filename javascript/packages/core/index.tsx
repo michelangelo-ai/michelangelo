@@ -1,5 +1,6 @@
 import { AppNavBar } from 'baseui/app-nav-bar';
 
+import { Link } from '#core/components/link/link';
 import { IconProvider } from '#core/providers/icon-provider/icon-provider';
 import { ServiceProvider } from '#core/providers/service-provider/service-provider';
 import { Router } from '#core/router/router';
@@ -23,7 +24,16 @@ export function CoreApp({ dependencies }: Props) {
     <ThemeProvider>
       <ServiceProvider {...dependencies.service}>
         <IconProvider icons={dependencies.theme.icons}>
-          <AppNavBar title="Michelangelo Studio" />
+          <AppNavBar
+            title={
+              <Link
+                href="/"
+                overrides={{ Link: { style: { ':hover': { textDecoration: 'unset' } } } }}
+              >
+                Michelangelo Studio
+              </Link>
+            }
+          />
           <Router />
         </IconProvider>
       </ServiceProvider>
