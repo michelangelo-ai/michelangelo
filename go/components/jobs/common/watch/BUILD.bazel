@@ -1,0 +1,46 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["federated_watcher.go"],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/watch",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/metrics:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/wait:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["federated_watcher_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/go/envfx.git:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_client_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/uke:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_cluster_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_compute_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/metrics:go_default_library",
+        "//third_party/mocks/k8s.io/client-go/tools/cache:go_cache_gomock_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)

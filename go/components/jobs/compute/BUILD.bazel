@@ -1,0 +1,64 @@
+# gazelle:gomock interfaces=Factory library=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute extra_imports=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute,go.uber.org/mock/gomock,michelangelo/api/v2beta1
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "factory.go",
+        "module.go",
+    ],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-auth:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-client:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/generated/client/clientset/versioned:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/ray/kuberay:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/spark/kubespark:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_client_go//kubernetes:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "factory_test.go",
+        "module_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-auth:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_fx//fxtest:go_default_library",
+    ],
+)
+
+gomock(
+    name = "compute_gomock",
+    out = "computemock.go",
+    interfaces = ["Factory"],
+    library = ":go_default_library",
+    package = "computemock",
+    self_package = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute/computemock",
+)
+
+go_library(
+    name = "go_compute_gomock_library",
+    srcs = ["computemock.go"],
+    importpath = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute/computemock",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":go_default_library",
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+    ],
+)

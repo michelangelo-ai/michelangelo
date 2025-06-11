@@ -1,0 +1,27 @@
+# gazelle:gomock interfaces=SkuConfigCache library=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/skus extra_imports=go.uber.org/mock/gomock
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["cache.go"],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/skus",
+    visibility = ["//visibility:public"],
+)
+
+gomock(
+    name = "skus_gomock",
+    out = "skusmock.go",
+    interfaces = ["SkuConfigCache"],
+    library = ":go_default_library",
+    package = "skusmock",
+    self_package = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/skus/skusmock",
+)
+
+go_library(
+    name = "go_skus_gomock_library",
+    srcs = ["skusmock.go"],
+    importpath = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/skus/skusmock",
+    visibility = ["//visibility:public"],
+    deps = ["@org_uber_go_mock//gomock:go_default_library"],
+)

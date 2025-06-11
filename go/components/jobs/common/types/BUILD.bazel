@@ -1,0 +1,42 @@
+# gazelle:gomock interfaces=FliprConstraintsBuilder library=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types extra_imports=code.uber.internal/rt/flipr-client-go.git/flipr,go.uber.org/mock/gomock
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["types.go"],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/code.uber.internal/rt/flipr-client-go.git/flipr:go_default_library",
+        "@org_golang_x_exp//maps:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
+)
+
+gomock(
+    name = "types_gomock",
+    out = "typesmock.go",
+    interfaces = ["FliprConstraintsBuilder"],
+    library = ":go_default_library",
+    package = "typesmock",
+    self_package = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types/typesmock",
+)
+
+go_library(
+    name = "go_types_gomock_library",
+    srcs = ["typesmock.go"],
+    importpath = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types/typesmock",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//src/code.uber.internal/rt/flipr-client-go.git/flipr:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["types_test.go"],
+    embed = [":go_default_library"],
+    deps = ["@com_github_stretchr_testify//require:go_default_library"],
+)

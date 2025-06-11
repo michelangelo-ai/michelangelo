@@ -1,0 +1,122 @@
+# gazelle:gomock interfaces=Helper library=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client extra_imports=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client,go.uber.org/mock/gomock,k8s.io/apimachinery/pkg/apis/meta/v1,k8s.io/apimachinery/pkg/runtime,k8s.io/client-go/rest,k8s.io/client-go/tools/cache,michelangelo/api/v2beta1
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+filegroup(
+    name = "prom_config",
+    srcs = glob(["prometheus.yml"]),
+    visibility = ["//visibility:public"],
+)
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "client.go",
+        "helper.go",
+        "module.go",
+    ],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/uke:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/secrets:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/utils:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/ray/kuberay:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/spark/kubespark:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/gateways/hadooptokenservice:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/labels:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/watch:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_client_go//tools/cache:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+gomock(
+    name = "client_gomock",
+    out = "clientmock.go",
+    interfaces = [
+        "Helper",
+    ],
+    library = ":go_default_library",
+    package = "clientmock",
+    self_package = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/clientmock",
+)
+
+go_library(
+    name = "go_client_gomock_library",
+    srcs = ["clientmock.go"],
+    importpath = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/clientmock",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":go_default_library",
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_client_go//tools/cache:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+    ],
+)
+
+# another gomock for use within the library following
+# https://engwiki.uberinternal.com/display/GOMONOREPO/Generate+mocks#Generatemocks-same_packageUsingmocksintestsofthesamepackage
+gomock(
+    name = "client_gomock_inernal",
+    out = "clientmock_internal.go",
+    interfaces = [
+        "Helper",
+    ],
+    library = ":go_default_library",
+    package = "client",
+    self_package = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client",
+)
+
+# This instructs gazelle to not add this file to other bazel targets. We also need the keep directive to not have the file removed from this target.
+# gazelle:exclude clientmock_internal.go
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "client_test.go",
+        "clientmock_internal.go",  #keep
+    ],
+    data = [":prom_config"],
+    embed = [":go_default_library"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/base/testing/contextmatcher:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/rt/flipr-client-go.git/flipr:go_flipr_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/uke:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/secrets:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/testutils:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types:go_types_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_compute_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/gateways/drogon:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/gateways/drogon:go_drogon_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/gateways/hadooptokenservice:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/gateways/hadooptokenservice:go_hadooptokenservice_gomock_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_client_go//discovery:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_client_go//rest/fake:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)

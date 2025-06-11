@@ -1,0 +1,56 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "affinity.go",
+        "load.go",
+        "pool_limit.go",
+    ],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/scheduler/framework/plugins",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/utils:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/scheduler/framework:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/utils/cloud:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/constants:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "affinity_test.go",
+        "load_test.go",
+        "pool_limit_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/rt/flipr-client-go.git/flipr:go_default_library",
+        "//src/code.uber.internal/rt/flipr-client-go.git/flipr:go_flipr_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_cluster_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types:go_types_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/scheduler/framework:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/constants:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)

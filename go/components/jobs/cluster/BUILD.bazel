@@ -1,0 +1,109 @@
+# gazelle:gomock interfaces=RegisteredClustersCache,ResourcePoolCache library=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster extra_imports=code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster,go.uber.org/mock/gomock,michelangelo/api/v2beta1
+load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "controller.go",
+        "module.go",
+        "resource_pool.go",
+        "sku_config_cache.go",
+        "types.go",
+    ],
+    importpath = "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/skus:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/utils:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/metrics:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/types:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/gateways/uown:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo//go/api:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo//go/api/handler:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo//go/api/utils:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/util/wait:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/handler:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/source:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = [
+        "controller_test.go",
+        "resource_pool_test.go",
+        "sku_config_cache_test.go",
+        "types_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//idl/code.uber.internal/infra/uown:go_default_library",
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "//src/code.uber.internal/base/testing/contextmatcher:go_default_library",
+        "//src/code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_client_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_compute_gomock_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/metrics:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/types:go_default_library",
+        "//src/code.uber.internal/uberai/michelangelo/shared/gateways/uown:go_uown_gomock_library",
+        "//third_party/mocks/github.com/michelangelo-ai/michelangelo/go/api:go_api_gomock_library",
+        "//third_party/mocks/sigs.k8s.io/controller-runtime/pkg/manager:go_manager_gomock_library",
+        "@com_github_go_logr_zapr//:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo//go/api:go_default_library",
+        "@com_github_michelangelo_ai_michelangelo//go/api/handler:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/types:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)
+
+gomock(
+    name = "cluster_gomock",
+    out = "clustermock.go",
+    interfaces = [
+        "RegisteredClustersCache",
+        "ResourcePoolCache",
+    ],
+    library = ":go_default_library",
+    package = "clustermock",
+    self_package = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster/clustermock",
+)
+
+go_library(
+    name = "go_cluster_gomock_library",
+    srcs = ["clustermock.go"],
+    importpath = "mock/code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster/clustermock",
+    visibility = ["//visibility:public"],
+    deps = [
+        ":go_default_library",
+        "//idl/code.uber.internal/uberai/michelangelo/api/v2beta1:go_default_library",
+        "@org_uber_go_mock//gomock:go_default_library",
+    ],
+)

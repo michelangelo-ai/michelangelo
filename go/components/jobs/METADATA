@@ -1,0 +1,23 @@
+schema:
+  version: 1
+---
+reviewers:
+  groups:
+    - michelangelo-jobctrl
+  users:
+    - bharatj
+    - avyas
+    - zhitao
+owner:
+  # https://uown.uberinternal.com/assets/35017423-f7ae-49bd-b343-8100a0c5aa08
+  assetUuid: 35017423-f7ae-49bd-b343-8100a0c5aa08
+  # Owner information updated from uOwn by assetUuid value.
+  # "managerEmail" retrieved from "Accountable" role on uOwn.
+  name: michelangelo-training
+  managerEmail: pengz@uber.com
+code-quality:
+  coverage:
+    excludes:
+      - /ray/kuberay/zz_generated.deepcopy.go # auto generated code
+      - /scripts # These are adhoc scripts
+      - /spark/module.go
