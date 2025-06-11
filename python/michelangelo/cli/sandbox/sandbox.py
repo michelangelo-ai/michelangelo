@@ -340,15 +340,16 @@ def _create_demo_crs(_: argparse.Namespace):
         project_yaml = yaml.safe_load(f)
     namespace = project_yaml.get("metadata", {}).get("namespace", "default")
 
-    # Create namespace
     _exec("kubectl", "create", "namespace", namespace)
 
-    # Create project first
+    # Create project first. Project CRD is essentially the "parent" of other CRDs. Under
+    # normal circumstances, users must create a project before creating other CRDs.
     _kube_create(project_yaml_path)
 
-    # Create pipelines
-    _kube_create(demo_dir / "training-pipeline.yaml")
-    _kube_create(demo_dir / "eval-pipeline.yaml")
+    # Create all other YAML files in the demo directory
+    for yaml_file in demo_dir.glob("*.yaml"):
+        if yaml_file.name != "project.yaml":
+            _kube_create(yaml_file)
 
     print(f"\nDemo CRs created in namespace {namespace}.")
 
