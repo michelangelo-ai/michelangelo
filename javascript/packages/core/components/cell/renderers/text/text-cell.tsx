@@ -1,5 +1,5 @@
-import { TruncatedText } from '#core/components/truncated-text/truncated-text';
 import { cellToString } from '#core/components/cell/cell-to-string';
+import { TruncatedText } from '#core/components/truncated-text/truncated-text';
 
 import type { CellRenderer } from '#core/components/cell/types';
 
