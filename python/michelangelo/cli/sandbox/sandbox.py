@@ -4,10 +4,10 @@ import sys
 import argparse
 import shutil
 import subprocess
-import shutil
 import tempfile
 import time
 import uuid
+import yaml
 from pathlib import Path
 
 short_description = "Manage the sandbox cluster."
@@ -42,7 +42,10 @@ def init_arguments(p: argparse.ArgumentParser):
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
-        "--exclude", help="Excludes specified services.", nargs="+", default=[]
+        "--exclude",
+        help="Excludes specified services. Available options: apiserver, controllermgr, ui, worker",
+        nargs="+",
+        default=[],
     )
     create_p.add_argument(
         "--workflow",
@@ -51,6 +54,9 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
 
+    _ = sp.add_parser(
+        "demo", help="Create demo project and pipelines in the sandbox cluster."
+    )
     _ = sp.add_parser("delete", help="Delete the cluster.")
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
@@ -79,6 +85,8 @@ def run(ns: argparse.Namespace):
         return _start(ns)
     if ns.action == "stop":
         return _stop(ns)
+    if ns.action == "demo":
+        return _create_demo_crs(ns)
 
     raise ValueError(f"Unsupported action: {ns.action}")
 
@@ -181,6 +189,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
 
     _create_spark_operator(helm_existing_repos)
+
     print("\nSandbox created successfully.")
 
 
@@ -303,6 +312,46 @@ def _setup_cadence(links):
             "",
         )
     )
+
+
+def _create_demo_crs(_: argparse.Namespace):
+    """Create demo Custom Resources (CRs) for the sandbox environment."""
+    # Check if cluster exists
+    try:
+        _exec("k3d", "cluster", "get", _kube_name, raise_error=True)
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Cluster {_kube_name} not found. Please run 'ma sandbox create' first."
+        )
+
+    # Check if cluster is running
+    try:
+        _exec("kubectl", "cluster-info", raise_error=True)
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Cluster {_kube_name} is not running. Please run 'ma sandbox start' first."
+        )
+
+    demo_dir = _dir / "demo"
+    project_yaml_path = demo_dir / "project.yaml"
+
+    # Extract namespace from project.yaml
+    with open(project_yaml_path) as f:
+        project_yaml = yaml.safe_load(f)
+    namespace = project_yaml.get("metadata", {}).get("namespace", "default")
+
+    _exec("kubectl", "create", "namespace", namespace)
+
+    # Create project first. Project CRD is essentially the "parent" of other CRDs. Under
+    # normal circumstances, users must create a project before creating other CRDs.
+    _kube_create(project_yaml_path)
+
+    # Create all other YAML files in the demo directory
+    for yaml_file in demo_dir.glob("*.yaml"):
+        if yaml_file.name != "project.yaml":
+            _kube_create(yaml_file)
+
+    print(f"\nDemo CRs created in namespace {namespace}.")
 
 
 def _delete(ns: argparse.Namespace):

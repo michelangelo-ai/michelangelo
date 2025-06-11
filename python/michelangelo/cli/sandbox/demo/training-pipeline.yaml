@@ -1,0 +1,15 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: training-pipeline
+  namespace: ma-dev-test
+spec:
+  description: Training pipeline for my ML project
+  owner:
+    name: craig.marker
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_YAML
+  commit:
+    gitRef: "main"
+    branch: "main"

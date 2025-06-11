@@ -3858,10 +3858,10 @@ files = [
 name = "pyyaml"
 version = "6.0.2"
 description = "YAML parser and emitter for Python"
-optional = true
+optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "platform_system == \"Linux\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\") and platform_machine == \"aarch64\""
+markers = "platform_system == \"Linux\" and platform_machine == \"aarch64\""
 files = [
     {file = "PyYAML-6.0.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0a9a2848a5b7feac301353437eb7d5957887edbf81d56e903999a75a3d743086"},
     {file = "PyYAML-6.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:29717114e51c84ddfba879543fb232a6ed60086602313ca38cce623c1d62cfbf"},
@@ -4701,7 +4701,7 @@ description = "Easily download, build, install, upgrade, and uninstall Python pa
 optional = true
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "(python_version == \"3.9\" or platform_system == \"Linux\") and (python_version == \"3.9\" or platform_machine == \"aarch64\") and python_version < \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\") or (python_version == \"3.10\" or extra == \"vllm\" or extra == \"example\" or extra == \"dev\") and python_version >= \"3.10\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\")"
+markers = "(extra == \"vllm\" or extra == \"example\" or extra == \"dev\" or python_version == \"3.10\") and platform_system == \"Linux\" and (extra == \"dev\" or extra == \"example\" or extra == \"vllm\") and platform_machine == \"aarch64\""
 files = [
     {file = "setuptools-74.1.1-py3-none-any.whl", hash = "sha256:fc91b5f89e392ef5b77fe143b17e32f65d3024744fba66dc3afe07201684d766"},
     {file = "setuptools-74.1.1.tar.gz", hash = "sha256:2353af060c06388be1cecbf5953dcdb1f38362f87a2356c480b6b4d5fcfc8847"},
@@ -4736,7 +4736,7 @@ description = "Python 2 and 3 compatibility utilities"
 optional = true
 python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,>=2.7"
 groups = ["main"]
-markers = "(python_version == \"3.9\" or platform_system == \"Linux\") and (python_version == \"3.9\" or platform_machine == \"aarch64\") and python_version < \"3.10\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\") or (python_version == \"3.10\" or extra == \"vllm\" or extra == \"plugin\" or extra == \"example\" or extra == \"dev\") and python_version >= \"3.10\" and (extra == \"plugin\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\")"
+markers = "extra == \"plugin\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\""
 files = [
     {file = "six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"},
     {file = "six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81"},
@@ -6150,4 +6150,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "fe1339bef8c573e6193e207998f7ecf3609389b0827523d0fa921e071198410d"
+content-hash = "ce8b006c06c0c2ee7a649e1c56c3d8b6971acffbbc5ef8a2db90c826aeb621e1"
