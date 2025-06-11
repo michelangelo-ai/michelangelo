@@ -86,16 +86,16 @@ class PickledModelBinaryTest(TestCase):
             self.assertEqual(
                 files,
                 [
-                    "uber/ai/michelangelo/sdk/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-                    "uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
+                    "michelangelo/lib/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+                    "michelangelo/lib/model_manager/interface/custom_model.py",
                 ],
             )
 

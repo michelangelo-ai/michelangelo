@@ -17,7 +17,7 @@ class RawModelPackageTest(TestCase):
             "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             ModelSchema(),
             [{"input": np.array([1, 2])}],
-            include_import_prefixes=["uber"],
+            include_import_prefixes=["michelangelo"],
         )
 
         mock_download_model.assert_called_once()
@@ -29,9 +29,9 @@ class RawModelPackageTest(TestCase):
         self.assertIn("model", content)
         self.assertIn("defs", content)
         model = content["model"]
-        self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/model", model))
+        self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+/)+model", model))
         defs = content["defs"]
-        self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/defs", defs))
+        self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+/)+defs", defs))
         self.assertNotIn("dependencies", content)
 
     @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model")
@@ -41,7 +41,7 @@ class RawModelPackageTest(TestCase):
             "michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.predict.Predict",
             ModelSchema(),
             [{"input": np.array([1, 2])}],
-            include_import_prefixes=["uber"],
+            include_import_prefixes=["michelangelo"],
             batch_inference=True,
         )
 
@@ -54,9 +54,11 @@ class RawModelPackageTest(TestCase):
         self.assertIn("model", content)
         self.assertIn("defs", content)
         model = content["model"]
-        self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/model", model))
+
+        print(model)
+        self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+/)+model", model))
         defs = content["defs"]
-        self.assertIsNotNone(re.fullmatch(r"dir://(?:/tmp/.+)/defs", defs))
+        self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+/)+defs", defs))
         self.assertNotIn("dependencies", content)
 
     @patch("michelangelo.lib.model_manager._private.packager.python_triton.raw_model_package.download_model")

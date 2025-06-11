@@ -45,7 +45,7 @@ class CustomRawModelTest(TestCase):
 
     @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_external(self, mock_logger_info):
-        model_path = "uber/ai/michelangelo/sdk/model_manager/_private/serde/model/tests/testdata/external_custom_raw_model_package"
+        model_path = "michelangelo/lib/model_manager/_private/serde/model/tests/testdata/external_custom_raw_model_package"
         model = load_custom_raw_model(model_path)
 
         mock_logger_info.assert_called_with(
