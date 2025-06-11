@@ -19,7 +19,7 @@ export function getCellRenderer(args: CellRendererProps<unknown>): CellRenderer<
     return CELL_RENDERERS[columnType];
   }
 
-  if (typeof value === 'string' && isURL(value)) {
+  if (typeof value === 'string' && isURL(value, { require_protocol: true })) {
     const LinkRenderer = () => <Link href={value}>Click here</Link>;
     LinkRenderer.displayName = 'LinkRenderer';
     return LinkRenderer;
