@@ -33,7 +33,7 @@ class PickledModelBinaryTest(TestCase):
             with open(fn3, "w") as f:
                 f.write("not a pickle")
 
-            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["uber"])
+            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["michelangelo"])
 
             files = sorted(
                 str(Path(os.path.join(dirpath, file)).relative_to(target_dir)) for dirpath, _, filenames in os.walk(target_dir) for file in filenames
@@ -42,17 +42,17 @@ class PickledModelBinaryTest(TestCase):
             self.assertEqual(
                 files,
                 [
-                    "uber/ai/michelangelo/sdk/model_manager/_private/packager/python_triton/tests/fixtures/invalid_model.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-                    "uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
+                    "michelangelo/lib/model_manager/_private/packager/python_triton/tests/fixtures/invalid_model.py",
+                    "michelangelo/lib/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+                    "michelangelo/lib/model_manager/interface/custom_model.py",
                 ],
             )
 
@@ -66,7 +66,7 @@ class PickledModelBinaryTest(TestCase):
             with open(os.path.join(model_path, "test.pkl"), "wb") as f:
                 pickle.dump({}, f)
 
-            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["uber"])
+            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["michelangelo"])
             self.assertTrue(len(os.listdir(target_dir)) > 0)
 
     def test_serialize_pickled_file_dependencies(self):
@@ -77,7 +77,7 @@ class PickledModelBinaryTest(TestCase):
             with open(fn, "wb") as f:
                 pickle.dump(Predict(), f)
 
-            serialize_pickled_file_dependencies(fn, target_dir, include_import_prefixes=["uber"])
+            serialize_pickled_file_dependencies(fn, target_dir, include_import_prefixes=["michelangelo"])
 
             files = sorted(
                 str(Path(os.path.join(dirpath, file)).relative_to(target_dir)) for dirpath, _, filenames in os.walk(target_dir) for file in filenames
