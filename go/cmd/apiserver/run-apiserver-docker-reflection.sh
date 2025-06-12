@@ -27,8 +27,10 @@ cleanup() {
     fi
 }
 
-# Trap cleanup on exit
-trap cleanup EXIT
+# Trap cleanup on exit, except for 'server' and 'build' modes
+if [[ "$MODE" != "server" && "$MODE" != "build" ]]; then
+    trap cleanup EXIT
+fi
 
 # Always build from project root, regardless of current directory
 build_image() {
@@ -70,7 +72,7 @@ case $MODE in
         ;;
     "server")
         docker run --name $CONTAINER_NAME \
-            --network host \
+            -p 15566:15566 \
             -v "$TEMP_KUBE_DIR:/root/.kube:ro" \
             -e KUBECONFIG=/root/.kube/config \
             -e KUBERNETES_MASTER="$K3D_ENDPOINT" \
