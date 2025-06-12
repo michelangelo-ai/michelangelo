@@ -14,7 +14,7 @@ class ModelClassTest(TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = os.path.join(temp_dir, "package")
-            serialize_model_class(model_class, target_dir, "model_class.txt", include_import_prefixes=["uber"])
+            serialize_model_class(model_class, target_dir, "model_class.txt", include_import_prefixes=["michelangelo"])
 
             # test we can load the model file
             with open(os.path.join(target_dir, "model_class.txt")) as f:
@@ -25,10 +25,8 @@ class ModelClassTest(TestCase):
             with open(
                 os.path.join(
                     target_dir,
-                    "uber",
-                    "ai",
                     "michelangelo",
-                    "sdk",
+                    "lib",
                     "model_manager",
                     "_private",
                     "packager",
@@ -54,16 +52,16 @@ class ModelClassTest(TestCase):
             self.assertEqual(
                 files,
                 [
+                    "michelangelo/lib/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+                    "michelangelo/lib/model_manager/interface/custom_model.py",
                     "model_class.txt",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/packager/python_triton/tests/fixtures/predict.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
-                    "uber/ai/michelangelo/sdk/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
-                    "uber/ai/michelangelo/sdk/model_manager/interface/custom_model.py",
                 ],
             )

@@ -10,7 +10,7 @@ from michelangelo.lib.model_manager._private.packager.python_triton import (
 import michelangelo.lib.model_manager.interface.tests.fixtures.custom_model
 import michelangelo.lib.model_manager._private.packager.python_triton.tests.fixtures.invalid_model  # noqa:F401
 
-module_path = os.path.join("uber", "ai", "michelangelo", "sdk", "model_manager", "interface", "custom_model.py")
+module_path = os.path.join("michelangelo", "lib", "model_manager", "interface", "custom_model.py")
 
 
 class ModelInterfaceTest(TestCase):

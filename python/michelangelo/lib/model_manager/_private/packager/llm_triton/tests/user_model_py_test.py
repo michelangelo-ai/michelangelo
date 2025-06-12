@@ -26,7 +26,7 @@ class UserModelPyTest(TestCase):
         content = generate_user_model_content(gen, llm_model_type, model_def_script)
         self.assertEqual(content, gen.render("vllm/user_model.py.tmpl"))
 
-        model_def_script = "uber/ai/michelangelo/sdk/model_manager/_private/packager/llm_triton/tests/fixtures/user_model.py.txt"
+        model_def_script = "michelangelo/lib/model_manager/_private/packager/llm_triton/tests/fixtures/user_model.py.txt"
         content = generate_user_model_content(gen, llm_model_type, model_def_script)
         self.assertEqual(content, gen.render("hf/user_model.py.tmpl"))
 
