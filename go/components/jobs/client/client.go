@@ -6,20 +6,20 @@ import (
 	"fmt"
 	"os"
 
-	infraCrds "code.uber.internal/infra/compute/k8s-crds/apis/compute.uber.com/v1beta1"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/client/uke"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/secrets"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/compute"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/ray/kuberay"
-	"code.uber.internal/uberai/michelangelo/shared/gateways/hadooptokenservice"
+	hadoopclients "github.com/michelangelo-ai/michelangelo/go/components/hadoop/clients"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/uke"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
+	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
-	v2beta1pb "michelangelo/api/v2beta1"
 )
 
 // ClusterConditions Reasons
@@ -46,40 +46,40 @@ const (
 // Callers should check using errors.Is(err, ErrRetryable) to determine if they should retry.
 var ErrRetryable = errors.New("operation failed but is retryable")
 
-func newClusterReadyCondition(t metav1.Time) *v2beta1pb.Condition {
-	return &v2beta1pb.Condition{
+func newClusterReadyCondition(t metav1.Time) *v2pb.Condition {
+	return &v2pb.Condition{
 		Type:                 constants.ClusterReady,
-		Status:               v2beta1pb.CONDITION_STATUS_TRUE,
+		Status:               v2pb.CONDITION_STATUS_TRUE,
 		Reason:               ClusterReadyReason,
 		Message:              ClusterReadyMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterNotReadyCondition(t metav1.Time) *v2beta1pb.Condition {
-	return &v2beta1pb.Condition{
+func newClusterNotReadyCondition(t metav1.Time) *v2pb.Condition {
+	return &v2pb.Condition{
 		Type:                 constants.ClusterReady,
-		Status:               v2beta1pb.CONDITION_STATUS_FALSE,
+		Status:               v2pb.CONDITION_STATUS_FALSE,
 		Reason:               ClusterNotReadyReason,
 		Message:              ClusterNotReadyMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterOfflineCondition(t metav1.Time) *v2beta1pb.Condition {
-	return &v2beta1pb.Condition{
+func newClusterOfflineCondition(t metav1.Time) *v2pb.Condition {
+	return &v2pb.Condition{
 		Type:                 constants.ClusterOffline,
-		Status:               v2beta1pb.CONDITION_STATUS_TRUE,
+		Status:               v2pb.CONDITION_STATUS_TRUE,
 		Reason:               ClusterNotReachableReason,
 		Message:              ClusterNotReachableMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterNotOfflineCondition(t metav1.Time) *v2beta1pb.Condition {
-	return &v2beta1pb.Condition{
+func newClusterNotOfflineCondition(t metav1.Time) *v2pb.Condition {
+	return &v2pb.Condition{
 		Type:                 constants.ClusterOffline,
-		Status:               v2beta1pb.CONDITION_STATUS_FALSE,
+		Status:               v2pb.CONDITION_STATUS_FALSE,
 		Reason:               ClusterReachableReason,
 		Message:              ClusterReachableMsg,
 		LastUpdatedTimestamp: t.Unix(),
@@ -105,8 +105,47 @@ type Params struct {
 	SparkClient *uke.SparkClient
 }
 
+// This is the key in the config map. This is just the file name so that it can be referenced in conjunction with the configmap mount path
+var _prometheusConfigMapKeyName = "prometheus.yml"
+
+// FederatedClient defines the interface for managing resources across multiple clusters
+type FederatedClient interface {
+	// CreatePromConfigMap creates the prometheus configmap in the specified cluster
+	CreatePromConfigMap(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster, configFile string) error
+
+	// CreateSecret creates the secret in the specified cluster
+	CreateSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// DeletePromConfigMap deletes the prometheus configmap from the specified cluster
+	DeletePromConfigMap(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// DeleteSecret deletes the secret from the specified cluster
+	DeleteSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// GetJobStatus gets the job status from the specified cluster
+	GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (constants.SparkJobStatus, error)
+
+	// DeleteJob deletes a batch job from the specified cluster
+	DeleteJob(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// CreateJob creates a job on the specified cluster
+	CreateJob(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
+
+	// Watcher creates resource watchers on the specified cluster
+	Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) ([]*ResourceWatcher, error)
+
+	// GetClusterStatus gets the kubernetes cluster's health and version status
+	GetClusterStatus(ctx context.Context, cluster *v2pb.Cluster) (*v2pb.ClusterStatus, error)
+
+	// GetResourcePools fetches the resource pools from the specified cluster
+	GetResourcePools(ctx context.Context, cluster *v2pb.Cluster) (types.ResourcePoolList, error)
+
+	// GetSkuConfigMaps fetch the config maps from the specified cluster
+	GetSkuConfigMaps(ctx context.Context, cluster *v2pb.Cluster) (corev1.ConfigMapList, error)
+}
+
 // NewClient is the constructor
-func NewClient(p Params) *Client {
+func NewClient(p Params) FederatedClient {
 	return &Client{
 		factory:         p.Factory,
 		logger:          p.Logger.With(zap.String("component", "client")),
@@ -127,14 +166,11 @@ type Client struct {
 	sparkClient     *uke.SparkClient
 }
 
-// This is the key in the config map. This is just the file name so that it can be referenced in conjunction with the configmap mount path
-var _prometheusConfigMapKeyName = "prometheus.yml"
-
 // CreatePromConfigMap creates the prom configmap
 func (c *Client) CreatePromConfigMap(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster,
+	cluster *v2pb.Cluster,
 	configFile string) error {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
@@ -181,7 +217,7 @@ func GetPrometheusConfigMapName(jobName string) string {
 func (c *Client) CreateSecret(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster) error {
+	cluster *v2pb.Cluster) error {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
 		return err
@@ -227,7 +263,7 @@ func (c *Client) CreateSecret(
 func (c *Client) DeletePromConfigMap(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster) error {
+	cluster *v2pb.Cluster) error {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
 		return err
@@ -248,7 +284,7 @@ func (c *Client) DeletePromConfigMap(
 func (c *Client) DeleteSecret(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster) error {
+	cluster *v2pb.Cluster) error {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
 		return err
@@ -266,11 +302,11 @@ func (c *Client) DeleteSecret(
 }
 
 // GetJobStatus gets the job status from the cluster
-func (c *Client) GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2beta1pb.Cluster) (constants.SparkJobStatus, error) {
+func (c *Client) GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (constants.SparkJobStatus, error) {
 	switch job := jobObject.(type) {
-	case *v2beta1pb.RayJob:
+	case *v2pb.RayJob:
 		return "", fmt.Errorf("GetStatus of RayJob is not supported")
-	case *v2beta1pb.SparkJob:
+	case *v2pb.SparkJob:
 		return c.sparkClient.GetJobStatus(ctx, job, cluster)
 	}
 	return "", fmt.Errorf("the object must be a RayJob or a SparkJob, got:%T", jobObject)
@@ -280,16 +316,16 @@ func (c *Client) GetJobStatus(ctx context.Context, jobObject runtime.Object, clu
 func (c *Client) DeleteJob(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster) error {
+	cluster *v2pb.Cluster) error {
 	switch job := jobObject.(type) {
-	case *v2beta1pb.RayJob:
+	case *v2pb.RayJob:
 		cs, err := c.factory.GetClientSetForCluster(cluster)
 		if err != nil {
 			return err
 		}
 		localNamespace, localName := c.mapper.GetLocalName(jobObject)
 		return c.helper.DeleteResource(ctx, cs.Ray, constants.KubeRayResource, localNamespace, localName, metav1.DeleteOptions{})
-	case *v2beta1pb.SparkJob:
+	case *v2pb.SparkJob:
 		return c.sparkClient.CancelJob(ctx, job, cluster)
 	}
 	return fmt.Errorf("unrecognized job type")
@@ -300,9 +336,9 @@ func (c *Client) DeleteJob(
 func (c *Client) CreateJob(
 	ctx context.Context,
 	jobObject runtime.Object,
-	cluster *v2beta1pb.Cluster) error {
+	cluster *v2pb.Cluster) error {
 	switch job := jobObject.(type) {
-	case *v2beta1pb.RayJob:
+	case *v2pb.RayJob:
 		cs, err := c.factory.GetClientSetForCluster(cluster)
 		if err != nil {
 			return fmt.Errorf("get client for cluster err:%v", err)
@@ -329,10 +365,10 @@ func (c *Client) CreateJob(
 				zap.String("cluster", cluster.Name)).
 			Info("Successfully created job in uke cluster")
 		return nil
-	case *v2beta1pb.SparkJob:
+	case *v2pb.SparkJob:
 		err := c.sparkClient.SubmitJob(ctx, job, cluster)
 		if err != nil {
-			if errors.Is(err, hadooptokenservice.ErrPartialTokens) {
+			if errors.Is(err, hadoopclients.ErrPartialTokens) {
 				return fmt.Errorf("%w: %v", ErrRetryable, err)
 			}
 			return err
@@ -343,7 +379,7 @@ func (c *Client) CreateJob(
 }
 
 // Watcher creates a pod watch on Compute API server
-func (c *Client) Watcher(watcherParams []*WatcherParams, cluster *v2beta1pb.Cluster) (
+func (c *Client) Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) (
 	[]*ResourceWatcher, error) {
 	clientSet, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
@@ -368,7 +404,7 @@ func (c *Client) Watcher(watcherParams []*WatcherParams, cluster *v2beta1pb.Clus
 }
 
 // GetClusterStatus gets the kubernetes cluster's health and version status
-func (c *Client) GetClusterStatus(ctx context.Context, cluster *v2beta1pb.Cluster) (*v2beta1pb.ClusterStatus, error) {
+func (c *Client) GetClusterStatus(ctx context.Context, cluster *v2pb.Cluster) (*v2pb.ClusterStatus, error) {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
 		return nil, err
@@ -378,30 +414,15 @@ func (c *Client) GetClusterStatus(ctx context.Context, cluster *v2beta1pb.Cluste
 }
 
 // GetResourcePools fetches the resource pools from the cluster
-func (c *Client) GetResourcePools(ctx context.Context, cluster *v2beta1pb.Cluster) (
-	infraCrds.ResourcePoolList, error) {
-	cs, err := c.factory.GetClientSetForCluster(cluster)
-	if err != nil {
-		return infraCrds.ResourcePoolList{}, err
-	}
-
-	result := infraCrds.ResourcePoolList{}
-	err = c.helper.ListResources(ctx, cs.ComputeV1, "resourcepools", metav1.NamespaceNone, &result)
-	if err != nil {
-		return infraCrds.ResourcePoolList{}, err
-	}
-
-	c.logger.Info("fetched resource pools from cluster",
-		zap.Int("count", len(result.Items)),
-		zap.String("cluster", cluster.Name))
-
-	return result, nil
+func (c *Client) GetResourcePools(ctx context.Context, cluster *v2pb.Cluster) (
+	types.ResourcePoolList, error) {
+	return types.ResourcePoolList{}, nil
 }
 
 var _gpuSkuListNamespace = "special-resource-list"
 
 // GetSkuConfigMaps fetch the config maps from the cluster
-func (c *Client) GetSkuConfigMaps(ctx context.Context, cluster *v2beta1pb.Cluster) (
+func (c *Client) GetSkuConfigMaps(ctx context.Context, cluster *v2pb.Cluster) (
 	corev1.ConfigMapList, error) {
 	cs, err := c.factory.GetClientSetForCluster(cluster)
 	if err != nil {
