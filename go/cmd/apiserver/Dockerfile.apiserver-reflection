@@ -1,0 +1,76 @@
+# Multi-stage build for apiserver with reflection support
+FROM ubuntu:22.04 AS builder
+
+# Install dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    build-essential \
+    python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Bazelisk
+RUN curl -L https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64 -o /usr/local/bin/bazel \
+    && chmod +x /usr/local/bin/bazel
+
+# Set working directory
+WORKDIR /app
+
+# Copy source code
+COPY . .
+
+# Build the apiserver
+RUN bazel build //go/cmd/apiserver:apiserver
+
+# Runtime stage with grpcurl
+FROM ubuntu:22.04
+
+# Install runtime dependencies and grpcurl
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    curl \
+    && curl -L https://github.com/fullstorydev/grpcurl/releases/download/v1.8.7/grpcurl_1.8.7_linux_x86_64.tar.gz \
+    | tar -xz -C /usr/local/bin \
+    && chmod +x /usr/local/bin/grpcurl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy built binary
+COPY --from=builder /app/bazel-bin/go/cmd/apiserver/apiserver_/apiserver /app/apiserver
+
+# Copy config directory
+COPY go/cmd/apiserver/config /app/config
+
+# Set working directory
+WORKDIR /app
+
+# Create start script
+RUN echo '#!/bin/bash' > /app/start.sh && \
+    echo 'set -e' >> /app/start.sh && \
+    echo 'echo "Starting apiserver..."' >> /app/start.sh && \
+    echo 'CONFIG_DIR=/app/config /app/apiserver &' >> /app/start.sh && \
+    echo 'SERVER_PID=$!' >> /app/start.sh && \
+    echo 'sleep 5' >> /app/start.sh && \
+    echo 'grpcurl -plaintext -H rpc-caller:grpcurl -H rpc-service:ma-apiserver -H rpc-encoding:proto 127.0.0.1:15566 list' >> /app/start.sh && \
+    echo 'wait $SERVER_PID' >> /app/start.sh && \
+    chmod +x /app/start.sh
+
+# Create custom config for Docker
+RUN echo 'apiserver:' > /app/config/custom.yaml && \
+    echo '  yarpc:' >> /app/config/custom.yaml && \
+    echo '    host: "0.0.0.0"' >> /app/config/custom.yaml && \
+    echo '    port: 15566' >> /app/config/custom.yaml && \
+    echo '  crdSync:' >> /app/config/custom.yaml && \
+    echo '    enableCRDUpdate: false' >> /app/config/custom.yaml && \
+    echo '    enableIncompatibleUpdate: false' >> /app/config/custom.yaml && \
+    echo 'k8s:' >> /app/config/custom.yaml && \
+    echo '  qps: 300' >> /app/config/custom.yaml && \
+    echo '  burst: 600' >> /app/config/custom.yaml && \
+    echo 'metadataStorage:' >> /app/config/custom.yaml && \
+    echo '  enableMetadataStorage: false' >> /app/config/custom.yaml
+
+# Set environment variable to use custom config
+ENV RUNTIME_ENVIRONMENT=custom
+
+EXPOSE 15566
+
+CMD ["/app/start.sh"] 
