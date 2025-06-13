@@ -1,0 +1,7 @@
+apiVersion: michelangelo.uber.com/v2beta1
+kind: Pipeline
+metadata:
+  namespace: "ma-integration-test"
+  name: "mactl-test-0001"
+spec:
+  type: "PIPELINE_TYPE_TRAIN"
