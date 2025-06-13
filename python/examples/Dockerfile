@@ -6,6 +6,8 @@
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
+ARG CUSTOM_CA_PEM
+
 # Install dependencies required for building Python
 RUN apt-get update && apt-get install -y \
     curl \
@@ -38,6 +40,20 @@ RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSIO
 # Ensure python3.9 is the default
 RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
     ln -sf /usr/local/bin/python3.9 /usr/bin/python
+
+# Install pip and certifi
+RUN curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py && \
+    python3 get-pip.py && \
+    pip3 install certifi
+
+# Configure custom CA certificate if provided
+if [ -n "$CUSTOM_CA_PEM" ]; then
+    RUN mkdir -p /etc/ssl/certs
+    COPY ${CUSTOM_CA_PEM} /etc/ssl/certs/custom-ca.pem
+    ENV REQUESTS_CA_BUNDLE=/etc/ssl/certs/custom-ca.pem
+    ENV SSL_CERT_FILE=/etc/ssl/certs/custom-ca.pem
+    RUN python3 -c "import certifi; print(certifi.where())" > /etc/ssl/certs/ca-certificates.crt
+fi
 
 # Install pip and Poetry
 RUN python --version
