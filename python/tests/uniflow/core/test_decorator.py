@@ -169,7 +169,7 @@ class TaskTest(unittest.TestCase):
 
         # Ensure that the @task "config" properties are included in the transpiled expression.
         task_params = "cpu=2, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None"
-        expected_str = f"__task_a('test_decorator.generate_random_text', {task_params})"
+        expected_str = f"__task_a('tests.uniflow.core.test_decorator.generate_random_text', {task_params})"
         self.assertEqual(
             expected_str,
             ast.unparse(exp),
@@ -190,7 +190,7 @@ class TaskTest(unittest.TestCase):
 
         # Ensure that the "alias" property is included in the transpiled expression.
         task_params = "alias='gzip', cpu=4, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None"
-        expected_str = f"__task_a('test_decorator.gzip_compress', {task_params})"
+        expected_str = f"__task_a('tests.uniflow.core.test_decorator.gzip_compress', {task_params})"
         self.assertEqual(
             expected_str,
             ast.unparse(exp),
