@@ -1,7 +1,7 @@
 import os
 import uuid
 from unittest import TestCase
-from michelangelo.lib._internal.testing.env import EnvTestCase
+from michelangelo._internal.testing.env import EnvTestCase
 
 
 class EnvTestCaseTest(TestCase):
