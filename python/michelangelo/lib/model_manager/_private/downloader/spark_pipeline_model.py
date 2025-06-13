@@ -44,19 +44,6 @@ def download_spark_pipeline_model(
             timeout=timeout,
             source_entity=source_entity,
         )
-    else:
-        from michelangelo.lib.model_manager._private.utils.api_client import APIClient
-
-        model_crd = APIClient.ModelService.get_model(project_name, model_name)
-        project_id = model_crd.spec.legacy_model_spec.project_id
-        tm_model_id = model_crd.spec.legacy_model_spec.tm_model_id
-        download_legacy_ma_model(
-            project_id,
-            tm_model_id,
-            dest_model_path,
-            timeout=timeout,
-            source_entity=source_entity,
-        )
 
 
 def get_latest_model_revision(project_name: str, model_name: str, timeout: str, source_entity: str) -> str:

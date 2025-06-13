@@ -34,7 +34,8 @@ def make_download_from_terrablob_v2_projects(project_name: str):
             shutil.make_archive(model_binary_zip_name, "zip", model_binary_dir)
 
             model_jar_path = os.path.join(temp_dir, "model.jar")
-            os.system(f"jar cfvM {model_jar_path} -C {model_files_dir} .")
+            shutil.make_archive(model_files_dir, "zip", model_files_dir)
+            os.rename(f"{model_files_dir}.zip", model_jar_path)
 
             gzip_compress(model_jar_path, dest_path)
 
@@ -193,101 +194,6 @@ class SparkPipelineModelTest(TestCase):
                 project_name,
                 model_name,
                 "",
-                dest_model_path,
-            )
-
-            with open(os.path.join(dest_model_path, "test_file")) as f:
-                self.assertEqual(f.read(), "test")
-
-        mock_download_from_terrablob.assert_called_once()
-
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
-    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
-    def test_download_spark_pipeline_model_with_legacy_ma(
-        self,
-        mock_download_from_terrablob,
-        mock_get_model,
-        mock_path_exists,
-        mock_list_terrablob_dir,
-        mock_path_exists_revision_id,
-        mock_get_latest_model_revision_id,
-    ):
-        mock_get_latest_model_revision_id.return_value = 0
-        mock_path_exists_revision_id.return_value = False
-        mock_list_terrablob_dir.return_value = []
-        mock_path_exists.return_value = False
-        model_crd = Model()
-        model_crd.spec.legacy_model_spec.project_id = "project_id"
-        model_crd.spec.legacy_model_spec.tm_model_id = "tm_model_id"
-        mock_get_model.return_value = model_crd
-
-        project_name = "test_project"
-        model_name = "test_model"
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            dest_model_path = os.path.join(temp_dir, "model")
-
-            download_spark_pipeline_model(
-                project_name,
-                model_name,
-                "0",
-                dest_model_path,
-            )
-
-            mock_download_from_terrablob.assert_called_once()
-
-            args = mock_download_from_terrablob.call_args.args
-            self.assertEqual(
-                args[0],
-                "/prod/michelangelo/v1_projects/project_id/trained_models/tm_model_id/sparkml_proto/project_id-v2.zip",
-            )
-
-            with open(os.path.join(dest_model_path, "test_file")) as f:
-                self.assertEqual(f.read(), "test")
-
-        mock_path_exists.assert_called_once_with(
-            "/prod/michelangelo/v2_projects/test_project/trained_models/test_model/0/deploy_jar/model.jar.gz",
-            timeout=None,
-            source_entity=None,
-        )
-
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.get_latest_model_revision_id")
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
-    @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
-    @patch("michelangelo.lib.model_manager._private.downloader.spark_pipeline_model.path_exists")
-    @patch("michelangelo.lib.model_manager._private.utils.api_client.APIClient.ModelService.get_model")
-    @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob_v1_projects)
-    def test_download_spark_pipeline_model_with_legacy_ma_no_revision(
-        self,
-        mock_download_from_terrablob,
-        mock_get_model,
-        mock_path_exists,
-        mock_list_terrablob_dir,
-        mock_path_exists_revision_id,
-        mock_get_latest_model_revision_id,
-    ):
-        mock_get_latest_model_revision_id.return_value = 0
-        mock_path_exists_revision_id.return_value = False
-        mock_list_terrablob_dir.return_value = []
-        mock_path_exists.return_value = False
-        model_crd = Model()
-        model_crd.spec.legacy_model_spec.project_id = "project_id"
-        model_crd.spec.legacy_model_spec.tm_model_id = "tm_model_id"
-        mock_get_model.return_value = model_crd
-
-        project_name = "test_project"
-        model_name = "test_model"
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            dest_model_path = os.path.join(temp_dir, "model")
-            download_spark_pipeline_model(
-                project_name,
-                model_name,
-                None,
                 dest_model_path,
             )
 

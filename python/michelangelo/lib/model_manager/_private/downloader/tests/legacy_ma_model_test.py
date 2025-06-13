@@ -29,8 +29,8 @@ def download_from_terrablob(
 
 class LegacyMaModelTest(EnvTestCase):
     @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch.dict("os.environ", {})
     def test_download_legacy_ma_model_local_env(self, mock_download_from_terrablob):
-        mimic_local_env()
         project_id = "project_id"
         model_id = "model_id"
 
@@ -57,8 +57,8 @@ class LegacyMaModelTest(EnvTestCase):
             self.assertEqual(kwargs["source_entity"], None)
 
     @patch("michelangelo.lib.model_manager._private.downloader.legacy_ma_model.download_from_terrablob", wraps=download_from_terrablob)
+    @patch.dict("os.environ", {"UF_TASK_IMAGE": "image"})
     def test_download_legacy_ma_model_remote_env(self, mock_download_from_terrablob):
-        mimic_remote_env()
         project_id = "project_id"
         model_id = "model_id"
 

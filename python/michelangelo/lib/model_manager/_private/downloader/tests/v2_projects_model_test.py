@@ -5,7 +5,6 @@ from unittest.mock import patch
 from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager._private.utils.file_utils.gzip import gzip_compress
 from michelangelo.lib.model_manager._private.downloader import download_v2_projects_model
-from .utils.env import mimic_local_env, mimic_remote_env
 
 
 def make_download_from_terrablob(project_name: str):
@@ -34,7 +33,8 @@ def make_download_from_terrablob(project_name: str):
             shutil.make_archive(model_binary_zip_name, "zip", model_binary_dir)
 
             model_jar_path = os.path.join(temp_dir, "model.jar")
-            os.system(f"jar cfvM {model_jar_path} -C {model_files_dir} .")
+            shutil.make_archive(model_files_dir, "zip", model_files_dir)
+            os.rename(f"{model_files_dir}.zip", model_jar_path)
 
             gzip_compress(model_jar_path, dest_path)
 
@@ -42,8 +42,8 @@ def make_download_from_terrablob(project_name: str):
 
 
 class V2ProjectsModelTest(EnvTestCase):
+    @patch.dict("os.environ", {})
     def test_download_v2_projects_model_local_env(self):
-        mimic_local_env()
         project_name = "test_project"
         model_name = "test_model"
 
@@ -74,8 +74,8 @@ class V2ProjectsModelTest(EnvTestCase):
             self.assertEqual(kwargs["timeout"], None)
             self.assertEqual(kwargs["source_entity"], None)
 
+    @patch.dict("os.environ", {"UF_TASK_IMAGE": "image"})
     def test_download_v2_projects_model_remote_env(self):
-        mimic_remote_env()
         project_name = "test_project"
         model_name = "test_model"
 

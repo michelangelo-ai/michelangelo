@@ -46,7 +46,6 @@ def download_v2_projects_model(
         gzip_decompress(jar_gz_local_path, jar_local_path)
         if not os.path.exists(model_files_dir):
             os.makedirs(model_files_dir)
-        with cd(model_files_dir):
-            os.system("jar xf ../model.jar")
+        shutil.unpack_archive(jar_local_path, model_files_dir, "zip")
         model_zip_path = os.path.join(model_files_dir, f"{project_name}.zip")
         shutil.unpack_archive(model_zip_path, dest_model_path, "zip")

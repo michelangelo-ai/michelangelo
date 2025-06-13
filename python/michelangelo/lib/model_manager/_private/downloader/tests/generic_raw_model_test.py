@@ -3,7 +3,6 @@ import tempfile
 from unittest.mock import patch, call
 from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager._private.downloader import download_generic_raw_model
-from .utils.env import mimic_local_env, mimic_remote_env
 
 
 def download_from_terrablob(
@@ -26,6 +25,7 @@ class GenericRawModelTest(EnvTestCase):
     @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
     @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
     @patch("michelangelo.lib.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
+    @patch.dict(os.environ, {})
     def test_download_generic_raw_model_local_env(
         self,
         mock_get_terrablob_auth_mode,
@@ -34,7 +34,6 @@ class GenericRawModelTest(EnvTestCase):
         mock_get_latest_model_revision_id,
         mock_download_from_terrablob,
     ):
-        mimic_local_env()
         mock_get_latest_model_revision_id.return_value = 0
         mock_path_exists_revision_id.return_value = True
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -61,6 +60,7 @@ class GenericRawModelTest(EnvTestCase):
     @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.path_exists")
     @patch("michelangelo.lib.model_manager._private.utils.model_utils.model_revision_id.list_terrablob_dir")
     @patch("michelangelo.lib.model_manager._private.utils.terrablob_utils.get_terrablob_auth_mode", return_value=None)
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_download_generic_raw_model_remote_env(
         self,
         mock_get_terrablob_auth_mode,
@@ -69,7 +69,6 @@ class GenericRawModelTest(EnvTestCase):
         mock_get_latest_model_revision_id,
         mock_download_from_terrablob,
     ):
-        mimic_remote_env()
         mock_get_latest_model_revision_id.return_value = 0
         mock_path_exists_revision_id.return_value = True
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -91,8 +90,8 @@ class GenericRawModelTest(EnvTestCase):
 
     @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.download_from_terrablob", wraps=download_from_terrablob)
     @patch("michelangelo.lib.model_manager._private.downloader.generic_raw_model.get_terrablob_auth_mode", return_value=None)
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_download_generic_raw_model_with_model_revision(self, mock_get_terrablob_auth_model, mock_download_from_terrablob):
-        mimic_remote_env()
         with tempfile.TemporaryDirectory() as temp_dir:
             dest_model_path = os.path.join(temp_dir, "model")
             download_generic_raw_model("test_project", "model_name", "1", dest_model_path)

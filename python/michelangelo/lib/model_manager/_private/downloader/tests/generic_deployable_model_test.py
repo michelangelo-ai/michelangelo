@@ -6,7 +6,6 @@ from unittest.mock import patch
 from michelangelo._internal.testing.env import EnvTestCase
 from michelangelo.lib.model_manager.constants import PackageType, StorageType
 from michelangelo.lib.model_manager._private.downloader import download_generic_deployable_model
-from .utils.env import mimic_local_env, mimic_remote_env
 
 
 def download_from_terrablob_simple(
@@ -63,6 +62,7 @@ class GenericDeployableModelTest(EnvTestCase):
     @patch(
         "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
+    @patch.dict(os.environ, {})
     def test_download_generic_deployable_model_local_env(
         self,
         mock_download_from_terrablob,
@@ -71,7 +71,6 @@ class GenericDeployableModelTest(EnvTestCase):
         mock_path_exists_revision_id,
         mock_get_latest_model_revision_id,
     ):
-        mimic_local_env()
         mock_get_terrablob_auth_mode.return_value = None
         mock_get_latest_model_revision_id.return_value = 0
         mock_path_exists_revision_id.return_value = False
@@ -116,6 +115,7 @@ class GenericDeployableModelTest(EnvTestCase):
     @patch(
         "michelangelo.lib.model_manager._private.downloader.generic_deployable_model.download_from_terrablob", wraps=download_from_terrablob_simple
     )
+    @patch.dict(os.environ, {"UF_TASK_IMAGE": "image"})
     def test_download_generic_deployable_model_remote_env(
         self,
         mock_download_from_terrablob,
@@ -124,7 +124,6 @@ class GenericDeployableModelTest(EnvTestCase):
         mock_path_exists_revision_id,
         mock_get_latest_model_revision_id,
     ):
-        mimic_remote_env()
         mock_get_terrablob_auth_mode.return_value = None
         mock_get_latest_model_revision_id.return_value = 0
         mock_path_exists_revision_id.return_value = False
