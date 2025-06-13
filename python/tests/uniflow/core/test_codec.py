@@ -80,7 +80,7 @@ class Test(TestCase):
         # Compare the encoded result with the expected JSON object.
         expected_json = {
             "entity_type": {
-                "path": "test_codec.Entity",
+                "path": "tests.uniflow.core.test_codec.Entity",
                 "__codec__": "type",
             },
             "entity": {
@@ -92,14 +92,14 @@ class Test(TestCase):
                         "value": {
                             "status": 200,
                             "function_ref": {
-                                "path": "test_codec.user_defined_function",
+                                "path": "tests.uniflow.core.test_codec.user_defined_function",
                                 "__codec__": "type",
                             },
                             "color": {
                                 "name": "RED",
                                 "value": 1,
                                 "__codec__": "enum",
-                                "__class__": "test_codec.Color",
+                                "__class__": "tests.uniflow.core.test_codec.Color",
                             },
                             "bytes": {
                                 "__codec__": "bytes",
@@ -108,7 +108,7 @@ class Test(TestCase):
                         },
                         "children": None,
                         "_private_field": None,  # private fields are encoded/decoded in the same way as public fields
-                        "__class__": "test_codec.Entity",
+                        "__class__": "tests.uniflow.core.test_codec.Entity",
                         "__codec__": "dataclass",
                     },
                     {
@@ -120,20 +120,20 @@ class Test(TestCase):
                                 "id": "parent_pydantic_entity",
                                 "index": 100,
                                 "parent": None,
-                                "__class__": "test_codec.PydanticEnity",
+                                "__class__": "tests.uniflow.core.test_codec.PydanticEnity",
                                 "__codec__": "pydantic",
                             },
-                            "__class__": "test_codec.PydanticEnity",
+                            "__class__": "tests.uniflow.core.test_codec.PydanticEnity",
                             "__codec__": "pydantic",
                         },
                         "children": None,
                         "_private_field": None,  # private fields are encoded/decoded in the same way as public fields
-                        "__class__": "test_codec.Entity",
+                        "__class__": "tests.uniflow.core.test_codec.Entity",
                         "__codec__": "dataclass",
                     },
                 ],
                 "_private_field": "secret",
-                "__class__": "test_codec.Entity",
+                "__class__": "tests.uniflow.core.test_codec.Entity",
                 "__codec__": "dataclass",
             },
         }
