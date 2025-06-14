@@ -67,12 +67,21 @@ def upload_to_terrablob(
 
     def upload_file(file_path: str) -> dict:
         rel_path = os.path.relpath(file_path, src_path).replace("\\", "/")
-        return upload_file_to_terrablob(file_path, f"{des_path}/{rel_path}", options, use_kraken=use_kraken, multipart=multipart, concurrency=concurrency)
+        return upload_file_to_terrablob(
+            file_path,
+            f"{des_path}/{rel_path}",
+            options,
+            use_kraken=use_kraken,
+            multipart=multipart,
+            concurrency=concurrency,
+        )
 
     files = list_files(src_path)
 
     if use_threads:
-        num_threads = max(num_threads, 1) if num_threads is not None else DEFAULT_NUM_THREADS
+        num_threads = (
+            max(num_threads, 1) if num_threads is not None else DEFAULT_NUM_THREADS
+        )
         with ThreadPoolExecutor(max_workers=num_threads) as executor:
             futures = [executor.submit(upload_file, file) for file in files]
             for future in as_completed(futures):
@@ -134,9 +143,13 @@ def upload_file_to_terrablob(
 
     stats = os.stat(src_path)
 
-    _logger.info(f"Uploading {src_path} to Terrablob {des_path}. File size: {stats.st_size} bytes.")
+    _logger.info(
+        f"Uploading {src_path} to Terrablob {des_path}. File size: {stats.st_size} bytes."
+    )
 
-    message = execute_terrablob_cmd_with_exception(cmd, f"Error uploading {src_path} to Terrablob {des_path}.")
+    message = execute_terrablob_cmd_with_exception(
+        cmd, f"Error uploading {src_path} to Terrablob {des_path}."
+    )
 
     result = {
         "exitcode": 0,
@@ -159,4 +172,8 @@ def list_files(directory):
     Returns:
         A list of paths to all files in the directory.
     """
-    return [os.path.join(dirpath, file) for dirpath, _, filenames in os.walk(directory) for file in filenames]
+    return [
+        os.path.join(dirpath, file)
+        for dirpath, _, filenames in os.walk(directory)
+        for file in filenames
+    ]

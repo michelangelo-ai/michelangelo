@@ -33,7 +33,9 @@ class ListTest(TestCase):
             ),
         ]
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_list_terrablob_dir(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (
             b'{"result": [{"type": "dir", "name": "dir1"},{"type": "blob", "name": "file1"}]}',
@@ -78,11 +80,26 @@ class ListTest(TestCase):
             auth_mode="auto",
         )
         mock_execute_terrablob_cmd.assert_called_with(
-            ["tb-cli", "ls", "test", "--json", "--limit", "10", "-t", "2h", "-a", "user", "--auth-mode", "auto"],
+            [
+                "tb-cli",
+                "ls",
+                "test",
+                "--json",
+                "--limit",
+                "10",
+                "-t",
+                "2h",
+                "-a",
+                "user",
+                "--auth-mode",
+                "auto",
+            ],
         )
         self.assertEqual(paths, ["test/file1"])
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_list_terrablob_dir_recursively(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
         paths = list_terrablob_dir("test", recursive=True)
@@ -104,8 +121,12 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    def test_list_terrablob_dir_recursively_output_relative_path(self, mock_execute_terrablob_cmd):
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
+    def test_list_terrablob_dir_recursively_output_relative_path(
+        self, mock_execute_terrablob_cmd
+    ):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
         paths = list_terrablob_dir("test", recursive=True, output_relative_path=True)
@@ -127,8 +148,12 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    def test_list_terrablob_dir_recursively_include_dir(self, mock_execute_terrablob_cmd):
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
+    def test_list_terrablob_dir_recursively_include_dir(
+        self, mock_execute_terrablob_cmd
+    ):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
         paths = list_terrablob_dir("test", recursive=True, include_dir=True)
@@ -154,11 +179,17 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    def test_list_terrablob_dir_recursively_oupout_relative_path_include_dir(self, mock_execute_terrablob_cmd):
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
+    def test_list_terrablob_dir_recursively_oupout_relative_path_include_dir(
+        self, mock_execute_terrablob_cmd
+    ):
         mock_execute_terrablob_cmd.side_effect = self.recursive_side_effect
 
-        paths = list_terrablob_dir("test", recursive=True, output_relative_path=True, include_dir=True)
+        paths = list_terrablob_dir(
+            "test", recursive=True, output_relative_path=True, include_dir=True
+        )
         mock_execute_terrablob_cmd.assert_has_calls(
             [
                 call(["tb-cli", "ls", "test", "--json"]),
@@ -181,13 +212,19 @@ class ListTest(TestCase):
             ],
         )
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_list_terrablob_dir_failure(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"", b"error", 1)
         with self.assertRaises(TerrablobError):
             list_terrablob_dir("dir")
 
-        mock_execute_terrablob_cmd.return_value = (b"", b"error code:permission-denied ...", 1)
+        mock_execute_terrablob_cmd.return_value = (
+            b"",
+            b"error code:permission-denied ...",
+            1,
+        )
         with self.assertRaises(TerrablobPermissionError):
             list_terrablob_dir("dir")
 
@@ -196,8 +233,12 @@ class ListTest(TestCase):
             list_terrablob_dir("dir")
 
     @patch("time.sleep")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
-    def test_list_terrablob_dir_retry(self, mock_execute_terrablob_cmd, mock_time_sleep):
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
+    def test_list_terrablob_dir_retry(
+        self, mock_execute_terrablob_cmd, mock_time_sleep
+    ):
         mock_execute_terrablob_cmd.return_value = (
             b"",
             b"E0731 1:6:58.413706363  251714 backup_poller.cc:138]       "

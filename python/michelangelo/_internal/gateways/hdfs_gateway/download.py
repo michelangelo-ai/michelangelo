@@ -23,6 +23,8 @@ def download_from_hdfs(src_path: str, des_path: str):
     _logger.info(f"Executing command: {cmd}")
     out, err, exitcode = execute_cmd(cmd)
     if exitcode != 0:
-        raise HDFSError(f"Error downloading from HDFS {src_path} to {des_path}. Error: {decode_output(err)}")
+        raise HDFSError(
+            f"Error downloading from HDFS {src_path} to {des_path}. Error: {decode_output(err)}"
+        )
 
     _logger.info(f"Successfully downloaded from HDFS {src_path} to {des_path}")

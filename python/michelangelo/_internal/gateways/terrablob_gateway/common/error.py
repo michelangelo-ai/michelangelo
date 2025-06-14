@@ -41,11 +41,17 @@ def get_terrablob_error(
     if cmd_error and "reset reason: connection timeout" in cmd_error:
         return TerrablobConnectionTimeoutError(f"{error_message}. Error: {cmd_error}")
 
-    if cmd_error and "code:unavailable message:closing transport due to: connection error" in cmd_error:
+    if (
+        cmd_error
+        and "code:unavailable message:closing transport due to: connection error"
+        in cmd_error
+    ):
         return TerrablobConnectionError(f"{error_message}. Error: {cmd_error}")
 
     if cmd_error and "context deadline exceeded" in cmd_error:
-        return TerrablobContextDeadlineExceededError(f"{error_message}. Error: {cmd_error}")
+        return TerrablobContextDeadlineExceededError(
+            f"{error_message}. Error: {cmd_error}"
+        )
 
     if cmd_error:
         return TerrablobError(f"{error_message}. Error: {cmd_error}")

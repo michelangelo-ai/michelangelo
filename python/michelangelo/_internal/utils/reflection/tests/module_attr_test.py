@@ -7,7 +7,9 @@ import michelangelo._internal.utils.reflection.tests.fixtures.simple_module  # n
 
 class ModuleAttrTest(TestCase):
     def test_get_module_attr(self):
-        module_attr = get_module_attr("michelangelo._internal.utils.reflection.tests.fixtures.simple_module.module_attr")
+        module_attr = get_module_attr(
+            "michelangelo._internal.utils.reflection.tests.fixtures.simple_module.module_attr"
+        )
 
         self.assertIsNotNone(module_attr)
         self.assertEqual(module_attr.__name__, "module_attr")

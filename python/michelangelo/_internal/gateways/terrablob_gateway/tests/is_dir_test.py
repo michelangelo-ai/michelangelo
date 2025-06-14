@@ -8,7 +8,9 @@ from michelangelo._internal.errors.terrablob_error import (
 
 
 class IsDirTest(TestCase):
-    @patch("michelangelo._internal.gateways.terrablob_gateway.is_dir.list_terrablob_dir")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.is_dir.list_terrablob_dir"
+    )
     def test_path_is_dir(self, mock_list_terrablob_dir):
         self.assertTrue(path_is_dir("test"))
 

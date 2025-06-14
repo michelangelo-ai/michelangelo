@@ -20,7 +20,10 @@ def tb_cli_get(cmd: list[str]):
 
 class DownloadTest(TestCase):
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
+        wraps=tb_cli_get,
+    )
     def test_download_from_terrablob_success(
         self,
         mock_tb_cli_get,
@@ -35,9 +38,22 @@ class DownloadTest(TestCase):
             mock_tb_cli_get.assert_called_once_with(["tb-cli", "get", "src", dest])
             self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
-            result = download_from_terrablob("src", dest, timeout="2h", source_entity="user", auth_mode="auto")
+            result = download_from_terrablob(
+                "src", dest, timeout="2h", source_entity="user", auth_mode="auto"
+            )
             mock_tb_cli_get.assert_called_with(
-                ["tb-cli", "get", "src", dest, "-t", "2h", "-a", "user", "--auth-mode", "auto"],
+                [
+                    "tb-cli",
+                    "get",
+                    "src",
+                    dest,
+                    "-t",
+                    "2h",
+                    "-a",
+                    "user",
+                    "--auth-mode",
+                    "auto",
+                ],
             )
             self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
@@ -52,7 +68,9 @@ class DownloadTest(TestCase):
             )
             self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
     def test_download_from_terrablob_failure(
         self,
@@ -64,7 +82,11 @@ class DownloadTest(TestCase):
         with self.assertRaises(TerrablobError):
             download_from_terrablob("src", "dest")
 
-        mock_execute_terrablob_cmd.return_value = (b"", b"error code:permission-denied ...", 1)
+        mock_execute_terrablob_cmd.return_value = (
+            b"",
+            b"error code:permission-denied ...",
+            1,
+        )
         with self.assertRaises(TerrablobPermissionError):
             download_from_terrablob("src", "dest")
 
@@ -73,14 +95,21 @@ class DownloadTest(TestCase):
             download_from_terrablob("src", "dest")
 
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir"
+    )
     def test_download_dir_from_terrablob(
         self,
         mock_list_terrablob_dir,
         mock_path_is_dir,
     ):
         mock_path_is_dir.return_value = True
-        mock_list_terrablob_dir.return_value = ["src/file1", "src/sub/file2", "src/sub/file3", "src/file4"]
+        mock_list_terrablob_dir.return_value = [
+            "src/file1",
+            "src/sub/file2",
+            "src/sub/file3",
+            "src/file4",
+        ]
         with patch(
             "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
             wraps=tb_cli_get,
@@ -100,17 +129,40 @@ class DownloadTest(TestCase):
 
                 mock_tb_cli_get.assert_has_calls(
                     [
-                        call(["tb-cli", "get", "src/file1", os.path.join(dest, "file1")]),
-                        call(["tb-cli", "get", "src/sub/file2", os.path.join(dest, "sub/file2")]),
-                        call(["tb-cli", "get", "src/sub/file3", os.path.join(dest, "sub/file3")]),
-                        call(["tb-cli", "get", "src/file4", os.path.join(dest, "file4")]),
+                        call(
+                            ["tb-cli", "get", "src/file1", os.path.join(dest, "file1")]
+                        ),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/sub/file2",
+                                os.path.join(dest, "sub/file2"),
+                            ]
+                        ),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/sub/file3",
+                                os.path.join(dest, "sub/file3"),
+                            ]
+                        ),
+                        call(
+                            ["tb-cli", "get", "src/file4", os.path.join(dest, "file4")]
+                        ),
                     ],
                     any_order=True,
                 )
 
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd", wraps=tb_cli_get)
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir"
+    )
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
+        wraps=tb_cli_get,
+    )
     def test_download_dir_from_terrablob_single_thread(
         self,
         mock_tb_cli_get,
@@ -118,7 +170,12 @@ class DownloadTest(TestCase):
         mock_path_is_dir,
     ):
         mock_path_is_dir.return_value = True
-        mock_list_terrablob_dir.return_value = ["src/file1", "src/sub/file2", "src/sub/file3", "src/file4"]
+        mock_list_terrablob_dir.return_value = [
+            "src/file1",
+            "src/sub/file2",
+            "src/sub/file3",
+            "src/file4",
+        ]
         with tempfile.TemporaryDirectory() as temp_dir:
             dest = os.path.join(temp_dir, "dest")
             result = download_from_terrablob("src", dest, use_threads=False)
@@ -135,22 +192,43 @@ class DownloadTest(TestCase):
             mock_tb_cli_get.assert_has_calls(
                 [
                     call(["tb-cli", "get", "src/file1", os.path.join(dest, "file1")]),
-                    call(["tb-cli", "get", "src/sub/file2", os.path.join(dest, "sub/file2")]),
-                    call(["tb-cli", "get", "src/sub/file3", os.path.join(dest, "sub/file3")]),
+                    call(
+                        [
+                            "tb-cli",
+                            "get",
+                            "src/sub/file2",
+                            os.path.join(dest, "sub/file2"),
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "get",
+                            "src/sub/file3",
+                            os.path.join(dest, "sub/file3"),
+                        ]
+                    ),
                     call(["tb-cli", "get", "src/file4", os.path.join(dest, "file4")]),
                 ],
                 any_order=True,
             )
 
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.download.list_terrablob_dir"
+    )
     def test_download_dir_from_terrablob_staging(
         self,
         mock_list_terrablob_dir,
         mock_path_is_dir,
     ):
         mock_path_is_dir.return_value = True
-        mock_list_terrablob_dir.return_value = ["src/file1", "src/sub/file2", "src/sub/file3", "src/file4"]
+        mock_list_terrablob_dir.return_value = [
+            "src/file1",
+            "src/sub/file2",
+            "src/sub/file3",
+            "src/file4",
+        ]
         with patch(
             "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd",
             wraps=tb_cli_get,
@@ -170,16 +248,50 @@ class DownloadTest(TestCase):
 
                 mock_tb_cli_get.assert_has_calls(
                     [
-                        call(["tb-cli", "get", "src/file1", os.path.join(dest, "file1"), "-s"]),
-                        call(["tb-cli", "get", "src/sub/file2", os.path.join(dest, "sub/file2"), "-s"]),
-                        call(["tb-cli", "get", "src/sub/file3", os.path.join(dest, "sub/file3"), "-s"]),
-                        call(["tb-cli", "get", "src/file4", os.path.join(dest, "file4"), "-s"]),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/file1",
+                                os.path.join(dest, "file1"),
+                                "-s",
+                            ]
+                        ),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/sub/file2",
+                                os.path.join(dest, "sub/file2"),
+                                "-s",
+                            ]
+                        ),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/sub/file3",
+                                os.path.join(dest, "sub/file3"),
+                                "-s",
+                            ]
+                        ),
+                        call(
+                            [
+                                "tb-cli",
+                                "get",
+                                "src/file4",
+                                os.path.join(dest, "file4"),
+                                "-s",
+                            ]
+                        ),
                     ],
                     any_order=True,
                 )
 
     @patch("time.sleep")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     @patch("michelangelo._internal.gateways.terrablob_gateway.download.path_is_dir")
     def test_download_from_terrablob_retry(
         self,

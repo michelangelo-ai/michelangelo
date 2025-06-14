@@ -62,7 +62,9 @@ def download_from_terrablob(
         paths = list_terrablob_dir(src_path, recursive=True, **kwargs)
 
         if use_threads:
-            num_threads = max(num_threads, 1) if num_threads is not None else DEFAULT_NUM_THREADS
+            num_threads = (
+                max(num_threads, 1) if num_threads is not None else DEFAULT_NUM_THREADS
+            )
             with ThreadPoolExecutor(max_workers=num_threads) as executor:
                 futures = [executor.submit(download_file, path) for path in paths]
                 for future in as_completed(futures):
@@ -87,7 +89,12 @@ def download_from_terrablob(
     return result
 
 
-def download_file_from_terrablob(src_path: str, des_path: str, options: TerrablobOptions, multipart: Optional[bool] = False) -> dict:
+def download_file_from_terrablob(
+    src_path: str,
+    des_path: str,
+    options: TerrablobOptions,
+    multipart: Optional[bool] = False,
+) -> dict:
     """
     Download one file from Terrablob.
     This is an internal function. Use download_from_terrablob instead.
@@ -119,7 +126,9 @@ def download_file_from_terrablob(src_path: str, des_path: str, options: Terrablo
 
     _logger.info(f"Downloading {src_path} to Terrablob {des_path}.")
 
-    message = execute_terrablob_cmd_with_exception(cmd, f"Error downloading from Terrablob {src_path} to {des_path}.")
+    message = execute_terrablob_cmd_with_exception(
+        cmd, f"Error downloading from Terrablob {src_path} to {des_path}."
+    )
 
     stats = os.stat(des_path)
 
@@ -129,6 +138,8 @@ def download_file_from_terrablob(src_path: str, des_path: str, options: Terrablo
         "error": "",
     }
 
-    _logger.info(f"download_from_terrablob result: {result}. File size: {stats.st_size} bytes.")
+    _logger.info(
+        f"download_from_terrablob result: {result}. File size: {stats.st_size} bytes."
+    )
 
     return result

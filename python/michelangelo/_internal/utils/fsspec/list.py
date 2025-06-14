@@ -3,7 +3,11 @@ from typing import Optional
 from pathlib import PurePath
 
 
-def ls_files(path: str, recursive: Optional[bool] = False, output_relative_path: Optional[bool] = False) -> list[str]:
+def ls_files(
+    path: str,
+    recursive: Optional[bool] = False,
+    output_relative_path: Optional[bool] = False,
+) -> list[str]:
     """
     List the files in a directory.
 
@@ -54,9 +58,18 @@ def ls_files_internal(
 
     items = [item for item in results if item["name"] != root_directory]
 
-    output_paths.extend([construct_path(item["name"]) for item in items if item.get("type") == "file"])
+    output_paths.extend(
+        [construct_path(item["name"]) for item in items if item.get("type") == "file"]
+    )
 
     if recursive:
         for item in items:
             if item.get("type") == "directory":
-                ls_files_internal(fs, item["name"], output_paths, root_directory, recursive, output_relative_path)
+                ls_files_internal(
+                    fs,
+                    item["name"],
+                    output_paths,
+                    root_directory,
+                    recursive,
+                    output_relative_path,
+                )

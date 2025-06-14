@@ -7,7 +7,9 @@ from michelangelo._internal.utils.cmd import (
 from michelangelo._internal.gateways.terrablob_gateway.common.error import (
     get_terrablob_error,
 )
-from michelangelo._internal.gateways.terrablob_gateway.common.option import TerrablobOptions
+from michelangelo._internal.gateways.terrablob_gateway.common.option import (
+    TerrablobOptions,
+)
 from michelangelo._internal.errors.terrablob_error import (
     TerrablobRetriableError,
     TerrablobError,
@@ -36,7 +38,11 @@ def execute_terrablob_cmd(cmd: list[str]) -> tuple[bytes, bytes, int]:
     return out, err, exitcode
 
 
-@retry(retry_on_exception=lambda e: isinstance(e, TerrablobRetriableError), stop_max_attempt_number=3, wait_exponential_multiplier=4000)
+@retry(
+    retry_on_exception=lambda e: isinstance(e, TerrablobRetriableError),
+    stop_max_attempt_number=3,
+    wait_exponential_multiplier=4000,
+)
 def execute_terrablob_cmd_with_exception(cmd: list[str], error_message: str) -> str:
     """
     Execute a tb-cli command in a subprocess and return the output. Throw exception if stderr is not empty.

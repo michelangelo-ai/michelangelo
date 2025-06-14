@@ -59,7 +59,15 @@ class ListTest(TestCase):
 
         paths = ls_files("foo/bar", recursive=True)
 
-        self.assertEqual(paths, ["foo/bar/file1", "foo/bar/dir1/file1", "foo/bar/dir2/file2", "foo/bar/dir2/dir3/file3"])
+        self.assertEqual(
+            paths,
+            [
+                "foo/bar/file1",
+                "foo/bar/dir1/file1",
+                "foo/bar/dir2/file2",
+                "foo/bar/dir2/dir3/file3",
+            ],
+        )
 
     @patch("michelangelo._internal.utils.fsspec.list.fsspec.core.url_to_fs")
     def test_ls_files_recursive_relative(self, mock_url_to_fs):
@@ -86,4 +94,6 @@ class ListTest(TestCase):
 
         paths = ls_files("foo/bar", recursive=True, output_relative_path=True)
 
-        self.assertEqual(paths, ["file1", "dir1/file1", "dir2/file2", "dir2/dir3/file3"])
+        self.assertEqual(
+            paths, ["file1", "dir1/file1", "dir2/file2", "dir2/dir3/file3"]
+        )

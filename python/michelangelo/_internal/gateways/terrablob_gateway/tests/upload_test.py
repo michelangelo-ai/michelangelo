@@ -14,7 +14,9 @@ class UploadTest(TestCase):
     @patch("os.stat")
     @patch("os.path.exists")
     @patch("os.path.isfile")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_upload_one_file_to_terrablob_success(
         self,
         mock_execute_terrablob_cmd,
@@ -34,10 +36,30 @@ class UploadTest(TestCase):
         )
         self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
-        result = upload_to_terrablob("src", "dest", use_kraken=True, timeout="2h", source_entity="user", auth_mode="auto")
+        result = upload_to_terrablob(
+            "src",
+            "dest",
+            use_kraken=True,
+            timeout="2h",
+            source_entity="user",
+            auth_mode="auto",
+        )
 
         mock_execute_terrablob_cmd.assert_called_with(
-            ["tb-cli", "put", "src", "dest", "-p", "--kraken", "-t", "2h", "-a", "user", "--auth-mode", "auto"],
+            [
+                "tb-cli",
+                "put",
+                "src",
+                "dest",
+                "-p",
+                "--kraken",
+                "-t",
+                "2h",
+                "-a",
+                "user",
+                "--auth-mode",
+                "auto",
+            ],
         )
         self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
@@ -48,15 +70,21 @@ class UploadTest(TestCase):
         )
         self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
-        result = upload_to_terrablob("src", "dest", use_kraken=True, multipart=True, concurrency=10)
+        result = upload_to_terrablob(
+            "src", "dest", use_kraken=True, multipart=True, concurrency=10
+        )
 
-        mock_execute_terrablob_cmd.assert_called_with(["tb-cli", "put", "src", "dest", "-p", "--kraken", "-m", "-C", "10"])
+        mock_execute_terrablob_cmd.assert_called_with(
+            ["tb-cli", "put", "src", "dest", "-p", "--kraken", "-m", "-C", "10"]
+        )
         self.assertEqual(result, {"exitcode": 0, "message": "pass", "error": ""})
 
     @patch("os.stat")
     @patch("os.path.exists")
     @patch("os.path.isfile")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_upload_to_terrablob_failure(
         self,
         mock_execute_terrablob_cmd,
@@ -72,7 +100,11 @@ class UploadTest(TestCase):
         with self.assertRaises(TerrablobError):
             upload_to_terrablob("src", "dest")
 
-        mock_execute_terrablob_cmd.return_value = (b"", b"error code:permission-denied ...", 1)
+        mock_execute_terrablob_cmd.return_value = (
+            b"",
+            b"error code:permission-denied ...",
+            1,
+        )
         with self.assertRaises(TerrablobPermissionError):
             upload_to_terrablob("src", "dest")
 
@@ -84,7 +116,9 @@ class UploadTest(TestCase):
         with self.assertRaises(FileNotFoundError):
             upload_to_terrablob("src_path", "dest")
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_upload_dir_to_terrablob(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"pass", b"", 0)
 
@@ -127,17 +161,67 @@ class UploadTest(TestCase):
 
             mock_execute_terrablob_cmd.assert_has_calls(
                 [
-                    call(["tb-cli", "put", os.path.join(temp_dir, "file1"), "dest/file1", "-p"]),
-                    call(["tb-cli", "put", os.path.join(temp_dir, "file2"), "dest/file2", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subdir1, "file3"), "dest/subdir1/file3", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subdir2, "file4"), "dest/subdir2/file4", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subsubdir1, "file5"), "dest/subdir1/subsubdir1/file5", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subsubdir1, "file6"), "dest/subdir1/subsubdir1/file6", "-p"]),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(temp_dir, "file1"),
+                            "dest/file1",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(temp_dir, "file2"),
+                            "dest/file2",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subdir1, "file3"),
+                            "dest/subdir1/file3",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subdir2, "file4"),
+                            "dest/subdir2/file4",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subsubdir1, "file5"),
+                            "dest/subdir1/subsubdir1/file5",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subsubdir1, "file6"),
+                            "dest/subdir1/subsubdir1/file6",
+                            "-p",
+                        ]
+                    ),
                 ],
                 any_order=True,
             )
 
-    @patch("michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.common.cmd.execute_terrablob_cmd"
+    )
     def test_upload_to_terrablob_single_thread(self, mock_execute_terrablob_cmd):
         mock_execute_terrablob_cmd.return_value = (b"pass", b"", 0)
 
@@ -180,12 +264,60 @@ class UploadTest(TestCase):
 
             mock_execute_terrablob_cmd.assert_has_calls(
                 [
-                    call(["tb-cli", "put", os.path.join(temp_dir, "file1"), "dest/file1", "-p"]),
-                    call(["tb-cli", "put", os.path.join(temp_dir, "file2"), "dest/file2", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subdir1, "file3"), "dest/subdir1/file3", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subdir2, "file4"), "dest/subdir2/file4", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subsubdir1, "file5"), "dest/subdir1/subsubdir1/file5", "-p"]),
-                    call(["tb-cli", "put", os.path.join(subsubdir1, "file6"), "dest/subdir1/subsubdir1/file6", "-p"]),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(temp_dir, "file1"),
+                            "dest/file1",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(temp_dir, "file2"),
+                            "dest/file2",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subdir1, "file3"),
+                            "dest/subdir1/file3",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subdir2, "file4"),
+                            "dest/subdir2/file4",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subsubdir1, "file5"),
+                            "dest/subdir1/subsubdir1/file5",
+                            "-p",
+                        ]
+                    ),
+                    call(
+                        [
+                            "tb-cli",
+                            "put",
+                            os.path.join(subsubdir1, "file6"),
+                            "dest/subdir1/subsubdir1/file6",
+                            "-p",
+                        ]
+                    ),
                 ],
                 any_order=True,
             )

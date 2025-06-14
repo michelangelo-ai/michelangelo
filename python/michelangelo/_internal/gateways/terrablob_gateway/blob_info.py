@@ -42,7 +42,9 @@ def get_blob_info(blob_path: str, **kwargs) -> dict:
 
     _logger.info(f"Getting blob info for {blob_path}.")
 
-    message = execute_terrablob_cmd_with_exception(cmd, f"Error getting blob info for {blob_path}.")
+    message = execute_terrablob_cmd_with_exception(
+        cmd, f"Error getting blob info for {blob_path}."
+    )
 
     data = json.loads(message)
 

@@ -78,7 +78,9 @@ def list_terrablob_dir_internal(
 
     cmd = construct_terrablob_cmd(cmd, options)
 
-    message = execute_terrablob_cmd_with_exception(cmd, f"Error listing Terrablob directory {directory}.")
+    message = execute_terrablob_cmd_with_exception(
+        cmd, f"Error listing Terrablob directory {directory}."
+    )
 
     data = json.loads(message)
 
@@ -91,17 +93,21 @@ def list_terrablob_dir_internal(
         if directory == root_directory:
             return name
 
-        return f"{directory[len(root_directory) + 1:]}/{name}"
+        return f"{directory[len(root_directory) + 1 :]}/{name}"
 
     paths.extend(
-        [construct_path(item["name"]) for item in result if include_dir or item.get("type", None) == "blob"],
+        [
+            construct_path(item["name"])
+            for item in result
+            if include_dir or item.get("type", None) == "blob"
+        ],
     )
 
     if recursive:
         for item in result:
             if item.get("type", "blob") == "dir":
                 list_terrablob_dir_internal(
-                    f'{directory}/{item["name"]}',
+                    f"{directory}/{item['name']}",
                     paths,
                     root_directory,
                     options,

@@ -10,7 +10,9 @@ from michelangelo._internal.errors.terrablob_error import (
 
 class ExistsTest(TestCase):
     @patch("michelangelo._internal.gateways.terrablob_gateway.exists.get_blob_info")
-    @patch("michelangelo._internal.gateways.terrablob_gateway.exists.list_terrablob_dir")
+    @patch(
+        "michelangelo._internal.gateways.terrablob_gateway.exists.list_terrablob_dir"
+    )
     def test_path_exists(self, mock_list_terrablob_dir, mock_get_blob_info):
         self.assertTrue(path_exists("test"))
 

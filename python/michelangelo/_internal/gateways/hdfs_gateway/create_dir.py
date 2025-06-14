@@ -22,6 +22,8 @@ def create_dir_in_hdfs(dir_path: str):
     _logger.info(f"Executing command: {cmd}")
     out, err, exitcode = execute_cmd(cmd)
     if exitcode != 0:
-        raise HDFSError(f"Error creating directory in HDFS {dir_path}. Error: {decode_output(err)}")
+        raise HDFSError(
+            f"Error creating directory in HDFS {dir_path}. Error: {decode_output(err)}"
+        )
 
     _logger.info(f"Successfully created directory in HDFS {dir_path}")

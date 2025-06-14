@@ -60,7 +60,10 @@ class ErrorTest(TestCase):
         )
 
         self.assertIsInstance(
-            get_terrablob_error("code:unavailable message:closing transport due to: connection error", "message"),
+            get_terrablob_error(
+                "code:unavailable message:closing transport due to: connection error",
+                "message",
+            ),
             TerrablobConnectionError,
         )
 
