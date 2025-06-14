@@ -167,8 +167,18 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0",
     )
 
-    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--selector=!job-name", "--timeout=600s")
-    _exec("kubectl", "wait", "--all", "jobs", "--for=condition=complete", "--timeout=600s")
+    _exec(
+        "kubectl",
+        "wait",
+        "--all",
+        "pods",
+        "--for=condition=ready",
+        "--selector=!job-name",
+        "--timeout=600s",
+    )
+    _exec(
+        "kubectl", "wait", "--all", "jobs", "--for=condition=complete", "--timeout=600s"
+    )
 
     links = []
     _assert_command(
@@ -292,7 +302,15 @@ def _setup_temporal(links, helm_existing_repos):
 
 def _setup_cadence(links):
     _kube_create(_dir / "resources" / "cadence.yaml")
-    _exec("kubectl", "wait", "--all", "pods", "--for=condition=ready", "--selector=!job-name", "--timeout=600s")
+    _exec(
+        "kubectl",
+        "wait",
+        "--all",
+        "pods",
+        "--for=condition=ready",
+        "--selector=!job-name",
+        "--timeout=600s",
+    )
     _kube_run(
         image="ubercadence/cli:v1.2.6",
         command=[
