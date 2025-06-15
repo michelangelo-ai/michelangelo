@@ -19,7 +19,16 @@ RUN apt-get update && apt-get install -y \
     libffi-dev \
     liblzma-dev \
     zlib1g-dev \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# The CA mount block is defined in the build_docker.sh script
+# It can be used to optionally inject a CA certificate into the container
+${CA_MOUNT_BLOCK}
+
+# The CA environment block is defined in the build_docker.sh script
+# It can be used to make sure the CA is trusted by the python, pip and poetry
+${CA_ENV_BLOCK}
 
 # Set Python version
 ENV PYTHON_VERSION=3.9.18

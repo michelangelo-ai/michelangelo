@@ -48,6 +48,17 @@ For IDE users to access ray dashboard,
 
 ## Remote Run
 
+
+**Using Custom Certificates**
+
+If you're behind a corporate proxy or need to use a custom proxy, you need to set the `CUSTOM_CA_PATH` environment variable to point to your certificate PEM file location.
+
+For example
+
+```
+export CUSTOM_CA_PATH=<certificate-pem-location>
+```
+
 **Prerequisite**
 
 setup sandbox, see /python/michelangelo/sandbox/README.md
@@ -71,20 +82,30 @@ The create setup dependencies for Uniflow including
 
 **Run workflow**
 
-Running workflows in the remote mode requires a docker container that contains code of the workflow tasks. Build
-a new revision of the project's container, or use an existing revision if you didn't change task code.
+Running workflows in the remote mode requires a docker container that contains code of the workflow tasks. Build a new revision of the project's container, or use an existing revision if you didn't change task code.
 
 Build Docker image depending on your required environment
 
+We provide a script to build a Docker image based on the Dockerfile template. If the `CUSTOM_CA_PATH` environment variable is set, the script will automatically mount the custom certificate file as a secret into the container.
+
+```
+cd python
+./examples/build_docker.sh <path-to-dockerfile-template> <image:tag>
+```
+
 For `example` environment:
 
-    cd python
-    docker build -t examples:latest -f ./examples/Dockerfile .
+```
+cd python
+./examples/build_docker.sh examples/Dockerfile.template examples:latest
+```
 
 For `vllm` environment:
 
-    cd python
-    docker build -t vllm:latest -f ./examples/Dockerfile-vllm .
+```
+cd python
+./examples/build_docker.sh examples/Dockerfile.template vllm:latest
+```
 
 Copy the build's `Revision ID`, we use it later.
 
