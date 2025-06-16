@@ -112,7 +112,7 @@ exclude = [
 ]
 
 # https://peps.python.org/pep-0008/
-line-length = 88
+line-length = 155
 indent-width = 4
 
 # Assume Python 3.9
