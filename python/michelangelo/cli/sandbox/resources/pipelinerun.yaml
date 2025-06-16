@@ -1,9 +1,0 @@
-apiVersion: michelangelo.api/v2
-kind: PipelineRun
-metadata:
-  name: baoquan-pipelinerun-0608-06
-  namespace: default
-spec:
-  pipeline:
-    name: baoquan-pipeline-0608-04
-    namespace: default
