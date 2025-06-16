@@ -37,7 +37,7 @@ METADATA = [
 
 ### For OSS server
 # $ (Run oss server)
-ADDRESS = "127.0.0.1:5435"
+ADDRESS = "127.0.0.1:14566"
 METADATA = [
     ("rpc-caller", "grpcurl"),
     ("rpc-service", "ma-apiserver"),
