@@ -57,6 +57,7 @@ export { DescriptionHierarchy } from '#core/components/cell/renderers/descriptio
 export { LinkCell } from '#core/components/cell/renderers/link/link-cell';
 export { MultiCell } from '#core/components/cell/renderers/multi/multi-cell';
 export { StateCell } from '#core/components/cell/renderers/state/state-cell';
+export { TagCell } from '#core/components/cell/renderers/tag/tag-cell';
 export { TextCell } from '#core/components/cell/renderers/text/text-cell';
 export { TypeCell } from '#core/components/cell/renderers/type/type-cell';
 
