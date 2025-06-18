@@ -4,7 +4,6 @@ from inspect import Signature, Parameter
 from logging import basicConfig, getLogger, WARNING
 from os import getenv
 from pathlib import Path
-from pprint import pprint
 from types import MethodType
 from typing import Any, Callable, Union
 from uuid import uuid4
