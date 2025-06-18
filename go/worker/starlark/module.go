@@ -44,7 +44,9 @@ func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker
 		return err
 	}
 	for _, w := range workers {
-		workerService.Register(w)
+		workerService.RegisterWithOptions(w, worker.RegisterWorkflowOptions{
+			Name: "starlark",
+		})
 	}
 
 	return nil
