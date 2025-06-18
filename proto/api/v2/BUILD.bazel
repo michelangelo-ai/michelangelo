@@ -19,6 +19,8 @@ proto_library(
         "deployment_svc.proto",
         "git.proto",
         "groupversion_info.proto",
+        "inference_server.proto",
+        "inference_server_svc.proto",
         "job.proto",
         "kubernetes.proto",
         "model.proto",
