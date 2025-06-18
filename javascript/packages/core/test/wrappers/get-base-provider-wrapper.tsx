@@ -1,5 +1,8 @@
 // This is required for some BaseWeb components. If missing, BaseWeb will console.warn
 
+import { Client as Styletron } from 'styletron-engine-atomic';
+import { Provider as StyletronProvider } from 'styletron-react';
+
 import { ThemeProvider } from '#core/themes/provider';
 import { WrapperComponentProps } from './types';
 
@@ -7,6 +10,10 @@ import { WrapperComponentProps } from './types';
 // something like "`LayersManager` was not found."
 export function getBaseProviderWrapper() {
   return function BaseProviderWrapper({ children }: WrapperComponentProps) {
-    return <ThemeProvider>{children}</ThemeProvider>;
+    return (
+      <StyletronProvider value={new Styletron()}>
+        <ThemeProvider>{children}</ThemeProvider>
+      </StyletronProvider>
+    );
   };
 }

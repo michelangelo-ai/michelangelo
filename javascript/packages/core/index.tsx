@@ -76,6 +76,8 @@ export { Icon } from '#core/components/icon/icon';
 export { IconKind } from '#core/components/icon/types';
 export { IconProvider } from '#core/providers/icon-provider/icon-provider';
 
+export { ThemeProvider };
+
 export { UserProvider } from '#core/providers/user-provider/user-provider';
 
 export * from '#core/utils/object-utils';
