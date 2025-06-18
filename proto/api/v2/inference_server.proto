@@ -2,20 +2,16 @@
 
 syntax = "proto3";
 
-package michelangelo.api.v2beta1;
+package michelangelo.api.v2;
 
-option go_package = "michelangelo/api/v2beta1;v2beta1pb";
-option java_multiple_files = true;
-option java_outer_classname = "InferenceServerProto";
-option java_package = "com.michelangelo.api.v2beta1";
+option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "michelangelo/api/v2beta1/conditions.proto";
-import "michelangelo/api/v2beta1/feature_store_spec.proto";
-import "michelangelo/api/v2beta1/pod.proto";
-import "michelangelo/api/v2beta1/project.proto";
-import "michelangelo/api/v2beta1/user.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/v2/pod.proto";
+import "michelangelo/api/v2/project.proto";
+import "michelangelo/api/v2/user.proto";
 
 // ServingSpec encapsulates serving service specification.
 message ServingSpec {
@@ -91,7 +87,7 @@ message InferenceServerSpec {
   reserved "serving_group_override_spec";
 
   // optional feature store spec
-  OnlineFeatureStoreSpec online_feature_store_spec = 6;
+  // OnlineFeatureStoreSpec online_feature_store_spec = 6;
 
   // Information about the most recent user to update the inference-server
   // The inference-server's owner is the user who update the inference-server, not the really owner, we use owner to keep the consistency
