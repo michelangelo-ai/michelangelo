@@ -39,8 +39,6 @@ data:
 
     minio:
       awsRegion: us-east-1
-      awsAccessKeyId: minioadmin
-      awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
     
     workflowClient:
