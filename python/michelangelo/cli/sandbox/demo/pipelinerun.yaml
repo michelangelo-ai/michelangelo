@@ -1,0 +1,9 @@
+apiVersion: michelangelo.api/v2
+kind: PipelineRun
+metadata:
+ name: run-training-pipeline
+ namespace: ma-dev-test
+spec:
+ pipeline:
+   name: training-pipeline
+   namespace: ma-dev-test

@@ -3,13 +3,16 @@ kind: Pipeline
 metadata:
   name: training-pipeline
   namespace: ma-dev-test
+  annotations:
+   michelangelo/uniflow-image: docker.io/library/examples:latest
 spec:
   description: Training pipeline for my ML project
   owner:
     name: craig.marker
   type: PIPELINE_TYPE_TRAIN
   manifest:
-    type: PIPELINE_MANIFEST_TYPE_YAML
+    type: PIPELINE_MANIFEST_TYPE_UNIFLOW
+    uniflowTar: s3://default/bert_local.tar
   commit:
     gitRef: "main"
     branch: "main"

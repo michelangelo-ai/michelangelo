@@ -20,12 +20,20 @@ const (
 	_defaultConfigDir         = "config"
 	_k8sConfigKey             = "k8s"
 	_metadataStorageConfigKey = "metadataStorage"
+	_workflowClientConfigKey  = "workflowClient"
 )
 
 // K8sConfig is the configuration for k8s REST client.
 type K8sConfig struct {
 	QPS   float32 `yaml:"qps"`
 	Burst int     `yaml:"burst"`
+}
+
+type WorkflowClientConfig struct {
+	Service   string `yaml:"service"`
+	Host      string `yaml:"host"`
+	Transport string `yaml:"transport"`
+	Domain    string `yaml:"domain"`
 }
 
 // Params defines the dependencies of the config fx module.
@@ -94,4 +102,11 @@ func GetMetadataStorageConfig(provider config.Provider) (storage.MetadataStorage
 	storageConfig := storage.MetadataStorageConfig{}
 	err := provider.Get(_metadataStorageConfigKey).Populate(&storageConfig)
 	return storageConfig, err
+}
+
+// GetWorkflowClientConfig parses the configuration file and returns the workflow client configuration
+func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, error) {
+	workflowClientConfig := WorkflowClientConfig{}
+	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
+	return workflowClientConfig, err
 }

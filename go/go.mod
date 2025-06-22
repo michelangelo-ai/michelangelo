@@ -25,6 +25,7 @@ require (
 	github.com/uber-go/tally v3.5.10+incompatible
 	github.com/uber-go/tally/v4 v4.1.1
 	go.starlark.net v0.0.0-20250128212104-d908c3ead437
+	go.temporal.io/api v1.46.0
 	go.temporal.io/sdk v1.33.0
 	go.temporal.io/sdk/contrib/tally v0.2.0
 	go.uber.org/cadence v1.2.9
@@ -104,7 +105,6 @@ require (
 	github.com/uber-go/mapdecode v1.0.0 // indirect
 	github.com/uber/tchannel-go v1.34.4 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
-	go.temporal.io/api v1.46.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect

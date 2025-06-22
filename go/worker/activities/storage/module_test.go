@@ -16,7 +16,7 @@ type dummyStorage struct {
 
 var _ worker.Worker = (*dummyWorker)(nil)
 
-func (d *dummyStorage) Get(ctx context.Context, uri string) (any, error) {
+func (d *dummyStorage) Get(ctx context.Context, uri string) ([]byte, error) {
 	return nil, nil
 }
 

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	jsoniter "github.com/json-iterator/go"
+
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/stretchr/testify/suite"
@@ -32,11 +34,11 @@ func TestITTemporal(t *testing.T) {
 }
 
 func (r *Suite) SetupSuite() {
-	expected := "hello world"
+	expected := map[string]string{"key": "value"}
 	fake = &fakeStorage{
 		scheme: "test",
-		readFn: func(ctx context.Context, path string) (any, error) {
-			return expected, nil
+		readFn: func(ctx context.Context, path string) ([]byte, error) {
+			return jsoniter.Marshal(expected)
 		},
 	}
 	blobStore := blobstore.BlobStore{}
@@ -55,11 +57,11 @@ func (r *Suite) BeforeTest(_, _ string) {
 // fakeStorage is a mock implementation of the Storage interface for testing.
 type fakeStorage struct {
 	scheme string
-	readFn func(ctx context.Context, path string) (any, error)
+	readFn func(ctx context.Context, path string) ([]byte, error)
 }
 
 // Read calls the fake read function.
-func (fs *fakeStorage) Get(ctx context.Context, path string) (any, error) {
+func (fs *fakeStorage) Get(ctx context.Context, path string) ([]byte, error) {
 	return fs.readFn(ctx, path)
 }
 
@@ -71,15 +73,15 @@ func (fs *fakeStorage) Scheme() string {
 // TestActivities_Read_Success verifies that activities.Read returns the expected result
 // when the Storage implementation successfully reads the data.
 func (r *Suite) TestActivities_Read_Success() {
-	expected := "hello world"
-	fake.readFn = func(ctx context.Context, path string) (any, error) {
-		return expected, nil
+	expected := map[string]string{"key": "value"}
+	fake.readFn = func(ctx context.Context, path string) ([]byte, error) {
+		return jsoniter.Marshal(expected)
 	}
 	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
 
 	r.Require().NoError(err)
 
-	var res string
+	var res map[string]string
 	result.Get(&res)
 	r.Require().Equal(res, expected)
 }
@@ -88,8 +90,8 @@ func (r *Suite) TestActivities_Read_Success() {
 // returned by the Storage implementation using cadence.CustomError.
 func (r *Suite) TestActivities_Read_Error() {
 	expectedErr := errors.New("read error")
-	fake.readFn = func(ctx context.Context, path string) (any, error) {
-		return "", expectedErr
+	fake.readFn = func(ctx context.Context, path string) ([]byte, error) {
+		return nil, expectedErr
 	}
 	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
 

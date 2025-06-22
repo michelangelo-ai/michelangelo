@@ -8,10 +8,10 @@ import (
 
 type mockBlobStoreClient struct {
 	scheme string
-	readFn func(ctx context.Context, path string) (any, error)
+	readFn func(ctx context.Context, path string) ([]byte, error)
 }
 
-func (m *mockBlobStoreClient) Get(ctx context.Context, path string) (any, error) {
+func (m *mockBlobStoreClient) Get(ctx context.Context, path string) ([]byte, error) {
 	return m.readFn(ctx, path)
 }
 
@@ -21,21 +21,21 @@ func (m *mockBlobStoreClient) Scheme() string {
 
 func TestBlobStore_Get(t *testing.T) {
 	bs := BlobStore{}
-	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) (any, error) {
-		return "test", nil
+	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) ([]byte, error) {
+		return []byte("test"), nil
 	}})
 	result, err := bs.Get(context.Background(), "test://test")
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	if result != "test" {
+	if string(result) != "test" {
 		t.Fatalf("expected test, got %v", result)
 	}
 }
 
 func TestBlobStore_Get_Error(t *testing.T) {
 	bs := BlobStore{}
-	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) (any, error) {
+	bs.RegisterClient(&mockBlobStoreClient{scheme: "test", readFn: func(ctx context.Context, blobURI string) ([]byte, error) {
 		return nil, errors.New("test error")
 	}})
 	result, err := bs.Get(context.Background(), "test://test")
