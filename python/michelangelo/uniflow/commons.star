@@ -24,6 +24,8 @@ CACHE_OPERATION_GET = "GET"
 CACHE_ENABLED_TRUE = "true"
 CACHE_ENABLED_FALSE = "false"
 
+DEFAULT_RETRY_ATTEMPTS = 1
+
 def get_result_url():
     """
     Get the url for the result.json
@@ -73,7 +75,9 @@ def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
         res["gpu_sku"] = gpu_sku
     return res
 
-def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = ""):
+def report_progress(task_path, task_name, task_log = "", task_message = "", task_state = "", start_time = "", end_time = "", output = "", retry_attempt_id = ""):
+    if type(retry_attempt_id) != "str":
+        retry_attempt_id = str(retry_attempt_id)
     state_dict = {
         "task_path": task_path,
         "task_name": task_name,
@@ -83,6 +87,7 @@ def report_progress(task_path, task_name, task_log = "", task_message = "", task
         "start_time": start_time,
         "end_time": end_time,
         "output": output,
+        "retry_attempt_id": retry_attempt_id,
     }
     progress.report(str(state_dict))
 
