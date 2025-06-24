@@ -103,7 +103,7 @@ class CRD:
         Extract method information and their input/output types
         """
         assert isinstance(function_name, str), function_name
-        assert function_name in ["Get", "Update", "Create", "List"]
+        assert function_name in ["Get", "Update", "Create", "List", "Delete"]
 
         methods, method_pool = get_methods_from_service(channel, full_name)
         method_name = function_name + snake_to_camel(self.name)
@@ -128,6 +128,56 @@ class CRD:
         _LOG.debug("Retrieved method output class: %r", output_class)
 
         return method_name, input_class, output_class
+
+    def generate_delete(self, channel: Channel):
+        """
+        Generate delete function of this class.
+        """
+        _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
+        method_name, input_class, output_class = self._extract_method_info(
+            channel, self.full_name, "Delete"
+        )
+        delete_func_signature = Signature(
+            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+            + [
+                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
+                for name in ["namespace", "name"]
+            ]
+        )
+
+        @bind_signature(delete_func_signature)
+        def delete_func(bound_args: Signature) -> Message:
+            _LOG.info("Start delete_func for %r", self.full_name)
+            _LOG.info("Bound arguments: %r", bound_args.arguments)
+            _self: CRD = bound_args.arguments["self"]
+
+            request_input = input_class(
+                namespace=bound_args.arguments["namespace"],
+                name=bound_args.arguments["name"],
+            )
+            _LOG.info(
+                "DELETE Request input (%r) ready: %r",
+                type(request_input),
+                request_input,
+            )
+
+            method_fullname = f"/{_self.full_name}/{method_name}"
+            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+            stub_method = channel.unary_unary(
+                method_fullname,
+                request_serializer=input_class.SerializeToString,
+                response_deserializer=output_class.FromString,
+            )
+            response = stub_method(
+                request_input,
+                metadata=METADATA_STUB,
+                timeout=30,
+            )
+            _LOG.info("Stub method completed (%r): %r", type(response), response)
+            return response
+
+        delete_func.__signature__ = delete_func_signature  # type: ignore[attr-defined]
+        self.delete = MethodType(delete_func, self)
 
     def generate_get(self, channel: Channel):
         """
