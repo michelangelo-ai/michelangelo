@@ -6,8 +6,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/provider/tritoninferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/provider/llmd"
+	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/provider/tritoninferenceserver"
 )
 
 var (
