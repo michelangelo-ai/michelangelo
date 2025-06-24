@@ -1,4 +1,4 @@
-package tritoninferenceserver
+package llmd
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -8,13 +8,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-// Module provides the Triton inference server provider
-var Module = fx.Module("tritoninferenceserver",
-	fx.Provide(fx.Annotate(NewTritonInferenceServerProvider, fx.ResultTags(`name:"triton"`))),
+// Module provides the LLM-D inference server provider
+var Module = fx.Module("llmd",
+	fx.Provide(fx.Annotate(NewLLMDProvider, fx.ResultTags(`name:"llmd"`))),
 )
 
-// NewTritonInferenceServerProvider creates a new TritonInferenceServerProvider
-func NewTritonInferenceServerProvider(
+// NewLLMDProvider creates a new LLMDProvider
+func NewLLMDProvider(
 	env env.Context,
 	mgr manager.Manager,
 ) serving.Provider {
@@ -25,7 +25,7 @@ func NewTritonInferenceServerProvider(
 	if err != nil {
 		panic("failed to create dynamic client: " + err.Error())
 	}
-	return &TritonInferenceServerProvider{
+	return &LLMDProvider{
 		DynamicClient: dynamicClient,
 	}
 }
