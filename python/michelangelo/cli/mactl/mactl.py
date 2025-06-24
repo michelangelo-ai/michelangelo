@@ -4,7 +4,6 @@ from inspect import Signature, Parameter
 from logging import basicConfig, getLogger, WARNING
 from os import getenv
 from pathlib import Path
-from pprint import pprint
 from types import MethodType
 from typing import Any, Callable, Union
 from uuid import uuid4
@@ -37,7 +36,7 @@ METADATA = [
 
 ### For OSS server
 # $ (Run oss server)
-ADDRESS = "127.0.0.1:5435"
+ADDRESS = "127.0.0.1:14566"
 METADATA = [
     ("rpc-caller", "grpcurl"),
     ("rpc-service", "ma-apiserver"),
