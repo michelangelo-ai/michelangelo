@@ -72,6 +72,15 @@ enum TenancyType {
   TENANCY_TYPE_MULTI_TENANT = 2;
 }
 
+// BackendType specifies the type of inference serving backend.
+enum BackendType {
+  BACKEND_TYPE_INVALID = 0;
+  // Triton Inference Server backend
+  BACKEND_TYPE_TRITON = 1;
+  // LLM-D (Large Language Model Deployer) backend
+  BACKEND_TYPE_LLM_D = 2;
+}
+
 // Inference Server spec.
 message InferenceServerSpec {
   // Tenancy type of this InferenceServer.
@@ -82,6 +91,8 @@ message InferenceServerSpec {
   InitSpec init_spec = 3;
   // optional decommissioning spec.
   DecomSpec decom_spec = 4;
+  // Backend type for this inference server (Triton, LLM-D, etc.)
+  BackendType backend_type = 8;
 
   reserved 5;
   reserved "serving_group_override_spec";
