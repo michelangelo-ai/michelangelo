@@ -31,7 +31,7 @@ require (
 	go.uber.org/cadence v1.2.9
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
-	go.uber.org/yarpc v1.75.3
+	go.uber.org/yarpc v1.80.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/tools v0.26.0
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d

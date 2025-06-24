@@ -28,7 +28,9 @@ go_library(
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_yarpc//:go_default_library",
         "@org_uber_go_yarpc//api/transport:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
         "@org_uber_go_yarpc//transport/grpc:go_default_library",
+        "@org_uber_go_yarpc//x/reflection:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
@@ -69,6 +71,7 @@ go_test(
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_fx//fxtest:go_default_library",
         "@org_uber_go_yarpc//api/transport:go_default_library",
+        "@org_uber_go_yarpc//encoding/protobuf/reflection:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
