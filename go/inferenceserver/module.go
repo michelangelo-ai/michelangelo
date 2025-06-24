@@ -7,24 +7,34 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/provider/tritoninferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/provider/llmd"
 )
 
 var (
 	// Module FX
 	Module = fx.Options(
 		tritoninferenceserver.Module,
+		llmd.Module,
 		fx.Invoke(register),
 	)
 )
 
+// ProviderParams contains all the providers
+type ProviderParams struct {
+	fx.In
+	TritonProvider serving.Provider `name:"triton"`
+	LLMDProvider   serving.Provider `name:"llmd"`
+}
+
 func register(
 	env env.Context,
 	mgr manager.Manager,
-	servingProvider serving.Provider,
+	providers ProviderParams,
 ) error {
 	return (&Reconciler{
-		Client:          mgr.GetClient(),
-		servingProvider: servingProvider,
-		env:             env,
+		Client:         mgr.GetClient(),
+		tritonProvider: providers.TritonProvider,
+		llmdProvider:   providers.LLMDProvider,
+		env:            env,
 	}).Register(mgr)
 }

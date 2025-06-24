@@ -24,14 +24,33 @@ const requeueAfter = 10 * time.Second
 
 type Reconciler struct {
 	client.Client
-	servingProvider serving.Provider
-	env             env.Context
+	tritonProvider serving.Provider
+	llmdProvider   serving.Provider
+	env            env.Context
 }
 
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.InferenceServer{}).
 		Complete(r)
+}
+
+// getProvider returns the appropriate serving provider based on the backend type
+func (r *Reconciler) getProvider(backendType v2pb.BackendType) (serving.Provider, error) {
+	switch backendType {
+	case v2pb.BACKEND_TYPE_TRITON:
+		if r.tritonProvider == nil {
+			return nil, fmt.Errorf("triton provider not available")
+		}
+		return r.tritonProvider, nil
+	case v2pb.BACKEND_TYPE_LLM_D:
+		if r.llmdProvider == nil {
+			return nil, fmt.Errorf("llm-d provider not available")
+		}
+		return r.llmdProvider, nil
+	default:
+		return nil, fmt.Errorf("unsupported backend type: %v", backendType)
+	}
 }
 
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -50,8 +69,32 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	original := inferenceServer.DeepCopy()
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServer.Name)
 
-	// Check if Triton infrastructure already exists and update status
-	err = r.servingProvider.GetStatus(ctx, logger, inferenceServer)
+	// Get the appropriate provider based on backend type
+	backendType := inferenceServer.Spec.BackendType
+	provider, err := r.getProvider(backendType)
+	if err != nil {
+		res.RequeueAfter = requeueAfter
+		return res, fmt.Errorf("failed to get provider for backend type %v: %w", backendType, err)
+	}
+
+	// Check for model reload trigger annotation
+	if triggerValue, exists := inferenceServer.GetMetadata().GetAnnotations()["michelangelo.ai/model-reload-trigger"]; exists {
+		logger.Info("Model reload trigger detected", "triggerValue", triggerValue)
+
+		// Trigger model reload/update in the provider
+		err = provider.UpdateInferenceServer(ctx, logger, inferenceServer.GetMetadata().GetName(), inferenceServer.GetMetadata().GetNamespace())
+		if err != nil {
+			logger.Error(err, "Failed to trigger model reload")
+			res.RequeueAfter = requeueAfter
+		} else {
+			logger.Info("Model reload triggered successfully")
+			// Note: We don't remove the trigger annotation here to allow for idempotent retries
+			// The deployment controller can clean up old annotations if needed
+		}
+	}
+
+	// Check if infrastructure already exists and update status
+	err = provider.GetStatus(ctx, logger, inferenceServer)
 	if err != nil {
 		res.RequeueAfter = requeueAfter
 		return res, fmt.Errorf("failed to check existing infrastructure: %w", err)
@@ -59,19 +102,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// If infrastructure doesn't exist (status is INITIALIZED), create it
 	if inferenceServer.Status.State == v2pb.INFERENCE_SERVER_STATE_INITIALIZED {
-		logger.Info("Creating new Triton infrastructure")
+		logger.Info("Creating new infrastructure", "backendType", backendType)
 
-		// Create ConfigMap first
-		logger.Info("Creating model config ConfigMap")
-		err = r.createModelConfigMap(ctx, configMapName, logger, inferenceServer)
-		if err != nil {
-			res.RequeueAfter = requeueAfter
-			return res, fmt.Errorf("failed to create model config ConfigMap: %w", err)
+		// Create ConfigMap first (only for certain backend types)
+		if backendType == v2pb.BACKEND_TYPE_TRITON || backendType == v2pb.BACKEND_TYPE_LLM_D {
+			logger.Info("Creating model config ConfigMap")
+			err = r.createModelConfigMap(ctx, configMapName, logger, inferenceServer, backendType)
+			if err != nil {
+				res.RequeueAfter = requeueAfter
+				return res, fmt.Errorf("failed to create model config ConfigMap: %w", err)
+			}
 		}
 
 		// Create serving infrastructure
 		logger.Info("Creating serving infrastructure")
-		err = r.servingProvider.CreateInferenceServer(ctx, logger, inferenceServer.Name, inferenceServer.Namespace, configMapName)
+		err = provider.CreateInferenceServer(ctx, logger, inferenceServer.Name, inferenceServer.Namespace, configMapName)
 		if err != nil {
 			res.RequeueAfter = requeueAfter
 			return res, fmt.Errorf("failed to create serving infrastructure: %w", err)
@@ -81,7 +126,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		inferenceServer.Status.State = v2pb.INFERENCE_SERVER_STATE_CREATING
 		inferenceServer.Status.UpdateTime = fmt.Sprintf("%d", time.Now().Unix())
 	} else {
-		logger.Info("Triton infrastructure already exists", "state", inferenceServer.Status.State)
+		logger.Info("Infrastructure already exists", "backendType", backendType, "state", inferenceServer.Status.State)
 	}
 
 	if !reflect.DeepEqual(original, inferenceServer) {
@@ -95,12 +140,21 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return res, nil
 }
 
-func (r *Reconciler) createModelConfigMap(ctx context.Context, configMapName string, log logr.Logger, inferenceServer *v2pb.InferenceServer) error {
+func (r *Reconciler) createModelConfigMap(ctx context.Context, configMapName string, log logr.Logger, inferenceServer *v2pb.InferenceServer, backendType v2pb.BackendType) error {
 	name := inferenceServer.GetMetadata().GetName()
 	namespace := inferenceServer.GetMetadata().GetNamespace()
 
 	// Create empty model list initially - will be populated by deployment controller
 	modelListJSON := "[]"
+
+	// Determine provider label based on backend type
+	providerLabel := "triton" // default
+	switch backendType {
+	case v2pb.BACKEND_TYPE_TRITON:
+		providerLabel = "triton"
+	case v2pb.BACKEND_TYPE_LLM_D:
+		providerLabel = "llm-d"
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -108,7 +162,7 @@ func (r *Reconciler) createModelConfigMap(ctx context.Context, configMapName str
 			Namespace: namespace,
 			Labels: map[string]string{
 				"michelangelo.ai/inference": name,
-				"michelangelo.ai/provider":  "triton",
+				"michelangelo.ai/provider":  providerLabel,
 			},
 		},
 		Data: map[string]string{
