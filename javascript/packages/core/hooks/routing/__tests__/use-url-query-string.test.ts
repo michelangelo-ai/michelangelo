@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import useURLQueryString from '#core/hooks/routing/use-url-query-string';
+import { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 

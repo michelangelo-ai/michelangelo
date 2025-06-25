@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams } from 'react-router-dom-v5-compat';
 
-import useURLQueryString from '#core/hooks/routing/use-url-query-string';
+import { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
 import { Phase } from '#core/types/common/studio-types';
 import { VIEW_TYPE_TO_PARAMS } from './constants';
 import { normalizeEntityParam } from './normalize-entity-param';

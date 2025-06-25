@@ -1,16 +1,16 @@
 import { HIERARCHY, SIZE as BASE_SIZE } from 'baseui/tag';
 
-export const SIZE = {
+export const TAG_SIZE = {
   xSmall: 'xSmall',
   ...BASE_SIZE,
 } as const;
 
-export const BEHAVIOR = {
+export const TAG_BEHAVIOR = {
   display: 'display',
   selection: 'selection',
 } as const;
 
-export const COLOR = {
+export const TAG_COLOR = {
   gray: 'gray',
   red: 'red',
   orange: 'orange',
@@ -23,4 +23,4 @@ export const COLOR = {
   lime: 'lime',
 } as const;
 
-export { HIERARCHY };
+export { HIERARCHY as TAG_HIERARCHY };

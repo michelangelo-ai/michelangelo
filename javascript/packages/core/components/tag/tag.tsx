@@ -2,7 +2,7 @@ import { forwardRef } from 'react';
 import { mergeOverrides, useStyletron } from 'baseui';
 import { KIND as BASE_KIND, Tag as BaseTag } from 'baseui/tag';
 
-import { BEHAVIOR, COLOR, HIERARCHY, SIZE } from './constants';
+import { TAG_BEHAVIOR, TAG_COLOR, TAG_HIERARCHY, TAG_SIZE } from './constants';
 import { getTagOverrides } from './styled-components';
 
 import type { TagKind as BaseTagKind, TagSize as BaseTagSize } from 'baseui/tag';
@@ -13,19 +13,19 @@ export const Tag = forwardRef<HTMLElement, Props>(
     {
       children,
       overrides,
-      size = SIZE.small,
-      color = COLOR.gray,
-      behavior = BEHAVIOR.display,
-      hierarchy = HIERARCHY.secondary,
+      size = TAG_SIZE.small,
+      color = TAG_COLOR.gray,
+      behavior = TAG_BEHAVIOR.display,
+      hierarchy = TAG_HIERARCHY.secondary,
       ...rest
     },
     ref
   ) => {
     const [_, theme] = useStyletron();
 
-    const baseSize: BaseTagSize | undefined = size === SIZE.xSmall ? SIZE.small : size;
+    const baseSize: BaseTagSize | undefined = size === TAG_SIZE.xSmall ? TAG_SIZE.small : size;
     const baseKind: BaseTagKind | undefined =
-      color === COLOR.gray || color === COLOR.purple || color === COLOR.magenta
+      color === TAG_COLOR.gray || color === TAG_COLOR.purple || color === TAG_COLOR.magenta
         ? BASE_KIND.black
         : color;
 

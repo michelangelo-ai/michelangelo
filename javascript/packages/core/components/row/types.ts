@@ -27,4 +27,5 @@ export type RowCell = Cell & {
 type RowOverrides = {
   RowContainer?: Override;
   RowItemContainer?: Override;
+  RowItem?: Override;
 };
