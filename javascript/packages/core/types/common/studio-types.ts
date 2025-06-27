@@ -15,12 +15,16 @@
  * - Traditional ML workflow: Data → Train → Retrain → Deploy → Monitor
  *
  * - Generative AI workflow: LLM → Data → Prompt → Finetune → Monitor
+ *
+ * - Agent workflow: Data → Develop → Deploy → Monitor
  */
 export enum Phase {
   /** Initial project setup and configuration phase */
   Project = 'project',
   /** Assistants builder phase*/
   Assistants = 'assistants',
+  /** Agents builder phase */
+  Agents = 'agents',
 
   /** Data preparation and preprocessing phase */
   Data = 'data',
@@ -43,6 +47,15 @@ export enum Phase {
   GenaiFinetune = 'genai-finetune',
   /** Monitoring of generative AI model performance */
   GenaiMonitor = 'genai-monitor',
+
+  /** Agent data preparation and preprocessing phase */
+  AgentData = 'agent-data',
+  /** Agent development and training phase */
+  AgentDevelop = 'agent-develop',
+  /** Agent deployment and serving phase */
+  AgentDeploy = 'agent-deploy',
+  /** Agent monitoring and performance tracking phase */
+  AgentMonitor = 'agent-monitor',
 }
 
 /**

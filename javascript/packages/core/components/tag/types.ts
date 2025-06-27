@@ -1,11 +1,11 @@
 import type { TagProps as BaseTagProps } from 'baseui/tag';
 import type { StyleFunction } from '#core/types/style-types';
-import type { BEHAVIOR, COLOR, HIERARCHY, SIZE } from './constants';
+import type { TAG_BEHAVIOR, TAG_COLOR, TAG_HIERARCHY, TAG_SIZE } from './constants';
 
-export type TagSize = keyof typeof SIZE;
-export type TagBehavior = keyof typeof BEHAVIOR;
-export type TagColor = keyof typeof COLOR;
-export type TagHierarchy = keyof typeof HIERARCHY;
+export type TagSize = keyof typeof TAG_SIZE;
+export type TagBehavior = keyof typeof TAG_BEHAVIOR;
+export type TagColor = keyof typeof TAG_COLOR;
+export type TagHierarchy = keyof typeof TAG_HIERARCHY;
 
 export interface Props extends Omit<BaseTagProps, 'size' | 'kind'> {
   size?: TagSize;

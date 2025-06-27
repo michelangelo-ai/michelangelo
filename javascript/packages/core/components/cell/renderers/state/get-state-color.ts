@@ -1,4 +1,4 @@
-import { COLOR } from '#core/components/tag/constants';
+import { TAG_COLOR } from '#core/components/tag/constants';
 
 import type { TagColor } from '#core/components/tag/types';
 
@@ -21,10 +21,10 @@ import type { TagColor } from '#core/components/tag/types';
  * ```
  */
 export const getStateColor = (value: string): TagColor => {
-  if (!value) return COLOR.gray;
-  if (value.endsWith('_ERROR')) return COLOR.red;
-  if (value.endsWith('_SUCCESS')) return COLOR.green;
-  if (value.endsWith('_RUNNING')) return COLOR.blue;
-  if (value.endsWith('_INVALID')) return COLOR.gray;
-  return COLOR.gray;
+  if (!value) return TAG_COLOR.gray;
+  if (value.endsWith('_ERROR')) return TAG_COLOR.red;
+  if (value.endsWith('_SUCCESS')) return TAG_COLOR.green;
+  if (value.endsWith('_RUNNING')) return TAG_COLOR.blue;
+  if (value.endsWith('_INVALID')) return TAG_COLOR.gray;
+  return TAG_COLOR.gray;
 };

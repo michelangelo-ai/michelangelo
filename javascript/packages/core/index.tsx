@@ -45,10 +45,12 @@ export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
 export { cellToString } from '#core/components/cell/cell-to-string';
+export { cellTooltipHOC } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
 export { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
 export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
 export * from '#core/components/cell/types';
 export { CellType } from '#core/components/cell/constants';
+export { useCellStyles } from '#core/components/cell/hooks';
 
 export { BooleanCell } from '#core/components/cell/renderers/boolean/boolean-cell';
 export { DateCell } from '#core/components/cell/renderers/date/date-cell';
@@ -70,17 +72,28 @@ export { Link } from '#core/components/link/link';
 export * from '#core/components/link/styled-components';
 export { Markdown } from '#core/components/markdown/markdown';
 export { Row } from '#core/components/row/row';
+export type { RowCell, RowProps } from '#core/components/row/types';
 export { Tag } from '#core/components/tag/tag';
+export * from '#core/components/tag/constants';
+export type { TagColor, TagHierarchy, TagBehavior, TagSize } from '#core/components/tag/types';
 export { TruncatedText } from '#core/components/truncated-text/truncated-text';
 
 export { Icon } from '#core/components/icon/icon';
 export { IconKind } from '#core/components/icon/types';
 export { IconProvider } from '#core/providers/icon-provider/icon-provider';
+export * from '#core/providers/icon-provider/types';
 
 export { ThemeProvider };
 
 export { UserProvider } from '#core/providers/user-provider/user-provider';
 
+export { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
+export * from '#core/hooks/routing/use-studio-params/types';
+export { useURLQueryString } from '#core/hooks/routing/use-url-query-string';
+
 export * from '#core/utils/object-utils';
 export * from '#core/utils/string-utils';
 export * from '#core/utils/time-utils';
+
+export * from '#core/types/common/studio-types';
+export * from '#core/types/common/view-types';

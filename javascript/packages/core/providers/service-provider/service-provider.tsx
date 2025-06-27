@@ -1,10 +1,6 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
 import { ServiceContext } from './service-context';
 
 import type { ServiceContextType } from './types';
-
-const queryClient = new QueryClient();
 
 /**
  * @description
@@ -25,9 +21,5 @@ export const ServiceProvider = ({
   children,
   ...serviceContext
 }: { children: React.ReactNode } & ServiceContextType) => {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>
-    </QueryClientProvider>
-  );
+  return <ServiceContext.Provider value={serviceContext}>{children}</ServiceContext.Provider>;
 };

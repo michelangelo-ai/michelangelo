@@ -1,5 +1,6 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom-v5-compat';
 import { request } from '@michelangelo/rpc';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { CoreApp } from '@uber/michelangelo-core';
 import { Client as Styletron } from 'styletron-engine-atomic';
 import { Provider as StyletronProvider } from 'styletron-react';
@@ -16,15 +17,18 @@ const dependencies = {
 };
 
 const engine = new Styletron();
+const queryClient = new QueryClient();
 
 export function App() {
   return (
     <StyletronProvider value={engine}>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/*" element={<CoreApp dependencies={dependencies} />} />
-        </Routes>
-      </BrowserRouter>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/*" element={<CoreApp dependencies={dependencies} />} />
+          </Routes>
+        </BrowserRouter>
+      </QueryClientProvider>
     </StyletronProvider>
   );
 }

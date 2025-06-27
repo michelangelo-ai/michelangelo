@@ -3,7 +3,7 @@ import { getOverrides } from 'baseui';
 import { Skeleton } from 'baseui/skeleton';
 
 import { getObjectValue } from '#core/utils/object-utils';
-import { RowItem } from './components/row-item';
+import { RowItem as BaseRowItem } from './components/row-item';
 import { StyledRowContainer, StyledRowItemContainer } from './styled-components';
 
 import type { RowProps } from '#core/components/row/types';
@@ -20,6 +20,8 @@ export function Row(props: RowProps) {
     overrides.RowItemContainer,
     StyledRowItemContainer
   );
+
+  const [RowItem, rowItemProps] = getOverrides(overrides.RowItem, BaseRowItem);
 
   return (
     <RowContainer {...rowContainerProps}>
@@ -52,7 +54,7 @@ export function Row(props: RowProps) {
             )}
             {!loading && (
               <RowItemContainer $index={i} {...rowItemContainerProps}>
-                {<RowItem item={item} record={record} />}
+                {<RowItem item={item} record={record} {...rowItemProps} />}
               </RowItemContainer>
             )}
           </React.Fragment>

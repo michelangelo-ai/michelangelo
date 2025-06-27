@@ -1,101 +1,101 @@
-import { BEHAVIOR, COLOR, HIERARCHY, SIZE } from './constants';
+import { TAG_BEHAVIOR, TAG_COLOR, TAG_HIERARCHY, TAG_SIZE } from './constants';
 
 import type { Theme } from 'baseui';
 import type { ColorOverrides, TagBehavior, TagColor, TagHierarchy, TagSize } from './types';
 
 const COLOR_OVERRIDES: ColorOverrides = {
-  [HIERARCHY.primary]: {
-    [BEHAVIOR.display]: {
-      [COLOR.purple]: (theme: Theme) => ({
+  [TAG_HIERARCHY.primary]: {
+    [TAG_BEHAVIOR.display]: {
+      [TAG_COLOR.purple]: (theme: Theme) => ({
         color: theme.colors.white,
         backgroundColor: theme.colors.purple600,
       }),
-      [COLOR.magenta]: (theme: Theme) => ({
+      [TAG_COLOR.magenta]: (theme: Theme) => ({
         color: theme.colors.white,
         backgroundColor: theme.colors.magenta600,
       }),
     },
-    [BEHAVIOR.selection]: {
-      [COLOR.gray]: (theme: Theme) => ({
+    [TAG_BEHAVIOR.selection]: {
+      [TAG_COLOR.gray]: (theme: Theme) => ({
         borderColor: theme.colors.gray700,
       }),
-      [COLOR.red]: (theme: Theme) => ({
+      [TAG_COLOR.red]: (theme: Theme) => ({
         borderColor: theme.colors.red700,
       }),
-      [COLOR.orange]: (theme: Theme) => ({
+      [TAG_COLOR.orange]: (theme: Theme) => ({
         borderColor: theme.colors.orange700,
       }),
-      [COLOR.yellow]: (theme: Theme) => ({
+      [TAG_COLOR.yellow]: (theme: Theme) => ({
         borderColor: theme.colors.yellow700,
       }),
-      [COLOR.green]: (theme: Theme) => ({
+      [TAG_COLOR.green]: (theme: Theme) => ({
         borderColor: theme.colors.green700,
       }),
-      [COLOR.blue]: (theme: Theme) => ({
+      [TAG_COLOR.blue]: (theme: Theme) => ({
         borderColor: theme.colors.blue700,
       }),
-      [COLOR.purple]: (theme: Theme) => ({
+      [TAG_COLOR.purple]: (theme: Theme) => ({
         color: theme.colors.white,
         backgroundColor: theme.colors.purple600,
         borderColor: theme.colors.purple700,
       }),
-      [COLOR.magenta]: (theme: Theme) => ({
+      [TAG_COLOR.magenta]: (theme: Theme) => ({
         color: theme.colors.white,
         backgroundColor: theme.colors.magenta600,
         borderColor: theme.colors.magenta700,
       }),
-      [COLOR.teal]: (theme: Theme) => ({
+      [TAG_COLOR.teal]: (theme: Theme) => ({
         borderColor: theme.colors.teal700,
       }),
-      [COLOR.lime]: (theme: Theme) => ({
+      [TAG_COLOR.lime]: (theme: Theme) => ({
         borderColor: theme.colors.lime700,
       }),
     },
   },
-  [HIERARCHY.secondary]: {
-    [BEHAVIOR.display]: {
-      [COLOR.magenta]: (theme: Theme) => ({
+  [TAG_HIERARCHY.secondary]: {
+    [TAG_BEHAVIOR.display]: {
+      [TAG_COLOR.magenta]: (theme: Theme) => ({
         color: theme.colors.magenta700,
         backgroundColor: theme.colors.magenta50,
       }),
-      [COLOR.purple]: (theme: Theme) => ({
+      [TAG_COLOR.purple]: (theme: Theme) => ({
         color: theme.colors.purple700,
         backgroundColor: theme.colors.purple50,
       }),
     },
-    [BEHAVIOR.selection]: {
-      [COLOR.gray]: (theme: Theme) => ({
+    [TAG_BEHAVIOR.selection]: {
+      [TAG_COLOR.gray]: (theme: Theme) => ({
         borderColor: theme.colors.gray100,
       }),
-      [COLOR.red]: (theme: Theme) => ({
+      [TAG_COLOR.red]: (theme: Theme) => ({
         borderColor: theme.colors.red100,
       }),
-      [COLOR.orange]: (theme: Theme) => ({
+      [TAG_COLOR.orange]: (theme: Theme) => ({
         borderColor: theme.colors.orange100,
       }),
-      [COLOR.yellow]: (theme: Theme) => ({
+      [TAG_COLOR.yellow]: (theme: Theme) => ({
         borderColor: theme.colors.yellow100,
       }),
-      [COLOR.green]: (theme: Theme) => ({
+      [TAG_COLOR.green]: (theme: Theme) => ({
         borderColor: theme.colors.green100,
       }),
-      [COLOR.blue]: (theme: Theme) => ({
+      [TAG_COLOR.blue]: (theme: Theme) => ({
         borderColor: theme.colors.blue100,
       }),
-      [COLOR.purple]: (theme: Theme) => ({
+      [TAG_COLOR.purple]: (theme: Theme) => ({
         color: theme.colors.purple700,
         backgroundColor: theme.colors.purple50,
         borderColor: theme.colors.purple100,
       }),
-      [COLOR.magenta]: (theme: Theme) => ({
+      [TAG_COLOR.magenta]: (theme: Theme) => ({
         color: theme.colors.magenta700,
         backgroundColor: theme.colors.magenta50,
         borderColor: theme.colors.magenta100,
       }),
-      [COLOR.teal]: (theme: Theme) => ({
+      [TAG_COLOR.teal]: (theme: Theme) => ({
         borderColor: theme.colors.teal100,
       }),
-      [COLOR.lime]: (theme: Theme) => ({
+      [TAG_COLOR.lime]: (theme: Theme) => ({
         borderColor: theme.colors.lime100,
       }),
     },
@@ -121,7 +121,7 @@ export const getTagOverrides = (
   return {
     Root: {
       style: {
-        ...(size === SIZE.xSmall
+        ...(size === TAG_SIZE.xSmall
           ? {
               ...theme.typography.LabelXSmall,
               height: '20px',
@@ -144,7 +144,7 @@ export const getTagOverrides = (
 
     StartEnhancerContainer: {
       style: {
-        ...(size === SIZE.xSmall
+        ...(size === TAG_SIZE.xSmall
           ? {
               paddingRight: theme.sizing.scale100,
             }
