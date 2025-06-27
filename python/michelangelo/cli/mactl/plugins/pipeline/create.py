@@ -33,6 +33,7 @@ def convert_crd_metadata_pipeline_create(
         raise ValueError("Expected a dictionary for CRD metadata")
 
     repo = Repo(".", search_parent_directories=True)
+    repo_root = Path(repo.git.rev_parse("--show-toplevel")).resolve()
     _LOG.info("Current git repository info: %r", repo)
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
@@ -49,7 +50,9 @@ def convert_crd_metadata_pipeline_create(
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,
     }
-    assert yaml_path.resolve().is_relative_to(PWD)
+    assert yaml_path.resolve().is_relative_to(repo_root), (
+        f"Expected {yaml_path.resolve()} to be relative to {repo_root}"
+    )
     # "path": str(yaml_path.relative_to(PWD)),
     # TODO: retrieve path from Project.
     res["spec"]["manifest"] = {
