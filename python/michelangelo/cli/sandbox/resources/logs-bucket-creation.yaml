@@ -1,0 +1,158 @@
+apiVersion: "batch/v1"
+kind: "Job"
+metadata:
+  name: "logs-bucket-creation"
+spec:
+  template:
+    spec:
+      containers:
+        # Container to deploy the log viewer. To inspect logs, use the following command:
+        # `kubectl logs job.batch/logs-bucket-creation`
+        - name: "logs-bucket-creation"
+          image: "amazon/aws-cli:latest"
+          command:
+            - "/bin/bash"
+          args:
+            - "/scripts/logs-bucket-creation.sh"
+          env:
+            - name: "AWS_ENDPOINT_URL"
+              value: "http://minio:9091"
+            - name: "BUCKET_NAME"
+              value: "logs"
+            - name: "PUBLIC"
+              value: "true"
+          volumeMounts:
+            - name: "aws-credentials-volume"
+              mountPath: "/root/.aws"
+            - name:  "scripts-volume"
+              mountPath: "/scripts"
+          imagePullPolicy: "IfNotPresent"
+      restartPolicy: "Never"
+      volumes:
+        - name: "aws-credentials-volume"
+          secret:
+            secretName: "aws-credentials"
+        - name: "scripts-volume"
+          configMap:
+            name: "logs-bucket-creation"
+---
+apiVersion: v1
+data:
+  logs-bucket-creation.sh: |-
+    #!/usr/bin/env bash
+
+    # Create a bucket and optionally it configure with public read access
+    # on a S3-compatible object store such as MinIO
+    #
+    # Requirements:
+    #
+    # * AWS CLI authentication configured using any supported method---for example:
+    #   * A credentials file in $HOME/.aws/credentials
+    #   * AWS_CONFIG_FILE pointing to a custom credentials file
+    #   * Environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+    # * Environment variables:
+    #   * AWS_ENDPOINT_URL: The S3-compatible object store endpoint URL
+    #   * BUCKET_NAME: The name of the bucket where the log viewer should be deployed
+    #     * NOTE: This script will make the bucket publicly readable.
+    #   * PUBLIC (Optional): If set to "true", configures bucket with public read policy
+    set -e
+    set -o pipefail
+    set -u
+
+    # Emits a log event to stderr with an auto-generated ISO timestamp as well as the given level
+    # and message.
+    #
+    # @param $1: Level string
+    # @param $2: Message to be logged
+    log() {
+        local -r LEVEL=$1
+        local -r MESSAGE=$2
+        echo "$(date --utc --date="now" +"%Y-%m-%dT%H:%M:%SZ") [${LEVEL}] ${MESSAGE}" >&2
+    }
+
+    # Waits for the S3 endpoint to be available, or exits if it's unavailable.
+    wait_for_s3_availability() {
+        # Check availability by listing available buckets
+        log "INFO" "Waiting until ${AWS_ENDPOINT_URL} endpoint becomes available."
+        local -r MAX_RETRIES=10
+        local -r RETRY_DELAY_IN_SECS=6
+        for ((retries = 0; retries < MAX_RETRIES; retries++)); do
+            if aws s3 ls --endpoint-url "$AWS_ENDPOINT_URL" >/dev/null; then
+                return
+            fi
+            log "WARN" "S3 API endpoint unavailable. Retrying in ${RETRY_DELAY_IN_SECS} seconds."
+
+            sleep "$RETRY_DELAY_IN_SECS"
+        done
+
+        if [[ $retries -eq $MAX_RETRIES ]]; then
+            log "ERROR" "Maximum retries reached. S3 API endpoint ${AWS_ENDPOINT_URL} didn't respond."
+            exit 1
+        fi
+    }
+
+    # Creates a bucket
+    create_bucket() {
+        # Create log-viewer bucket if it doesn't already exist
+        log "INFO" "Creating ${BUCKET_S3_URI} bucket."
+        if ! aws s3api head-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$BUCKET_NAME" \
+            2>/dev/null; then
+            aws s3api create-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$BUCKET_NAME"
+        fi
+    }
+
+    # Configures a bucket with public read access
+    configure_bucket() {
+        # Define and apply the bucket policy for public read access
+        log "INFO" "Applying public read access policy to ${BUCKET_S3_URI}"
+        local -r POLICY=$(
+            cat <<EOP
+    {
+        "Version": "2012-10-17",
+        "Statement": [
+            {
+                "Effect": "Allow",
+                "Principal": "*",
+                "Action": "s3:GetObject",
+                "Resource": "arn:aws:s3:::${BUCKET_NAME}/*"
+            }
+        ]
+    }
+    EOP
+        )
+        if ! aws s3api put-bucket-policy \
+            --endpoint-url "$AWS_ENDPOINT_URL" \
+            --bucket "$BUCKET_NAME" \
+            --policy "$POLICY"; then
+            log "ERROR" "Failed to set bucket policy for ${BUCKET_S3_URI}"
+            exit 1
+        fi
+    }
+
+    # Validate required environment variables
+    readonly REQUIRED_ENV_VARS=(
+        # Example: "http://minio:9000"
+        "AWS_ENDPOINT_URL"
+
+        # Example: "logs"
+        "BUCKET_NAME"
+    )
+    for var in "${REQUIRED_ENV_VARS[@]}"; do
+        if ! [[ -v "$var" ]]; then
+            log "ERROR" "$var environment variable must be set."
+            exit 1
+        fi
+    done
+
+    readonly BUCKET_S3_URI="s3://${BUCKET_NAME}"
+
+    wait_for_s3_availability
+    create_bucket
+    if [[ "${PUBLIC:-false}" = "true" ]]; then
+        configure_bucket
+    fi
+
+    log "INFO" "Bucket ${BUCKET_NAME} created and configured successfully."
+kind: ConfigMap
+metadata:
+  name: logs-bucket-creation
