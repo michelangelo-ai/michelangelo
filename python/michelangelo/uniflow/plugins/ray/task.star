@@ -454,6 +454,66 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
+                        "volumes": [
+                            {
+                                "name": "logs",
+                                "volumeSource": {
+                                    "emptyDir": {},
+                                },
+                            },
+                            {
+                                "name": "fluent-bit-plugins",
+                                "volumeSource": {
+                                    "emptyDir": {},
+                                }
+                            },
+                            {
+                                "name": "fluent-bit-config",
+                                "volumeSource": {
+                                    "configMap": {
+                                        "localObjectReference": {
+                                            "name": "fluent-bit-config",
+                                        },
+                                    },
+                                },
+                            },
+                            {
+                                "name": "aws-credentials",
+                                "volumeSource": {
+                                    "secret": {
+                                        "secretName": "aws-credentials",
+                                    },
+                                },
+                            },
+                        ],
+                        "initContainers": [
+                            {
+                                "name": "fix-perms",
+                                "image": "busybox",
+                                "command": ["sh", "-c", "chown -R 1000:1000 /tmp/ray"],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                ],
+                            },
+                            {
+                                # This step won't be required after the plugin is included in the official Fluent Bit OSS repository.
+                                "name": "download-fluent-bit-plugin",
+                                "image": "busybox",
+                                "command": ["sh", "-c", "wget -O \
+                                    /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so \
+                                    https://raw.githubusercontent.com/y-scope/fluent-bit-clp/refs/heads/irv2-beta/pre-built/out_clp_s3_v2_linux_amd64.so"
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "fluent-bit-plugins",
+                                        "mountPath": "/fluent-bit/plugins",
+                                    },
+                                ],
+                            },
+                        ],
                         "containers": [
                             {
                                 "name": "head",
@@ -472,6 +532,12 @@ def ray_cluster_spec(
                                         },
                                     },
                                 ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                ],
                                 "lifecycle": {
                                     "postStart": {
                                         "exec": {
@@ -479,6 +545,45 @@ def ray_cluster_spec(
                                         },
                                     },
                                 },
+                            },
+                            {
+                                "name": "fluent-bit",
+                                "image": "fluent/fluent-bit:3.2.7",
+                                "args": ["-c", "/fluent-bit/etc/fluent-bit.yaml"],
+                                "env": [
+                                    {
+                                        "name": "CLUSTER_NAME",
+                                        "valueFrom": {
+                                            "fieldRef": {
+                                                "fieldPath": "metadata.name",
+                                            },
+                                        },
+                                    },
+                                    {
+                                        "name": "AWS_ENDPOINT_URL",
+                                        "value": "http://minio:9091"
+                                    },
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "logs",
+                                        "mountPath": "/tmp/ray",
+                                    },
+                                    {
+                                        "name": "fluent-bit-plugins",
+                                        "mountPath": "/fluent-bit/plugins/"
+                                    },
+                                    {
+                                        "name": "fluent-bit-config",
+                                        "mountPath": "/fluent-bit/etc/",
+                                        "readOnly": True,
+                                    },
+                                    {
+                                        "name": "aws-credentials",
+                                        "mountPath": "/root/.aws/",
+                                        "readOnly": True,
+                                    }
+                                ],
                             },
                         ],
                     },
