@@ -1,0 +1,345 @@
+---
+description: Troubleshooting guide for common Uniflow development issues
+globs: 
+alwaysApply: false
+---
+# Uniflow Troubleshooting and Debugging Guide
+
+## Common Issues and Solutions
+
+### Task Execution Issues
+
+#### Task Not Found Error
+**Problem**: Task function not recognized by Uniflow
+**Solution**: Ensure proper task registration and imports
+
+```python
+# Check task decorator usage in decorator.py
+from michelangelo.uniflow.core.decorator import task
+
+@task  # Correct decorator usage
+def my_task():
+    pass
+
+# Verify task is properly imported in workflow
+from my_module import my_task  # Ensure task is imported
+```
+
+#### Resource Allocation Failures
+**Problem**: Tasks fail due to insufficient resources
+**Solution**: Check resource specifications and availability
+
+```python
+# Review task configuration in task_config.py
+@task(
+    num_cpus=2,  # Reduce if cluster has limited CPUs
+    num_gpus=1,  # Ensure GPU nodes are available
+    memory="4GB"  # Adjust based on available memory
+)
+def resource_intensive_task():
+    pass
+```
+
+### Workflow Execution Issues
+
+#### Starlark Compatibility Errors
+**Problem**: Workflow code not compatible with Starlark runtime
+**Solution**: Review workflow constraints and fix incompatible code
+
+```python
+# INCORRECT - Python modules not allowed in workflows
+@workflow
+def bad_workflow():
+    import os  # ❌ Not allowed in Starlark
+    return os.getcwd()
+
+# CORRECT - Use built-ins or task functions
+@workflow  
+def good_workflow():
+    result = get_current_directory_task()  # ✅ Use task
+    return result
+```
+
+#### Context Configuration Issues
+**Problem**: Incorrect context setup causing workflow failures
+**Solution**: Verify context configuration in [context.py](mdc:python/michelangelo/uniflow/core/context.py)
+
+```python
+# Check context initialization
+ctx = uniflow.create_context()
+
+# Verify environment variables
+required_env_vars = [
+    "MICHELANGELO_PROJECT_ID",
+    "UF_STORAGE_URL",
+    "CONTAINER_IMAGE"
+]
+
+for var in required_env_vars:
+    if var not in ctx.environ:
+        raise ValueError(f"Missing required environment variable: {var}")
+```
+
+### Storage and Data Issues
+
+#### HDFS Connection Failures
+**Problem**: Cannot connect to HDFS storage
+**Solution**: Check HDFS configuration and connectivity
+
+```python
+# Verify HDFS settings
+import os
+hdfs_url = os.getenv("UF_STORAGE_URL", "hdfs:///app/michelangelo/workspaces")
+
+# Test HDFS connectivity
+@task
+def test_hdfs_connection():
+    try:
+        from uniflow.core.ref import ref
+        test_ref = ref(f"{hdfs_url}/test_file")
+        # Test write/read operations
+        return "HDFS connection successful"
+    except Exception as e:
+        return f"HDFS connection failed: {e}"
+```
+
+#### Data Reference Issues
+**Problem**: Data references not resolving correctly
+**Solution**: Check reference paths and permissions in [ref.py](mdc:python/michelangelo/uniflow/core/ref.py)
+
+```python
+# Verify data reference format
+from uniflow.core.ref import ref
+
+# Correct reference usage
+data_ref = ref("s3://bucket/path/file.parquet")  # ✅ Valid S3 path
+hdfs_ref = ref("hdfs:///app/data/file.parquet")  # ✅ Valid HDFS path
+
+# Common mistakes
+bad_ref = ref("file.parquet")  # ❌ Missing protocol
+bad_ref2 = ref("s3://bucket with spaces/file")  # ❌ Spaces in path
+```
+
+### Container and Deployment Issues
+
+#### Container Image Problems
+**Problem**: Tasks fail due to container image issues
+**Solution**: Verify container image configuration
+
+```python
+# Check container image in context
+ctx.environ.update({
+    "CONTAINER_IMAGE": "my-registry/ml-pipeline:v1.0.0",  # Verify image exists
+    "REGISTRY_AUTH": "required_if_private"  # Add auth if needed
+})
+
+# Test container locally before deployment
+# docker run my-registry/ml-pipeline:v1.0.0 python -c "import uniflow; print('OK')"
+```
+
+#### Dependency Issues in Containers
+**Problem**: Missing dependencies in task execution
+**Solution**: Verify all dependencies are included in container
+
+```dockerfile
+# Dockerfile example with proper dependencies
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+
+# Install Uniflow
+RUN pip install michelangelo-uniflow
+
+# Copy application code
+COPY . /app
+WORKDIR /app
+```
+
+## Debugging Techniques
+
+### Local Debugging Setup
+```python
+def setup_debug_context():
+    """
+    Setup context for local debugging with verbose logging.
+    """
+    ctx = uniflow.create_context()
+    
+    # Enable debug logging
+    ctx.environ.update({
+        "LOG_LEVEL": "DEBUG",
+        "UNIFLOW_DEBUG": "1",
+        "RAY_AIR_FULL_TRACEBACKS": "1"
+    })
+    
+    # Use local storage for debugging
+    ctx.environ["UF_STORAGE_URL"] = "/tmp/uniflow_debug"
+    
+    return ctx
+```
+
+### Task-Level Debugging
+```python
+@task
+def debug_task(input_data):
+    """
+    Task with comprehensive debugging information.
+    """
+    import logging
+    import traceback
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Task started with input: {input_data}")
+    
+    try:
+        # Add checkpoints for debugging
+        logger.debug("Checkpoint 1: Input validation")
+        validated_data = validate_input(input_data)
+        
+        logger.debug("Checkpoint 2: Data processing")
+        processed_data = process_data(validated_data)
+        
+        logger.debug("Checkpoint 3: Output generation")
+        result = generate_output(processed_data)
+        
+        logger.info(f"Task completed successfully: {result}")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Task failed: {e}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        raise
+```
+
+### Workflow-Level Debugging
+```python
+@workflow
+def debug_workflow(input_params):
+    """
+    Workflow with debugging checkpoints.
+    """
+    # Log workflow start
+    log_workflow_start(input_params)
+    
+    # Step 1 with error handling
+    try:
+        step1_result = step1_task(input_params)
+        log_step_completion("step1", step1_result)
+    except Exception as e:
+        log_step_failure("step1", e)
+        raise
+    
+    # Step 2 with conditional execution
+    if should_execute_step2(step1_result):
+        step2_result = step2_task(step1_result)
+        log_step_completion("step2", step2_result)
+        return step2_result
+    else:
+        log_step_skipped("step2")
+        return step1_result
+```
+
+## Performance Optimization
+
+### Task Performance Issues
+```python
+# Monitor task execution time
+@task
+def performance_monitored_task(data):
+    import time
+    start_time = time.time()
+    
+    try:
+        result = expensive_operation(data)
+        execution_time = time.time() - start_time
+        
+        # Log performance metrics
+        log_performance_metrics({
+            "task_name": "expensive_operation",
+            "execution_time": execution_time,
+            "data_size": len(data),
+            "throughput": len(data) / execution_time
+        })
+        
+        return result
+    except Exception as e:
+        execution_time = time.time() - start_time
+        log_performance_metrics({
+            "task_name": "expensive_operation",
+            "execution_time": execution_time,
+            "status": "failed",
+            "error": str(e)
+        })
+        raise
+```
+
+### Memory Usage Optimization
+```python
+@task(memory="8GB")
+def memory_optimized_task(large_dataset):
+    """
+    Task optimized for large datasets with memory management.
+    """
+    import gc
+    
+    # Process data in chunks to manage memory
+    chunk_size = 10000
+    results = []
+    
+    for i in range(0, len(large_dataset), chunk_size):
+        chunk = large_dataset[i:i + chunk_size]
+        
+        # Process chunk
+        chunk_result = process_chunk(chunk)
+        results.append(chunk_result)
+        
+        # Force garbage collection
+        del chunk
+        gc.collect()
+    
+    # Combine results
+    final_result = combine_results(results)
+    
+    # Clean up intermediate results
+    del results
+    gc.collect()
+    
+    return final_result
+```
+
+## Common Error Messages and Solutions
+
+### "Task execution failed with exit code 1"
+- Check task logs for specific error details
+- Verify container image has all required dependencies
+- Ensure sufficient resources are allocated
+
+### "Workflow compilation failed"
+- Review Starlark compatibility issues
+- Check for unsupported Python features in workflow code
+- Verify all imported functions are available
+
+### "Storage access denied"
+- Check HDFS/S3 permissions and credentials
+- Verify storage URL format and accessibility
+- Test storage connectivity outside of Uniflow
+
+### "Resource allocation timeout"
+- Check cluster resource availability
+- Reduce resource requirements if possible
+- Verify resource pool configuration
+
+### "HDFS connection failed"
+- Install missing Hadoop CFS dependencies: `pip install hadoop-cfs`
+- Configure HDFS environment variables properly
+- Check network connectivity to HDFS cluster
+- Verify Hadoop configuration files are accessible
+
+This troubleshooting guide helps identify and resolve common Uniflow development issues. Reference the core implementation files for detailed debugging information.
