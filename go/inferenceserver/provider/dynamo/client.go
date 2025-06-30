@@ -112,12 +112,12 @@ func (d DynamoInferenceServerProvider) UpdateInferenceServer(ctx context.Context
 		return nil
 	}
 
-	log.Info("Deploying new model", "from", currentModelName, "to", modelName, "uri", modelURI)
+	log.Info("Switching to new model", "from", currentModelName, "to", modelName, "uri", modelURI)
 
-	// Deploy new model instance
+	// Deploy new model instance and update DynamoGraphDeployment
 	err = d.deployNewModelInstance(ctx, log, name, namespace, modelName, modelURI)
 	if err != nil {
-		log.Error(err, "Failed to deploy new model instance")
+		log.Error(err, "Failed to update model")
 		return err
 	}
 
@@ -706,3 +706,4 @@ func (d DynamoInferenceServerProvider) deleteDynamoDeployment(ctx context.Contex
 	log.Info("DynamoGraphDeployment deleted", "deployment", deploymentName)
 	return nil
 }
+
