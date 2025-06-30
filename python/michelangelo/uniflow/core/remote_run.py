@@ -97,6 +97,9 @@ class RemoteRun:
             if cadence_transport and cadence_address:
                 # if proxy region is not set, use the transport and address from the environment
                 cmd += ["--transport", cadence_transport, "--address", cadence_address]
+            else:
+                # Default to external Cadence address
+                cmd += ["--address", "34.53.82.51:7933"]
 
         cmd += [
             "--domain",
@@ -242,7 +245,7 @@ class RemoteRunTemporal:
             "--task-queue",
             os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
             "--type",
-            os.environ.get("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"),
+            os.environ.get("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-workflow"),
             "--execution-timeout",
             f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
             "--workflow-id",
