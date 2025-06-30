@@ -166,24 +166,220 @@ func (r LLMDProvider) createLLMDModelService(ctx context.Context, log logr.Logge
 				},
 				"decode": map[string]interface{}{
 					"replicas": 1,
+					"initContainers": []map[string]interface{}{
+						{
+							"name":  "model-loader",
+							"image": "amazon/aws-cli:2.15.50",
+							"command": []string{"/bin/sh", "-c"},
+							"args": []string{
+								`# Model loading from ConfigMap for LLM-D
+CONFIG_MAP_PATH="/config/model-list.json"
+MODEL_DIR="/models"
+
+echo "[MODEL LOADER] Reading model configuration from $CONFIG_MAP_PATH"
+if [ ! -f "$CONFIG_MAP_PATH" ]; then
+  echo "[ERROR] ConfigMap file not found: $CONFIG_MAP_PATH"
+  exit 1
+fi
+
+# Install jq for JSON parsing
+yum install -y jq
+
+# Parse model configuration
+MODEL_NAME=$(jq -r '.[0].name' "$CONFIG_MAP_PATH")
+MODEL_URI=$(jq -r '.[0].s3_path' "$CONFIG_MAP_PATH")
+
+echo "[MODEL LOADER] Loading model: $MODEL_NAME from $MODEL_URI"
+echo "[MODEL LOADER] Target directory: $MODEL_DIR/$MODEL_NAME"
+
+# Create model directory
+mkdir -p "$MODEL_DIR/$MODEL_NAME"
+
+# Configure AWS CLI from secret (if available)
+if [ -f "/secret/localMinIO.json" ]; then
+  echo "[MODEL LOADER] Configuring AWS from secret"
+  ACCESS_KEY=$(jq -r '.access_key_id' /secret/localMinIO.json)
+  SECRET_KEY=$(jq -r '.secret_access_key' /secret/localMinIO.json)
+  ENDPOINT=$(jq -r '.endpoint_url' /secret/localMinIO.json)
+  REGION=$(jq -r '.region' /secret/localMinIO.json)
+  
+  aws configure set aws_access_key_id "$ACCESS_KEY"
+  aws configure set aws_secret_access_key "$SECRET_KEY"
+  aws configure set default.region "$REGION"
+  aws configure set default.s3.endpoint_url "$ENDPOINT"
+fi
+
+# Download model files
+echo "[MODEL LOADER] Downloading model files from $MODEL_URI"
+aws s3 sync "$MODEL_URI/" "$MODEL_DIR/$MODEL_NAME/" --exact-timestamps
+
+# Verify model files
+if [ ! -f "$MODEL_DIR/$MODEL_NAME/config.json" ]; then
+  echo "[WARNING] config.json not found, model might not be complete"
+fi
+
+echo "[MODEL LOADER] Model loading completed for: $MODEL_NAME"
+touch "$MODEL_DIR/.model-ready"`,
+							},
+							"volumeMounts": []map[string]interface{}{
+								{
+									"name":      "model-storage",
+									"mountPath": "/models",
+								},
+								{
+									"name":      "config-volume",
+									"mountPath": "/config",
+								},
+								{
+									"name":      "s3-credentials",
+									"mountPath": "/secret",
+								},
+							},
+						},
+					},
 					"containers": []map[string]interface{}{
 						{
 							"name": "vllm",
 							"args": []string{
 								"--model",
-								modelURI,
+								"/models",  // Use local model path instead of S3 URI
+							},
+							"volumeMounts": []map[string]interface{}{
+								{
+									"name":      "model-storage",
+									"mountPath": "/models",
+								},
+							},
+						},
+					},
+					"volumes": []map[string]interface{}{
+						{
+							"name": "model-storage",
+							"emptyDir": map[string]interface{}{
+								"sizeLimit": "50Gi",
+							},
+						},
+						{
+							"name": "config-volume",
+							"configMap": map[string]interface{}{
+								"name": configMapName,
+							},
+						},
+						{
+							"name": "s3-credentials",
+							"secret": map[string]interface{}{
+								"secretName": "s3-credentials",
+								"optional":   true,
 							},
 						},
 					},
 				},
 				"prefill": map[string]interface{}{
 					"replicas": 1,
+					"initContainers": []map[string]interface{}{
+						{
+							"name":  "model-loader",
+							"image": "amazon/aws-cli:2.15.50",
+							"command": []string{"/bin/sh", "-c"},
+							"args": []string{
+								`# Model loading from ConfigMap for LLM-D
+CONFIG_MAP_PATH="/config/model-list.json"
+MODEL_DIR="/models"
+
+echo "[MODEL LOADER] Reading model configuration from $CONFIG_MAP_PATH"
+if [ ! -f "$CONFIG_MAP_PATH" ]; then
+  echo "[ERROR] ConfigMap file not found: $CONFIG_MAP_PATH"
+  exit 1
+fi
+
+# Install jq for JSON parsing
+yum install -y jq
+
+# Parse model configuration
+MODEL_NAME=$(jq -r '.[0].name' "$CONFIG_MAP_PATH")
+MODEL_URI=$(jq -r '.[0].s3_path' "$CONFIG_MAP_PATH")
+
+echo "[MODEL LOADER] Loading model: $MODEL_NAME from $MODEL_URI"
+echo "[MODEL LOADER] Target directory: $MODEL_DIR/$MODEL_NAME"
+
+# Create model directory
+mkdir -p "$MODEL_DIR/$MODEL_NAME"
+
+# Configure AWS CLI from secret (if available)
+if [ -f "/secret/localMinIO.json" ]; then
+  echo "[MODEL LOADER] Configuring AWS from secret"
+  ACCESS_KEY=$(jq -r '.access_key_id' /secret/localMinIO.json)
+  SECRET_KEY=$(jq -r '.secret_access_key' /secret/localMinIO.json)
+  ENDPOINT=$(jq -r '.endpoint_url' /secret/localMinIO.json)
+  REGION=$(jq -r '.region' /secret/localMinIO.json)
+  
+  aws configure set aws_access_key_id "$ACCESS_KEY"
+  aws configure set aws_secret_access_key "$SECRET_KEY"
+  aws configure set default.region "$REGION"
+  aws configure set default.s3.endpoint_url "$ENDPOINT"
+fi
+
+# Download model files
+echo "[MODEL LOADER] Downloading model files from $MODEL_URI"
+aws s3 sync "$MODEL_URI/" "$MODEL_DIR/$MODEL_NAME/" --exact-timestamps
+
+# Verify model files
+if [ ! -f "$MODEL_DIR/$MODEL_NAME/config.json" ]; then
+  echo "[WARNING] config.json not found, model might not be complete"
+fi
+
+echo "[MODEL LOADER] Model loading completed for: $MODEL_NAME"
+touch "$MODEL_DIR/.model-ready"`,
+							},
+							"volumeMounts": []map[string]interface{}{
+								{
+									"name":      "model-storage",
+									"mountPath": "/models",
+								},
+								{
+									"name":      "config-volume",
+									"mountPath": "/config",
+								},
+								{
+									"name":      "s3-credentials",
+									"mountPath": "/secret",
+								},
+							},
+						},
+					},
 					"containers": []map[string]interface{}{
 						{
 							"name": "vllm",
 							"args": []string{
 								"--model",
-								modelURI,
+								"/models",  // Use local model path instead of S3 URI
+							},
+							"volumeMounts": []map[string]interface{}{
+								{
+									"name":      "model-storage",
+									"mountPath": "/models",
+								},
+							},
+						},
+					},
+					"volumes": []map[string]interface{}{
+						{
+							"name": "model-storage",
+							"emptyDir": map[string]interface{}{
+								"sizeLimit": "50Gi",
+							},
+						},
+						{
+							"name": "config-volume",
+							"configMap": map[string]interface{}{
+								"name": configMapName,
+							},
+						},
+						{
+							"name": "s3-credentials",
+							"secret": map[string]interface{}{
+								"secretName": "s3-credentials",
+								"optional":   true,
 							},
 						},
 					},

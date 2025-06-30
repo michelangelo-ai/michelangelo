@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
     ),
     cache_enabled=True,
 )
-def pusher(model_uri: str, deployed_model_name: str):
+def pusher(model_uri: str, deployed_model_name: str, hf_model_name: str = "Qwen/Qwen1.5-1.8B-Chat"):
     """
     Push the fine-tuned Qwen model for LLM-D deployment.
     
@@ -44,7 +44,7 @@ def pusher(model_uri: str, deployed_model_name: str):
         model.save_pretrained(local_model_dir)
         
         # Also save the tokenizer
-        tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen1.5-1.8B-Chat", trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(hf_model_name, trust_remote_code=True)
         tokenizer.save_pretrained(local_model_dir)
         
         # Define deployment bucket and paths for LLM-D
@@ -95,7 +95,7 @@ def pusher(model_uri: str, deployed_model_name: str):
         # Define model spec for LLM
         model.spec.owner.name = "default-user"
         model.spec.description = "Fine-tuned Qwen model for LLM-D deployment"
-        model.spec.kind = ModelKind.MODEL_KIND_GENERATIVE_LLM
+        model.spec.kind = ModelKind.MODEL_KIND_BINARY_CLASSIFICATION
         model.spec.algorithm = "qwen"
         model.spec.training_framework = "pytorch"
         model.spec.source = "Michelangelo V2"
