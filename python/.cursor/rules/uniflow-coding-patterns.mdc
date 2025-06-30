@@ -1,0 +1,318 @@
+---
+description: Coding patterns and examples for Uniflow development
+globs: 
+alwaysApply: false
+---
+# Uniflow Coding Patterns and Examples
+
+## Task Implementation Patterns
+
+### Basic Task Structure
+Reference the decorator implementation in [decorator.py](mdc:python/michelangelo/uniflow/core/decorator.py) for task creation patterns.
+
+```python
+import uniflow
+
+@uniflow.task
+def data_preprocessing(input_path: str, output_path: str) -> str:
+    """
+    Basic task structure with type hints and documentation.
+    """
+    # Task implementation
+    processed_data = process_data(input_path)
+    save_data(processed_data, output_path)
+    return output_path
+```
+
+### Task with Resource Requirements
+```python
+@uniflow.task(
+    num_cpus=4,
+    num_gpus=1,
+    memory="8GB",
+    timeout=3600  # 1 hour timeout
+)
+def gpu_training_task(model_config: dict) -> dict:
+    """
+    Resource-intensive task with specific requirements.
+    """
+    # GPU training implementation
+    return training_results
+```
+
+### Task with Retry Logic
+```python
+@uniflow.task(
+    retry_exceptions=[ConnectionError, TimeoutError],
+    max_retries=3,
+    retry_delay=60  # 60 seconds between retries
+)
+def external_api_call(endpoint: str, params: dict) -> dict:
+    """
+    Task that may fail due to external dependencies.
+    """
+    # API call implementation with potential failures
+    return api_response
+```
+
+## Workflow Implementation Patterns
+
+### Linear Workflow
+Reference workflow context in [context.py](mdc:python/michelangelo/uniflow/core/context.py).
+
+```python
+@uniflow.workflow
+def linear_ml_pipeline(dataset_id: str, model_params: dict) -> dict:
+    """
+    Simple linear workflow for ML training.
+    """
+    # Sequential task execution
+    raw_data = load_dataset(dataset_id)
+    processed_data = preprocess_data(raw_data)
+    trained_model = train_model(processed_data, model_params)
+    evaluation_results = evaluate_model(trained_model, processed_data)
+    
+    return evaluation_results
+```
+
+### Parallel Workflow
+```python
+@uniflow.workflow
+def parallel_feature_engineering(dataset_id: str) -> dict:
+    """
+    Workflow with parallel task execution.
+    """
+    raw_data = load_dataset(dataset_id)
+    
+    # Parallel feature engineering
+    numerical_features = extract_numerical_features(raw_data)
+    categorical_features = extract_categorical_features(raw_data)
+    text_features = extract_text_features(raw_data)
+    
+    # Combine results
+    combined_features = combine_features(
+        numerical_features, 
+        categorical_features, 
+        text_features
+    )
+    
+    return combined_features
+```
+
+### Conditional Workflow
+```python
+@uniflow.workflow
+def adaptive_training_workflow(dataset_size: int, model_type: str) -> dict:
+    """
+    Workflow with conditional logic based on input parameters.
+    """
+    data = load_dataset_by_size(dataset_size)
+    
+    if dataset_size > 1000000:  # Large dataset
+        # Use distributed training
+        if model_type == "deep_learning":
+            model = distributed_deep_learning_train(data)
+        else:
+            model = distributed_ml_train(data)
+    else:  # Small dataset
+        # Use single-machine training
+        model = single_machine_train(data, model_type)
+    
+    metrics = evaluate_model(model, data)
+    return metrics
+```
+
+## Data Management Patterns
+
+### Using Data References
+Reference the data reference system in [ref.py](mdc:python/michelangelo/uniflow/core/ref.py).
+
+```python
+from uniflow.core.ref import ref
+
+@uniflow.task
+def process_large_dataset(input_ref: str) -> str:
+    """
+    Task that works with data references instead of direct data.
+    """
+    # Load data using reference
+    data = ref(input_ref).load()
+    
+    # Process data
+    processed_data = transform_data(data)
+    
+    # Save and return reference
+    output_ref = ref("s3://bucket/processed_data.parquet")
+    output_ref.save(processed_data)
+    
+    return str(output_ref)
+```
+
+### Storage Configuration
+Check IO registry patterns in [io_registry.py](mdc:python/michelangelo/uniflow/core/io_registry.py).
+
+```python
+@uniflow.task
+def configure_storage_task() -> str:
+    """
+    Task demonstrating storage configuration.
+    """
+    # Configure different storage backends
+    local_path = "/tmp/local_data"
+    s3_path = "s3://my-bucket/data"
+    hdfs_path = "hdfs://cluster/data"
+    
+    # Use appropriate storage based on environment
+    if is_local_environment():
+        return local_path
+    elif is_cloud_environment():
+        return s3_path
+    else:
+        return hdfs_path
+```
+
+## Context and Configuration Patterns
+
+### Context Setup
+```python
+def setup_uniflow_context():
+    """
+    Standard context setup for Uniflow workflows.
+    """
+    ctx = uniflow.create_context()
+    
+    # Environment configuration
+    ctx.environ.update({
+        "LOG_LEVEL": "INFO",
+        "RAY_AIR_FULL_TRACEBACKS": "1",
+        "UF_STORAGE_URL": "hdfs:///app/michelangelo/workspaces",
+        "PYTHONPATH": "/app/custom_modules"
+    })
+    
+    # Resource configuration
+    ctx.config.update({
+        "default_cpu": 2,
+        "default_memory": "4GB",
+        "max_retries": 3,
+        "task_timeout": 1800  # 30 minutes
+    })
+    
+    return ctx
+```
+
+### Production Configuration
+```python
+def production_workflow_runner():
+    """
+    Production-ready workflow execution setup.
+    """
+    ctx = setup_uniflow_context()
+    
+    # Production-specific settings
+    ctx.environ.update({
+        "MICHELANGELO_PROJECT_ID": "my-ml-project",
+        "CONTAINER_IMAGE": "my-registry/ml-pipeline:v1.0.0",
+        "RESOURCE_POOL": "production-gpu-pool"
+    })
+    
+    # Run workflow
+    result = ctx.run(
+        my_production_workflow,
+        dataset_id="production_dataset",
+        model_params={"learning_rate": 0.001, "batch_size": 32}
+    )
+    
+    return result
+```
+
+## Error Handling Patterns
+
+### Comprehensive Error Handling
+```python
+@uniflow.task(
+    retry_exceptions=[ConnectionError, TimeoutError, OSError],
+    max_retries=3,
+    retry_delay=30
+)
+def robust_data_processing(input_path: str) -> str:
+    """
+    Task with comprehensive error handling.
+    """
+    try:
+        # Main processing logic
+        data = load_data(input_path)
+        processed_data = process_data(data)
+        output_path = save_data(processed_data)
+        
+        # Log success
+        log_success(f"Successfully processed {input_path}")
+        return output_path
+        
+    except ValueError as e:
+        # Handle data validation errors
+        log_error(f"Data validation failed: {e}")
+        raise
+    except MemoryError as e:
+        # Handle memory issues
+        log_error(f"Out of memory: {e}")
+        # Try with smaller batch size
+        return process_data_in_batches(input_path)
+    except Exception as e:
+        # Handle unexpected errors
+        log_error(f"Unexpected error: {e}")
+        raise
+```
+
+## Testing Patterns
+
+### Local Testing Setup
+```python
+def test_workflow_locally():
+    """
+    Pattern for testing workflows locally.
+    """
+    # Create test context
+    ctx = uniflow.create_context()
+    ctx.environ["LOG_LEVEL"] = "DEBUG"
+    
+    # Use test data
+    test_dataset_id = "test_small_dataset"
+    test_params = {"learning_rate": 0.01, "epochs": 2}
+    
+    # Run workflow locally
+    result = ctx.run(
+        my_ml_workflow,
+        dataset_id=test_dataset_id,
+        model_params=test_params
+    )
+    
+    # Validate results
+    assert result is not None
+    assert "metrics" in result
+    assert result["metrics"]["accuracy"] > 0.5
+    
+    print("Local test passed!")
+    return result
+```
+
+### Integration Testing
+```python
+def integration_test_with_caching():
+    """
+    Test workflow with task caching enabled.
+    """
+    ctx = uniflow.create_context()
+    ctx.config["enable_caching"] = True
+    
+    # First run - should execute all tasks
+    result1 = ctx.run(my_workflow, input_data="test_data")
+    
+    # Second run - should use cached results
+    result2 = ctx.run(my_workflow, input_data="test_data")
+    
+    # Results should be identical
+    assert result1 == result2
+    print("Caching test passed!")
+```
+
+This guide provides practical coding patterns and examples for effective Uniflow development. Reference the core implementation files for detailed API usage and advanced patterns.
