@@ -49,7 +49,8 @@ def create_model(model_name: str = "Qwen/Qwen1.5-1.8B-Chat") -> transformers.Aut
 def load_and_train(
     dataset_name: str = "squad",
     tokenizer_max_length: int = 512,
-    model_name: str = "Qwen/Qwen1.5-1.8B-Chat",
+    model_name: str = "qwen-1.5-1.8b-chat",
+    hf_model_name: str = "Qwen/Qwen1.5-1.8B-Chat",
 ):
     """Load data and train Qwen model in a single task"""
     log.info("Starting combined data loading and training...")
@@ -242,8 +243,8 @@ def load_and_train(
         mlflow.log_param("max_epochs", max_epochs)
 
         # Load model and tokenizer for training
-        model = create_model(model_name)
-        train_tokenizer = AutoTokenizer.from_pretrained(model_name, trust_remote_code=True)
+        model = create_model(hf_model_name)
+        train_tokenizer = AutoTokenizer.from_pretrained(hf_model_name, trust_remote_code=True)
         
         # Add pad token if it doesn't exist
         if train_tokenizer.pad_token is None:
@@ -324,14 +325,16 @@ def qwen_finetune_workflow():
     Complete workflow for fine-tuning Qwen and deploying with LLM-D
     """
     # Load data and train the model in a single task
+    model_name = "qwen-1.5-1.8b-chat"
+    hf_model_name = "Qwen/Qwen1.5-1.8B-Chat"
     model_uri, train_result, best_checkpoint = load_and_train(
         dataset_name="squad",  # Using SQuAD for Q&A fine-tuning
-        model_name="Qwen/Qwen1.5-1.8B-Chat",
+        model_name=model_name,
+        hf_model_name=hf_model_name,
     )
     
     # Push model for deployment
-    deployed_model_name = "Qwen1.5-1.8B-Chat-v1"
-    model_name = pusher(model_uri, deployed_model_name)
+    model_name = pusher(model_uri, model_name, hf_model_name=hf_model_name)
     
     # Note: After this workflow completes, you can deploy the model using LLM-D backend
     # by creating an InferenceServer resource with backend_type = BACKEND_TYPE_LLM_D
