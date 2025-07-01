@@ -3,14 +3,15 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "provider.go",
+        "engine.go",
+        "registry.go",
+        "types.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/providers/llmd",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/deployment/provider:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
     ],
 )

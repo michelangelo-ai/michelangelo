@@ -51,3 +51,10 @@ const (
 	StateDeleted  = v2pb.INFERENCE_SERVER_STATE_DELETED
 	StateFailed   = v2pb.INFERENCE_SERVER_STATE_FAILED
 )
+
+// Backend types - using the correct protobuf enum values
+const (
+	BackendTriton = v2pb.BACKEND_TYPE_TRITON
+	BackendLLMD   = v2pb.BACKEND_TYPE_LLM_D
+	BackendDynamo = v2pb.BACKEND_TYPE_DYNAMO
+)
