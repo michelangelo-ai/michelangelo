@@ -13,9 +13,12 @@ proto_library(
     srcs = [
         "cached_output.proto",
         "cached_output_svc.proto",
+        "cluster.proto",
+        "cluster_svc.proto",
         "git.proto",
         "groupversion_info.proto",
         "job.proto",
+        "kubernetes.proto",
         "model.proto",
         "model_family.proto",
         "model_family_svc.proto",

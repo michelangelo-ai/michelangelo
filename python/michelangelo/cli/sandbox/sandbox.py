@@ -9,6 +9,8 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+import yaml
+import base64
 
 short_description = "Manage the sandbox cluster."
 
@@ -35,6 +37,7 @@ _cadence_ports = [
     "8088:30004",  # Cadence Web
 ]
 _cadence_domain = "default"
+_jobs_cluster_name = "michelangelo-jobs-0"
 
 
 def init_arguments(p: argparse.ArgumentParser):
@@ -49,6 +52,11 @@ def init_arguments(p: argparse.ArgumentParser):
         choices=["cadence", "temporal"],
         default="cadence",
         help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    create_p.add_argument(
+        "--create-jobs-cluster",
+        action="store_true",
+        help="Create an additional cluster for Ray jobs.",
     )
 
     _ = sp.add_parser("delete", help="Delete the cluster.")
@@ -85,6 +93,8 @@ def run(ns: argparse.Namespace):
 
 def _create(ns: argparse.Namespace):
     assert ns
+
+    # Create the main sandbox cluster
     ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
     args = ["k3d", "cluster", "create", _kube_name, "--servers", "1", "--agents", "1"]
 
@@ -182,6 +192,12 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _create_spark_operator(helm_existing_repos)
     print("\nSandbox created successfully.")
+
+    # Create the jobs cluster if requested
+    if ns.create_jobs_cluster:
+        _create_jobs_cluster(ns)
+        _create_cluster_crd(_jobs_cluster_name)
+        _create_cluster_secrets(_jobs_cluster_name)
 
 
 def _create_spark_operator(helm_existing_repos):
@@ -308,6 +324,7 @@ def _setup_cadence(links):
 def _delete(ns: argparse.Namespace):
     assert ns
     _exec("k3d", "cluster", "delete", _kube_name)
+    _exec("k3d", "cluster", "delete", _jobs_cluster_name)
 
 
 def _start(ns: argparse.Namespace):
@@ -413,6 +430,160 @@ def _err_exit(err_message: str, code: int = 1):
     # Print the error message in red and bold.
     print(f"\033[91m\033[1mERROR: {err_message}\nexit {code}\033[0m")
     sys.exit(code)
+
+
+def _create_jobs_cluster(ns: argparse.Namespace):
+    """Create a dedicated cluster for jobs."""
+
+    args = [
+        "k3d", "cluster", "create", _jobs_cluster_name,
+        "--servers", "1",
+        "--agents", "2",  # More worker nodes for Ray
+        "--kubeconfig-switch-context=false",  # Don't switch kubectl context to this cluster
+        # "--k3s-arg", "--disable=traefik",  # Disable traefik as we don't need it
+        # "--k3s-arg", "--disable=servicelb",  # Disable service load balancer
+    ]
+
+    # Add port mappings for Ray
+    ray_ports = [
+        "10001:10001",  # Ray client port
+        "8265:8265",    # Ray dashboard
+    ]
+
+    for p in ray_ports:
+        args += ["-p", f"{p}@agent:0"]
+
+    _exec(*args)
+
+    print(f"\nJobs cluster '{_jobs_cluster_name}' created successfully.")
+
+
+# Given a cluster name, create a Cluster CRD in the sandbox cluster
+def _create_cluster_crd(cluster_name: str):
+    """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
+    # Get kubeconfig for the Ray jobs cluster
+    kubeconfig = subprocess.check_output(
+        ["k3d", "kubeconfig", "get", cluster_name]
+    ).decode()
+
+    # Parse the kubeconfig YAML
+    kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract server URL from clusters[0].cluster.server
+    server_url = kubeconfig_data['clusters'][0]['cluster']['server']
+
+    # Extract host and port from server URL
+    # Example: "https://host.docker.internal:52910"
+    import re
+    match = re.search(r"(https://[^:]+):(\d+)", server_url)
+    if not match:
+        raise ValueError(f"Could not extract cluster host and port from server URL: {server_url}")
+    host, port = match.groups()
+
+    # Create Cluster CRD manifest
+    cluster_crd = {
+        "apiVersion": "michelangelo.api/v2",
+        "kind": "Cluster",
+        "metadata": {
+            "name": cluster_name,
+            "namespace": "default"
+        },
+        "spec": {
+            "sla": "SLA_TYPE_EPHEMERAL",  # Using ephemeral SLA for development
+            "dc": "DC_TYPE_ON_PREM",      # Local k3d cluster is on-prem
+            "kubernetes": {
+                "rest": {
+                    "host": host,
+                    "port": port,
+                    "tokenTag": f"cluster-{cluster_name}-token",
+                    "caDataTag": f"cluster-{cluster_name}-ca-data"
+                },
+                "skus": []
+            }
+        }
+    }
+
+    # Create a temporary file for the Cluster CRD
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as crd_file:
+        yaml.dump(cluster_crd, crd_file)
+        crd_file.flush()
+
+        # Apply the Cluster CRD to the sandbox cluster (explicitly specify context)
+        _exec("kubectl", "--context", f"k3d-{_kube_name}", "apply", "-f", crd_file.name)
+
+        print(f"\nCreated Cluster CRD '{cluster_name}' in the sandbox cluster")
+        print(f"Cluster host: {host}")
+        print(f"Cluster port: {port}")
+        print(f"Server URL: {server_url}")
+
+
+def _create_cluster_secrets(cluster_name: str):
+    """Create Kubernetes secrets for the kubeconfig of the given cluster name."""
+    # Get kubeconfig for the cluster
+    kubeconfig = subprocess.check_output(
+        ["k3d", "kubeconfig", "get", cluster_name]
+    ).decode()
+
+    # Parse the kubeconfig YAML
+    kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract certificate-authority-data from clusters[0].cluster
+    ca_data = kubeconfig_data['clusters'][0]['cluster'].get('certificate-authority-data')
+    if not ca_data:
+        raise ValueError("certificate-authority-data not found in kubeconfig")
+
+    # # Decode the certificate-authority-data
+    # ca_data_decoded = base64.b64decode(ca_data).decode()
+
+    # Create a secret for the certificate-authority-data
+    ca_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+            "name": f"cluster-{cluster_name}-ca-data",
+            "namespace": "default"
+        },
+        "data": {
+            "ca.crt": ca_data
+        }
+    }
+
+    # Create a temporary file for the CA secret
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as ca_file:
+        yaml.dump(ca_secret, ca_file)
+        ca_file.flush()
+
+        # Apply the CA secret to the sandbox cluster
+        _exec("kubectl", "apply", "-f", ca_file.name)
+
+    # Create a new token for the default service account
+    token_raw = subprocess.check_output(
+        ["kubectl", "--context", f"k3d-{cluster_name}", "-n", "default", "create", "token", "default"]
+    ).decode().strip()
+    token = base64.b64encode(token_raw.encode()).decode()
+
+    # Create a secret for the user token
+    token_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+            "name": f"cluster-{cluster_name}-client-token",
+            "namespace": "default"
+        },
+        "data": {
+            "token": token
+        }
+    }
+
+    # Create a temporary file for the token secret
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as token_file:
+        yaml.dump(token_secret, token_file)
+        token_file.flush()
+
+        # Apply the token secret to the sandbox cluster
+        _exec("kubectl", "apply", "-f", token_file.name)
+
+    print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
 if __name__ == "__main__":

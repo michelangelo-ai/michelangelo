@@ -1,0 +1,16 @@
+apiVersion: michelangelo.api/v2
+kind: Cluster
+metadata:
+  name: michelangelo-jobs-0
+  namespace: default
+spec:
+  sla: SLA_TYPE_EPHEMERAL  # Using ephemeral SLA for development
+  dc: DC_TYPE_ON_PREM      # Local k3d cluster is on-prem
+  kubernetes:
+    rest:
+      host: "https://host.docker.internal"
+      port: "55315"  # This will be dynamically set during cluster creation
+      # For local development, we don't need token and ca_data
+      tokenTag: ""
+      caDataTag: ""
+    skus: []

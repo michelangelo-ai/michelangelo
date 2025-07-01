@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -46,40 +47,40 @@ const (
 // Callers should check using errors.Is(err, ErrRetryable) to determine if they should retry.
 var ErrRetryable = errors.New("operation failed but is retryable")
 
-func newClusterReadyCondition(t metav1.Time) *v2pb.Condition {
-	return &v2pb.Condition{
+func newClusterReadyCondition(t metav1.Time) *apipb.Condition {
+	return &apipb.Condition{
 		Type:                 constants.ClusterReady,
-		Status:               v2pb.CONDITION_STATUS_TRUE,
+		Status:               apipb.CONDITION_STATUS_TRUE,
 		Reason:               ClusterReadyReason,
 		Message:              ClusterReadyMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterNotReadyCondition(t metav1.Time) *v2pb.Condition {
-	return &v2pb.Condition{
+func newClusterNotReadyCondition(t metav1.Time) *apipb.Condition {
+	return &apipb.Condition{
 		Type:                 constants.ClusterReady,
-		Status:               v2pb.CONDITION_STATUS_FALSE,
+		Status:               apipb.CONDITION_STATUS_FALSE,
 		Reason:               ClusterNotReadyReason,
 		Message:              ClusterNotReadyMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterOfflineCondition(t metav1.Time) *v2pb.Condition {
-	return &v2pb.Condition{
+func newClusterOfflineCondition(t metav1.Time) *apipb.Condition {
+	return &apipb.Condition{
 		Type:                 constants.ClusterOffline,
-		Status:               v2pb.CONDITION_STATUS_TRUE,
+		Status:               apipb.CONDITION_STATUS_TRUE,
 		Reason:               ClusterNotReachableReason,
 		Message:              ClusterNotReachableMsg,
 		LastUpdatedTimestamp: t.Unix(),
 	}
 }
 
-func newClusterNotOfflineCondition(t metav1.Time) *v2pb.Condition {
-	return &v2pb.Condition{
+func newClusterNotOfflineCondition(t metav1.Time) *apipb.Condition {
+	return &apipb.Condition{
 		Type:                 constants.ClusterOffline,
-		Status:               v2pb.CONDITION_STATUS_FALSE,
+		Status:               apipb.CONDITION_STATUS_FALSE,
 		Reason:               ClusterReachableReason,
 		Message:              ClusterReachableMsg,
 		LastUpdatedTimestamp: t.Unix(),

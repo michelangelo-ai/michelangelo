@@ -1,0 +1,115 @@
+// This file defines the Cluster related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/v2/kubernetes.proto";
+
+// Peloton specific cluster configuration
+message PelotonSpec {
+  // Resource pool path
+  string pool = 1;
+}
+
+// YARN specific cluster configuration
+message YarnSpec {
+  // Queue name
+  string queue = 1;
+}
+
+// DC type of the cluster
+enum DCType {
+  // invalid
+  DC_TYPE_INVALID = 0;
+
+  // On-prem
+  DC_TYPE_ON_PREM = 1;
+
+  // Cloud GCP
+  DC_TYPE_CLOUD_GCP = 2;
+}
+
+// Specification of the cluster where a ML job will be launched,
+// including the type, SLA, and optional region and/or zone
+// information.
+message ClusterSpec {
+
+  // SLA of the cluster.
+  enum SLAType {
+    // Invalid cluster SLA
+    SLA_TYPE_INVALID = 0;
+
+    // Production SLA
+    SLA_TYPE_PRODUCTION = 1;
+
+    // Ephemeral SLA
+    SLA_TYPE_EPHEMERAL = 2;
+  }
+
+  // SLA of the cluster, e.g. production or ephemeral
+  SLAType sla = 1;
+
+  // Region of the cluster
+  string region = 2;
+
+  // Zone of the cluster
+  string zone = 3;
+
+  // Cluster type specific configurations
+  oneof cluster {
+    option (michelangelo.api.required) = true;
+    // Peloton cluster specific config
+    PelotonSpec peloton = 4;
+
+    // Kubernetes cluster specific config
+    KubernetesSpec kubernetes = 5;
+
+    // YARN cluster specific config
+    YarnSpec yarn = 6;
+  }
+
+  // DC type of the cluster
+  DCType dc = 7;
+}
+
+// ClusterStatus will have workload
+// related information
+message ClusterStatus {
+  // Deprecated - use status_conditions instead
+  // Conditions is an array of current cluster conditions.
+  repeated k8s.io.apimachinery.pkg.apis.meta.v1.Condition conditions = 1 [deprecated=true];
+
+  // Conditions that describe states
+  repeated Condition status_conditions = 2;
+}
+
+// Cluster refers to a CRD resource for a cluster
+message Cluster {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the cluster.
+  ClusterSpec spec = 3;
+
+  // Most recently observed status of the cluster.
+  ClusterStatus status = 4;
+}
+
+// A list of clusters
+message ClusterList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of clusters
+  repeated Cluster items = 3;
+}
