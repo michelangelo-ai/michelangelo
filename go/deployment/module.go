@@ -1,30 +1,25 @@
 package deployment
 
 import (
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/proxy"
 	"go.uber.org/fx"
-	"sigs.k8s.io/controller-runtime/pkg/manager"
+	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/istio"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
 )
 
-var (
-	// Module FX
-	Module = fx.Options(
-		istio.Module,
-		fx.Invoke(register),
-	)
+// Module provides the deployment controller with all dependencies
+var Module = fx.Module("deployment",
+	fx.Provide(NewGateway),
+	fx.Provide(NewReconciler),
+	fx.Invoke(register),
 )
 
-func register(
-	env env.Context,
-	mgr manager.Manager,
-	proxyProvider proxy.ProxyProvider,
-) error {
-	return (&Reconciler{
-		Client:        mgr.GetClient(),
-		proxyProvider: proxyProvider,
-		env:           env,
-	}).Register(mgr)
+// NewGateway creates a new inference server gateway
+func NewGateway() inferenceserver.Gateway {
+	return inferenceserver.NewGateway()
+}
+
+// register sets up the deployment controller with the manager
+func register(mgr ctrl.Manager, reconciler *Reconciler) error {
+	return reconciler.SetupWithManager(mgr)
 }
