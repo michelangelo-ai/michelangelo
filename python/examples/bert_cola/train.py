@@ -28,7 +28,7 @@ def create_model(
         worker_cpu=1,
         worker_memory="4Gi",
         worker_instances=1,
-        # breakpoint=True,
+        breakpoint=False,
     ),
     cache_enabled=True,
 )

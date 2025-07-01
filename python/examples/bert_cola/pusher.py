@@ -1,5 +1,6 @@
 import os
 import logging
+import tempfile
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 import fsspec
