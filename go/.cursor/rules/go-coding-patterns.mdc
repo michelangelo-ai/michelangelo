@@ -1,5 +1,511 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Go Coding Patterns for Michelangelo
+
+## Interface Design Patterns
+
+### Service Interface Pattern
+
+Follow the pattern established in [api/interface.go](mdc:go/api/interface.go):
+
+```go
+//go:generate mamockgen Handler
+package api
+
+// Handler defines an interface to handle the unified API objects
+type Handler interface {
+    // Create saves the API object obj into the unified API system
+    Create(ctx context.Context, obj client.Object, opts *metav1.CreateOptions) error
+    
+    // Get retrieves an API object by the given name and namespace
+    Get(ctx context.Context, namespace string, name string, opts *metav1.GetOptions, obj client.Object) error
+    
+    // Update updates the given API object to the unified API system
+    Update(ctx context.Context, obj client.Object, opts *metav1.UpdateOptions) error
+    
+    // Delete deletes an API object specified by obj and opts
+    Delete(ctx context.Context, obj client.Object, opts *metav1.DeleteOptions) error
+}
+```
+
+**Key Principles:**
+1. **Use context.Context as first parameter** for all methods
+2. **Include comprehensive documentation** for each method
+3. **Use consistent parameter ordering** (context, then domain objects, then options)
+4. **Generate mocks** using `//go:generate mamockgen InterfaceName`
+
+### Storage Interface Pattern
+
+Follow the pattern in [storage/blob_storage.go](mdc:go/storage/blob_storage.go):
+
+```go
+//go:generate mamockgen BlobStorage
+package storage
+
+// BlobStorage defines the interface of a Blob storage
+type BlobStorage interface {
+    // MergeWithExternalBlob gets the corresponding object stored in the blob storage and do the merge
+    MergeWithExternalBlob(context.Context, runtime.Object) error
+    
+    // UploadToBlobStorage uploads the object to blob storage
+    // Returns the key to retrieve the object if the upload succeeds
+    UploadToBlobStorage(context.Context, runtime.Object) (string, error)
+    
+    // DeleteFromBlobStorage deletes the object from blob storage
+    DeleteFromBlobStorage(context.Context, runtime.Object) error
+    
+    // IsObjectInteresting returns whether the object should be processed by blob storage
+    IsObjectInteresting(runtime.Object) bool
+}
+```
+
+**Key Principles:**
+1. **Single responsibility** - each interface serves one purpose
+2. **Method naming** - use descriptive verbs (Upload, Delete, Merge)
+3. **Return values** - include both result and error when appropriate
+4. **Predicate methods** - use `Is*` or `Has*` for boolean checks
+
+## Dependency Injection Patterns
+
+### Module Pattern with Uber FX
+
+Follow the pattern in [base/zapfx/module.go](mdc:go/base/zapfx/module.go):
+
+```go
+package zapfx
+
+import (
+    "github.com/michelangelo-ai/michelangelo/go/base/config"
+    "go.uber.org/fx"
+    "go.uber.org/zap"
+)
+
+// Module provides a zap logger for structured logging
+var Module = fx.Options(
+    fx.Provide(config.ProvideConfig[Config](mdc:configKey)),
+    fx.Provide(provide),
+)
+
+type In struct {
+    fx.In
+    Config Config
+}
+
+type Out struct {
+    fx.Out
+    Config zap.Config
+    Level  zap.AtomicLevel
+    Logger *zap.Logger
+}
+
+func provide(in In) (Out, error) {
+    // Implementation details...
+}
+```
+
+**Key Principles:**
+1. **Export Module variable** for easy inclusion in other modules
+2. **Use In/Out structs** for complex dependency injection
+3. **Tag structs with fx.In/fx.Out** for proper dependency resolution
+4. **Provide multiple related dependencies** in a single Out struct
+
+### Configuration Provider Pattern
+
+Follow the pattern in [base/config/utils.go](mdc:go/base/config/utils.go):
+
+```go
+package config
+
+import "go.uber.org/config"
+
+// ProvideConfig is a helper function to provide a config value from a config.Provider
+func ProvideConfig[T any](mdc:key string) func(config.Provider) (T, error) {
+    return func(p config.Provider) (T, error) {
+        c := new(T)
+        err := p.Get(key).Populate(&c)
+        return *c, err
+    }
+}
+```
+
+**Key Principles:**
+1. **Use generics** for type-safe configuration loading
+2. **Return provider functions** for delayed evaluation
+3. **Handle errors gracefully** in configuration loading
+
+## Error Handling Patterns
+
+### Validation Pattern
+
+Follow the pattern in [api/api.go](mdc:go/api/api.go):
+
+```go
+type validation interface {
+    Validate(prefix string) error
+}
+
+// Validate an input message, if the message has Validate(string) error function
+func Validate(obj interface{}) error {
+    v, ok := obj.(validation)
+    if ok {
+        return v.Validate("")
+    }
+    return nil
+}
+```
+
+**Key Principles:**
+1. **Use type assertions** to check for validation capabilities
+2. **Provide default behavior** when validation is not implemented
+3. **Use consistent error prefixes** for nested validation
+
+### gRPC Status Error Pattern
+
+```go
+import (
+    "google.golang.org/grpc/codes"
+    "google.golang.org/grpc/status"
+)
+
+// Example error handling
+func (h *handler) Create(ctx context.Context, obj client.Object) error {
+    if err := Validate(obj); err != nil {
+        return status.Errorf(codes.InvalidArgument, "validation failed: %v", err)
+    }
+    
+    if err := h.storage.Create(ctx, obj); err != nil {
+        return status.Errorf(codes.Internal, "failed to create object: %v", err)
+    }
+    
+    return nil
+}
+```
+
+## Logging Patterns
+
+### Structured Logging with Zap
+
+Follow the pattern established in the codebase:
+
+```go
+import (
+    "go.uber.org/zap"
+    "github.com/michelangelo-ai/michelangelo/go/logging"
+)
+
+// Use structured logging
+logger.Info("processing request",
+    zap.String("namespace", namespace),
+    zap.String("name", name),
+    zap.String("operation", "create"),
+)
+
+// For JSON marshaling
+logger.Info("object details",
+    zap.String("object", logging.MarshalToString(obj)),
+)
+```
+
+### Audit Logging Pattern
+
+Follow the pattern in [logging/audit_log_struct.go](mdc:go/logging/audit_log_struct.go):
+
+```go
+type AuditLogEvent struct {
+    Namespace  string
+    EntityType string
+    EntityName string
+    Procedure  string
+    Request    string
+    Response   string
+    Error      string
+    PreCRD     string
+}
+```
+
+**Key Principles:**
+1. **Use structured data** for audit events
+2. **Include context information** (namespace, entity type, etc.)
+3. **Capture both request and response** data
+4. **Log errors separately** in audit events
+
+## Testing Patterns
+
+### Table-Driven Tests
+
+```go
+func TestSetPackageAlias(t *testing.T) {
+    tests := []struct {
+        name     string
+        input    string
+        pkgPath  string
+        newAlias string
+        want     string
+    }{
+        {
+            name: "explicit alias",
+            input: `package main
+import (
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)`,
+            pkgPath:  "k8s.io/apimachinery/pkg/apis/meta/v1",
+            newAlias: "v1",
+            want: `package main
+import (
+    v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+)`,
+        },
+        // More test cases...
+    }
+    
+    for _, tt := range tests {
+        t.Run(tt.name, func(t *testing.T) {
+            // Test implementation
+        })
+    }
+}
+```
+
+### Mock Usage Pattern
+
+```go
+func TestHandler_Create(t *testing.T) {
+    ctrl := gomock.NewController(t)
+    defer ctrl.Finish()
+    
+    mockStorage := storagemocks.NewMockMetadataStorage(ctrl)
+    handler := &handlerImpl{
+        storage: mockStorage,
+    }
+    
+    mockStorage.EXPECT().
+        Create(gomock.Any(), gomock.Any()).
+        Return(nil).
+        Times(1)
+    
+    err := handler.Create(context.Background(), obj)
+    assert.NoError(t, err)
+}
+```
+
+## Protocol Buffer Integration Patterns
+
+### Code Generation Pattern
+
+The project uses custom protoc plugins. Follow these patterns:
+
+```go
+// In proto files, use custom options
+syntax = "proto3";
+
+import "github.com/michelangelo-ai/proto/michelangelo/api/options.proto";
+
+message MyResource {
+    option (michelangelo.api.has_resource) = true;
+    option (michelangelo.api.resource.name) = "myresources";
+    option (michelangelo.api.resource.scope) = "Namespaced";
+    
+    // Fields...
+}
+```
+
+### Package Alias Management
+
+Follow the pattern in [kubeproto/util/util.go](mdc:go/kubeproto/util/util.go):
+
+```go
+// SetPackageAlias modifies the alias of a package import and updates all its references
+func SetPackageAlias(file *dst.File, pkgPath string, newAlias string) {
+    // Implementation for managing import aliases
+}
+
+// Standard aliases used in the project
+util.SetPackageAlias(dstFile, "k8s.io/apimachinery/pkg/apis/meta/v1", "metav1")
+util.SetPackageAlias(dstFile, "github.com/michelangelo-ai/proto/michelangelo/api", "apipb")
+```
+
+## Kubernetes Integration Patterns
+
+### CRD Management Pattern
+
+```go
+import (
+    apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+    metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+    "k8s.io/apimachinery/pkg/runtime"
+)
+
+// Resource registration pattern
+var (
+    GroupVersion = schema.GroupVersion{Group: "michelangelo.ai", Version: "v1"}
+    SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}
+    AddToScheme = SchemeBuilder.AddToScheme
+)
+```
+
+### Controller Pattern
+
+```go
+import (
+    "sigs.k8s.io/controller-runtime/pkg/client"
+    "sigs.k8s.io/controller-runtime/pkg/controller"
+    "sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+type Reconciler struct {
+    client.Client
+    // Other dependencies
+}
+
+func (r *Reconciler) Reconcile(ctx context.Context, req reconcile.Request) (reconcile.Result, error) {
+    // Reconciliation logic
+}
+```
+
+## Workflow Integration Patterns
+
+### Temporal/Cadence Activity Pattern
+
+```go
+// Activity interface
+type Activities interface {
+    ProcessData(ctx context.Context, input DataInput) (DataOutput, error)
+    ValidateResults(ctx context.Context, results Results) error
+}
+
+// Activity implementation
+func (a *activities) ProcessData(ctx context.Context, input DataInput) (DataOutput, error) {
+    // Use structured logging
+    logger := activity.GetLogger(ctx)
+    logger.Info("Processing data", "inputSize", len(input.Data))
+    
+    // Implementation
+    return output, nil
+}
+```
+
+### Workflow Definition Pattern
+
+```go
+func MyWorkflow(ctx workflow.Context, input WorkflowInput) (WorkflowOutput, error) {
+    ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+        StartToCloseTimeout: time.Minute * 10,
+        RetryPolicy: &temporal.RetryPolicy{
+            MaximumAttempts: 3,
+        },
+    })
+    
+    var activities Activities
+    var result DataOutput
+    err := workflow.ExecuteActivity(ctx, activities.ProcessData, input.Data).Get(ctx, &result)
+    if err != nil {
+        return WorkflowOutput{}, err
+    }
+    
+    return WorkflowOutput{Result: result}, nil
+}
+```
+
+## Performance Patterns
+
+### Context Usage
+
+```go
+// Always accept context as first parameter
+func ProcessRequest(ctx context.Context, req Request) error {
+    // Check for cancellation
+    select {
+    case <-ctx.Done():
+        return ctx.Err()
+    default:
+    }
+    
+    // Use context for downstream calls
+    return downstream.Call(ctx, req)
+}
+```
+
+### Resource Management
+
+```go
+// Use defer for cleanup
+func ProcessFile(filename string) error {
+    file, err := os.Open(filename)
+    if err != nil {
+        return err
+    }
+    defer file.Close()
+    
+    // Process file
+    return nil
+}
+
+// Use sync.Pool for object reuse
+var bufferPool = sync.Pool{
+    New: func() interface{} {
+        return make([]byte, 0, 1024)
+    },
+}
+
+func ProcessData(data []byte) error {
+    buf := bufferPool.Get().([]byte)
+    defer bufferPool.Put(buf[:0])
+    
+    // Use buffer
+    return nil
+}
+```
+
+## Security Patterns
+
+### Input Validation
+
+```go
+import (
+    "net"
+    "net/mail"
+    "net/url"
+    "regexp"
+    "github.com/google/uuid"
+)
+
+// Validation functions pattern
+func validateEmail(email string) error {
+    _, err := mail.ParseAddress(email)
+    return err
+}
+
+func validateUUID(id string) error {
+    _, err := uuid.Parse(id)
+    return err
+}
+
+func validateIP(ip string) error {
+    if net.ParseIP(ip) == nil {
+        return fmt.Errorf("invalid IP address: %s", ip)
+    }
+    return nil
+}
+```
+
+### RBAC Integration
+
+```go
+// Use Kubernetes RBAC patterns
+func (h *handler) checkPermissions(ctx context.Context, namespace, resource, verb string) error {
+    // Implementation for permission checking
+    return nil
+}
+
+func (h *handler) Create(ctx context.Context, obj client.Object) error {
+    if err := h.checkPermissions(ctx, obj.GetNamespace(), "pipelines", "create"); err != nil {
+        return status.Errorf(codes.PermissionDenied, "insufficient permissions: %v", err)
+    }
+    
+    // Continue with creation
+    return h.storage.Create(ctx, obj)
+}
+```

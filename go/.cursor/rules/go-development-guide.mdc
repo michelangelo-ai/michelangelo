@@ -1,5 +1,303 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Go Development Guide for Michelangelo
+
+## Project Structure
+
+The Go codebase follows a well-organized structure under the `/go` directory:
+
+### Core Directories
+
+- **`api/`** - API handlers, interfaces, and utilities
+  - [interface.go](mdc:go/api/interface.go) - Core API handler interface
+  - [api.go](mdc:go/api/api.go) - API implementation
+  - `handler/` - Request handlers
+  - `crd/` - Custom Resource Definition management
+  - `utils/` - API utilities
+
+- **`base/`** - Foundational packages and utilities
+  - `config/` - Configuration management ([config.go](mdc:go/base/config/config.go))
+  - `zapfx/` - Structured logging ([module.go](mdc:go/base/zapfx/module.go))
+  - `blobstore/` - Blob storage abstractions
+  - `workflowclient/` - Workflow client implementations
+  - `conditions/` - Condition evaluation engine
+
+- **`cmd/`** - Command-line applications and tools
+  - `apiserver/` - API server binary
+  - `controllermgr/` - Controller manager
+  - `worker/` - Worker processes
+  - `kubeproto/` - Protocol buffer code generators
+
+- **`components/`** - Business logic components
+  - `pipeline/`, `pipelinerun/` - Pipeline management
+  - `ray/`, `spark/` - Compute engine integrations
+
+- **`storage/`** - Storage layer abstractions
+  - [blob_storage.go](mdc:go/storage/blob_storage.go) - Blob storage interface
+  - [metadata_storage.go](mdc:go/storage/metadata_storage.go) - Metadata storage interface
+
+- **`worker/`** - Workflow execution components
+  - `activities/` - Workflow activities
+  - `workflows/` - Workflow definitions
+  - `plugins/` - Plugin implementations
+
+## Naming Conventions
+
+### Package Names
+
+1. **Use lowercase, single-word package names**
+   ```go
+   package api        // ✓ Good
+   package storage    // ✓ Good
+   package zapfx      // ✓ Good for abbreviations
+   ```
+
+2. **For multi-word concepts, use abbreviations or compound words**
+   ```go
+   package controllermgr    // ✓ Good - controller manager
+   package temporalclient   // ✓ Good - temporal client
+   package conditionUtils   // ✓ Good for utilities
+   ```
+
+3. **Interface packages use descriptive names**
+   ```go
+   package clientinterface       // ✓ Good
+   package conditionInterfaces   // ✓ Good
+   ```
+
+### File Names
+
+1. **Use snake_case for file names**
+   ```go
+   blob_storage.go          // ✓ Good
+   metadata_storage.go      // ✓ Good
+   audit_log_struct.go      // ✓ Good
+   ```
+
+2. **Test files follow Go conventions**
+   ```go
+   handler_test.go          // ✓ Good
+   config_test.go           // ✓ Good
+   ```
+
+3. **Mock files have clear naming**
+   ```go
+   interface_mocks.go       // ✓ Good - generated mocks
+   gateway_mocks.go         // ✓ Good - specific mocks
+   ```
+
+### Interface Names
+
+1. **Use descriptive interface names**
+   ```go
+   type Handler interface           // ✓ Good - from api package
+   type BlobStorage interface       // ✓ Good - clear purpose
+   type MetadataStorage interface   // ✓ Good - specific storage type
+   ```
+
+2. **Single-method interfaces can use -er suffix**
+   ```go
+   type validation interface {      // ✓ Good - internal interface
+       Validate(prefix string) error
+   }
+   ```
+
+### Constants and Variables
+
+1. **Use PascalCase for exported constants**
+   ```go
+   const MichelangeloAPIScopeName = "api"    // ✓ Good
+   const APIProcedureTag = "api_procedure"   // ✓ Good
+   const NamespaceTag = "namespace"          // ✓ Good
+   ```
+
+2. **Use camelCase for package-level variables**
+   ```go
+   var logger = log.New(os.Stderr, "", 0)   // ✓ Good
+   ```
+
+### Function and Method Names
+
+1. **Use PascalCase for exported functions**
+   ```go
+   func Validate(obj interface{}) error                    // ✓ Good
+   func MarshalToString(v interface{}) string             // ✓ Good
+   func GetLogrLoggerOrPanic() logr.Logger               // ✓ Good
+   ```
+
+2. **Use camelCase for private functions**
+   ```go
+   func getLastPathComponent(path string) string          // ✓ Good
+   func loadSchemas(packageName string, embedFS embed.FS) // ✓ Good
+   ```
+
+## Module Structure
+
+### Go Module Configuration
+
+The main module is defined in [go.mod](mdc:go/go.mod):
+```go
+module github.com/michelangelo-ai/michelangelo/go
+go 1.23.2
+```
+
+### Import Path Conventions
+
+1. **Internal packages use full module path**
+   ```go
+   "github.com/michelangelo-ai/michelangelo/go/api"
+   "github.com/michelangelo-ai/michelangelo/go/base/config"
+   "github.com/michelangelo-ai/michelangelo/go/storage"
+   ```
+
+2. **Proto imports use proto module**
+   ```go
+   apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+   ```
+
+3. **External dependencies follow standard conventions**
+   ```go
+   "go.uber.org/fx"
+   "go.uber.org/zap"
+   "k8s.io/apimachinery/pkg/apis/meta/v1"
+   ```
+
+## Build System (Bazel)
+
+### BUILD.bazel Conventions
+
+1. **Standard go_library structure** (see [BUILD.bazel](mdc:go/BUILD.bazel))
+   ```python
+   load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+   
+   go_library(
+       name = "go_default_library",
+       srcs = ["file.go"],
+       importpath = "github.com/michelangelo-ai/michelangelo/go/package",
+       visibility = ["//visibility:public"],
+       deps = ["//go/other:go_default_library"],
+   )
+   ```
+
+2. **Test targets when applicable**
+   ```python
+   go_test(
+       name = "go_default_test",
+       srcs = ["file_test.go"],
+       embed = [":go_default_library"],
+   )
+   ```
+
+## Code Generation
+
+### Mock Generation
+
+Use `//go:generate` directives for mock generation:
+```go
+//go:generate mamockgen BlobStorage
+//go:generate mamockgen Handler
+//go:generate mamockgen MetadataStorage
+```
+
+### Protocol Buffer Generation
+
+The project uses custom protoc plugins:
+- `protoc-gen-kubeproto` - Kubernetes CRD generation
+- `protoc-gen-kubeyarpc` - YARPC service generation  
+- `protoc-gen-validation` - Validation code generation
+
+## Development Patterns
+
+### Dependency Injection
+
+Use Uber FX for dependency injection:
+```go
+var Module = fx.Options(
+    fx.Provide(config.ProvideConfig[Config](mdc:configKey)),
+    fx.Provide(provide),
+)
+```
+
+### Configuration Management
+
+Follow the pattern in [base/config](mdc:go/base/config/utils.go):
+```go
+func ProvideConfig[T any](mdc:key string) func(config.Provider) (T, error) {
+    return func(p config.Provider) (T, error) {
+        c := new(T)
+        err := p.Get(key).Populate(&c)
+        return *c, err
+    }
+}
+```
+
+### Error Handling
+
+1. **Use gRPC status errors for API responses**
+2. **Wrap errors with context when appropriate**
+3. **Use panic only for unrecoverable errors**
+
+### Logging
+
+Use structured logging with Zap (see [zapfx](mdc:go/base/zapfx/module.go)):
+```go
+import "go.uber.org/zap"
+
+// In your code
+logger.Info("message", zap.String("key", value))
+```
+
+## Testing Conventions
+
+### Test File Organization
+
+1. **Place tests in same package as code under test**
+2. **Use `_test.go` suffix for test files**
+3. **Use table-driven tests when appropriate**
+
+### Mock Usage
+
+1. **Generate mocks using mamockgen**
+2. **Place mocks in separate packages (e.g., `apimocks`, `storagemocks`)**
+3. **Use dependency injection to inject mocks in tests**
+
+## Best Practices
+
+### Code Organization
+
+1. **Keep interfaces small and focused**
+2. **Use composition over inheritance**
+3. **Separate concerns into different packages**
+4. **Keep business logic separate from infrastructure code**
+
+### Performance
+
+1. **Use context.Context for cancellation and timeouts**
+2. **Prefer sync.Pool for object reuse when appropriate**
+3. **Use buffered channels for producer-consumer patterns**
+
+### Security
+
+1. **Validate all inputs at API boundaries**
+2. **Use RBAC for authorization**
+3. **Sanitize log output to prevent log injection**
+
+## Tools and Dependencies
+
+### Required Tools
+
+Tools are managed in [tools.go](mdc:go/tools.go) to ensure consistent versions:
+- Protocol buffer compilers and plugins
+- Code generation tools
+- Linting and formatting tools
+
+### Key Dependencies
+
+- **Uber FX** - Dependency injection framework
+- **Uber Zap** - Structured logging
+- **Kubernetes APIs** - CRD and controller patterns
+- **gRPC/YARPC** - Service communication
+- **Temporal/Cadence** - Workflow orchestration

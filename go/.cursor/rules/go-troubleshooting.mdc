@@ -1,5 +1,576 @@
 ---
-description:
-globs:
-alwaysApply: false
+description: 
+globs: 
+alwaysApply: true
 ---
+# Go Troubleshooting Guide for Michelangelo
+
+## Build and Compilation Issues
+
+### Bazel Build Failures
+
+#### Missing Dependencies
+**Problem:** `go_library` target fails with missing dependencies
+```
+ERROR: missing dependency on //go/base/config:go_default_library
+```
+
+**Solution:** Add missing dependencies to BUILD.bazel
+```python
+go_library(
+    name = "go_default_library",
+    srcs = ["handler.go"],
+    deps = [
+        "//go/base/config:go_default_library",  # Add missing dependency
+        "//go/storage:go_default_library",
+    ],
+)
+```
+
+#### Import Path Mismatches
+**Problem:** Import path doesn't match directory structure
+```
+ERROR: importpath "github.com/michelangelo-ai/michelangelo/go/wrong" doesn't match directory
+```
+
+**Solution:** Ensure `importpath` in BUILD.bazel matches the actual module path:
+```python
+go_library(
+    name = "go_default_library",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/correct/path",
+)
+```
+
+### Go Module Issues
+
+#### Version Conflicts
+**Problem:** Conflicting dependency versions in [go.mod](mdc:go/go.mod)
+```
+go: github.com/example/package@v1.0.0: reading module.sum: checksum mismatch
+```
+
+**Solution:** 
+1. Run `go mod tidy` to clean up dependencies
+2. Use `go mod download` to refresh checksums
+3. Check for indirect dependency conflicts
+
+#### Missing Proto Dependencies
+**Problem:** Proto imports fail during code generation
+```
+ERROR: github.com/michelangelo-ai/michelangelo/proto not found
+```
+
+**Solution:** Ensure proto module replacement in [go.mod](mdc:go/go.mod):
+```go
+replace github.com/michelangelo-ai/michelangelo/proto => ../proto
+```
+
+## Code Generation Issues
+
+### Mock Generation Failures
+
+#### mamockgen Not Found
+**Problem:** `//go:generate mamockgen` fails
+```
+//go:generate: mamockgen: command not found
+```
+
+**Solution:** 
+1. Ensure mamockgen is installed and in PATH
+2. Check [tools.go](mdc:go/tools.go) for required tool imports
+3. Run `go mod download` to ensure tools are available
+
+#### Interface Changes Breaking Mocks
+**Problem:** Generated mocks are outdated after interface changes
+```
+ERROR: method signature mismatch in mock
+```
+
+**Solution:**
+1. Regenerate mocks: `go generate ./...`
+2. Update test expectations to match new interface
+3. Verify mock package imports are correct
+
+### Protocol Buffer Generation
+
+#### Custom Plugin Failures
+**Problem:** `protoc-gen-kubeproto` fails during build
+```
+ERROR: protoc-gen-kubeproto: plugin failed with status 1
+```
+
+**Solution:**
+1. Check that custom protoc plugins are built and available
+2. Verify proto file syntax and imports
+3. Ensure required proto options are properly set
+
+#### Missing Proto Options
+**Problem:** CRD generation fails due to missing options
+```
+ERROR: message missing required option 'has_resource'
+```
+
+**Solution:** Add required proto options:
+```protobuf
+message MyResource {
+    option (michelangelo.api.has_resource) = true;
+    option (michelangelo.api.resource.name) = "myresources";
+}
+```
+
+## Runtime Issues
+
+### Context and Cancellation
+
+#### Context Deadline Exceeded
+**Problem:** Operations timeout unexpectedly
+```
+ERROR: context deadline exceeded
+```
+
+**Solution:**
+1. Check context timeout values in workflow/activity options
+2. Increase timeout for long-running operations
+3. Implement proper context propagation:
+
+```go
+ctx, cancel := context.WithTimeout(ctx, time.Minute*10)
+defer cancel()
+```
+
+#### Missing Context Propagation
+**Problem:** Context not passed through call chain
+```
+ERROR: context required but not provided
+```
+
+**Solution:** Always pass context as first parameter:
+```go
+func ProcessRequest(ctx context.Context, req Request) error {
+    return downstream.Process(ctx, req)  // Pass context through
+}
+```
+
+### Dependency Injection Issues
+
+#### Circular Dependencies
+**Problem:** FX fails to start due to circular dependencies
+```
+ERROR: cycle detected in dependency graph
+```
+
+**Solution:**
+1. Break circular dependencies by introducing interfaces
+2. Use provider functions to delay dependency resolution
+3. Review module structure in packages like [base/zapfx](mdc:go/base/zapfx/module.go)
+
+#### Missing Providers
+**Problem:** FX can't resolve dependency
+```
+ERROR: missing dependency of type MyInterface
+```
+
+**Solution:**
+1. Ensure interface is provided in an FX module
+2. Check that provider function returns correct type
+3. Verify module is included in application:
+
+```go
+fx.New(
+    mypackage.Module,  // Ensure module is included
+    fx.Invoke(myFunction),
+)
+```
+
+### Storage and Database Issues
+
+#### Blob Storage Connection Failures
+**Problem:** Cannot connect to blob storage (see [storage/blob_storage.go](mdc:go/storage/blob_storage.go))
+```
+ERROR: failed to connect to blob storage: connection refused
+```
+
+**Solution:**
+1. Check blob storage configuration in config files
+2. Verify network connectivity and credentials
+3. Ensure proper MinIO client configuration in [base/blobstore/minio](mdc:go/base/blobstore/minio/client.go)
+
+#### Metadata Storage Inconsistencies
+**Problem:** Metadata storage operations fail
+```
+ERROR: object not found in metadata storage
+```
+
+**Solution:**
+1. Check metadata storage synchronization
+2. Verify indexing is working correctly
+3. Review [storage/metadata_storage.go](mdc:go/storage/metadata_storage.go) interface implementation
+
+## Testing Issues
+
+### Mock-Related Problems
+
+#### Outdated Mock Expectations
+**Problem:** Tests fail due to changed mock expectations
+```
+ERROR: unexpected call to method Create
+```
+
+**Solution:**
+1. Update mock expectations to match new interface
+2. Regenerate mocks after interface changes
+3. Use `gomock.Any()` for flexible matching:
+
+```go
+mockStorage.EXPECT().
+    Create(gomock.Any(), gomock.Any()).
+    Return(nil).
+    Times(1)
+```
+
+#### Missing Mock Setup
+**Problem:** Mock not properly configured in tests
+```
+ERROR: no matching expected call
+```
+
+**Solution:**
+1. Ensure all expected calls are set up
+2. Use proper mock lifecycle:
+
+```go
+func TestMyFunction(t *testing.T) {
+    ctrl := gomock.NewController(t)
+    defer ctrl.Finish()  // Important: call Finish()
+    
+    mock := mocks.NewMockInterface(ctrl)
+    // Set up expectations...
+}
+```
+
+### Table-Driven Test Issues
+
+#### Test Case Isolation Problems
+**Problem:** Test cases affect each other
+```
+ERROR: test case "second" fails due to state from "first"
+```
+
+**Solution:**
+1. Ensure proper test isolation
+2. Reset global state between test cases
+3. Use fresh instances for each test case:
+
+```go
+for _, tt := range tests {
+    t.Run(tt.name, func(t *testing.T) {
+        // Create fresh instances for each test
+        handler := NewHandler()
+        // Run test...
+    })
+}
+```
+
+## Performance Issues
+
+### Memory Leaks
+
+#### Goroutine Leaks
+**Problem:** Application memory usage grows over time
+```
+WARNING: goroutine count increasing: 1000+ goroutines
+```
+
+**Solution:**
+1. Ensure all goroutines have proper exit conditions
+2. Use context for cancellation
+3. Monitor goroutine lifecycle:
+
+```go
+go func() {
+    defer wg.Done()
+    select {
+    case <-ctx.Done():
+        return  // Proper exit on cancellation
+    case result := <-workChan:
+        // Process result
+    }
+}()
+```
+
+#### Resource Pool Exhaustion
+**Problem:** Connection pools or object pools exhausted
+```
+ERROR: connection pool exhausted
+```
+
+**Solution:**
+1. Implement proper resource cleanup with defer
+2. Use sync.Pool for object reuse (see patterns in codebase)
+3. Configure appropriate pool sizes
+
+### CPU and I/O Performance
+
+#### Blocking Operations
+**Problem:** Application becomes unresponsive
+```
+WARNING: handler taking too long to respond
+```
+
+**Solution:**
+1. Use buffered channels for producer-consumer patterns
+2. Implement timeouts for all external calls
+3. Use worker pools for CPU-intensive tasks
+
+## Logging and Observability Issues
+
+### Structured Logging Problems
+
+#### Missing Log Context
+**Problem:** Logs lack sufficient context for debugging
+```
+INFO: operation failed
+```
+
+**Solution:** Use structured logging with context (see [logging/utils.go](mdc:go/logging/utils.go)):
+```go
+logger.Error("operation failed",
+    zap.String("namespace", namespace),
+    zap.String("name", name),
+    zap.String("operation", "create"),
+    zap.Error(err),
+)
+```
+
+#### Log Level Configuration
+**Problem:** Too much or too little logging
+```
+DEBUG: excessive debug output in production
+```
+
+**Solution:** Configure log levels properly in [base/zapfx/config.go](mdc:go/base/zapfx/config.go):
+```yaml
+logging:
+  level: info  # Use appropriate level for environment
+  development: false
+  encoding: json
+```
+
+### Audit Logging Issues
+
+#### Missing Audit Events
+**Problem:** Important operations not audited
+```
+WARNING: create operation not found in audit log
+```
+
+**Solution:** Ensure audit logging for all API operations (see [logging/audit_log_struct.go](mdc:go/logging/audit_log_struct.go)):
+```go
+auditEvent := AuditLogEvent{
+    Namespace:  obj.GetNamespace(),
+    EntityType: "Pipeline",
+    EntityName: obj.GetName(),
+    Procedure:  "Create",
+    Request:    logging.MarshalToString(obj),
+}
+// Log audit event
+```
+
+## Security Issues
+
+### Authentication and Authorization
+
+#### Permission Denied Errors
+**Problem:** Operations fail with permission errors
+```
+ERROR: insufficient permissions for operation
+```
+
+**Solution:**
+1. Check RBAC configuration in Kubernetes
+2. Verify service account permissions
+3. Implement proper permission checking:
+
+```go
+if err := h.checkPermissions(ctx, namespace, "pipelines", "create"); err != nil {
+    return status.Errorf(codes.PermissionDenied, "insufficient permissions: %v", err)
+}
+```
+
+#### Token Validation Failures
+**Problem:** API calls fail with invalid token errors
+```
+ERROR: invalid or expired token
+```
+
+**Solution:**
+1. Check token expiration and renewal
+2. Verify token format and signing
+3. Ensure proper token propagation through request chain
+
+### Input Validation Issues
+
+#### Injection Attacks
+**Problem:** Malicious input not properly validated
+```
+WARNING: potential injection attempt detected
+```
+
+**Solution:** Implement comprehensive input validation:
+```go
+func validateInput(input string) error {
+    // Use validation patterns from the codebase
+    if err := validateUUID(input.ID); err != nil {
+        return fmt.Errorf("invalid ID: %v", err)
+    }
+    // Additional validation...
+    return nil
+}
+```
+
+## Kubernetes Integration Issues
+
+### CRD Management Problems
+
+#### Schema Validation Failures
+**Problem:** CRD objects fail validation
+```
+ERROR: validation failure for custom resource
+```
+
+**Solution:**
+1. Check CRD schema definition
+2. Verify generated validation code
+3. Update proto definitions and regenerate CRDs
+
+#### Controller Reconciliation Issues
+**Problem:** Controller not processing events
+```
+WARNING: reconciliation loop not triggered
+```
+
+**Solution:**
+1. Check controller manager configuration
+2. Verify event filtering and watch setup
+3. Review controller reconciliation logic
+
+### Resource Management
+
+#### Resource Quota Exceeded
+**Problem:** Cannot create resources due to quota limits
+```
+ERROR: resource quota exceeded
+```
+
+**Solution:**
+1. Check namespace resource quotas
+2. Implement proper resource cleanup
+3. Monitor resource usage patterns
+
+## Workflow Integration Issues
+
+### Temporal/Cadence Problems
+
+#### Activity Timeout
+**Problem:** Workflow activities timeout unexpectedly
+```
+ERROR: activity timeout after 10m0s
+```
+
+**Solution:**
+1. Increase activity timeout in workflow definition
+2. Implement proper progress reporting
+3. Break long-running activities into smaller chunks
+
+#### Workflow Execution Failures
+**Problem:** Workflows fail to start or complete
+```
+ERROR: workflow execution failed
+```
+
+**Solution:**
+1. Check workflow worker configuration
+2. Verify activity registration
+3. Review workflow definition for errors
+
+## Debugging Techniques
+
+### Using Go Debugger
+
+#### Delve Integration
+```bash
+# Debug specific test
+go test -gcflags="all=-N -l" ./... -run TestSpecificFunction
+dlv test -- -test.run TestSpecificFunction
+
+# Debug running application
+dlv attach <pid>
+```
+
+### Profiling Performance Issues
+
+#### CPU Profiling
+```go
+import _ "net/http/pprof"
+
+// In main function
+go func() {
+    log.Println(http.ListenAndServe("localhost:6060", nil))
+}()
+```
+
+#### Memory Profiling
+```bash
+# Generate memory profile
+go tool pprof http://localhost:6060/debug/pprof/heap
+
+# Analyze goroutines
+go tool pprof http://localhost:6060/debug/pprof/goroutine
+```
+
+### Log Analysis
+
+#### Structured Log Querying
+Use tools like jq for JSON log analysis:
+```bash
+# Filter logs by level and component
+cat app.log | jq 'select(.level=="error" and .component=="api")'
+
+# Extract specific fields
+cat app.log | jq '.msg, .namespace, .name'
+```
+
+## Prevention Strategies
+
+### Code Review Checklist
+
+1. **Context Usage**
+   - [ ] All functions accept context.Context as first parameter
+   - [ ] Context is properly propagated through call chain
+   - [ ] Timeouts are set appropriately
+
+2. **Error Handling**
+   - [ ] Errors are wrapped with sufficient context
+   - [ ] gRPC status codes are used correctly
+   - [ ] Validation is performed at API boundaries
+
+3. **Resource Management**
+   - [ ] defer statements used for cleanup
+   - [ ] Goroutines have proper exit conditions
+   - [ ] Database connections are properly closed
+
+4. **Testing**
+   - [ ] Unit tests cover error cases
+   - [ ] Mocks are properly configured
+   - [ ] Integration tests verify end-to-end functionality
+
+### Monitoring and Alerting
+
+Set up monitoring for:
+- Memory usage and goroutine count
+- API response times and error rates
+- Database connection pool utilization
+- Workflow execution success rates
+- Custom business metrics
+
+Use structured logging and metrics to enable effective debugging and monitoring of the Go services in the Michelangelo platform.
