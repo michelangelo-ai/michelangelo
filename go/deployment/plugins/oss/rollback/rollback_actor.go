@@ -23,45 +23,50 @@ func (a *rollbackActor) GetType() string {
 	return "RollbackComplete"
 }
 
-// Run executes the rollback logic
-func (a *rollbackActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *v2pb.Condition) error {
-	runtimeCtx.Logger.Info("Executing rollback for deployment", "deployment", deployment.Name)
+// Execute performs the rollback operation
+func (a *rollbackActor) Execute(ctx context.Context, requestCtx plugins.RequestContext, logger logr.Logger) (*apipb.Condition, error) {
+	logger.Info("Executing rollback for deployment", "deployment", requestCtx.Deployment.Name)
 
 	// Rollback logic:
 	// 1. Revert to previous revision if available
 	// 2. Update routing back to previous model
 	// 3. Clean up failed candidate deployment
 
-	if deployment.Status.CurrentRevision != nil {
-		runtimeCtx.Logger.Info("Rolling back to previous revision", 
-			"current", deployment.Status.CurrentRevision.Name,
-			"failed", deployment.Spec.DesiredRevision.Name)
+	if requestCtx.Deployment.Status.CurrentRevision != nil {
+		logger.Info("Rolling back to previous revision", 
+			"current", requestCtx.Deployment.Status.CurrentRevision.Name,
+			"failed", requestCtx.Deployment.Spec.DesiredRevision.Name)
 		
 		// Set desired revision back to current (previous working) revision
-		deployment.Spec.DesiredRevision = deployment.Status.CurrentRevision
-		deployment.Status.CandidateRevision = nil
+		requestCtx.Deployment.Spec.DesiredRevision = requestCtx.Deployment.Status.CurrentRevision
+		requestCtx.Deployment.Status.CandidateRevision = nil
 	}
 
-	deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
-	deployment.Status.Message = "Rollback completed successfully"
+	requestCtx.Deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
+	requestCtx.Deployment.Status.Message = "Rollback completed successfully"
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Message: "Rollback executed successfully",
+		Reason:  "RollbackExecuted",
+	}, nil
 }
 
-// Retrieve checks the status of the rollback
-func (a *rollbackActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition apipb.Condition) (apipb.Condition, error) {
+// EvaluateCondition checks the status of the rollback
+func (a *rollbackActor) EvaluateCondition(ctx context.Context, requestCtx plugins.RequestContext, logger logr.Logger) (*apipb.Condition, error) {
 	// Check if rollback is complete
-	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE {
-		return apipb.Condition{
-			Type:    condition.Type,
+	if requestCtx.Deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE {
+		return &apipb.Condition{
+			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_TRUE,
 			Message: "Rollback completed successfully",
 			Reason:  "RollbackComplete",
 		}, nil
 	}
 
-	return apipb.Condition{
-		Type:    condition.Type,
+	return &apipb.Condition{
+		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_FALSE,
 		Message: "Rollback in progress",
 		Reason:  "RollbackInProgress",
