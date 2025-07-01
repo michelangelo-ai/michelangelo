@@ -142,7 +142,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    # Provision a ServiceAccount for fluent-bit DaemonSet execution
+    # Provision a ServiceAccount for fluent-bit DaemonSet execution.
     _exec(
         "kubectl",
         "create",
