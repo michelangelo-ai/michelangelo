@@ -105,7 +105,7 @@ def spark_task(
             executor_instances = _executor_instances,
         )
 
-        total_retry_attempt = retry_attempts
+        total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
 
             job_state, terminated_job = execute_spark_task(

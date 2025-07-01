@@ -160,7 +160,7 @@ def task(
             runtime_env = runtime_env,
         )
 
-        total_retry_attempt = retry_attempts
+        total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
 
             job_state, job = execute_ray_task(
