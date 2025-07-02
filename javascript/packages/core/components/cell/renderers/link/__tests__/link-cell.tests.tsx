@@ -2,7 +2,6 @@ import { render, screen } from '@testing-library/react';
 
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { LinkCell } from '../link-cell';
-import { linkCellToString } from '../link-cell-to-string';
 
 describe('LinkCell', () => {
   it('should render text without link when no URL is provided', () => {
@@ -58,43 +57,5 @@ describe('LinkCell', () => {
     );
 
     expect(screen.getByRole('link')).toHaveTextContent('');
-  });
-
-  describe('toString', () => {
-    it('should render value when no cellToString result is available', () => {
-      const { container } = render(
-        linkCellToString({
-          column: { id: 'spec.link' },
-          record: { spec: { link: 'Click me' } },
-          value: 'Click me',
-        })
-      );
-
-      expect(container).toHaveTextContent('Click me');
-    });
-
-    it('should render empty value correctly', () => {
-      const { container } = render(
-        linkCellToString({
-          column: { id: 'spec.link' },
-          record: { spec: { link: '' } },
-          value: '',
-        })
-      );
-
-      expect(container).toHaveTextContent('');
-    });
-
-    it('should render undefined value correctly', () => {
-      const { container } = render(
-        linkCellToString({
-          column: { id: 'spec.link' },
-          record: { spec: { link: undefined } },
-          value: undefined,
-        })
-      );
-
-      expect(container).toHaveTextContent('');
-    });
   });
 });

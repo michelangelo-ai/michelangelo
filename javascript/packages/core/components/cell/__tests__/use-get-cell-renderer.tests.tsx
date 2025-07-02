@@ -4,12 +4,18 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { CellType } from '../constants';
-import { getCellRenderer } from '../get-cell-renderer';
+import { useGetCellRenderer } from '../use-get-cell-renderer';
 
 import type { LinkCellConfig } from '../renderers/link/types';
 import type { CellRenderer, CellRendererProps } from '../types';
 
-describe('getCellRenderer', () => {
+function TestCellRenderer({ props }: { props: CellRendererProps<unknown> }) {
+  const getCellRenderer = useGetCellRenderer();
+  const CellComponent = getCellRenderer(props);
+  return <CellComponent {...props} />;
+}
+
+describe('useGetCellRenderer', () => {
   it('should return custom cell renderer when provided', () => {
     const CustomCell: CellRenderer<string> = (props: CellRendererProps<string>) => (
       <div>Custom: {props.value}</div>
@@ -20,9 +26,8 @@ describe('getCellRenderer', () => {
       value: 'test value',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -36,9 +41,8 @@ describe('getCellRenderer', () => {
       value: true,
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -52,9 +56,8 @@ describe('getCellRenderer', () => {
       value: 'https://example.com',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -70,9 +73,8 @@ describe('getCellRenderer', () => {
       value: 'example.com',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -87,9 +89,8 @@ describe('getCellRenderer', () => {
       value: 'test value',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -103,9 +104,8 @@ describe('getCellRenderer', () => {
       value: 'test value',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
@@ -119,9 +119,8 @@ describe('getCellRenderer', () => {
       value: 'Click me',
     };
 
-    const CellComponent = getCellRenderer(props);
     render(
-      <CellComponent {...props} />,
+      <TestCellRenderer props={props} />,
       buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
     );
 
