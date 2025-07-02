@@ -30,6 +30,9 @@ type Gateway interface {
 
 	// Health Checking
 	IsHealthy(ctx context.Context, logger logr.Logger, serverName string, backendType v2pb.BackendType) (bool, error)
+	
+	// Model Configuration Updates (for rolling out new models)
+	UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error
 }
 
 // ModelLoadRequest contains information needed to load a model
@@ -55,6 +58,20 @@ type ModelStatus struct {
 	State   string // LOADING, LOADED, FAILED, NOT_FOUND
 	Message string
 	Ready   bool
+}
+
+// ModelConfigUpdateRequest contains information for updating model configurations
+type ModelConfigUpdateRequest struct {
+	InferenceServer string
+	Namespace       string
+	BackendType     v2pb.BackendType
+	ModelConfigs    []ModelConfigEntry
+}
+
+// ModelConfigEntry represents a single model configuration
+type ModelConfigEntry struct {
+	Name   string
+	S3Path string
 }
 
 // Infrastructure Management Types
@@ -229,6 +246,32 @@ func (g *gateway) IsHealthy(ctx context.Context, logger logr.Logger, serverName 
 		return g.isDynamoHealthy(ctx, logger, serverName)
 	default:
 		return false, fmt.Errorf("unsupported backend type: %v", backendType)
+	}
+}
+
+// UpdateModelConfig updates model configuration for rolling out new models
+func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error {
+	logger.Info("Updating model configuration", "server", request.InferenceServer, "backend", request.BackendType, "models", len(request.ModelConfigs))
+
+	switch request.BackendType {
+	case v2pb.BACKEND_TYPE_TRITON:
+		// Convert to internal ModelConfig format
+		modelConfigs := make([]ModelConfig, len(request.ModelConfigs))
+		for i, config := range request.ModelConfigs {
+			modelConfigs[i] = ModelConfig{
+				Name:   config.Name,
+				S3Path: config.S3Path,
+			}
+		}
+		return g.updateTritonModelConfig(ctx, logger, request.InferenceServer, request.Namespace, modelConfigs)
+	case v2pb.BACKEND_TYPE_LLM_D:
+		// TODO: Implement LLMD model config updates
+		return fmt.Errorf("model config updates not yet implemented for LLMD backend")
+	case v2pb.BACKEND_TYPE_DYNAMO:
+		// TODO: Implement Dynamo model config updates  
+		return fmt.Errorf("model config updates not yet implemented for Dynamo backend")
+	default:
+		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
