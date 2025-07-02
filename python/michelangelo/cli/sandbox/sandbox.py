@@ -308,6 +308,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         _create_cluster_secrets(ns.jobs_cluster_name)
 
     _kube_wait()
+    _setup_istio(helm_existing_repos)
 
     print(
         "\n🚀 Sandbox created successfully. To access the services, please use the following links:\n"
@@ -652,6 +653,73 @@ def _exec(
 def _assert_command(command: str, err_message: str):
     if shutil.which(command) is None:
         _err_exit(err_message)
+
+
+def _setup_istio(helm_existing_repos):
+    """Install and configure Istio service mesh using Helm."""
+    print("Setting up Istio service mesh...")
+
+    # Add Istio Helm repository if not already present
+    if "istio" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "istio",
+            "https://istio-release.storage.googleapis.com/charts",
+        )
+        _exec("helm", "repo", "update")
+
+    # Install Istio base (CRDs and cluster roles)
+    _exec(
+        "helm",
+        "install",
+        "istio-base",
+        "istio/base",
+        "--namespace",
+        "istio-system",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Install Istio control plane (istiod)
+    _exec(
+        "helm",
+        "install",
+        "istiod",
+        "istio/istiod",
+        "--namespace",
+        "istio-system",
+        "--wait",
+    )
+
+    # Install Istio ingress gateway
+    _exec(
+        "helm",
+        "install",
+        "istio-ingressgateway",
+        "istio/gateway",
+        "--namespace",
+        "istio-ingress",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Wait for Istio components to be ready
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--namespace=istio-system",
+        "--all",
+        "--timeout=600s",
+    )
+
+    # Create the Istio Gateway for Michelangelo
+    _kube_create(_dir / "resources" / "istio-gateway.yaml")
+
+    print("✅ Istio service mesh installed successfully")
 
 
 def _err_exit(err_message: str, code: int = 1):

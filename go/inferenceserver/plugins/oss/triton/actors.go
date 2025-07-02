@@ -56,7 +56,7 @@ func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource 
 		return fmt.Errorf("invalid backend type")
 	}
 	
-	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "ValidationSucceeded"
 	condition.Message = "Triton configuration is valid"
 	return nil
@@ -142,7 +142,7 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 		return err
 	}
 	
-	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "InfrastructureCreationInitiated"
 	condition.Message = "Infrastructure creation initiated successfully"
 	return nil
@@ -272,7 +272,7 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, r
 		return err
 	}
 	
-	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "ProxyConfigured"
 	condition.Message = "Proxy configured successfully"
 	return nil
@@ -335,7 +335,7 @@ func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2
 		return err
 	}
 	
-	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "CleanupInitiated"
 	condition.Message = "Infrastructure cleanup initiated successfully"
 	return nil
