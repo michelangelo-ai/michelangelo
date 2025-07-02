@@ -3,7 +3,6 @@ package triton
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
@@ -25,26 +24,42 @@ func (a *ValidationActor) GetType() string {
 	return "TritonValidation"
 }
 
-func (a *ValidationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Validating Triton configuration")
+func (a *ValidationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Triton validation condition")
 	
 	// Validate Triton-specific requirements
-	if inferenceServer.Spec.BackendType != v2pb.BACKEND_TYPE_TRITON {
-		return fmt.Errorf("invalid backend type for Triton plugin: %v", inferenceServer.Spec.BackendType)
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_TRITON {
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InvalidBackendType",
+			Message: fmt.Sprintf("invalid backend type for Triton plugin: %v", resource.Spec.BackendType),
+		}, nil
 	}
 	
-	logger.Info("Triton configuration validation completed")
-	return nil
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "ValidationSucceeded",
+		Message: "Triton configuration is valid",
+	}, nil
 }
 
-func (a *ValidationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	return &apipb.Condition{
-		Type:                 a.GetType(),
-		Status:               apipb.CONDITION_STATUS_TRUE,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:               "ValidationSucceeded",
-		Message:              "Triton configuration is valid",
-	}, nil
+func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Triton validation action")
+	
+	// For validation, there's no corrective action - just update condition status
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_TRITON {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InvalidBackendType"
+		condition.Message = fmt.Sprintf("invalid backend type for Triton plugin: %v", resource.Spec.BackendType)
+		return fmt.Errorf("invalid backend type")
+	}
+	
+	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Reason = "ValidationSucceeded"
+	condition.Message = "Triton configuration is valid"
+	return nil
 }
 
 // ResourceCreationActor creates Triton infrastructure
@@ -60,47 +75,22 @@ func (a *ResourceCreationActor) GetType() string {
 	return "TritonResourceCreation"
 }
 
-func (a *ResourceCreationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Creating Triton infrastructure")
+func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Triton infrastructure condition")
 	
-	// Convert proto ResourceSpec to gateway ResourceSpec
-	protoResources := inferenceServer.Spec.InitSpec.ResourceSpec
-	resources := inferenceserver.ResourceSpec{
-		CPU:      fmt.Sprintf("%d", protoResources.Cpu),
-		Memory:   protoResources.Memory,
-		GPU:      protoResources.Gpu,
-		Replicas: 1, // Default to 1 replica
-		ImageTag: "", // Use default
-		ModelConfig: map[string]string{
-			"model": "s3://deployed-model/bert-cola-23", // Use the model path from user requirement
-		},
-	}
-	
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
-		InferenceServer: inferenceServer,
-		BackendType:     inferenceServer.Spec.BackendType,
-		Namespace:       inferenceServer.Namespace,
-		Resources:       resources,
-	})
-	
-	return err
-}
-
-func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	// Check if infrastructure exists
 	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	if err != nil {
-		return &apipb.Condition{
-			Type:               a.GetType(),
-			Status:             apipb.CONDITION_STATUS_FALSE,
-			LastUpdatedTimestamp: time.Now().UnixMilli(),
-			Reason:             "InfrastructureCheckFailed",
-			Message:            "Failed to check infrastructure status",
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InfrastructureCheckFailed",
+			Message: "Failed to check infrastructure status",
 		}, nil
 	}
 	
@@ -114,13 +104,48 @@ func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger lo
 		message = "Infrastructure is ready"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Triton infrastructure creation")
+	
+	// Convert proto ResourceSpec to gateway ResourceSpec
+	protoResources := resource.Spec.InitSpec.ResourceSpec
+	resources := inferenceserver.ResourceSpec{
+		CPU:      fmt.Sprintf("%d", protoResources.Cpu),
+		Memory:   protoResources.Memory,
+		GPU:      protoResources.Gpu,
+		Replicas: 1, // Default to 1 replica
+		ImageTag: "", // Use default
+		ModelConfig: map[string]string{
+			"model": "s3://deployed-model/bert-cola-23", // Use the model path from user requirement
+		},
+	}
+	
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
+		InferenceServer: resource,
+		BackendType:     resource.Spec.BackendType,
+		Namespace:       resource.Namespace,
+		Resources:       resources,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InfrastructureCreationFailed"
+		condition.Message = fmt.Sprintf("Failed to create infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Reason = "InfrastructureCreationInitiated"
+	condition.Message = "Infrastructure creation initiated successfully"
+	return nil
 }
 
 // HealthCheckActor checks Triton server health
@@ -136,23 +161,10 @@ func (a *HealthCheckActor) GetType() string {
 	return "TritonHealthCheck"
 }
 
-func (a *HealthCheckActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Checking Triton server health")
+func (a *HealthCheckActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Triton health condition")
 	
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
-	if err != nil {
-		return err
-	}
-	
-	if !healthy {
-		return fmt.Errorf("Triton server is not healthy")
-	}
-	
-	return nil
-}
-
-func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
 	
 	status := apipb.CONDITION_STATUS_FALSE
 	reason := "HealthCheckFailed"
@@ -162,15 +174,44 @@ func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Lo
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "HealthCheckSucceeded"
 		message = "Server is healthy"
+	} else if err != nil {
+		message = fmt.Sprintf("Health check error: %v", err)
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Triton health check action")
+	
+	// For health checks, there's typically no corrective action
+	// Just update the condition based on current health status
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckError"
+		condition.Message = fmt.Sprintf("Health check error: %v", err)
+		return err
+	}
+	
+	if healthy {
+		condition.Status = apipb.CONDITION_STATUS_TRUE
+		condition.Reason = "HealthCheckSucceeded"
+		condition.Message = "Server is healthy"
+	} else {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckFailed"
+		condition.Message = "Server is not healthy"
+		return fmt.Errorf("server is not healthy")
+	}
+	
+	return nil
 }
 
 // ProxyConfigurationActor configures Istio proxy
@@ -186,21 +227,12 @@ func (a *ProxyConfigurationActor) GetType() string {
 	return "TritonProxyConfiguration"
 }
 
-func (a *ProxyConfigurationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Configuring Triton proxy")
+func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Triton proxy configuration condition")
 	
-	return a.gateway.ConfigureProxy(ctx, logger, inferenceserver.ProxyConfigRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		ModelName:       inferenceServer.Name,
-		BackendType:     inferenceServer.Spec.BackendType,
-	})
-}
-
-func (a *ProxyConfigurationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, inferenceserver.ProxyStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
 	})
 	
 	status := apipb.CONDITION_STATUS_FALSE
@@ -211,15 +243,39 @@ func (a *ProxyConfigurationActor) EvaluateCondition(ctx context.Context, logger 
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "ProxyConfigured"
 		message = "Proxy is configured and ready"
+	} else if err != nil {
+		message = fmt.Sprintf("Failed to check proxy status: %v", err)
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Triton proxy configuration")
+	
+	err := a.gateway.ConfigureProxy(ctx, logger, inferenceserver.ProxyConfigRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		ModelName:       resource.Name,
+		BackendType:     resource.Spec.BackendType,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "ProxyConfigurationFailed"
+		condition.Message = fmt.Sprintf("Failed to configure proxy: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Reason = "ProxyConfigured"
+	condition.Message = "Proxy configured successfully"
+	return nil
 }
 
 // CleanupActor cleans up Triton infrastructure
@@ -235,22 +291,14 @@ func (a *CleanupActor) GetType() string {
 	return "TritonCleanup"
 }
 
-func (a *CleanupActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Cleaning up Triton infrastructure")
+func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Triton cleanup condition")
 	
-	return a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
-	})
-}
-
-func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	// Check if infrastructure still exists
 	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	status := apipb.CONDITION_STATUS_TRUE
@@ -263,11 +311,32 @@ func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger
 		message = "Infrastructure cleanup in progress"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Triton infrastructure cleanup")
+	
+	err := a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "CleanupFailed"
+		condition.Message = fmt.Sprintf("Failed to cleanup infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.ConditionStatus_CONDITION_STATUS_TRUE
+	condition.Reason = "CleanupInitiated"
+	condition.Message = "Infrastructure cleanup initiated successfully"
+	return nil
 }

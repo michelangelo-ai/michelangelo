@@ -3,77 +3,106 @@ package plugins
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// ActorEngineImpl implements the ActorEngine interface
-type ActorEngineImpl struct{}
+// DefaultEngine implements the Engine interface following Uber's proven pattern
+type DefaultEngine struct{}
 
-// NewActorEngine creates a new actor engine
-func NewActorEngine() ActorEngine {
-	return &ActorEngineImpl{}
+// NewEngine creates a new instance of the default engine
+func NewEngine() Engine {
+	return &DefaultEngine{}
 }
 
-// ExecuteActors runs actors sequentially and updates conditions
-func (e *ActorEngineImpl) ExecuteActors(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer, actors []ConditionActor) error {
-	logger.Info("Executing actors", "count", len(actors))
+// Run executes the plugin by running through the list of actors from the plugin and executing Retrieve and Run
+// for each actor. Only the first failing condition will have its Run method executed per engine execution.
+func (e *DefaultEngine) Run(ctx context.Context, logger logr.Logger, plugin Plugin, resource *v2pb.InferenceServer) (*apipb.Condition, error) {
+	actors := plugin.GetActors()
+	if len(actors) == 0 {
+		logger.Info("No actors found in plugin")
+		return nil, nil
+	}
+
+	conditions := plugin.GetConditions(resource)
+	conditionMap := make(map[string]*apipb.Condition)
 	
-	for _, actor := range actors {
-		actorLogger := logger.WithValues("actor", actor.GetType())
-		actorLogger.Info("Executing actor")
-		
-		// Execute the actor
-		if err := actor.Execute(ctx, actorLogger, inferenceServer); err != nil {
-			actorLogger.Error(err, "Actor execution failed")
-			
-			// Set failed condition
-			condition := &apipb.Condition{
-				Type:                 actor.GetType(),
-				Status:               apipb.CONDITION_STATUS_FALSE,
-				LastUpdatedTimestamp: time.Now().UnixMilli(),
-				Reason:               "ExecutionFailed",
-				Message:              fmt.Sprintf("Actor execution failed: %v", err),
-			}
-			
-			e.updateCondition(inferenceServer, condition)
-			return fmt.Errorf("actor %s failed: %w", actor.GetType(), err)
-		}
-		
-		// Evaluate condition after execution
-		condition, err := actor.EvaluateCondition(ctx, actorLogger, inferenceServer)
-		if err != nil {
-			actorLogger.Error(err, "Failed to evaluate condition")
-			continue
-		}
-		
+	// Create map of existing conditions by type
+	for _, condition := range conditions {
 		if condition != nil {
-			e.updateCondition(inferenceServer, condition)
-			actorLogger.Info("Updated condition", "status", condition.Status, "reason", condition.Reason)
+			conditionMap[condition.Type] = condition
 		}
 	}
-	
-	logger.Info("All actors executed successfully")
-	return nil
-}
 
-// updateCondition updates or adds a condition to the inference server
-func (e *ActorEngineImpl) updateCondition(inferenceServer *v2pb.InferenceServer, newCondition *apipb.Condition) {
-	if inferenceServer.Status.Conditions == nil {
-		inferenceServer.Status.Conditions = []*apipb.Condition{}
+	logger.Info("Running engine with actors", "actorCount", len(actors), "existingConditions", len(conditions))
+
+	var firstFailingCondition *apipb.Condition
+
+	// Execute Retrieve for each actor
+	for _, actor := range actors {
+		actorType := actor.GetType()
+		actorLogger := logger.WithValues("actorType", actorType)
+
+		// Get existing condition or create new one
+		existingCondition := &apipb.Condition{
+			Type:   actorType,
+			Status: apipb.CONDITION_STATUS_UNKNOWN,
+		}
+		if existing, exists := conditionMap[actorType]; exists {
+			existingCondition = existing
+		}
+
+		// Execute Retrieve to get current condition state
+		retrievedCondition, err := actor.Retrieve(ctx, actorLogger, resource, *existingCondition)
+		if err != nil {
+			actorLogger.Error(err, "Failed to retrieve condition")
+			// Create failed condition
+			retrievedCondition = apipb.Condition{
+				Type:    actorType,
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "RetrieveError",
+				Message: fmt.Sprintf("Failed to retrieve condition: %v", err),
+			}
+		}
+
+		// Update condition in plugin
+		plugin.PutCondition(resource, retrievedCondition)
+
+		// Track first failing condition
+		if retrievedCondition.Status == apipb.CONDITION_STATUS_FALSE && firstFailingCondition == nil {
+			firstFailingCondition = &retrievedCondition
+		}
+
+		actorLogger.Info("Retrieved condition", 
+			"status", retrievedCondition.Status.String(), 
+			"reason", retrievedCondition.Reason,
+			"message", retrievedCondition.Message)
 	}
-	
-	// Find existing condition and update it
-	for i, condition := range inferenceServer.Status.Conditions {
-		if condition.Type == newCondition.Type {
-			inferenceServer.Status.Conditions[i] = newCondition
-			return
+
+	// If we found a failing condition, execute Run on its actor
+	if firstFailingCondition != nil {
+		for _, actor := range actors {
+			if actor.GetType() == firstFailingCondition.Type {
+				runLogger := logger.WithValues("actorType", firstFailingCondition.Type)
+				runLogger.Info("Executing Run for first failing condition")
+
+				if err := actor.Run(ctx, runLogger, resource, firstFailingCondition); err != nil {
+					runLogger.Error(err, "Failed to execute Run")
+					firstFailingCondition.Status = apipb.CONDITION_STATUS_FALSE
+					firstFailingCondition.Reason = "RunError"
+					firstFailingCondition.Message = fmt.Sprintf("Failed to execute run: %v", err)
+				}
+
+				// Update condition in plugin after Run
+				plugin.PutCondition(resource, *firstFailingCondition)
+				
+				return firstFailingCondition, nil
+			}
 		}
 	}
-	
-	// Add new condition if not found
-	inferenceServer.Status.Conditions = append(inferenceServer.Status.Conditions, newCondition)
+
+	logger.Info("All conditions are healthy, no Run execution needed")
+	return nil, nil
 }

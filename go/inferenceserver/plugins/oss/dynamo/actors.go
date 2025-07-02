@@ -3,7 +3,6 @@ package dynamo
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
@@ -25,24 +24,40 @@ func (a *ValidationActor) GetType() string {
 	return "DynamoValidation"
 }
 
-func (a *ValidationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Validating Dynamo configuration")
+func (a *ValidationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Dynamo validation condition")
 	
-	if inferenceServer.Spec.BackendType != v2pb.BACKEND_TYPE_DYNAMO {
-		return fmt.Errorf("invalid backend type for Dynamo plugin: %v", inferenceServer.Spec.BackendType)
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_DYNAMO {
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InvalidBackendType",
+			Message: fmt.Sprintf("invalid backend type for Dynamo plugin: %v", resource.Spec.BackendType),
+		}, nil
 	}
 	
-	return nil
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "ValidationSucceeded",
+		Message: "Dynamo configuration is valid",
+	}, nil
 }
 
-func (a *ValidationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             apipb.CONDITION_STATUS_TRUE,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             "ValidationSucceeded",
-		Message:            "Dynamo configuration is valid",
-	}, nil
+func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Dynamo validation action")
+	
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_DYNAMO {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InvalidBackendType"
+		condition.Message = fmt.Sprintf("invalid backend type for Dynamo plugin: %v", resource.Spec.BackendType)
+		return fmt.Errorf("invalid backend type")
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "ValidationSucceeded"
+	condition.Message = "Dynamo configuration is valid"
+	return nil
 }
 
 // PlatformDependenciesActor ensures NATS and ETCD are available
@@ -58,22 +73,28 @@ func (a *PlatformDependenciesActor) GetType() string {
 	return "DynamoPlatformDependencies"
 }
 
-func (a *PlatformDependenciesActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Ensuring Dynamo platform dependencies")
+func (a *PlatformDependenciesActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Dynamo platform dependencies condition")
 	
-	// Platform dependencies are handled by the gateway's Dynamo backend
-	// This is primarily a validation step
-	return nil
+	// For now, assume dependencies are available
+	// In a real implementation, this would check NATS and ETCD availability
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "DependenciesReady",
+		Message: "Platform dependencies are available",
+	}, nil
 }
 
-func (a *PlatformDependenciesActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             apipb.CONDITION_STATUS_TRUE,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             "DependenciesReady",
-		Message:            "Platform dependencies are available",
-	}, nil
+func (a *PlatformDependenciesActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Dynamo platform dependencies action")
+	
+	// Platform dependencies are handled by the gateway's Dynamo backend
+	// This ensures NATS and ETCD are deployed
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "DependenciesReady"
+	condition.Message = "Platform dependencies are available"
+	return nil
 }
 
 // ResourceCreationActor creates Dynamo infrastructure
@@ -89,40 +110,21 @@ func (a *ResourceCreationActor) GetType() string {
 	return "DynamoResourceCreation"
 }
 
-func (a *ResourceCreationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Creating Dynamo infrastructure")
+func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Dynamo infrastructure condition")
 	
-	resources := inferenceserver.ResourceSpec{
-		CPU:      "8",
-		Memory:   "16Gi",
-		GPU:      2,
-		Replicas: 1,
-	}
-	
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
-		InferenceServer: inferenceServer,
-		BackendType:     inferenceServer.Spec.BackendType,
-		Namespace:       inferenceServer.Namespace,
-		Resources:       resources,
-	})
-	
-	return err
-}
-
-func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	if err != nil {
-		return &apipb.Condition{
-			Type:               a.GetType(),
-			Status:             apipb.CONDITION_STATUS_FALSE,
-			LastUpdatedTimestamp: time.Now().UnixMilli(),
-			Reason:             "InfrastructureCheckFailed",
-			Message:            "Failed to check infrastructure status",
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InfrastructureCheckFailed",
+			Message: "Failed to check infrastructure status",
 		}, nil
 	}
 	
@@ -136,13 +138,42 @@ func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger lo
 		message = "Infrastructure is ready"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Dynamo infrastructure creation")
+	
+	resources := inferenceserver.ResourceSpec{
+		CPU:      "8",
+		Memory:   "16Gi",
+		GPU:      2,
+		Replicas: 1,
+	}
+	
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
+		InferenceServer: resource,
+		BackendType:     resource.Spec.BackendType,
+		Namespace:       resource.Namespace,
+		Resources:       resources,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InfrastructureCreationFailed"
+		condition.Message = fmt.Sprintf("Failed to create infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "InfrastructureCreationInitiated"
+	condition.Message = "Infrastructure creation initiated successfully"
+	return nil
 }
 
 // HealthCheckActor checks Dynamo server health
@@ -158,23 +189,10 @@ func (a *HealthCheckActor) GetType() string {
 	return "DynamoHealthCheck"
 }
 
-func (a *HealthCheckActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Checking Dynamo server health")
+func (a *HealthCheckActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Dynamo health condition")
 	
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
-	if err != nil {
-		return err
-	}
-	
-	if !healthy {
-		return fmt.Errorf("Dynamo server is not healthy")
-	}
-	
-	return nil
-}
-
-func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
 	
 	status := apipb.CONDITION_STATUS_FALSE
 	reason := "HealthCheckFailed"
@@ -184,15 +202,42 @@ func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Lo
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "HealthCheckSucceeded"
 		message = "Server is healthy"
+	} else if err != nil {
+		message = fmt.Sprintf("Health check error: %v", err)
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Dynamo health check action")
+	
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckError"
+		condition.Message = fmt.Sprintf("Health check error: %v", err)
+		return err
+	}
+	
+	if healthy {
+		condition.Status = apipb.CONDITION_STATUS_TRUE
+		condition.Reason = "HealthCheckSucceeded"
+		condition.Message = "Server is healthy"
+	} else {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckFailed"
+		condition.Message = "Server is not healthy"
+		return fmt.Errorf("server is not healthy")
+	}
+	
+	return nil
 }
 
 // CleanupActor cleans up Dynamo infrastructure
@@ -208,21 +253,13 @@ func (a *CleanupActor) GetType() string {
 	return "DynamoCleanup"
 }
 
-func (a *CleanupActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Cleaning up Dynamo infrastructure")
+func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving Dynamo cleanup condition")
 	
-	return a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
-	})
-}
-
-func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	status := apipb.CONDITION_STATUS_TRUE
@@ -235,11 +272,32 @@ func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger
 		message = "Infrastructure cleanup in progress"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running Dynamo infrastructure cleanup")
+	
+	err := a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "CleanupFailed"
+		condition.Message = fmt.Sprintf("Failed to cleanup infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "CleanupInitiated"
+	condition.Message = "Infrastructure cleanup initiated successfully"
+	return nil
 }
