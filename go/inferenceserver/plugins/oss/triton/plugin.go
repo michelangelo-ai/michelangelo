@@ -3,6 +3,7 @@ package triton
 import (
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -23,8 +24,26 @@ func (p *TritonPlugin) GetType() v2pb.BackendType {
 	return v2pb.BACKEND_TYPE_TRITON
 }
 
-// GetCreationActors returns the actors needed for infrastructure creation
-func (p *TritonPlugin) GetCreationActors() []plugins.ConditionActor {
+// GetCreationPlugin returns the plugin for infrastructure creation
+func (p *TritonPlugin) GetCreationPlugin() plugins.Plugin {
+	return &TritonCreationPlugin{
+		gateway: p.gateway,
+	}
+}
+
+// GetDeletionPlugin returns the plugin for infrastructure cleanup  
+func (p *TritonPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plugins.Plugin {
+	return &TritonDeletionPlugin{
+		gateway: p.gateway,
+	}
+}
+
+// TritonCreationPlugin implements the Plugin interface for creation lifecycle
+type TritonCreationPlugin struct {
+	gateway inferenceserver.Gateway
+}
+
+func (p *TritonCreationPlugin) GetActors() []plugins.ConditionActor {
 	return []plugins.ConditionActor{
 		NewValidationActor(p.gateway),
 		NewResourceCreationActor(p.gateway),
@@ -33,16 +52,55 @@ func (p *TritonPlugin) GetCreationActors() []plugins.ConditionActor {
 	}
 }
 
-// GetDeletionActors returns the actors needed for infrastructure cleanup
-func (p *TritonPlugin) GetDeletionActors() []plugins.ConditionActor {
+func (p *TritonCreationPlugin) GetConditions(resource *v2pb.InferenceServer) []*apipb.Condition {
+	return resource.Status.Conditions
+}
+
+func (p *TritonCreationPlugin) PutCondition(resource *v2pb.InferenceServer, condition apipb.Condition) {
+	if resource.Status.Conditions == nil {
+		resource.Status.Conditions = []*apipb.Condition{}
+	}
+	
+	// Find existing condition and update it
+	for i, existingCondition := range resource.Status.Conditions {
+		if existingCondition.Type == condition.Type {
+			resource.Status.Conditions[i] = &condition
+			return
+		}
+	}
+	
+	// Add new condition if not found
+	resource.Status.Conditions = append(resource.Status.Conditions, &condition)
+}
+
+// TritonDeletionPlugin implements the Plugin interface for deletion lifecycle
+type TritonDeletionPlugin struct {
+	gateway inferenceserver.Gateway
+}
+
+func (p *TritonDeletionPlugin) GetActors() []plugins.ConditionActor {
 	return []plugins.ConditionActor{
 		NewCleanupActor(p.gateway),
 	}
 }
 
-// GetStatusActors returns the actors for status checking
-func (p *TritonPlugin) GetStatusActors() []plugins.ConditionActor {
-	return []plugins.ConditionActor{
-		NewHealthCheckActor(p.gateway),
+func (p *TritonDeletionPlugin) GetConditions(resource *v2pb.InferenceServer) []*apipb.Condition {
+	return resource.Status.Conditions
+}
+
+func (p *TritonDeletionPlugin) PutCondition(resource *v2pb.InferenceServer, condition apipb.Condition) {
+	if resource.Status.Conditions == nil {
+		resource.Status.Conditions = []*apipb.Condition{}
 	}
+	
+	// Find existing condition and update it
+	for i, existingCondition := range resource.Status.Conditions {
+		if existingCondition.Type == condition.Type {
+			resource.Status.Conditions[i] = &condition
+			return
+		}
+	}
+	
+	// Add new condition if not found
+	resource.Status.Conditions = append(resource.Status.Conditions, &condition)
 }

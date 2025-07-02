@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -17,6 +18,11 @@ import (
 
 func (g *gateway) createLLMDInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
 	logger.Info("Creating LLMD infrastructure", "server", request.InferenceServer.Name)
+
+	// Create VirtualService first for fixed endpoint routing  
+	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
+		return nil, fmt.Errorf("failed to create VirtualService: %w", err)
+	}
 
 	// Create ConfigMap for LLMD configuration
 	if err := g.createLLMDConfigMap(ctx, logger, request); err != nil {
@@ -37,7 +43,7 @@ func (g *gateway) createLLMDInfrastructure(ctx context.Context, logger logr.Logg
 		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 		Message: "LLMD infrastructure creation initiated",
 		Endpoints: []string{
-			fmt.Sprintf("http://%s-service.%s.svc.cluster.local:80", request.InferenceServer.Name, request.Namespace),
+			fmt.Sprintf("/%s-endpoint/%s/production", request.InferenceServer.Name, request.InferenceServer.Name),
 		},
 		Details: map[string]interface{}{
 			"backend":   "llmd",
@@ -81,6 +87,17 @@ func (g *gateway) getLLMDInfrastructureStatus(ctx context.Context, logger logr.L
 
 func (g *gateway) deleteLLMDInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
 	logger.Info("Deleting LLMD infrastructure", "server", request.InferenceServer)
+
+	// Delete VirtualService
+	gvr := schema.GroupVersionResource{
+		Group:    "networking.istio.io",
+		Version:  "v1beta1",
+		Resource: "virtualservices",
+	}
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", request.InferenceServer)
+	if err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Delete(ctx, virtualServiceName, metav1.DeleteOptions{}); err != nil {
+		logger.Error(err, "Failed to delete VirtualService")
+	}
 
 	// Delete Deployment
 	deployment := &appsv1.Deployment{

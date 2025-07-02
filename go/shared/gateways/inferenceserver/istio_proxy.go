@@ -94,10 +94,50 @@ func (g *gateway) getOrCreateVirtualService(ctx context.Context, logger logr.Log
 				"namespace": request.Namespace,
 			},
 			"spec": map[string]interface{}{
-				"hosts": []interface{}{
-					fmt.Sprintf("%s-service.%s.svc.cluster.local", request.InferenceServer, request.Namespace),
+				"hosts": []string{"*"},
+				"gateways": []string{
+					"default/ma-gateway",
 				},
-				"http": []interface{}{},
+				"http": []map[string]interface{}{
+					{
+						"match": []map[string]interface{}{
+							{
+								"uri": map[string]string{
+									"prefix": fmt.Sprintf("/%s-endpoint/%s/production", request.InferenceServer, request.InferenceServer),
+								},
+							},
+						},
+						"route": []map[string]interface{}{
+							{
+								"destination": map[string]interface{}{
+									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", request.InferenceServer, request.Namespace),
+									"port": map[string]int{
+										"number": 80,
+									},
+								},
+							},
+						},
+					},
+					{
+						"match": []map[string]interface{}{
+							{
+								"uri": map[string]string{
+									"prefix": fmt.Sprintf("/%s-endpoint/%s/canary", request.InferenceServer, request.InferenceServer),
+								},
+							},
+						},
+						"route": []map[string]interface{}{
+							{
+								"destination": map[string]interface{}{
+									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", request.InferenceServer, request.Namespace),
+									"port": map[string]int{
+										"number": 80,
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
@@ -108,7 +148,7 @@ func (g *gateway) getOrCreateVirtualService(ctx context.Context, logger logr.Log
 func (g *gateway) updateProductionRoute(ctx context.Context, logger logr.Logger, vs *unstructured.Unstructured, request ProxyConfigRequest) error {
 	httpRoutes, found, err := unstructured.NestedSlice(vs.Object, "spec", "http")
 	if err != nil || !found {
-		httpRoutes = []interface{}{}
+		return fmt.Errorf("http routes not found in VirtualService")
 	}
 
 	productionPrefix := fmt.Sprintf("/%s-endpoint/%s/production", request.InferenceServer, request.InferenceServer)
@@ -122,48 +162,22 @@ func (g *gateway) updateProductionRoute(ctx context.Context, logger logr.Logger,
 		}
 
 		if g.hasMatchingPrefix(routeMap, productionPrefix) {
-			// Update existing route
+			logger.Info("Updating existing production route", "modelName", request.ModelName)
+			
+			// Add rewrite URI to route to specific model
 			newUri := fmt.Sprintf("/v2/models/%s", request.ModelName)
 			if err = unstructured.SetNestedField(routeMap, newUri, "rewrite", "uri"); err != nil {
 				logger.Error(err, "Failed to set rewrite uri")
 				return err
 			}
+			
 			updated = true
 			break
 		}
 	}
 
 	if !updated {
-		// Add new production route
-		logger.Info("Adding new production route", "modelName", request.ModelName)
-		productionRoute := map[string]interface{}{
-			"match": []interface{}{
-				map[string]interface{}{
-					"uri": map[string]interface{}{
-						"prefix": productionPrefix,
-					},
-				},
-			},
-			"rewrite": map[string]interface{}{
-				"uri": fmt.Sprintf("/v2/models/%s", request.ModelName),
-			},
-			"route": []interface{}{
-				map[string]interface{}{
-					"destination": map[string]interface{}{
-						"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", request.InferenceServer, request.Namespace),
-						"port": map[string]interface{}{
-							"number": int64(80),
-						},
-					},
-				},
-			},
-		}
-
-		// Add the production route to the beginning of the routes array
-		newRoutes := make([]interface{}, 0, len(httpRoutes)+1)
-		newRoutes = append(newRoutes, productionRoute)
-		newRoutes = append(newRoutes, httpRoutes...)
-		httpRoutes = newRoutes
+		return fmt.Errorf("production route not found in VirtualService for inference server: %s", request.InferenceServer)
 	}
 
 	// Update the VirtualService
@@ -184,6 +198,7 @@ func (g *gateway) updateProductionRoute(ctx context.Context, logger logr.Logger,
 		return err
 	}
 
+	logger.Info("Production route updated successfully", "modelName", request.ModelName, "inferenceServer", request.InferenceServer)
 	return nil
 }
 
