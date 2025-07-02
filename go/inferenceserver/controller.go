@@ -218,11 +218,11 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 		}
 		
-		// Execute creation actors
-		actors := plugin.GetCreationActors()
-		engine := plugins.NewActorEngine()
+		// Execute creation plugin
+		creationPlugin := plugin.GetCreationPlugin()
+		engine := plugins.NewEngine()
 		
-		err = engine.ExecuteActors(ctx, logger, inferenceServer, actors)
+		_, err = engine.Run(ctx, logger, creationPlugin, inferenceServer)
 		if err != nil {
 			logger.Error(err, "Failed to execute creation actors")
 			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonCreationFailed, fmt.Sprintf("%s: %v", MessageCreationFailed, err))
@@ -298,10 +298,10 @@ func (r *Reconciler) handleDeletion(ctx context.Context, logger logr.Logger, inf
 	}
 	
 	// Execute deletion actors
-	actors := plugin.GetDeletionActors()
-	engine := plugins.NewActorEngine()
+	deletionPlugin := plugin.GetDeletionPlugin(inferenceServer)
+	engine := plugins.NewEngine()
 	
-	err = engine.ExecuteActors(ctx, logger, inferenceServer, actors)
+	_, err = engine.Run(ctx, logger, deletionPlugin, inferenceServer)
 	if err != nil {
 		logger.Error(err, "Failed to execute deletion actors")
 		r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonDeletionFailed, fmt.Sprintf("%s: %v", MessageDeletionFailed, err))

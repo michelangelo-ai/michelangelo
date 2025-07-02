@@ -126,7 +126,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 	// Delete ConfigMap
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-config", request.InferenceServer),
+			Name:      fmt.Sprintf("%s-models", request.InferenceServer),
 			Namespace: request.Namespace,
 		},
 	}
@@ -138,9 +138,41 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 }
 
 func (g *gateway) createTritonConfigMap(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	// Skip ConfigMap creation as we'll use config.pbtxt from the model package
-	logger.Info("Using config.pbtxt from model package, skipping ConfigMap creation")
-	return nil
+	configMapName := fmt.Sprintf("%s-models", request.InferenceServer.Name)
+	
+	// Check if ConfigMap already exists
+	existing := &corev1.ConfigMap{}
+	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, existing)
+	if err == nil {
+		logger.Info("ConfigMap already exists, skipping creation", "name", configMapName)
+		return nil
+	}
+	
+	// Create model list configuration for the sidecar
+	// Extract model path from resource configuration, fallback to default
+	modelPath := "s3://deploy-models/bert-cola-23/"
+	if modelConfig, ok := request.Resources.ModelConfig["model"]; ok {
+		modelPath = modelConfig
+	}
+	
+	modelList := fmt.Sprintf(`[
+  {
+    "name": "%s",
+    "s3_path": "%s"
+  }
+]`, request.InferenceServer.Name, modelPath)
+
+	configMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      configMapName,
+			Namespace: request.Namespace,
+		},
+		Data: map[string]string{
+			"model-list.json": modelList,
+		},
+	}
+
+	return g.kubeClient.Create(ctx, configMap)
 }
 
 func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
@@ -191,60 +223,95 @@ func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger
 							Resources: buildResourceRequirements(request.Resources),
 							Args: []string{
 								"tritonserver",
-								"--model-store=s3://deploy-models/bert-cola-23",
-								"--allow-http=true",
+								"--model-store=/mnt/models",
+								"--grpc-port=8001",
+								"--http-port=8000",
 								"--allow-grpc=true",
+								"--allow-http=true",
 								"--allow-metrics=true",
-								"--strict-model-config=false",
-								"--exit-on-error=false",
+								"--metrics-port=8002",
 								"--model-control-mode=poll",
 								"--repository-poll-secs=60",
-								"--log-verbose=1",
+								"--exit-on-error=true",
+								"--log-error=true",
+								"--log-warning=true",
+								"--log-verbose=0",
 							},
-							Env: []corev1.EnvVar{
+							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:  "AWS_ACCESS_KEY_ID",
-									Value: "minioadmin",
+									Name:      "workdir",
+									MountPath: "/mnt/models",
 								},
-								{
-									Name:  "AWS_SECRET_ACCESS_KEY",
-									Value: "minioadmin",
-								},
-								{
-									Name:  "AWS_DEFAULT_REGION",
-									Value: "us-south",
-								},
-								{
-									Name:  "AWS_ENDPOINT_URL",
-									Value: "http://minio:9091",
-								},
-								{
-									Name:  "AWS_S3_FORCE_PATH_STYLE",
-									Value: "true",
-								},
-								{
-									Name:  "AWS_S3_USE_PATH_STYLE_ENDPOINT",
-									Value: "true",
-								},
-								{
-									Name:  "S3_VERIFY_SSL",
-									Value: "false",
-								},
-								{
-									Name:  "TRITON_AWS_MOUNT_DIRECTORY",
-									Value: "/etc/storage",
+							},
+						},
+						{
+							Name:  "model-sync",
+							Image: "amazon/aws-cli:2.15.50",
+							Command: []string{"/bin/sh", "-c"},
+							Args: []string{
+								`yum install -y jq && \
+CONFIG_FILE=/secret/localMinIO.json
+ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
+SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
+ENDPOINT=$(jq -r '.endpoint_url' $CONFIG_FILE)
+REGION=$(jq -r '.region' $CONFIG_FILE)
+aws configure set aws_access_key_id $ACCESS_KEY
+aws configure set aws_secret_access_key $SECRET_KEY
+aws configure set default.region $REGION
+aws configure set default.s3.endpoint_url $ENDPOINT
+
+while true; do
+  cp /config/model-list.json /tmp/model-list.json
+  jq -c '.[]' /tmp/model-list.json | while read model; do
+    name=$(echo "$model" | jq -r '.name')
+    s3_path=$(echo "$model" | jq -r '.s3_path')
+    echo "Syncing model $name from $s3_path to /mnt/models/"
+    aws s3 sync "$s3_path" /mnt/models/ --delete --exact-timestamps --endpoint-url "$ENDPOINT"
+  done
+  
+  sleep 60
+done`,
+							},
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    parseQuantity("100m"),
+									corev1.ResourceMemory: parseQuantity("100Mi"),
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
+									Name:      "workdir",
+									MountPath: "/mnt/models",
+								},
+								{
+									Name:      "model-config",
+									MountPath: "/config",
+								},
+								{
 									Name:      "storage-secret",
-									MountPath: "/etc/storage",
+									MountPath: "/secret",
 									ReadOnly:  true,
 								},
 							},
 						},
 					},
 					Volumes: []corev1.Volume{
+						{
+							Name: "workdir",
+							VolumeSource: corev1.VolumeSource{
+								EmptyDir: &corev1.EmptyDirVolumeSource{},
+							},
+						},
+						{
+							Name: "model-config",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{
+										Name: fmt.Sprintf("%s-models", request.InferenceServer.Name),
+									},
+								},
+							},
+						},
 						{
 							Name: "storage-secret",
 							VolumeSource: corev1.VolumeSource{
@@ -310,7 +377,6 @@ func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, r
 	return g.kubeClient.Create(ctx, service)
 }
 
-
 func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
@@ -319,7 +385,7 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 	}
 
 	virtualServiceName := fmt.Sprintf("%s-virtualservice", request.InferenceServer.Name)
-	
+
 	// Check if VirtualService already exists
 	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, virtualServiceName, metav1.GetOptions{})
 	if err == nil {
@@ -345,8 +411,8 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 						"match": []map[string]interface{}{
 							{
 								"uri": map[string]string{
-									"prefix": fmt.Sprintf("/%s-endpoint/%s/production", 
-										request.InferenceServer.Name, 
+									"prefix": fmt.Sprintf("/%s-endpoint/%s/production",
+										request.InferenceServer.Name,
 										request.InferenceServer.Name),
 								},
 							},
@@ -354,8 +420,8 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 						"route": []map[string]interface{}{
 							{
 								"destination": map[string]interface{}{
-									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", 
-										request.InferenceServer.Name, 
+									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local",
+										request.InferenceServer.Name,
 										request.Namespace),
 									"port": map[string]int{
 										"number": 80,
@@ -368,8 +434,8 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 						"match": []map[string]interface{}{
 							{
 								"uri": map[string]string{
-									"prefix": fmt.Sprintf("/%s-endpoint/%s/canary", 
-										request.InferenceServer.Name, 
+									"prefix": fmt.Sprintf("/%s-endpoint/%s/canary",
+										request.InferenceServer.Name,
 										request.InferenceServer.Name),
 								},
 							},
@@ -377,8 +443,8 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 						"route": []map[string]interface{}{
 							{
 								"destination": map[string]interface{}{
-									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", 
-										request.InferenceServer.Name, 
+									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local",
+										request.InferenceServer.Name,
 										request.Namespace),
 									"port": map[string]int{
 										"number": 80,
@@ -440,6 +506,49 @@ func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serve
 
 // Helper functions
 
+// updateTritonModelConfig updates the model configuration for rolling out new models
+func (g *gateway) updateTritonModelConfig(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string, modelConfigs []ModelConfig) error {
+	configMapName := fmt.Sprintf("%s-models", inferenceServerName)
+	
+	// Build model list JSON
+	modelList := "["
+	for i, config := range modelConfigs {
+		if i > 0 {
+			modelList += ","
+		}
+		modelList += fmt.Sprintf(`
+  {
+    "name": "%s",
+    "s3_path": "%s"
+  }`, config.Name, config.S3Path)
+	}
+	modelList += "\n]"
+	
+	// Get existing ConfigMap
+	configMap := &corev1.ConfigMap{}
+	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
+	if err != nil {
+		return fmt.Errorf("failed to get ConfigMap: %w", err)
+	}
+	
+	// Update the model list
+	configMap.Data["model-list.json"] = modelList
+	
+	// Apply the update
+	err = g.kubeClient.Update(ctx, configMap)
+	if err != nil {
+		return fmt.Errorf("failed to update ConfigMap: %w", err)
+	}
+	
+	logger.Info("Updated model configuration", "configMap", configMapName, "models", len(modelConfigs))
+	return nil
+}
+
+// ModelConfig represents a model configuration for syncing
+type ModelConfig struct {
+	Name   string
+	S3Path string
+}
 
 func getTritonImageTag(tag string) string {
 	if tag == "" {

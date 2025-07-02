@@ -3,7 +3,6 @@ package llmd
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
@@ -25,24 +24,40 @@ func (a *ValidationActor) GetType() string {
 	return "LLMDValidation"
 }
 
-func (a *ValidationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Validating LLMD configuration")
+func (a *ValidationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving LLMD validation condition")
 	
-	if inferenceServer.Spec.BackendType != v2pb.BACKEND_TYPE_LLM_D {
-		return fmt.Errorf("invalid backend type for LLMD plugin: %v", inferenceServer.Spec.BackendType)
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_LLM_D {
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InvalidBackendType",
+			Message: fmt.Sprintf("invalid backend type for LLMD plugin: %v", resource.Spec.BackendType),
+		}, nil
 	}
 	
-	return nil
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "ValidationSucceeded",
+		Message: "LLMD configuration is valid",
+	}, nil
 }
 
-func (a *ValidationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             apipb.CONDITION_STATUS_TRUE,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             "ValidationSucceeded",
-		Message:            "LLMD configuration is valid",
-	}, nil
+func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running LLMD validation action")
+	
+	if resource.Spec.BackendType != v2pb.BACKEND_TYPE_LLM_D {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InvalidBackendType"
+		condition.Message = fmt.Sprintf("invalid backend type for LLMD plugin: %v", resource.Spec.BackendType)
+		return fmt.Errorf("invalid backend type")
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "ValidationSucceeded"
+	condition.Message = "LLMD configuration is valid"
+	return nil
 }
 
 // ResourceCreationActor creates LLMD infrastructure
@@ -58,40 +73,21 @@ func (a *ResourceCreationActor) GetType() string {
 	return "LLMDResourceCreation"
 }
 
-func (a *ResourceCreationActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Creating LLMD infrastructure")
+func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving LLMD infrastructure condition")
 	
-	resources := inferenceserver.ResourceSpec{
-		CPU:      "4",
-		Memory:   "8Gi",
-		GPU:      1,
-		Replicas: 1,
-	}
-	
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
-		InferenceServer: inferenceServer,
-		BackendType:     inferenceServer.Spec.BackendType,
-		Namespace:       inferenceServer.Namespace,
-		Resources:       resources,
-	})
-	
-	return err
-}
-
-func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	if err != nil {
-		return &apipb.Condition{
-			Type:               a.GetType(),
-			Status:             apipb.CONDITION_STATUS_FALSE,
-			LastUpdatedTimestamp: time.Now().UnixMilli(),
-			Reason:             "InfrastructureCheckFailed",
-			Message:            "Failed to check infrastructure status",
+		return apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "InfrastructureCheckFailed",
+			Message: "Failed to check infrastructure status",
 		}, nil
 	}
 	
@@ -105,14 +101,44 @@ func (a *ResourceCreationActor) EvaluateCondition(ctx context.Context, logger lo
 		message = "Infrastructure is ready"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
 }
+
+func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running LLMD infrastructure creation")
+	
+	resources := inferenceserver.ResourceSpec{
+		CPU:      "4",
+		Memory:   "8Gi",
+		GPU:      1,
+		Replicas: 1,
+	}
+	
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
+		InferenceServer: resource,
+		BackendType:     resource.Spec.BackendType,
+		Namespace:       resource.Namespace,
+		Resources:       resources,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "InfrastructureCreationFailed"
+		condition.Message = fmt.Sprintf("Failed to create infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "InfrastructureCreationInitiated"
+	condition.Message = "Infrastructure creation initiated successfully"
+	return nil
+}
+
 
 // HealthCheckActor checks LLMD server health
 type HealthCheckActor struct {
@@ -127,23 +153,10 @@ func (a *HealthCheckActor) GetType() string {
 	return "LLMDHealthCheck"
 }
 
-func (a *HealthCheckActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Checking LLMD server health")
+func (a *HealthCheckActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving LLMD health condition")
 	
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
-	if err != nil {
-		return err
-	}
-	
-	if !healthy {
-		return fmt.Errorf("LLMD server is not healthy")
-	}
-	
-	return nil
-}
-
-func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
-	healthy, err := a.gateway.IsHealthy(ctx, logger, inferenceServer.Name, inferenceServer.Spec.BackendType)
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
 	
 	status := apipb.CONDITION_STATUS_FALSE
 	reason := "HealthCheckFailed"
@@ -153,15 +166,42 @@ func (a *HealthCheckActor) EvaluateCondition(ctx context.Context, logger logr.Lo
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "HealthCheckSucceeded"
 		message = "Server is healthy"
+	} else if err != nil {
+		message = fmt.Sprintf("Health check error: %v", err)
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running LLMD health check action")
+	
+	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckError"
+		condition.Message = fmt.Sprintf("Health check error: %v", err)
+		return err
+	}
+	
+	if healthy {
+		condition.Status = apipb.CONDITION_STATUS_TRUE
+		condition.Reason = "HealthCheckSucceeded"
+		condition.Message = "Server is healthy"
+	} else {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "HealthCheckFailed"
+		condition.Message = "Server is not healthy"
+		return fmt.Errorf("server is not healthy")
+	}
+	
+	return nil
 }
 
 // CleanupActor cleans up LLMD infrastructure
@@ -177,21 +217,13 @@ func (a *CleanupActor) GetType() string {
 	return "LLMDCleanup"
 }
 
-func (a *CleanupActor) Execute(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Cleaning up LLMD infrastructure")
+func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+	logger.Info("Retrieving LLMD cleanup condition")
 	
-	return a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
-	})
-}
-
-func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (*apipb.Condition, error) {
 	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
 	})
 	
 	status := apipb.CONDITION_STATUS_TRUE
@@ -204,11 +236,32 @@ func (a *CleanupActor) EvaluateCondition(ctx context.Context, logger logr.Logger
 		message = "Infrastructure cleanup in progress"
 	}
 	
-	return &apipb.Condition{
-		Type:               a.GetType(),
-		Status:             status,
-		LastUpdatedTimestamp: time.Now().UnixMilli(),
-		Reason:             reason,
-		Message:            message,
+	return apipb.Condition{
+		Type:    a.GetType(),
+		Status:  status,
+		Reason:  reason,
+		Message: message,
 	}, nil
+}
+
+func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+	logger.Info("Running LLMD infrastructure cleanup")
+	
+	err := a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
+	})
+	
+	if err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "CleanupFailed"
+		condition.Message = fmt.Sprintf("Failed to cleanup infrastructure: %v", err)
+		return err
+	}
+	
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "CleanupInitiated"
+	condition.Message = "Infrastructure cleanup initiated successfully"
+	return nil
 }
