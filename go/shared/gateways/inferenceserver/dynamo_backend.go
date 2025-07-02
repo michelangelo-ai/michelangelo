@@ -20,6 +20,11 @@ import (
 func (g *gateway) createDynamoInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
 	logger.Info("Creating Dynamo infrastructure", "server", request.InferenceServer.Name)
 
+	// Create VirtualService first for fixed endpoint routing
+	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
+		return nil, fmt.Errorf("failed to create VirtualService: %w", err)
+	}
+
 	// First, ensure platform dependencies are available (NATS, ETCD)
 	if err := g.ensureDynamoPlatformDependencies(ctx, logger, request); err != nil {
 		return nil, fmt.Errorf("failed to ensure platform dependencies: %w", err)
@@ -39,7 +44,7 @@ func (g *gateway) createDynamoInfrastructure(ctx context.Context, logger logr.Lo
 		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 		Message: "Dynamo infrastructure creation initiated",
 		Endpoints: []string{
-			fmt.Sprintf("http://%s-service.%s.svc.cluster.local:8000", request.InferenceServer.Name, request.Namespace),
+			fmt.Sprintf("/%s-endpoint/%s/production", request.InferenceServer.Name, request.InferenceServer.Name),
 		},
 		Details: map[string]interface{}{
 			"backend":   "dynamo",
@@ -83,6 +88,17 @@ func (g *gateway) getDynamoInfrastructureStatus(ctx context.Context, logger logr
 
 func (g *gateway) deleteDynamoInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
 	logger.Info("Deleting Dynamo infrastructure", "server", request.InferenceServer)
+
+	// Delete VirtualService
+	vsGvr := schema.GroupVersionResource{
+		Group:    "networking.istio.io",
+		Version:  "v1beta1",
+		Resource: "virtualservices",
+	}
+	virtualServiceName := fmt.Sprintf("%s-virtualservice", request.InferenceServer)
+	if err := g.dynamicClient.Resource(vsGvr).Namespace(request.Namespace).Delete(ctx, virtualServiceName, metav1.DeleteOptions{}); err != nil {
+		logger.Error(err, "Failed to delete VirtualService")
+	}
 
 	// Delete DynamoGraphDeployment
 	gvr := schema.GroupVersionResource{

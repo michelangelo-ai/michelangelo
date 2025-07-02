@@ -79,6 +79,8 @@ enum BackendType {
   BACKEND_TYPE_TRITON = 1;
   // LLM-D (Large Language Model Deployer) backend
   BACKEND_TYPE_LLM_D = 2;
+  // Dynamo (Disaggregated Inference) backend
+  BACKEND_TYPE_DYNAMO = 3;
 }
 
 // Inference Server spec.
