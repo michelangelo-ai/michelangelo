@@ -29,7 +29,7 @@ task_context = threading.local()
 task_context.config = None
 task_context.alias = None
 
-DEFAULT_RETRY_ATTEMPTS = 1
+DEFAULT_RETRY_ATTEMPTS = 0
 
 
 class TaskFunction(Generic[P, R]):
