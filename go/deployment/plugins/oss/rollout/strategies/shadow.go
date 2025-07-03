@@ -1,0 +1,247 @@
+package strategies
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+// GetShadowActors returns actors for shadow rollout strategy (canary with analysis)
+func GetShadowActors(params Params, deployment *v2pb.Deployment) []plugins.ConditionActor {
+	return []plugins.ConditionActor{
+		&ModelSyncActor{
+			client:  params.Client,
+			gateway: params.Gateway,
+			logger:  params.Logger,
+		},
+		&ShadowDeploymentActor{
+			client:  params.Client,
+			gateway: params.Gateway,
+			logger:  params.Logger,
+		},
+		&ShadowAnalysisActor{
+			client:  params.Client,
+			gateway: params.Gateway,
+			logger:  params.Logger,
+		},
+		&ShadowPromotionActor{
+			client:  params.Client,
+			gateway: params.Gateway,
+			logger:  params.Logger,
+		},
+	}
+}
+
+// ShadowDeploymentActor deploys shadow version alongside production
+type ShadowDeploymentActor struct {
+	client  client.Client
+	gateway inferenceserver.Gateway
+	logger  logr.Logger
+}
+
+func (a *ShadowDeploymentActor) GetType() string {
+	return common.ActorTypeShadowDeployment
+}
+
+func (a *ShadowDeploymentActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, existingCondition *apipb.Condition) (*apipb.Condition, error) {
+	condition := &apipb.Condition{
+		Type:   "ShadowDeployment",
+		Status: apipb.CONDITION_STATUS_FALSE,
+		Reason: "ShadowDeploymentInProgress",
+	}
+
+	if existingCondition != nil {
+		condition = existingCondition
+	}
+
+	a.logger.Info("Retrieved shadow deployment condition", "status", condition.Status, "reason", condition.Reason)
+	return condition, nil
+}
+
+func (a *ShadowDeploymentActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *apipb.Condition) error {
+	a.logger.Info("Starting shadow deployment", "deployment", deployment.Name)
+
+	modelName := deployment.Spec.DesiredRevision.Name
+	if modelName == "" {
+		modelName = deployment.Name
+	}
+
+	// Deploy shadow version with traffic splitting
+	// In OSS implementation, use Istio VirtualService with weighted routing
+	shadowRequest := inferenceserver.ProxyConfigRequest{
+		InferenceServer: deployment.Spec.GetInferenceServer().Name,
+		Namespace:       deployment.Namespace,
+		ModelName:       modelName,
+		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		Routes: []inferenceserver.RouteConfig{
+			{
+				Path:        fmt.Sprintf("/%s-endpoint/%s/production", deployment.Spec.GetInferenceServer().Name, deployment.Spec.GetInferenceServer().Name),
+				Destination: fmt.Sprintf("%s-service.%s.svc.cluster.local", deployment.Spec.GetInferenceServer().Name, deployment.Namespace),
+				Weight:      90, // 90% to production
+			},
+			{
+				Path:        fmt.Sprintf("/%s-endpoint/%s/shadow", deployment.Spec.GetInferenceServer().Name, deployment.Spec.GetInferenceServer().Name),
+				Destination: fmt.Sprintf("%s-shadow-service.%s.svc.cluster.local", deployment.Spec.GetInferenceServer().Name, deployment.Namespace),
+				Weight:      10, // 10% to shadow
+			},
+		},
+	}
+
+	if err := a.gateway.ConfigureProxy(ctx, a.logger, shadowRequest); err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "ShadowDeploymentFailed"
+		condition.Message = fmt.Sprintf("Failed to configure shadow routing: %v", err)
+		return err
+	}
+
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "ShadowDeploymentCompleted"
+	condition.Message = "Shadow deployment configured with 10% traffic split"
+
+	a.logger.Info("Shadow deployment completed", "model", modelName, "trafficSplit", "10%")
+	return nil
+}
+
+// ShadowAnalysisActor analyzes shadow deployment results
+type ShadowAnalysisActor struct {
+	client  client.Client
+	gateway inferenceserver.Gateway
+	logger  logr.Logger
+}
+
+func (a *ShadowAnalysisActor) GetType() string {
+	return common.ActorTypeShadowAnalysis
+}
+
+func (a *ShadowAnalysisActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, existingCondition *apipb.Condition) (*apipb.Condition, error) {
+	condition := &apipb.Condition{
+		Type:   "ShadowAnalysis",
+		Status: apipb.CONDITION_STATUS_FALSE,
+		Reason: "ShadowAnalysisInProgress",
+	}
+
+	if existingCondition != nil {
+		condition = existingCondition
+	}
+
+	a.logger.Info("Retrieved shadow analysis condition", "status", condition.Status, "reason", condition.Reason)
+	return condition, nil
+}
+
+func (a *ShadowAnalysisActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *apipb.Condition) error {
+	a.logger.Info("Starting shadow analysis", "deployment", deployment.Name)
+
+	// In OSS implementation, we do basic health and performance analysis
+	// In Uber's implementation, this would integrate with DPQS for sophisticated analysis
+	
+	analysisTime := 5 * time.Minute
+	a.logger.Info("Running shadow analysis", "duration", analysisTime)
+
+	// Simulate analysis period
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+	timeout := time.After(analysisTime)
+
+	healthyChecks := 0
+	totalChecks := 0
+
+	for {
+		select {
+		case <-timeout:
+			// Analysis complete
+			successRate := float64(healthyChecks) / float64(totalChecks) * 100
+			
+			if successRate >= 95.0 {
+				condition.Status = apipb.CONDITION_STATUS_TRUE
+				condition.Reason = "ShadowAnalysisCompleted"
+				condition.Message = fmt.Sprintf("Shadow analysis passed with %.1f%% success rate", successRate)
+				a.logger.Info("Shadow analysis completed successfully", "successRate", successRate)
+				return nil
+			} else {
+				condition.Status = apipb.CONDITION_STATUS_FALSE
+				condition.Reason = "ShadowAnalysisFailed"
+				condition.Message = fmt.Sprintf("Shadow analysis failed with %.1f%% success rate (required: 95%%)", successRate)
+				return fmt.Errorf("shadow analysis failed: success rate %.1f%% below threshold", successRate)
+			}
+
+		case <-ticker.C:
+			// Check shadow deployment health
+			healthy, err := a.gateway.IsHealthy(ctx, a.logger, deployment.Spec.GetInferenceServer().Name, v2pb.BACKEND_TYPE_TRITON) // Default to Triton
+			totalChecks++
+			if err == nil && healthy {
+				healthyChecks++
+			}
+			a.logger.Info("Shadow health check", "healthy", healthy, "successRate", float64(healthyChecks)/float64(totalChecks)*100)
+		}
+	}
+}
+
+// ShadowPromotionActor promotes shadow to production if analysis passes
+type ShadowPromotionActor struct {
+	client  client.Client
+	gateway inferenceserver.Gateway
+	logger  logr.Logger
+}
+
+func (a *ShadowPromotionActor) GetType() string {
+	return common.ActorTypeShadowPromotion
+}
+
+func (a *ShadowPromotionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, existingCondition *apipb.Condition) (*apipb.Condition, error) {
+	condition := &apipb.Condition{
+		Type:   "ShadowPromotion",
+		Status: apipb.CONDITION_STATUS_FALSE,
+		Reason: "ShadowPromotionInProgress",
+	}
+
+	if existingCondition != nil {
+		condition = existingCondition
+	}
+
+	a.logger.Info("Retrieved shadow promotion condition", "status", condition.Status, "reason", condition.Reason)
+	return condition, nil
+}
+
+func (a *ShadowPromotionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *apipb.Condition) error {
+	a.logger.Info("Starting shadow promotion", "deployment", deployment.Name)
+
+	modelName := deployment.Spec.DesiredRevision.Name
+	if modelName == "" {
+		modelName = deployment.Name
+	}
+
+	// Promote shadow to production (100% traffic)
+	promotionRequest := inferenceserver.ModelConfigUpdateRequest{
+		InferenceServer: deployment.Spec.GetInferenceServer().Name,
+		Namespace:       deployment.Namespace,
+		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		ModelConfigs: []inferenceserver.ModelConfigEntry{
+			{
+				Name:   modelName,
+				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+			},
+		},
+	}
+
+	if err := a.gateway.UpdateModelConfig(ctx, a.logger, promotionRequest); err != nil {
+		condition.Status = apipb.CONDITION_STATUS_FALSE
+		condition.Reason = "ShadowPromotionFailed"
+		condition.Message = fmt.Sprintf("Failed to promote shadow to production: %v", err)
+		return err
+	}
+
+	condition.Status = apipb.CONDITION_STATUS_TRUE
+	condition.Reason = "ShadowPromotionCompleted"
+	condition.Message = "Shadow deployment promoted to production successfully"
+
+	a.logger.Info("Shadow promotion completed", "model", modelName)
+	return nil
+}
