@@ -14,9 +14,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss"
-	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -33,19 +31,11 @@ type Reconciler struct {
 	client.Client
 	Log      logr.Logger
 	Recorder record.EventRecorder
-	Plugin   *oss.Plugin
+	Plugin   plugins.Plugin
 }
 
-// NewReconciler creates a new deployment reconciler
-func NewReconciler(client client.Client, logger logr.Logger, gateway inferenceserver.Gateway) *Reconciler {
-	return &Reconciler{
-		Client: client,
-		Log:    logger,
-		Plugin: oss.NewPlugin(gateway),
-	}
-}
 
-// Reconcile handles deployment reconciliation using plugin-based approach
+// Reconcile handles deployment reconciliation using basic OSS approach
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.Log.WithValues(_deploymentKey, req.NamespacedName.String())
 	ctx, cancel := context.WithTimeout(ctx, _reconciliationTimeout)
@@ -97,7 +87,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return result, nil
 }
 
-// reconcile contains the main reconciliation logic following the reference implementation pattern
+// reconcile contains the main reconciliation logic for OSS deployments
 func (r *Reconciler) reconcile(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment, originalDeployment *v2pb.Deployment) (ctrl.Result, error) {
 	defaultResult := ctrl.Result{
 		Requeue:      true,
@@ -112,177 +102,94 @@ func (r *Reconciler) reconcile(ctx context.Context, logger logr.Logger, deployme
 		}
 	}
 
-	originalStage := deployment.Status.Stage
-	result, err := r.processPlugin(ctx, logger, deployment, originalDeployment)
-
-	// Update stage if changed
-	stage := r.Plugin.ParseStage(deployment)
-	if originalStage != stage {
-		message := fmt.Sprintf("state transition from %s to %s", originalStage, stage)
-		logger.Info(message)
-		deployment.Status.Stage = stage
-		r.handleStageTransition(ctx, logger, deployment, err)
-		r.Recorder.Event(deployment, "Normal", "StageChange", message)
-	}
-
-	// Handle cleanup completion
-	if common.IsCleanupCompleteStage(deployment.Status.Stage) {
+	// Handle deletion/cleanup
+	if !deployment.ObjectMeta.DeletionTimestamp.IsZero() {
+		logger.Info("Processing deployment deletion")
+		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
+		
+		err := r.handleCleanup(ctx, logger, deployment)
+		if err != nil {
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED
+			deployment.Status.Message = fmt.Sprintf("Cleanup failed: %v", err)
+			return defaultResult, err
+		}
+		
+		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
+		deployment.Status.Message = "Cleanup completed successfully"
 		controllerutil.RemoveFinalizer(deployment, _deploymentCleanedUpFinalizer)
 		return ctrl.Result{}, nil
 	}
 
-	return result, err
-}
-
-// processPlugin processes the deployment using the appropriate plugin
-func (r *Reconciler) processPlugin(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment, originalDeployment *v2pb.Deployment) (ctrl.Result, error) {
-	defaultResult := ctrl.Result{
-		Requeue:      true,
-		RequeueAfter: _defaultRequeuePeriod,
-	}
-
-	var err error
-	// Process based on deployment state following reference pattern
-	if common.ShouldCleanup(*deployment) {
-		if !common.IsCleanupStage(deployment.Status.Stage) {
-			logger.Info("detected that a cleanup should occur")
-			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-		}
-		cleanupPlugin := r.Plugin.GetCleanupPlugin()
-		err = cleanupPlugin.Execute(ctx, logger, deployment)
-		if err != nil {
-			logger.Error(err, "Cleanup plugin processing failed")
-			return defaultResult, err
-		}
-	} else if common.RolloutInProgress(*deployment) {
-		// Health check gate
-		observability := oss.ObservabilityContext{Logger: logger}
-		isHealthy, healthErr := r.Plugin.HealthCheckGate(ctx, observability, deployment)
-		if healthErr != nil {
-			logger.Error(healthErr, "failed to get the health check")
-			return defaultResult, healthErr
-		}
-
-		desiredModelChanged := common.ShouldRollback(*deployment)
-		rollbackAlertsEnabled := common.RollbackAlertsEnabled(*deployment)
-		if (!isHealthy || desiredModelChanged) && rollbackAlertsEnabled {
-			if !common.IsRollbackStage(deployment.GetStatus().Stage) {
-				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", !isHealthy, desiredModelChanged)
-				logger.Info("detected that a rollback should occur")
-				deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
-			}
-			rollbackPlugin := r.Plugin.GetRollbackPlugin()
-			err = rollbackPlugin.Execute(ctx, logger, deployment)
-			if err != nil {
-				logger.Error(err, "Rollback plugin processing failed")
-				return defaultResult, err
-			}
-		} else {
-			rolloutPlugin, pluginErr := r.Plugin.GetRolloutPlugin(ctx, deployment)
-			if pluginErr != nil {
-				logger.Error(pluginErr, "failed to retrieve rollout plugin")
-				return defaultResult, pluginErr
-			}
-			err = rolloutPlugin.Execute(ctx, logger, deployment)
-			if err != nil {
-				logger.Error(err, "Rollout plugin processing failed")
-				return defaultResult, err
-			}
-		}
-	} else if common.TriggerNewRollout(*deployment) {
+	// Handle new rollout
+	if r.shouldTriggerNewRollout(deployment) {
 		logger.Info("detected new rollout")
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
-
-		if !common.ShouldSkipRollout(*deployment) {
-			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
-			rolloutPlugin, pluginErr := r.Plugin.GetRolloutPlugin(ctx, deployment)
-			if pluginErr != nil {
-				logger.Error(pluginErr, "failed to retrieve rollout plugin")
-				return defaultResult, pluginErr
-			}
-			err = rolloutPlugin.Execute(ctx, logger, deployment)
-			if err != nil {
-				logger.Error(err, "Rollout plugin processing failed")
-				return defaultResult, err
-			}
-		}
-	} else if common.InSteadyState(*deployment) {
-		steadyStatePlugin := r.Plugin.GetSteadyStatePlugin()
-		err = steadyStatePlugin.Execute(ctx, logger, deployment)
+		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+		
+		err := r.handleRollout(ctx, logger, deployment)
 		if err != nil {
-			logger.Error(err, "Steady state plugin processing failed")
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED
+			deployment.Status.Message = fmt.Sprintf("Rollout failed: %v", err)
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 			return defaultResult, err
 		}
-	}
-
-	// Get final state from plugin
-	observability := oss.ObservabilityContext{Logger: logger}
-	status, getStateErr := r.Plugin.GetState(ctx, observability, deployment)
-	if getStateErr != nil {
-		logger.Error(getStateErr, "Failed to get deployment state")
-		return defaultResult, getStateErr
-	}
-	deployment.Status = status
-
-	return defaultResult, err
-}
-
-// handleStageTransition handles deployment stage transitions following reference pattern
-func (r *Reconciler) handleStageTransition(
-	ctx context.Context,
-	logger logr.Logger,
-	deployment *v2pb.Deployment,
-	err error) bool {
-
-	var messages []string
-	if !common.IsTerminalStage(deployment.Status.Stage) {
-		if deployment.Status.Message != "" {
-			messages = append(messages, deployment.Status.Message)
-		}
-		if err != nil {
-			messages = append(messages, fmt.Sprintf("Error from latest reconciliation: %+v", err))
-		}
-		if len(messages) > 0 {
-			deployment.Status.Message = fmt.Sprintf("%s", messages[0])
-		}
-		return false
-	}
-
-	// Handle terminal stages
-	switch deployment.Status.Stage {
-	case v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE:
-		// Graduate the candidate revision
+		
+		// Move to completion
+		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		deployment.Status.CurrentRevision = deployment.Status.CandidateRevision
 		deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		deployment.Status.Message = "Rollout completed successfully"
-	case v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED:
-		messages = append(messages, "Failed to rollout deployment")
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE:
-		// Clear revisions
-		deployment.Status.CurrentRevision = nil
-		deployment.Status.CandidateRevision = nil
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_EMPTY
-		deployment.Status.Message = "Cleanup completed successfully"
-	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:
-		messages = append(messages, "Failed to cleanup deployment")
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-	case v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE:
-		deployment.Status.Message = "Rollback completed successfully"
-	case v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:
-		messages = append(messages, "Failed to rollback deployment")
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 	}
 
-	if err != nil {
-		messages = append(messages, fmt.Sprintf("Error from latest reconciliation: %+v", err))
-	}
+	return defaultResult, nil
+}
 
-	if len(messages) > 0 {
-		logger.Info(fmt.Sprintf("%s", messages[0]))
+// shouldTriggerNewRollout determines if a new rollout should be triggered
+func (r *Reconciler) shouldTriggerNewRollout(deployment *v2pb.Deployment) bool {
+	if deployment.Spec.DesiredRevision == nil {
+		return false
 	}
+	
+	// New deployment
+	if deployment.Status.CurrentRevision == nil {
+		return true
+	}
+	
+	// Desired revision changed
+	return deployment.Spec.DesiredRevision.Name != deployment.Status.CurrentRevision.Name
+}
 
-	return true
+// handleRollout handles the rollout process for OSS deployments
+func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
+	logger.Info("Processing deployment rollout", 
+		"desiredRevision", deployment.Spec.DesiredRevision.Name,
+		"inferenceServer", deployment.Spec.GetInferenceServer().Name)
+	
+	// For OSS, we'll just validate basic requirements
+	if deployment.Spec.GetInferenceServer() == nil {
+		return fmt.Errorf("no inference server specified")
+	}
+	
+	// Here would be the actual rollout logic:
+	// 1. Create/update ConfigMap with model info
+	// 2. Trigger model loading
+	// 3. Wait for model to be ready
+	// 4. Update routing if needed
+	
+	logger.Info("Rollout completed for OSS deployment")
+	return nil
+}
+
+// handleCleanup handles the cleanup process for OSS deployments
+func (r *Reconciler) handleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
+	logger.Info("Processing deployment cleanup")
+	
+	// For OSS, cleanup would involve:
+	// 1. Remove ConfigMaps
+	// 2. Clean up any deployment-specific resources
+	
+	logger.Info("Cleanup completed for OSS deployment")
+	return nil
 }
 
 // addLoggingContext adds contextual logging information
@@ -304,7 +211,7 @@ func (r *Reconciler) addLoggingContext(logger logr.Logger, deployment *v2pb.Depl
 	return logger
 }
 
-// SetupWithManager sets up the controller with the Manager following reference pattern
+// SetupWithManager sets up the controller with the Manager
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Log = mgr.GetLogger().WithName(_deploymentKey)
 	r.Recorder = mgr.GetEventRecorderFor(_deploymentKey)

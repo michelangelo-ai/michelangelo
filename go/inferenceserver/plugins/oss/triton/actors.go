@@ -124,7 +124,7 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 		Replicas: 1, // Default to 1 replica
 		ImageTag: "", // Use default
 		ModelConfig: map[string]string{
-			"model": "s3://deployed-model/bert-cola-23", // Use the model path from user requirement
+			"model": "s3://deploy-models/bert-cola-23", // Use the model path from user requirement
 		},
 	}
 	
