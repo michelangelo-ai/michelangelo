@@ -168,7 +168,7 @@ class TaskTest(unittest.TestCase):
         exp = generate_random_text._transpile(deps)
 
         # Ensure that the @task "config" properties are included in the transpiled expression.
-        task_params = "cpu=2, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None, retry_attempts=1"
+        task_params = "cpu=2, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None, retry_attempts=0"
         expected_str = f"__task_a('test_decorator.generate_random_text', {task_params})"
         self.assertEqual(
             expected_str,
@@ -189,7 +189,7 @@ class TaskTest(unittest.TestCase):
         exp = gzip_compress._transpile(deps)
 
         # Ensure that the "alias" property is included in the transpiled expression.
-        task_params = "alias='gzip', cpu=4, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None, retry_attempts=1"
+        task_params = "alias='gzip', cpu=4, memory='1g', spot_instance=False, cache_enabled=False, cache_version=None, retry_attempts=0"
         expected_str = f"__task_a('test_decorator.gzip_compress', {task_params})"
         self.assertEqual(
             expected_str,
