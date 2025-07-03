@@ -15,6 +15,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -159,24 +160,92 @@ func (r *Reconciler) shouldTriggerNewRollout(deployment *v2pb.Deployment) bool {
 	return deployment.Spec.DesiredRevision.Name != deployment.Status.CurrentRevision.Name
 }
 
-// handleRollout handles the rollout process for OSS deployments
+// handleRollout handles the rollout process using enhanced plugin system
 func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
-	logger.Info("Processing deployment rollout", 
+	logger.Info("Processing deployment rollout with enhanced plugin system", 
 		"desiredRevision", deployment.Spec.DesiredRevision.Name,
 		"inferenceServer", deployment.Spec.GetInferenceServer().Name)
 	
-	// For OSS, we'll just validate basic requirements
-	if deployment.Spec.GetInferenceServer() == nil {
-		return fmt.Errorf("no inference server specified")
+	// Use enhanced plugin system for rollout
+	if r.Plugin == nil {
+		return fmt.Errorf("plugin not initialized")
 	}
 	
-	// Here would be the actual rollout logic:
-	// 1. Create/update ConfigMap with model info
-	// 2. Trigger model loading
-	// 3. Wait for model to be ready
-	// 4. Update routing if needed
+	// Get rollout plugin from the main plugin
+	rolloutPlugin, err := r.Plugin.GetRolloutPlugin(ctx, deployment)
+	if err != nil {
+		return fmt.Errorf("failed to get rollout plugin: %w", err)
+	}
 	
-	logger.Info("Rollout completed for OSS deployment")
+	// Get actors from rollout plugin
+	actors := rolloutPlugin.GetActors()
+	logger.Info("Running enhanced rollout with actors", "actorCount", len(actors))
+	
+	// Execute all actors in sequence following Uber pattern
+	runtimeCtx := plugins.RequestContext{Logger: logger}
+	for _, actor := range actors {
+		actorType := actor.GetType()
+		logger.Info("Executing actor", "actorType", actorType)
+		
+		// Retrieve condition  
+		var existingCondition *apipb.Condition
+		for _, condition := range deployment.Status.Conditions {
+			if condition.Type == actorType {
+				existingCondition = condition
+				break
+			}
+		}
+		
+		if existingCondition == nil {
+			existingCondition = &apipb.Condition{
+				Type:   actorType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			}
+		}
+		
+		// Retrieve current state
+		updatedCondition, err := actor.Retrieve(ctx, runtimeCtx, deployment, existingCondition)
+		if err != nil {
+			logger.Error(err, "Actor retrieve failed", "actorType", actorType)
+			return fmt.Errorf("actor %s retrieve failed: %w", actorType, err)
+		}
+		
+		// If condition is not TRUE, run the actor
+		if updatedCondition.Status != apipb.CONDITION_STATUS_TRUE {
+			logger.Info("Running actor", "actorType", actorType, "reason", updatedCondition.Reason)
+			
+			err = actor.Run(ctx, runtimeCtx, deployment, updatedCondition)
+			if err != nil {
+				logger.Error(err, "Actor run failed", "actorType", actorType)
+				return fmt.Errorf("actor %s run failed: %w", actorType, err)
+			}
+			
+			// Re-retrieve after running
+			updatedCondition, err = actor.Retrieve(ctx, runtimeCtx, deployment, updatedCondition)
+			if err != nil {
+				logger.Error(err, "Actor re-retrieve failed", "actorType", actorType)
+				return fmt.Errorf("actor %s re-retrieve failed: %w", actorType, err)
+			}
+		}
+		
+		// Update condition in deployment status
+		found := false
+		for i, condition := range deployment.Status.Conditions {
+			if condition.Type == actorType {
+				deployment.Status.Conditions[i] = updatedCondition
+				found = true
+				break
+			}
+		}
+		
+		if !found {
+			deployment.Status.Conditions = append(deployment.Status.Conditions, updatedCondition)
+		}
+		
+		logger.Info("Actor completed", "actorType", actorType, "status", updatedCondition.Status, "message", updatedCondition.Message)
+	}
+	
+	logger.Info("Enhanced rollout plugin execution completed")
 	return nil
 }
 
