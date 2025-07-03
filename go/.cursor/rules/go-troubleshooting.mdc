@@ -1,7 +1,7 @@
 ---
-description: 
+description: API Code troubleshooting
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 # Go Troubleshooting Guide for Michelangelo
 

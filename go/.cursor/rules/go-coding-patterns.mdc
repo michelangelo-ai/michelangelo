@@ -1,7 +1,7 @@
 ---
-description: 
+description: API Code development
 globs: 
-alwaysApply: true
+alwaysApply: false
 ---
 # Go Coding Patterns for Michelangelo
 
