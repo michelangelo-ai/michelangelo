@@ -1,0 +1,336 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# JavaScript Development Guide
+
+This guide provides comprehensive guidelines for JavaScript/TypeScript development in the Michelangelo project. It covers project structure, TypeScript configuration, React patterns, testing, build tools, and development workflow.
+
+## Project Structure and Organization
+
+### Workspace Architecture
+The JavaScript codebase follows a monorepo structure using Yarn workspaces:
+
+```
+javascript/
+├── app/                    # Main React application
+├── packages/               # Shared packages
+│   ├── core/              # Core UI components and utilities
+│   └── rpc/               # Generated gRPC clients
+├── package.json           # Root workspace configuration
+├── tsconfig.base.json     # Base TypeScript configuration
+├── tsconfig.json          # Project references configuration
+├── eslint.config.js       # ESLint configuration
+├── .prettierrc.json       # Prettier configuration
+├── .nvmrc                 # Node version specification
+└── yarn.lock              # Dependency lock file
+```
+
+### Package Structure
+- **`app/`**: Main React application using Vite
+- **`packages/core/`**: Reusable UI components, hooks, and utilities
+- **`packages/rpc/`**: Generated gRPC clients and type definitions
+
+### File Organization Patterns
+- Components in `components/` directories with co-located tests
+- Hooks in `hooks/` directories with descriptive names
+- Utilities in `utils/` directories with focused responsibilities
+- Types in `types/` directories organized by domain
+- Tests in `__tests__/` directories following the same structure
+
+## TypeScript Configuration
+
+### Base Configuration
+Use the shared base configuration from [tsconfig.base.json](mdc:javascript/tsconfig.base.json):
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "lib": ["DOM", "DOM.Iterable", "ES2020"],
+    "module": "ESNext",
+    "strict": false,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "paths": {
+      "#core/*": ["packages/core/*"],
+      "#rpc/*": ["packages/rpc/*"]
+    }
+  }
+}
+```
+
+### Project References
+Use TypeScript project references for better build performance:
+- Root [tsconfig.json](mdc:javascript/tsconfig.json) defines project references
+- Each package has its own TypeScript configuration
+- Use `tsc -b` for building with project references
+
+### Path Mapping
+Use path aliases for clean imports:
+- `#core/*` for core package imports
+- `#rpc/*` for RPC package imports
+- Relative paths for local imports within the same package
+
+## React Development Patterns
+
+### Component Architecture
+Follow the established patterns from [packages/core/](mdc:javascript/packages/core):
+
+```tsx
+// Component with proper TypeScript types
+export function MyComponent({ children, title }: Props) {
+  const [css, theme] = useStyletron();
+  
+  return (
+    <div className={css({ padding: theme.sizing.scale400 })}>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  );
+}
+```
+
+### Hook Patterns
+Create custom hooks following established patterns:
+- Use descriptive names (e.g., `useStudioQuery`, `useStudioParams`)
+- Co-locate with related components
+- Include proper TypeScript generics for type safety
+
+### Provider Pattern
+Use React Context for dependency injection:
+```tsx
+// Provider pattern from core package
+export function ServiceProvider({ children, ...serviceContext }: Props) {
+  return (
+    <ServiceContext.Provider value={serviceContext}>
+      {children}
+    </ServiceContext.Provider>
+  );
+}
+```
+
+### Component Composition
+Use BaseUI's override pattern for customization:
+```tsx
+const [Component, componentProps] = getOverrides(
+  overrides.Component,
+  DefaultComponent
+);
+```
+
+## UI Library Integration
+
+### BaseUI Integration
+The project uses BaseUI v15 as the primary UI library:
+- Import components from `baseui/*` packages
+- Use BaseUI's styling system with Styletron
+- Follow BaseUI's override patterns for customization
+- Use BaseUI's theming system for consistent styling
+
+### Styling Approach
+- Use Styletron for CSS-in-JS styling
+- Leverage BaseUI's theme system
+- Global styles in [packages/core/styles/main.css](mdc:javascript/packages/core/styles/main.css)
+- Theme customization in [packages/core/themes/](mdc:javascript/packages/core/themes)
+
+### Icon Management
+Use the centralized icon system:
+- Register icons in the IconProvider
+- Use the `Icon` component for consistent icon rendering
+- Support for custom icons and BaseUI icons
+
+## Testing Patterns
+
+### Testing Framework
+Use Vitest for unit testing with the following setup:
+- **Framework**: Vitest with jsdom environment
+- **Testing Library**: React Testing Library
+- **Assertions**: Jest-compatible assertions
+- **Setup**: [packages/core/test-setup.ts](mdc:javascript/packages/core/test-setup.ts)
+
+### Test Organization
+```
+__tests__/
+├── component.test.tsx     # Component tests
+├── hook.test.ts          # Hook tests
+└── utils.test.ts         # Utility tests
+```
+
+### Testing Utilities
+Use the provided test wrappers from [packages/core/test/wrappers/](mdc:javascript/packages/core/test/wrappers):
+- `getBaseProviderWrapper()` for BaseUI components
+- `getRouterWrapper()` for routing-dependent components
+- `getIconProviderWrapper()` for icon-dependent components
+- `buildWrapper()` for composing multiple wrappers
+
+### Test Patterns
+```tsx
+describe('MyComponent', () => {
+  it('should render correctly', () => {
+    render(
+      <MyComponent title="Test" />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getRouterWrapper({ location: '/test' })
+      ])
+    );
+    
+    expect(screen.getByText('Test')).toBeInTheDocument();
+  });
+});
+```
+
+## Build Tools and Development Workflow
+
+### Package Management
+- **Package Manager**: Yarn v1.22.22
+- **Node Version**: 22.11.0 (specified in [.nvmrc](mdc:javascript/.nvmrc))
+- **Workspace Configuration**: Yarn workspaces for monorepo management
+
+### Build System
+- **Bundler**: Vite for both development and production builds
+- **Library Build**: Vite library mode for packages
+- **Development Server**: Vite dev server with HMR
+
+### Development Scripts
+From [package.json](mdc:javascript/package.json):
+```json
+{
+  "scripts": {
+    "dev": "yarn workspace @michelangelo/app dev",
+    "build": "yarn workspaces run build",
+    "test": "yarn workspace @uber/michelangelo-core test",
+    "lint": "eslint .",
+    "format": "prettier --check .",
+    "typecheck": "tsc -b",
+    "setup": "yarn install && yarn generate",
+    "generate": "../tools/gen-grpc-client.sh --clients javascript"
+  }
+}
+```
+
+### Code Generation
+- **gRPC Clients**: Generated using `../tools/gen-grpc-client.sh`
+- **Generated Files**: Located in `gen/` directories
+- **Build Process**: Generation happens during `prebuild` phase
+
+## Code Quality and Linting
+
+### ESLint Configuration
+Use the comprehensive ESLint setup from [eslint.config.js](mdc:javascript/eslint.config.js):
+- TypeScript ESLint with type-aware rules
+- React Hooks plugin for React-specific rules
+- Prettier integration for formatting
+- BaseUI plugin for component-specific rules
+- Simple import sort for consistent import ordering
+
+### Import Sorting
+Follow the established import order:
+1. React imports (React first)
+2. Third-party imports
+3. Internal imports using path aliases (`#core/*`, `#rpc/*`)
+4. Relative imports
+5. Type imports
+6. Style imports
+
+### Prettier Configuration
+Use the shared Prettier configuration from [.prettierrc.json](mdc:javascript/.prettierrc.json):
+- Consistent formatting across the codebase
+- Integration with ESLint for seamless development
+
+## gRPC Integration
+
+### Client Generation
+- Generated clients in [packages/rpc/](mdc:javascript/packages/rpc)
+- Use Connect-Web for gRPC-Web communication
+- Transport configuration for Envoy proxy
+
+### Service Usage
+```tsx
+import { SERVICES } from '#rpc/services';
+
+// Use generated services
+const response = await SERVICES.ProjectService.getProject(request);
+```
+
+### Type Safety
+- Generated TypeScript definitions from protobuf
+- Type-safe request/response handling
+- Integration with React Query for data fetching
+
+## Performance and Optimization
+
+### Bundle Optimization
+- External dependencies in Vite configuration
+- Tree-shaking for unused code elimination
+- Code splitting for better loading performance
+
+### Development Performance
+- Vite's fast HMR for quick development cycles
+- TypeScript project references for incremental builds
+- Efficient dependency management with Yarn workspaces
+
+## Environment and Configuration
+
+### Environment Setup
+- Node.js version specified in [.nvmrc](mdc:javascript/.nvmrc)
+- Yarn version requirements in [package.json](mdc:javascript/package.json)
+- NPM registry configuration in [.npmrc](mdc:javascript/.npmrc)
+
+### Development vs Production
+- Separate Vite configurations for development and production
+- Environment-specific build optimizations
+- Conditional resolution for workspace vs published packages
+
+## Common Patterns and Best Practices
+
+### Component Development
+1. Use TypeScript for all components
+2. Follow BaseUI override patterns
+3. Implement proper error boundaries
+4. Use React.memo for performance optimization
+5. Co-locate tests with components
+
+### Hook Development
+1. Use descriptive hook names with `use` prefix
+2. Return objects for multiple values
+3. Include proper TypeScript generics
+4. Handle loading and error states
+5. Implement proper cleanup
+
+### State Management
+1. Use React Query for server state
+2. Use React Context for global client state
+3. Keep component state local when possible
+4. Use proper TypeScript types for state
+
+### Error Handling
+1. Implement proper error boundaries
+2. Use React Query's error handling
+3. Provide user-friendly error messages
+4. Log errors for debugging
+
+### Accessibility
+1. Use semantic HTML elements
+2. Implement proper ARIA attributes
+3. Ensure keyboard navigation
+4. Test with screen readers
+5. Follow WCAG guidelines
+
+## Migration and Compatibility
+
+### BaseUI v15 Migration
+- Handle compatibility issues with tslib
+- Use yarn resolutions for dependency management
+- Test components after BaseUI updates
+
+### React Router Migration
+- Use react-router-dom v5 with v6 compatibility layer
+- Gradual migration to newer routing patterns
+- Maintain backward compatibility
+
+This guide ensures consistent development practices across the JavaScript codebase while leveraging modern tools and frameworks for optimal developer experience and application performance.
