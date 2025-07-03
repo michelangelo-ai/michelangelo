@@ -1,7 +1,12 @@
-import { cellToString } from '../cell-to-string';
+import { renderHook } from '@testing-library/react';
 
-describe('cellToString', () => {
+import { useCellToString } from '../use-cell-to-string';
+
+describe('useCellToString', () => {
   it('should return undefined for null value', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: null,
       column: { type: 'text', id: 'test' },
@@ -11,6 +16,9 @@ describe('cellToString', () => {
   });
 
   it('should return undefined for undefined value', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: undefined,
       column: { type: 'text', id: 'test' },
@@ -20,6 +28,9 @@ describe('cellToString', () => {
   });
 
   it('should return undefined for empty string value', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: '',
       column: { type: 'text', id: 'test' },
@@ -29,6 +40,9 @@ describe('cellToString', () => {
   });
 
   it('should return string for string value', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: 'test',
       column: { type: 'unknown', id: 'test' },
@@ -38,6 +52,9 @@ describe('cellToString', () => {
   });
 
   it('should convert number to string when no renderer is available', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: 123,
       column: { type: 'unknown', id: 'test' },
@@ -47,6 +64,9 @@ describe('cellToString', () => {
   });
 
   it('should convert boolean to string when no renderer is available', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: true,
       column: { type: 'unknown', id: 'test' },
@@ -56,6 +76,9 @@ describe('cellToString', () => {
   });
 
   it('should handle complex objects', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: { foo: 'bar' },
       column: { type: 'text', id: 'test' },
@@ -65,6 +88,9 @@ describe('cellToString', () => {
   });
 
   it('should handle custom renderer', () => {
+    const { result } = renderHook(() => useCellToString());
+    const cellToString = result.current;
+
     const props = {
       value: true,
       column: { type: 'boolean', id: 'test' },

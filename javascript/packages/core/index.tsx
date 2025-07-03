@@ -44,10 +44,10 @@ export function CoreApp({ dependencies }: Props) {
 export { useStudioQuery } from '#core/hooks/use-studio-query';
 export { ServiceProvider } from '#core/providers/service-provider/service-provider';
 
-export { cellToString } from '#core/components/cell/cell-to-string';
+export { useCellToString } from '#core/components/cell/use-cell-to-string';
 export { cellTooltipHOC } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
 export { DefaultCellRenderer } from '#core/components/cell/renderers/default-cell-renderer';
-export { getCellRenderer } from '#core/components/cell/get-cell-renderer';
+export { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 export * from '#core/components/cell/types';
 export { CellType } from '#core/components/cell/constants';
 export { useCellStyles } from '#core/components/cell/hooks';
