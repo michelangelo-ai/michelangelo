@@ -1,0 +1,523 @@
+---
+description: Frontend code development & debugging
+globs: 
+alwaysApply: false
+---
+# JavaScript Troubleshooting Guide
+
+This guide provides solutions to common issues encountered during JavaScript/TypeScript development in the Michelangelo project. It covers build problems, runtime errors, testing issues, and development workflow problems.
+
+## Build and Compilation Issues
+
+### TypeScript Compilation Errors
+
+#### Issue: Path mapping not working
+```
+Error: Cannot find module '#core/components/...'
+```
+
+**Solution:**
+1. Check [tsconfig.base.json](mdc:javascript/tsconfig.base.json) path mappings
+2. Ensure project references are correct in [tsconfig.json](mdc:javascript/tsconfig.json)
+3. Verify the file exists at the mapped path
+4. Restart TypeScript server in your IDE
+
+```json
+// tsconfig.base.json
+{
+  "compilerOptions": {
+    "paths": {
+      "#core/*": ["packages/core/*"],
+      "#rpc/*": ["packages/rpc/*"]
+    }
+  }
+}
+```
+
+#### Issue: TypeScript project reference errors
+```
+Error: Project 'packages/core' is out of date
+```
+
+**Solution:**
+1. Run `tsc -b` to build all project references
+2. Clean build artifacts: `rm -rf packages/*/dist`
+3. Rebuild: `yarn build`
+4. Check for circular dependencies between packages
+
+### Vite Build Issues
+
+#### Issue: Vite dev server not starting
+```
+Error: Failed to resolve import
+```
+
+**Solution:**
+1. Check [vite.config.ts](mdc:javascript/app/vite.config.ts) configuration
+2. Verify dependencies are installed: `yarn install`
+3. Clear Vite cache: `rm -rf node_modules/.vite`
+4. Restart dev server: `yarn dev`
+
+#### Issue: External dependencies not working
+```
+Error: 'react' is not defined
+```
+
+**Solution:**
+1. Check [vite.config.ts](mdc:javascript/packages/core/vite.config.ts) external configuration
+2. Ensure peer dependencies are installed in consuming packages
+3. Verify rollup options for library builds
+
+```typescript
+// vite.config.ts
+export default defineConfig({
+  build: {
+    rollupOptions: {
+      external: ['react', 'react-dom', '@tanstack/react-query'],
+    },
+  },
+});
+```
+
+### Yarn Workspace Issues
+
+#### Issue: Dependency resolution conflicts
+```
+Error: Package not found in workspace
+```
+
+**Solution:**
+1. Check [package.json](mdc:javascript/package.json) workspace configuration
+2. Run `yarn install` from root directory
+3. Use `yarn workspace <package-name> add <dependency>` for package-specific deps
+4. Check yarn resolutions for version conflicts
+
+#### Issue: Symlink issues with workspaces
+```
+Error: Module not found or cannot resolve
+```
+
+**Solution:**
+1. Use `preserveSymlinks: true` in TypeScript config
+2. Check Node.js version compatibility with [.nvmrc](mdc:javascript/.nvmrc)
+3. Clear node_modules and reinstall: `rm -rf node_modules && yarn install`
+
+## Runtime Errors
+
+### React Component Errors
+
+#### Issue: BaseUI components not rendering
+```
+Error: LayersManager was not found
+```
+
+**Solution:**
+1. Ensure BaseProvider is wrapping your app
+2. Check [packages/core/themes/provider.tsx](mdc:javascript/packages/core/themes/provider.tsx) setup
+3. Verify Styletron provider is configured
+
+```tsx
+// Correct setup
+<StyletronProvider value={new Styletron()}>
+  <BaseProvider theme={theme}>
+    <App />
+  </BaseProvider>
+</StyletronProvider>
+```
+
+#### Issue: React Router hooks not working
+```
+Error: useParams() may be used only in the context of a <Router> component
+```
+
+**Solution:**
+1. Ensure BrowserRouter wraps your app
+2. Check [app/App.tsx](mdc:javascript/app/App.tsx) router setup
+3. For tests, use router wrappers from [packages/core/test/wrappers/](mdc:javascript/packages/core/test/wrappers)
+
+#### Issue: React Query hooks failing
+```
+Error: No QueryClient set, use QueryClientProvider
+```
+
+**Solution:**
+1. Wrap app with QueryClientProvider
+2. Create QueryClient instance
+3. For tests, include QueryClient in test wrappers
+
+```tsx
+const queryClient = new QueryClient();
+
+<QueryClientProvider client={queryClient}>
+  <App />
+</QueryClientProvider>
+```
+
+### Context Provider Errors
+
+#### Issue: Context provider not found
+```
+Error: useServiceProvider must be used within ServiceProvider
+```
+
+**Solution:**
+1. Check provider hierarchy in [packages/core/index.tsx](mdc:javascript/packages/core/index.tsx)
+2. Ensure context is provided at the correct level
+3. Verify provider props are passed correctly
+
+#### Issue: Icon provider missing icons
+```
+Error: Icon component returns null
+```
+
+**Solution:**
+1. Check icon registration in IconProvider
+2. Verify icon name matches registered icons
+3. Ensure icons are imported correctly
+
+```tsx
+// app/icons.ts
+import { Check, Alert } from 'baseui/icon';
+
+export const ICONS = {
+  check: Check,
+  alert: Alert,
+};
+```
+
+## Testing Issues
+
+### Test Environment Setup
+
+#### Issue: Tests failing with DOM errors
+```
+Error: document is not defined
+```
+
+**Solution:**
+1. Check [packages/core/vitest.config.ts](mdc:javascript/packages/core/vitest.config.ts) environment
+2. Ensure jsdom is configured
+3. Verify test setup file is loaded
+
+```typescript
+// vitest.config.ts
+export default defineConfig({
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./test-setup.ts'],
+  },
+});
+```
+
+#### Issue: Test wrappers not working
+```
+Error: Cannot read properties of undefined (reading 'match')
+```
+
+**Solution:**
+1. Use proper test wrappers from [packages/core/test/wrappers/](mdc:javascript/packages/core/test/wrappers)
+2. Combine multiple wrappers with `buildWrapper()`
+3. Provide necessary props to wrappers
+
+```tsx
+// Correct test wrapper usage
+const wrapper = buildWrapper([
+  getBaseProviderWrapper(),
+  getRouterWrapper({ location: '/test' }),
+  getIconProviderWrapper(),
+]);
+
+render(<Component />, wrapper);
+```
+
+### Mock Issues
+
+#### Issue: Vitest mocks not working
+```
+Error: vi.fn() is not a function
+```
+
+**Solution:**
+1. Import `vi` from vitest
+2. Clear mocks in beforeEach
+3. Use proper mock syntax
+
+```typescript
+import { vi } from 'vitest';
+
+const mockFn = vi.fn();
+
+beforeEach(() => {
+  mockFn.mockClear();
+});
+```
+
+#### Issue: Module mocks not applied
+```
+Error: Cannot spy on a property that is not defined
+```
+
+**Solution:**
+1. Use `vi.mock()` at the top level
+2. Provide mock implementation
+3. Use `vi.mocked()` for TypeScript support
+
+```typescript
+vi.mock('#core/hooks/use-studio-query', () => ({
+  useStudioQuery: vi.fn(),
+}));
+```
+
+## Development Workflow Issues
+
+### Code Generation Problems
+
+#### Issue: gRPC client generation failing
+```
+Error: protoc command not found
+```
+
+**Solution:**
+1. Install protoc and required plugins
+2. Check [package.json](mdc:javascript/package.json) generate script
+3. Verify `../tools/gen-grpc-client.sh` exists and is executable
+4. Run `yarn generate` to regenerate clients
+
+#### Issue: Generated files not found
+```
+Error: Cannot find module './gen/...'
+```
+
+**Solution:**
+1. Run `yarn generate` or `yarn setup`
+2. Check [.gitignore](mdc:javascript/.gitignore) doesn't exclude gen/ files
+3. Verify generation script completed successfully
+
+### ESLint and Prettier Issues
+
+#### Issue: ESLint configuration errors
+```
+Error: Configuration for rule "import/order" is invalid
+```
+
+**Solution:**
+1. Check [eslint.config.js](mdc:javascript/eslint.config.js) configuration
+2. Verify all plugins are installed
+3. Update ESLint and plugins to compatible versions
+
+#### Issue: Import sorting conflicts
+```
+Error: Import order is incorrect
+```
+
+**Solution:**
+1. Check simple-import-sort configuration in [eslint.config.js](mdc:javascript/eslint.config.js)
+2. Use correct import order:
+   - React imports first
+   - Third-party imports
+   - Internal imports (#core/*, #rpc/*)
+   - Relative imports
+   - Type imports
+
+```typescript
+// Correct import order
+import React from 'react';
+import { Button } from 'baseui/button';
+
+import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { SERVICES } from '#rpc/services';
+
+import { LocalComponent } from './local-component';
+
+import type { Props } from './types';
+```
+
+### Performance Issues
+
+#### Issue: Slow development server
+```
+Warning: Slow dependency pre-bundling
+```
+
+**Solution:**
+1. Check Vite configuration optimizeDeps
+2. Add slow dependencies to include list
+3. Clear Vite cache: `rm -rf node_modules/.vite`
+
+#### Issue: Large bundle sizes
+```
+Warning: Bundle size exceeds recommended limit
+```
+
+**Solution:**
+1. Use code splitting with React.lazy
+2. Check external dependencies in Vite config
+3. Analyze bundle with `yarn build --analyze`
+
+#### Issue: Memory leaks in tests
+```
+Error: JavaScript heap out of memory
+```
+
+**Solution:**
+1. Clear mocks and timers in test cleanup
+2. Use `vi.clearAllMocks()` in afterEach
+3. Avoid creating large objects in test loops
+
+## Dependency Issues
+
+### BaseUI v15 Compatibility
+
+#### Issue: BaseUI component errors
+```
+Error: Cannot destructure property '__extends' of 'import_tslib.default'
+```
+
+**Solution:**
+1. Check yarn resolutions in [package.json](mdc:javascript/package.json)
+2. Ensure tslib version is pinned
+3. Clear node_modules and reinstall
+
+```json
+// package.json
+{
+  "resolutions": {
+    "tslib": "^2.6.2"
+  }
+}
+```
+
+#### Issue: Styletron compatibility
+```
+Error: Cannot read properties of undefined (reading 'getStylesheet')
+```
+
+**Solution:**
+1. Verify Styletron provider setup
+2. Check BaseUI and Styletron version compatibility
+3. Ensure proper provider order
+
+### React Router v5/v6 Migration
+
+#### Issue: Router compatibility errors
+```
+Error: useNavigate is not a function
+```
+
+**Solution:**
+1. Use react-router-dom-v5-compat for gradual migration
+2. Check imports use compatibility layer
+3. Update router patterns gradually
+
+```typescript
+// Use compatibility layer
+import { useNavigate } from 'react-router-dom-v5-compat';
+```
+
+## Environment Issues
+
+### Node.js Version Problems
+
+#### Issue: Node.js version mismatch
+```
+Error: The engine "node" is incompatible with this module
+```
+
+**Solution:**
+1. Check [.nvmrc](mdc:javascript/.nvmrc) for required Node.js version
+2. Use nvm to switch versions: `nvm use`
+3. Update package.json engines if needed
+
+### Package Manager Issues
+
+#### Issue: Yarn version conflicts
+```
+Error: This project requires Yarn 1.x
+```
+
+**Solution:**
+1. Check [package.json](mdc:javascript/package.json) engines field
+2. Install correct Yarn version
+3. Use `yarn --version` to verify
+
+#### Issue: NPM registry issues
+```
+Error: 404 Not Found - Package not found
+```
+
+**Solution:**
+1. Check [.npmrc](mdc:javascript/.npmrc) registry configuration
+2. Verify package names and versions
+3. Clear npm/yarn cache
+
+## Debugging Techniques
+
+### React Developer Tools
+
+1. Install React DevTools browser extension
+2. Use Profiler to identify performance issues
+3. Inspect component props and state
+4. Check context provider values
+
+### Browser DevTools
+
+1. Use Network tab to debug API calls
+2. Check Console for runtime errors
+3. Use Sources tab for debugging with breakpoints
+4. Monitor Performance tab for rendering issues
+
+### VS Code Debugging
+
+1. Set breakpoints in TypeScript files
+2. Use debugger configuration for Node.js
+3. Debug tests with Vitest extension
+4. Use TypeScript error reporting
+
+### Logging and Monitoring
+
+```typescript
+// Debug logging pattern
+const DEBUG = process.env.NODE_ENV === 'development';
+
+function debugLog(message: string, data?: any) {
+  if (DEBUG) {
+    console.log(`[DEBUG] ${message}`, data);
+  }
+}
+```
+
+## Prevention Strategies
+
+### Code Quality
+
+1. Use TypeScript strict mode where possible
+2. Enable all relevant ESLint rules
+3. Write comprehensive tests
+4. Use proper error boundaries
+5. Implement proper loading states
+
+### Development Practices
+
+1. Use consistent naming conventions
+2. Follow established patterns from the codebase
+3. Keep components small and focused
+4. Use proper TypeScript types
+5. Document complex logic
+
+### Testing Strategy
+
+1. Test components in isolation
+2. Use proper test wrappers
+3. Mock external dependencies
+4. Test error scenarios
+5. Use snapshot testing judiciously
+
+### Performance Monitoring
+
+1. Use React DevTools Profiler
+2. Monitor bundle sizes
+3. Check for memory leaks
+4. Optimize re-renders
+5. Use proper memoization
+
+This troubleshooting guide helps developers quickly identify and resolve common issues in the JavaScript/TypeScript development workflow, ensuring smooth development experience and high-quality code delivery.

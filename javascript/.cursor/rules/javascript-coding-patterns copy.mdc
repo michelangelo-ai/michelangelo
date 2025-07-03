@@ -1,0 +1,698 @@
+---
+description: Frontend code development
+globs: 
+alwaysApply: false
+---
+# JavaScript Coding Patterns
+
+This guide provides practical coding patterns and examples for JavaScript/TypeScript development in the Michelangelo project. It includes real-world examples from the codebase and best practices for common development scenarios.
+
+## React Component Patterns
+
+### Basic Component Structure
+Follow the established pattern from [packages/core/components/](mdc:javascript/packages/core/components):
+
+```tsx
+import { memo } from 'react';
+import { useStyletron } from 'baseui';
+
+import type { Props } from './types';
+
+export const MyComponent = memo<Props>(function MyComponent(props) {
+  const [css, theme] = useStyletron();
+  const { children, title, loading = false } = props;
+
+  if (loading) {
+    return <div>Loading...</div>;
+  }
+
+  return (
+    <div className={css({ padding: theme.sizing.scale400 })}>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  );
+});
+```
+
+### Override Pattern for Customization
+Use BaseUI's override pattern for component customization:
+
+```tsx
+import { getOverrides } from 'baseui';
+import { StyledContainer, StyledHeader } from './styled-components';
+
+export function CustomizableComponent(props: Props) {
+  const { overrides = {}, children, title } = props;
+
+  const [Container, containerProps] = getOverrides(
+    overrides.Container,
+    StyledContainer
+  );
+  
+  const [Header, headerProps] = getOverrides(
+    overrides.Header,
+    StyledHeader
+  );
+
+  return (
+    <Container {...containerProps}>
+      <Header {...headerProps}>{title}</Header>
+      {children}
+    </Container>
+  );
+}
+```
+
+### Layout Components
+Pattern from [packages/core/components/views/main-view-container.tsx](mdc:javascript/packages/core/components/views/main-view-container.tsx):
+
+```tsx
+import { Cell, Grid } from 'baseui/layout-grid';
+
+export const MainViewContainer = ({ hasBreadcrumb = true, children }: Props) => {
+  return (
+    <Grid
+      gridColumns={1}
+      gridGutters={0}
+      gridGaps={0}
+      overrides={{
+        Grid: {
+          style: {
+            marginTop: hasBreadcrumb ? BREADCRUMB_BAR_HEIGHT : 0,
+          },
+        },
+      }}
+    >
+      <Cell>{children}</Cell>
+    </Grid>
+  );
+};
+```
+
+### Icon Component Pattern
+Pattern from [packages/core/components/icon/icon.tsx](mdc:javascript/packages/core/components/icon/icon.tsx):
+
+```tsx
+import { memo } from 'react';
+import { useStyletron } from 'baseui';
+import { useIconProvider } from '#core/providers/icon-provider/use-icon-provider';
+
+export const Icon = memo<Props>(function Icon(props) {
+  const [, theme] = useStyletron();
+  const { color, name, icon, kind = IconKind.PRIMARY } = props;
+  const { icons } = useIconProvider();
+
+  const IconComponent = icon ?? (name ? icons[name] : null);
+
+  if (!IconComponent) return null;
+
+  return (
+    <IconComponent
+      {...props}
+      color={color ?? theme.colors[`content${capitalizeFirstLetter(kind)}`]}
+      style={{ minWidth: 'fit-content' }}
+    />
+  );
+});
+```
+
+## Custom Hook Patterns
+
+### Data Fetching Hook
+Pattern from [packages/core/hooks/use-studio-query.ts](mdc:javascript/packages/core/hooks/use-studio-query.ts):
+
+```tsx
+import { useQuery } from '@tanstack/react-query';
+import { useServiceProvider } from '#core/providers/service-provider/use-service-provider';
+
+export function useStudioQuery<TData = unknown>(
+  options: QueryOptions<TData>
+): UseQueryResult<TData> {
+  const { request } = useServiceProvider();
+  const { projectId } = useStudioParams('base');
+
+  return useQuery({
+    queryKey: [options.queryName, options.serviceOptions],
+    queryFn: async () => {
+      return await request(options.queryName, {
+        ...options.serviceOptions,
+        namespace: projectId,
+      });
+    },
+    ...options.queryOptions,
+  });
+}
+```
+
+### URL Parameter Hook
+Pattern from [packages/core/hooks/routing/use-studio-params.ts](mdc:javascript/packages/core/hooks/routing/use-studio-params.ts):
+
+```tsx
+import { useParams } from 'react-router-dom-v5-compat';
+
+export function useStudioParams<T extends ParamType>(
+  type: T
+): StudioParams[T] {
+  const params = useParams();
+  
+  return {
+    projectId: params.projectId || '',
+    ...params
+  } as StudioParams[T];
+}
+```
+
+### URL Query String Hook
+Pattern from [packages/core/hooks/routing/use-url-query-string.ts](mdc:javascript/packages/core/hooks/routing/use-url-query-string.ts):
+
+```tsx
+import { useLocation } from 'react-router-dom-v5-compat';
+
+export function useURLQueryString<T extends Record<string, string>>(): T {
+  const location = useLocation();
+  
+  return useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const params: Record<string, string> = {};
+    
+    searchParams.forEach((value, key) => {
+      params[key] = value;
+    });
+    
+    return params as T;
+  }, [location.search]);
+}
+```
+
+## Provider Patterns
+
+### Service Provider
+Pattern from [packages/core/providers/service-provider/](mdc:javascript/packages/core/providers/service-provider):
+
+```tsx
+import { createContext, useContext } from 'react';
+import type { ServiceContextType } from './types';
+
+const ServiceContext = createContext<ServiceContextType | null>(null);
+
+export function ServiceProvider({ children, ...serviceContext }: Props) {
+  return (
+    <ServiceContext.Provider value={serviceContext}>
+      {children}
+    </ServiceContext.Provider>
+  );
+}
+
+export function useServiceProvider(): ServiceContextType {
+  const context = useContext(ServiceContext);
+  if (!context) {
+    throw new Error('useServiceProvider must be used within ServiceProvider');
+  }
+  return context;
+}
+```
+
+### Icon Provider
+Pattern from [packages/core/providers/icon-provider/](mdc:javascript/packages/core/providers/icon-provider):
+
+```tsx
+import { createContext, useContext } from 'react';
+import type { IconProviderContext } from './types';
+
+const IconContext = createContext<IconProviderContext | null>(null);
+
+export function IconProvider({ children, icons }: Props) {
+  const value = useMemo(() => ({ icons }), [icons]);
+  
+  return (
+    <IconContext.Provider value={value}>
+      {children}
+    </IconContext.Provider>
+  );
+}
+
+export function useIconProvider(): IconProviderContext {
+  const context = useContext(IconContext);
+  if (!context) {
+    throw new Error('useIconProvider must be used within IconProvider');
+  }
+  return context;
+}
+```
+
+## State Management Patterns
+
+### React Query Integration
+Pattern for server state management:
+
+```tsx
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+export function useProjectData(projectId: string) {
+  return useQuery({
+    queryKey: ['project', projectId],
+    queryFn: () => fetchProject(projectId),
+    enabled: !!projectId,
+  });
+}
+
+export function useUpdateProject() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: updateProject,
+    onSuccess: (data) => {
+      queryClient.setQueryData(['project', data.id], data);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+```
+
+### Local State with Reducer
+Pattern for complex local state:
+
+```tsx
+import { useReducer } from 'react';
+
+interface State {
+  loading: boolean;
+  error: string | null;
+  data: any[];
+}
+
+type Action = 
+  | { type: 'LOADING' }
+  | { type: 'SUCCESS'; payload: any[] }
+  | { type: 'ERROR'; payload: string };
+
+function reducer(state: State, action: Action): State {
+  switch (action.type) {
+    case 'LOADING':
+      return { ...state, loading: true, error: null };
+    case 'SUCCESS':
+      return { loading: false, error: null, data: action.payload };
+    case 'ERROR':
+      return { loading: false, error: action.payload, data: [] };
+    default:
+      return state;
+  }
+}
+
+export function useDataState() {
+  const [state, dispatch] = useReducer(reducer, {
+    loading: false,
+    error: null,
+    data: [],
+  });
+
+  return { state, dispatch };
+}
+```
+
+## Testing Patterns
+
+### Component Testing
+Pattern from [packages/core/components/row/__tests__/row.test.tsx](mdc:javascript/packages/core/components/row/__tests__/row.test.tsx):
+
+```tsx
+import { render, screen } from '@testing-library/react';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
+
+describe('MyComponent', () => {
+  const mockProps = {
+    title: 'Test Title',
+    items: [{ id: 'test', label: 'Test Item' }],
+  };
+
+  it('renders correctly', () => {
+    render(
+      <MyComponent {...mockProps} />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
+
+    expect(screen.getByText('Test Title')).toBeInTheDocument();
+    expect(screen.getByText('Test Item')).toBeInTheDocument();
+  });
+
+  it('handles loading state', () => {
+    render(
+      <MyComponent {...mockProps} loading={true} />,
+      buildWrapper([getBaseProviderWrapper()])
+    );
+
+    expect(screen.getByTestId('loading')).toBeInTheDocument();
+  });
+});
+```
+
+### Hook Testing
+Pattern from [packages/core/hooks/__tests__/use-studio-query.test.ts](mdc:javascript/packages/core/hooks/__tests__/use-studio-query.test.ts):
+
+```tsx
+import { renderHook, waitFor } from '@testing-library/react';
+import { vi } from 'vitest';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+
+describe('useStudioQuery', () => {
+  const mockRequest = vi.fn();
+
+  beforeEach(() => {
+    mockRequest.mockClear();
+  });
+
+  it('fetches data successfully', async () => {
+    mockRequest.mockResolvedValue({ data: 'test' });
+
+    const { result } = renderHook(
+      () => useStudioQuery({ queryName: 'GetData', serviceOptions: {} }),
+      buildWrapper([getServiceProviderWrapper({ request: mockRequest })])
+    );
+
+    await waitFor(() => {
+      expect(result.current.data).toEqual({ data: 'test' });
+    });
+  });
+});
+```
+
+### Utility Testing
+Pattern from [packages/core/utils/__tests__/string-utils.tests.ts](mdc:javascript/packages/core/utils/__tests__/string-utils.tests.ts):
+
+```tsx
+import { capitalizeFirstLetter, isAbsoluteURL } from '../string-utils';
+
+describe('string-utils', () => {
+  describe('capitalizeFirstLetter', () => {
+    it('capitalizes the first letter', () => {
+      expect(capitalizeFirstLetter('hello')).toBe('Hello');
+    });
+
+    it('handles empty strings', () => {
+      expect(capitalizeFirstLetter('')).toBe('');
+    });
+  });
+
+  describe('isAbsoluteURL', () => {
+    it('identifies absolute URLs', () => {
+      expect(isAbsoluteURL('https://example.com')).toBe(true);
+      expect(isAbsoluteURL('relative/path')).toBe(false);
+    });
+  });
+});
+```
+
+## Styling Patterns
+
+### Styletron with BaseUI
+Pattern for CSS-in-JS styling:
+
+```tsx
+import { useStyletron } from 'baseui';
+
+export function StyledComponent({ variant = 'primary' }: Props) {
+  const [css, theme] = useStyletron();
+
+  const containerStyles = css({
+    padding: theme.sizing.scale400,
+    backgroundColor: variant === 'primary' 
+      ? theme.colors.backgroundPrimary 
+      : theme.colors.backgroundSecondary,
+    borderRadius: theme.borders.radius200,
+    ':hover': {
+      backgroundColor: theme.colors.backgroundTertiary,
+    },
+  });
+
+  return <div className={containerStyles}>Content</div>;
+}
+```
+
+### Theme Customization
+Pattern from [packages/core/themes/](mdc:javascript/packages/core/themes):
+
+```tsx
+import { createTheme } from 'baseui';
+
+const GRID_OVERRIDES = {
+  grid: {
+    margins: [16, 36, 36],
+    maxWidth: 1848, // 1920 - 36 - 36
+  },
+};
+
+export function ThemeProvider({ children, theme }: Props) {
+  return (
+    <BaseProvider theme={theme ?? createTheme(GRID_OVERRIDES)}>
+      {children}
+    </BaseProvider>
+  );
+}
+```
+
+## Data Transformation Patterns
+
+### Object Path Access
+Pattern from [packages/core/utils/object-utils.ts](mdc:javascript/packages/core/utils/object-utils.ts):
+
+```tsx
+export function getObjectValue<T = unknown>(
+  obj: Record<string, any>,
+  accessor: string | ((obj: any) => T),
+  defaultValue?: T
+): T | undefined {
+  if (typeof accessor === 'function') {
+    const result = accessor(obj);
+    return result || defaultValue;
+  }
+
+  if (typeof accessor === 'string') {
+    const keys = accessor.split('.');
+    let current = obj;
+    
+    for (const key of keys) {
+      if (current?.[key] === undefined) {
+        return defaultValue;
+      }
+      current = current[key];
+    }
+    
+    return current;
+  }
+
+  return defaultValue;
+}
+```
+
+### String Utilities
+Pattern from [packages/core/utils/string-utils.ts](mdc:javascript/packages/core/utils/string-utils.ts):
+
+```tsx
+export function capitalizeFirstLetter(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+export function isAbsoluteURL(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function sentenceCaseEnumValue(
+  value: string,
+  prefix: string | RegExp = ''
+): string {
+  if (typeof value !== 'string') return value;
+  
+  const cleanValue = typeof prefix === 'string' 
+    ? value.replace(prefix, '')
+    : value.replace(prefix, '');
+    
+  return cleanValue
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+```
+
+## Error Handling Patterns
+
+### Error Boundary
+Pattern for React error boundaries:
+
+```tsx
+import { Component, ErrorInfo, ReactNode } from 'react';
+
+interface State {
+  hasError: boolean;
+  error?: Error;
+}
+
+export class ErrorBoundary extends Component<
+  { children: ReactNode; fallback?: ReactNode },
+  State
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || <div>Something went wrong.</div>;
+    }
+
+    return this.props.children;
+  }
+}
+```
+
+### Async Error Handling
+Pattern for handling async operations:
+
+```tsx
+export function useAsyncOperation<T>() {
+  const [state, setState] = useState<{
+    loading: boolean;
+    error: string | null;
+    data: T | null;
+  }>({
+    loading: false,
+    error: null,
+    data: null,
+  });
+
+  const execute = useCallback(async (operation: () => Promise<T>) => {
+    setState(prev => ({ ...prev, loading: true, error: null }));
+    
+    try {
+      const result = await operation();
+      setState({ loading: false, error: null, data: result });
+      return result;
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setState({ loading: false, error: errorMessage, data: null });
+      throw error;
+    }
+  }, []);
+
+  return { ...state, execute };
+}
+```
+
+## Performance Patterns
+
+### Memoization
+Pattern for performance optimization:
+
+```tsx
+import { memo, useMemo, useCallback } from 'react';
+
+export const OptimizedComponent = memo(function OptimizedComponent({
+  items,
+  onItemClick,
+  filter
+}: Props) {
+  const filteredItems = useMemo(() => {
+    return items.filter(item => 
+      filter ? item.name.includes(filter) : true
+    );
+  }, [items, filter]);
+
+  const handleItemClick = useCallback((itemId: string) => {
+    onItemClick?.(itemId);
+  }, [onItemClick]);
+
+  return (
+    <div>
+      {filteredItems.map(item => (
+        <ItemComponent
+          key={item.id}
+          item={item}
+          onClick={handleItemClick}
+        />
+      ))}
+    </div>
+  );
+});
+```
+
+### Lazy Loading
+Pattern for code splitting:
+
+```tsx
+import { lazy, Suspense } from 'react';
+
+const LazyComponent = lazy(() => import('./LazyComponent'));
+
+export function ParentComponent() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <LazyComponent />
+    </Suspense>
+  );
+}
+```
+
+## Form Patterns
+
+### Controlled Components
+Pattern for form handling:
+
+```tsx
+import { useState, useCallback } from 'react';
+
+export function FormComponent({ onSubmit }: Props) {
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    description: '',
+  });
+
+  const handleChange = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleSubmit = useCallback((e: FormEvent) => {
+    e.preventDefault();
+    onSubmit(formData);
+  }, [formData, onSubmit]);
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <Input
+        value={formData.name}
+        onChange={e => handleChange('name', e.target.value)}
+        placeholder="Name"
+      />
+      <Input
+        value={formData.email}
+        onChange={e => handleChange('email', e.target.value)}
+        placeholder="Email"
+      />
+      <Textarea
+        value={formData.description}
+        onChange={e => handleChange('description', e.target.value)}
+        placeholder="Description"
+      />
+      <Button type="submit">Submit</Button>
+    </form>
+  );
+}
+```
+
+These patterns provide a solid foundation for consistent, maintainable, and performant JavaScript/TypeScript development in the Michelangelo project. They leverage modern React patterns, TypeScript best practices, and the established conventions from the existing codebase.
