@@ -1,5 +1,419 @@
 ---
-description:
-globs:
+description: 
+globs: 
 alwaysApply: false
 ---
+# Protobuf Design Guide
+
+This guide provides comprehensive guidelines for designing Protocol Buffer (protobuf) definitions in the Michelangelo project. It covers file organization, naming conventions, message patterns, service definitions, custom options, validation, and best practices.
+
+## File Organization and Structure
+
+### Directory Structure
+```
+proto/
+├── api/                    # Core API definitions
+│   ├── v2/                # API version 2 (current)
+│   ├── options.proto      # Custom protobuf options
+│   ├── conditions.proto   # Condition definitions
+│   └── list.proto         # List and pagination utilities
+├── test/                  # Test-specific protobuf definitions
+│   └── kubeproto/         # Kubernetes protobuf testing
+└── BUILD.bazel           # Build configuration
+```
+
+### File Naming Conventions
+- Use **snake_case** for proto file names: `spark_job.proto`, `pipeline_run.proto`
+- Service files use `_svc.proto` suffix: `model_svc.proto`, `pipeline_svc.proto`
+- Group related messages in logical files by domain/resource
+- Keep files focused on single resource types or related concepts
+
+## Package and Import Structure
+
+### Package Declaration
+```protobuf
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+```
+
+### Import Organization
+Order imports as follows:
+1. Standard protobuf imports (google/protobuf/*)
+2. Kubernetes imports (k8s.io/*)
+3. Michelangelo internal imports (michelangelo/*)
+
+Example from [pipeline.proto](mdc:proto/api/v2/pipeline.proto):
+```protobuf
+import "google/protobuf/any.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/v2/user.proto";
+```
+
+## Message Design Patterns
+
+### Kubernetes Resource Pattern
+Follow Kubernetes CRD conventions for resource definitions:
+
+```protobuf
+message Pipeline {
+  option (michelangelo.api.resource) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  PipelineSpec spec = 3;
+  PipelineStatus status = 4;
+}
+
+message PipelineList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  repeated Pipeline items = 3;
+}
+```
+
+### Spec/Status Pattern
+- **Spec**: Desired state (user-defined configuration)
+- **Status**: Observed state (system-reported status)
+
+Example from [ray_job.proto](mdc:proto/api/v2/ray_job.proto):
+```protobuf
+message RayJobSpec {
+  UserInfo user = 1;
+  string entrypoint = 2;
+  double object_store_memory_ratio = 3;
+  // ... other spec fields
+}
+
+message RayJobStatus {
+  RayJobState state = 1;
+  string error_message = 2;
+  google.protobuf.Timestamp start_time = 3;
+  // ... other status fields
+}
+```
+
+### Common Message Patterns
+
+#### User Information Pattern
+Use consistent user info structure across resources:
+```protobuf
+message UserInfo {
+  string name = 1;           // LDAP username
+  string proxy_user = 2;     // Optional proxy user
+}
+```
+
+#### Resource Reference Pattern
+Use ResourceIdentifier for cross-resource references:
+```protobuf
+michelangelo.api.ResourceIdentifier pipeline = 1 [
+  (michelangelo.api.resource_reference) = {
+    type: "michelangelo/Pipeline"
+  }
+];
+```
+
+#### Condition Pattern
+Use standardized condition reporting:
+```protobuf
+repeated michelangelo.api.Condition conditions = 1;
+```
+
+## Field Naming Conventions
+
+### Field Names
+- Use **snake_case** for field names: `user_info`, `start_time`, `error_message`
+- Be descriptive and avoid abbreviations: `description` not `desc`
+- Use consistent naming across similar fields
+
+### Field Types
+- Use appropriate primitive types:
+  - `string` for text data
+  - `int32` for small integers, `int64` for large integers
+  - `double` for floating-point numbers
+  - `bool` for boolean values
+  - `bytes` for binary data
+
+### Field Numbers
+- Reserve field numbers 1-15 for frequently used fields (single-byte encoding)
+- Use field numbers 16+ for less common fields
+- Never reuse field numbers
+- Leave gaps for future expansion
+
+## Enum Design
+
+### Enum Naming
+- Use **SCREAMING_SNAKE_CASE** for enum values
+- Prefix with enum type name: `PIPELINE_TYPE_TRAIN`, `RAY_JOB_STATE_RUNNING`
+- Always include `INVALID` or `UNKNOWN` as the zero value
+
+Example from [pipeline.proto](mdc:proto/api/v2/pipeline.proto):
+```protobuf
+enum PipelineType {
+  PIPELINE_TYPE_INVALID = 0;
+  PIPELINE_TYPE_TRAIN = 1;
+  PIPELINE_TYPE_EVAL = 2;
+  PIPELINE_TYPE_PREDICTION = 6;
+  // ... other types
+}
+```
+
+### Enum Evolution
+- Never remove enum values
+- Add new values with higher numbers
+- Use reserved statements for deprecated values
+
+## Service Definition Patterns
+
+### Generated Service Pattern
+Services are auto-generated using `tools/grpc-svc-gen.sh`. The pattern includes:
+
+```protobuf
+// Standard CRUD operations
+service ModelService {
+  rpc CreateModel(CreateModelRequest) returns (CreateModelResponse);
+  rpc GetModel(GetModelRequest) returns (GetModelResponse);
+  rpc UpdateModel(UpdateModelRequest) returns (UpdateModelResponse);
+  rpc DeleteModel(DeleteModelRequest) returns (DeleteModelResponse);
+  rpc DeleteModelCollection(DeleteModelCollectionRequest) returns (DeleteModelCollectionResponse);
+  rpc ListModel(ListModelRequest) returns (ListModelResponse);
+}
+```
+
+### Request/Response Patterns
+- Use consistent naming: `Create{Resource}Request/Response`
+- Include standard Kubernetes options where applicable
+- Use resource-specific names in responses
+
+Example from [model_svc.proto](mdc:proto/api/v2/model_svc.proto):
+```protobuf
+message CreateModelRequest {
+  Model model = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions create_options = 2;
+}
+
+message CreateModelResponse {
+  Model model = 1;
+}
+```
+
+## Custom Options and Annotations
+
+### Resource Options
+Use custom options from [options.proto](mdc:proto/api/options.proto):
+
+```protobuf
+// Mark as Kubernetes CRD
+option (michelangelo.api.resource) = {
+  scope: "Namespaced";
+  immutable: true;
+};
+
+// Mark as resource list
+option (michelangelo.api.resource_list) = {};
+```
+
+### Field Annotations
+
+#### Validation
+```protobuf
+string name = 1 [
+  (michelangelo.api.validation) = {required: true},
+  (michelangelo.api.validation) = {pattern: "[a-zA-Z0-9][\\w-]*"},
+  (michelangelo.api.validation) = {max_length: "40"}
+];
+```
+
+#### External Storage
+```protobuf
+google.protobuf.Any content = 1 [(michelangelo.api.external_storage) = true];
+```
+
+#### Resource References
+```protobuf
+michelangelo.api.ResourceIdentifier cluster = 1 [
+  (michelangelo.api.resource_reference) = {
+    type: "michelangelo.uber.com/RayCluster"
+  }
+];
+```
+
+#### Indexing
+```protobuf
+option (michelangelo.api.index) = {
+  path: "spec.owner_email",
+  key: "email",
+};
+```
+
+## Validation Patterns
+
+### Common Validation Rules
+Based on [validation_ut.proto](mdc:proto/test/kubeproto/validation_ut.proto):
+
+```protobuf
+// String validation
+string description = 1 [
+  (michelangelo.api.validation) = {min_length: "1", max_length: "255"},
+  (michelangelo.api.validation) = {pattern: "\\S+( \\S+)*"}
+];
+
+// Numeric validation
+int32 instances = 2 [
+  (michelangelo.api.validation) = {min: "1", max: "100"}
+];
+
+// Email validation
+string email = 3 [(michelangelo.api.validation) = {email: true}];
+
+// UUID validation
+string id = 4 [(michelangelo.api.validation) = {uuid: true}];
+
+// Required fields
+string name = 5 [(michelangelo.api.validation) = {required: true}];
+```
+
+### Collection Validation
+```protobuf
+repeated string items = 1 [
+  (michelangelo.api.validation) = {min_items: "1", max_items: "10"},
+  (michelangelo.api.validation) = {items: {pattern: "[a-z]+"}}
+];
+
+map<string, string> labels = 2 [
+  (michelangelo.api.validation) = {
+    keys: {pattern: "[a-zA-Z0-9-_]+"},
+    values: {max_length: "100"}
+  }
+];
+```
+
+## Documentation Standards
+
+### File-Level Documentation
+Start each proto file with comprehensive documentation:
+
+```protobuf
+// Pipeline API provides interfaces for managing ML pipelines in Michelangelo.
+// A pipeline represents a workflow that can be customized for different ML tasks:
+// - Training pipelines for model development
+// - Evaluation pipelines for model validation 
+// - Inference pipelines for inference
+//
+// Key concepts:
+// - Pipeline type and template configuration
+// - Job specifications and resource requirements
+// - Git commit information for version control
+// - Owner and notification settings
+```
+
+### Message Documentation
+Document each message with purpose and usage:
+
+```protobuf
+// PipelineSpec defines the desired state and configuration for a pipeline.
+// It contains all the necessary information to instantiate and run a pipeline, including:
+// - Target pipeline type and template
+// - Resource requirements and constraints
+// - Git commit information
+// - Owner and access controls
+message PipelineSpec {
+  // ... fields
+}
+```
+
+### Field Documentation
+Document each field with clear descriptions:
+
+```protobuf
+// LDAP username of the user who initiated the workload.
+// This field identifies the user for authentication and authorization.
+// For example: "jsmith" or "training-service"
+// Required field that must be a valid LDAP username.
+string name = 1;
+```
+
+## Build Configuration
+
+### Bazel Integration
+Configure protobuf compilation in BUILD.bazel files:
+
+```bazel
+proto_library(
+    name = "v2_proto",
+    srcs = [
+        "model.proto",
+        "pipeline.proto",
+        "spark_job.proto",
+        # ... other proto files
+    ],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    deps = [
+        "//proto/api:api_proto",
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:timestamp_proto",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
+    ],
+)
+```
+
+### Code Generation
+Use custom compilers for specialized code generation:
+
+```bazel
+go_proto_library(
+    name = "v2_go_proto",
+    compilers = [
+        "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_yarpc",
+        "//bazel/rules/proto:go_validation",
+    ],
+    proto = ":v2_proto",
+)
+```
+
+## Best Practices
+
+### Backward Compatibility
+- Never remove fields or change field types
+- Use `reserved` statements for deprecated fields
+- Add new fields with higher field numbers
+- Use oneof for mutually exclusive fields
+
+### Performance Considerations
+- Use appropriate field types for data size
+- Consider using `bytes` for large binary data
+- Use external storage annotation for large fields
+- Implement proper indexing for searchable fields
+
+### Error Handling
+- Use consistent error message patterns
+- Include detailed error information in status messages
+- Use standard gRPC status codes
+- Provide actionable error messages
+
+### Testing
+- Create comprehensive test proto files in `proto/test/`
+- Test all validation rules and edge cases
+- Validate generated code compilation
+- Test backward compatibility
+
+### Security
+- Use sensitive field annotations for confidential data
+- Validate all user inputs
+- Use proper authentication patterns
+- Implement access control through resource references
+
+This guide ensures consistent, maintainable, and well-documented protobuf definitions that integrate seamlessly with the Michelangelo platform's architecture and conventions.
