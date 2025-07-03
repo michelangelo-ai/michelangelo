@@ -45,7 +45,7 @@ func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Lo
 		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 		Message: "Triton infrastructure creation initiated",
 		Endpoints: []string{
-			fmt.Sprintf("/%s-endpoint/%s/production", request.InferenceServer.Name, request.InferenceServer.Name),
+			fmt.Sprintf("/%s-endpoint/%s", request.InferenceServer.Name, request.InferenceServer.Name),
 		},
 		Details: map[string]interface{}{
 			"backend":   "triton",
@@ -411,34 +411,14 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 						"match": []map[string]interface{}{
 							{
 								"uri": map[string]string{
-									"prefix": fmt.Sprintf("/%s-endpoint/%s/production",
+									"prefix": fmt.Sprintf("/%s-endpoint/%s/",
 										request.InferenceServer.Name,
 										request.InferenceServer.Name),
 								},
 							},
 						},
-						"route": []map[string]interface{}{
-							{
-								"destination": map[string]interface{}{
-									"host": fmt.Sprintf("%s-service.%s.svc.cluster.local",
-										request.InferenceServer.Name,
-										request.Namespace),
-									"port": map[string]int{
-										"number": 80,
-									},
-								},
-							},
-						},
-					},
-					{
-						"match": []map[string]interface{}{
-							{
-								"uri": map[string]string{
-									"prefix": fmt.Sprintf("/%s-endpoint/%s/canary",
-										request.InferenceServer.Name,
-										request.InferenceServer.Name),
-								},
-							},
+						"rewrite": map[string]interface{}{
+							"uri": "/",
 						},
 						"route": []map[string]interface{}{
 							{

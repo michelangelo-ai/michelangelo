@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/go-logr/zapr"
+	"github.com/michelangelo-ai/michelangelo/go/deployment"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,6 +81,8 @@ func options() fx.Option {
 		apiHandler.CtrlMgrModule,
 		ray.Module,
 		cadenceclient.Module,
+		spark.Module,
+		deployment.Module,
 		pipeline.Module,
 		inferenceserver.Module,
 		pipelinerun.Module,

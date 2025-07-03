@@ -1,22 +1,31 @@
 package deployment
 
 import (
+	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
 )
 
 // Module provides the deployment controller with all dependencies
 var Module = fx.Module("deployment",
-	fx.Provide(NewGateway),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
 )
 
-// NewGateway creates a new inference server gateway
-func NewGateway() inferenceserver.Gateway {
-	return inferenceserver.NewGateway()
+// NewReconciler creates a new deployment reconciler with injected dependencies
+func NewReconciler(client ctrl.Manager, logger *zap.Logger, gateway inferenceserver.Gateway) *Reconciler {
+	log := zapr.NewLogger(logger).WithName("deployment")
+	plugin := oss.NewPlugin(client.GetClient(), gateway, log)
+	
+	return &Reconciler{
+		Client: client.GetClient(),
+		Log:    log,
+		Plugin: plugin,
+	}
 }
 
 // register sets up the deployment controller with the manager
