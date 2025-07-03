@@ -97,3 +97,8 @@ export * from '#core/utils/time-utils';
 
 export * from '#core/types/common/studio-types';
 export * from '#core/types/common/view-types';
+
+// Cell Provider
+export { CellProvider } from '#core/providers/cell-provider/cell-provider';
+export { useCellProvider } from '#core/providers/cell-provider/use-cell-provider';
+export type { CellContextType } from '#core/providers/cell-provider/types';
