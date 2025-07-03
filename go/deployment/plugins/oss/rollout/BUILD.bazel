@@ -3,19 +3,14 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "actors.go",
-        "plugin.go",
-        "plugins.go",
+        "condition_plugin.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/rollout",
     visibility = ["//visibility:public"],
     deps = [
         "//go/deployment/plugins:go_default_library",
         "//go/deployment/plugins/oss/common:go_default_library",
-        "//go/deployment/plugins/oss/rollout:go_default_library",
-        "//go/deployment/plugins/oss/cleanup:go_default_library",
-        "//go/deployment/plugins/oss/rollback:go_default_library",
-        "//go/deployment/plugins/oss/steadystate:go_default_library",
+        "//go/deployment/plugins/oss/rollout/strategies:go_default_library",
         "//go/shared/gateways/inferenceserver:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

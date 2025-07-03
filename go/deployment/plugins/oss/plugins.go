@@ -27,12 +27,31 @@ func NewRolloutPlugin(client client.Client, gateway inferenceserver.Gateway, log
 }
 
 func (p *RolloutPlugin) GetActors() []plugins.ConditionActor {
-	return []plugins.ConditionActor{
+	// Pre-placement actors (following Uber pattern)
+	prePlacementActors := []plugins.ConditionActor{
 		&ValidationActor{client: p.client, logger: p.logger},
+		&AssetPreparationActor{client: p.client, gateway: p.gateway, logger: p.logger},
 		&ResourceAcquisitionActor{client: p.client, logger: p.logger},
-		&ModelSyncActor{client: p.client, logger: p.logger},
-		&RolloutActor{client: p.client, logger: p.logger},
 	}
+	
+	// Placement strategy actors (OSS rolling strategy)
+	placementActors := []plugins.ConditionActor{
+		&ModelSyncActor{client: p.client, logger: p.logger},
+		&RollingRolloutActor{client: p.client, gateway: p.gateway, logger: p.logger},
+	}
+	
+	// Post-placement actors
+	postPlacementActors := []plugins.ConditionActor{
+		&RolloutCompletionActor{client: p.client, logger: p.logger},
+	}
+	
+	// Combine all actors in sequence
+	actors := make([]plugins.ConditionActor, 0, len(prePlacementActors)+len(placementActors)+len(postPlacementActors))
+	actors = append(actors, prePlacementActors...)
+	actors = append(actors, placementActors...)
+	actors = append(actors, postPlacementActors...)
+	
+	return actors
 }
 
 func (p *RolloutPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {

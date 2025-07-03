@@ -34,22 +34,26 @@ func NewPlugin(client client.Client, gateway inferenceserver.Gateway, logger log
 
 // GetRolloutPlugin returns the rollout plugin
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (plugins.ConditionsPlugin, error) {
-	// For OSS, return a simple rollout plugin
+	// For now, use the simple implementation from plugins.go
+	// TODO: Replace with structured rollout plugin once imports are fixed
 	return NewRolloutPlugin(p.client, p.gateway, p.logger), nil
 }
 
 // GetRollbackPlugin returns the rollback plugin
 func (p *Plugin) GetRollbackPlugin() plugins.ConditionsPlugin {
+	// TODO: Replace with structured rollback plugin once imports are fixed
 	return NewRollbackPlugin(p.client, p.gateway, p.logger)
 }
 
 // GetCleanupPlugin returns the cleanup plugin
 func (p *Plugin) GetCleanupPlugin() plugins.ConditionsPlugin {
+	// TODO: Replace with structured cleanup plugin once imports are fixed
 	return NewCleanupPlugin(p.client, p.gateway, p.logger)
 }
 
 // GetSteadyStatePlugin returns the steady state plugin
 func (p *Plugin) GetSteadyStatePlugin() plugins.ConditionsPlugin {
+	// TODO: Replace with structured steadystate plugin once imports are fixed
 	return NewSteadyStatePlugin(p.client, p.gateway, p.logger)
 }
 
