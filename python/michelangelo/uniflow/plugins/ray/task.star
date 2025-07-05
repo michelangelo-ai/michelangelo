@@ -454,6 +454,16 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
+                        "volumes": [
+                            {
+                                "name": "ray",
+                                "volumeSource": {
+                                    "hostPath": {
+                                        "path": "/tmp/ray"
+                                    }
+                                },
+                            },
+                        ],
                         "containers": [
                             {
                                 "name": "head",
@@ -470,6 +480,12 @@ def ray_cluster_spec(
                                                 "name": "michelangelo-config",
                                             },
                                         },
+                                    },
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "name": "ray",
+                                        "mountPath": "/tmp/ray",
                                     },
                                 ],
                                 "lifecycle": {

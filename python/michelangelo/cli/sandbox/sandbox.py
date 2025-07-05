@@ -142,6 +142,14 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
+    # Provision a ServiceAccount for fluent-bit DaemonSet execution.
+    _exec(
+        "kubectl",
+        "create",
+        "serviceaccount",
+        "fluent-bit",
+    )
+
     resources = [
         "boot.yaml",
         "mysql.yaml",
@@ -150,6 +158,8 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
+        "fluent-bit.yaml",
+        "fluent-bit-config.yaml",
     ]
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
