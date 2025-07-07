@@ -54,3 +54,32 @@ export const sentenceCaseEnumValue = (
     enumValue.replace(enumPrefixRegExp, '').replace(/_/g, ' ').toLowerCase()
   );
 };
+
+/**
+ * @description
+ * Safely convert any value to a string, with JSON.stringify for objects.
+ * Handles edge cases like circular references, BigInt, and undefined values.
+ *
+ * @param value - The value to convert to a string
+ * @returns A string representation of the value
+ *
+ * @example
+ * ```ts
+ * safeStringify('already a string'); // 'already a string'
+ * safeStringify({ code: 500, message: 'Error' }); // '{"code":500,"message":"Error"}'
+ * safeStringify([1, 2, 3]); // '[1,2,3]'
+ * safeStringify(undefined); // 'undefined'
+ * safeStringify(circularRef); // '[object Object]' (fallback)
+ * ```
+ */
+export function safeStringify(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
