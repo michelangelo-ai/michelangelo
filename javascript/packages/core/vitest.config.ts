@@ -7,5 +7,6 @@ export default defineConfig({
     globals: true, // Enable global Jest-like functions (describe, it, expect)
     include: ['**/__tests__/**/*.{ts,tsx}'],
     setupFiles: ['./test-setup.ts'],
+    silent: 'passed-only',
   },
 });
