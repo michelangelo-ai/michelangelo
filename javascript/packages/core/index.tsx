@@ -102,3 +102,8 @@ export * from '#core/types/common/view-types';
 export { CellProvider } from '#core/providers/cell-provider/cell-provider';
 export { useCellProvider } from '#core/providers/cell-provider/use-cell-provider';
 export type { CellContextType } from '#core/providers/cell-provider/types';
+
+// Error Provider
+export { ErrorProvider } from '#core/providers/error-provider/error-provider';
+export { useApplicationError } from '#core/providers/error-provider/use-application-error';
+export { GrpcStatusCode } from '#core/constants/grpc-status-codes';
