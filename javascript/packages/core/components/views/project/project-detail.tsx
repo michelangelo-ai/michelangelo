@@ -27,7 +27,6 @@ export function ProjectDetail() {
   }>({
     queryName: 'GetProject',
     serviceOptions: {
-      name: projectId,
       namespace: projectId,
     },
   });

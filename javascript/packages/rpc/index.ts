@@ -31,3 +31,4 @@ export * from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 export * from './gen/michelangelo/api/v2/user_pb';
 
 export { request } from './request';
+export { normalizeConnectError } from './normalize-connect-error';

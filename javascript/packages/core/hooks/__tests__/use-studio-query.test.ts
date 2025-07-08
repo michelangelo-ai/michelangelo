@@ -1,11 +1,14 @@
 import { renderHook, waitFor } from '@testing-library/react';
 import { vi } from 'vitest';
 
+import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
 
+import type { ErrorNormalizer } from '#core/types/error-types';
 import type { QueryOptions } from '#core/types/query-types';
 
 describe('useStudioQuery', () => {
@@ -21,7 +24,11 @@ describe('useStudioQuery', () => {
 
       const { result } = renderHook(
         () => useStudioQuery({ queryName: 'ListAnything', serviceOptions: {} }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
 
       await waitFor(() => {
@@ -34,7 +41,11 @@ describe('useStudioQuery', () => {
 
       const { result } = renderHook(
         () => useStudioQuery({ queryName: 'ListAnything', serviceOptions: {} }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
 
       await waitFor(() => {
@@ -54,7 +65,11 @@ describe('useStudioQuery', () => {
             queryName: 'ListAnything',
             serviceOptions: {},
           }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
 
       await waitFor(() => {
@@ -71,7 +86,11 @@ describe('useStudioQuery', () => {
             queryName: 'ListAnything',
             serviceOptions: {},
           }),
-        buildWrapper([getRouterWrapper(), getServiceProviderWrapper({ request: mockRequest })])
+        buildWrapper([
+          getErrorProviderWrapper(),
+          getRouterWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
       );
 
       await waitFor(() => {
@@ -90,6 +109,7 @@ describe('useStudioQuery', () => {
       renderHook(
         () => useStudioQuery({ queryName: 'GetDataset', serviceOptions: {} }),
         buildWrapper([
+          getErrorProviderWrapper(),
           getRouterWrapper({ location: '/ma-dev-test' }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
@@ -111,6 +131,7 @@ describe('useStudioQuery', () => {
             serviceOptions: { namespace: 'provided-namespace' },
           }),
         buildWrapper([
+          getErrorProviderWrapper(),
           getRouterWrapper({ location: '/ma-dev-test' }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
@@ -137,6 +158,7 @@ describe('useStudioQuery', () => {
             clientOptions,
           }),
         buildWrapper([
+          getErrorProviderWrapper(),
           getRouterWrapper({ location: '/ma-dev-test' }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
@@ -161,6 +183,7 @@ describe('useStudioQuery', () => {
             serviceOptions: { filter: 'active' },
           }),
         buildWrapper([
+          getErrorProviderWrapper(),
           getRouterWrapper({ location: '/ma-dev-test' }),
           getServiceProviderWrapper({ request: mockRequest }),
         ])
@@ -172,6 +195,49 @@ describe('useStudioQuery', () => {
           namespace: 'ma-dev-test',
         });
       });
+    });
+  });
+
+  describe('error normalization', () => {
+    test('normalizes errors to ApplicationError', async () => {
+      const customError = {
+        message: 'RPC request failed',
+        code: 404,
+        meta: { requestId: 'req-123' },
+        isResponseError: true,
+      };
+
+      const customNormalizer: ErrorNormalizer = (error: unknown) => {
+        if (typeof error === 'object' && error !== null && 'isResponseError' in error) {
+          const rpcError = error as Record<string, unknown>;
+          return {
+            message: String(rpcError.message),
+            code: GrpcStatusCode.NOT_FOUND,
+            source: 'custom-normalizer',
+            meta: rpcError.meta as Record<string, unknown>,
+          };
+        }
+        return null;
+      };
+
+      mockRequest.mockRejectedValue(customError);
+
+      const { result } = renderHook(
+        () => useStudioQuery({ queryName: 'GetDataset', serviceOptions: {} }),
+        buildWrapper([
+          getErrorProviderWrapper({ normalizeError: customNormalizer }),
+          getRouterWrapper(),
+          getServiceProviderWrapper({ request: mockRequest }),
+        ])
+      );
+
+      await waitFor(() => {
+        expect(result.current.error).not.toBeNull();
+      });
+
+      const error = result.current.error!;
+      expect(error.message).toEqual('RPC request failed');
+      expect(error.source).toEqual('custom-normalizer');
     });
   });
 });
