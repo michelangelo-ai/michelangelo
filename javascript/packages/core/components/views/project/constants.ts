@@ -67,3 +67,49 @@ export const PIPELINE_CELL_CONFIG = [
     },
   },
 ];
+
+export const PIPELINE_RUN_CELL_CONFIG = [
+  { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
+  {
+    id: 'spec.pipeline.name',
+    label: 'Pipeline',
+    items: [
+      {
+        id: 'spec.pipeline.name',
+        type: CellType.TEXT,
+      },
+      {
+        id: 'spec.revision.name',
+        type: CellType.DESCRIPTION,
+      },
+    ],
+  },
+  {
+    id: 'spec.actor.name',
+    label: 'Started by',
+    type: CellType.TEXT,
+  },
+  {
+    id: 'status.state',
+    label: 'State',
+    type: CellType.STATE,
+    stateTextMap: {
+      0: 'Queued',
+      1: 'Pending',
+      2: 'Running',
+      3: 'Succeeded',
+      4: 'Killed',
+      5: 'Failed',
+      6: 'Skipped',
+    },
+    stateColorMap: {
+      0: 'grey',
+      1: 'accent',
+      2: 'accent',
+      3: 'positive',
+      4: 'error',
+      5: 'error',
+      6: 'grey',
+    },
+  },
+];

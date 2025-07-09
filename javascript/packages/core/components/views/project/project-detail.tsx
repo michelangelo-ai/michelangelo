@@ -1,10 +1,16 @@
 import { useStyletron } from 'baseui';
+import { Card } from 'baseui/card';
+import { HeadingMedium } from 'baseui/typography';
 
 import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { PIPELINE_CELL_CONFIG, SHARED_PROJECT_CELL_CONFIG } from './constants';
+import {
+  PIPELINE_CELL_CONFIG,
+  PIPELINE_RUN_CELL_CONFIG,
+  SHARED_PROJECT_CELL_CONFIG,
+} from './constants';
 
 import type { Theme } from 'baseui';
 
@@ -49,13 +55,29 @@ export function ProjectDetail() {
   }>({
     queryName: 'ListPipeline',
     serviceOptions: {
-      name: projectId,
+      namespace: projectId,
+    },
+  });
+
+  const pipelineRuns = useStudioQuery<{
+    pipelineRunList: { items: Array<{ metadata: { name: string } }> };
+  }>({
+    queryName: 'ListPipelineRun',
+    serviceOptions: {
       namespace: projectId,
     },
   });
 
   return (
-    <div className={css({ gap: theme.sizing.scale400, display: 'flex', flexDirection: 'column' })}>
+    <div
+      className={css({
+        display: 'flex',
+        flexDirection: 'column',
+        gridGap: theme.sizing.scale600,
+        padding: theme.sizing.scale400,
+      })}
+    >
+      {/* Project Overview */}
       <Box
         description={data?.project?.spec?.description}
         title={data?.project?.metadata?.name}
@@ -63,7 +85,6 @@ export function ProjectDetail() {
           BoxContainer: {
             style: ({ $theme }: { $theme: Theme }) => ({
               backgroundColor: $theme.colors.backgroundSecondary,
-              marginTop: $theme.sizing.scale400,
             }),
           },
         }}
@@ -71,26 +92,115 @@ export function ProjectDetail() {
         <Row items={SHARED_PROJECT_CELL_CONFIG} record={data?.project} />
       </Box>
 
-      {pipelines?.data?.pipelineList.items.map((item, index) => (
-        <Row
-          overrides={{
-            RowItemContainer: {
-              style: {
-                width: '200px',
-              },
-            },
-          }}
-          key={item.metadata.name}
-          record={item}
-          items={[
-            { id: 'metadata.name', label: 'Name', url: item.metadata.name },
-            ...PIPELINE_CELL_CONFIG,
-          ].map((cell) => ({
-            ...cell,
-            ...(index > 0 && { label: undefined }),
-          }))}
-        />
-      ))}
+      {/* Pipelines Section */}
+      <Card
+        overrides={{
+          Root: {
+            style: ({ $theme }: { $theme: Theme }) => ({
+              borderRadius: $theme.borders.radius400,
+              backgroundColor: $theme.colors.backgroundPrimary,
+            }),
+          },
+        }}
+      >
+        <div className={css({ marginBottom: theme.sizing.scale600 })}>
+          <HeadingMedium margin={0}>Pipelines</HeadingMedium>
+        </div>
+
+        {(pipelines?.data?.pipelineList.items ?? []).length > 0 ? (
+          <div
+            className={css({
+              display: 'flex',
+              flexDirection: 'column',
+              gridGap: theme.sizing.scale300,
+            })}
+          >
+            {(pipelines?.data?.pipelineList.items ?? []).map((item, index) => (
+              <Row
+                overrides={{
+                  RowItemContainer: {
+                    style: {
+                      minWidth: '250px',
+                    },
+                  },
+                }}
+                key={item.metadata.name}
+                record={item}
+                items={[
+                  {
+                    id: 'metadata.name',
+                    label: 'Name',
+                    url: `/project/${projectId}/pipelines/${item.metadata.name}`,
+                  },
+                  ...PIPELINE_CELL_CONFIG,
+                ].map((cell) => ({
+                  ...cell,
+                  ...(index > 0 && { label: undefined }),
+                }))}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className={css({ color: theme.colors.contentSecondary })}>
+            <em>No pipelines found</em>
+          </div>
+        )}
+      </Card>
+
+      {/* Pipeline Runs Section */}
+      <Card
+        overrides={{
+          Root: {
+            style: ({ $theme }: { $theme: Theme }) => ({
+              borderRadius: $theme.borders.radius400,
+              backgroundColor: $theme.colors.backgroundPrimary,
+            }),
+          },
+        }}
+      >
+        <div className={css({ marginBottom: theme.sizing.scale600 })}>
+          <HeadingMedium margin={0}>Pipeline Runs</HeadingMedium>
+        </div>
+
+        {(pipelineRuns?.data?.pipelineRunList.items ?? []).length > 0 ? (
+          <div
+            className={css({
+              display: 'flex',
+              flexDirection: 'column',
+              gridGap: theme.sizing.scale300,
+            })}
+          >
+            {(pipelineRuns?.data?.pipelineRunList.items ?? []).map((item, index) => (
+              <Row
+                overrides={{
+                  RowItemContainer: {
+                    style: {
+                      minWidth: '250px',
+                    },
+                  },
+                }}
+                key={item.metadata.name}
+                record={item}
+                items={[
+                  {
+                    id: 'metadata.name',
+                    label: 'Name',
+                    url: `/project/${projectId}/runs/${item.metadata.name}`,
+                  },
+                  ...PIPELINE_RUN_CELL_CONFIG,
+                ].map((cell) => ({
+                  ...cell,
+                  ...(index > 0 && { label: undefined }),
+                }))}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className={css({ color: theme.colors.contentSecondary })}>
+            <em>No pipeline runs found</em>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

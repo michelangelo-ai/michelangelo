@@ -1,6 +1,7 @@
 import { createClient, Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
+import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 
@@ -27,4 +28,5 @@ const transport = createGrpcWebTransport({
 export const SERVICES = {
   ProjectService: createClient(ProjectService, transport),
   PipelineService: createClient(PipelineService, transport),
+  PipelineRunService: createClient(PipelineRunService, transport),
 } as const;
