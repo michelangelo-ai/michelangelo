@@ -22,4 +22,7 @@ export default defineConfig({
     emptyOutDir: true,
   },
   plugins: [react()],
+  resolve: {
+    conditions: ['workspace'],
+  },
 });
