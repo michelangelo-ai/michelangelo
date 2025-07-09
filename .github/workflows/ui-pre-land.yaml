@@ -40,6 +40,9 @@ jobs:
         env:
           WORKSPACE_ROOT: ${{ github.workspace }}
 
+      - name: Build Core package for type resolution
+        run: yarn workspace @uber/michelangelo-core build
+
       - name: Run ESLint
         run: yarn lint
 
