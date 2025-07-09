@@ -1,6 +1,6 @@
+import { ConnectError } from '@connectrpc/connect';
 import { GrpcStatusCode } from '@uber/michelangelo-core';
 
-import type { ConnectError } from '@connectrpc/connect';
 import type { ApplicationError, ErrorNormalizer } from '@uber/michelangelo-core';
 
 /**
@@ -19,9 +19,11 @@ import type { ApplicationError, ErrorNormalizer } from '@uber/michelangelo-core'
  * );
  * ```
  */
-export const normalizeConnectError: ErrorNormalizer = (
-  error: ConnectError
-): ApplicationError | null => {
+export const normalizeConnectError: ErrorNormalizer = (error: unknown): ApplicationError | null => {
+  if (!(error instanceof ConnectError)) {
+    return null;
+  }
+
   return {
     message: error.message,
     code: mapConnectCodeToGrpc(error.code),
