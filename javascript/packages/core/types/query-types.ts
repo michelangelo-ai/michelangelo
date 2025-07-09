@@ -1,3 +1,5 @@
+import type { ApplicationError } from './error-types';
+
 /**
  * Options that can be passed to query hooks.
  */
@@ -13,7 +15,7 @@ export type QueryResult<TData = unknown> = {
   /** The data returned by the query */
   data: TData | undefined;
   /** Any error that occurred during the query */
-  error: Error | null;
+  error: ApplicationError | null;
   /** Whether the query is currently loading */
   isLoading: boolean;
 };
