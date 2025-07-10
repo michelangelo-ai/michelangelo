@@ -10,6 +10,7 @@ go_library(
         "//go/inferenceserver/plugins/oss/dynamo:dynamo",
         "//go/inferenceserver/plugins/oss/llmd:llmd",
         "//go/inferenceserver/plugins/oss/triton:triton",
+        "//go/inferenceserver/plugins/oss/torchserve:torchserve",
         "//go/shared/gateways/inferenceserver:go_default_library",
         "//proto/api/v2:go_default_library",
     ],

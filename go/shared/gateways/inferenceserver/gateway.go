@@ -55,7 +55,7 @@ type ModelStatusRequest struct {
 
 // ModelStatus represents the status of a model
 type ModelStatus struct {
-	State   string // LOADING, LOADED, FAILED, NOT_FOUND
+	State   v2pb.InferenceServerState // Use proper enum type
 	Message string
 	Ready   bool
 }
@@ -158,6 +158,17 @@ type ActiveRoute struct {
 	Active      bool
 }
 
+// Health Check Types
+type HealthCheckRequest struct {
+	InferenceServer string
+	Namespace       string
+}
+
+type HealthStatus struct {
+	Healthy bool
+	Message string
+}
+
 // gateway implements the Gateway interface
 type gateway struct {
 	httpClient    *http.Client
@@ -196,6 +207,8 @@ func (g *gateway) LoadModel(ctx context.Context, logger logr.Logger, request Mod
 		return g.loadLLMDModel(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.loadDynamoModel(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.loadTorchServeModel(ctx, logger, request)
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -212,6 +225,9 @@ func (g *gateway) CheckModelStatus(ctx context.Context, logger logr.Logger, requ
 		return g.checkLLMDModelStatus(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.checkDynamoModelStatus(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		status, err := g.getTorchServeModelStatus(ctx, logger, request)
+		return status != nil && status.State == v2pb.INFERENCE_SERVER_STATE_SERVING, err
 	default:
 		return false, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -228,6 +244,8 @@ func (g *gateway) GetModelStatus(ctx context.Context, logger logr.Logger, reques
 		return g.getLLMDModelStatus(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.getDynamoModelStatus(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.getTorchServeModelStatus(ctx, logger, request)
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -244,6 +262,9 @@ func (g *gateway) IsHealthy(ctx context.Context, logger logr.Logger, serverName 
 		return g.isLLMDHealthy(ctx, logger, serverName)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.isDynamoHealthy(ctx, logger, serverName)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		healthStatus, err := g.isTorchServeHealthy(ctx, logger, HealthCheckRequest{InferenceServer: serverName})
+		return healthStatus != nil && healthStatus.Healthy, err
 	default:
 		return false, fmt.Errorf("unsupported backend type: %v", backendType)
 	}
@@ -270,6 +291,8 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		// TODO: Implement Dynamo model config updates  
 		return fmt.Errorf("model config updates not yet implemented for Dynamo backend")
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.updateTorchServeModelConfig(ctx, logger, request)
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -288,6 +311,8 @@ func (g *gateway) CreateInfrastructure(ctx context.Context, logger logr.Logger, 
 		return g.createLLMDInfrastructure(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.createDynamoInfrastructure(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.createTorchServeInfrastructure(ctx, logger, request)
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -304,6 +329,8 @@ func (g *gateway) GetInfrastructureStatus(ctx context.Context, logger logr.Logge
 		return g.getLLMDInfrastructureStatus(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.getDynamoInfrastructureStatus(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.getTorchServeInfrastructureStatus(ctx, logger, request)
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -320,6 +347,8 @@ func (g *gateway) DeleteInfrastructure(ctx context.Context, logger logr.Logger, 
 		return g.deleteLLMDInfrastructure(ctx, logger, request)
 	case v2pb.BACKEND_TYPE_DYNAMO:
 		return g.deleteDynamoInfrastructure(ctx, logger, request)
+	case v2pb.BACKEND_TYPE_TORCHSERVE:
+		return g.deleteTorchServeInfrastructure(ctx, logger, request)
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}

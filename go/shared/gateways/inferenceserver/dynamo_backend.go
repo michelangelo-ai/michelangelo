@@ -507,7 +507,7 @@ func (g *gateway) getDynamoModelStatus(ctx context.Context, logger logr.Logger, 
 	ready, err := g.checkDynamoModelStatus(ctx, logger, request)
 	if err != nil {
 		return &ModelStatus{
-			State:   "FAILED",
+			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
 			Message: fmt.Sprintf("Failed to check status: %v", err),
 			Ready:   false,
 		}, nil
@@ -515,14 +515,14 @@ func (g *gateway) getDynamoModelStatus(ctx context.Context, logger logr.Logger, 
 
 	if ready {
 		return &ModelStatus{
-			State:   "LOADED",
+			State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
 			Message: "Model is loaded and ready",
 			Ready:   true,
 		}, nil
 	}
 
 	return &ModelStatus{
-		State:   "LOADING",
+		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 		Message: "Model is still loading",
 		Ready:   false,
 	}, nil

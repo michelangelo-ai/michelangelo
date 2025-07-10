@@ -274,7 +274,7 @@ func (g *gateway) getLLMDModelStatus(ctx context.Context, logger logr.Logger, re
 	logger.Info("Getting LLMD model status", "model", request.ModelName)
 	
 	return &ModelStatus{
-		State:   "LOADED",
+		State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
 		Message: "Model is loaded and ready",
 		Ready:   true,
 	}, nil
