@@ -1,7 +1,6 @@
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
+import { ApplicationError } from '#core/types/error-types';
 import { safeStringify } from '#core/utils/string-utils';
-
-import type { ApplicationError } from '#core/types/error-types';
 
 /**
  * Normalizes any error to an {@link ApplicationError}: Michelangelo's standard
@@ -18,49 +17,39 @@ import type { ApplicationError } from '#core/types/error-types';
  * // { message: 'Something went wrong', code: 2, source: 'javascript' }
  * ```
  */
-export function normalizeUniversalError(error: unknown): ApplicationError | null {
+export function normalizeUniversalError(error: unknown): ApplicationError {
   if (error === null || error === undefined) {
-    return {
-      message: 'Unknown error occurred',
-      code: GrpcStatusCode.UNKNOWN,
+    return new ApplicationError('Unknown error occurred', GrpcStatusCode.UNKNOWN, {
       source: 'unknown',
-    };
+    });
   }
 
   if (error instanceof Error) {
-    return {
-      message: error.message,
-      code: GrpcStatusCode.UNKNOWN,
+    return new ApplicationError(error.message, GrpcStatusCode.UNKNOWN, {
       cause: error,
       source: 'javascript',
-    };
+    });
   }
 
   if (typeof error === 'string') {
-    return {
-      message: error,
-      code: GrpcStatusCode.UNKNOWN,
+    return new ApplicationError(error, GrpcStatusCode.UNKNOWN, {
       source: 'string',
-    };
+    });
   }
 
   if (typeof error === 'object' && error !== null) {
     const errorObj = error as Record<string, unknown>;
 
     if (errorObj.message) {
-      return {
-        message: safeStringify(errorObj.message),
-        code: GrpcStatusCode.UNKNOWN,
+      return new ApplicationError(safeStringify(errorObj.message), GrpcStatusCode.UNKNOWN, {
         cause: error,
         source: 'unknown',
-      };
+      });
     }
   }
 
-  return {
-    message: 'Unknown error occurred',
-    code: GrpcStatusCode.UNKNOWN,
+  return new ApplicationError('Unknown error occurred', GrpcStatusCode.UNKNOWN, {
     meta: { originalError: error },
     source: 'unknown',
-  };
+  });
 }

@@ -1,10 +1,9 @@
 /**
- * Core error interface that all error types should conform to
+ * Core error class that all error types should extend
  * Uses gRPC status codes as the universal standard
  */
-export interface ApplicationError {
-  /** Human-readable error message */
-  message: string;
+export class ApplicationError extends Error {
+  name = 'ApplicationError' as const;
   /** Error code - using gRPC codes as the standard */
   code: number;
   /** Optional additional context/metadata */
@@ -13,6 +12,28 @@ export interface ApplicationError {
   cause?: unknown;
   /** Error source/framework identifier */
   source?: string;
+
+  constructor(
+    message: string,
+    code: number,
+    options?: {
+      meta?: Record<string, unknown>;
+      cause?: unknown;
+      source?: string;
+    }
+  ) {
+    super(message);
+    this.code = code;
+    this.meta = options?.meta;
+    this.cause = options?.cause;
+    this.source = options?.source;
+
+    // Ensure prototype chain is correct for instanceof
+    Object.setPrototypeOf(this, ApplicationError.prototype);
+
+    // Improve stack traces (V8 only)
+    Error.captureStackTrace?.(this, this.constructor);
+  }
 }
 
 /**
