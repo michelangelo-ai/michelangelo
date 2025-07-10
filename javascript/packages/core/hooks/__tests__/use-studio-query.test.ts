@@ -7,6 +7,7 @@ import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+import { ApplicationError } from '#core/types/error-types';
 
 import type { ErrorNormalizer } from '#core/types/error-types';
 import type { QueryOptions } from '#core/types/query-types';
@@ -210,12 +211,10 @@ describe('useStudioQuery', () => {
       const customNormalizer: ErrorNormalizer = (error: unknown) => {
         if (typeof error === 'object' && error !== null && 'isResponseError' in error) {
           const rpcError = error as Record<string, unknown>;
-          return {
-            message: String(rpcError.message),
-            code: GrpcStatusCode.NOT_FOUND,
+          return new ApplicationError(String(rpcError.message), GrpcStatusCode.NOT_FOUND, {
             source: 'custom-normalizer',
             meta: rpcError.meta as Record<string, unknown>,
-          };
+          });
         }
         return null;
       };
