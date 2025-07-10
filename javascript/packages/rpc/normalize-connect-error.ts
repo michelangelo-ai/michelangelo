@@ -1,7 +1,7 @@
 import { ConnectError } from '@connectrpc/connect';
-import { GrpcStatusCode } from '@uber/michelangelo-core';
+import { ApplicationError, GrpcStatusCode } from '@uber/michelangelo-core';
 
-import type { ApplicationError, ErrorNormalizer } from '@uber/michelangelo-core';
+import type { ErrorNormalizer } from '@uber/michelangelo-core';
 
 /**
  * Normalizes Connect RPC errors to ApplicationError format
@@ -24,9 +24,7 @@ export const normalizeConnectError: ErrorNormalizer = (error: unknown): Applicat
     return null;
   }
 
-  return {
-    message: error.message,
-    code: mapConnectCodeToGrpc(error.code),
+  return new ApplicationError(error.message, mapConnectCodeToGrpc(error.code), {
     source: 'connect-rpc',
     meta: {
       connectErrorName: error.name,
@@ -34,7 +32,7 @@ export const normalizeConnectError: ErrorNormalizer = (error: unknown): Applicat
       metadata: error.metadata,
     },
     cause: error.cause ?? error,
-  };
+  });
 };
 
 /**

@@ -109,7 +109,8 @@ export { useCellProvider } from '#core/providers/cell-provider/use-cell-provider
 export type { CellContextType } from '#core/providers/cell-provider/types';
 
 // Error Provider
-export type { ApplicationError, ErrorNormalizer } from '#core/types/error-types';
+export { ApplicationError } from '#core/types/error-types';
+export type { ErrorNormalizer } from '#core/types/error-types';
 export { ErrorProvider } from '#core/providers/error-provider/error-provider';
 export { useApplicationError } from '#core/providers/error-provider/use-application-error';
 export { GrpcStatusCode } from '#core/constants/grpc-status-codes';
