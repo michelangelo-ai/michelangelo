@@ -14,6 +14,16 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// getBackendTypeFromDeployment determines the backend type from the deployment's inference server
+// In a real implementation, this would query the inference server to get its backend type
+func getBackendTypeFromDeployment(deployment *v2pb.Deployment) v2pb.BackendType {
+	// For now, default to Triton. In a production system, this would:
+	// 1. Query the inference server CRD to get its backend type
+	// 2. Use the backend type from the deployment spec if available
+	// 3. Have proper error handling for unknown backend types
+	return v2pb.BACKEND_TYPE_TRITON
+}
+
 // DisaggregatedStep represents a step in disaggregated deployment
 type DisaggregatedStep struct {
 	Name        string
@@ -155,7 +165,7 @@ func (a *DisaggregatedRolloutActor) validateModel(ctx context.Context, deploymen
 	loadRequest := inferenceserver.ModelLoadRequest{
 		ModelName:       modelName,
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		BackendType:     getBackendTypeFromDeployment(deployment),
 		PackagePath:     fmt.Sprintf("s3://deploy-models/%s/", modelName),
 	}
 
@@ -167,7 +177,7 @@ func (a *DisaggregatedRolloutActor) validateModel(ctx context.Context, deploymen
 	statusRequest := inferenceserver.ModelStatusRequest{
 		ModelName:       modelName,
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		BackendType:     getBackendTypeFromDeployment(deployment),
 	}
 
 	ready, err := a.gateway.CheckModelStatus(ctx, a.logger, statusRequest)
@@ -210,7 +220,7 @@ func (a *DisaggregatedRolloutActor) executeRollingStep(ctx context.Context, depl
 	updateRequest := inferenceserver.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		BackendType:     getBackendTypeFromDeployment(deployment),
 		ModelConfigs: []inferenceserver.ModelConfigEntry{
 			{
 				Name:   modelName,
@@ -229,7 +239,7 @@ func (a *DisaggregatedRolloutActor) executeBlastStep(ctx context.Context, deploy
 	updateRequest := inferenceserver.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		BackendType:     getBackendTypeFromDeployment(deployment),
 		ModelConfigs: []inferenceserver.ModelConfigEntry{
 			{
 				Name:   modelName,
@@ -271,7 +281,7 @@ func (a *DisaggregatedRolloutActor) deployToZone(ctx context.Context, deployment
 	updateRequest := inferenceserver.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
+		BackendType:     getBackendTypeFromDeployment(deployment),
 		ModelConfigs: []inferenceserver.ModelConfigEntry{
 			{
 				Name:   modelName,

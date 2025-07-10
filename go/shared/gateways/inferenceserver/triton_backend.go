@@ -470,7 +470,7 @@ func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, 
 	logger.Info("Getting Triton model status", "model", request.ModelName)
 
 	return &ModelStatus{
-		State:   "LOADED",
+		State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
 		Message: "Model is loaded and ready",
 		Ready:   true,
 	}, nil

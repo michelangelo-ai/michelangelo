@@ -7,6 +7,7 @@ go_library(
         "triton_backend.go",
         "llmd_backend.go",
         "dynamo_backend.go",
+        "torchserve_backend.go",
         "istio_proxy.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver",
