@@ -81,6 +81,8 @@ enum BackendType {
   BACKEND_TYPE_LLM_D = 2;
   // Dynamo (Disaggregated Inference) backend
   BACKEND_TYPE_DYNAMO = 3;
+  // TorchServe backend
+  BACKEND_TYPE_TORCHSERVE = 4;
 }
 
 // Inference Server spec.
