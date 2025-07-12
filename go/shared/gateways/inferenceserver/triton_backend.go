@@ -21,9 +21,16 @@ import (
 func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
 	logger.Info("Creating Triton infrastructure", "server", request.InferenceServer.Name)
 
-	// Create VirtualService first for fixed endpoint routing
-	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
-		return nil, fmt.Errorf("failed to create VirtualService: %w", err)
+	// Create routing resource - prefer HTTPRoute (Gateway API) over VirtualService (Istio-specific)
+	// Check if Gateway API is available by trying to create HTTPRoute first
+	if err := g.createInferenceServerHTTPRoute(ctx, logger, request); err != nil {
+		logger.Info("HTTPRoute creation failed, falling back to VirtualService", "error", err)
+		// Fallback to VirtualService if HTTPRoute fails
+		if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
+			return nil, fmt.Errorf("failed to create both HTTPRoute and VirtualService: %w", err)
+		}
+	} else {
+		logger.Info("Successfully created HTTPRoute for inference server", "server", request.InferenceServer.Name)
 	}
 
 	// Create ConfigMap for model configuration
@@ -90,15 +97,30 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
 	logger.Info("Deleting Triton infrastructure", "server", request.InferenceServer)
 
-	// Delete VirtualService
-	gvr := schema.GroupVersionResource{
+	// Delete HTTPRoute (Gateway API)
+	httpRouteGVR := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer)
+	if err := g.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
+		logger.Info("Failed to delete HTTPRoute (may not exist)", "name", httpRouteName, "error", err)
+	} else {
+		logger.Info("HTTPRoute deleted successfully", "name", httpRouteName)
+	}
+
+	// Delete VirtualService (fallback/legacy)
+	virtualServiceGVR := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
 		Version:  "v1beta1",
 		Resource: "virtualservices",
 	}
 	virtualServiceName := fmt.Sprintf("%s-virtualservice", request.InferenceServer)
-	if err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Delete(ctx, virtualServiceName, metav1.DeleteOptions{}); err != nil {
-		logger.Error(err, "Failed to delete VirtualService")
+	if err := g.dynamicClient.Resource(virtualServiceGVR).Namespace(request.Namespace).Delete(ctx, virtualServiceName, metav1.DeleteOptions{}); err != nil {
+		logger.Info("Failed to delete VirtualService (may not exist)", "name", virtualServiceName, "error", err)
+	} else {
+		logger.Info("VirtualService deleted successfully", "name", virtualServiceName)
 	}
 
 	// Delete Deployment
@@ -445,6 +467,154 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 	}
 
 	logger.Info("VirtualService created successfully", "name", virtualServiceName)
+	return nil
+}
+
+// createInferenceServerHTTPRoute creates a HTTPRoute for the inference server using generic Gateway API
+func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+	gvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer.Name)
+
+	// Check if HTTPRoute already exists
+	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	if err == nil {
+		logger.Info("HTTPRoute already exists, skipping creation", "name", httpRouteName)
+		return nil
+	}
+
+	hr := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "gateway.networking.k8s.io/v1",
+			"kind":       "HTTPRoute",
+			"metadata": map[string]interface{}{
+				"name":      httpRouteName,
+				"namespace": request.Namespace,
+				"labels": map[string]string{
+					"app":                        "inference-server",
+					"inference-server":           request.InferenceServer.Name,
+					"michelangelo.ai/managed-by": "controller",
+				},
+			},
+			"spec": map[string]interface{}{
+				"parentRefs": []map[string]interface{}{
+					{
+						"name":      "ma-gateway",
+						"namespace": "default",
+					},
+				},
+				"rules": []map[string]interface{}{
+					{
+						// Health check endpoint
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s-endpoint/%s/v2/health", request.InferenceServer.Name, request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/health",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+						},
+					},
+					{
+						// Model endpoints
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s-endpoint/%s/v2/models", request.InferenceServer.Name, request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/models",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+						},
+					},
+					{
+						// General endpoint with URL rewrite
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type": "PathPrefix",
+									"value": fmt.Sprintf("/%s-endpoint/%s/",
+										request.InferenceServer.Name,
+										request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+							// Example: Traffic splitting capability (commented for now)
+							// {
+							//     "name": fmt.Sprintf("%s-canary-service", request.InferenceServer.Name),
+							//     "port": 80,
+							//     "weight": 10,
+							// },
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, hr, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error(err, "Failed to create HTTPRoute")
+		return err
+	}
+
+	logger.Info("HTTPRoute created successfully", "name", httpRouteName)
 	return nil
 }
 
