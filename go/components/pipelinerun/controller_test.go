@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -40,7 +42,7 @@ func TestReconcile(t *testing.T) {
 	}
 	testCases := []struct {
 		name                      string
-		initialObjects            []runtime.Object
+		initialObjects            []client.Object
 		mockFunc                  func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient)
 		expectedConditions        []*apipb.Condition
 		expectedPipelineRunStatus v2.PipelineRunStatus
@@ -50,7 +52,7 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name: "All conditions are nil. Initial pipeline run condition and steps are added",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline-run",
@@ -116,7 +118,7 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "Source pipeline condition is true",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline-run",
@@ -217,7 +219,7 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "Workflow is succeeded",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline-run",
@@ -312,7 +314,7 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "Error getting workflow execution info",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline-run",
@@ -439,7 +441,7 @@ func TestReconcile(t *testing.T) {
 
 func setUpReconciler(
 	t *testing.T,
-	initialObjects []runtime.Object,
+	initialObjects []client.Object,
 	mockWorkflowClient *workflowClientMock.MockWorkflowClient,
 	mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient,
 ) *Reconciler {
@@ -447,7 +449,11 @@ func setUpReconciler(
 	scheme := runtime.NewScheme()
 	err := v2.AddToScheme(scheme)
 	require.NoError(t, err)
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialObjects...).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithObjects(initialObjects...).
+		WithStatusSubresource(initialObjects...).
+		Build()
 	handler := apiHandler.NewFakeAPIHandler(k8sClient)
 	plugin := plugin.NewPlugin(plugin.PluginParams{
 		Logger:         logger,

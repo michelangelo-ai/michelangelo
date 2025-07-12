@@ -22,8 +22,12 @@ type FakeStatusWriter struct {
 	client.Client
 }
 
+func (f *FakeStatusWriter) Create(ctx context.Context, obj client.Object, subResource client.Object, opts ...client.SubResourceCreateOption) error {
+	return f.Client.Create(ctx, obj)
+}
+
 // Update overrides the Update method to simulate status updates
-func (f *FakeStatusWriter) Update(ctx context.Context, obj client.Object, _ ...client.UpdateOption) error {
+func (f *FakeStatusWriter) Update(ctx context.Context, obj client.Object, _ ...client.SubResourceUpdateOption) error {
 	// Perform a regular update, since the fake client doesn't differentiate status subresources
 	original := obj.DeepCopyObject()
 
@@ -41,7 +45,7 @@ func (f *FakeStatusWriter) Update(ctx context.Context, obj client.Object, _ ...c
 }
 
 // Patch simulates the Patch method for the status subresource
-func (f *FakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, _ ...client.PatchOption) error {
+func (f *FakeStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, _ ...client.SubResourcePatchOption) error {
 	return f.Client.Patch(ctx, obj, patch)
 }
 
