@@ -22,9 +22,30 @@ type IstioProvider struct {
 var _ proxy.ProxyProvider = &IstioProvider{}
 
 func (r IstioProvider) UpdateProxy(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error {
-	log.Info("Updating Istio VirtualService", "name", deployment.Name, "namespace", deployment.Namespace)
+	log.Info("Updating proxy routes (HTTPRoute preferred)", "name", deployment.Name, "namespace", deployment.Namespace)
 
-	// Get existing VirtualService
+	// Try HTTPRoute first
+	httpRouteGvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	httpRouteName := fmt.Sprintf("%s-httproute", deployment.Spec.GetInferenceServer().Name)
+	httpRoute, err := r.DynamicClient.Resource(httpRouteGvr).Namespace(deployment.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	if err == nil {
+		// HTTPRoute found, update it
+		err = r.updateHTTPRouteProductionRoute(ctx, log, httpRoute, deployment.Spec.GetInferenceServer().Name, deployment.Name, deployment.Namespace, deployment.Spec.DesiredRevision.Name)
+		if err != nil {
+			return err
+		}
+		log.Info("HTTPRoute production route updated successfully")
+		return nil
+	}
+
+	// Fallback to VirtualService
+	log.Info("HTTPRoute not found, falling back to VirtualService", "error", err)
+	
 	gvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
 		Version:  "v1beta1",
@@ -344,4 +365,147 @@ func (r IstioProvider) updateProductionRoute(ctx context.Context, log logr.Logge
 	}
 
 	return nil
+}
+
+
+// HTTPRoute functions for Gateway API
+
+// updateHTTPRouteProductionRoute updates the existing production route in HTTPRoute with new model name
+func (r IstioProvider) updateHTTPRouteProductionRoute(ctx context.Context, log logr.Logger, httpRoute *unstructured.Unstructured, inferenceServerName string, deploymentName, namespace, modelName string) error {
+	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
+	if err != nil || !found {
+		return fmt.Errorf("rules not found in HTTPRoute")
+	}
+
+	productionPrefix := fmt.Sprintf("/%s-endpoint/%s/production", inferenceServerName, deploymentName)
+	updated := false
+
+	// Look for existing production route
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if r.hasMatchingHTTPRoutePrefix(ruleMap, productionPrefix) {
+			log.Info("Updating existing HTTPRoute production route", "modelName", modelName)
+			
+			// Update URLRewrite filter to route to specific model
+			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
+			if found {
+				for _, filter := range filters {
+					filterMap, ok := filter.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					
+					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
+						newPath := fmt.Sprintf("/v2/models/%s", modelName)
+						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
+							log.Error(err, "Failed to set URLRewrite replacePrefixMatch")
+							return err
+						}
+						break
+					}
+				}
+				
+				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
+					log.Error(err, "Failed to update filters in HTTPRoute rule")
+					return err
+				}
+			}
+			
+			updated = true
+			break
+		}
+	}
+
+	if !updated {
+		// Production route not found, add it
+		log.Info("Production route not found in HTTPRoute, adding new production route", "modelName", modelName)
+		productionRule := map[string]interface{}{
+			"matches": []map[string]interface{}{
+				{
+					"path": map[string]interface{}{
+						"type":  "PathPrefix",
+						"value": productionPrefix,
+					},
+				},
+			},
+			"backendRefs": []map[string]interface{}{
+				{
+					"group":  "",
+					"kind":   "Service",
+					"name":   fmt.Sprintf("%s-service", inferenceServerName),
+					"port":   80,
+					"weight": 100,
+				},
+			},
+			"filters": []map[string]interface{}{
+				{
+					"type": "URLRewrite",
+					"urlRewrite": map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":               "ReplacePrefixMatch",
+							"replacePrefixMatch": fmt.Sprintf("/v2/models/%s", modelName),
+						},
+					},
+				},
+			},
+		}
+
+		// Add the production rule to the beginning of the rules array
+		newRules := make([]interface{}, 0, len(rules)+1)
+		newRules = append(newRules, productionRule)
+		newRules = append(newRules, rules...)
+		rules = newRules
+	}
+
+	// Update the HTTPRoute
+	if err = unstructured.SetNestedField(httpRoute.Object, rules, "spec", "rules"); err != nil {
+		log.Error(err, "Failed to update rules in HTTPRoute")
+		return err
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	_, err = r.DynamicClient.Resource(gvr).Namespace(namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
+	if err != nil {
+		log.Error(err, "Failed to update HTTPRoute")
+		return err
+	}
+
+	log.Info("HTTPRoute production route updated successfully", "modelName", modelName, "inferenceServerName", inferenceServerName)
+	return nil
+}
+
+func (r IstioProvider) hasMatchingHTTPRoutePrefix(ruleMap map[string]interface{}, targetPrefix string) bool {
+	matches, found, _ := unstructured.NestedSlice(ruleMap, "matches")
+	if !found {
+		return false
+	}
+
+	for _, match := range matches {
+		matchMap, ok := match.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		pathMap, found, _ := unstructured.NestedMap(matchMap, "path")
+		if !found {
+			continue
+		}
+
+		if value, ok := pathMap["value"]; ok {
+			if valueStr, ok := value.(string); ok && valueStr == targetPrefix {
+				return true
+			}
+		}
+	}
+
+	return false
 }

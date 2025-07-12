@@ -73,7 +73,6 @@ func options() fx.Option {
 		zapfx.Module,
 		baseconfig.Module,
 		fx.Provide(scheme),
-		spark.Module,
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
