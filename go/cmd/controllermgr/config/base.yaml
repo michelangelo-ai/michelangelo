@@ -16,6 +16,12 @@ k8s:
 metadataStorage:
   enableMetadataStorage: false
 
+minio:
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: 35.199.170.39:9091
+
 controllers:
   rayCluster:
     k8sQps: 300
