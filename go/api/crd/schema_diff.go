@@ -1,6 +1,7 @@
 package crd
 
 import (
+	"fmt"
 	"reflect"
 
 	apiextv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -45,7 +46,7 @@ type schemaDiff struct {
 }
 
 // newSchemaDiff compare two JSONSchemaProps and return the diff
-func newSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps) (*schemaDiff, error) {
+func newSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps) *schemaDiff {
 	diff := schemaDiff{}
 
 	if old == nil {
@@ -61,10 +62,7 @@ func newSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps)
 	}
 
 	if old.Properties != nil || new.Properties != nil {
-		propertiesDiff, err := newSchemaObjectDiff(old.Properties, new.Properties)
-		if err != nil {
-			return nil, err
-		}
+		propertiesDiff := newSchemaObjectDiff(old.Properties, new.Properties)
 		diff.propertiesDiff = propertiesDiff
 	}
 
@@ -77,44 +75,32 @@ func newSchemaDiff(old *apiextv1.JSONSchemaProps, new *apiextv1.JSONSchemaProps)
 		if new.Items != nil {
 			newItemSchema = new.Items.Schema
 		}
-		itemsDiff, err := newSchemaDiff(oldItemSchema, newItemSchema)
-		if err != nil {
-			return nil, err
-		}
+		itemsDiff := newSchemaDiff(oldItemSchema, newItemSchema)
 		diff.itemsDiff = itemsDiff
 	}
 
 	if old.OneOf != nil || new.OneOf != nil {
-		oneOfDiff, err := newSchemaArrayDiff(old.OneOf, new.OneOf)
-		if err != nil {
-			return nil, err
-		}
+		oneOfDiff := newSchemaArrayDiff(old.OneOf, new.OneOf)
 		diff.oneOfDiff = oneOfDiff
 	}
 
 	if old.AnyOf != nil || new.AnyOf != nil {
-		anyOfDiff, err := newSchemaArrayDiff(old.AnyOf, new.AnyOf)
-		if err != nil {
-			return nil, err
-		}
+		anyOfDiff := newSchemaArrayDiff(old.AnyOf, new.AnyOf)
 		diff.anyOfDiff = anyOfDiff
 	}
 
 	if old.AllOf != nil || new.AllOf != nil {
-		allOfDiff, err := newSchemaArrayDiff(old.AllOf, new.AllOf)
-		if err != nil {
-			return nil, err
-		}
+		allOfDiff := newSchemaArrayDiff(old.AllOf, new.AllOf)
 		diff.allOfDiff = allOfDiff
 	}
 
 	// return nil if no diff exists
 	emptyDiff := schemaDiff{}
 	if diff == emptyDiff {
-		return nil, nil
+		return nil
 	}
 
-	return &diff, nil
+	return &diff
 }
 
 // Following changes are not compatible for a schema
@@ -161,7 +147,7 @@ type schemaArrayDiff struct {
 }
 
 // newSchemaArrayDiff compares two arrays of JSON property schemas
-func newSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchemaProps) (*schemaArrayDiff, error) {
+func newSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchemaProps) *schemaArrayDiff {
 
 	var deletedProps []*apiextv1.JSONSchemaProps
 	var addedProps []*apiextv1.JSONSchemaProps
@@ -173,10 +159,7 @@ func newSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchem
 			continue
 		}
 
-		diff, err := newSchemaDiff(&old[i], &new[i])
-		if err != nil {
-			return nil, err
-		}
+		diff := newSchemaDiff(&old[i], &new[i])
 		if diff != nil {
 			modifiedProps = append(modifiedProps, diff)
 		}
@@ -187,10 +170,10 @@ func newSchemaArrayDiff(old []apiextv1.JSONSchemaProps, new []apiextv1.JSONSchem
 	}
 
 	if len(deletedProps) > 0 || len(addedProps) > 0 || len(modifiedProps) > 0 {
-		return &schemaArrayDiff{deleted: deletedProps, added: addedProps, modified: modifiedProps}, nil
+		return &schemaArrayDiff{deleted: deletedProps, added: addedProps, modified: modifiedProps}
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (d *schemaArrayDiff) compatible() bool {
@@ -220,7 +203,7 @@ type schemaObjectDiff struct {
 	modified map[string]*schemaDiff
 }
 
-func newSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string]apiextv1.JSONSchemaProps) (*schemaObjectDiff, error) {
+func newSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string]apiextv1.JSONSchemaProps) *schemaObjectDiff {
 
 	deletedProps := make(map[string]*apiextv1.JSONSchemaProps)
 	addedProps := make(map[string]*apiextv1.JSONSchemaProps)
@@ -232,10 +215,7 @@ func newSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string
 			continue
 		}
 
-		diff, err := newSchemaDiff(&oldValue, &newValue)
-		if err != nil {
-			return nil, err
-		}
+		diff := newSchemaDiff(&oldValue, &newValue)
 
 		if diff != nil {
 			modifiedProps[key] = diff
@@ -255,10 +235,10 @@ func newSchemaObjectDiff(old map[string]apiextv1.JSONSchemaProps, new map[string
 			deleted:  deletedProps,
 			added:    addedProps,
 			modified: modifiedProps,
-		}, nil
+		}
 	}
 
-	return nil, nil
+	return nil
 }
 
 func (d *schemaObjectDiff) compatible() bool {
@@ -335,15 +315,11 @@ func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *a
 	for k, oldVersion := range oldVersions {
 		newVersion, present := newVersions[k]
 		if !present {
-			// Allow deleting old CRD version
-			continue
+			return false, fmt.Errorf("CRD %s has version %s that is not in the new CRD", oldCRD.Name, k)
 		}
 
 		// compare the two schemas with the same version name
-		diff, err := newSchemaDiff(oldVersion.Schema.OpenAPIV3Schema, newVersion.Schema.OpenAPIV3Schema)
-		if err != nil {
-			return false, err
-		}
+		diff := newSchemaDiff(oldVersion.Schema.OpenAPIV3Schema, newVersion.Schema.OpenAPIV3Schema)
 
 		if diff != nil && !diff.compatible() {
 			return false, nil

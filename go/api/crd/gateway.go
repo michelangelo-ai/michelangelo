@@ -62,8 +62,13 @@ func NewCRDGateway(p GatewayParams) Gateway {
 }
 
 // ConditionalUpsert create or update CRD, also check for CRD compatibility before update
-func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomResourceDefinition, enableIncompatibleUpdate bool) error {
+func (r *gateway) ConditionalUpsert(
+	ctx context.Context,
+	crd *apiextv1.CustomResourceDefinition,
+	enableIncompatibleUpdate bool) error {
 	r.logger.Info("Get CRD schema from k8s server.", zap.String("name", crd.Name))
+
+	// get existing CRDs in the cluster
 	crdOnServer, err := r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Get(ctx, crd.Name, metav1.GetOptions{})
 	if err != nil {
 		// directly update if CRD not found
@@ -85,6 +90,23 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 		e := fmt.Errorf("failed to get CRD %s: %w", crd.Name, err)
 		r.logger.Error(e.Error())
 		return e
+	}
+
+	// return error if there are CRD versions that are in the cluster but is not in the corresponding new CRDs,
+	// as we don't currently support removing versions of CRDs in the cluster
+	for _, v := range crdOnServer.Spec.Versions {
+		find := false
+		for _, newV := range crd.Spec.Versions {
+			if v.Name == newV.Name {
+				find = true
+				break
+			}
+		}
+		if !find {
+			e := fmt.Errorf("CRD %s has version %s that is not in the new CRD", crd.Name, v.Name)
+			r.logger.Error(e.Error())
+			return e
+		}
 	}
 
 	// Compare change, then apply update conditionally
@@ -109,9 +131,8 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 		}
 	}
 
-	// k8s use ResourceVersion for concurrency control
 	r.logger.Info("Update CRD definition.", zap.String("name", crd.Name))
-	crd.ResourceVersion = crdOnServer.ResourceVersion
+	crd.ResourceVersion = crdOnServer.ResourceVersion // for k8s concurrency control
 	updatedCRD, err := r.apiExtClient.ApiextensionsV1().CustomResourceDefinitions().Update(
 		ctx,
 		crd,
@@ -120,7 +141,7 @@ func (r *gateway) ConditionalUpsert(ctx context.Context, crd *apiextv1.CustomRes
 	if err != nil {
 		return err
 	}
-	r.logger.Info("CRD updated successfully to version", zap.String("name", updatedCRD.Name), zap.String("version", updatedCRD.ResourceVersion))
+	r.logger.Info("CRD updated", zap.String("name", updatedCRD.Name))
 	return nil
 }
 
