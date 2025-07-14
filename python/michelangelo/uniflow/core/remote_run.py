@@ -244,7 +244,8 @@ class RemoteRunTemporal:
             f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
             "--workflow-id",
             workflow_id,
-            "--address", "temporal.stg-myteksi.com:7233",
+            "--address",
+            "temporal.stg-myteksi.com:7233",
         ]
 
         # Add optional parameters if set
