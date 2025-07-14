@@ -49,3 +49,21 @@ export function timestampToString(
 
   return `${formattedDate} (${timeZoneString})`;
 }
+
+/**
+ * Converts epoch seconds to a JavaScript Date object
+ * @param epochSeconds - Unix timestamp in seconds
+ * @returns Date object
+ */
+export function getDateFromEpochSeconds(epochSeconds: number): Date {
+  return new Date(epochSeconds * 1000);
+}
+
+/**
+ * Converts a JavaScript Date object to epoch seconds
+ * @param date - Date object to convert
+ * @returns Unix timestamp in seconds
+ */
+export function getEpochSecondsFromDate(date: Date): number {
+  return Math.floor(date.getTime() / 1000);
+}
