@@ -525,15 +525,6 @@ def ray_cluster_spec(
                                 "image": image,  # Keeping original variable
                                 "imagePullPolicy": IMAGE_PULL_POLICY,
                                 "env": env,  # Keeping original variable
-                                "envFrom": [
-                                    {
-                                        "configMapRef": {
-                                            "localObjectReference": {
-                                                "name": "michelangelo-config",
-                                            },
-                                        },
-                                    },
-                                ],
                                 "volumeMounts": [
                                     {
                                         "name": "ray",
@@ -590,15 +581,6 @@ def ray_cluster_spec(
                                     "image": image,
                                     "imagePullPolicy": IMAGE_PULL_POLICY,
                                     "env": env,
-                                    "envFrom": [
-                                        {
-                                            "configMapRef": {
-                                                "localObjectReference": {
-                                                    "name": "michelangelo-config",
-                                                },
-                                            },
-                                        },
-                                    ],
                                     "lifecycle": {
                                         "postStart": {
                                             "exec": {

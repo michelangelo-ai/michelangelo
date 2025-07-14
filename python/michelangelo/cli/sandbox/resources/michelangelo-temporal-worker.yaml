@@ -59,4 +59,4 @@ data:
 
     minio:
       awsRegion: ap-southeast-1
-      awsEndpointUrl: wenbo-ray-test
+      awsEndpointUrl: s3.amazonaws.com
