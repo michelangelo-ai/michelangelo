@@ -10,14 +10,14 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 
 DEFAULT_EXECUTION_TIMEOUT_SECONDS = (
-    60 * 60 * 24 * 365 * 10
+        60 * 60 * 24 * 365 * 10
 )  # 3650 days, practically no timeout
 
 _RUN_ID_SEARCH_RE = re.compile(
@@ -235,7 +235,7 @@ class RemoteRunTemporal:
         # Set required parameters
         cmd += [
             "--namespace",
-            os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+            os.environ.get("UFC_TEMPORAL_NAMESPACE", "uniflow"),
             "--task-queue",
             os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
             "--type",
@@ -244,6 +244,7 @@ class RemoteRunTemporal:
             f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
             "--workflow-id",
             workflow_id,
+            "--address", "temporal.stg-myteksi.com:7233",
         ]
 
         # Add optional parameters if set

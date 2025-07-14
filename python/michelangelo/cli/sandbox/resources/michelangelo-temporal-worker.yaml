@@ -1,21 +1,32 @@
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: michelangelo-worker
   labels:
     app: michelangelo-worker
 spec:
-  containers:
-    - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: michelangelo-worker
+  template:
+    metadata:
+      labels:
+        app: michelangelo-worker
+    spec:
+      containers:
+        - name: app
+          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:main
+          volumeMounts:
+            - name: worker-config-volume
+              mountPath: /config
+      volumes:
         - name: worker-config-volume
-          mountPath: /config
-  volumes:
-    - name: worker-config-volume
-      configMap:
-        name: michelangelo-worker-config
+          configMap:
+            name: michelangelo-worker-config
+      nodeSelector:
+        node.kubernetes.io/scaling-group: nodes
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -36,7 +47,7 @@ data:
 
     workflow-engine:
       # for temporal
-        host: temporaltest-frontend:7233
+        host: temporal.stg-myteksi.com:7233
         transport: grpc
         # for temporal
         provider: temporal
@@ -44,10 +55,11 @@ data:
           - domain: default
             taskList: default
         client:
-          domain: default
+          domain: uniflow
 
     minio:
-      awsRegion: us-east-1
-      awsAccessKeyId: minioadmin
-      awsSecretAccessKey: minioadmin
-      awsEndpointUrl: minio:9091
+      awsRegion: ap-southeast-1
+    #  awsAccessKeyId: ASIARMJLJVVDZZBS2FRV
+    #  awsSecretAccessKey: +UfixUkzvbGczv2krlN7ClhYE+TX3uaLvGkzaIqH
+    #  awsSessionToken: IQoJb3JpZ2luX2VjELH//////////wEaDmFwLXNvdXRoZWFzdC0xIkgwRgIhAKnA1erEJat7QV/bRdnu80+680quunN32hvBqfVe6lNQAiEA3aI+sul1kDhIrshkIDXufhOmh2L5BrKC/gpB20vfUNUqtAMIuv//////////ARAEGgwwOTUxMTY5NjMxNDMiDGFckSkE1+BFPvndBiqIAw7oaHoB7eEhO2clVwvkhzR9402Zwvvn6B0Cj3VM1zOXMjjjeGMU6GrejqK+YjmoWPSJRlxFWAyU4SdWQUOExikYQdZeI5RNIJYPLOmXUF1mrl3yUA125iMBq2wGzBcnWYnjNBObbIoHRkPH7rsCyCI04l6KQtya9q6StP62NM2jd/7m/f6Eu3Kp30fPbVRBzdAowY4rkRlc3gbnYkzUZUabD57txKzZoLj9zy71XHFuJShiY4MZ5Z1Stt9jJGKeDIA8YjXOdmVSuvPbVBYTfkWfptYMAKHjgU8KjrqPNscr54Paq6zCstA1RTBrLup6cK0X+GyzfsTmHtKh0VhHmW6DAvxUx+E9+XyEckpqM7ExXZEvp12vyfvL90jo7bWmUoB2Q/y3kEA5NQqDxE/GYimMCutbnbYs3H7AwYCC3UziMFt0nwcA79YEWlB2Wuoc/L2sFf+2xh4eM1VOEKq3i/G+EdFFqKgjwn0VzkQ2GdKDOKAKpRuC2B9SPNDyS0dtL0OLIMmAEAOSMI2KvsMGOqUBv7JG0MdUon+DJDwuQRtGE7+plXmeiFO/CeY5i3B+jq/ONunlOx4/bQm3EkvWQyj/2nUzOzw7MLvTNEdIuaiYuVjVQ7hlRDuGJo8X7atiPRA5FGDHee9elr2fV/j+Px52Eui09lq8s+ZOQqbsL2boSnTk3iwCnz3EbV7CNxPAPrZjiiH+zbaGIIaulT3wIrlT8aV8v1oecedXcxlgBZa6qizg7xEB
+      awsEndpointUrl: wenbo-ray-test
