@@ -491,7 +491,7 @@ def ray_cluster_spec(
                 "pod": {
                     "metadata": {
                         "annotations": {
-                            "iam.amazonaws.com/role": "arn:aws:iam::095116963143:role/chimera/chimera_pipeline_controller_role"
+                            "iam.amazonaws.com/role": "arn:aws:iam::095116963143:role/chimera/michelangelo_role"
                         }
                     },
                     "spec": {
@@ -556,7 +556,7 @@ def ray_cluster_spec(
                     "pod": {
                         "metadata": {
                             "annotations": {
-                                "iam.amazonaws.com/role": "arn:aws:iam::095116963143:role/chimera/chimera_pipeline_controller_role"
+                                "iam.amazonaws.com/role": "arn:aws:iam::095116963143:role/chimera/michelangelo_role"
                             }
                         },
                         "spec": {
