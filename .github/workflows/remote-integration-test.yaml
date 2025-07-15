@@ -45,7 +45,7 @@ jobs:
           echo "Starting Docker build..."
           # Fixed: removed invalid --memory and --cpus flags
           docker build -t ma-it-examples -f ./examples/Dockerfile ./python
-          
+
           if [ $? -eq 0 ]; then
             echo "Docker build successful!"
           else

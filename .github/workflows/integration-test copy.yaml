@@ -1,0 +1,33 @@
+name: Integration test 2
+
+# Trigger the workflow on push and pull request events for the main branch
+on:
+  workflow_dispatch:
+
+jobs:
+  bert-cola-local:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python
+
+    steps:
+      #----------------------------------------------
+      # Check-out repo
+      #----------------------------------------------
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      #----------------------------------------------
+      # Build docker image
+      #----------------------------------------------
+      - name: Build docker image
+        run: docker build -t ma-it-examples -f ./examples/Dockerfile .
+      - name: Check docker image
+        run: docker image ls
+
+      #----------------------------------------------
+      # Run test
+      #----------------------------------------------
+      - name: Run pipeline
+        run: docker run --rm ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
