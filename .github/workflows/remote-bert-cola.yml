@@ -43,8 +43,8 @@ jobs:
       - name: Build docker image
         run: |
           echo "Starting Docker build..."
-          # Fixed build context
-          docker build --memory=6g --cpus=1.5 -t ma-it-examples -f ./examples/Dockerfile ./python
+          # Fixed: removed invalid --memory and --cpus flags
+          docker build -t ma-it-examples -f ./examples/Dockerfile ./python
           
           if [ $? -eq 0 ]; then
             echo "✅ Docker build successful!"
@@ -67,4 +67,5 @@ jobs:
       - name: Run pipeline
         run: |
           echo "Starting BERT CoLA pipeline..."
+          # Resource limits are correct for docker run
           docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
