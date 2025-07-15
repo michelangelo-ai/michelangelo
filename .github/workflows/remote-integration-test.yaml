@@ -1,10 +1,8 @@
 name: Remote Integration test
 
-# Trigger the workflow on push to the ananya/remote-integ-test branch
+# Trigger the workflow on push and pull request events for the main branch
 on:
-  push:
-    branches: [ananya/remote-integ-test]
-  workflow_dispatch:  # Keep manual trigger as backup
+  workflow_dispatch:
 
 jobs:
   bert-cola-local:
@@ -45,8 +43,14 @@ jobs:
       - name: Build docker image
         run: |
           echo "Starting Docker build..."
-          # Fixed: removed invalid --memory and --cpus flags
-          docker build -t ma-it-examples -f ./examples/Dockerfile ./python
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "Python directory contents:"
+          ls -la python/ || echo "Python directory not found"
+          
+          # Try building from the correct context
+          docker build -t ma-it-examples -f python/examples/Dockerfile .
 
           if [ $? -eq 0 ]; then
             echo "Docker build successful!"
@@ -70,4 +74,4 @@ jobs:
         run: |
           echo "Starting BERT CoLA pipeline..."
           # Resource limits are correct for docker run
-          docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
+          docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python examples/bert_cola/bert_cola.py
