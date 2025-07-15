@@ -67,7 +67,7 @@ data:
 
     minio:
       awsRegion: ap-southeast-1
-      awsEndpointUrl: s3.amazonaws.com
+      awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
     
     workflowClient:
       service: cadence-frontend

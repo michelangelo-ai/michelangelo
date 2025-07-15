@@ -12,6 +12,8 @@ spec:
       app: michelangelo-worker
   template:
     metadata:
+      annotations:
+        iam.amazonaws.com/role: arn:aws:iam::095116963143:role/chimera/michelangelo_role
       labels:
         app: michelangelo-worker
     spec:
@@ -59,4 +61,4 @@ data:
 
     minio:
       awsRegion: ap-southeast-1
-      awsEndpointUrl: s3.amazonaws.com
+      awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
