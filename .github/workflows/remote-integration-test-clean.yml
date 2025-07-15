@@ -1,0 +1,49 @@
+name: Remote Integration test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bert-cola-local:
+    runs-on: self-hosted
+    defaults:
+      run:
+        working-directory: ./python
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Check system resources
+        run: |
+          echo "=== System Resources ==="
+          echo "CPU Cores: $(nproc)"
+          echo "Memory: $(free -h | grep Mem | awk '{print $2}')"
+          echo "Available Memory: $(free -h | grep Mem | awk '{print $7}')"
+          echo "Disk Space: $(df -h / | tail -1 | awk '{print $4}')"
+
+      - name: Clean up Docker
+        run: |
+          docker system prune -f
+          docker image prune -f
+
+      - name: Build docker image
+        run: |
+          echo "Starting Docker build..."
+          docker build -t ma-it-examples -f ./examples/Dockerfile ./python
+          if [ $? -eq 0 ]; then
+            echo "Docker build successful!"
+          else
+            echo "Docker build failed!"
+            exit 1
+          fi
+
+      - name: Check docker image
+        run: |
+          docker image ls
+          docker images ma-it-examples --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+
+      - name: Run pipeline
+        run: |
+          echo "Starting BERT CoLA pipeline..."
+          docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
