@@ -2,6 +2,8 @@ name: Remote Integration test
 
 # Trigger the workflow on push and pull request events for the main branch
 on:
+  push:
+    branches: [ananya/remote-integ-test]
   workflow_dispatch:
 
 jobs:
