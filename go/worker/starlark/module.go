@@ -8,6 +8,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/rayhttp"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
 	"go.uber.org/fx"
@@ -28,6 +29,7 @@ func register(workers []worker.Worker, backend service.BackendType) error {
 	plugins[spark.Plugin.ID()] = spark.Plugin
 	plugins[storage.Plugin.ID()] = storage.Plugin
 	plugins[cachedoutput.Plugin.ID()] = cachedoutput.Plugin
+	plugins[rayhttp.Plugin.ID()] = rayhttp.Plugin
 
 	workerService, err := service.NewService(plugins, "", backend)
 	if err != nil {

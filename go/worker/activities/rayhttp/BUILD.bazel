@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "rayhttp",
+    srcs = [
+        "module.go",
+        "ray_activities.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/worker/ray",
+        "@com_github_cadence_workflow_starlark_worker//activity",
+        "@com_github_cadence_workflow_starlark_worker//service",
+        "@com_github_cadence_workflow_starlark_worker//worker",
+        "@com_github_cadence_workflow_starlark_worker//workflow",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:meta",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured",
+        "@io_k8s_sigs_controller_runtime//pkg/log",
+        "@org_uber_go_fx//:fx",
+        "@org_uber_go_zap//:zap",
+    ],
+)
