@@ -1,7 +1,7 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "rayhttp",
+    name = "go_default_library",
     srcs = [
         "plugin.go",
         "starlark_module.go",
@@ -9,12 +9,12 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/plugins/rayhttp",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/worker/plugins/utils",
-        "@com_github_cadence_workflow_starlark_worker//ext",
-        "@com_github_cadence_workflow_starlark_worker//service",
-        "@com_github_cadence_workflow_starlark_worker//worker",
-        "@com_github_cadence_workflow_starlark_worker//workflow",
-        "@net_starlark_go//starlark",
-        "@org_uber_go_zap//:zap",
+        "//go/worker/plugins/utils:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
+        "@net_starlark_go//starlark:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ],
 )
