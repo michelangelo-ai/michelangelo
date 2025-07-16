@@ -21,59 +21,15 @@ jobs:
         uses: actions/checkout@v4
 
       #----------------------------------------------
-      # Check system resources
-      #----------------------------------------------
-      - name: Check system resources
-        run: |
-          echo "=== System Resources ==="
-          echo "CPU Cores: $(nproc)"
-          echo "Memory: $(free -h | grep Mem | awk '{print $2}')"
-          echo "Available Memory: $(free -h | grep Mem | awk '{print $7}')"
-          echo "Disk Space: $(df -h / | tail -1 | awk '{print $4}')"
-
-      #----------------------------------------------
-      # Clean up Docker
-      #----------------------------------------------
-      - name: Clean up Docker
-        run: |
-          docker system prune -f
-          docker image prune -f
-
-      #----------------------------------------------
       # Build docker image
       #----------------------------------------------
       - name: Build docker image
-        run: |
-          echo "Starting Docker build..."
-          echo "Current directory: $(pwd)"
-          echo "Directory contents:"
-          ls -la
-          echo "Python directory contents:"
-          ls -la python/ || echo "Python directory not found"
-          
-          # Try building from the correct context
-          docker build -t ma-it-examples -f examples/Dockerfile .
-
-          if [ $? -eq 0 ]; then
-            echo "Docker build successful!"
-          else
-            echo "Docker build failed!"
-            exit 1
-          fi
-
-      #----------------------------------------------
-      # Check docker image
-      #----------------------------------------------
+        run: docker build -t ma-it-examples -f ./examples/Dockerfile .
       - name: Check docker image
-        run: |
-          docker image ls
-          docker images ma-it-examples --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
+        run: docker image ls
 
       #----------------------------------------------
       # Run test
       #----------------------------------------------
       - name: Run pipeline
-        run: |
-          echo "Starting BERT CoLA pipeline..."
-          # Resource limits are correct for docker run
-          docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python examples/bert_cola/bert_cola.py
+        run: docker run --rm ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
