@@ -1,11 +1,10 @@
 worker:
-  address: 127.0.0.1:14566
+  address: localhost:14566
+  httpAddress: http://localhost:8080
   maApiServiceName: ma-apiserver
-  http:
-    baseUrl: http://127.0.0.1:8000
-    workspace: cauldron-test
-    environment: dev
-    sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
+  transport: grpc  # Options: "grpc" or "http"
+  rayHttp:
+    baseUrl: http://localhost:8000  # Base URL for Ray HTTP API
 
 logging:
   level: info
@@ -14,21 +13,22 @@ logging:
 
 workflow-engine:
   # for cadence
-#  host: 127.0.0.1:7833
+  host: 127.0.0.1:7833
   # for temporal
-  host: temporal.stg-myteksi.com:7233
+#  host: 127.0.0.1:7233
   transport: grpc
   # for cadence
-#  provider: cadence
+  provider: cadence
     # for temporal
-  provider: temporal
+#  provider: temporal
   workers:
     - domain: default
-      taskList: cauldron-test
+      taskList: default
   client:
-    domain: uniflow
+    domain: default
 
 minio:
-  awsRegion: ap-southeast-1
-  awsEndpointUrl: s3.amazonaws.com
-  useEnvAws: true
+  awsRegion: us-east-1
+  awsAccessKeyId: minioadmin
+  awsSecretAccessKey: minioadmin
+  awsEndpointUrl: localhost:9091

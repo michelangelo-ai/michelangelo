@@ -4,21 +4,23 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/api/transport"
 	"go.uber.org/yarpc/transport/grpc"
+	"go.uber.org/yarpc/transport/http"
 
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/rayhttp"
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/sparkhttp"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp"
 )
 
 const configKey = "worker"
 
-// Config represents the worker configuration.
+// Config represents the worker YARPC configuration.
 type Config struct {
-	MaAPIServiceName string      `yaml:"maApiServiceName"`
-	Address          string      `yaml:"address"`
-	HTTP             http.Config `yaml:"http"`
+	MaAPIServiceName string `yaml:"maApiServiceName"`
+	Address          string `yaml:"address"`
+	HTTPAddress      string `yaml:"httpAddress"`
+	Transport        string `yaml:"transport"` // "grpc" or "http"
+	RayHTTP          rayhttp.Config `yaml:"rayHttp"`
 }
 
 // Params provides dependencies for YARPC dispatcher.
@@ -43,12 +45,26 @@ func NewConfig(provider config.Provider) (Config, error) {
 	return conf, err
 }
 
-// NewYARPCDispatcher creates and starts a new YARPC dispatcher.
+// NewYARPCDispatcher creates and starts a new YARPC dispatcher with either gRPC or HTTP transport.
 func NewYARPCDispatcher(p Params) (*yarpc.Dispatcher, error) {
-	tran := grpc.NewTransport().NewSingleOutbound(p.Config.Address)
+	var unaryOutbound transport.UnaryOutbound
+
+	// Select transport based on configuration
+	switch p.Config.Transport {
+	case "http":
+		if p.Config.HTTPAddress == "" {
+			// Fallback to regular address if HTTP address is not provided
+			unaryOutbound = http.NewTransport().NewSingleOutbound(p.Config.Address)
+		} else {
+			unaryOutbound = http.NewTransport().NewSingleOutbound(p.Config.HTTPAddress)
+		}
+	default: // Default to gRPC
+		unaryOutbound = grpc.NewTransport().NewSingleOutbound(p.Config.Address)
+	}
+
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
 		Name:      p.Config.MaAPIServiceName,
-		Outbounds: yarpc.Outbounds{p.Config.MaAPIServiceName: {Unary: tran}},
+		Outbounds: yarpc.Outbounds{p.Config.MaAPIServiceName: {Unary: unaryOutbound}},
 	})
 
 	if err := dispatcher.Start(); err != nil {
@@ -56,6 +72,11 @@ func NewYARPCDispatcher(p Params) (*yarpc.Dispatcher, error) {
 	}
 
 	return dispatcher, nil
+}
+
+// GetRayHTTPConfig returns the Ray HTTP API configuration.
+func GetRayHTTPConfig(p Params) rayhttp.Config {
+	return p.Config.RayHTTP
 }
 
 // NewRayClusterServiceClient creates a RayClusterService YARPC client.
@@ -76,14 +97,4 @@ func NewSparkJobServiceClient(p ClientParams) v2pb.SparkJobServiceYARPCClient {
 // NewCachedOutputServiceClient creates a CachedOutputService YARPC client.
 func NewCachedOutputServiceClient(p ClientParams) v2pb.CachedOutputServiceYARPCClient {
 	return v2pb.NewCachedOutputServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
-}
-
-// GetRayHTTPConfig returns the Ray HTTP API configuration.
-func GetRayHTTPConfig(p Params) rayhttp.Config {
-	return rayhttp.Config{Config: p.Config.HTTP}
-}
-
-// GetSparkHTTPConfig returns the Spark HTTP API configuration.
-func GetSparkHTTPConfig(p Params) sparkhttp.Config {
-	return sparkhttp.Config{Config: p.Config.HTTP}
 }
