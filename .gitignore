@@ -283,3 +283,7 @@ MODULE.bazel.lock
 /go/vendor
 
 .envrc.local
+
+# Claude specific
+**/.claude/settings.local.json
+CLAUDE.local.md
