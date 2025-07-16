@@ -2,18 +2,18 @@ package torchserve
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TorchServePlugin implements InferenceServerPlugin for TorchServe backend
 type TorchServePlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // NewPlugin creates a new TorchServe plugin
-func NewPlugin(gateway inferenceserver.Gateway) plugins.InferenceServerPlugin {
+func NewPlugin(gateway gateways.Gateway) plugins.InferenceServerPlugin {
 	return &TorchServePlugin{
 		gateway: gateway,
 	}
@@ -40,7 +40,7 @@ func (p *TorchServePlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plu
 
 // TorchServeCreationPlugin handles TorchServe infrastructure creation
 type TorchServeCreationPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // GetActors returns the list of actors for TorchServe creation
@@ -60,7 +60,7 @@ func (p *TorchServeCreationPlugin) GetActors() []plugins.ConditionActor {
 
 // TorchServeDeletionPlugin handles TorchServe infrastructure deletion
 type TorchServeDeletionPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // GetActors returns the list of actors for TorchServe deletion

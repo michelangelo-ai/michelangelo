@@ -16,7 +16,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -26,7 +26,7 @@ type Reconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Gateway  inferenceserver.Gateway
+	Gateway  gateways.Gateway
 	Plugins  plugins.PluginRegistry
 }
 
@@ -140,7 +140,7 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, logger logr.Logg
 	}
 	
 	// Get current status from gateway
-	statusResp, err := r.Gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	statusResp, err := r.Gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: inferenceServer.Name,
 		Namespace:       inferenceServer.Namespace,
 		BackendType:     inferenceServer.Spec.BackendType,
@@ -240,7 +240,7 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 		if inferenceServer.Status.ProviderMetadata != "proxy-configured" {
 			logger.Info("Configuring proxy for serving server")
 			
-			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, inferenceserver.ProxyConfigRequest{
+			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
 				ModelName:       inferenceServer.Name, // Use server name as model name for now
@@ -310,7 +310,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, logger logr.Logger, inf
 	}
 
 	// Check if deletion is complete by getting status
-	statusResp, statusErr := r.Gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	statusResp, statusErr := r.Gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: inferenceServer.Name,
 		Namespace:       inferenceServer.Namespace,
 		BackendType:     inferenceServer.Spec.BackendType,

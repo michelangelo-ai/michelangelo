@@ -8,7 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,7 +52,7 @@ func GetDisaggregatedActors(params Params, deployment *v2pb.Deployment) []plugin
 // DisaggregatedRolloutActor implements multi-step, environment-specific deployment
 type DisaggregatedRolloutActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -162,9 +162,10 @@ func (a *DisaggregatedRolloutActor) executeStep(ctx context.Context, deployment 
 
 func (a *DisaggregatedRolloutActor) validateModel(ctx context.Context, deployment *v2pb.Deployment, modelName string) error {
 	// Model load validation
-	loadRequest := inferenceserver.ModelLoadRequest{
+	loadRequest := gateways.ModelLoadRequest{
 		ModelName:       modelName,
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
+		Namespace:       deployment.Namespace,
 		BackendType:     getBackendTypeFromDeployment(deployment),
 		PackagePath:     fmt.Sprintf("s3://deploy-models/%s/", modelName),
 	}
@@ -174,9 +175,10 @@ func (a *DisaggregatedRolloutActor) validateModel(ctx context.Context, deploymen
 	}
 
 	// Model prediction validation
-	statusRequest := inferenceserver.ModelStatusRequest{
+	statusRequest := gateways.ModelStatusRequest{
 		ModelName:       modelName,
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
+		Namespace:       deployment.Namespace,
 		BackendType:     getBackendTypeFromDeployment(deployment),
 	}
 
@@ -217,11 +219,11 @@ func (a *DisaggregatedRolloutActor) executeRollingStep(ctx context.Context, depl
 	a.logger.Info("Executing rolling step", "step", step.Name, "percentage", step.Percentage)
 
 	// Update model config with percentage-based rollout
-	updateRequest := inferenceserver.ModelConfigUpdateRequest{
+	updateRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		BackendType:     getBackendTypeFromDeployment(deployment),
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
@@ -236,11 +238,11 @@ func (a *DisaggregatedRolloutActor) executeBlastStep(ctx context.Context, deploy
 	a.logger.Info("Executing blast step", "step", step.Name)
 
 	// Full deployment to all remaining infrastructure
-	updateRequest := inferenceserver.ModelConfigUpdateRequest{
+	updateRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		BackendType:     getBackendTypeFromDeployment(deployment),
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
@@ -278,11 +280,11 @@ func (a *DisaggregatedRolloutActor) getTargetZones(ctx context.Context, deployme
 func (a *DisaggregatedRolloutActor) deployToZone(ctx context.Context, deployment *v2pb.Deployment, zone string, modelName string) error {
 	// Implementation same as ZonalRolloutActor.deployToZone
 	// Would be extracted to common utility in real implementation
-	updateRequest := inferenceserver.ModelConfigUpdateRequest{
+	updateRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		BackendType:     getBackendTypeFromDeployment(deployment),
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),

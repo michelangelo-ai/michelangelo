@@ -9,7 +9,7 @@ logging:
 
 workflow-engine:
   # for cadence
-  host: 34.82.60.63:7833
+  host: 35.199.170.39:7833
   # for temporal
 #  host: 34.82.60.63:7233
   transport: grpc
@@ -29,4 +29,4 @@ minio:
   awsRegion: us-east-1
   awsAccessKeyId: minioadmin
   awsSecretAccessKey: minioadmin
-  awsEndpointUrl: 34.82.60.63:9091
+  awsEndpointUrl: 35.199.170.39:9091

@@ -8,7 +8,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/rollout/strategies"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -23,7 +23,7 @@ type conditionPlugin struct {
 // Params contains dependencies for rollout plugin
 type Params struct {
 	Client  client.Client
-	Gateway inferenceserver.Gateway
+	Gateway gateways.Gateway
 	Logger  logr.Logger
 }
 
@@ -173,7 +173,7 @@ func (a *ValidationActor) Run(ctx context.Context, runtimeCtx plugins.RequestCon
 // AssetPreparationActor handles asset preparation following Uber patterns
 type AssetPreparationActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 

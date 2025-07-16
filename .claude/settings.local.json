@@ -223,7 +223,22 @@
       "Bash(grep -n \"FAILED\\|LOADED\" /Users/weric/works/uber/michelangelo_ai/michelangelo/go/shared/gateways/inferenceserver/dynamo_backend.go)",
       "Bash(grep -A 10 \"type InfrastructureStatusRequest\" /Users/weric/works/uber/michelangelo_ai/michelangelo/go/shared/gateways/inferenceserver/gateway.go)",
       "Bash(grep -A 10 \"type ModelStatusRequest\" /Users/weric/works/uber/michelangelo_ai/michelangelo/go/shared/gateways/inferenceserver/gateway.go)",
-      "Bash(grep -n \"RequestContext\" /Users/weric/works/uber/michelangelo_ai/michelangelo/go/inferenceserver/plugins/oss/triton/actors.go)"
+      "Bash(grep -n \"RequestContext\" /Users/weric/works/uber/michelangelo_ai/michelangelo/go/inferenceserver/plugins/oss/triton/actors.go)",
+      "Bash(chmod:*)",
+      "Bash(./deploy-gateway-api.sh:*)",
+      "Bash(CONFIG_DIR=go/cmd/controllermgr/config KUBECONFIG=/Users/weric/Downloads/kubeconfig.yaml bazel build //go/cmd/controllermgr:controllermgr)",
+      "Bash(bazel mod:*)",
+      "Bash(sed:*)",
+      "Bash(kill:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cp:*)",
+      "Bash(true)",
+      "Bash(for file in *.go)",
+      "Bash(do sed -i '' 's/package inferenceserver/package gateways/g' \"$file\")",
+      "Bash(done)",
+      "Bash(bazel query:*)",
+      "Bash(CONFIG_DIR=go/cmd/worker/config KUBECONFIG=/Users/weric/Downloads/kubeconfig.yaml bazel run //go/cmd/controllermgr:controllermgr)"
     ],
     "deny": []
   }

@@ -6,7 +6,7 @@ log = logging.getLogger(__name__)
 
 
 @star_plugin("deployment.deploy")
-def deploy(namespace, name, model_name):
+def deploy(namespace, name, model_name, resource_cpu=1, resource_memory="4Gi", stragetiy=""):
     """
     Decorator to deploy model based on model name.
 

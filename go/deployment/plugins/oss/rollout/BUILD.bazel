@@ -11,7 +11,7 @@ go_library(
         "//go/deployment/plugins:go_default_library",
         "//go/deployment/plugins/oss/common:go_default_library",
         "//go/deployment/plugins/oss/rollout/strategies:go_default_library",
-        "//go/shared/gateways/inferenceserver:go_default_library",
+        "//go/shared/gateways:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",

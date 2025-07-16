@@ -1,10 +1,14 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: triton-models
+  name: bert-cola-inference-server-config
 data:
   model-list.json: |
     [
+      {
+        "name": "bert-cola-6",
+        "s3_path": "s3://deploy-models/bert-cola-6"
+      },
       {
         "name": "bert-cola-6",
         "s3_path": "s3://deploy-models/bert-cola-6"

@@ -3,7 +3,7 @@ package oss
 import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -14,11 +14,11 @@ import (
 // RolloutPlugin handles rollout operations
 type RolloutPlugin struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
-func NewRolloutPlugin(client client.Client, gateway inferenceserver.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
+func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
 	return &RolloutPlugin{
 		client:  client,
 		gateway: gateway,
@@ -74,11 +74,11 @@ func (p *RolloutPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb
 // CleanupPlugin handles cleanup operations  
 type CleanupPlugin struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
-func NewCleanupPlugin(client client.Client, gateway inferenceserver.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
+func NewCleanupPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
 	return &CleanupPlugin{
 		client:  client,
 		gateway: gateway,
@@ -109,11 +109,11 @@ func (p *CleanupPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb
 // RollbackPlugin handles rollback operations
 type RollbackPlugin struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
-func NewRollbackPlugin(client client.Client, gateway inferenceserver.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
+func NewRollbackPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
 	return &RollbackPlugin{
 		client:  client,
 		gateway: gateway,
@@ -144,11 +144,11 @@ func (p *RollbackPlugin) PutCondition(resource *v2pb.Deployment, condition *apip
 // SteadyStatePlugin handles steady state monitoring
 type SteadyStatePlugin struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
-func NewSteadyStatePlugin(client client.Client, gateway inferenceserver.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
+func NewSteadyStatePlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
 	return &SteadyStatePlugin{
 		client:  client,
 		gateway: gateway,
