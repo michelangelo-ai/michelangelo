@@ -52,7 +52,7 @@ jobs:
           ls -la python/ || echo "Python directory not found"
           
           # Try building from the correct context
-          docker build -t ma-it-examples -f python/examples/Dockerfile .
+          docker build -t ma-it-examples -f examples/Dockerfile .
 
           if [ $? -eq 0 ]; then
             echo "Docker build successful!"
