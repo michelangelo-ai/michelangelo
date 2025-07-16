@@ -1,11 +1,13 @@
 package rayhttp
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
-	"github.com/cadence-workflow/starlark-worker/activity"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -91,20 +93,41 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 	
-	// Implement HTTP client call to create a Ray job
-	// This is a placeholder - actual implementation would use the HTTP client to post to the Ray API
+	// Convert RayJob to JSON for HTTP POST
+	rayJobBytes, err := json.Marshal(request.RayJob)
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
 	
-	// Simulating a successful response
+	// Extract namespace from the RayJob metadata for the URL
+	// For now, we'll use a default namespace since the Metadata struct only has Name
+	namespace := "default" // TODO: This should come from the request or configuration
+	if namespace == "" {
+		return nil, errors.New("namespace is required in ray job metadata")
+	}
+	
+	// Make HTTP POST request to create the Ray job
+	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayjobs", r.apiBaseURL, namespace)
+	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(rayJobBytes))
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to create ray job", resp.StatusCode)
+	}
+	
+	var rayJobData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rayJobData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	
 	response := &CreateRayJobResponse{
-		Object: map[string]interface{}{
-			"kind":       request.RayJob.Kind,
-			"apiVersion": request.RayJob.APIVersion,
-			"metadata":   request.RayJob.Metadata,
-			"spec":       request.RayJob.Spec,
-			"status": map[string]interface{}{
-				"state": "PENDING",
-			},
-		},
+		Object: rayJobData,
 	}
 	
 	return response, nil
@@ -120,29 +143,34 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 // - *GetRayJobResponse: Response containing the job details.
 // - error: Error information if the operation fails.
 func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*GetRayJobResponse, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
-	// Implement HTTP client call to get a Ray job
-	// This is a placeholder - actual implementation would use the HTTP client to get from the Ray API
 	
 	if request.Name == "" {
 		return nil, errors.New("ray job name is required")
 	}
 	
-	// Simulating a successful response
+	// Make HTTP GET request to the Ray API
+	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayjobs/%s", r.apiBaseURL, request.Namespace, request.Name)
+	resp, err := r.httpClient.Get(url)
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to get ray job", resp.StatusCode)
+	}
+	
+	var rayJobData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rayJobData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	
 	response := &GetRayJobResponse{
-		Object: map[string]interface{}{
-			"kind":       "RayJob",
-			"apiVersion": "ray.io/v1",
-			"metadata": map[string]interface{}{
-				"name":      request.Name,
-				"namespace": request.Namespace,
-			},
-			"status": map[string]interface{}{
-				"state": "RUNNING",
-			},
-		},
+		Object: rayJobData,
 	}
 	
 	return response, nil
@@ -158,7 +186,7 @@ func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*
 // - *ray.ListRayJobsResponse: Response containing the list of jobs.
 // - error: Error information if the operation fails.
 func (r *activities) ListRayJobs(ctx context.Context, request ListRayJobsRequest) (*ray.ListRayJobsResponse, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 	
 	// Implement HTTP client call to list Ray jobs
@@ -182,7 +210,7 @@ func (r *activities) ListRayJobs(ctx context.Context, request ListRayJobsRequest
 // - bool: True if deletion was successful.
 // - error: Error information if the operation fails.
 func (r *activities) DeleteRayJob(ctx context.Context, request GetRayJobRequest) (bool, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 	
 	// Implement HTTP client call to delete a Ray job
@@ -210,7 +238,7 @@ func (r *activities) TerminateRayJob(ctx context.Context, request struct {
 	Namespace string `json:"namespace"`
 	Reason    string `json:"reason"`
 }) (bool, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 	
 	// Implement HTTP client call to terminate a Ray job
@@ -234,11 +262,8 @@ func (r *activities) TerminateRayJob(ctx context.Context, request struct {
 // - *CreateRayClusterResponse: Response containing the created Ray cluster details.
 // - error: Error information if the operation fails.
 func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClusterRequest) (*CreateRayClusterResponse, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
-	// Implement HTTP client call to create a Ray cluster
-	// This is a placeholder - actual implementation would use the HTTP client to post to the Ray API
 	
 	// Extract metadata from the cluster spec
 	metadata, ok := request.ClusterSpec["metadata"].(map[string]interface{})
@@ -246,17 +271,43 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 		return nil, errors.New("invalid cluster spec: missing metadata")
 	}
 	
-	// Simulating a successful response
+	// Extract namespace from metadata
+	namespace := ""
+	if ns, ok := metadata["namespace"].(string); ok {
+		namespace = ns
+	}
+	if namespace == "" {
+		return nil, errors.New("namespace is required in cluster spec metadata")
+	}
+	
+	// Convert cluster spec to JSON for HTTP POST
+	clusterBytes, err := json.Marshal(request.ClusterSpec)
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	
+	// Make HTTP POST request to create the Ray cluster
+	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayclusters", r.apiBaseURL, namespace)
+	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(clusterBytes))
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to create ray cluster", resp.StatusCode)
+	}
+	
+	var rayClusterData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	
 	response := &CreateRayClusterResponse{
-		Object: map[string]interface{}{
-			"kind":       "RayCluster",
-			"apiVersion": "ray.io/v1",
-			"metadata":   metadata,
-			"spec":       request.ClusterSpec["spec"],
-			"status": map[string]interface{}{
-				"state": "PENDING",
-			},
-		},
+		Object: rayClusterData,
 	}
 	
 	return response, nil
@@ -272,29 +323,34 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 // - *GetRayClusterResponse: Response containing the cluster details.
 // - error: Error information if the operation fails.
 func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterRequest) (*GetRayClusterResponse, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
-	// Implement HTTP client call to get a Ray cluster
-	// This is a placeholder - actual implementation would use the HTTP client to get from the Ray API
 	
 	if request.Name == "" {
 		return nil, errors.New("ray cluster name is required")
 	}
 	
-	// Simulating a successful response
+	// Make HTTP GET request to the Ray API
+	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayclusters/%s", r.apiBaseURL, request.Namespace, request.Name)
+	resp, err := r.httpClient.Get(url)
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to get ray cluster", resp.StatusCode)
+	}
+	
+	var rayClusterData map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+	
 	response := &GetRayClusterResponse{
-		Object: map[string]interface{}{
-			"kind":       "RayCluster",
-			"apiVersion": "ray.io/v1",
-			"metadata": map[string]interface{}{
-				"name":      request.Name,
-				"namespace": request.Namespace,
-			},
-			"status": map[string]interface{}{
-				"state": "READY",
-			},
-		},
+		Object: rayClusterData,
 	}
 	
 	return response, nil
@@ -310,7 +366,7 @@ func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterReq
 // - bool: True if termination was successful.
 // - error: Error information if the operation fails.
 func (r *activities) TerminateRayCluster(ctx context.Context, request TerminateRayClusterRequest) (bool, error) {
-	logger := activity.GetLogger(ctx)
+	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 	
 	// Implement HTTP client call to terminate a Ray cluster
