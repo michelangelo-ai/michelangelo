@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  boston-housing:
+  bert-cola-remote:
     runs-on: self-hosted
     defaults:
       run:
@@ -74,6 +74,6 @@ jobs:
       #----------------------------------------------
       - name: Run pipeline
         run: |
-          echo "Starting Boston Housing XGBoost pipeline..."
-          # Boston Housing uses much less memory than BERT
-          docker run --rm --memory=3g --cpus=1 --shm-size=256m ma-it-examples poetry run python examples/boston_housing_xgb/boston_housing_xgb.py
+          echo "Starting BERT CoLA pipeline..."
+          # Resource limits are correct for docker run
+          docker run --rm --memory=4g --cpus=1 ma-it-examples poetry run python examples/bert_cola/bert_cola.py
