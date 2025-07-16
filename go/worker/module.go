@@ -30,7 +30,7 @@ var Module = fx.Options(
 	blobstore.Module,
 	minio.Module,
 	fx.Provide(
-		func() *rayhttpPlugin.Plugin {
+		func() interface{} {
 			return rayhttpPlugin.Plugin
 		},
 	),
