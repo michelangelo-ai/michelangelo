@@ -31,7 +31,7 @@ func (r IstioProvider) UpdateProxy(ctx context.Context, log logr.Logger, deploym
 		Resource: "httproutes",
 	}
 
-	httpRouteName := fmt.Sprintf("%s-httproute", deployment.Spec.GetInferenceServer().Name)
+	httpRouteName := fmt.Sprintf("%s-http-route", deployment.Spec.GetInferenceServer().Name)
 	httpRoute, err := r.DynamicClient.Resource(httpRouteGvr).Namespace(deployment.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err == nil {
 		// HTTPRoute found, update it
@@ -227,7 +227,7 @@ func (r IstioProvider) addProductionRoute(ctx context.Context, log logr.Logger, 
 		"route": []interface{}{
 			map[string]interface{}{
 				"destination": map[string]interface{}{
-					"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", name, namespace),
+					"host": fmt.Sprintf("%s-inference-service.%s.svc.cluster.local", name, namespace),
 					"port": map[string]interface{}{
 						"number": int64(80),
 					},
@@ -330,7 +330,7 @@ func (r IstioProvider) updateProductionRoute(ctx context.Context, log logr.Logge
 			"route": []interface{}{
 				map[string]interface{}{
 					"destination": map[string]interface{}{
-						"host": fmt.Sprintf("%s-service.%s.svc.cluster.local", inferenceServerName, namespace),
+						"host": fmt.Sprintf("%s-inference-service.%s.svc.cluster.local", inferenceServerName, namespace),
 						"port": map[string]interface{}{
 							"number": int64(80),
 						},
@@ -436,7 +436,7 @@ func (r IstioProvider) updateHTTPRouteProductionRoute(ctx context.Context, log l
 				{
 					"group":  "",
 					"kind":   "Service",
-					"name":   fmt.Sprintf("%s-service", inferenceServerName),
+					"name":   fmt.Sprintf("%s-inference-service", inferenceServerName),
 					"port":   80,
 					"weight": 100,
 				},

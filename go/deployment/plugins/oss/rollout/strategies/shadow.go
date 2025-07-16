@@ -8,7 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -43,7 +43,7 @@ func GetShadowActors(params Params, deployment *v2pb.Deployment) []plugins.Condi
 // ShadowDeploymentActor deploys shadow version alongside production
 type ShadowDeploymentActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -76,12 +76,12 @@ func (a *ShadowDeploymentActor) Run(ctx context.Context, runtimeCtx plugins.Requ
 
 	// Deploy shadow version with traffic splitting
 	// In OSS implementation, use Istio VirtualService with weighted routing
-	shadowRequest := inferenceserver.ProxyConfigRequest{
+	shadowRequest := gateways.ProxyConfigRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		ModelName:       modelName,
 		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
-		Routes: []inferenceserver.RouteConfig{
+		Routes: []gateways.RouteConfig{
 			{
 				Path:        fmt.Sprintf("/%s-endpoint/%s/production", deployment.Spec.GetInferenceServer().Name, deployment.Spec.GetInferenceServer().Name),
 				Destination: fmt.Sprintf("%s-service.%s.svc.cluster.local", deployment.Spec.GetInferenceServer().Name, deployment.Namespace),
@@ -113,7 +113,7 @@ func (a *ShadowDeploymentActor) Run(ctx context.Context, runtimeCtx plugins.Requ
 // ShadowAnalysisActor analyzes shadow deployment results
 type ShadowAnalysisActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -187,7 +187,7 @@ func (a *ShadowAnalysisActor) Run(ctx context.Context, runtimeCtx plugins.Reques
 // ShadowPromotionActor promotes shadow to production if analysis passes
 type ShadowPromotionActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -219,11 +219,11 @@ func (a *ShadowPromotionActor) Run(ctx context.Context, runtimeCtx plugins.Reque
 	}
 
 	// Promote shadow to production (100% traffic)
-	promotionRequest := inferenceserver.ModelConfigUpdateRequest{
+	promotionRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),

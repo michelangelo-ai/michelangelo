@@ -3,14 +3,15 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "gateway.go",
-        "triton_backend.go",
-        "llmd_backend.go",
+        "configmap.go",
         "dynamo_backend.go",
-        "torchserve_backend.go",
+        "gateway.go",
         "istio_proxy.go",
+        "llmd_backend.go",
+        "torchserve_backend.go",
+        "triton_backend.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/shared/gateways",
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api/v2:go_default_library",

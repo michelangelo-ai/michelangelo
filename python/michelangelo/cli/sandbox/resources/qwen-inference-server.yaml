@@ -1,7 +1,7 @@
 apiVersion: michelangelo.api/v2
 kind: InferenceServer
 metadata:
-  name: bert-cola-inference-server
+  name: qwen-inference-server
   namespace: default
   labels:
     app: inference-server

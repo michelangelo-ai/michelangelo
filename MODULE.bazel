@@ -72,6 +72,7 @@ use_repo(
     "io_k8s_apimachinery",
     "io_k8s_client_go",
     "io_k8s_sigs_controller_runtime",
+    "io_k8s_sigs_gateway_api",
     "io_k8s_sigs_yaml",
     "io_k8s_utils",
     "io_temporal_go_api",

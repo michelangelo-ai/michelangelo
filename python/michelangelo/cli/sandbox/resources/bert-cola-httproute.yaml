@@ -6,7 +6,7 @@
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: bert-cola-inference-httproute
+  name: bert-cola-inference-server-http-route
   namespace: default
   labels:
     app: bert-cola-inference
@@ -29,7 +29,7 @@ spec:
           type: ReplacePrefixMatch
           replacePrefixMatch: /v2/models/bert-cola-13
     backendRefs:
-    - name: bert-cola-deployment-service
+    - name: bert-cola-inference-server-inference-service
       port: 80
       weight: 100
 
@@ -45,7 +45,7 @@ spec:
           type: ReplacePrefixMatch
           replacePrefixMatch: /v2/models/bert-cola-new-model
     backendRefs:
-    - name: bert-cola-deployment-service
+    - name: bert-cola-inference-server-inference-service
       port: 80
       weight: 100
 
@@ -61,7 +61,7 @@ spec:
           type: ReplacePrefixMatch
           replacePrefixMatch: /
     backendRefs:
-    - name: bert-cola-deployment-service
+    - name: bert-cola-inference-server-inference-service
       port: 80
       weight: 100
     # Example: Add traffic splitting (uncomment to enable canary)
@@ -74,7 +74,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: triton-inference-httproute
+  name: triton-test-inference-server-http-route
   namespace: default
   labels:
     app: triton-inference
@@ -92,7 +92,7 @@ spec:
         type: PathPrefix
         value: /v2/health
     backendRefs:
-    - name: test-inference-server-service
+    - name: test-inference-server-inference-service
       port: 80
       weight: 100
 
@@ -102,7 +102,7 @@ spec:
         type: PathPrefix
         value: /v2/models
     backendRefs:
-    - name: test-inference-server-service
+    - name: test-inference-server-inference-service
       port: 80
       weight: 100
 
@@ -112,7 +112,7 @@ spec:
         type: PathPrefix
         value: /
     backendRefs:
-    - name: test-inference-server-service
+    - name: test-inference-server-inference-service
       port: 80
       weight: 100
     # Example: Traffic splitting for A/B testing
@@ -125,7 +125,7 @@ spec:
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: advanced-triton-httproute
+  name: advanced-triton-test-inference-server-http-route
   namespace: default
   labels:
     app: triton-inference
@@ -147,7 +147,7 @@ spec:
       - name: "X-User-Tier"
         value: "premium"
     backendRefs:
-    - name: triton-premium-service
+    - name: triton-premium-inference-service
       port: 80
       weight: 100
 
@@ -160,7 +160,7 @@ spec:
       - name: "X-Canary-User"
         value: "true"
     backendRefs:
-    - name: test-inference-server-canary-service
+    - name: test-inference-server-canary-inference-service
       port: 80
       weight: 100
 
@@ -170,9 +170,9 @@ spec:
         type: PathPrefix
         value: /
     backendRefs:
-    - name: test-inference-server-service
+    - name: test-inference-server-inference-service
       port: 80
       weight: 80
-    - name: test-inference-server-backup-service
+    - name: test-inference-server-backup-inference-service
       port: 80
       weight: 20

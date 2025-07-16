@@ -1,4 +1,4 @@
-package inferenceserver
+package gateways
 
 import (
 	"context"

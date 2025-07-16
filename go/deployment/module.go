@@ -7,7 +7,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 )
 
 // Module provides the deployment controller with all dependencies
@@ -17,7 +17,7 @@ var Module = fx.Module("deployment",
 )
 
 // NewReconciler creates a new deployment reconciler with injected dependencies
-func NewReconciler(client ctrl.Manager, logger *zap.Logger, gateway inferenceserver.Gateway) *Reconciler {
+func NewReconciler(client ctrl.Manager, logger *zap.Logger, gateway gateways.Gateway) *Reconciler {
 	log := zapr.NewLogger(logger).WithName("deployment")
 	plugin := oss.NewPlugin(client.GetClient(), gateway, log)
 	

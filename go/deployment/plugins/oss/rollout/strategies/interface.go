@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -13,7 +13,7 @@ import (
 // Params contains dependencies for strategy actors
 type Params struct {
 	Client  client.Client
-	Gateway inferenceserver.Gateway
+	Gateway gateways.Gateway
 	Logger  logr.Logger
 }
 

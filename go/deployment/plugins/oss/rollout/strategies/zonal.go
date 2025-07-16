@@ -8,7 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	corev1 "k8s.io/api/core/v1"
@@ -34,7 +34,7 @@ func GetZonalActors(params Params, deployment *v2pb.Deployment) []plugins.Condit
 // ZonalRolloutActor implements zone-by-zone deployment strategy
 type ZonalRolloutActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -136,11 +136,11 @@ func (a *ZonalRolloutActor) getTargetZones(ctx context.Context, deployment *v2pb
 func (a *ZonalRolloutActor) deployToZone(ctx context.Context, deployment *v2pb.Deployment, zone string, modelName string) error {
 	// Update model configuration for this zone
 	// In OSS implementation, we update ConfigMap with zone-specific annotations
-	updateRequest := inferenceserver.ModelConfigUpdateRequest{
+	updateRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
 		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),

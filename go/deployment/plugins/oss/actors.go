@@ -6,7 +6,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -432,7 +432,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 // AssetPreparationActor handles asset preparation for deployments (following Uber pattern)
 type AssetPreparationActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -497,7 +497,7 @@ func (a *AssetPreparationActor) Run(ctx context.Context, runtimeCtx plugins.Requ
 // RollingRolloutActor handles rolling rollout strategy (following Uber pattern)
 type RollingRolloutActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 

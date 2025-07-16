@@ -6,17 +6,17 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ValidationActor validates Triton-specific configuration
 type ValidationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewValidationActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewValidationActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &ValidationActor{gateway: gateway}
 }
 
@@ -64,10 +64,10 @@ func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource 
 
 // ResourceCreationActor creates Triton infrastructure
 type ResourceCreationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewResourceCreationActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewResourceCreationActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &ResourceCreationActor{gateway: gateway}
 }
 
@@ -79,7 +79,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger
 	logger.Info("Retrieving Triton infrastructure condition")
 	
 	// Check if infrastructure exists
-	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -117,7 +117,7 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 	
 	// Convert proto ResourceSpec to gateway ResourceSpec
 	protoResources := resource.Spec.InitSpec.ResourceSpec
-	resources := inferenceserver.ResourceSpec{
+	resources := gateways.ResourceSpec{
 		CPU:      fmt.Sprintf("%d", protoResources.Cpu),
 		Memory:   protoResources.Memory,
 		GPU:      protoResources.Gpu,
@@ -128,7 +128,7 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 		},
 	}
 	
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, gateways.InfrastructureRequest{
 		InferenceServer: resource,
 		BackendType:     resource.Spec.BackendType,
 		Namespace:       resource.Namespace,
@@ -150,10 +150,10 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 
 // HealthCheckActor checks Triton server health
 type HealthCheckActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewHealthCheckActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewHealthCheckActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &HealthCheckActor{gateway: gateway}
 }
 
@@ -216,10 +216,10 @@ func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource
 
 // ProxyConfigurationActor configures Istio proxy
 type ProxyConfigurationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewProxyConfigurationActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewProxyConfigurationActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &ProxyConfigurationActor{gateway: gateway}
 }
 
@@ -230,7 +230,7 @@ func (a *ProxyConfigurationActor) GetType() string {
 func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton proxy configuration condition")
 	
-	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, inferenceserver.ProxyStatusRequest{
+	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, gateways.ProxyStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 	})
@@ -258,7 +258,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger logr.Logg
 func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton proxy configuration")
 	
-	err := a.gateway.ConfigureProxy(ctx, logger, inferenceserver.ProxyConfigRequest{
+	err := a.gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		ModelName:       resource.Name,
@@ -280,10 +280,10 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, r
 
 // CleanupActor cleans up Triton infrastructure
 type CleanupActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewCleanupActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewCleanupActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &CleanupActor{gateway: gateway}
 }
 
@@ -295,7 +295,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resourc
 	logger.Info("Retrieving Triton cleanup condition")
 	
 	// Check if infrastructure still exists
-	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -322,7 +322,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resourc
 func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton infrastructure cleanup")
 	
-	err := a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
+	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.InfrastructureDeleteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
