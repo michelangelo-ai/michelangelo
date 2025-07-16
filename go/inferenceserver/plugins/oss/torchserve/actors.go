@@ -5,14 +5,14 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TorchServeValidationActor validates TorchServe inference server configuration
 type TorchServeValidationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (a *TorchServeValidationActor) GetType() string {
@@ -81,7 +81,7 @@ func (a *TorchServeValidationActor) Run(ctx context.Context, logger logr.Logger,
 
 // TorchServeResourceCreationActor creates TorchServe infrastructure resources
 type TorchServeResourceCreationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (a *TorchServeResourceCreationActor) GetType() string {
@@ -90,7 +90,7 @@ func (a *TorchServeResourceCreationActor) GetType() string {
 
 func (a *TorchServeResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	// Check if infrastructure was created successfully
-	request := inferenceserver.InfrastructureStatusRequest{
+	request := gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     v2pb.BACKEND_TYPE_TORCHSERVE,
@@ -127,11 +127,11 @@ func (a *TorchServeResourceCreationActor) Run(ctx context.Context, logger logr.L
 	logger.Info("Creating TorchServe infrastructure", "server", resource.Name)
 
 	// Create infrastructure using gateway
-	request := inferenceserver.InfrastructureRequest{
+	request := gateways.InfrastructureRequest{
 		InferenceServer: resource,
 		BackendType:     v2pb.BACKEND_TYPE_TORCHSERVE,
 		Namespace:       resource.Namespace,
-		Resources: inferenceserver.ResourceSpec{
+		Resources: gateways.ResourceSpec{
 			CPU:      fmt.Sprintf("%d", resource.Spec.InitSpec.ResourceSpec.Cpu),
 			Memory:   resource.Spec.InitSpec.ResourceSpec.Memory,
 			GPU:      resource.Spec.InitSpec.ResourceSpec.Gpu,
@@ -157,7 +157,7 @@ func (a *TorchServeResourceCreationActor) Run(ctx context.Context, logger logr.L
 
 // TorchServeHealthCheckActor monitors TorchServe server health
 type TorchServeHealthCheckActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (a *TorchServeHealthCheckActor) GetType() string {
@@ -205,7 +205,7 @@ func (a *TorchServeHealthCheckActor) Run(ctx context.Context, logger logr.Logger
 
 // TorchServeCleanupActor handles TorchServe resource cleanup
 type TorchServeCleanupActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (a *TorchServeCleanupActor) GetType() string {
@@ -236,7 +236,7 @@ func (a *TorchServeCleanupActor) Run(ctx context.Context, logger logr.Logger, re
 
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Delete infrastructure
-		request := inferenceserver.InfrastructureDeleteRequest{
+		request := gateways.InfrastructureDeleteRequest{
 			InferenceServer: resource.Name,
 			Namespace:       resource.Namespace,
 			BackendType:     v2pb.BACKEND_TYPE_TORCHSERVE,

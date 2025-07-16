@@ -2,18 +2,18 @@ package llmd
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // LLMDPlugin implements InferenceServerPlugin for LLMD backend
 type LLMDPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // NewPlugin creates a new LLMD plugin
-func NewPlugin(gateway inferenceserver.Gateway) plugins.InferenceServerPlugin {
+func NewPlugin(gateway gateways.Gateway) plugins.InferenceServerPlugin {
 	return &LLMDPlugin{
 		gateway: gateway,
 	}
@@ -40,7 +40,7 @@ func (p *LLMDPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plugins.P
 
 // LLMDCreationPlugin implements the Plugin interface for creation lifecycle
 type LLMDCreationPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *LLMDCreationPlugin) GetActors() []plugins.ConditionActor {
@@ -74,7 +74,7 @@ func (p *LLMDCreationPlugin) PutCondition(resource *v2pb.InferenceServer, condit
 
 // LLMDDeletionPlugin implements the Plugin interface for deletion lifecycle
 type LLMDDeletionPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *LLMDDeletionPlugin) GetActors() []plugins.ConditionActor {

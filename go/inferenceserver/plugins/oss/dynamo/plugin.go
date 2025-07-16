@@ -2,18 +2,18 @@ package dynamo
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // DynamoPlugin implements InferenceServerPlugin for Dynamo backend
 type DynamoPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // NewPlugin creates a new Dynamo plugin
-func NewPlugin(gateway inferenceserver.Gateway) plugins.InferenceServerPlugin {
+func NewPlugin(gateway gateways.Gateway) plugins.InferenceServerPlugin {
 	return &DynamoPlugin{
 		gateway: gateway,
 	}
@@ -40,7 +40,7 @@ func (p *DynamoPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plugins
 
 // DynamoCreationPlugin implements the Plugin interface for creation lifecycle
 type DynamoCreationPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *DynamoCreationPlugin) GetActors() []plugins.ConditionActor {
@@ -75,7 +75,7 @@ func (p *DynamoCreationPlugin) PutCondition(resource *v2pb.InferenceServer, cond
 
 // DynamoDeletionPlugin implements the Plugin interface for deletion lifecycle
 type DynamoDeletionPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *DynamoDeletionPlugin) GetActors() []plugins.ConditionActor {

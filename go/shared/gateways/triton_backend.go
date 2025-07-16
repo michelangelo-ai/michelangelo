@@ -1,8 +1,13 @@
-package inferenceserver
+package gateways
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"time"
 
 	"github.com/go-logr/logr"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -33,11 +38,6 @@ func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Lo
 		logger.Info("Successfully created HTTPRoute for inference server", "server", request.InferenceServer.Name)
 	}
 
-	// Create ConfigMap for model configuration
-	if err := g.createTritonConfigMap(ctx, logger, request); err != nil {
-		return nil, fmt.Errorf("failed to create ConfigMap: %w", err)
-	}
-
 	// Create Deployment
 	if err := g.createTritonDeployment(ctx, logger, request); err != nil {
 		return nil, fmt.Errorf("failed to create Deployment: %w", err)
@@ -50,7 +50,7 @@ func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Lo
 
 	return &InfrastructureResponse{
 		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
-		Message: "Triton infrastructure creation initiated",
+		Message: "Triton infrastructure creation initiated (ConfigMap handled separately)",
 		Endpoints: []string{
 			fmt.Sprintf("/%s-endpoint/%s", request.InferenceServer.Name, request.InferenceServer.Name),
 		},
@@ -66,7 +66,7 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 
 	// Check deployment status
 	deployment := &appsv1.Deployment{}
-	deploymentKey := client.ObjectKey{Name: request.InferenceServer, Namespace: request.Namespace}
+	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", request.InferenceServer), Namespace: request.Namespace}
 
 	if err := g.kubeClient.Get(ctx, deploymentKey, deployment); err != nil {
 		return &InfrastructureStatus{
@@ -89,7 +89,7 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 		Message: fmt.Sprintf("Deployment status: %d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 		Ready:   ready,
 		Endpoints: []string{
-			fmt.Sprintf("http://%s-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace),
+			fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace),
 		},
 	}, nil
 }
@@ -103,7 +103,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		Version:  "v1",
 		Resource: "httproutes",
 	}
-	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer)
+	httpRouteName := fmt.Sprintf("%s-http-route", request.InferenceServer)
 	if err := g.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
 		logger.Info("Failed to delete HTTPRoute (may not exist)", "name", httpRouteName, "error", err)
 	} else {
@@ -126,7 +126,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      request.InferenceServer,
+			Name:      fmt.Sprintf("triton-%s", request.InferenceServer),
 			Namespace: request.Namespace,
 		},
 	}
@@ -137,7 +137,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 	// Delete Service
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-service", request.InferenceServer),
+			Name:      fmt.Sprintf("%s-inference-service", request.InferenceServer),
 			Namespace: request.Namespace,
 		},
 	}
@@ -145,60 +145,16 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		logger.Error(err, "Failed to delete service")
 	}
 
-	// Delete ConfigMap
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-models", request.InferenceServer),
-			Namespace: request.Namespace,
-		},
-	}
-	if err := g.kubeClient.Delete(ctx, configMap); err != nil {
-		logger.Error(err, "Failed to delete configmap")
-	}
+	// Note: ConfigMap deletion is handled by the ConfigMap provider, not the backend
 
 	return nil
 }
 
-func (g *gateway) createTritonConfigMap(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	configMapName := fmt.Sprintf("%s-models", request.InferenceServer.Name)
-	
-	// Check if ConfigMap already exists
-	existing := &corev1.ConfigMap{}
-	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, existing)
-	if err == nil {
-		logger.Info("ConfigMap already exists, skipping creation", "name", configMapName)
-		return nil
-	}
-	
-	// Create model list configuration for the sidecar
-	// Extract model path from resource configuration, fallback to default
-	modelPath := "s3://deploy-models/bert-cola-23/"
-	if modelConfig, ok := request.Resources.ModelConfig["model"]; ok {
-		modelPath = modelConfig
-	}
-	
-	modelList := fmt.Sprintf(`[
-  {
-    "name": "%s",
-    "s3_path": "%s"
-  }
-]`, request.InferenceServer.Name, modelPath)
-
-	configMap := &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      configMapName,
-			Namespace: request.Namespace,
-		},
-		Data: map[string]string{
-			"model-list.json": modelList,
-		},
-	}
-
-	return g.kubeClient.Create(ctx, configMap)
-}
+// createTritonConfigMap has been moved to the ConfigMap provider
+// This backend no longer creates ConfigMaps directly
 
 func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	deploymentName := request.InferenceServer.Name
+	deploymentName := fmt.Sprintf("triton-%s", request.InferenceServer.Name)
 
 	// Check if Deployment already exists
 	existing := &appsv1.Deployment{}
@@ -252,8 +208,8 @@ func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger
 								"--allow-http=true",
 								"--allow-metrics=true",
 								"--metrics-port=8002",
-								"--model-control-mode=poll",
-								"--repository-poll-secs=60",
+								"--model-control-mode=explicit",
+								"--strict-model-config=false",
 								"--exit-on-error=true",
 								"--log-error=true",
 								"--log-warning=true",
@@ -271,7 +227,7 @@ func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger
 							Image: "amazon/aws-cli:2.15.50",
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
-								`yum install -y jq && \
+								`yum install -y jq curl && \
 CONFIG_FILE=/secret/localMinIO.json
 ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
 SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
@@ -282,15 +238,79 @@ aws configure set aws_secret_access_key $SECRET_KEY
 aws configure set default.region $REGION
 aws configure set default.s3.endpoint_url $ENDPOINT
 
+# Function to get currently loaded models from Triton
+get_loaded_models() {
+  curl -s http://localhost:8000/v2/models 2>/dev/null | jq -r '.models[]?.name // empty' 2>/dev/null || echo ""
+}
+
+# Function to load model in Triton
+load_model() {
+  local model_name=$1
+  echo "Loading model $model_name in Triton"
+  curl -s -X POST "http://localhost:8000/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}'
+  if [ $? -eq 0 ]; then
+    echo "Model $model_name loaded successfully"
+  else
+    echo "Failed to load model $model_name"
+  fi
+}
+
+# Function to unload model in Triton
+unload_model() {
+  local model_name=$1
+  echo "Unloading model $model_name from Triton"
+  curl -s -X POST "http://localhost:8000/v2/repository/models/$model_name/unload" -H "Content-Type: application/json" -d '{}'
+  if [ $? -eq 0 ]; then
+    echo "Model $model_name unloaded successfully"
+  else
+    echo "Failed to unload model $model_name"
+  fi
+}
+
+# Wait for Triton to be ready
+echo "Waiting for Triton server to be ready..."
+while ! curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; do
+  echo "Triton not ready, waiting..."
+  sleep 5
+done
+echo "Triton server is ready"
+
 while true; do
+  echo "Starting model sync cycle"
   cp /config/model-list.json /tmp/model-list.json
+  
+  # Get current models from config
+  DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null || echo "")
+  
+  # Get currently loaded models from Triton
+  LOADED_MODELS=$(get_loaded_models)
+  
+  # Sync models from S3
   jq -c '.[]' /tmp/model-list.json | while read model; do
     name=$(echo "$model" | jq -r '.name')
     s3_path=$(echo "$model" | jq -r '.s3_path')
-    echo "Syncing model $name from $s3_path to /mnt/models/"
-    aws s3 sync "$s3_path" /mnt/models/ --delete --exact-timestamps --endpoint-url "$ENDPOINT"
+    echo "Syncing model $name from $s3_path to /mnt/models/$name/"
+    mkdir -p "/mnt/models/$name"
+    aws s3 sync "$s3_path" "/mnt/models/$name/" --delete --exact-timestamps --endpoint-url "$ENDPOINT"
   done
   
+  # Unload models that are no longer in config
+  for loaded_model in $LOADED_MODELS; do
+    if ! echo "$DESIRED_MODELS" | grep -q "^$loaded_model$"; then
+      echo "Model $loaded_model no longer in config, unloading"
+      unload_model "$loaded_model"
+    fi
+  done
+  
+  # Load models from config
+  for desired_model in $DESIRED_MODELS; do
+    if [ ! -z "$desired_model" ]; then
+      echo "Loading model $desired_model"
+      load_model "$desired_model"
+    fi
+  done
+  
+  echo "Model sync cycle completed, sleeping for 60 seconds"
   sleep 60
 done`,
 							},
@@ -329,7 +349,7 @@ done`,
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-models", request.InferenceServer.Name),
+										Name: fmt.Sprintf("%s-model-config", request.InferenceServer.Name),
 									},
 								},
 							},
@@ -358,7 +378,7 @@ done`,
 }
 
 func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	serviceName := fmt.Sprintf("%s-service", request.InferenceServer.Name)
+	serviceName := fmt.Sprintf("%s-inference-service", request.InferenceServer.Name)
 
 	// Check if Service already exists
 	existing := &corev1.Service{}
@@ -376,7 +396,7 @@ func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, r
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				"app": request.InferenceServer.Name,
+				"app": fmt.Sprintf("triton-%s", request.InferenceServer.Name),
 			},
 			Ports: []corev1.ServicePort{
 				{
@@ -478,7 +498,7 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 		Resource: "httproutes",
 	}
 
-	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer.Name)
+	httpRouteName := fmt.Sprintf("%s-http-route", request.InferenceServer.Name)
 
 	// Check if HTTPRoute already exists
 	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
@@ -531,7 +551,7 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 						},
 						"backendRefs": []map[string]interface{}{
 							{
-								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
 								"port": 80,
 								"weight": 100,
 							},
@@ -560,7 +580,7 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 						},
 						"backendRefs": []map[string]interface{}{
 							{
-								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
 								"port": 80,
 								"weight": 100,
 							},
@@ -591,7 +611,7 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 						},
 						"backendRefs": []map[string]interface{}{
 							{
-								"name": fmt.Sprintf("%s-service", request.InferenceServer.Name),
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
 								"port": 80,
 								"weight": 100,
 							},
@@ -621,78 +641,169 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 // Triton Model Management
 
 func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error {
-	logger.Info("Loading Triton model", "model", request.ModelName)
+	logger.Info("Loading Triton model explicitly", "model", request.ModelName, "server", request.InferenceServer)
 
-	// For now, return success as the model is loaded via config
-	// In a real implementation, this would call the Triton model management API
+	// Call Triton /v2/repository/models/{model}/load endpoint
+	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
+	loadURL := fmt.Sprintf("%s/v2/repository/models/%s/load", serviceURL, request.ModelName)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Create load request body
+	loadRequestBody := map[string]interface{}{}
+	bodyBytes, err := json.Marshal(loadRequestBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal load request: %w", err)
+	}
+
+	// Make POST request to load model
+	req, err := http.NewRequestWithContext(ctx, "POST", loadURL, bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return fmt.Errorf("failed to create load request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to call Triton load endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("Triton load failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	logger.Info("Triton model loaded successfully", "model", request.ModelName)
 	return nil
 }
 
 func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error) {
-	logger.Info("Checking Triton model status", "model", request.ModelName)
+	logger.Info("Checking Triton model status", "model", request.ModelName, "server", request.InferenceServer)
 
-	// For now, assume model is ready if infrastructure is ready
-	// In a real implementation, this would call the Triton model status API
-	return true, nil
+	// Call Triton /v2/models/{model}/ready endpoint
+	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
+	readyURL := fmt.Sprintf("%s/v2/models/%s/ready", serviceURL, request.ModelName)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", readyURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create ready request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to call Triton ready endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Model is ready if status is 200
+	ready := resp.StatusCode == http.StatusOK
+	logger.Info("Triton model ready status", "model", request.ModelName, "ready", ready, "statusCode", resp.StatusCode)
+	return ready, nil
 }
 
 func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {
-	logger.Info("Getting Triton model status", "model", request.ModelName)
+	logger.Info("Getting Triton model status", "model", request.ModelName, "server", request.InferenceServer)
+
+	// First check if model is ready
+	ready, err := g.checkTritonModelStatus(ctx, logger, request)
+	if err != nil {
+		return &ModelStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
+			Message: fmt.Sprintf("Failed to check model status: %v", err),
+			Ready:   false,
+		}, nil
+	}
+
+	if ready {
+		return &ModelStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
+			Message: "Model is loaded and ready for inference",
+			Ready:   true,
+		}, nil
+	}
+
+	// Check if model exists in repository
+	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
+	modelURL := fmt.Sprintf("%s/v2/models/%s", serviceURL, request.ModelName)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(ctx, "GET", modelURL, nil)
+	if err != nil {
+		return &ModelStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
+			Message: fmt.Sprintf("Failed to create model status request: %v", err),
+			Ready:   false,
+		}, nil
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return &ModelStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
+			Message: fmt.Sprintf("Failed to get model info: %v", err),
+			Ready:   false,
+		}, nil
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return &ModelStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
+			Message: "Model not found in repository",
+			Ready:   false,
+		}, nil
+	}
 
 	return &ModelStatus{
-		State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
-		Message: "Model is loaded and ready",
-		Ready:   true,
+		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
+		Message: "Model exists but not ready for inference",
+		Ready:   false,
 	}, nil
 }
 
 func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serverName string) (bool, error) {
 	logger.Info("Checking Triton health", "server", serverName)
 
-	// For now, assume healthy if infrastructure exists
-	// In a real implementation, this would call the Triton health API
-	return true, nil
+	// Call Triton /v2/health/ready endpoint
+	serviceURL := fmt.Sprintf("http://%s-inference-service.default.svc.cluster.local:8000", serverName)
+	healthURL := fmt.Sprintf("%s/v2/health/ready", serviceURL)
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
+	if err != nil {
+		return false, fmt.Errorf("failed to create health request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, fmt.Errorf("failed to call Triton health endpoint: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Triton is healthy if status is 200
+	healthy := resp.StatusCode == http.StatusOK
+	logger.Info("Triton health status", "server", serverName, "healthy", healthy, "statusCode", resp.StatusCode)
+	return healthy, nil
 }
 
 // Helper functions
 
 // updateTritonModelConfig updates the model configuration for rolling out new models
-func (g *gateway) updateTritonModelConfig(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string, modelConfigs []ModelConfig) error {
-	configMapName := fmt.Sprintf("%s-models", inferenceServerName)
-	
-	// Build model list JSON
-	modelList := "["
-	for i, config := range modelConfigs {
-		if i > 0 {
-			modelList += ","
-		}
-		modelList += fmt.Sprintf(`
-  {
-    "name": "%s",
-    "s3_path": "%s"
-  }`, config.Name, config.S3Path)
-	}
-	modelList += "\n]"
-	
-	// Get existing ConfigMap
-	configMap := &corev1.ConfigMap{}
-	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
-	if err != nil {
-		return fmt.Errorf("failed to get ConfigMap: %w", err)
-	}
-	
-	// Update the model list
-	configMap.Data["model-list.json"] = modelList
-	
-	// Apply the update
-	err = g.kubeClient.Update(ctx, configMap)
-	if err != nil {
-		return fmt.Errorf("failed to update ConfigMap: %w", err)
-	}
-	
-	logger.Info("Updated model configuration", "configMap", configMapName, "models", len(modelConfigs))
-	return nil
-}
+// updateTritonModelConfig has been moved to the ConfigMap provider
+// This backend no longer manages ConfigMaps directly
 
 // ModelConfig represents a model configuration for syncing
 type ModelConfig struct {

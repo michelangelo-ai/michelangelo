@@ -6,17 +6,17 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ValidationActor validates Dynamo-specific configuration
 type ValidationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewValidationActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewValidationActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &ValidationActor{gateway: gateway}
 }
 
@@ -62,10 +62,10 @@ func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource 
 
 // PlatformDependenciesActor ensures NATS and ETCD are available
 type PlatformDependenciesActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewPlatformDependenciesActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewPlatformDependenciesActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &PlatformDependenciesActor{gateway: gateway}
 }
 
@@ -99,10 +99,10 @@ func (a *PlatformDependenciesActor) Run(ctx context.Context, logger logr.Logger,
 
 // ResourceCreationActor creates Dynamo infrastructure
 type ResourceCreationActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewResourceCreationActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewResourceCreationActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &ResourceCreationActor{gateway: gateway}
 }
 
@@ -113,7 +113,7 @@ func (a *ResourceCreationActor) GetType() string {
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Dynamo infrastructure condition")
 	
-	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -149,14 +149,14 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger
 func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Dynamo infrastructure creation")
 	
-	resources := inferenceserver.ResourceSpec{
+	resources := gateways.ResourceSpec{
 		CPU:      "8",
 		Memory:   "16Gi",
 		GPU:      2,
 		Replicas: 1,
 	}
 	
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, inferenceserver.InfrastructureRequest{
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, gateways.InfrastructureRequest{
 		InferenceServer: resource,
 		BackendType:     resource.Spec.BackendType,
 		Namespace:       resource.Namespace,
@@ -178,10 +178,10 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 
 // HealthCheckActor checks Dynamo server health
 type HealthCheckActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewHealthCheckActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewHealthCheckActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &HealthCheckActor{gateway: gateway}
 }
 
@@ -242,10 +242,10 @@ func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource
 
 // CleanupActor cleans up Dynamo infrastructure
 type CleanupActor struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
-func NewCleanupActor(gateway inferenceserver.Gateway) plugins.ConditionActor {
+func NewCleanupActor(gateway gateways.Gateway) plugins.ConditionActor {
 	return &CleanupActor{gateway: gateway}
 }
 
@@ -256,7 +256,7 @@ func (a *CleanupActor) GetType() string {
 func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Dynamo cleanup condition")
 	
-	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, inferenceserver.InfrastructureStatusRequest{
+	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -283,7 +283,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resourc
 func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Dynamo infrastructure cleanup")
 	
-	err := a.gateway.DeleteInfrastructure(ctx, logger, inferenceserver.InfrastructureDeleteRequest{
+	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.InfrastructureDeleteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,

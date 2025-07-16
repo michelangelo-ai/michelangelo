@@ -2,18 +2,18 @@ package triton
 
 import (
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TritonPlugin implements InferenceServerPlugin for Triton backend
 type TritonPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 // NewPlugin creates a new Triton plugin
-func NewPlugin(gateway inferenceserver.Gateway) plugins.InferenceServerPlugin {
+func NewPlugin(gateway gateways.Gateway) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
 		gateway: gateway,
 	}
@@ -40,7 +40,7 @@ func (p *TritonPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plugins
 
 // TritonCreationPlugin implements the Plugin interface for creation lifecycle
 type TritonCreationPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *TritonCreationPlugin) GetActors() []plugins.ConditionActor {
@@ -75,7 +75,7 @@ func (p *TritonCreationPlugin) PutCondition(resource *v2pb.InferenceServer, cond
 
 // TritonDeletionPlugin implements the Plugin interface for deletion lifecycle
 type TritonDeletionPlugin struct {
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 }
 
 func (p *TritonDeletionPlugin) GetActors() []plugins.ConditionActor {

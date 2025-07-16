@@ -1,8 +1,13 @@
+# Legacy Istio Gateway (for backward compatibility)
+# DEPRECATED: Use gateway-api-setup.yaml for new generic Gateway API
 apiVersion: networking.istio.io/v1
 kind: Gateway
 metadata:
-  name: ma-gateway
+  name: ma-gateway-legacy
   namespace: default
+  annotations:
+    deprecated: "true"
+    migration.note: "Use Gateway API in gateway-api-setup.yaml"
 spec:
   selector:
     istio: ingressgateway
@@ -12,4 +17,10 @@ spec:
     port:
       name: http
       number: 80
+      protocol: HTTP
+  - hosts:
+    - '*'
+    port:
+      name: triton-http
+      number: 8888
       protocol: HTTP

@@ -6,7 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -15,7 +15,7 @@ import (
 // ModelSyncActor handles model synchronization to inference servers
 type ModelSyncActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -73,7 +73,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 // RollingRolloutActor handles rolling rollout strategy following Uber patterns
 type RollingRolloutActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 

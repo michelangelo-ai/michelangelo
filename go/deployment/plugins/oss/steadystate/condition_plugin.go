@@ -7,7 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,7 +22,7 @@ type conditionPlugin struct {
 // Params contains dependencies for steadystate plugin
 type Params struct {
 	Client  client.Client
-	Gateway inferenceserver.Gateway
+	Gateway gateways.Gateway
 	Logger  logr.Logger
 }
 
@@ -67,7 +67,7 @@ func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *api
 // SteadyStateActor handles steady state monitoring following Uber patterns
 type SteadyStateActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 

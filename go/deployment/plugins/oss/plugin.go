@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,12 +19,12 @@ var _ plugins.Plugin = &Plugin{}
 // Plugin is the OSS plugin implementation
 type Plugin struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
 // NewPlugin creates a new instance of OSS plugin
-func NewPlugin(client client.Client, gateway inferenceserver.Gateway, logger logr.Logger) *Plugin {
+func NewPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) *Plugin {
 	return &Plugin{
 		client:  client,
 		gateway: gateway,

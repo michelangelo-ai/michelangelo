@@ -7,7 +7,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways/inferenceserver"
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -32,7 +32,7 @@ func GetBlastActors(params Params, deployment *v2pb.Deployment) []plugins.Condit
 // BlastRolloutActor implements all-at-once deployment strategy
 type BlastRolloutActor struct {
 	client  client.Client
-	gateway inferenceserver.Gateway
+	gateway gateways.Gateway
 	logger  logr.Logger
 }
 
@@ -69,11 +69,11 @@ func (a *BlastRolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestC
 	namespace := deployment.Namespace
 
 	// Perform immediate 100% rollout - update all replicas at once
-	updateRequest := inferenceserver.ModelConfigUpdateRequest{
+	updateRequest := gateways.ModelConfigUpdateRequest{
 		InferenceServer: inferenceServerName,
 		Namespace:       namespace,
 		BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
-		ModelConfigs: []inferenceserver.ModelConfigEntry{
+		ModelConfigs: []gateways.ModelConfigEntry{
 			{
 				Name:   modelName,
 				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),

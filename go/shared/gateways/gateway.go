@@ -1,4 +1,4 @@
-package inferenceserver
+package gateways
 
 import (
 	"context"
@@ -33,6 +33,11 @@ type Gateway interface {
 	
 	// Model Configuration Updates (for rolling out new models)
 	UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error
+
+	// ConfigMap Management
+	CreateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
+	UpdateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
+	DeleteModelConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) error
 }
 
 // ModelLoadRequest contains information needed to load a model
@@ -41,6 +46,7 @@ type ModelLoadRequest struct {
 	ModelVersion     string
 	PackagePath      string
 	InferenceServer  string
+	Namespace        string
 	BackendType      v2pb.BackendType
 	Config           map[string]string
 }
@@ -50,6 +56,7 @@ type ModelStatusRequest struct {
 	ModelName       string
 	ModelVersion    string
 	InferenceServer string
+	Namespace       string
 	BackendType     v2pb.BackendType
 }
 
@@ -68,10 +75,15 @@ type ModelConfigUpdateRequest struct {
 	ModelConfigs    []ModelConfigEntry
 }
 
-// ModelConfigEntry represents a single model configuration
-type ModelConfigEntry struct {
-	Name   string
-	S3Path string
+
+// ModelConfigMapRequest contains information needed to create/update model ConfigMaps
+type ModelConfigMapRequest struct {
+	InferenceServer string
+	Namespace       string
+	BackendType     v2pb.BackendType
+	ModelConfigs    []ModelConfigEntry
+	Labels          map[string]string
+	Annotations     map[string]string
 }
 
 // Infrastructure Management Types
@@ -171,9 +183,10 @@ type HealthStatus struct {
 
 // gateway implements the Gateway interface
 type gateway struct {
-	httpClient    *http.Client
-	kubeClient    client.Client
-	dynamicClient dynamic.Interface
+	httpClient       *http.Client
+	kubeClient       client.Client
+	dynamicClient    dynamic.Interface
+	configMapProvider *ConfigMapProvider
 }
 
 // NewGateway creates a new inference server gateway
@@ -186,13 +199,14 @@ func NewGateway() Gateway {
 }
 
 // NewGatewayWithClients creates a new inference server gateway with Kubernetes clients
-func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Interface) Gateway {
+func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Interface, logger logr.Logger) Gateway {
 	return &gateway{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		kubeClient:    kubeClient,
-		dynamicClient: dynamicClient,
+		kubeClient:       kubeClient,
+		dynamicClient:    dynamicClient,
+		configMapProvider: NewConfigMapProvider(kubeClient, logger),
 	}
 }
 
@@ -276,15 +290,17 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
-		// Convert to internal ModelConfig format
-		modelConfigs := make([]ModelConfig, len(request.ModelConfigs))
-		for i, config := range request.ModelConfigs {
-			modelConfigs[i] = ModelConfig{
-				Name:   config.Name,
-				S3Path: config.S3Path,
-			}
+		// Use ConfigMap provider to update model configuration
+		if g.configMapProvider == nil {
+			return fmt.Errorf("ConfigMap provider not initialized")
 		}
-		return g.updateTritonModelConfig(ctx, logger, request.InferenceServer, request.Namespace, modelConfigs)
+		configMapRequest := ConfigMapRequest{
+			InferenceServer: request.InferenceServer,
+			Namespace:       request.Namespace,
+			BackendType:     request.BackendType,
+			ModelConfigs:    request.ModelConfigs,
+		}
+		return g.configMapProvider.UpdateModelConfigMap(ctx, configMapRequest)
 	case v2pb.BACKEND_TYPE_LLM_D:
 		// TODO: Implement LLMD model config updates
 		return fmt.Errorf("model config updates not yet implemented for LLMD backend")
@@ -296,6 +312,65 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
+}
+
+// ConfigMap Management implementations
+
+// CreateModelConfigMap creates a ConfigMap for model configuration
+func (g *gateway) CreateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error {
+	if g.configMapProvider == nil {
+		return fmt.Errorf("ConfigMap provider not initialized")
+	}
+
+	configMapRequest := ConfigMapRequest{
+		InferenceServer: request.InferenceServer,
+		Namespace:       request.Namespace,
+		BackendType:     request.BackendType,
+		ModelConfigs:    convertToConfigMapEntries(request.ModelConfigs),
+		Labels:          request.Labels,
+		Annotations:     request.Annotations,
+	}
+
+	return g.configMapProvider.CreateModelConfigMap(ctx, configMapRequest)
+}
+
+// UpdateModelConfigMap updates a ConfigMap for model configuration
+func (g *gateway) UpdateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error {
+	if g.configMapProvider == nil {
+		return fmt.Errorf("ConfigMap provider not initialized")
+	}
+
+	configMapRequest := ConfigMapRequest{
+		InferenceServer: request.InferenceServer,
+		Namespace:       request.Namespace,
+		BackendType:     request.BackendType,
+		ModelConfigs:    convertToConfigMapEntries(request.ModelConfigs),
+		Labels:          request.Labels,
+		Annotations:     request.Annotations,
+	}
+
+	return g.configMapProvider.UpdateModelConfigMap(ctx, configMapRequest)
+}
+
+// DeleteModelConfigMap deletes a ConfigMap for model configuration
+func (g *gateway) DeleteModelConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) error {
+	if g.configMapProvider == nil {
+		return fmt.Errorf("ConfigMap provider not initialized")
+	}
+
+	return g.configMapProvider.DeleteModelConfigMap(ctx, inferenceServerName, namespace)
+}
+
+// Helper function to convert between types
+func convertToConfigMapEntries(entries []ModelConfigEntry) []ModelConfigEntry {
+	result := make([]ModelConfigEntry, len(entries))
+	for i, entry := range entries {
+		result[i] = ModelConfigEntry{
+			Name:   entry.Name,
+			S3Path: entry.S3Path,
+		}
+	}
+	return result
 }
 
 // Infrastructure Management Methods
