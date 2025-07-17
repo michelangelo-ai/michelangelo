@@ -3,7 +3,6 @@ package worker
 import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp"
 	rayhttpPlugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/rayhttp"
 	"github.com/michelangelo-ai/michelangelo/go/worker/starlark"
@@ -12,18 +11,10 @@ import (
 	"go.uber.org/fx"
 )
 
-// Module provides YARPC client instances.
+// Module provides HTTP client instances for rayhttp.
 var Module = fx.Options(
-	fx.Provide(NewConfig, NewYARPCDispatcher),
-	fx.Provide(
-		NewRayClusterServiceClient,
-		NewRayJobServiceClient,
-		NewSparkJobServiceClient,
-		NewCachedOutputServiceClient,
-		GetRayHTTPConfig,
-	),
+	fx.Provide(NewConfig, GetRayHTTPConfig),
 	workflowfx.Module,
-	activities.Module,
 	rayhttp.Module,
 	workflows.Module,
 	starlark.Module,

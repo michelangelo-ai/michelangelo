@@ -1,10 +1,8 @@
 worker:
   address: localhost:14566
-  httpAddress: http://localhost:8080
   maApiServiceName: ma-apiserver
-  transport: grpc  # Options: "grpc" or "http"
   rayHttp:
-    baseUrl: https://compute.cauldron.myteksi.net  # Base URL for Ray HTTP API
+    baseUrl: http://localhost:14568  # Base URL for Ray HTTP API
     workspace: cauldron-test
     environment: dev
 

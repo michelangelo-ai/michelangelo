@@ -10,7 +10,6 @@ import (
 	"go.uber.org/yarpc/api/transport"
 	"go.uber.org/yarpc/encoding/protobuf/reflection"
 	"go.uber.org/yarpc/transport/grpc"
-	"go.uber.org/yarpc/transport/http"
 	yarpcreflection "go.uber.org/yarpc/x/reflection"
 	"go.uber.org/zap"
 )
@@ -29,54 +28,22 @@ type RegisterParams struct {
 	ProtoReflectionMetas []reflection.ServerMeta `group:"yarpcfx"`
 }
 
-// provideDispatcher creates and configures a YARPC dispatcher with gRPC and/or HTTP support.
+// provideDispatcher creates and configures a YARPC dispatcher.
 func provideDispatcher(conf YARPCConfig, zapLogger *zap.Logger) (*yarpc.Dispatcher, error) {
-	var inbounds []transport.Inbound
-	
-	// Default transport is gRPC if not specified
-	transport := conf.Transport
-	if transport == "" {
-		transport = "grpc"
+	listener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", conf.Host, conf.Port))
+	if err != nil {
+		return nil, err
 	}
-	
-	// Always add gRPC inbound (for backward compatibility)
-	if transport == "grpc" || transport == "both" {
-		grpcListener, err := net.Listen("tcp", fmt.Sprintf("%s:%d", conf.Host, conf.Port))
-		if err != nil {
-			return nil, fmt.Errorf("failed to create gRPC listener: %w", err)
-		}
-		grpcTransport := grpc.NewTransport()
-		grpcInbound := grpcTransport.NewInbound(grpcListener)
-		inbounds = append(inbounds, grpcInbound)
-		zapLogger.Info("gRPC server listening", zap.String("address", fmt.Sprintf("%s:%d", conf.Host, conf.Port)))
-	}
-	
-	// Add HTTP inbound if requested
-	if transport == "http" || transport == "both" {
-		httpPort := conf.HTTPPort
-		if httpPort == 0 {
-			if transport == "http" {
-				// If only HTTP is requested and no specific port, use the main port
-				httpPort = conf.Port
-			} else {
-				// If both transports, default HTTP to main port + 1
-				httpPort = conf.Port + 1
-			}
-		}
-		
-		httpTransport := http.NewTransport()
-		httpInbound := httpTransport.NewInbound(fmt.Sprintf("%s:%d", conf.Host, httpPort))
-		inbounds = append(inbounds, httpInbound)
-		zapLogger.Info("HTTP server listening", zap.String("address", fmt.Sprintf("%s:%d", conf.Host, httpPort)))
-	}
-	
-	if len(inbounds) == 0 {
-		return nil, fmt.Errorf("no valid transport configured (transport: %s)", transport)
-	}
+	grpcTransport := grpc.NewTransport()
+	inbound := grpcTransport.NewInbound(
+		listener,
+	)
 
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
-		Name:     serverName,
-		Inbounds: inbounds,
+		Name: serverName,
+		Inbounds: yarpc.Inbounds{
+			inbound,
+		},
 		Logging: yarpc.LoggingConfig{
 			Zap: zapLogger,
 		},
