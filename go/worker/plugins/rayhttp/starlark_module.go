@@ -9,6 +9,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
+	"github.com/michelangelo-ai/michelangelo/go/worker/ray"
 	"go.starlark.net/starlark"
 	"go.uber.org/zap"
 )
@@ -195,114 +196,20 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	ctx := service.GetContext(thread)
 	logger := workflow.GetLogger(ctx)
 	
-	var entrypoint string
-	var rayClusterNamespace string
-	var rayClusterName string
-	var clusterImage string
-	var headCPU, workerCPU, workerInstances int64
-	var headMemory, workerMemory string
-	var debugEnabled bool
-	var runtimeEnv *starlark.Dict
-
-	if err := starlark.UnpackArgs("create_job", args, kwargs,
-		"entrypoint", &entrypoint,
-		"ray_job_namespace?", &rayClusterNamespace,
-		"ray_job_name?", &rayClusterName,
-		"cluster_image?", &clusterImage,
-		"head_cpu?", &headCPU,
-		"head_memory?", &headMemory,
-		"worker_cpu?", &workerCPU,
-		"worker_memory?", &workerMemory,
-		"worker_instances?", &workerInstances,
-		"debug_enabled?", &debugEnabled,
-		"runtime_env?", &runtimeEnv,
-	); err != nil {
+	var rayJobSpec *starlark.Dict
+	if err := starlark.UnpackArgs("create_job", args, kwargs, "ray_job_spec", &rayJobSpec); err != nil {
 		logger.Error("error unpacking args", zap.Error(err))
 		return nil, err
 	}
 	
-	// Convert runtime_env if provided
-	var runtimeEnvGo interface{}
-	if runtimeEnv != nil {
-		if err := utils.AsGo(runtimeEnv, &runtimeEnvGo); err != nil {
-			logger.Error("error converting runtime_env", zap.Error(err))
-			return nil, err
-		}
+	// Convert the provided ray job spec from starlark to worker/ray object
+	var rayJob ray.RayJob
+	if err := utils.AsGo(rayJobSpec, &rayJob); err != nil {
+		logger.Error("error converting ray job spec to worker/ray object", zap.Error(err))
+		return nil, err
 	}
 	
-	// Prepare ray job request with embedded cluster specification
-	rayJob := map[string]interface{}{
-		"kind": "RayJob",
-		"apiVersion": "ray.io/v1",
-		"metadata": map[string]interface{}{
-			"generateName": fmt.Sprintf("uf-rj-%v-", rayClusterName),
-			"namespace": rayClusterNamespace,
-		},
-		"spec": map[string]interface{}{
-			"entrypoint": entrypoint,
-			"runtimeEnv": runtimeEnvGo,
-			"shutdownAfterJobFinishes": true,
-			"ttlSecondsAfterFinished": 600,
-			"rayClusterSpec": map[string]interface{}{
-				"rayVersion": "2.3.1",
-				"head": map[string]interface{}{
-					"serviceType": "ClusterIP",
-					"rayStartParams": map[string]interface{}{
-						"block": "true",
-						"dashboard-host": "0.0.0.0",
-					},
-					"pod": map[string]interface{}{
-						"spec": map[string]interface{}{
-							"containers": []map[string]interface{}{
-								{
-									"name": "head",
-									"image": clusterImage,
-									"imagePullPolicy": "Never",
-									"resources": map[string]interface{}{
-										"requests": map[string]interface{}{
-											"cpu": fmt.Sprintf("%d", headCPU),
-											"memory": headMemory,
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-				"workers": []map[string]interface{}{
-					{
-						"minInstances": workerInstances,
-						"maxInstances": workerInstances,
-						"nodeType": "worker-group-1",
-						"rayStartParams": map[string]interface{}{
-							"block": "true",
-							"dashboard-host": "0.0.0.0",
-						},
-						"pod": map[string]interface{}{
-							"spec": map[string]interface{}{
-								"restartPolicy": "Never",
-								"containers": []map[string]interface{}{
-									{
-										"name": "worker",
-										"image": clusterImage,
-										"imagePullPolicy": "Never",
-										"resources": map[string]interface{}{
-											"requests": map[string]interface{}{
-												"cpu": fmt.Sprintf("%d", workerCPU),
-												"memory": workerMemory,
-											},
-										},
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-	
-	// Marshal the rayJob into a proper structure
+	// Marshal the ray job into the request format expected by activities
 	rayJobBytes, err := json.Marshal(rayJob)
 	if err != nil {
 		logger.Error("error marshaling ray job", zap.Error(err))
@@ -314,6 +221,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	}
 	request.RayJob = rayJobBytes
 	
+	// Execute the create activity
 	var createResponse interface{}
 	err = workflow.ExecuteActivity(ctx, "activities.rayhttp.CreateRayJob", request).Get(ctx, &createResponse)
 	if err != nil {
