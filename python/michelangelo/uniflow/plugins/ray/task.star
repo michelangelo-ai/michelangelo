@@ -269,20 +269,74 @@ def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image, hea
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | create rayjob:", "task_path=" + task_path)
     
-    # Create RayJob using rayhttp plugin with all parameters - this calls the HTTP activity and handles polling
-    job = rayhttp.create_job(
-        entrypoint, 
-        ray_job_namespace=cluster_namespace, 
-        ray_job_name=task_name,
-        cluster_image=cluster_image,
-        head_cpu=head_cpu,
-        head_memory=head_memory,
-        worker_cpu=worker_cpu,
-        worker_memory=worker_memory,
-        worker_instances=worker_instances,
-        debug_enabled=debug_enabled,
-        runtime_env=runtime_env
-    )
+    # Build complete RayJob specification
+    ray_job_spec = {
+        "kind": "RayJob",
+        "apiVersion": "ray.io/v1",
+        "metadata": {
+            "generateName": "uf-rj-" + task_name + "-",
+            "namespace": cluster_namespace,
+        },
+        "spec": {
+            "entrypoint": entrypoint,
+            "runtimeEnv": runtime_env,
+            "shutdownAfterJobFinishes": True,
+            "ttlSecondsAfterFinished": 600,
+            "rayClusterSpec": {
+                "rayVersion": "2.3.1",
+                "head": {
+                    "serviceType": "ClusterIP",
+                    "rayStartParams": {
+                        "block": "true",
+                        "dashboard-host": "0.0.0.0",
+                    },
+                    "pod": {
+                        "spec": {
+                            "containers": [{
+                                "name": "head",
+                                "image": cluster_image,
+                                "imagePullPolicy": "Never",
+                                "resources": {
+                                    "requests": {
+                                        "cpu": str(head_cpu),
+                                        "memory": head_memory,
+                                    },
+                                },
+                            }],
+                        },
+                    },
+                },
+                "workers": [{
+                    "minInstances": worker_instances,
+                    "maxInstances": worker_instances,
+                    "nodeType": "worker-group-1",
+                    "rayStartParams": {
+                        "block": "true",
+                        "dashboard-host": "0.0.0.0",
+                    },
+                    "pod": {
+                        "spec": {
+                            "restartPolicy": "Never",
+                            "containers": [{
+                                "name": "worker",
+                                "image": cluster_image,
+                                "imagePullPolicy": "Never",
+                                "resources": {
+                                    "requests": {
+                                        "cpu": str(worker_cpu),
+                                        "memory": worker_memory,
+                                    },
+                                },
+                            }],
+                        },
+                    },
+                }],
+            },
+        },
+    }
+    
+    # Create RayJob using rayhttp plugin with complete specification
+    job = rayhttp.create_job(ray_job_spec=ray_job_spec)
     
     report_progress(
         task_path = task_path,

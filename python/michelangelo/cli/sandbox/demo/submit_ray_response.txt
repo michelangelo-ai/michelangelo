@@ -1,0 +1,35 @@
+curl --location 'https://compute.cauldron.myteksi.net/api/v1/workspaces/cauldron-test/env/dev/rayjobs' \
+--header 'Content-Type: application/json' \
+--header 'Authorization: Bearer xxx' \
+--data-raw '{
+  "apiVersion": "ray.io/v1",
+  "kind": "RayJob",
+  "metadata": {
+    "name": "rayjob-test-bifrost"
+  },
+  "spec": {
+    "pipeline": "test-ray",
+    "submitterImage": "rayproject/ray:2.41.0",
+    "entrypoint": "python -c  \"\nimport os\nimport ray\nfrom grab.bifrost.client import BifrostChimeraClient\nbifrost_client = BifrostChimeraClient()\n\nray.init()\n@ray.remote\ndef get_data(data_path):\n    return ray.data.read_parquet(data_path)\n\npath_1 = '\''s3://cauldron-chimera/pod_cost_v3/ds=2024-10-21/cluster=compute-aardwolf/part-00000-b00a1371-57f7-4a62-9867-4febe4d96070.c000.snappy.parquet'\''\nsts_token = bifrost_client.request_sts_token(path_1)\nresult1 = ray.get(\n    get_data.options(\n        runtime_env={\n            '\''env_vars'\'': {\n                '\''AWS_ACCESS_KEY_ID'\'': sts_token['\''aws_access_key_id'\''],\n                '\''AWS_SECRET_ACCESS_KEY'\'': sts_token['\''aws_secret_access_key'\''],\n                '\''AWS_SESSION_TOKEN'\'': sts_token['\''aws_session_token'\'']\n            }\n        }\n    ).remote(path_1)\n)\nprint(result1.schema())\n\npath_2 = '\''s3://chimera-public/zx_test/data/part-00000-8717f4d4-055a-49f1-8905-d659220aaed3-c000.snappy.parquet'\''\nsts_token = bifrost_client.request_sts_token(path_2)\nresult2 = ray.get(\n    get_data.options(\n        runtime_env={\n            '\''env_vars'\'': {\n                '\''AWS_ACCESS_KEY_ID'\'': sts_token['\''aws_access_key_id'\''],\n                '\''AWS_SECRET_ACCESS_KEY'\'': sts_token['\''aws_secret_access_key'\''],\n                '\''AWS_SESSION_TOKEN'\'': sts_token['\''aws_session_token'\'']\n            }\n        }\n    ).remote(path_2)\n)\nprint(result2.schema())\n\"",
+    "rayClusterSpec": {
+      "image": "095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/mlp/cauldron-test/test-ray/rayjob-rayjob-test-bifrost:296a27",
+      "headGroupSpec": {
+        "resources": {
+          "cpu": "1",
+          "memory": "4Gi"
+        }
+      },
+      "workerGroupSpecs": [
+        {
+          "replicas": 0,
+          "minReplicas": 0,
+          "maxReplicas": 3,
+          "resources": {
+            "cpu": "2",
+            "memory": "8Gi"
+          }
+        }
+      ]
+    }
+  }
+}'

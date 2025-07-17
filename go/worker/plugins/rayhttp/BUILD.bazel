@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/worker/plugins/utils:go_default_library",
+        "//go/worker/ray:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//ext:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
