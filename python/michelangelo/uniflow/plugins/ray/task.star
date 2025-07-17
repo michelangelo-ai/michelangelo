@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "rayhttp", "time")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -126,6 +126,8 @@ def task(
         _worker_disk = os.environ.get("RAY_OVERRIDE_WORKER_DISK." + task_path, worker_disk)
         _worker_gpu = os.environ.get("RAY_OVERRIDE_WORKER_GPU." + task_path, worker_gpu)
         _worker_instances = os.environ.get("RAY_OVERRIDE_WORKER_INSTANCES." + task_path, worker_instances)
+        _worker_min_instances = os.environ.get("RAY_OVERRIDE_WORKER_INSTANCES." + task_path, worker_min_instances)
+        _worker_max_instances = os.environ.get("RAY_OVERRIDE_WORKER_INSTANCES." + task_path, worker_max_instances)
 
         _gpu_sku = os.environ.get("RAY_OVERRIDE_GPU_SKU." + task_path, gpu_sku)
         _zone = os.environ.get("RAY_OVERRIDE_ZONE." + task_path, zone)
@@ -150,32 +152,31 @@ def task(
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
-
             job_state, job = execute_ray_task(
-                task_path=task_path,
-                task_name=task_name,
-                cluster_namespace=cluster_namespace,
-                cluster_image=cluster_image,
+                task_path = task_path,
+                task_name = task_name,
+                cluster_namespace = cluster_namespace,
+                cluster_image = cluster_image,
                 head_resource = resource_dict(
-                     cpu = _head_cpu,
-                     memory = _head_memory,
+                    cpu = _head_cpu,
+                    memory = _head_memory,
                 ),
                 worker_resource = resource_dict(
-                     cpu = _worker_cpu,
-                     memory = _worker_memory,
+                    cpu = _worker_cpu,
+                    memory = _worker_memory,
                 ),
-                worker_instances=_worker_instances,
-                worker_min_instances=_worker_min_instances,
-                worker_max_instances=_worker_max_instances,
-                debug_enabled=breakpoint,
-                runtime_env=runtime_env,
-                start_time_formated_str=start_time_formated_str,
-                result_url=result_url,
-                args=args,
-                kwargs=kwargs,
-                retry_attempt_id=retry_attempt_id,
-                total_retry_attempt=total_retry_attempt,
-                breakpoint=breakpoint,
+                worker_instances = _worker_instances,
+                worker_min_instances = _worker_min_instances,
+                worker_max_instances = _worker_max_instances,
+                debug_enabled = breakpoint,
+                runtime_env = runtime_env,
+                result_url = result_url,
+                start_time_formated_str = start_time_formated_str,
+                args = args,
+                kwargs = kwargs,
+                retry_attempt_id = retry_attempt_id,
+                total_retry_attempt = total_retry_attempt,
+                breakpoint = breakpoint,
             )
 
             retryable = process_terminated_ray_job(
@@ -231,11 +232,9 @@ def task(
     return callable
 
 def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt):
-
     retryable = False
 
     if job_state == TASK_STATE_SUCCEEDED:
-
         cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
         created_cached_output = create_cached_output(
             namespace = namespace,
@@ -272,14 +271,29 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
 
     return retryable
 
-
-def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image,
-                     head_resource, worker_resource, worker_instances, debug_enabled, runtime_env, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
-
+def execute_ray_task(
+        task_path,
+        task_name,
+        cluster_namespace,
+        cluster_image,
+        head_resource,
+        worker_resource,
+        worker_instances,
+        worker_min_instances,
+        worker_max_instances,
+        debug_enabled,
+        runtime_env,
+        result_url,
+        start_time_formated_str,
+        args,
+        kwargs,
+        retry_attempt_id,
+        total_retry_attempt,
+        breakpoint = False):
     # Create RayJob directly with embedded cluster specification
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | create rayjob:", "task_path=" + task_path)
-    
+
     # Build complete RayJob specification
     ray_job_spec = {
         "kind": "RayJob",
@@ -297,18 +311,18 @@ def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image,
                 },
                 "workerGroupSpecs": [{
                     "replicas": worker_instances,
-                    "minReplicas": worker_min_instance,
-                    "maxReplicas": worker_max_instance,
+                    "minReplicas": worker_min_instances,
+                    "maxReplicas": worker_max_instances,
                     "resources": worker_resource,
                 }],
             },
         },
     }
-    
+
     # Create RayJob using rayhttp plugin with complete specification
     # TODO pass in user token
-    job = rayhttp.create_job(ray_job_spec=ray_job_spec)
-    
+    job = rayhttp.create_job(ray_job_spec = ray_job_spec)
+
     report_progress(
         task_path = task_path,
         task_name = task_name,
@@ -317,19 +331,18 @@ def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image,
         start_time = start_time_formated_str,
         end_time = "",
     )
-    
+
     if breakpoint:
         print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + task_name)
         time.sleep(seconds = 60 * 60 * 24)
         err_message = "internal: breakpoint timeout"
         print("ray | error:", err_message)
         fail(err_message)
-    
+
     # The worker activity handles the actual job monitoring and returns the final status
     return report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id), job
 
 def report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id):
-
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
     if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
@@ -377,7 +390,6 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
 
     return "python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
 
-
 def ray_config(
         head_cpu = None,
         head_memory = None,
@@ -412,4 +424,3 @@ def ray_config(
         "runtime_env": runtime_env,
     }
     return {key: value for key, value in config_overrides.items() if value != None}
-
