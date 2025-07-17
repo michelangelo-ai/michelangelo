@@ -156,7 +156,7 @@ def task(
                 task_name=task_name,
                 cluster_namespace=cluster_namespace,
                 cluster_image=cluster_image,
-                resource_dict(
+                head_resource = resource_dict(
                      cpu = _head_cpu,
                      memory = _head_memory,
                 ),
