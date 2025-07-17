@@ -2,7 +2,6 @@ package rayhttp
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/ext"
@@ -78,51 +77,20 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	request.RayJob = rayJobBytes
 
 	// Execute the create activity
-	var createResponse interface{}
+	var createResponse ray.CreateRayJobResponse
 	err = workflow.ExecuteActivity(ctx, rayhttp.Activities.CreateRayJob, request).Get(ctx, &createResponse)
 	if err != nil {
 		logger.Error("error executing create activity", zap.Error(err))
 		return nil, err
 	}
 
-	// Get job name and namespace from the response for monitoring
-	respMap, ok := createResponse.(map[string]interface{})
-	if !ok {
-		logger.Error("unexpected response type", zap.Any("response", createResponse))
-		return nil, fmt.Errorf("unexpected response type")
-	}
-
-	object, ok := respMap["object"].(map[string]interface{})
-	if !ok {
-		logger.Error("missing object in response", zap.Any("response", respMap))
-		return nil, fmt.Errorf("missing object in response")
-	}
-
-	metadata, ok := object["metadata"].(map[string]interface{})
-	if !ok {
-		logger.Error("missing metadata in object", zap.Any("object", object))
-		return nil, fmt.Errorf("missing metadata in object")
-	}
-
-	name, ok := metadata["name"].(string)
-	if !ok {
-		logger.Error("missing name in metadata", zap.Any("metadata", metadata))
-		return nil, fmt.Errorf("missing name in metadata")
-	}
-
-	namespace, ok := metadata["namespace"].(string)
-	if !ok {
-		logger.Error("missing namespace in metadata", zap.Any("metadata", metadata))
-		return nil, fmt.Errorf("missing namespace in metadata")
-	}
+	name := createResponse.Object["metadata"].(map[string]interface{})["name"].(string)
 
 	// Now poll for the job to be ready
 	sensorRequest := struct {
-		Name      string `json:"name"`
-		Namespace string `json:"namespace"`
+		Name string `json:"name"`
 	}{
-		Name:      name,
-		Namespace: namespace,
+		Name: name,
 	}
 
 	// Set up polling with retry policy
@@ -133,7 +101,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	// Monitor job until it's in a terminal state
 	var getResponse interface{}
 
-	if err := workflow.ExecuteActivity(sensorCtx, rayhttp.Activities.GetRayJob, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
+	if err := workflow.ExecuteActivity(sensorCtx, rayhttp.Activities.SensorRayJob, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
