@@ -102,7 +102,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
 	// Monitor job until it's in a terminal state
-	var getResponse interface{}
+	var getResponse ray.GetRayJobResponse
 
 	if err := workflow.ExecuteActivity(sensorCtx, rayhttp.Activities.SensorRayJob, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
@@ -110,7 +110,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	}
 
 	var result starlark.Value
-	if err := utils.AsStar(getResponse, &result); err != nil {
+	if err := utils.AsStar(getResponse.Object, &result); err != nil {
 		logger.Error("error converting to Starlark", zap.Error(err))
 		return nil, err
 	}
