@@ -2,6 +2,8 @@ import type {
   StudioParamsView,
   ViewTypeToParamType,
 } from '#core/hooks/routing/use-studio-params/types';
+import type { FunctionInterpolation } from './function-interpolation';
+import type { StringInterpolation } from './string-interpolation';
 
 /**
  * Base interface for data sources that users can provide to interpolation.
@@ -81,3 +83,32 @@ export interface InterpolationContext<U extends StudioParamsView = 'base'> exten
    */
   data: any;
 }
+
+/**
+ * Union type that represents a value that can either be resolved data or an interpolation pattern.
+ * Used in schemas to indicate that a field accepts both static values and dynamic interpolations.
+ *
+ * @template T - The resolved value type
+ * @template U - The studio params view type
+ *
+ * @example
+ * ```typescript
+ * interface ActionConfig {
+ *   title: Interpolatable<string>;
+ *   disabled: Interpolatable<boolean>;
+ *   priority: Interpolatable<number>;
+ * }
+ *
+ * // All of these are valid:
+ * const config: ActionConfig = {
+ *   title: 'Static Title',                           // Direct value
+ *   disabled: interpolate('${user.isGuest}'),        // String interpolation
+ *   priority: interpolate(({ data }) => data.level), // Function interpolation
+ * };
+ * ```
+ */
+export type Interpolatable<T, U extends StudioParamsView = 'base'> =
+  | T
+  | string
+  | FunctionInterpolation<T, U>
+  | StringInterpolation<U>;

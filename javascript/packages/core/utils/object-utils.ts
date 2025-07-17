@@ -17,3 +17,18 @@ export function getObjectValue<K>(
 
   return undefined;
 }
+
+export function getObjectSymbols(obj: unknown): Record<symbol, unknown> {
+  if (typeof obj !== 'object' || obj === null) {
+    return {};
+  }
+
+  const symbols = Object.getOwnPropertySymbols(obj);
+  const result: Record<symbol, unknown> = {};
+
+  for (const symbol of symbols) {
+    result[symbol] = obj[symbol];
+  }
+
+  return result;
+}
