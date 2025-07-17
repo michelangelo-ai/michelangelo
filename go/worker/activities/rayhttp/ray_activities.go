@@ -239,13 +239,11 @@ func (r *activities) SensorRayJob(ctx context.Context, request GetRayJobRequest)
 
 	// Check if the job has reached a terminal state
 	if status, ok := objectData["status"].(map[string]interface{}); ok {
-		if jobStatus, ok := status["succeeded"].(int32); ok {
-			if jobStatus == 1 {
-				return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), jobStatus)
-			}
-		} else if failed, ok := status["failed"].(int32); ok {
-			if failed == 1 {
-				return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), "job failed")
+		if jobStatus, ok := status["jobStatus"].(string); ok {
+			if jobStatus == "SUCCEEDED" || jobStatus == "FAILED" {
+				return &GetRayJobResponse{
+					Object: objectData,
+				}, nil
 			}
 		}
 	}

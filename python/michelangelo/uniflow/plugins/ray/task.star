@@ -358,7 +358,7 @@ def execute_ray_task(
 def report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id):
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-    if job["status"]["state"] == "RAY_JOB_STATE_SUCCEEDED":
+    if job["status"]["jobStatus"] == "SUCCEEDED":
         report_progress(
             task_path = task_path,
             task_name = task_name,
@@ -369,7 +369,7 @@ def report_ray_task_result(job, task_path, task_name, start_time_formated_str, r
             retry_attempt_id = retry_attempt_id,
         )
         return TASK_STATE_SUCCEEDED
-    elif job["status"]["state"] == "RAY_JOB_STATE_KILLED":
+    elif job["status"]["jobStatus"] == "KILLED":
         message = job.get("message", "unknown reason")
         task_message = "Ray Job killed with {}".format(message)
         report_progress(
