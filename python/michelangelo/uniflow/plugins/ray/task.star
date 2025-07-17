@@ -410,8 +410,6 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
 
     return "python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
 
-<<<<<<< HEAD
-=======
 # Constructs a Unified API resource for provisioning a Ray Cluster.
 # This function generates a RayJob Custom Resource Definition (CRD) that defines the specifications for a Ray cluster.
 # Refer to the RayJob CRD: https://github.com/michelangelo-ai/michelangelo/blob/main/proto/api/v2/ray_job.proto
@@ -609,7 +607,6 @@ def ray_cluster_spec(
             "rayConf": {},
         },
     }
->>>>>>> d1c07fd (Michelangelo Uniflow PoC)
 
 def ray_config(
         head_cpu = None,
