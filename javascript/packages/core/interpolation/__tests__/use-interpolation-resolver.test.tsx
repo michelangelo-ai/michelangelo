@@ -2,11 +2,14 @@ import { renderHook } from '@testing-library/react';
 import { lowerCase, upperCase } from 'lodash';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
+import { getRepeatedLayoutProviderWrapper } from '#core/test/wrappers/get-repeated-layout-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import { createMockProject, createMockUser } from '../__fixtures__/mock-context';
 import { interpolate } from '../interpolate';
 import { useInterpolationResolver } from '../use-interpolation-resolver';
 
-import type { InterpolationContext } from '../types';
+import type { InterpolationContext, UserDataSources } from '../types';
 
 describe('useInterpolationResolver', () => {
   const page = { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } };
@@ -19,14 +22,18 @@ describe('useInterpolationResolver', () => {
     spec: { id: 'row-spec-id' },
   };
 
-  let resolve: <T>(variables: T) => T;
+  let resolve: <T>(variables: T, input?: Partial<UserDataSources>) => T;
 
   beforeEach(() => {
     const { result } = renderHook(
       () => useInterpolationResolver(),
-      buildWrapper([getRouterWrapper()])
+      buildWrapper([
+        getInterpolationProviderWrapper({ user: createMockUser(), project: createMockProject() }),
+        getRouterWrapper(),
+      ])
     );
-    resolve = (input) => result.current(input, { page, row, initialValues });
+    resolve = (interpolator, input) =>
+      result.current(interpolator, { page, row, initialValues, ...input });
   });
 
   describe('No interpolation', () => {
@@ -382,6 +389,61 @@ describe('useInterpolationResolver', () => {
         row: { missing: { property: { access: 'success' } } },
       });
       expect(secondResult).toBe('success');
+    });
+  });
+
+  describe('Provider integration', () => {
+    test('resolves user and project data via context extension', () => {
+      const userInterpolation = interpolate('${user.username}');
+      const projectInterpolation = interpolate('${project.name}');
+
+      expect(resolve(userInterpolation)).toBe('testuser');
+      expect(resolve(projectInterpolation)).toBe('Test Project');
+    });
+
+    test('uses repeated layout context when provided', () => {
+      const { result } = renderHook(
+        () => useInterpolationResolver(),
+        buildWrapper([
+          getInterpolationProviderWrapper({ user: createMockUser(), project: createMockProject() }),
+          getRepeatedLayoutProviderWrapper({ index: 2, rootFieldPath: 'items' }),
+          getRouterWrapper(),
+        ])
+      );
+
+      const interpolation = interpolate(
+        ({ repeatedLayoutContext }) =>
+          `index: ${repeatedLayoutContext?.index}, path: ${repeatedLayoutContext?.rootFieldPath}`
+      );
+
+      const resolved = result.current(interpolation, { page, row, initialValues });
+      expect(resolved).toBe('index: 2, path: items');
+    });
+
+    test('provides repeated layout context to nested interpolations', () => {
+      const { result } = renderHook(
+        () => useInterpolationResolver(),
+        buildWrapper([
+          getInterpolationProviderWrapper({ user: createMockUser(), project: createMockProject() }),
+          getRepeatedLayoutProviderWrapper({ index: 3, rootFieldPath: 'items.data' }),
+          getRouterWrapper(),
+        ])
+      );
+
+      const schema = {
+        title: interpolate(
+          ({ repeatedLayoutContext }) =>
+            `Item ${repeatedLayoutContext?.index} of ${repeatedLayoutContext?.rootFieldPath}`
+        ),
+        path: interpolate('${repeatedLayoutContext.rootFieldPath}[${repeatedLayoutContext.index}]'),
+      };
+
+      const resolved = result.current(schema);
+
+      expect(resolved).toEqual({
+        title: 'Item 3 of items.data',
+        path: 'items.data[3]',
+      });
     });
   });
 });

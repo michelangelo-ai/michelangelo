@@ -2,6 +2,7 @@ import type {
   StudioParamsView,
   ViewTypeToParamType,
 } from '#core/hooks/routing/use-studio-params/types';
+import type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
 import type { FunctionInterpolation } from './function-interpolation';
 import type { StringInterpolation } from './string-interpolation';
 
@@ -70,7 +71,17 @@ export interface UserDataSources {
  * );
  * ```
  */
-export interface InterpolationContext<U extends StudioParamsView = 'base'> extends UserDataSources {
+export interface InterpolationContext<U extends StudioParamsView = 'base'>
+  extends InterpolationContextExtensions,
+    UserDataSources {
+  /**
+   * The context that is available for the fields that are rendered inside a
+   * repeated layout (field's index, rootFieldPath, etc.). The context may be
+   * useful in cases when interpolation function needs to know the index of the
+   * field in the repeated layout to, let's say, derive field's value from some
+   * array of data.
+   */
+  repeatedLayoutContext?: RepeatedLayoutState;
   /**
    * Studio is the MA Studio-specific data picked from the URL, e.g. projectId,
    * phase, entity.
@@ -83,6 +94,29 @@ export interface InterpolationContext<U extends StudioParamsView = 'base'> exten
    */
   data: any;
 }
+
+/**
+ * Interface that can be augmented via module declaration to extend interpolation context.
+ * Use this to add application-specific context data that's always available.
+ *
+ * @example
+ * ```typescript
+ * // In your application code:
+ * declare module '@uber/michelangelo-core' {
+ *   interface InterpolationContextExtensions {
+ *     user: { uuid: string; email: string; username: string };
+ *     project: { id: string; name: string };
+ *     environment: 'development' | 'staging' | 'production';
+ *   }
+ * }
+ *
+ * // Now available in all interpolations:
+ * const userEmail = interpolate('${user.email}');
+ * const isProduction = interpolate(({ environment }) => environment === 'production');
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+export interface InterpolationContextExtensions {}
 
 /**
  * Union type that represents a value that can either be resolved data or an interpolation pattern.

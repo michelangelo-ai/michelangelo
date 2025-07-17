@@ -151,7 +151,7 @@ export default [
 
   // Interpolation module - Allow unsafe operations for dynamic data handling
   {
-    files: ['packages/core/interpolation/**/*.{ts,tsx}'],
+    files: ['packages/core/interpolation/**/*.{ts,tsx}', 'packages/core/providers/interpolation-provider/**/*.{ts,tsx}'],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
