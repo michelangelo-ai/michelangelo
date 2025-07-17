@@ -114,3 +114,22 @@ export type { ErrorNormalizer } from '#core/types/error-types';
 export { ErrorProvider } from '#core/providers/error-provider/error-provider';
 export { useErrorNormalizer } from '#core/providers/error-provider/use-error-normalizer';
 export { GrpcStatusCode } from '#core/constants/grpc-status-codes';
+
+// Interpolation
+export { interpolate } from '#core/interpolation/interpolate';
+export { Interpolation } from '#core/interpolation/base';
+export { StringInterpolation } from '#core/interpolation/string-interpolation';
+export { FunctionInterpolation } from '#core/interpolation/function-interpolation';
+export { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+export type {
+  InterpolationContext,
+  InterpolationContextExtensions,
+  Interpolatable,
+  UserDataSources,
+} from '#core/interpolation/types';
+
+// Interpolation Providers
+export { InterpolationProvider } from '#core/providers/interpolation-provider/interpolation-provider';
+export { RepeatedLayoutProvider } from '#core/providers/repeated-layout-provider/repeated-layout-provider';
+export { useRepeatedLayoutContext } from '#core/providers/repeated-layout-provider/use-repeated-layout-context';
+export type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
