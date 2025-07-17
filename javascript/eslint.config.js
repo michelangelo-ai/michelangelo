@@ -149,6 +149,17 @@ export default [
     rules: sharedRules,
   },
 
+  // Interpolation module - Allow unsafe operations for dynamic data handling
+  {
+    files: ['packages/core/interpolation/**/*.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
   // RPC package
   {
     files: ['packages/rpc/**/*.{ts,tsx}'],

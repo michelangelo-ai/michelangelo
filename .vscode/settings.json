@@ -4,5 +4,8 @@
     ],
     "[yaml]": {
         "editor.formatOnSave": false
-    }
+    },
+    "eslint.workingDirectories": [
+        "./javascript"
+    ]
 }
