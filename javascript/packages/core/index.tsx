@@ -127,6 +127,9 @@ export type {
   Interpolatable,
   UserDataSources,
 } from '#core/interpolation/types';
+export { isInterpolation } from '#core/interpolation/utils/is-interpolation';
+export { hasInterpolationProperty } from '#core/interpolation/utils/has-interpolation-property';
+export { clearUnresolvedInterpolations } from '#core/interpolation/utils/clear-unresolved-interpolations';
 
 // Interpolation Providers
 export { InterpolationProvider } from '#core/providers/interpolation-provider/interpolation-provider';
