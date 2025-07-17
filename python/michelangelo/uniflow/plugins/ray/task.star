@@ -302,7 +302,7 @@ def execute_ray_task(
             "name": "uf-rj-" + normalize_task_name(task_name),
         },
         "spec": {
-            "submitterImage": "rayproject/ray:2.41.0",
+            "submitterImage": cluster_image,
             "entrypoint": entrypoint,
             "rayClusterSpec": {
                 "image": cluster_image,
