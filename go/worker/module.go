@@ -5,13 +5,19 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
+<<<<<<< HEAD
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
+=======
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp"
+	rayhttpPlugin "github.com/michelangelo-ai/michelangelo/go/worker/plugins/rayhttp"
+>>>>>>> 1a61b95 (Add rayhttp)
 	"github.com/michelangelo-ai/michelangelo/go/worker/starlark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows"
 	"go.uber.org/fx"
 )
 
+<<<<<<< HEAD
 // ProvidePluginRegistry creates a new plugin registry based on the global registry.
 func ProvidePluginRegistry() map[string]service.IPlugin {
 	// Start with the global plugin registry as base
@@ -34,6 +40,13 @@ var Module = fx.Options(
 	),
 	workflowfx.Module,
 	activities.Module,
+=======
+// Module provides HTTP client instances for rayhttp.
+var Module = fx.Options(
+	fx.Provide(NewConfig, GetRayHTTPConfig),
+	workflowfx.Module,
+	rayhttp.Module,
+>>>>>>> 1a61b95 (Add rayhttp)
 	workflows.Module,
 	starlark.Module,
 	blobstore.Module,
