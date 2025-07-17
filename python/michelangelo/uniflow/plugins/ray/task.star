@@ -501,6 +501,12 @@ def ray_cluster_spec(
                                 "value": "true",
                                 "effect": "NoSchedule",
                                 "operator": "Equal"
+                            },
+                            {
+                                "key": "kubernetes.io/arch",
+                                "value": "arm64",
+                                "effect": "NoSchedule",
+                                "operator": "Equal"
                             }
                         ],
                         "nodeSelector": {
@@ -564,6 +570,12 @@ def ray_cluster_spec(
                                 {
                                     "key": "compute-graviton",
                                     "value": "true",
+                                    "effect": "NoSchedule",
+                                    "operator": "Equal"
+                                },
+                                {
+                                    "key": "kubernetes.io/arch",
+                                    "value": "arm64",
                                     "effect": "NoSchedule",
                                     "operator": "Equal"
                                 }
