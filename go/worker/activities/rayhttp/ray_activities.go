@@ -184,10 +184,28 @@ func (r *activities) SensorRayJob(ctx context.Context, request GetRayJobRequest)
 	}
 
 	// Make HTTP GET request to the Ray API using the correct API format
+	//url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
+	//resp, err := r.httpClient.Get(url)
+	//if err != nil {
+	//	logger.Error(err, "activity-error")
+	//	return nil, err
+	//}
+
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
-	resp, err := r.httpClient.Get(url)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error(err, "activity-error: failed to get request")
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	// TODO input by worker
+	req.Header.Set("Authorization", "Bearer xxx")
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		logger.Error(err, "activity-error: failed to execute request")
 		return nil, err
 	}
 	defer resp.Body.Close()
