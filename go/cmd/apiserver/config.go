@@ -11,10 +11,8 @@ const (
 type (
 	// YARPCConfig is the configuration for YARPC server.
 	YARPCConfig struct {
-		Host      string `yaml:"host"`
-		Port      int    `yaml:"port"`
-		Transport string `yaml:"transport"` // "grpc", "http", or "both" (default: "grpc")
-		HTTPPort  int    `yaml:"httpPort"`  // Optional separate HTTP port (default: Port + 1)
+		Host string `yaml:"host"`
+		Port int    `yaml:"port"`
 	}
 )
 

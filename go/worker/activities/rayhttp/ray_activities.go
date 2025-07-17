@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -32,9 +33,9 @@ func extractJobName(responseObject map[string]interface{}) (string, error) {
 
 // activities struct encapsulates the HTTP client for Ray operations.
 type activities struct {
-	httpClient *http.Client
-	apiBaseURL string
-	workspace  string
+	httpClient  *http.Client
+	apiBaseURL  string
+	workspace   string
 	environment string
 }
 
@@ -107,14 +108,14 @@ type TerminateRayClusterRequest struct {
 func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobRequest) (*CreateRayJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Convert RayJob to JSON for HTTP POST
 	rayJobBytes, err := json.Marshal(request.RayJob)
 	if err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	// Make HTTP POST request to create the Ray job using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs", r.apiBaseURL, r.workspace, r.environment)
 	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(rayJobBytes))
@@ -123,21 +124,21 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: failed to create ray job", resp.StatusCode)
 	}
-	
+
 	var rayJobData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rayJobData); err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	response := &CreateRayJobResponse{
 		Object: rayJobData,
 	}
-	
+
 	return response, nil
 }
 
@@ -153,11 +154,11 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*GetRayJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	if request.Name == "" {
 		return nil, errors.New("ray job name is required")
 	}
-	
+
 	// Make HTTP GET request to the Ray API using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	resp, err := r.httpClient.Get(url)
@@ -166,21 +167,42 @@ func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: failed to get ray job", resp.StatusCode)
 	}
-	
+
 	var rayJobData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rayJobData); err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	response := &GetRayJobResponse{
 		Object: rayJobData,
 	}
-	
+
+	terminalStates := map[string]bool{"SUCCEEDED": true, "FAILED": true, "STOPPED": true}
+
+	object, ok := rayJobData["object"].(map[string]interface{})
+	if !ok {
+		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "no object in response")
+	}
+
+	status, ok := object["status"].(map[string]interface{})
+	if !ok {
+		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "no status in object")
+	}
+
+	jobStatus, ok := status["state"].(string)
+	if !ok {
+		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", status)
+	}
+
+	if terminalStates[jobStatus] {
+		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "job is not in a terminal state")
+	}
+
 	return response, nil
 }
 
@@ -196,15 +218,15 @@ func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*
 func (r *activities) ListRayJobs(ctx context.Context, request ListRayJobsRequest) (*ray.ListRayJobsResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Implement HTTP client call to list Ray jobs
 	// This is a placeholder - actual implementation would use the HTTP client to get from the Ray API
-	
+
 	// Simulating a successful response with empty list
 	response := &ray.ListRayJobsResponse{
 		Items: []unstructured.Unstructured{},
 	}
-	
+
 	return response, nil
 }
 
@@ -220,14 +242,14 @@ func (r *activities) ListRayJobs(ctx context.Context, request ListRayJobsRequest
 func (r *activities) DeleteRayJob(ctx context.Context, request GetRayJobRequest) (bool, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Implement HTTP client call to delete a Ray job
 	// This is a placeholder - actual implementation would use the HTTP client to delete from the Ray API
-	
+
 	if request.Name == "" {
 		return false, errors.New("ray job name is required")
 	}
-	
+
 	// Simulating a successful deletion
 	return true, nil
 }
@@ -248,14 +270,14 @@ func (r *activities) TerminateRayJob(ctx context.Context, request struct {
 }) (bool, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Implement HTTP client call to terminate a Ray job
 	// This is a placeholder - actual implementation would use the HTTP client to post termination to the Ray API
-	
+
 	if request.Name == "" {
 		return false, errors.New("ray job name is required")
 	}
-	
+
 	// Simulating a successful termination
 	return true, nil
 }
@@ -272,13 +294,13 @@ func (r *activities) TerminateRayJob(ctx context.Context, request struct {
 func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClusterRequest) (*CreateRayClusterResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Extract metadata from the cluster spec
 	metadata, ok := request.ClusterSpec["metadata"].(map[string]interface{})
 	if !ok {
 		return nil, errors.New("invalid cluster spec: missing metadata")
 	}
-	
+
 	// Extract namespace from metadata
 	namespace := ""
 	if ns, ok := metadata["namespace"].(string); ok {
@@ -287,14 +309,14 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 	if namespace == "" {
 		return nil, errors.New("namespace is required in cluster spec metadata")
 	}
-	
+
 	// Convert cluster spec to JSON for HTTP POST
 	clusterBytes, err := json.Marshal(request.ClusterSpec)
 	if err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	// Make HTTP POST request to create the Ray cluster using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters", r.apiBaseURL, r.workspace, r.environment)
 	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(clusterBytes))
@@ -303,21 +325,21 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: failed to create ray cluster", resp.StatusCode)
 	}
-	
+
 	var rayClusterData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	response := &CreateRayClusterResponse{
 		Object: rayClusterData,
 	}
-	
+
 	return response, nil
 }
 
@@ -333,11 +355,11 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterRequest) (*GetRayClusterResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	if request.Name == "" {
 		return nil, errors.New("ray cluster name is required")
 	}
-	
+
 	// Make HTTP GET request to the Ray API using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	resp, err := r.httpClient.Get(url)
@@ -346,21 +368,21 @@ func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterReq
 		return nil, err
 	}
 	defer resp.Body.Close()
-	
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: failed to get ray cluster", resp.StatusCode)
 	}
-	
+
 	var rayClusterData map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
-	
+
 	response := &GetRayClusterResponse{
 		Object: rayClusterData,
 	}
-	
+
 	return response, nil
 }
 
@@ -376,14 +398,14 @@ func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterReq
 func (r *activities) TerminateRayCluster(ctx context.Context, request TerminateRayClusterRequest) (bool, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
-	
+
 	// Implement HTTP client call to terminate a Ray cluster
 	// This is a placeholder - actual implementation would use the HTTP client to post termination to the Ray API
-	
+
 	if request.Name == "" {
 		return false, errors.New("ray cluster name is required")
 	}
-	
+
 	// Simulating a successful termination
 	return true, nil
 }
