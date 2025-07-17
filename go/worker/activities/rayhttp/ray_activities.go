@@ -17,10 +17,25 @@ import (
 
 var Activities = (*activities)(nil)
 
+// extractJobName extracts the job name from the API response object.
+// Returns the name from response["object"]["metadata"]["name"]
+func extractJobName(responseObject map[string]interface{}) (string, error) {
+	if object, ok := responseObject["object"].(map[string]interface{}); ok {
+		if metadata, ok := object["metadata"].(map[string]interface{}); ok {
+			if name, ok := metadata["name"].(string); ok {
+				return name, nil
+			}
+		}
+	}
+	return "", errors.New("could not extract job name from response")
+}
+
 // activities struct encapsulates the HTTP client for Ray operations.
 type activities struct {
 	httpClient *http.Client
 	apiBaseURL string
+	workspace  string
+	environment string
 }
 
 // CreateRayJobRequest wraps the RayJob for creating a new Ray job.
@@ -100,15 +115,8 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 		return nil, err
 	}
 	
-	// Extract namespace from the RayJob metadata for the URL
-	// For now, we'll use a default namespace since the Metadata struct only has Name
-	namespace := "default" // TODO: This should come from the request or configuration
-	if namespace == "" {
-		return nil, errors.New("namespace is required in ray job metadata")
-	}
-	
-	// Make HTTP POST request to create the Ray job
-	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayjobs", r.apiBaseURL, namespace)
+	// Make HTTP POST request to create the Ray job using the correct API format
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs", r.apiBaseURL, r.workspace, r.environment)
 	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(rayJobBytes))
 	if err != nil {
 		logger.Error(err, "activity-error")
@@ -150,8 +158,8 @@ func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*
 		return nil, errors.New("ray job name is required")
 	}
 	
-	// Make HTTP GET request to the Ray API
-	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayjobs/%s", r.apiBaseURL, request.Namespace, request.Name)
+	// Make HTTP GET request to the Ray API using the correct API format
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
 		logger.Error(err, "activity-error")
@@ -287,8 +295,8 @@ func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClus
 		return nil, err
 	}
 	
-	// Make HTTP POST request to create the Ray cluster
-	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayclusters", r.apiBaseURL, namespace)
+	// Make HTTP POST request to create the Ray cluster using the correct API format
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters", r.apiBaseURL, r.workspace, r.environment)
 	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(clusterBytes))
 	if err != nil {
 		logger.Error(err, "activity-error")
@@ -330,8 +338,8 @@ func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterReq
 		return nil, errors.New("ray cluster name is required")
 	}
 	
-	// Make HTTP GET request to the Ray API
-	url := fmt.Sprintf("%s/apis/ray.io/v1/namespaces/%s/rayclusters/%s", r.apiBaseURL, request.Namespace, request.Name)
+	// Make HTTP GET request to the Ray API using the correct API format
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	resp, err := r.httpClient.Get(url)
 	if err != nil {
 		logger.Error(err, "activity-error")

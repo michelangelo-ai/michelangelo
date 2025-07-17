@@ -1,4 +1,4 @@
-load("@plugin", "atexit", "json", "os", "ray", "time")
+load("@plugin", "atexit", "json", "os", "ray", "rayhttp", "time")
 load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
@@ -139,26 +139,10 @@ def task(
 
         result_url = get_result_url()
 
-        # Create cluster
+        # Simplified ray job creation with embedded cluster spec
         cluster_namespace = namespace
         cluster_image = get_task_image(task_name)
-        print("ray | create cluster:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
-
-        cluster = ray_cluster_spec(
-            namespace = cluster_namespace,
-            image = cluster_image,
-            head_resource = resource_dict(
-                cpu = _head_cpu,
-                memory = _head_memory,
-            ),
-            worker_resource = resource_dict(
-                cpu = _worker_cpu,
-                memory = _worker_memory,
-            ),
-            worker_instances = _worker_instances,
-            debug_enabled = breakpoint,
-            runtime_env = runtime_env,
-        )
+        print("ray | create rayjob:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
@@ -166,8 +150,14 @@ def task(
             job_state, job = execute_ray_task(
                 task_path=task_path,
                 task_name=task_name,
-                cluster=cluster,
                 cluster_namespace=cluster_namespace,
+                cluster_image=cluster_image,
+                head_cpu=_head_cpu,
+                head_memory=_head_memory,
+                worker_cpu=_worker_cpu,
+                worker_memory=_worker_memory,
+                worker_instances=_worker_instances,
+                debug_enabled=breakpoint,
                 runtime_env=runtime_env,
                 start_time_formated_str=start_time_formated_str,
                 result_url=result_url,
@@ -271,57 +261,47 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
     return retryable
 
 
-def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
+def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image, head_cpu, head_memory, worker_cpu, worker_memory, worker_instances, debug_enabled, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
 
     print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
 
-    cluster = ray.create_cluster(cluster)
-    cluster_name = cluster["metadata"]["name"]
-    cluster_namespace = cluster["metadata"]["namespace"]
-
-    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name)
+    # Create RayJob directly with embedded cluster specification
+    entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
+    print("ray | create rayjob:", "task_path=" + task_path)
+    
+    # Create RayJob using rayhttp plugin with all parameters - this calls the HTTP activity and handles polling
+    job = rayhttp.create_job(
+        entrypoint, 
+        ray_job_namespace=cluster_namespace, 
+        ray_job_name=task_name,
+        cluster_image=cluster_image,
+        head_cpu=head_cpu,
+        head_memory=head_memory,
+        worker_cpu=worker_cpu,
+        worker_memory=worker_memory,
+        worker_instances=worker_instances,
+        debug_enabled=debug_enabled,
+        runtime_env=runtime_env
+    )
+    
     report_progress(
         task_path = task_path,
         task_name = task_name,
-        task_message = "Ray Cluster Created Successfully",
+        task_message = "Ray Job Completed",
         task_state = TASK_STATE_RUNNING,
         start_time = start_time_formated_str,
         end_time = "",
     )
-
-    atexit.register(terminate_cluster, cluster_namespace, cluster_name)
-
-    # Run job
-    entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
-    print("ray | run job:", "task_path=" + task_path)
-    job = ray.create_job(
-        entrypoint,
-        ray_job_namespace = cluster_namespace,
-        ray_job_name = cluster_name,
-    )
-    print("ray | +run job: job=" + str(job))
-
-    atexit.register(report_ray_task_result, job, task_path, task_name, start_time_formated_str, retry_attempt_id)
-
+    
     if breakpoint:
-        print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
-
+        print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + task_name)
         time.sleep(seconds = 60 * 60 * 24)
         err_message = "internal: breakpoint timeout"
         print("ray | error:", err_message)
         fail(err_message)
-
-    # Terminate cluster
-    job_state = report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id)
-    if job_state == TASK_STATE_SUCCEEDED:
-        ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
-    else:
-        ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
-
-    atexit.unregister(terminate_cluster)
-    atexit.unregister(report_ray_task_result)
-
-    return(job_state, job)
+    
+    # The worker activity handles the actual job monitoring and returns the final status
+    return report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id), job
 
 def terminate_cluster(cluster_namespace, cluster_name):
     ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
@@ -376,177 +356,6 @@ def ray_job_entrypoint(task_path, result_url, args = None, kwargs = None):
 
     return "python3 -m michelangelo.uniflow.core.run_task --task '" + task_path + "' --args '" + args + "' --kwargs '" + kwargs + "' --result-url '" + result_url + "'"
 
-# Constructs a Unified API resource for provisioning a Ray Cluster.
-# This function generates a RayJob Custom Resource Definition (CRD) that defines the specifications for a Ray cluster.
-# Refer to the RayJob CRD: https://github.com/michelangelo-ai/michelangelo/blob/main/proto/api/v2/ray_job.proto
-#
-# Parameters:
-#     namespace (str):
-#         - The Unified API namespace, also known as the Michelangelo Project ID.
-#         - Example: "ma-dev-test"
-#
-#     image (str):
-#         - The Docker image containing Ray, application code, and dependencies.
-#         - Example: "127.0.0.1:5055/uber-usi/uber-one-michelangelo-sandbox:bkt1-produ-1719018451-45448"
-#
-#     head_resource (dict):
-#         - Resource configuration for the Ray **head node**.
-#         - Reference: `resource_dict` function in commons.star.
-#
-#     worker_resource (dict):
-#         - Resource configuration for the Ray **worker nodes**.
-#         - Reference: `resource_dict` function in commons.star.
-#
-#     worker_instances (int):
-#         - Number of Ray worker instances to launch.
-#         - Must be a non-negative integer.
-#
-#     debug_enabled (bool, optional):
-#         - Enables debugging tools if set to True.
-#         - Includes additional debugging utilities such as SYS_PTRACE capability.
-#         - Defaults to False.
-#
-#     runtime_env (dict, optional):
-#         - The runtime environment for the cluster. https://docs.ray.io/en/latest/ray-core/api/doc/ray.runtime_env.RuntimeEnv.html
-#
-# Returns:
-#     dict: A dictionary representing the RayJob CRD.
-def ray_cluster_spec(
-        namespace,
-        image,
-        head_resource,
-        worker_resource,
-        worker_instances,
-        debug_enabled = False,
-        runtime_env = None):
-    ray_init_kwargs = os.environ.get("_RAY_INIT_KWARGS", {})
-    ray_init_kwargs["runtime_env"] = runtime_env
-    env = dict(COMMONS_ENV.items())
-    env.update(RAY_ENV)
-    env.update(os.environ)
-    env.update({"_RAY_INIT_KWARGS": str(ray_init_kwargs)})
-    env = [
-        {"name": k, "value": v}
-        for k, v in env.items()
-    ]
-
-    support_gpu = head_resource.get("gpu", 0) + worker_resource.get("gpu", 0) * worker_instances > 0
-
-    annotations = {}
-    if debug_enabled:
-        # Add SYS_PTRACE capability for profiling.
-        annotations["michelangelo/profiling-ptrace-enabled"] = "true"
-
-    return {
-        "metadata": {
-            "generateName": "uf-ray-",
-            "namespace": "default",
-            "annotations": annotations,
-        },
-        "spec": {
-            "user": {"name": USER_ID},
-            "rayVersion": "2.3.1",  # Keeping original version
-            "head": {
-                "serviceType": "ClusterIP",
-                "rayStartParams": {
-                    "block": "true",
-                    "dashboard-host": "0.0.0.0",
-                },
-                "pod": {
-                    "spec": {
-                        "volumes": [
-                            {
-                                "name": "ray",
-                                "volumeSource": {
-                                    "hostPath": {
-                                        "path": "/tmp/ray"
-                                    }
-                                },
-                            },
-                        ],
-                        "containers": [
-                            {
-                                "name": "head",
-                                "resources": {
-                                    "requests": head_resource,
-                                },
-                                "image": image,  # Keeping original variable
-                                "imagePullPolicy": IMAGE_PULL_POLICY,
-                                "env": env,  # Keeping original variable
-                                "envFrom": [
-                                    {
-                                        "configMapRef": {
-                                            "localObjectReference": {
-                                                "name": "michelangelo-config",
-                                            },
-                                        },
-                                    },
-                                ],
-                                "volumeMounts": [
-                                    {
-                                        "name": "ray",
-                                        "mountPath": "/tmp/ray",
-                                    },
-                                ],
-                                "lifecycle": {
-                                    "postStart": {
-                                        "exec": {
-                                            "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Head'"],
-                                        },
-                                    },
-                                },
-                            },
-                        ],
-                    },
-                },
-            },
-            "workers": [
-                {
-                    "minInstances": worker_instances,
-                    "maxInstances": worker_instances,
-                    "nodeType": "worker-group-1",
-                    "objectStoreMemoryRatio": 0.0,
-                    "rayStartParams": {
-                        "block": "true",
-                        "dashboard-host": "0.0.0.0",
-                    },
-                    "pod": {
-                        "spec": {
-                            "restartPolicy": "Never",
-                            "containers": [
-                                {
-                                    "name": "worker",
-                                    "resources": {
-                                        "requests": worker_resource,
-                                    },
-                                    "image": image,
-                                    "imagePullPolicy": IMAGE_PULL_POLICY,
-                                    "env": env,
-                                    "envFrom": [
-                                        {
-                                            "configMapRef": {
-                                                "localObjectReference": {
-                                                    "name": "michelangelo-config",
-                                                },
-                                            },
-                                        },
-                                    ],
-                                    "lifecycle": {
-                                        "postStart": {
-                                            "exec": {
-                                                "command": ["/bin/sh", "-c", "echo", "'Initializing Ray Worker'"],
-                                            },
-                                        },
-                                    },
-                                },
-                            ],
-                        },
-                    },
-                },
-            ],
-            "rayConf": {},
-        },
-    }
 
 def ray_config(
         head_cpu = None,
@@ -578,3 +387,4 @@ def ray_config(
         "runtime_env": runtime_env,
     }
     return {key: value for key, value in config_overrides.items() if value != None}
+

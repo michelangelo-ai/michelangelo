@@ -138,14 +138,41 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	var entrypoint string
 	var rayClusterNamespace string
 	var rayClusterName string
+	// Additional optional parameters to maintain compatibility with simplified flow
+	var clusterImage string
+	var headCPU, workerCPU, workerInstances int64
+	var headMemory, workerMemory string
+	var debugEnabled bool
+	var runtimeEnv *starlark.Dict
 
 	if err := starlark.UnpackArgs("create_job", args, kwargs,
 		"entrypoint", &entrypoint,
 		"ray_job_namespace?", &rayClusterNamespace,
 		"ray_job_name?", &rayClusterName,
+		"cluster_image?", &clusterImage,
+		"head_cpu?", &headCPU,
+		"head_memory?", &headMemory,
+		"worker_cpu?", &workerCPU,
+		"worker_memory?", &workerMemory,
+		"worker_instances?", &workerInstances,
+		"debug_enabled?", &debugEnabled,
+		"runtime_env?", &runtimeEnv,
 	); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
+	}
+
+	// Log the additional parameters for debugging but ignore them for now
+	// The ray plugin maintains the original behavior of creating jobs against existing clusters
+	if clusterImage != "" {
+		logger.Info("create_job received cluster parameters - maintaining original behavior", 
+			zap.String("cluster_image", clusterImage),
+			zap.Int64("head_cpu", headCPU),
+			zap.String("head_memory", headMemory),
+			zap.Int64("worker_cpu", workerCPU),
+			zap.String("worker_memory", workerMemory),
+			zap.Int64("worker_instances", workerInstances),
+			zap.Bool("debug_enabled", debugEnabled))
 	}
 
 	// Start submit a ray job here

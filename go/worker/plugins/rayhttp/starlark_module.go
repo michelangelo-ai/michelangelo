@@ -25,9 +25,7 @@ type module struct {
 func newModule() starlark.Value {
 	m := &module{}
 	m.attributes = map[string]starlark.Value{
-		"create_cluster":    starlark.NewBuiltin("create_cluster", m.createRayCluster).BindReceiver(m),
-		"create_job":        starlark.NewBuiltin("create_job", m.createRayJob).BindReceiver(m),
-		"terminate_cluster": starlark.NewBuiltin("terminate_cluster", m.terminateRayCluster).BindReceiver(m),
+		"create_job": starlark.NewBuiltin("create_job", m.createRayJob).BindReceiver(m),
 	}
 	return m
 }
@@ -200,17 +198,39 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	var entrypoint string
 	var rayClusterNamespace string
 	var rayClusterName string
+	var clusterImage string
+	var headCPU, workerCPU, workerInstances int64
+	var headMemory, workerMemory string
+	var debugEnabled bool
+	var runtimeEnv *starlark.Dict
 
 	if err := starlark.UnpackArgs("create_job", args, kwargs,
 		"entrypoint", &entrypoint,
 		"ray_job_namespace?", &rayClusterNamespace,
 		"ray_job_name?", &rayClusterName,
+		"cluster_image?", &clusterImage,
+		"head_cpu?", &headCPU,
+		"head_memory?", &headMemory,
+		"worker_cpu?", &workerCPU,
+		"worker_memory?", &workerMemory,
+		"worker_instances?", &workerInstances,
+		"debug_enabled?", &debugEnabled,
+		"runtime_env?", &runtimeEnv,
 	); err != nil {
 		logger.Error("error unpacking args", zap.Error(err))
 		return nil, err
 	}
 	
-	// Prepare ray job request
+	// Convert runtime_env if provided
+	var runtimeEnvGo interface{}
+	if runtimeEnv != nil {
+		if err := utils.AsGo(runtimeEnv, &runtimeEnvGo); err != nil {
+			logger.Error("error converting runtime_env", zap.Error(err))
+			return nil, err
+		}
+	}
+	
+	// Prepare ray job request with embedded cluster specification
 	rayJob := map[string]interface{}{
 		"kind": "RayJob",
 		"apiVersion": "ray.io/v1",
@@ -220,9 +240,64 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 		},
 		"spec": map[string]interface{}{
 			"entrypoint": entrypoint,
-			"cluster": map[string]interface{}{
-				"namespace": rayClusterNamespace,
-				"name": rayClusterName,
+			"runtimeEnv": runtimeEnvGo,
+			"shutdownAfterJobFinishes": true,
+			"ttlSecondsAfterFinished": 600,
+			"rayClusterSpec": map[string]interface{}{
+				"rayVersion": "2.3.1",
+				"head": map[string]interface{}{
+					"serviceType": "ClusterIP",
+					"rayStartParams": map[string]interface{}{
+						"block": "true",
+						"dashboard-host": "0.0.0.0",
+					},
+					"pod": map[string]interface{}{
+						"spec": map[string]interface{}{
+							"containers": []map[string]interface{}{
+								{
+									"name": "head",
+									"image": clusterImage,
+									"imagePullPolicy": "Never",
+									"resources": map[string]interface{}{
+										"requests": map[string]interface{}{
+											"cpu": fmt.Sprintf("%d", headCPU),
+											"memory": headMemory,
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				"workers": []map[string]interface{}{
+					{
+						"minInstances": workerInstances,
+						"maxInstances": workerInstances,
+						"nodeType": "worker-group-1",
+						"rayStartParams": map[string]interface{}{
+							"block": "true",
+							"dashboard-host": "0.0.0.0",
+						},
+						"pod": map[string]interface{}{
+							"spec": map[string]interface{}{
+								"restartPolicy": "Never",
+								"containers": []map[string]interface{}{
+									{
+										"name": "worker",
+										"image": clusterImage,
+										"imagePullPolicy": "Never",
+										"resources": map[string]interface{}{
+											"requests": map[string]interface{}{
+												"cpu": fmt.Sprintf("%d", workerCPU),
+												"memory": workerMemory,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}

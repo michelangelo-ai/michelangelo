@@ -1,5 +1,5 @@
 controllermgr:
-  metricsBindAddress: ${METRICS_ADDRESS::8091}
+  metricsBindAddress: ${METRICS_ADDRESS::8080}
   healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
