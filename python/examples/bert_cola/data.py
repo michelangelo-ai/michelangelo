@@ -21,6 +21,8 @@ log = logging.getLogger(__name__)
         worker_cpu=1,
         worker_memory="2Gi",
         worker_instances=1,
+        worker_min_instances=1,
+        worker_max_instances=1,
         # breakpoint=True,
     )
 )

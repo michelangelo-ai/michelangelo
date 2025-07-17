@@ -40,6 +40,8 @@ class RayTask(TaskConfig):
     worker_gpu: Optional[int] = None
     worker_object_store_memory: Optional[int] = None
     worker_instances: Optional[int] = None
+    worker_min_instances: Optional[int] = None
+    worker_max_instances: Optional[int] = None
     breakpoint: Optional[bool] = None
     runtime_env: Optional[dict] = None
 

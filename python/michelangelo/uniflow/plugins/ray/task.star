@@ -79,6 +79,8 @@ def task(
         worker_gpu = RAY_DEFAULT_WORKER_GPU,
         worker_object_store_memory = None,
         worker_instances = RAY_DEFAULT_WORKER_INSTANCES,
+        worker_min_instances = RAY_DEFAULT_WORKER_INSTANCES,
+        worker_max_instances = RAY_DEFAULT_WORKER_INSTANCES,
         gpu_sku = RAY_DEFAULT_GPU_SKU,
         zone = RAY_DEFAULT_ZONE,
         breakpoint = False,
@@ -136,6 +138,8 @@ def task(
         _worker_cpu = int(_worker_cpu)
         _worker_gpu = int(_worker_gpu)
         _worker_instances = int(_worker_instances)
+        _worker_min_instances = int(_worker_min_instances)
+        _worker_max_instances = int(_worker_max_instances)
 
         result_url = get_result_url()
 
@@ -152,11 +156,17 @@ def task(
                 task_name=task_name,
                 cluster_namespace=cluster_namespace,
                 cluster_image=cluster_image,
-                head_cpu=_head_cpu,
-                head_memory=_head_memory,
-                worker_cpu=_worker_cpu,
-                worker_memory=_worker_memory,
+                resource_dict(
+                     cpu = _head_cpu,
+                     memory = _head_memory,
+                ),
+                worker_resource = resource_dict(
+                     cpu = _worker_cpu,
+                     memory = _worker_memory,
+                ),
                 worker_instances=_worker_instances,
+                worker_min_instances=_worker_min_instances,
+                worker_max_instances=_worker_max_instances,
                 debug_enabled=breakpoint,
                 runtime_env=runtime_env,
                 start_time_formated_str=start_time_formated_str,
@@ -208,6 +218,8 @@ def task(
             worker_gpu = worker_gpu if "worker_gpu" not in config else config["worker_gpu"],
             worker_object_store_memory = worker_object_store_memory if "worker_object_store_memory" not in config else config["worker_object_store_memory"],
             worker_instances = worker_instances if "worker_instances" not in config else config["worker_instances"],
+            worker_min_instances = worker_instances if "worker_min_instances" not in config else config["worker_min_instances"],
+            worker_max_instances = worker_instances if "worker_max_instances" not in config else config["worker_max_instances"],
             gpu_sku = gpu_sku if "gpu_sku" not in config else config["gpu_sku"],
             zone = zone if "zone" not in config else config["zone"],
             breakpoint = breakpoint if "breakpoint" not in config else config["breakpoint"],
@@ -261,9 +273,8 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
     return retryable
 
 
-def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image, head_cpu, head_memory, worker_cpu, worker_memory, worker_instances, debug_enabled, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
-
-    print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
+def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image,
+                     head_resource, worker_resource, worker_instances, debug_enabled, runtime_env, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
 
     # Create RayJob directly with embedded cluster specification
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
@@ -274,62 +285,21 @@ def execute_ray_task(task_path, task_name, cluster_namespace, cluster_image, hea
         "kind": "RayJob",
         "apiVersion": "ray.io/v1",
         "metadata": {
-            "generateName": "uf-rj-" + task_name + "-",
-            "namespace": cluster_namespace,
+            "name": "uf-rj-" + task_name,
         },
         "spec": {
+            "submitterImage": "rayproject/ray:2.41.0",
             "entrypoint": entrypoint,
-            "runtimeEnv": runtime_env,
-            "shutdownAfterJobFinishes": True,
-            "ttlSecondsAfterFinished": 600,
             "rayClusterSpec": {
-                "rayVersion": "2.3.1",
-                "head": {
-                    "serviceType": "ClusterIP",
-                    "rayStartParams": {
-                        "block": "true",
-                        "dashboard-host": "0.0.0.0",
-                    },
-                    "pod": {
-                        "spec": {
-                            "containers": [{
-                                "name": "head",
-                                "image": cluster_image,
-                                "imagePullPolicy": "Never",
-                                "resources": {
-                                    "requests": {
-                                        "cpu": str(head_cpu),
-                                        "memory": head_memory,
-                                    },
-                                },
-                            }],
-                        },
-                    },
+                "image": cluster_image,
+                "headGroupSpec": {
+                    "resources": head_resource,
                 },
-                "workers": [{
-                    "minInstances": worker_instances,
-                    "maxInstances": worker_instances,
-                    "nodeType": "worker-group-1",
-                    "rayStartParams": {
-                        "block": "true",
-                        "dashboard-host": "0.0.0.0",
-                    },
-                    "pod": {
-                        "spec": {
-                            "restartPolicy": "Never",
-                            "containers": [{
-                                "name": "worker",
-                                "image": cluster_image,
-                                "imagePullPolicy": "Never",
-                                "resources": {
-                                    "requests": {
-                                        "cpu": str(worker_cpu),
-                                        "memory": worker_memory,
-                                    },
-                                },
-                            }],
-                        },
-                    },
+                "workerGroupSpecs": [{
+                    "replicas": worker_instances,
+                    "minReplicas": worker_min_instance,
+                    "maxReplicas": worker_max_instance,
+                    "resources": worker_resource,
                 }],
             },
         },
@@ -420,7 +390,9 @@ def ray_config(
         worker_gpu = None,
         worker_object_store_memory = None,
         worker_instances = None,
-        breakpoint = None, 
+        worker_min_instances = None,
+        worker_max_instances = None,
+        breakpoint = None,
         runtime_env = None):
     config_overrides = {
         "head_cpu": head_cpu,
@@ -434,6 +406,8 @@ def ray_config(
         "worker_gpu": worker_gpu,
         "worker_object_store_memory": worker_object_store_memory,
         "worker_instances": worker_instances,
+        "worker_min_instances": worker_min_instances,
+        "worker_max_instances": worker_max_instances,
         "breakpoint": breakpoint,
         "runtime_env": runtime_env,
     }
