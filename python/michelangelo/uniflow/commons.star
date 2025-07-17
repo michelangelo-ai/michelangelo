@@ -62,6 +62,37 @@ def get_task_name(task_path, alias):
         return alias
     return task_path.split(".")[-1]
 
+def normalize_task_name(task_name, max_length = 45):
+    """
+    Normalize task name for Kubernetes resource naming conventions.
+    
+    This function:
+    1. Replaces underscores with hyphens (Kubernetes prefers hyphens)
+    2. Truncates the name if it exceeds max_length characters
+    3. Ensures the result follows Kubernetes naming rules
+    
+    Args:
+        task_name: the original task name
+        max_length: maximum allowed length (default: 45 chars)
+    Returns:
+        normalized_task_name: the normalized task name suitable for Kubernetes resources
+    
+    Example:
+        normalize_task_name("my_very_long_task_name_that_exceeds_limits") 
+        -> "my-very-long-task-name-that-exceeds-limits"[:45]
+    """
+    if task_name == None:
+        return ""
+    
+    # Replace underscores with hyphens for Kubernetes compatibility
+    normalized = task_name.replace("_", "-")
+    
+    # Truncate if exceeds max length
+    if len(normalized) > max_length:
+        normalized = normalized[:max_length]
+    
+    return normalized
+
 def resource_dict(cpu, memory, disk = None, gpu = None, gpu_sku = ""):
     res = {
         "cpu": cpu,
