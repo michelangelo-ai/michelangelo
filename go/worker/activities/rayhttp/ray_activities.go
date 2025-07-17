@@ -113,9 +113,20 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 
 	// Make HTTP POST request to create the Ray job using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs", r.apiBaseURL, r.workspace, r.environment)
-	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(rayJobBytes))
+	req, err := http.NewRequest("POST", url, bytes.NewReader(rayJobBytes))
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error(err, "activity-error: failed to create request")
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	// TODO input by worker
+	req.Header.Set("Authorization", "Bearer xxx")
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		logger.Error(err, "activity-error: failed to execute request")
 		return nil, err
 	}
 	defer resp.Body.Close()

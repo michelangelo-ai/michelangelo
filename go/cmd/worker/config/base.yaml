@@ -2,7 +2,7 @@ worker:
   address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
   rayHttp:
-    baseUrl: http://localhost:14568  # Base URL for Ray HTTP API
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
     workspace: cauldron-test
     environment: dev
 
@@ -23,7 +23,7 @@ workflow-engine:
   provider: temporal
   workers:
     - domain: default
-      taskList: default
+      taskList: zhou-xian
   client:
     domain: uniflow
 

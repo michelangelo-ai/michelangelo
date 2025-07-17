@@ -237,7 +237,7 @@ class RemoteRunTemporal:
             "--namespace",
             os.environ.get("UFC_TEMPORAL_NAMESPACE", "uniflow"),
             "--task-queue",
-            os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
+            os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "zhou-xian"),
             "--type",
             os.environ.get("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"),
             "--execution-timeout",
