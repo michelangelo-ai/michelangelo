@@ -78,7 +78,10 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 
 	// Execute the create activity
 	var createResponse ray.CreateRayJobResponse
-	err = workflow.ExecuteActivity(ctx, rayhttp.Activities.CreateRayJob, request).Get(ctx, &createResponse)
+	srp := utils.CadenceDefaultRetryPolicy
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	createCtx := workflow.WithRetryPolicy(ctx, srp)
+	err = workflow.ExecuteActivity(createCtx, rayhttp.Activities.CreateRayJob, request).Get(ctx, &createResponse)
 	if err != nil {
 		logger.Error("error executing create activity", zap.Error(err))
 		return nil, err
@@ -94,7 +97,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	}
 
 	// Set up polling with retry policy
-	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp = utils.CadenceDefaultSensorRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
