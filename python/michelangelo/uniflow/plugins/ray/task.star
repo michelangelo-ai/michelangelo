@@ -290,6 +290,15 @@ def execute_ray_task(
         retry_attempt_id,
         total_retry_attempt,
         breakpoint = False):
+
+    env = dict(COMMONS_ENV.items())
+    env.update(RAY_ENV)
+    env.update(os.environ)
+    env.update({"_RAY_INIT_KWARGS": str(ray_init_kwargs)})
+    env = [
+        {"name": k, "value": v}
+        for k, v in env.items()
+    ]
     # Create RayJob directly with embedded cluster specification
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | create rayjob:", "task_path=" + task_path)
@@ -308,12 +317,14 @@ def execute_ray_task(
                 "image": cluster_image,
                 "headGroupSpec": {
                     "resources": head_resource,
+                    "env": env,
                 },
                 "workerGroupSpecs": [{
                     "replicas": worker_instances,
                     "minReplicas": worker_min_instances,
                     "maxReplicas": worker_max_instances,
                     "resources": worker_resource,
+                    "env": env,
                 }],
             },
         },
