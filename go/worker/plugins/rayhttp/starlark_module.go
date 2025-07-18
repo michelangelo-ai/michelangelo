@@ -52,7 +52,8 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	logger := workflow.GetLogger(ctx)
 
 	var rayJobSpec *starlark.Dict
-	if err := starlark.UnpackArgs("create_job", args, kwargs, "ray_job_spec", &rayJobSpec); err != nil {
+	var userToken string
+	if err := starlark.UnpackArgs("create_job", args, kwargs, "ray_job_spec", &rayJobSpec, "user_token", &userToken); err != nil {
 		logger.Error("error unpacking args", zap.Error(err))
 		return nil, err
 	}
@@ -72,9 +73,11 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	}
 
 	var request struct {
-		RayJob json.RawMessage `json:"rayJob"`
+		RayJob    json.RawMessage `json:"rayJob"`
+		UserToken string          `json:"userToken"`
 	}
 	request.RayJob = rayJobBytes
+	request.UserToken = userToken
 
 	// Execute the create activity
 	var createResponse ray.CreateRayJobResponse
@@ -91,9 +94,11 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 
 	// Now poll for the job to be ready
 	sensorRequest := struct {
-		Name string `json:"name"`
+		Name      string `json:"name"`
+		UserToken string `json:"userToken"`
 	}{
-		Name: name,
+		Name:      name,
+		UserToken: userToken,
 	}
 
 	// Set up polling with retry policy

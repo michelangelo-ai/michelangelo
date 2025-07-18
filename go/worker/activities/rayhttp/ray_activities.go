@@ -42,12 +42,14 @@ type activities struct {
 
 // CreateRayJobRequest wraps the RayJob for creating a new Ray job.
 type CreateRayJobRequest struct {
-	RayJob ray.RayJob `json:"rayJob"`
+	RayJob    ray.RayJob `json:"rayJob"`
+	UserToken string     `json:"userToken"`
 }
 
 // GetRayJobRequest defines parameters for getting a Ray job.
 type GetRayJobRequest struct {
-	Name string `json:"name"`
+	Name      string `json:"name"`
+	UserToken string `json:"userToken"`
 }
 
 // GetRayJobResponse wraps the response from getting a Ray job.
@@ -121,8 +123,7 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	// TODO input by worker
-	req.Header.Set("Authorization", "Bearer xxx")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.UserToken))
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
@@ -183,14 +184,6 @@ func (r *activities) SensorRayJob(ctx context.Context, request GetRayJobRequest)
 		return nil, errors.New("ray job name is required")
 	}
 
-	// Make HTTP GET request to the Ray API using the correct API format
-	//url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
-	//resp, err := r.httpClient.Get(url)
-	//if err != nil {
-	//	logger.Error(err, "activity-error")
-	//	return nil, err
-	//}
-
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -200,8 +193,7 @@ func (r *activities) SensorRayJob(ctx context.Context, request GetRayJobRequest)
 
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
-	// TODO input by worker
-	req.Header.Set("Authorization", "Bearer xxx")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.UserToken))
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {

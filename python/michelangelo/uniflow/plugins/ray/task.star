@@ -301,6 +301,9 @@ def execute_ray_task(
         for k, v in env.items()
     ]
 
+    # Read user OIDC token from environment variable
+    user_token = os.environ.get("WORKSPACE_TOKEN", "")
+
     # Create RayJob directly with embedded cluster specification
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
     print("ray | create rayjob:", "task_path=" + task_path)
@@ -333,8 +336,7 @@ def execute_ray_task(
     }
 
     # Create RayJob using rayhttp plugin with complete specification
-    # TODO pass in user token
-    job = rayhttp.create_job(ray_job_spec = ray_job_spec)
+    job = rayhttp.create_job(ray_job_spec = ray_job_spec, user_token = user_token)
 
     report_progress(
         task_path = task_path,
