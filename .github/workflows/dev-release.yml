@@ -71,9 +71,9 @@ jobs:
           context: .
           file: docker/service.Dockerfile
           build-args: |
-            BINARY_PATH=${{ matrix.service }}
+            BINARY_PATH=${{ matrix.service }}:grab-poc
             CONFIG_PATH=go/cmd/${{ matrix.service }}/config
-          tags: grab-uniflow-poc
+          tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           push: true
