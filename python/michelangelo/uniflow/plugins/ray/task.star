@@ -235,16 +235,16 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
     retryable = False
 
     if job_state == TASK_STATE_SUCCEEDED:
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        created_cached_output = create_cached_output(
-            namespace = namespace,
-            cache_keys = cache_keys,
-            zone = "",
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
-        cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
+        # cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        # created_cached_output = create_cached_output(
+        #     namespace = namespace,
+        #     cache_keys = cache_keys,
+        #     zone = "",
+        #     ttl_in_days = 0,
+        #     task_name = task_name,
+        #     result_json_url = result_url,
+        # )
+        # cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
         report_progress(
