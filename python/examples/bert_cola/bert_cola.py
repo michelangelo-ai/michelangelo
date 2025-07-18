@@ -26,14 +26,6 @@ def train_workflow():
 # For Local Run: python3 examples/bert_cola/bert_cola.py
 # For Remote Run: python3 examples/bert_cola/bert_cola.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
-    # Read workspace token from file
-    try:
-        token_file_path = os.path.expanduser("~/.chimeracli/workspace/token")
-        with open(token_file_path, "r") as f:
-            workspace_token = f.read().strip()
-    except Exception as e:
-        print(f"Warning: Could not read workspace token from {token_file_path}: {e}")
-    
     ctx = uniflow.create_context()
 
     # Set the environment variable DATA_SIZE to let the load_data task know how much data to generate.
@@ -46,5 +38,4 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Always"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
-    ctx.environ["WORKSPACE_TOKEN"] = workspace_token
     ctx.run(train_workflow)

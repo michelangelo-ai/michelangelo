@@ -51,6 +51,9 @@ def get_task_image(task_name):
         fail("failed to get task image:", task_name)
     return task_image
 
+def get_task_iam_role():
+    return os.environ.get("UF_TASK_IAM_ROLE", "")
+
 # Get the task name for the task.
 # Args:
 #    task_path: the path of the task

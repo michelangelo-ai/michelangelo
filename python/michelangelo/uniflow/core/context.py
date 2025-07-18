@@ -147,6 +147,16 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         help="Container image to use for running workflow tasks.",
     )
     p.add_argument(
+        "--iam-role",
+        required=True,
+        help="Container iam role to assume for running workflow tasks.",
+    )
+    p.add_argument(
+        "--user-token",
+        required=True,
+        help="User token to submit workflow tasks via ComputeAPI.",
+    )
+    p.add_argument(
         "--execution-timeout-seconds",
         default=DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         type=int,
@@ -178,6 +188,8 @@ def _remote_run(
     cron: Optional[str] = None,
     storage_url: str = "",
     image: str = "",
+    iam_role: str = "",
+    user_token: str = "",
     yes: bool = False,
     workflow: str = cadence,
 ):
@@ -193,10 +205,14 @@ def _remote_run(
         cron: Cron expression for scheduling periodic workflow runs.
         storage_url: Persistent storage URL for saving and loading workflow checkpoints.
         image: Container image to use for running workflow tasks.
+        iam_role: Container IAM role to use for running workflow tasks.
+        user_token: User token to submit workflow tasks via ComputeAPI.
         yes: Automatically answer yes to confirmation prompts.
     """
     assert storage_url
     assert image
+    assert iam_role
+    assert user_token
 
     environ = environ or {}
     args = args or ()
@@ -215,6 +231,8 @@ def _remote_run(
             fn=fn,
             image=image,
             storage_url=storage_url,
+            iam_role=iam_role,
+            user_token=user_token,
         )
     rr.environ = environ
     rr.args = args

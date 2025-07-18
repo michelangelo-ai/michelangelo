@@ -166,6 +166,8 @@ class RemoteRunTemporal:
     fn: Callable
     image: str
     storage_url: str
+    iam_role: str
+    user_token: str
     metadata_storage_url: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
@@ -194,6 +196,8 @@ class RemoteRunTemporal:
         environ = self.environ.copy()
         environ["UF_TASK_IMAGE"] = self.image
         environ["UF_STORAGE_URL"] = self.storage_url
+        environ["UF_TASK_IAM_ROLE"] = self.iam_role
+        environ["UF_TASK_WORKSPACE_TOKEN"] = self.user_token
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 

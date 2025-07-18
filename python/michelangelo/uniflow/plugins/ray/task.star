@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "rayhttp", "time")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -148,6 +148,7 @@ def task(
         # Simplified ray job creation with embedded cluster spec
         cluster_namespace = namespace
         cluster_image = get_task_image(task_name)
+        iam_role = get_task_iam_role()
         print("ray | create rayjob:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
 
         total_retry_attempt = retry_attempts + 1
@@ -157,6 +158,7 @@ def task(
                 task_name = task_name,
                 cluster_namespace = cluster_namespace,
                 cluster_image = cluster_image,
+                iam_role = iam_role,
                 head_resource = resource_dict(
                     cpu = _head_cpu,
                     memory = _head_memory,
@@ -276,6 +278,7 @@ def execute_ray_task(
         task_name,
         cluster_namespace,
         cluster_image,
+        iam_role,
         head_resource,
         worker_resource,
         worker_instances,
@@ -302,7 +305,7 @@ def execute_ray_task(
     ]
 
     # Read user OIDC token from environment variable
-    user_token = os.environ.get("WORKSPACE_TOKEN", "")
+    user_token = os.environ.get("UF_TASK_WORKSPACE_TOKEN", "")
 
     # Create RayJob directly with embedded cluster specification
     entrypoint = ray_job_entrypoint(task_path, result_url, args, kwargs)
@@ -323,6 +326,9 @@ def execute_ray_task(
                 "headGroupSpec": {
                     "resources": head_resource,
                     "env": env,
+                    "annotations": {
+                        "iam.amazonaws.com/role": iam_role,
+                    },
                 },
                 "workerGroupSpecs": [{
                     "replicas": worker_instances,
@@ -330,6 +336,9 @@ def execute_ray_task(
                     "maxReplicas": worker_max_instances,
                     "resources": worker_resource,
                     "env": env,
+                    "annotations": {
+                        "iam.amazonaws.com/role": iam_role,
+                    },
                 }],
             },
         },
