@@ -16,7 +16,7 @@ jobs:
     strategy:
       # max-parallel: 1
       matrix:
-        service: [controllermgr, worker, apiserver]
+        service: [worker]
 
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
           build-args: |
             BINARY_PATH=${{ matrix.service }}
             CONFIG_PATH=go/cmd/${{ matrix.service }}/config
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: grab-uniflow-poc
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           push: true
