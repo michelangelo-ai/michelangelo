@@ -73,7 +73,7 @@ jobs:
           build-args: |
             BINARY_PATH=${{ matrix.service }}
             CONFIG_PATH=go/cmd/${{ matrix.service }}/config
-          tags: ${{ steps.meta.outputs.tags }}:grab-poc
+          tags: ${{ env.REGISTRY }}/michelangelo-ai/${{ matrix.service }}:grab-poc
           labels: ${{ steps.meta.outputs.labels }}
           platforms: linux/amd64,linux/arm64
           push: true
