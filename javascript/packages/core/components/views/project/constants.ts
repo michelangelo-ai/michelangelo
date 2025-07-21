@@ -18,6 +18,11 @@ export const SHARED_PROJECT_CELL_CONFIG = [
 ];
 
 export const PIPELINE_CELL_CONFIG = [
+  {
+    id: 'metadata.name',
+    label: 'Name',
+    url: '/${studio.projectId}/pipelines/${data.metadata.name}',
+  },
   { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
   {
     id: 'spec.type',
@@ -69,6 +74,11 @@ export const PIPELINE_CELL_CONFIG = [
 ];
 
 export const PIPELINE_RUN_CELL_CONFIG = [
+  {
+    id: 'metadata.name',
+    label: 'Name',
+    url: '/${studio.projectId}/runs/${data.metadata.name}',
+  },
   { id: 'metadata.creationTimestamp.seconds', label: 'Created', type: CellType.DATE },
   {
     id: 'spec.pipeline.name',
