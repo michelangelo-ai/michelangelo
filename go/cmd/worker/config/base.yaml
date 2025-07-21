@@ -2,7 +2,7 @@ worker:
   address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
   rayHttp:
-    baseUrl: https://compute.cauldron.myteksi.net  # Base URL for Ray HTTP API
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
     workspace: cauldron-test
     environment: dev
 
@@ -29,5 +29,5 @@ workflow-engine:
 
 minio:
   awsRegion: ap-southeast-1
-  awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
+  awsEndpointUrl: s3.amazonaws.com
   useEnvAws: true
