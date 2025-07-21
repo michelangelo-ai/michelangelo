@@ -35,7 +35,7 @@ func newClient(config Config) (BlobStoreClientOut, error) {
 
 	s3Client, err := minio.New(config.AwsEndpointUrl, &minio.Options{
 		Creds:  creds,
-		Secure: false,
+		Secure: true,
 	})
 	if err != nil {
 		return BlobStoreClientOut{}, err
