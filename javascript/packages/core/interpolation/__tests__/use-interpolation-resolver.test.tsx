@@ -9,7 +9,7 @@ import { createMockProject, createMockUser } from '../__fixtures__/mock-context'
 import { interpolate } from '../interpolate';
 import { useInterpolationResolver } from '../use-interpolation-resolver';
 
-import type { InterpolationContext, UserDataSources } from '../types';
+import type { ExclusionCheck, InterpolationContext, UserDataSources } from '../types';
 
 describe('useInterpolationResolver', () => {
   const page = { metadata: { namespace: 'abc-123', name: 'tester' }, spec: { id: 'SOME_ID' } };
@@ -22,7 +22,11 @@ describe('useInterpolationResolver', () => {
     spec: { id: 'row-spec-id' },
   };
 
-  let resolve: <T>(variables: T, input?: Partial<UserDataSources>) => T;
+  let resolve: <T>(
+    variables: T,
+    input?: Partial<UserDataSources>,
+    excludeProperty?: ExclusionCheck
+  ) => T;
 
   beforeEach(() => {
     const { result } = renderHook(
@@ -32,8 +36,8 @@ describe('useInterpolationResolver', () => {
         getRouterWrapper(),
       ])
     );
-    resolve = (interpolator, input) =>
-      result.current(interpolator, { page, row, initialValues, ...input });
+    resolve = (interpolator, input, excludeProperty) =>
+      result.current(interpolator, { page, row, initialValues, ...input }, excludeProperty);
   });
 
   describe('No interpolation', () => {
@@ -444,6 +448,84 @@ describe('useInterpolationResolver', () => {
         title: 'Item 3 of items.data',
         path: 'items.data[3]',
       });
+    });
+  });
+
+  describe('Property Exclusion', () => {
+    test('excludes properties by key name', () => {
+      const input = {
+        shouldInterpolate: interpolate('${page.metadata.name}'),
+        shouldExclude: interpolate('${page.metadata.name}'),
+        nested: {
+          shouldInterpolate: interpolate('${page.metadata.namespace}'),
+          shouldExclude: interpolate('${page.metadata.namespace}'),
+        },
+      };
+
+      const excludeProperty: ExclusionCheck = (key) => key === 'shouldExclude';
+      const result = resolve(input, undefined, excludeProperty);
+
+      expect(result.shouldInterpolate).toBe('tester');
+      expect(result.shouldExclude).toBe(input.shouldExclude);
+      expect(result.nested.shouldInterpolate).toBe('abc-123');
+      expect(result.nested.shouldExclude).toBe(input.nested.shouldExclude);
+    });
+
+    test('excludes properties based on value type', () => {
+      const input = {
+        stringValue: interpolate('${page.metadata.name}'),
+        functionValue: () => 'test',
+        nested: {
+          anotherString: interpolate('${page.metadata.namespace}'),
+          anotherFunction: () => 'nested',
+        },
+      };
+
+      const excludeFunctions: ExclusionCheck = (_key, value) => typeof value === 'function';
+
+      const result = resolve(input, undefined, excludeFunctions);
+
+      expect(result.stringValue).toBe('tester');
+      expect(result.functionValue).toBe(input.functionValue);
+      expect(result.nested.anotherString).toBe('abc-123');
+      expect(result.nested.anotherFunction).toBe(input.nested.anotherFunction);
+    });
+
+    test('continues interpolation when exclusion function throws', () => {
+      const input = {
+        prop: interpolate('${page.metadata.name}'),
+      };
+
+      const faultyExclusion: ExclusionCheck = () => {
+        throw new Error('Exclusion error');
+      };
+
+      const result = resolve(input, undefined, faultyExclusion);
+
+      expect(result.prop).toBe('tester');
+    });
+
+    test('exclusion function receives correct parameters', () => {
+      const input = {
+        root: {
+          nested: {
+            target: interpolate('${page.metadata.name}'),
+          },
+        },
+      };
+
+      const capturedCalls: Array<{ key: string; value: any }> = [];
+      const trackingExclusion: ExclusionCheck = (key, value) => {
+        capturedCalls.push({ key, value });
+        return false; // Don't exclude anything
+      };
+
+      resolve(input, undefined, trackingExclusion);
+
+      expect(capturedCalls).toHaveLength(3);
+      expect(capturedCalls[0]).toEqual({ key: 'root', value: input.root });
+      expect(capturedCalls[1]).toEqual({ key: 'nested', value: input.root.nested });
+      expect(capturedCalls[2]).toEqual({ key: 'target', value: input.root.nested.target });
     });
   });
 });

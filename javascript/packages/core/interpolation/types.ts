@@ -146,3 +146,24 @@ export type Interpolatable<T, U extends StudioParamsView = 'base'> =
   | string
   | FunctionInterpolation<T, U>
   | StringInterpolation<U>;
+
+/**
+ * Function type for checking whether a property should be excluded from interpolation.
+ * Called for each object property during recursive interpolation processing.
+ *
+ * @param key - The property key being processed
+ * @param value - The property value being processed
+ * @returns true if the property should be excluded from interpolation
+ *
+ * @example
+ * ```typescript
+ * // Exclude form entities property
+ * const isFormEntitiesProperty: ExclusionCheck = (key, value) =>
+ *   key === 'entities' && !Array.isArray(value);
+ *
+ * // Exclude all function values
+ * const excludeFunctions: ExclusionCheck = (key, value) =>
+ *   typeof value === 'function';
+ * ```
+ */
+export type ExclusionCheck = (key: string, value: unknown) => boolean;

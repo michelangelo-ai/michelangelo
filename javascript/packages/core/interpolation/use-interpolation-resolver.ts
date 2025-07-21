@@ -5,7 +5,7 @@ import { useInterpolationContext } from '#core/providers/interpolation-provider/
 import { useRepeatedLayoutContext } from '#core/providers/repeated-layout-provider/use-repeated-layout-context';
 import { resolveInterpolations } from './resolve-interpolations';
 
-import type { InterpolationContext, UserDataSources } from './types';
+import type { ExclusionCheck, InterpolationContext, UserDataSources } from './types';
 
 /**
  * React hook that returns a function to resolve interpolations in an unknown
@@ -34,7 +34,11 @@ export function useInterpolationResolver() {
   const studio = useStudioParams('base');
 
   return useCallback(
-    <T = unknown>(variable: T, input?: Partial<UserDataSources>): T => {
+    <T = unknown>(
+      variable: T,
+      input?: Partial<UserDataSources>,
+      excludeProperty?: ExclusionCheck
+    ): T => {
       const minimumInterpolationData: InterpolationContext = {
         studio,
         repeatedLayoutContext,
@@ -50,6 +54,7 @@ export function useInterpolationResolver() {
       return resolveInterpolations({
         variable,
         params: { ...minimumInterpolationData, ...input },
+        excludeProperty,
       }) as T;
     },
     [injectedContext, repeatedLayoutContext, studio]
