@@ -28,7 +28,7 @@ func newClient(config Config) (BlobStoreClientOut, error) {
 	if config.UseEnvAws {
 		creds = credentials.NewEnvAWS()
 	} else if config.UseIAM {
-		creds = credentials.NewIAM("")
+		creds = credentials.NewIAM("http://169.254.169.254")
 	} else {
 		creds = credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, "")
 	}
