@@ -41,6 +41,10 @@ data:
     worker:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
+      rayHttp:
+        baseUrl: https://compute.cauldron.myteksi.net  # Base URL for Ray HTTP API
+        workspace: cauldron-test
+        environment: dev
 
     logging:
       level: info
@@ -55,10 +59,11 @@ data:
         provider: temporal
         workers:
           - domain: default
-            taskList: default
+            taskList: zhou-xian
         client:
           domain: uniflow
 
     minio:
       awsRegion: ap-southeast-1
       awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
+      UseIAM: true
