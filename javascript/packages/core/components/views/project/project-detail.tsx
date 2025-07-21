@@ -6,6 +6,7 @@ import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import {
   PIPELINE_CELL_CONFIG,
   PIPELINE_RUN_CELL_CONFIG,
@@ -17,6 +18,7 @@ import type { Theme } from 'baseui';
 export function ProjectDetail() {
   const [css, theme] = useStyletron();
   const { projectId } = useStudioParams('base');
+  const resolver = useInterpolationResolver();
   const { data } = useStudioQuery<{
     project: {
       metadata: {
@@ -126,14 +128,7 @@ export function ProjectDetail() {
                 }}
                 key={item.metadata.name}
                 record={item}
-                items={[
-                  {
-                    id: 'metadata.name',
-                    label: 'Name',
-                    url: `/project/${projectId}/pipelines/${item.metadata.name}`,
-                  },
-                  ...PIPELINE_CELL_CONFIG,
-                ].map((cell) => ({
+                items={resolver(PIPELINE_CELL_CONFIG, { page: item }).map((cell) => ({
                   ...cell,
                   ...(index > 0 && { label: undefined }),
                 }))}
@@ -181,14 +176,7 @@ export function ProjectDetail() {
                 }}
                 key={item.metadata.name}
                 record={item}
-                items={[
-                  {
-                    id: 'metadata.name',
-                    label: 'Name',
-                    url: `/project/${projectId}/runs/${item.metadata.name}`,
-                  },
-                  ...PIPELINE_RUN_CELL_CONFIG,
-                ].map((cell) => ({
+                items={resolver(PIPELINE_RUN_CELL_CONFIG, { page: item }).map((cell) => ({
                   ...cell,
                   ...(index > 0 && { label: undefined }),
                 }))}
