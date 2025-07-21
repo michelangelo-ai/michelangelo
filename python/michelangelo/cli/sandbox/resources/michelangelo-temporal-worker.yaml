@@ -66,4 +66,4 @@ data:
     minio:
       awsRegion: ap-southeast-1
       awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
-      UseIAM: true
+      useIam: true
