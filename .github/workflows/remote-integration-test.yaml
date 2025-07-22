@@ -33,60 +33,27 @@ jobs:
       #----------------------------------------------
       - name: Run pipeline
         run: |
-          # Debug: Show current directory and user
+          # Debug: Show current directory
           echo "=== PRE-PIPELINE DEBUG INFO ==="
           echo "Current working directory: $(pwd)"
-          echo "Current user: $(whoami)"
           echo "Home directory: $HOME"
           
           # Create persistent directory with date timestamp (outside repository)
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-          PERSISTENT_DIR="/home/ananya_jain/michelangelo_data"
+          PERSISTENT_DIR="$HOME/michelangelo_data"
           mkdir -p "$PERSISTENT_DIR"
           
           # Create dated folder for this run
           DATED_FOLDER="$PERSISTENT_DIR/bert_cola_$TIMESTAMP"
           mkdir -p "$DATED_FOLDER"
           
-          # Debug: Show what was created
-          echo "Created dated directory at: $DATED_FOLDER"
-          ls -la "$DATED_FOLDER/"
-          
-          # Debug: Show current directory contents
-          echo "Current directory contents before pipeline:"
-          ls -la
-          
           # Run with volume mount for bert_cola directory
-          echo "=== STARTING PIPELINE ==="
           docker run --rm \
             -v "$DATED_FOLDER:/app/bert_cola" \
             -e DATA_SIZE=10 \
-            ma-it-examples bash -c "
-              poetry run python ./examples/bert_cola/bert_cola.py
-              chown -R 1000:1000 /app/bert_cola/
-            "
+            ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
           
-          # Debug: Check what was created after pipeline
-          echo "=== POST-PIPELINE DEBUG INFO ==="
-          echo "Contents of dated folder after pipeline:"
+          # Show results
+          echo "Pipeline completed. Results saved to: $DATED_FOLDER"
           ls -la "$DATED_FOLDER/"
-          
-          echo "Contents of persistent_data directory:"
-          ls -la "$PERSISTENT_DIR/"
-          
-          echo "Checking for bert_cola directories:"
-          find "$PERSISTENT_DIR" -name "bert_cola*" -type d 2>/dev/null
-          
-          echo "Checking for model files:"
-          find "$PERSISTENT_DIR" -name "pytorch_model.bin" 2>/dev/null
-          find "$PERSISTENT_DIR" -name "config.json" 2>/dev/null
-          find "$PERSISTENT_DIR" -name "checkpoint*" -type d 2>/dev/null
-          
-          echo "Checking for recently modified files (last 10 minutes):"
-          find "$PERSISTENT_DIR" -type f -mmin -10 2>/dev/null
-          
-          echo "Checking for any files with 'bert' in name:"
-          find "$PERSISTENT_DIR" -name "*bert*" -type f 2>/dev/null
-          
-          echo "=== END DEBUG INFO ==="
           
