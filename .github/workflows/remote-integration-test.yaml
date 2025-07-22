@@ -33,11 +33,50 @@ jobs:
       #----------------------------------------------
       - name: Run pipeline
         run: |
-          # Create persistent directory in current working directory
-          mkdir -p ./persistent_data
+          # Debug: Show current directory and user
+          echo "=== PRE-PIPELINE DEBUG INFO ==="
+          echo "Current working directory: $(pwd)"
+          echo "Current user: $(whoami)"
+          echo "Home directory: $HOME"
           
-          # Run with volume mount
+          # Create persistent directory for bert_cola output
+          mkdir -p ./bert_cola_persistent
+          
+          # Debug: Show what was created
+          echo "Created directory at: $(pwd)/bert_cola_persistent"
+          ls -la ./bert_cola_persistent/
+          
+          # Debug: Show current directory contents
+          echo "Current directory contents before pipeline:"
+          ls -la
+          
+          # Run with volume mount for bert_cola directory
+          echo "=== STARTING PIPELINE ==="
           docker run --rm \
-            -v $(pwd)/persistent_data:/app/persistent_data \
-            -e OUTPUT_DIR=/app/persistent_data/bert_cola \
+            -v $(pwd)/bert_cola_persistent:/app/bert_cola \
+            -e DATA_SIZE=10 \
             ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
+          
+          # Debug: Check what was created after pipeline
+          echo "=== POST-PIPELINE DEBUG INFO ==="
+          echo "Contents of bert_cola_persistent after pipeline:"
+          ls -la ./bert_cola_persistent/
+          
+          echo "Contents of current directory after pipeline:"
+          ls -la
+          
+          echo "Checking for bert_cola directories:"
+          find . -name "bert_cola" -type d 2>/dev/null
+          
+          echo "Checking for model files:"
+          find . -name "pytorch_model.bin" 2>/dev/null
+          find . -name "config.json" 2>/dev/null
+          find . -name "checkpoint*" -type d 2>/dev/null
+          
+          echo "Checking for recently modified files (last 10 minutes):"
+          find . -type f -mmin -10 2>/dev/null
+          
+          echo "Checking for any files with 'bert' in name:"
+          find . -name "*bert*" -type f 2>/dev/null
+          
+          echo "=== END DEBUG INFO ==="
