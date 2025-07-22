@@ -15,6 +15,15 @@ jobs:
 
     steps:
       #----------------------------------------------
+      # Clean up old persistent data
+      #----------------------------------------------
+      - name: Clean up old persistent data
+        run: |
+          # Remove any old bert_cola_persistent directory that might conflict
+          sudo rm -rf /home/ananya_jain/actions-runner/_work/michelangelo/michelangelo/python/bert_cola_persistent/ 2>/dev/null || true
+          sudo rm -rf /home/ananya_jain/actions-runner/_work/michelangelo/michelangelo/python/bert_cola/ 2>/dev/null || true
+
+      #----------------------------------------------
       # Check-out repo
       #----------------------------------------------
       - name: Check out repository
