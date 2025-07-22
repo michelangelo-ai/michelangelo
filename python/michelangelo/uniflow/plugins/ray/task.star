@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "rayhttp", "time")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -149,6 +149,7 @@ def task(
         cluster_namespace = namespace
         cluster_image = get_task_image(task_name)
         iam_role = get_task_iam_role()
+        architecture = get_task_architecture()
         print("ray | create rayjob:", "ns:", cluster_namespace, "image:", cluster_image, "task_name:", task_name)
 
         total_retry_attempt = retry_attempts + 1
@@ -159,6 +160,7 @@ def task(
                 cluster_namespace = cluster_namespace,
                 cluster_image = cluster_image,
                 iam_role = iam_role,
+                architecture = architecture,
                 head_resource = resource_dict(
                     cpu = _head_cpu,
                     memory = _head_memory,
@@ -279,6 +281,7 @@ def execute_ray_task(
         cluster_namespace,
         cluster_image,
         iam_role,
+        architecture,
         head_resource,
         worker_resource,
         worker_instances,
@@ -321,6 +324,7 @@ def execute_ray_task(
         "spec": {
             "submitterImage": cluster_image,
             "entrypoint": entrypoint,
+            "architecture": architecture,
             "rayClusterSpec": {
                 "image": cluster_image,
                 "headGroupSpec": {

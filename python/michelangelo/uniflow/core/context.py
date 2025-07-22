@@ -152,6 +152,11 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         help="Container iam role to assume for running workflow tasks.",
     )
     p.add_argument(
+        "--architecture",
+        required=False,
+        help="Architecture for running workflow tasks: amd64 or arm64.",
+    )
+    p.add_argument(
         "--user-token",
         required=True,
         help="User token to submit workflow tasks via ComputeAPI.",
@@ -189,6 +194,7 @@ def _remote_run(
     storage_url: str = "",
     image: str = "",
     iam_role: str = "",
+    architecture: str = "",
     user_token: str = "",
     yes: bool = False,
     workflow: str = cadence,
@@ -206,6 +212,7 @@ def _remote_run(
         storage_url: Persistent storage URL for saving and loading workflow checkpoints.
         image: Container image to use for running workflow tasks.
         iam_role: Container IAM role to use for running workflow tasks.
+        architecture: Architecture for running workflow tasks: amd64 or arm64.
         user_token: User token to submit workflow tasks via ComputeAPI.
         yes: Automatically answer yes to confirmation prompts.
     """
@@ -232,6 +239,7 @@ def _remote_run(
             image=image,
             storage_url=storage_url,
             iam_role=iam_role,
+            architecture=architecture,
             user_token=user_token,
         )
     rr.environ = environ

@@ -35,13 +35,14 @@ type Metadata struct {
 
 // Spec represents the specification of a RayJob.
 type Spec struct {
-	Pipeline              string        `json:"pipeline,omitempty"`
-	ActiveDeadlineSeconds int           `json:"activeDeadlineSeconds,omitempty"`
-	Entrypoint            string        `json:"entrypoint,omitempty"`
+	Pipeline              string         `json:"pipeline,omitempty"`
+	ActiveDeadlineSeconds int            `json:"activeDeadlineSeconds,omitempty"`
+	Entrypoint            string         `json:"entrypoint,omitempty"`
+	Architecture          string         `json:"architecture,omitempty"`
 	RayClusterSpec        RayClusterSpec `json:"rayClusterSpec,omitempty"`
-	SubmitterImage        string        `json:"submitterImage,omitempty"`
-	CPU                   string        `json:"cpu,omitempty"`
-	Memory                string        `json:"memory,omitempty"`
+	SubmitterImage        string         `json:"submitterImage,omitempty"`
+	CPU                   string         `json:"cpu,omitempty"`
+	Memory                string         `json:"memory,omitempty"`
 }
 
 // RayJob represents a Ray job resource.
