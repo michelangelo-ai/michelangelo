@@ -32,4 +32,12 @@ jobs:
       # Run test
       #----------------------------------------------
       - name: Run pipeline
-        run: docker run --rm ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
+        run: |
+          # Create persistent directory
+          mkdir -p /home/runner/persistent_data
+          
+          # Run with volume mount
+          docker run --rm \
+            -v /home/runner/persistent_data:/app/persistent_data \
+            -e OUTPUT_DIR=/app/persistent_data/bert_cola \
+            ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
