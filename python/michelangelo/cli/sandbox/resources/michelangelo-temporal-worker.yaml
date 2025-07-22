@@ -20,6 +20,7 @@ spec:
       containers:
         - name: app
           image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:grab-poc
+          imagePullPolicy: Always
           volumeMounts:
             - name: worker-config-volume
               mountPath: /config
