@@ -15,14 +15,6 @@ jobs:
 
     steps:
       #----------------------------------------------
-      # Clean up persistent data
-      #----------------------------------------------
-      - name: Clean up persistent data
-        run: |
-          # Remove the persistent directory from /tmp
-          sudo rm -rf /tmp/bert_cola_persistent/ 2>/dev/null || true
-
-      #----------------------------------------------
       # Check-out repo
       #----------------------------------------------
       - name: Check out repository
@@ -47,9 +39,9 @@ jobs:
           echo "Current user: $(whoami)"
           echo "Home directory: $HOME"
           
-          # Create persistent directory with date timestamp
+          # Create persistent directory with date timestamp (outside repository)
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-          PERSISTENT_DIR="$(pwd)/bert_cola_persistent"
+          PERSISTENT_DIR="/tmp/michelangelo_persistent"
           mkdir -p "$PERSISTENT_DIR"
           
           # Create dated folder for this run
