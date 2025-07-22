@@ -244,6 +244,38 @@ func TestConditionalUpsert(t *testing.T) {
 		err = crdGateway.ConditionalUpsert(ctx, crd, false)
 		assert.Error(t, err, "failed to get CRD project.test: test error")
 	})
+
+	t.Run("test upsert CRD with missing version in new CRD", func(t *testing.T) {
+		// Prepare existing CRD with multiple versions
+		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
+		assert.NotNil(t, crd)
+		assert.NoError(t, err)
+
+		// Create existing CRD with two versions
+		existingCRD := crd.DeepCopy()
+		existingCRD.Spec.Versions = append(existingCRD.Spec.Versions, apiextv1.CustomResourceDefinitionVersion{
+			Name:    "v1",
+			Served:  true,
+			Storage: false,
+			Schema:  existingCRD.Spec.Versions[0].Schema,
+		})
+
+		apiExtClientStub := apiExtFake.NewSimpleClientset(existingCRD)
+		crdGateway := gateway{
+			logger:        zap.NewExample(),
+			apiExtClient:  apiExtClientStub,
+			dynamicClient: fakeClientNoResource,
+		}
+
+		// Action: Try to upsert with only one version (missing v1)
+		ctx := context.Background()
+		newCRD := crd.DeepCopy() // Only has v0, missing v1 that exists on server
+		err = crdGateway.ConditionalUpsert(ctx, newCRD, false)
+
+		// Assert: Should fail because v1 version exists on server but not in new CRD
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "has version v1 that is not in the new CRD")
+	})
 }
 
 func TestList(t *testing.T) {

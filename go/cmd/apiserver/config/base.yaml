@@ -5,6 +5,11 @@ apiserver:
   crdSync:
     enableCRDUpdate: true
     enableIncompatibleUpdate: false
+    enableCRDDeletion: true
+    crdVersions:
+      project:
+        versions: [v2]
+        storage_version: v2
 
 k8s:
   qps: 300
