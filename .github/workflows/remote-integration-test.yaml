@@ -33,11 +33,11 @@ jobs:
       #----------------------------------------------
       - name: Run pipeline
         run: |
-          # Create persistent directory
-          mkdir -p /home/runner/persistent_data
+          # Create persistent directory in current working directory
+          mkdir -p ./persistent_data
           
           # Run with volume mount
           docker run --rm \
-            -v /home/runner/persistent_data:/app/persistent_data \
+            -v $(pwd)/persistent_data:/app/persistent_data \
             -e OUTPUT_DIR=/app/persistent_data/bert_cola \
             ma-it-examples poetry run python ./examples/bert_cola/bert_cola.py
