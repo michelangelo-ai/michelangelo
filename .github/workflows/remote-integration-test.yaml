@@ -19,8 +19,10 @@ jobs:
       #----------------------------------------------
       - name: Clean up persistent data
         run: |
-          # Remove the persistent directory completely
+          # Navigate to the python directory and clean up
+          cd python
           sudo rm -rf ./bert_cola_persistent/ 2>/dev/null || true
+          sudo rm -rf ./bert_cola/ 2>/dev/null || true
 
       #----------------------------------------------
       # Check-out repo
@@ -58,10 +60,13 @@ jobs:
           echo "Current directory contents before pipeline:"
           ls -la
           
+          # Create persistent directory in /tmp to avoid checkout conflicts
+          mkdir -p /tmp/bert_cola_persistent
+          
           # Run with volume mount for bert_cola directory
           echo "=== STARTING PIPELINE ==="
           docker run --rm \
-            -v $(pwd)/bert_cola_persistent:/app/bert_cola \
+            -v /tmp/bert_cola_persistent:/app/bert_cola \
             -e DATA_SIZE=10 \
             ma-it-examples bash -c "
               poetry run python ./examples/bert_cola/bert_cola.py
