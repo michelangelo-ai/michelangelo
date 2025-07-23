@@ -3,12 +3,12 @@ import { get } from 'lodash';
 import type { Accessor } from '#core/types/common/studio-types';
 
 export function getObjectValue<K>(
-  obj: object,
+  obj: unknown,
   accessor: Accessor<K>,
   defaultValue?: K
 ): K | undefined {
   if (typeof accessor === 'function') {
-    return accessor(obj) || defaultValue;
+    return accessor(obj) ?? defaultValue;
   }
 
   if (typeof accessor === 'string') {

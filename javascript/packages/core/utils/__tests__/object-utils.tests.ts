@@ -58,6 +58,20 @@ describe('object-utils', () => {
         expect(getObjectValue(testObject, 123)).toBeUndefined();
       });
     });
+
+    describe('with invalid object', () => {
+      it('should return undefined when object is null', () => {
+        expect(getObjectValue(null, 'name')).toBeUndefined();
+      });
+
+      it('should return undefined when object is undefined', () => {
+        expect(getObjectValue(undefined, 'name')).toBeUndefined();
+      });
+
+      it('should return undefined when object is a primitive', () => {
+        expect(getObjectValue(123, 'name')).toBeUndefined();
+      });
+    });
   });
 
   describe('getObjectSymbols', () => {

@@ -83,4 +83,4 @@ export enum Phase {
  */
 export type Accessor<K = unknown> = AccessorFn<K> | string;
 
-export type AccessorFn<T = unknown> = (object: unknown) => T;
+export type AccessorFn<T = unknown> = (object: unknown) => T | undefined;
