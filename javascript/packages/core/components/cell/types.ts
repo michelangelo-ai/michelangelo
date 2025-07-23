@@ -18,7 +18,7 @@ import type { TypeCellConfig } from './renderers/type/types';
  * @see {@link LinkCellConfig}
  * @see {@link MultiCellConfig}
  */
-export type Cell = SharedCell &
+export type Cell<T = unknown> = SharedCell<T> &
   (DescriptionCellConfig | LinkCellConfig | MultiCellConfig | StateCellConfig | TypeCellConfig);
 
 export interface SharedCell<T = unknown> {
