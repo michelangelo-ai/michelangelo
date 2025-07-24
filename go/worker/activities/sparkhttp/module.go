@@ -9,9 +9,10 @@ import (
 
 // Config contains configuration options for the Spark HTTP API client.
 type Config struct {
-	BaseURL     string `yaml:"baseUrl"`
-	Workspace   string `yaml:"workspace"`
-	Environment string `yaml:"environment"`
+	BaseURL      string `yaml:"baseUrl"`
+	Workspace    string `yaml:"workspace"`
+	Environment  string `yaml:"environment"`
+	SparkDepsURL string `yaml:"sparkDepsUrl"`
 }
 
 // Module defines the dependency injection options for the fx framework.
@@ -39,10 +40,11 @@ func NewHTTPClient(config Config) *http.Client {
 func register(workers []worker.Worker, httpClient *http.Client, config Config) {
 	// Initialize the activities with the HTTP client and configuration
 	a := &activities{
-		httpClient:  httpClient,
-		apiBaseURL:  config.BaseURL,
-		workspace:   config.Workspace,
-		environment: config.Environment,
+		httpClient:   httpClient,
+		apiBaseURL:   config.BaseURL,
+		workspace:    config.Workspace,
+		environment:  config.Environment,
+		sparkDepsURL: config.SparkDepsURL,
 	}
 
 	// Register the activities with each worker

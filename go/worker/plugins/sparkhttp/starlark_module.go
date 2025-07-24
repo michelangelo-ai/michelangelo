@@ -1,7 +1,10 @@
 package sparkhttp
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cadence-workflow/starlark-worker/ext"
@@ -18,6 +21,41 @@ import (
 var _ starlark.HasAttrs = (*module)(nil)
 
 var poll int64 = 10
+
+// extractUsernameFromJWT extracts the preferred_username from a JWT token
+func extractUsernameFromJWT(token string) (string, error) {
+	// Split the JWT token into parts
+	parts := strings.Split(token, ".")
+	if len(parts) != 3 {
+		return "", fmt.Errorf("invalid JWT token format")
+	}
+
+	// Decode the payload (second part)
+	payload := parts[1]
+	// Add padding if necessary
+	if len(payload)%4 != 0 {
+		payload += strings.Repeat("=", 4-len(payload)%4)
+	}
+
+	decoded, err := base64.URLEncoding.DecodeString(payload)
+	if err != nil {
+		return "", fmt.Errorf("failed to decode JWT payload: %w", err)
+	}
+
+	// Parse the JSON payload
+	var claims map[string]interface{}
+	if err := json.Unmarshal(decoded, &claims); err != nil {
+		return "", fmt.Errorf("failed to parse JWT claims: %w", err)
+	}
+
+	// Extract preferred_username
+	username, ok := claims["preferred_username"].(string)
+	if !ok {
+		return "", fmt.Errorf("preferred_username not found in JWT token")
+	}
+
+	return username, nil
+}
 
 type module struct {
 	attributes map[string]starlark.Value
@@ -79,9 +117,53 @@ func (r *module) createSparkOne(thread *starlark.Thread, _ *starlark.Builtin, ar
 	request.SparkOne = sparkOneBytes
 	request.UserToken = userToken
 
+	// Extract username from JWT token
+	username, err := extractUsernameFromJWT(userToken)
+	if err != nil {
+		logger.Error("error extracting username from JWT token", zap.Error(err))
+		return nil, err
+	}
+
+	// First create SparkOne dependencies
+	depsRequest := sparkhttp.CreateSparkOneDepsRequest{
+		Username: username,
+		Pipeline: sparkOne.Spec.Pipeline,
+		JobName:  sparkOne.Metadata.Name,
+	}
+
+	var depsResponse sparkhttp.CreateSparkOneDepsResponse
+	err = workflow.ExecuteActivity(ctx, sparkhttp.Activities.CreateSparkOneDeps, depsRequest).Get(ctx, &depsResponse)
+	if err != nil {
+		logger.Error("error executing create deps activity", zap.Error(err))
+		return nil, err
+	}
+
+	// If pollUrl is not empty, sensor for deps completion
+	sensorDepsRequest := sparkhttp.SensorSparkOneDepsRequest{
+		PollURL: depsResponse.PollURL,
+	}
+
+	var sensorDepsResponse sparkhttp.SensorSparkOneDepsResponse
+
+	// Poll until dependencies are ready
+	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp.InitialInterval = time.Second * time.Duration(poll)
+	sensorDepsCtx := workflow.WithRetryPolicy(ctx, srp)
+
+	err = workflow.ExecuteActivity(sensorDepsCtx, sparkhttp.Activities.SensorSparkOneDeps, sensorDepsRequest).Get(sensorDepsCtx, &sensorDepsResponse)
+	if err != nil {
+		logger.Error("error executing sensor deps activity", zap.Error(err))
+		return nil, err
+	}
+
+	if sensorDepsResponse.Status != "success" {
+		logger.Error("dependencies failed to build", zap.String("status", sensorDepsResponse.Status), zap.String("msg", sensorDepsResponse.Msg))
+		return nil, fmt.Errorf("dependency build failed: %s", sensorDepsResponse.Msg)
+	}
+
 	// Execute the create activity
 	var createResponse spark.CreateSparkOneResponse
-	srp := utils.CadenceDefaultRetryPolicy
+	srp = utils.CadenceDefaultRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
 	err = workflow.ExecuteActivity(createCtx, sparkhttp.Activities.CreateSparkOne, request).Get(ctx, &createResponse)
