@@ -169,6 +169,7 @@ class RemoteRunTemporal:
     iam_role: str
     architecture: str
     user_token: str
+    pipeline: str
     metadata_storage_url: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
@@ -200,6 +201,7 @@ class RemoteRunTemporal:
         environ["UF_TASK_IAM_ROLE"] = self.iam_role
         environ["UF_TASK_ARCHITECTURE"] = self.architecture
         environ["UF_TASK_WORKSPACE_TOKEN"] = self.user_token
+        environ["UF_TASK_PIPELINE"] = self.pipeline
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 

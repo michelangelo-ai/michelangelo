@@ -57,6 +57,9 @@ def get_task_iam_role():
 def get_task_architecture():
     return os.environ.get("UF_TASK_ARCHITECTURE", "")
 
+def get_task_pipeline():
+    return os.environ.get("UF_TASK_PIPELINE", "")
+
 # Get the task name for the task.
 # Args:
 #    task_path: the path of the task

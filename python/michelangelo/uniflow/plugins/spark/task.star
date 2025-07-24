@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "sparkhttp", "time", "workflow")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_pipeline", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
 }
@@ -198,6 +198,8 @@ def execute_spark_task(namespace, task_name, task_path, start_time_formated_str,
 
     # task_path: examples.bert_cola.uniflow_spark.uf_test_spark_query
     name = task_path.split(".")[1].replace("_", "-")
+    main_application_file = task_name + ".py"
+    pipeline = get_task_pipeline()
 
     # submit spark job
     print("spark | submit job. ns:", namespace, "task_name:", task_name)
@@ -209,10 +211,8 @@ def execute_spark_task(namespace, task_name, task_path, start_time_formated_str,
             "name": name,
         },
         "spec": {
-            # TODO: input by flag --pipeline
-            "pipeline": "uniflow-poc",
-            # TODO: input by decorator
-            "mainApplicationFile": "sparkone.py",
+            "pipeline": pipeline,
+            "mainApplicationFile": main_application_file,
         },
     }
 

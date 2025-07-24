@@ -162,6 +162,11 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         help="User token to submit workflow tasks via ComputeAPI.",
     )
     p.add_argument(
+        "--pipeline",
+        required=False,
+        help="Pipeline name for the workflow.",
+    )
+    p.add_argument(
         "--execution-timeout-seconds",
         default=DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         type=int,
@@ -196,6 +201,7 @@ def _remote_run(
     iam_role: str = "",
     architecture: str = "",
     user_token: str = "",
+    pipeline: str = "",
     yes: bool = False,
     workflow: str = cadence,
 ):
@@ -214,6 +220,7 @@ def _remote_run(
         iam_role: Container IAM role to use for running workflow tasks.
         architecture: Architecture for running workflow tasks: amd64 or arm64.
         user_token: User token to submit workflow tasks via ComputeAPI.
+        pipeline: Pipeline name for the workflow.
         yes: Automatically answer yes to confirmation prompts.
     """
     assert storage_url
@@ -241,6 +248,7 @@ def _remote_run(
             iam_role=iam_role,
             architecture=architecture,
             user_token=user_token,
+            pipeline=pipeline,
         )
     rr.environ = environ
     rr.args = args
