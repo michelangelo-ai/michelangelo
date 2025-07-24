@@ -7,12 +7,14 @@ import { transformHeaders } from './components/table-header/header-transformer';
 import { TableHeader } from './components/table-header/table-header';
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { TableContainer } from './styled-components';
+import { applyDefaultProps } from './utils/apply-default-props';
 
 import type { TableData } from './types/data-types';
 import type { TableProps } from './types/table-types';
 
-export function Table<T extends TableData = TableData>(props: TableProps<T>) {
-  const columns = useColumnTransformer(props.columns);
+export function Table<T extends TableData = TableData>(inputProps: TableProps<T>) {
+  const props = applyDefaultProps<T>(inputProps);
+  const columns = useColumnTransformer<T>(props.columns);
 
   const table = useReactTable<T>({
     data: props.data,
@@ -20,13 +22,23 @@ export function Table<T extends TableData = TableData>(props: TableProps<T>) {
     getCoreRowModel: getCoreRowModel(),
   });
 
+  const ready = !props.loading;
+
   return (
     <TableContainer>
       <StyledTable>
-        <TableHeader<T>
-          headers={transformHeaders<T>(table.getHeaderGroups().flatMap((group) => group.headers))}
-        />
-        <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
+        {props.loading && <props.loadingView />}
+
+        {ready && (
+          <>
+            <TableHeader<T>
+              headers={transformHeaders<T>(
+                table.getHeaderGroups().flatMap((group) => group.headers)
+              )}
+            />
+            <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
+          </>
+        )}
       </StyledTable>
     </TableContainer>
   );
