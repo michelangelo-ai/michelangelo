@@ -1,11 +1,13 @@
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
 from examples.bert_cola.train import train
+from examples.bert_cola.uniflow_spark import sparkone
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def train_workflow():
+    sparkone()
     data_path = "glue"
     data_name = "cola"
     train_data, validation_data, test_data = load_data(

@@ -2,7 +2,11 @@ worker:
   address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
   rayHttp:
-    baseUrl: https://compute.cauldron.myteksi.net  # Base URL for Ray HTTP API
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
+    workspace: cauldron-test
+    environment: dev
+  sparkHttp:
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
     workspace: cauldron-test
     environment: dev
 

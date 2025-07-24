@@ -1,5 +1,5 @@
-load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("@plugin", "atexit", "json", "os", "sparkhttp", "time", "workflow")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
 }
@@ -83,28 +83,6 @@ def spark_task(
         _args = json.dumps(args) if args else "[]"
         _kwargs = json.dumps(kwargs) if kwargs else "{}"
 
-        spark_job = get_spark_job(
-            namespace = namespace,
-            image = get_task_image(task_name),
-            main_file = "local:///app/michelangelo/uniflow/core/run_task.py",
-            main_class = "org.apache.spark.deploy.PythonRunner",
-            # TODO: andrii: set --overrides
-            main_args = ["--task", task_path, "--args", _args, "--kwargs", _kwargs, "--result-url", result_url],
-            driver_resource = resource_dict(
-                cpu = _driver_cpu,
-                memory = _driver_memory,
-                disk = _driver_disk,
-                gpu = _driver_gpu,
-            ),
-            executor_resource = resource_dict(
-                cpu = _executor_cpu,
-                memory = _executor_memory,
-                disk = _executor_disk,
-                gpu = _executor_gpu,
-            ),
-            executor_instances = _executor_instances,
-        )
-
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
 
@@ -112,7 +90,6 @@ def spark_task(
                 namespace=namespace,
                 task_name=task_name,
                 task_path=task_path,
-                spark_job=spark_job,
                 start_time_formated_str=start_time_formated_str,
                 retry_attempt_id=retry_attempt_id,
                 total_retry_attempt=total_retry_attempt,
@@ -136,9 +113,9 @@ def spark_task(
             if retryable == False:
                 break
 
-        result = io_read_json(result_url)
-        print("spark | caching", "result:", result)
-        return result
+        # result = io_read_json(result_url)
+        # print("spark | caching", "result:", result)
+        return "NA"
 
     def with_overrides(alias = alias, config = spark_config(), retry_attempts = DEFAULT_RETRY_ATTEMPTS):
         return spark_task(
@@ -168,32 +145,32 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     if job_state == TASK_STATE_SUCCEEDED:
 
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        print("spark | caching with key", "key:", cache_keys)
-        created_cached_output = create_cached_output(
-            namespace = namespace,
-            cache_keys = cache_keys,
-            zone = "",
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
+        # cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        # print("spark | caching with key", "key:", cache_keys)
+        # created_cached_output = create_cached_output(
+        #     namespace = namespace,
+        #     cache_keys = cache_keys,
+        #     zone = "",
+        #     ttl_in_days = 0,
+        #     task_name = task_name,
+        #     result_json_url = result_url,
+        # )
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
-        driver_log_url = ""
-        if type(terminated_job) == "dict":
-            driver_log_url = terminated_job.get("status", {}).get("jobUrl", "")
+        # driver_log_url = ""
+        # if type(terminated_job) == "dict":
+        #     driver_log_url = terminated_job.get("status", {}).get("jobUrl", "")
 
         report_progress(
             task_name = task_name,
             task_path = task_path,
             task_state = TASK_STATE_SUCCEEDED,
             start_time = start_time_formated_str,
-            task_log = driver_log_url,
+            # task_log = driver_log_url,
             end_time = end_time_formated_str,
             task_message = "Spark job succeeded",
-            output = created_cached_output.get("metadata", {}).get("name", ""),
+            # output = created_cached_output.get("metadata", {}).get("name", ""),
             retry_attempt_id = retry_attempt_id,
         )
         print("Spark job succeeded, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") succeeded")
@@ -213,18 +190,36 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     return retryable
 
-def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt):
 
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
-    
-    driver_log_url = ""
+
+    # driver_log_url = ""
+
+    # task_path: examples.bert_cola.uniflow_spark.uf_test_spark_query
+    name = task_path.split(".")[1].replace("_", "-")
 
     # submit spark job
     print("spark | submit job. ns:", namespace, "task_name:", task_name)
-    created_spark_job = spark.create_job(spark_job)
 
-    if type(created_spark_job) == "dict":
-        driver_log_url = created_spark_job.get("status", {}).get("jobUrl", "")
+    spark_one_spec = {
+        "kind": "SparkOne",
+        "apiVersion": "ml.chimera.kubebuilder.io/v1",
+        "metadata": {
+            "name": name,
+        },
+        "spec": {
+            # TODO: input by flag --pipeline
+            "pipeline": "uniflow-poc",
+            # TODO: input by decorator
+            "mainApplicationFile": "sparkone.py",
+        },
+    }
+
+    # Read user OIDC token from environment variable
+    user_token = os.environ.get("UF_TASK_WORKSPACE_TOKEN", "")
+
+    job = sparkhttp.create_job(spark_one_spec = spark_one_spec, user_token = user_token)
 
     # report task as pending
     report_progress(
@@ -233,163 +228,53 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
         task_state = TASK_STATE_PENDING,
         start_time = start_time_formated_str,
         task_message = "Spark job has been submitted",
-        task_log = driver_log_url,
+        # task_log = driver_log_url,
         retry_attempt_id = retry_attempt_id,
     )
 
-    # register the check_spark_job function to be called at the end of the workflow.
-    # this is to ensure that the task state is reported correctly even if the workflow is killed
-    atexit.register(check_spark_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
+    return report_spark_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id), job
 
-    # senosr spark job until it is running and driver log url is available
-    running_job = spark.sensor_job(job = created_spark_job, assert_condition_type = spark.running_condition_type)
-
-    # senosr spark job until it is terminated
-    terminated_job = spark.sensor_job(job = created_spark_job)
-
-    job_state = report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
-    if job_state == TASK_STATE_SUCCEEDED:
-        atexit.unregister(check_spark_job_final_state_at_workflow_exit)
-
-    return (job_state, terminated_job)
-
-def check_spark_job_final_state_at_workflow_exit(created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id):
-    """
-    Check the final state of the spark job
-    """
-    final_job = spark.sensor_job(job = created_spark_job)
-    report_spark_job_terminated(final_job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=True)
-    return
-
-def report_spark_job_terminated(job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=False):
-    """
-    Report task progress based on the succeeded condition of the spark job
-
-    Args:
-        job: the spark job crd
-        task_name: the task name
-        task_path: the task path
-        start_time_formated_str: the UTC formated string of the task start time
-    Returns:
-        True if the task is done, False otherwise
-    """
-
-    if type(job) != "dict":
-        return False
-
-    job_state = job.get("status", {}).get("applicationId", "FAILED")
-    return job_state
-
-# TODO add env label for spark job
-# Get the match labels for the spark job.
-# The priority of the cluster/pool config is
-#     default < project annotation < env
-#
-# Returns:
-#   match_labels: the match labels for the spark job
-#def get_spark_job_match_labels():
-#    match_labels = {
-#        env_label: "true",
-#    }
-#
-#    return match_labels
-
-def get_spark_job(
-        namespace,
-        image,
-        main_file,
-        main_class,
-        main_args,
-        driver_resource,
-        executor_resource,
-        executor_instances):
-    env = dict(COMMONS_ENV.items())
-    env.update(SPARK_ENV)
-    env.update(os.environ)
-    env = [
-        {"name": k, "value": v}
-        for k, v in env.items()
-    ]
-
-    #    match_labels = get_spark_job_match_labels()
-    preemptible = True
-
-    # TODO RESOURCE_ENV_LABEL_PROD
-    #    if env_label == RESOURCE_ENV_LABEL_PROD:
-    #        preemptible = False
-    return {
-        "kind": "SparkJob",
-        "apiVersion": "michelangelo.api.v2",
-        "metadata": {
-            "namespace": namespace,
-            "generateName": "uniflow-sp-",
-        },
-        "spec": {
-            "user": {
-                "name": "test",
-            },
-            #            "affinity": {
-            #                "resourceAffinity": {
-            #                    "selector": {
-            #                        "matchLabels": match_labels,
-            #                    },
-            #                },
-            #            },
-            "driver": {
-                "pod": {
-                    "resource": driver_resource,
-                    "image": image,
-                    "imagePullingPolicy": "Never",
-                    "env": env,
-                    "envFrom": [
-                        {
-                            "configMapRef": {
-                                "localObjectReference": {
-                                    "name": "michelangelo-config",
-                                },
-                            },
-                        },
-                    ],
-                },
-            },
-            "executor": {
-                "pod": {
-                    "resource": executor_resource,
-                    "image": image,
-                    "imagePullingPolicy": "Never",
-                    "env": env,
-                    "envFrom": [
-                        {
-                            "configMapRef": {
-                                "localObjectReference": {
-                                    "name": "michelangelo-config",
-                                },
-                            },
-                        },
-                    ],
-                },
-                "instances": executor_instances,
-            },
-            "sparkConf": {
-                "spark.peloton.run-as-user": "true",
-                "spark.peloton.driver.docker.image": image,
-                "spark.peloton.executor.docker.image": image,
-                "spark.peloton.usecrets.enable": "true",
-                "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries",
-                "spark.sql.adaptive.enabled": "false",
-                "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
-                "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
-            },
-            "mainApplicationFile": main_file,
-            "mainArgs": main_args,
-            "mainClass": main_class,
-            "deps": {},
-            "scheduling": {
-                "preemptible": preemptible,
-            },
-            "sparkVersion": "3.5.5",
-        },
-    }
+def report_spark_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id):
+    end_time_seconds = time.time()
+    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+    if job["status"]["status"] == "SUCCEEDED":
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_message = "SparkOne Succeeded",
+            task_state = TASK_STATE_SUCCEEDED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
+        )
+        return TASK_STATE_SUCCEEDED
+    elif job["status"]["status"] == "KILLED":
+        message = job.get("message", "unknown reason")
+        task_message = "SparkOne killed with {}".format(message)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_message = task_message,
+            task_state = TASK_STATE_KILLED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
+        )
+        return TASK_STATE_KILLED
+    else:
+        error_type = job.get("errorType", "internal")
+        message = job.get("message", "unknown error")
+        task_message = "SparkOne Failed with {} Error: {}".format(error_type, message)
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_message = task_message,
+            task_state = TASK_STATE_FAILED,
+            start_time = start_time_formated_str,
+            end_time = end_time_formated_str,
+            retry_attempt_id = retry_attempt_id,
+        )
+        return TASK_STATE_FAILED
 
 def spark_config(
         driver_cpu = None,
