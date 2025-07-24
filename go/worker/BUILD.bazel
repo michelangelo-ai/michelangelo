@@ -12,6 +12,7 @@ go_library(
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/minio:go_default_library",
         "//go/worker/activities:go_default_library",
+        "//go/worker/activities/http:go_default_library",
         "//go/worker/activities/rayhttp:go_default_library",
         "//go/worker/plugins/rayhttp:go_default_library",
         "//go/worker/ray:go_default_library",

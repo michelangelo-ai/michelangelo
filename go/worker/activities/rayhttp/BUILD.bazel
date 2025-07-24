@@ -9,6 +9,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/worker/activities/http:go_default_library",
         "//go/worker/ray:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",

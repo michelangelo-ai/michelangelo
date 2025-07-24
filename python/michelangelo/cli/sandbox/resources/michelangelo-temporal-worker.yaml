@@ -42,10 +42,11 @@ data:
     worker:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
-      rayHttp:
-        baseUrl: https://compute.cauldron.myteksi.net  # Base URL for Ray HTTP API
+      http:
+        baseUrl: https://compute-stg.cauldron.myteksi.net
         workspace: cauldron-test
         environment: dev
+        sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
 
     logging:
       level: info
