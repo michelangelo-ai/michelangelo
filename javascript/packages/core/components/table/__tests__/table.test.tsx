@@ -114,4 +114,62 @@ describe('Table', () => {
       }
     });
   });
+
+  describe('when loading is true', () => {
+    const numberOfRows = 3;
+    const numberOfColumns = 4;
+
+    beforeEach(() => {
+      render(
+        <Table
+          data={buildTableData(numberOfRows, numberOfColumns)}
+          columns={buildTableColumns(numberOfColumns)}
+          loading={true}
+        />
+      );
+    });
+
+    it('renders the default loading state', () => {
+      expect(screen.getByTestId('table-loading-state')).toBeInTheDocument();
+    });
+
+    it('does not render column headers when loading', () => {
+      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    });
+
+    it('does not render data rows when loading', () => {
+      expect(screen.queryByRole('row', { name: /row/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('when loading with custom loadingView', () => {
+    const CustomLoadingView = () => <div data-testid="custom-loading">Custom Loading...</div>;
+
+    beforeEach(() => {
+      render(
+        <Table
+          data={buildTableData(2, 3)}
+          columns={buildTableColumns(3)}
+          loading={true}
+          loadingView={CustomLoadingView}
+        />
+      );
+    });
+
+    it('renders the custom loading view', () => {
+      expect(screen.getByText('Custom Loading...')).toBeInTheDocument();
+    });
+
+    it('does not render the default loading state', () => {
+      expect(screen.queryByTestId('table-loading-state')).not.toBeInTheDocument();
+    });
+
+    it('does not render column headers when loading', () => {
+      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    });
+
+    it('does not render data rows when loading', () => {
+      expect(screen.queryByRole('row', { name: /row/ })).not.toBeInTheDocument();
+    });
+  });
 });
