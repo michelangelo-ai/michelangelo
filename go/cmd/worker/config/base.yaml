@@ -1,8 +1,12 @@
 worker:
-  address: localhost:14566
+  address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
   rayHttp:
-    baseUrl: http://localhost:14568  # Base URL for Ray HTTP API
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
+    workspace: cauldron-test
+    environment: dev
+  sparkHttp:
+    baseUrl: http://127.0.0.1:8000  # Base URL for Ray HTTP API
     workspace: cauldron-test
     environment: dev
 
@@ -13,22 +17,21 @@ logging:
 
 workflow-engine:
   # for cadence
-  host: 127.0.0.1:7833
+#  host: 127.0.0.1:7833
   # for temporal
-#  host: 127.0.0.1:7233
+  host: temporal.stg-myteksi.com:7233
   transport: grpc
   # for cadence
-  provider: cadence
+#  provider: cadence
     # for temporal
-#  provider: temporal
+  provider: temporal
   workers:
     - domain: default
-      taskList: default
+      taskList: zhou-xian
   client:
-    domain: default
+    domain: uniflow
 
 minio:
-  awsRegion: us-east-1
-  awsAccessKeyId: minioadmin
-  awsSecretAccessKey: minioadmin
-  awsEndpointUrl: localhost:9091
+  awsRegion: ap-southeast-1
+  awsEndpointUrl: s3.amazonaws.com
+  useEnvAws: true

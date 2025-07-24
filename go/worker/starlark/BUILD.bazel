@@ -10,6 +10,7 @@ go_library(
         "//go/worker/plugins/ray:go_default_library",
         "//go/worker/plugins/rayhttp:go_default_library",
         "//go/worker/plugins/spark:go_default_library",
+        "//go/worker/plugins/sparkhttp:go_default_library",
         "//go/worker/plugins/storage:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
