@@ -1,3 +1,5 @@
+import { EmptyState } from '../components/table-empty-state/types';
+
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
 
@@ -32,6 +34,19 @@ export interface TableRequiredUserProps<T extends TableData = TableData> {
  */
 export interface TableRequiredFunctionalityProps {
   /**
+   * @description Configure landing card when the table has no data
+   *
+   * @default
+   * ```ts
+   * {
+   *   title: 'No data',
+   *   content: 'No data is present.',
+   * }
+   * ```
+   */
+  emptyState: EmptyState;
+
+  /**
    * @description
    * If true, the table will hide the columns and display a loading state.
    * @default false
@@ -60,3 +75,9 @@ export interface TableProps<T extends TableData = TableData>
 export interface TablePropsResolved<T extends TableData = TableData>
   extends TableRequiredUserProps<T>,
     TableRequiredFunctionalityProps {}
+
+/**
+ * Represents the possible view states of a table component.
+ * These states determine which UI components should be rendered.
+ */
+export type TableViewState = 'loading' | 'empty' | 'ready';

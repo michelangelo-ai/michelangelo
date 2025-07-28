@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
+import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -54,13 +55,13 @@ describe('Table', () => {
       expect(screen.getByRole('table')).toBeInTheDocument();
     });
 
+    it('renders the empty state', () => {
+      expect(screen.getByRole('row', { name: /No data/ })).toBeInTheDocument();
+    });
+
     it('renders column headers', () => {
       expect(screen.getAllByRole('columnheader')).toHaveLength(numberOfColumns);
       expect(screen.getByRole('row', { name: 'Column1 Column2 Column3' })).toBeInTheDocument();
-    });
-
-    it('renders no data cells', () => {
-      expect(screen.queryAllByRole('cell')).toHaveLength(0);
     });
   });
 
@@ -142,8 +143,8 @@ describe('Table', () => {
       expect(screen.getByTestId('table-loading-state')).toBeInTheDocument();
     });
 
-    it('does not render column headers when loading', () => {
-      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    it('renders column headers when loading', () => {
+      expect(screen.getAllByRole('columnheader')).toHaveLength(4);
     });
 
     it('does not render data rows when loading', () => {
@@ -174,8 +175,8 @@ describe('Table', () => {
       expect(screen.queryByTestId('table-loading-state')).not.toBeInTheDocument();
     });
 
-    it('does not render column headers when loading', () => {
-      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    it('renders column headers when loading', () => {
+      expect(screen.getAllByRole('columnheader')).toHaveLength(3);
     });
 
     it('does not render data rows when loading', () => {
