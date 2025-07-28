@@ -4,6 +4,7 @@ import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
+import { ApplicationError } from '#core/types/error-types';
 import { buildTableColumns, buildTableData } from '../__fixtures__/table-test-helpers';
 import { Table } from '../table';
 
@@ -181,6 +182,37 @@ describe('Table', () => {
 
     it('does not render data rows when loading', () => {
       expect(screen.queryByRole('row', { name: /row/ })).not.toBeInTheDocument();
+    });
+  });
+
+  describe('when error is present', () => {
+    beforeEach(() => {
+      render(
+        <Table
+          data={buildTableData(3, 4)}
+          columns={buildTableColumns(4)}
+          error={new ApplicationError('Test error', GrpcStatusCode.UNKNOWN)}
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+    });
+
+    it('renders error state', () => {
+      expect(
+        screen.getByRole('row', { name: /Unable to fetch data for the table/ })
+      ).toBeInTheDocument();
+    });
+
+    it('does not render column headers when error is present', () => {
+      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    });
+
+    it('does not render data rows when error is present', () => {
+      expect(screen.queryByRole('row', { name: /row/ })).not.toBeInTheDocument();
+    });
+
+    it('does not render empty state when error is present', () => {
+      expect(screen.queryByText('No data')).not.toBeInTheDocument();
     });
   });
 });
