@@ -1,6 +1,6 @@
 import { fromPairs } from 'lodash';
 
-import type { TableColumn } from '../types/column-types';
+import type { ColumnConfig } from '../types/column-types';
 
 export function buildTableData(
   numberOfRows: number,
@@ -16,7 +16,7 @@ export function buildTableData(
   );
 }
 
-export function buildTableColumns(numberOfColumns: number): TableColumn[] {
+export function buildTableColumns(numberOfColumns: number): ColumnConfig[] {
   return getArrayWithLength(numberOfColumns).map((columnId) => ({
     id: `col${columnId}`,
     label: `Column${columnId}`,

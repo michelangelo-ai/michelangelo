@@ -1,5 +1,8 @@
 import { render, screen } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { buildTableColumns, buildTableData } from '../__fixtures__/table-test-helpers';
 import { Table } from '../table';
 
@@ -13,7 +16,8 @@ describe('Table', () => {
         <Table
           data={buildTableData(numberOfRows, numberOfColumns)}
           columns={buildTableColumns(numberOfColumns)}
-        />
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
     });
 
@@ -68,7 +72,8 @@ describe('Table', () => {
         <Table
           data={buildTableData(1, numberOfColumns)}
           columns={buildTableColumns(numberOfColumns)}
-        />
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
     });
 
@@ -96,7 +101,10 @@ describe('Table', () => {
     const numberOfRows = 3;
 
     beforeEach(() => {
-      render(<Table data={buildTableData(numberOfRows, 1)} columns={buildTableColumns(1)} />);
+      render(
+        <Table data={buildTableData(numberOfRows, 1)} columns={buildTableColumns(1)} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
     });
 
     it('renders the table', () => {
@@ -125,7 +133,8 @@ describe('Table', () => {
           data={buildTableData(numberOfRows, numberOfColumns)}
           columns={buildTableColumns(numberOfColumns)}
           loading={true}
-        />
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
     });
 
@@ -152,7 +161,8 @@ describe('Table', () => {
           columns={buildTableColumns(3)}
           loading={true}
           loadingView={CustomLoadingView}
-        />
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
     });
 

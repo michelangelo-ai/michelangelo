@@ -1,12 +1,28 @@
-import { renderHook } from '@testing-library/react';
+import { CellContext } from '@tanstack/react-table';
+import { renderHook, screen } from '@testing-library/react';
+import { render } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { useColumnTransformer } from '../use-column-transformer';
 
-import type { TableColumn } from '../../types/column-types';
+import type { ColumnConfig } from '../../types/column-types';
 
 describe('useColumnTransformer', () => {
-  it('should preserve original column properties', () => {
-    const columns: TableColumn[] = [
+  it('should pick id from column config', () => {
+    const columns: ColumnConfig[] = [
+      {
+        id: 'name',
+      },
+    ];
+
+    const { result } = renderHook(() => useColumnTransformer(columns));
+    const transformedColumns = result.current;
+    expect(transformedColumns[0].id).toBe('name');
+  });
+
+  it('should preserve original column properties in meta', () => {
+    const columns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Name',
@@ -18,12 +34,14 @@ describe('useColumnTransformer', () => {
     const { result } = renderHook(() => useColumnTransformer(columns));
     const transformedColumns = result.current;
 
-    expect(transformedColumns[0].id).toBe('name');
-    expect(transformedColumns[0].type).toBe('text');
+    expect(transformedColumns[0].meta.id).toBe('name');
+    expect(transformedColumns[0].meta.type).toBe('text');
+    expect(transformedColumns[0].meta.label).toBe('Name');
+    expect(transformedColumns[0].meta.accessor).toBe('name');
   });
 
   it('should transform columns with label to header mapping', () => {
-    const columns: TableColumn[] = [
+    const columns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Full Name',
@@ -45,7 +63,7 @@ describe('useColumnTransformer', () => {
   });
 
   it('should create working accessor function', () => {
-    const columns: TableColumn[] = [
+    const columns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Name',
@@ -59,11 +77,11 @@ describe('useColumnTransformer', () => {
     const accessorFn = transformedColumns[0].accessorFn;
     const testData = { user: { name: 'John Doe' } };
 
-    expect(accessorFn!(testData)).toBe('John Doe');
+    expect(accessorFn(testData)).toBe('John Doe');
   });
 
   it('should memoize results when columns reference does not change', () => {
-    const columns: TableColumn[] = [
+    const columns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Name',
@@ -81,7 +99,7 @@ describe('useColumnTransformer', () => {
   });
 
   it('should update results when columns change', () => {
-    const initialColumns: TableColumn[] = [
+    const initialColumns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Name',
@@ -89,7 +107,7 @@ describe('useColumnTransformer', () => {
       },
     ];
 
-    const updatedColumns: TableColumn[] = [
+    const updatedColumns: ColumnConfig[] = [
       {
         id: 'name',
         label: 'Full Name',
@@ -108,5 +126,56 @@ describe('useColumnTransformer', () => {
     const secondResult = result.current;
     expect(secondResult[0].header).toBe('Full Name');
     expect(firstResult).not.toBe(secondResult);
+  });
+
+  it('should handle columns without labels', () => {
+    const columns: ColumnConfig[] = [
+      {
+        id: 'name',
+        accessor: 'name',
+      },
+    ];
+
+    const { result } = renderHook(() => useColumnTransformer(columns));
+    const transformedColumn = result.current[0];
+
+    expect(transformedColumn.header).toBeUndefined();
+  });
+
+  it('should handle empty columns array', () => {
+    const columns: ColumnConfig[] = [];
+
+    const { result } = renderHook(() => useColumnTransformer(columns));
+    const transformedColumns = result.current;
+
+    expect(transformedColumns).toHaveLength(0);
+  });
+
+  it('should render TableCell component when cell function is called', () => {
+    const columns: ColumnConfig[] = [
+      {
+        id: 'name',
+        label: 'Name',
+        accessor: 'name',
+      },
+    ];
+
+    const { result } = renderHook(() => useColumnTransformer(columns));
+    const cellRenderer = result.current[0].cell;
+
+    const mockCellContext = {
+      column: {
+        columnDef: {
+          meta: { id: 'name', label: 'Name', accessor: 'name' },
+        },
+      },
+      row: {
+        original: { name: 'John Doe' },
+      },
+      getValue: () => 'John Doe',
+    } as unknown as CellContext<unknown, unknown>;
+
+    render(cellRenderer(mockCellContext), buildWrapper([getRouterWrapper()]));
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
   });
 });

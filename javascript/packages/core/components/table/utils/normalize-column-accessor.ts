@@ -1,7 +1,7 @@
 import { getObjectValue } from '#core/utils/object-utils';
 
 import type { AccessorFn } from '#core/types/common/studio-types';
-import type { TableColumn } from '../types/column-types';
+import type { ColumnConfig } from '../types/column-types';
 import type { TableData } from '../types/data-types';
 
 /**
@@ -15,7 +15,7 @@ import type { TableData } from '../types/data-types';
  * ```
  */
 export function normalizeColumnAccessor<T extends TableData = TableData>(
-  column: TableColumn<T>
+  column: ColumnConfig<T>
 ): AccessorFn<T> {
   return (row) => {
     return getObjectValue<T>(row, column.accessor ?? column.id);
