@@ -4,6 +4,7 @@ import { StyledTable } from 'baseui/table-semantic';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableBody } from './components/table-body/table-body';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
+import { TableErrorState } from './components/table-error-state/table-error-state';
 import { transformHeaders } from './components/table-header/header-transformer';
 import { TableHeader } from './components/table-header/table-header';
 import { useColumnTransformer } from './hooks/use-column-transformer';
@@ -26,6 +27,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
 
   const viewState = getTableViewState({
     dataLength: props.data.length,
+    error: props.error,
     loading: props.loading,
   });
 
@@ -34,17 +36,18 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       <StyledTable>
         {viewState === 'loading' && <props.loadingView />}
 
+        {viewState === 'error' && <TableErrorState error={props.error!} />}
+
         {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
 
+        {viewState !== 'error' && (
+          <TableHeader<T>
+            headers={transformHeaders<T>(table.getHeaderGroups().flatMap((group) => group.headers))}
+          />
+        )}
+
         {viewState === 'ready' && (
-          <>
-            <TableHeader<T>
-              headers={transformHeaders<T>(
-                table.getHeaderGroups().flatMap((group) => group.headers)
-              )}
-            />
-            <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
-          </>
+          <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
         )}
       </StyledTable>
     </TableContainer>
