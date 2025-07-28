@@ -3,11 +3,13 @@ import { StyledTable } from 'baseui/table-semantic';
 
 import { transformRows } from './components/table-body/row-transformer';
 import { TableBody } from './components/table-body/table-body';
+import { TableEmptyState } from './components/table-empty-state/table-empty-state';
 import { transformHeaders } from './components/table-header/header-transformer';
 import { TableHeader } from './components/table-header/table-header';
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { TableContainer } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
+import { getTableViewState } from './utils/get-table-view-state';
 
 import type { TableData } from './types/data-types';
 import type { TableProps } from './types/table-types';
@@ -22,14 +24,19 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     getCoreRowModel: getCoreRowModel(),
   });
 
-  const ready = !props.loading;
+  const viewState = getTableViewState({
+    dataLength: props.data.length,
+    loading: props.loading,
+  });
 
   return (
     <TableContainer>
       <StyledTable>
-        {props.loading && <props.loadingView />}
+        {viewState === 'loading' && <props.loadingView />}
 
-        {ready && (
+        {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
+
+        {viewState === 'ready' && (
           <>
             <TableHeader<T>
               headers={transformHeaders<T>(
