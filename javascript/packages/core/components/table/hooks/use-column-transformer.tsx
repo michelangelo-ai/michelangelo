@@ -1,9 +1,11 @@
-import { useMemo } from 'react';
+import { ReactNode, useMemo } from 'react';
+import { CellContext } from '@tanstack/react-table';
 
+import { TableCell } from '../components/table-cell/table-cell';
 import { normalizeColumnAccessor } from '../utils/normalize-column-accessor';
 
 import type { AccessorFn } from '#core/types/common/studio-types';
-import type { TableColumn } from '../types/column-types';
+import type { ColumnConfig } from '../types/column-types';
 import type { TableData } from '../types/data-types';
 
 /**
@@ -22,19 +24,28 @@ import type { TableData } from '../types/data-types';
  * ```
  */
 export function useColumnTransformer<T extends TableData = TableData>(
-  columns: TableColumn[]
-): Array<
-  TableColumn<T> & {
-    header?: string;
-    accessorFn?: AccessorFn<T>;
-  }
-> {
+  columns: ColumnConfig[]
+): {
+  id: string;
+  header?: string;
+  accessorFn: AccessorFn<T>;
+  meta: ColumnConfig<T>;
+  cell: (props: CellContext<T, unknown>) => ReactNode;
+}[] {
   return useMemo(() => {
-    return columns.map((column: TableColumn<T>) => {
+    return columns.map((column: ColumnConfig<T>) => {
       return {
-        ...column,
+        id: column.id,
+        meta: column,
         accessorFn: normalizeColumnAccessor(column),
         header: column.label,
+        cell: (props: CellContext<T, unknown>) => (
+          <TableCell
+            column={props.column.columnDef.meta as ColumnConfig}
+            record={props.row.original as object}
+            value={props.getValue()}
+          />
+        ),
       };
     });
   }, [columns]);

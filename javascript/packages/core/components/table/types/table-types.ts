@@ -1,4 +1,4 @@
-import type { TableColumn } from './column-types';
+import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
 
 /**
@@ -20,7 +20,7 @@ export interface TableRequiredUserProps<T extends TableData = TableData> {
    *
    * @example [{ id: 'name', label: 'Name' }, { id: 'age', label: 'Age' }]
    */
-  columns: TableColumn<T>[];
+  columns: ColumnConfig<T>[];
 }
 
 /**

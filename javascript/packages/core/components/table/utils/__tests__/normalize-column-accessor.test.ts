@@ -1,10 +1,10 @@
 import { normalizeColumnAccessor } from '../normalize-column-accessor';
 
-import type { TableColumn } from '../../types/column-types';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
 
 describe('normalizeColumnAccessor', () => {
   it('should create accessor function using column id when no accessor is provided', () => {
-    const column: TableColumn = {
+    const column: ColumnConfig = {
       id: 'name',
       label: 'Name',
     };
@@ -16,7 +16,7 @@ describe('normalizeColumnAccessor', () => {
   });
 
   it('should create accessor function using provided accessor string', () => {
-    const column: TableColumn = {
+    const column: ColumnConfig = {
       id: 'fullName',
       label: 'Full Name',
       accessor: 'user.name',
@@ -29,7 +29,7 @@ describe('normalizeColumnAccessor', () => {
   });
 
   it('should create accessor function using provided accessor function', () => {
-    const column: TableColumn = {
+    const column: ColumnConfig = {
       id: 'displayName',
       label: 'Display Name',
       accessor: (row: { firstName: string; lastName: string }) =>
@@ -43,7 +43,7 @@ describe('normalizeColumnAccessor', () => {
   });
 
   it('should handle nested object paths', () => {
-    const column: TableColumn = {
+    const column: ColumnConfig = {
       id: 'address',
       label: 'Address',
       accessor: 'user.address.street',
@@ -63,7 +63,7 @@ describe('normalizeColumnAccessor', () => {
   });
 
   it('should return undefined for non-existent paths', () => {
-    const column: TableColumn = {
+    const column: ColumnConfig = {
       id: 'missing',
       label: 'Missing',
       accessor: 'non.existent.path',
