@@ -4,9 +4,9 @@ import { HeadingMedium } from 'baseui/typography';
 
 import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
+import { Table } from '#core/components/table/table';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import {
   PIPELINE_CELL_CONFIG,
   PIPELINE_RUN_CELL_CONFIG,
@@ -18,7 +18,6 @@ import type { Theme } from 'baseui';
 export function ProjectDetail() {
   const [css, theme] = useStyletron();
   const { projectId } = useStudioParams('base');
-  const resolver = useInterpolationResolver();
   const { data } = useStudioQuery<{
     project: {
       metadata: {
@@ -109,37 +108,11 @@ export function ProjectDetail() {
           <HeadingMedium margin={0}>Pipelines</HeadingMedium>
         </div>
 
-        {(pipelines?.data?.pipelineList.items ?? []).length > 0 ? (
-          <div
-            className={css({
-              display: 'flex',
-              flexDirection: 'column',
-              gridGap: theme.sizing.scale300,
-            })}
-          >
-            {(pipelines?.data?.pipelineList.items ?? []).map((item, index) => (
-              <Row
-                overrides={{
-                  RowItemContainer: {
-                    style: {
-                      minWidth: '250px',
-                    },
-                  },
-                }}
-                key={item.metadata.name}
-                record={item}
-                items={resolver(PIPELINE_CELL_CONFIG, { page: item }).map((cell) => ({
-                  ...cell,
-                  ...(index > 0 && { label: undefined }),
-                }))}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className={css({ color: theme.colors.contentSecondary })}>
-            <em>No pipelines found</em>
-          </div>
-        )}
+        <Table
+          data={pipelines?.data?.pipelineList.items ?? []}
+          columns={PIPELINE_CELL_CONFIG}
+          loading={pipelines.isLoading}
+        />
       </Card>
 
       {/* Pipeline Runs Section */}
@@ -157,37 +130,11 @@ export function ProjectDetail() {
           <HeadingMedium margin={0}>Pipeline Runs</HeadingMedium>
         </div>
 
-        {(pipelineRuns?.data?.pipelineRunList.items ?? []).length > 0 ? (
-          <div
-            className={css({
-              display: 'flex',
-              flexDirection: 'column',
-              gridGap: theme.sizing.scale300,
-            })}
-          >
-            {(pipelineRuns?.data?.pipelineRunList.items ?? []).map((item, index) => (
-              <Row
-                overrides={{
-                  RowItemContainer: {
-                    style: {
-                      minWidth: '250px',
-                    },
-                  },
-                }}
-                key={item.metadata.name}
-                record={item}
-                items={resolver(PIPELINE_RUN_CELL_CONFIG, { page: item }).map((cell) => ({
-                  ...cell,
-                  ...(index > 0 && { label: undefined }),
-                }))}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className={css({ color: theme.colors.contentSecondary })}>
-            <em>No pipeline runs found</em>
-          </div>
-        )}
+        <Table
+          data={pipelineRuns?.data?.pipelineRunList.items ?? []}
+          columns={PIPELINE_RUN_CELL_CONFIG}
+          loading={pipelineRuns.isLoading}
+        />
       </Card>
     </div>
   );

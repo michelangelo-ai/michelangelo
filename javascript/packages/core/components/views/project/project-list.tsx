@@ -1,13 +1,13 @@
 import { useStyletron } from 'baseui';
 
-import { Row } from '#core/components/row/row';
+import { Table } from '#core/components/table/table';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { SHARED_PROJECT_CELL_CONFIG } from './constants';
 
 export function ProjectList() {
   const [css, theme] = useStyletron();
 
-  const { data } = useStudioQuery<{
+  const { data, isLoading } = useStudioQuery<{
     projectList: {
       items: Array<{
         metadata: {
@@ -29,26 +29,11 @@ export function ProjectList() {
 
   return (
     <div className={css({ marginTop: theme.sizing.scale400 })}>
-      {data?.projectList.items.map((item, index) => (
-        <Row
-          overrides={{
-            RowItemContainer: {
-              style: {
-                width: '120px',
-              },
-            },
-          }}
-          key={item.metadata.name}
-          record={item}
-          items={[
-            { id: 'metadata.name', label: 'Name', url: item.metadata.name },
-            ...SHARED_PROJECT_CELL_CONFIG,
-          ].map((cell) => ({
-            ...cell,
-            ...(index > 0 && { label: undefined }),
-          }))}
-        />
-      ))}
+      <Table
+        data={data?.projectList.items ?? []}
+        columns={SHARED_PROJECT_CELL_CONFIG}
+        loading={isLoading}
+      />
     </div>
   );
 }
