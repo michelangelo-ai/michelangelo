@@ -21,7 +21,7 @@ from michelangelo.cli.mactl.utils import (
 _LOG = getLogger(__name__)
 
 # Constants for registration output files
-_UNIFLOW_TAR_TB_PATH_FILENAME = "uniflow_tar_tb_path.txt"
+_UNIFLOW_TAR_PATH_FILENAME = "uniflow_tar_path.txt"
 _UNIFLOW_INPUT_FILENAME = "uniflow_input.txt"
 
 
@@ -32,7 +32,7 @@ def get_pipeline_config_and_tar(repo_root: Path, config_file_relative_path: str,
     Run pipeline registration via subprocess to get uniflow artifacts.
     
     Executes registration in the user's Python environment to obtain:
-    1) uniflow tarball path in TerraBlob from "uniflow_tar_tb_path.txt" 
+    1) uniflow tarball path from "uniflow_tar_path.txt" 
     2) uniflow workflow input from "uniflow_input.txt" converted to Struct
     
     Uses subprocess isolation to maintain clean separation between
@@ -46,7 +46,7 @@ def get_pipeline_config_and_tar(repo_root: Path, config_file_relative_path: str,
         pipeline: Pipeline name
         
     Returns:
-        tuple: (workflow_inputs as Struct, uniflow_tar_tb_path as string)
+        tuple: (workflow_inputs as Struct, uniflow_tar_path as string)
         
     Raises:
         FileNotFoundError: If config file doesn't exist
@@ -99,22 +99,19 @@ def get_pipeline_config_and_tar(repo_root: Path, config_file_relative_path: str,
         
         _LOG.info("Registration successful: %s", message)
         
-        # Read uniflow tar TerraBlob path
-        tb_path_file = tmp_path / _UNIFLOW_TAR_TB_PATH_FILENAME
-        if not tb_path_file.exists():
-            # Fall back to default uniflow tar path file if TB path doesn't exist
-            tb_path_file = tmp_path / "uniflow_tar_path.txt"
+        # Read uniflow tar path
+        tar_path_file = tmp_path / _UNIFLOW_TAR_PATH_FILENAME
             
         try:
-            uniflow_tar_tb_path = tb_path_file.read_text().strip()
-            _LOG.info("Read uniflow tar path: %s", uniflow_tar_tb_path)
+            uniflow_tar_path = tar_path_file.read_text().strip()
+            _LOG.info("Read uniflow tar path: %s", uniflow_tar_path)
         except FileNotFoundError:
             # Use remote path from status file if direct file read fails
             if remote_path:
-                uniflow_tar_tb_path = remote_path
-                _LOG.info("Using tar path from status file: %s", uniflow_tar_tb_path)
+                uniflow_tar_path = remote_path
+                _LOG.info("Using tar path from status file: %s", uniflow_tar_path)
             else:
-                raise RuntimeError(f"Could not read uniflow tar path from {tb_path_file}")
+                raise RuntimeError(f"Could not read uniflow tar path from {tar_path_file}")
         
         # Read uniflow workflow input  
         input_file_path = tmp_path / _UNIFLOW_INPUT_FILENAME
@@ -131,7 +128,7 @@ def get_pipeline_config_and_tar(repo_root: Path, config_file_relative_path: str,
         workflow_inputs = Struct()
         workflow_inputs.update(input_data)
         
-        return workflow_inputs, uniflow_tar_tb_path
+        return workflow_inputs, uniflow_tar_path
 
 
 def generate_create(crd: CRD, channel: Channel):
@@ -166,7 +163,7 @@ def convert_crd_metadata_pipeline_create(
     
     # Run pipeline registration to get uniflow artifacts
     try:
-        workflow_inputs, uniflow_tar_tb_path = get_pipeline_config_and_tar(
+        workflow_inputs, uniflow_tar_path = get_pipeline_config_and_tar(
             repo_root=repo_root,
             config_file_relative_path=config_file_relative_path,
             bazel_target="",  # Not used
@@ -194,7 +191,7 @@ def convert_crd_metadata_pipeline_create(
             # For other registration failures, continue with graceful degradation
             _LOG.warning("Registration failed, continuing without uniflow artifacts: %s", e)
             workflow_inputs = None
-            uniflow_tar_tb_path = ""
+            uniflow_tar_path = ""
     except Exception as e:
         _LOG.error("Unexpected error during registration: %s", e)
         # For unexpected errors, also use graceful degradation
@@ -232,8 +229,8 @@ def convert_crd_metadata_pipeline_create(
     if workflow_inputs is not None:
         _LOG.info("Workflow inputs discovered but not added to spec (schema limitation)")
         
-    if uniflow_tar_tb_path:
-        _LOG.info("Uniflow tar path: %s (not added to spec due to schema limitation)", uniflow_tar_tb_path)
+    if uniflow_tar_path:
+        _LOG.info("Uniflow tar path: %s (not added to spec due to schema limitation)", uniflow_tar_path)
     
     _LOG.debug("Converted CRD metadata: %r", res)
     return res
