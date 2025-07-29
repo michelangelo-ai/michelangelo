@@ -224,13 +224,12 @@ def convert_crd_metadata_pipeline_create(
     res["spec"]["owner"] = {"name": getenv("UBER_LDAP_UID")}
     
     # Add uniflow artifacts if registration succeeded
-    # Note: The current protobuf schema doesn't support workflow_inputs or uniflow_tar_path
-    # These would need to be added to the manifest or stored differently
     if workflow_inputs is not None:
-        _LOG.info("Workflow inputs discovered but not added to spec (schema limitation)")
+        _LOG.info("Workflow inputs discovered but not added to spec")
         
     if uniflow_tar_path:
-        _LOG.info("Uniflow tar path: %s (not added to spec due to schema limitation)", uniflow_tar_path)
+        res["spec"]["manifest"]["uniflowTar"] = uniflow_tar_path
+        _LOG.info("Added uniflow tar path to spec: %s", uniflow_tar_path)
     
     _LOG.debug("Converted CRD metadata: %r", res)
     return res
