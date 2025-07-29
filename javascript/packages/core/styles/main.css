@@ -12,15 +12,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Focus styles for accessibility */
-button:focus,
-input:focus,
-select:focus,
-textarea:focus {
-  outline: 2px solid Highlight;
-  outline-offset: 2px;
-}
-
 /* Remove number input spin buttons and search decorations, handled by BaseWeb components */
 input[type='number']::-webkit-inner-spin-button,
 input[type='number']::-webkit-outer-spin-button,
