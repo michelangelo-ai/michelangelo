@@ -1,6 +1,7 @@
 import { EmptyState } from '../components/table-empty-state/types';
 
 import type { ApplicationError } from '#core/types/error-types';
+import type { TableActionBarConfig } from '../components/table-action-bar/types';
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
 
@@ -69,6 +70,15 @@ export interface TableRequiredFunctionalityProps {
    * @default undefined
    */
   error: ApplicationError | undefined;
+
+  /**
+   * @description
+   * Configuration for the action bar above the table.
+   * Controls search functionality and other action bar features.
+   *
+   * @default { enableSearch: true }
+   */
+  actionBarConfig: TableActionBarConfig;
 }
 
 /**
@@ -90,4 +100,4 @@ export interface TablePropsResolved<T extends TableData = TableData>
  * Represents the possible view states of a table component.
  * These states determine which UI components should be rendered.
  */
-export type TableViewState = 'loading' | 'empty' | 'ready' | 'error';
+export type TableViewState = 'loading' | 'empty' | 'ready' | 'error' | 'filtered-empty';

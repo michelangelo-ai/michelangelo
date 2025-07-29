@@ -1,4 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -213,6 +215,196 @@ describe('Table', () => {
 
     it('does not render empty state when error is present', () => {
       expect(screen.queryByText('No data')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('search functionality integration', () => {
+    const testData = [
+      { id: '1', name: 'Apple Product', category: 'Electronics' },
+      { id: '2', name: 'Banana Split', category: 'Food' },
+      { id: '3', name: 'Orange Juice', category: 'Beverage' },
+      { id: '4', name: 'Apple Pie', category: 'Food' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'category', label: 'Category' },
+    ];
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    });
+
+    describe('when search is enabled', () => {
+      beforeEach(() => {
+        render(
+          <Table data={testData} columns={testColumns} actionBarConfig={{ enableSearch: true }} />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+      });
+
+      it('renders the action bar with search input', () => {
+        expect(screen.getByRole('searchbox')).toBeInTheDocument();
+      });
+
+      it('renders all data rows initially', () => {
+        expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+      });
+
+      it('filters data when searching', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'Apple');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')).toHaveLength(3); // 1 header + 2 rows
+        });
+
+        expect(screen.queryByRole('cell', { name: 'Banana Split' })).not.toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Apple Product' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Apple Pie' })).toBeInTheDocument();
+      });
+
+      it('filters data case-insensitively', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'apple');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(screen.getByRole('cell', { name: 'Apple Product' })).toBeInTheDocument();
+          expect(screen.getByRole('cell', { name: 'Apple Pie' })).toBeInTheDocument();
+        });
+      });
+
+      it('shows filtered empty state when search returns no results', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'NonExistentItem');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(
+            screen.getByRole('heading', {
+              name: 'There is no information available for selected filters',
+            })
+          ).toBeInTheDocument();
+        });
+
+        expect(screen.getAllByRole('row')).toHaveLength(2); // 1 header + 1 row
+
+        // No data state is not rendered when there are no results
+        expect(screen.queryByRole('heading', { name: 'No data' })).not.toBeInTheDocument();
+      });
+
+      it('clears search when clear filters button is clicked', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'NonExistentItem');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(
+            screen.getByRole('heading', {
+              name: 'There is no information available for selected filters',
+            })
+          ).toBeInTheDocument();
+        });
+
+        await user.click(screen.getByRole('button', { name: 'Clear all filters' }));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+        });
+
+        expect(
+          screen.queryByRole('heading', {
+            name: 'There is no information available for selected filters',
+          })
+        ).not.toBeInTheDocument();
+      });
+
+      it('clears search using input clear button', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'Apple');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')).toHaveLength(3); // 1 header + 2 rows
+        });
+
+        await user.click(screen.getByLabelText('Clear value'));
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+        });
+      });
+    });
+
+    describe('when search is disabled', () => {
+      beforeEach(() => {
+        render(
+          <Table data={testData} columns={testColumns} actionBarConfig={{ enableSearch: false }} />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+      });
+
+      it('does not render the action bar or search input', () => {
+        expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
+      });
+
+      it('renders all data rows without filtering', () => {
+        expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+      });
+    });
+
+    describe('when search is enabled but data is empty', () => {
+      beforeEach(() => {
+        render(
+          <Table data={[]} columns={testColumns} actionBarConfig={{ enableSearch: true }} />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+      });
+
+      it('renders search input but shows regular empty state', () => {
+        expect(screen.getByRole('searchbox')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'No data' })).toBeInTheDocument();
+        expect(
+          screen.queryByRole('heading', {
+            name: 'There is no information available for selected filters',
+          })
+        ).not.toBeInTheDocument();
+      });
+
+      it('renders empty state when search returns no results', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'Food');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expect(screen.getByRole('heading', { name: 'No data' })).toBeInTheDocument();
+        });
+
+        expect(
+          screen.queryByRole('heading', {
+            name: 'There is no information available for selected filters',
+          })
+        ).not.toBeInTheDocument();
+      });
     });
   });
 });

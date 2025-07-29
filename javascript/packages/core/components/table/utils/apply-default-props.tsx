@@ -30,5 +30,8 @@ export function applyDefaultProps<T extends TableData = TableData>(
     loading: props.loading ?? false,
     loadingView: props.loadingView ?? TableLoadingState,
     error: props.error ?? undefined,
+    actionBarConfig: props.actionBarConfig ?? {
+      enableSearch: true,
+    },
   };
 }
