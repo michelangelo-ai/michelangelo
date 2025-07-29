@@ -283,6 +283,22 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 						}
 					}
 
+					// Add "ext" field of type *anypb.Any to all structs
+					extField := &dst.Field{
+						Names: []*dst.Ident{dst.NewIdent("Ext")},
+						Type: &dst.StarExpr{
+							X: &dst.SelectorExpr{
+								X:   dst.NewIdent("anypb"),
+								Sel: dst.NewIdent("Any"),
+							},
+						},
+						Tag: &dst.BasicLit{
+							Kind:  token.STRING,
+							Value: "`json:\"ext,omitempty\" protobuf:\"bytes,1000,opt,name=ext,proto3\"`",
+						},
+					}
+					structType.Fields.List = append(structType.Fields.List, extField)
+
 					pbOptions := protoMsg.Desc.Options().(*descriptorpb.MessageOptions)
 					options, err := pboptions.ReadOptions(extTypes, pbOptions)
 					if err != nil {
@@ -335,6 +351,17 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 
 	if hasCRD {
 		updatedContent = strings.Replace(updatedContent, `import (`, "import ("+templates.CRDImports, 1)
+	}
+
+	// Always add anypb import since we're adding Ext field to all structs
+	if !strings.Contains(updatedContent, `"google.golang.org/protobuf/types/known/anypb"`) {
+		if strings.Contains(updatedContent, `import (`) {
+			updatedContent = strings.Replace(updatedContent, `import (`, "import (\n\t\"google.golang.org/protobuf/types/known/anypb\"", 1)
+		} else {
+			// Add import block if it doesn't exist
+			packageLine := fmt.Sprintf("package %s\n", dstFile.Name.Name)
+			updatedContent = strings.Replace(updatedContent, packageLine, packageLine+"\nimport (\n\t\"google.golang.org/protobuf/types/known/anypb\"\n)\n", 1)
+		}
 	}
 
 	gofile.Content = &updatedContent
