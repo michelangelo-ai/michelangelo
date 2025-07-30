@@ -11,7 +11,7 @@ from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
 from grpc import Channel
 
-from mactl import CRD, PWD
+from mactl import CRD
 from michelangelo.cli.mactl.utils import (
     run_subprocess_registration,
     read_subprocess_outputs
@@ -197,7 +197,7 @@ def convert_crd_metadata_pipeline_create(
         # For unexpected errors, also use graceful degradation
         _LOG.warning("Unexpected registration failure, continuing without uniflow artifacts")
         workflow_inputs = None
-        uniflow_tar_tb_path = ""
+        uniflow_tar_path = ""
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
     res["metadata"] = {

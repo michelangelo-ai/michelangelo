@@ -7,7 +7,6 @@ into tarballs and uploading them to various storage backends using fsspec.
 
 import logging
 import uuid
-from pathlib import Path
 from typing import Callable, Optional
 
 try:
