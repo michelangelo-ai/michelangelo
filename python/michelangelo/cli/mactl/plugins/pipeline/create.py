@@ -219,7 +219,7 @@ def convert_crd_metadata_pipeline_create(
     
     res["spec"]["manifest"] = {
         "filePath": config_file_relative_path,
-        "type": "PIPELINE_MANIFEST_TYPE_YAML",
+        "type": "PIPELINE_MANIFEST_TYPE_UNIFLOW",
     }
     res["spec"]["owner"] = {"name": getenv("UBER_LDAP_UID")}
     
