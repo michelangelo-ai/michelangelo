@@ -21,4 +21,5 @@ __all__ = [
     "prepare_uniflow_input",
     "UniflowTarBuilder",
     "prepare_uniflow_tar",
+    "subprocess",
 ]
