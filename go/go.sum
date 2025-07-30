@@ -84,8 +84,8 @@ github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2y
 github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b h1:AP/Y7sqYicnjGDfD5VcY4CIfh1hRXBUavxrvELjTiOE=
 github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b/go.mod h1:ac9efd0D1fsDb3EJvhqgXRbFx7bs2wqZ10HQPeU8U/Q=
 github.com/cactus/go-statsd-client/statsd v0.0.0-20200423205355-cb0885a1018c/go.mod h1:l/bIBLeOl9eX+wxJAzxS4TveKRtAqlyDpHjhkfO0MEI=
-github.com/cadence-workflow/starlark-worker v1.0.4 h1:u1e9yxk0BmQOfHSNcGyOj9NKz3Rn8HWDkryCSJLpTcs=
-github.com/cadence-workflow/starlark-worker v1.0.4/go.mod h1:hCFyJLLcWXIh+89QFI9QOuNm9qbHOcJALdf4WhmyqrA=
+github.com/cadence-workflow/starlark-worker v1.0.9 h1:YZNNwhx+gIJfDxI2MW0/Ra2qW9dFlSaUAM0S8gxDuKg=
+github.com/cadence-workflow/starlark-worker v1.0.9/go.mod h1:hCFyJLLcWXIh+89QFI9QOuNm9qbHOcJALdf4WhmyqrA=
 github.com/cenkalti/backoff v2.2.1+incompatible h1:tNowT99t7UNflLxfYYSlKYsBpXdEet03Pg2g16Swow4=
 github.com/cenkalti/backoff v2.2.1+incompatible/go.mod h1:90ReRw6GdpyfrHakVjL/QHaoyV4aDUVVkXQJJJ3NXXM=
 github.com/census-instrumentation/opencensus-proto v0.2.1/go.mod h1:f6KPmirojxKA12rnyqOA5BBL4O983OfeGPqjHWSTneU=
