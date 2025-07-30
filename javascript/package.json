@@ -47,9 +47,11 @@
     "react-dom": "^18.3.1",
     "vite": "^6.2.0",
     "@vitejs/plugin-react": "^4.4.1",
-    "tslib": "^2.6.2"
+    "tslib": "^2.6.2",
+    "react-uid/tslib": "^1.14.1"
   },
   "resolutionsComments": {
-    "tslib": "Required to fix 'Cannot destructure property __extends of import_tslib.default' error that occurs with BaseUI 15 and its dependencies"
+    "tslib": "Required to fix 'Cannot destructure property __extends of import_tslib.default' error that occurs with BaseUI 15 and its dependencies",
+    "react-uid/tslib": "react-uid@2.3.0 (used by BaseUI) requires tslib v1.x API while CodeMirror packages require v2.x - force v1 for react-uid specifically"
   }
 }
