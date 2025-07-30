@@ -15,10 +15,13 @@
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
+    "@codemirror/lang-json": "^6.0.2",
+    "@codemirror/view": "^6.38.1",
     "@connectrpc/connect": "^2.0.2",
     "@connectrpc/connect-web": "^2.0.2",
     "@tanstack/react-table": "^8.21.3",
     "@types/pluralize": "^0.0.33",
+    "@uiw/react-codemirror": "^4.21.23",
     "baseui": "15.0.0",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "7.4.7",
