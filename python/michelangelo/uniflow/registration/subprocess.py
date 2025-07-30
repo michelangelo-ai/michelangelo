@@ -12,11 +12,10 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
-from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
+from michelangelo.uniflow.core.utils import LOGGING_FORMAT
 from michelangelo.uniflow.registration import register
 
 _logger = logging.getLogger(__name__)
