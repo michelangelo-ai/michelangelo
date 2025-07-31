@@ -1,4 +1,3 @@
-import React from 'react';
 import { getCoreRowModel, getFilteredRowModel, useReactTable } from '@tanstack/react-table';
 import { StyledTable } from 'baseui/table-semantic';
 
@@ -13,6 +12,7 @@ import { TableNoResultsState } from './components/table-no-results-state/table-n
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { TableContainer } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
+import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
 
 import type { TableData } from './types/data-types';
@@ -21,15 +21,15 @@ import type { TableProps } from './types/table-types';
 export function Table<T extends TableData = TableData>(inputProps: TableProps<T>) {
   const props = applyDefaultProps<T>(inputProps);
   const columns = useColumnTransformer<T>(props.columns);
-  const [globalFilter, setGlobalFilter] = React.useState('');
+
+  const { state, initialState } = composeTableState(props.state ?? {});
 
   const table = useReactTable<T>({
     data: props.data,
     columns,
-    state: {
-      globalFilter,
-    },
-    onGlobalFilterChange: setGlobalFilter,
+    initialState,
+    ...(Object.keys(state).length > 0 && { state }),
+    ...(state.setGlobalFilter ? { onGlobalFilterChange: state.setGlobalFilter } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     globalFilterFn: 'includesString',
@@ -39,15 +39,15 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     dataLength: props.data.length,
     error: props.error,
     loading: props.loading,
-    hasFiltersApplied: globalFilter.length > 0,
+    hasFiltersApplied: (table.getState().globalFilter as string)?.length > 0,
     filteredLength: table.getFilteredRowModel().rows.length,
   });
 
   return (
     <TableContainer>
       <TableActionBar
-        globalFilter={globalFilter}
-        setGlobalFilter={setGlobalFilter}
+        globalFilter={table.getState().globalFilter as string}
+        setGlobalFilter={table.setGlobalFilter}
         configuration={props.actionBarConfig}
       />
 
@@ -59,7 +59,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
 
         {viewState === 'filtered-empty' && (
-          <TableNoResultsState clearFilters={() => setGlobalFilter('')} />
+          <TableNoResultsState clearFilters={() => table.setGlobalFilter('')} />
         )}
 
         {viewState !== 'error' && (

@@ -33,5 +33,6 @@ export function applyDefaultProps<T extends TableData = TableData>(
     actionBarConfig: props.actionBarConfig ?? {
       enableSearch: true,
     },
+    state: props.state ?? undefined,
   };
 }
