@@ -1,13 +1,13 @@
 syntax = "proto3";
 
-package michelangelo.test.kubeproto;
+package michelangelo.test.kubeproto.indexing_errors;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/user.proto";
 import "google/protobuf/timestamp.proto";
 
-option go_package = "kubeproto";
+option go_package = "indexing_errors";
 
 message TestIndexingInvalidPathSpec {
 }
