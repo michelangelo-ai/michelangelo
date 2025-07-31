@@ -79,6 +79,31 @@ export interface TableRequiredFunctionalityProps {
    * @default { enableSearch: true }
    */
   actionBarConfig: TableActionBarConfig;
+
+  /**
+   * @description
+   * Table state for managing filters and other table state.
+   * Can include both controlled state (with setters) and initial state (without setters).
+   *
+   * @example
+   * ```ts
+   * // Controlled state -- setGlobalFilter is responsible for updating globalFilter
+   * {
+   *   globalFilter: 'search-1',
+   *   setGlobalFilter: (newValue: string) => {
+   *     // handle the new value
+   *   },
+   * }
+   * // Uncontrolled state -- globalFilter is the initial global filter value for the table.
+   * // Updates to the state will be handled by the Table component.
+   * {
+   *   globalFilter: 'search-1',
+   * }
+   * ```
+   *
+   * @default undefined
+   */
+  state: Partial<ControlledTableState> | undefined;
 }
 
 /**
@@ -101,3 +126,22 @@ export interface TablePropsResolved<T extends TableData = TableData>
  * These states determine which UI components should be rendered.
  */
 export type TableViewState = 'loading' | 'empty' | 'ready' | 'error' | 'filtered-empty';
+
+/**
+ * Table state containing aspects of table behavior.
+ */
+export type TableState = {
+  /** Global search/filter value */
+  globalFilter: string;
+};
+
+/**
+ * Table state with update functions for controlled state management.
+ */
+export type ControlledTableState = TableState & {
+  setGlobalFilter: (
+    updater:
+      | TableState['globalFilter']
+      | ((old: TableState['globalFilter']) => TableState['globalFilter'])
+  ) => void;
+};

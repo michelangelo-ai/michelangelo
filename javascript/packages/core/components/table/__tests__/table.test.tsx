@@ -407,4 +407,87 @@ describe('Table', () => {
       });
     });
   });
+
+  describe('state management integration', () => {
+    const testData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+      { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
+      { id: '3', name: 'Carol Davis', department: 'Engineering', status: 'Active' },
+      { id: '4', name: 'David Wilson', department: 'Sales', status: 'Active' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'department', label: 'Department' },
+      { id: 'status', label: 'Status' },
+    ];
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.runOnlyPendingTimers();
+      vi.useRealTimers();
+    });
+
+    describe('controlled state with search', () => {
+      it('respects controlled globalFilter state and updates search UI', () => {
+        const controlledState = {
+          globalFilter: 'Engineering',
+          setGlobalFilter: vi.fn(),
+        };
+
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={controlledState}
+            actionBarConfig={{ enableSearch: true }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(screen.getByRole('searchbox')).toHaveValue('Engineering');
+        expect(screen.getAllByRole('row')).toHaveLength(3); // 1 header + 2 Engineering rows
+      });
+
+      it('updates filtered results when controlled state changes', async () => {
+        let currentState = {
+          globalFilter: '',
+          setGlobalFilter: vi.fn(),
+        };
+        const TestWrapper = () => (
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={currentState}
+            actionBarConfig={{ enableSearch: true }}
+          />
+        );
+
+        const { rerender } = render(
+          <TestWrapper />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 data rows
+        expect(screen.getByRole('searchbox')).toHaveValue('');
+
+        currentState = {
+          globalFilter: 'Marketing',
+          setGlobalFilter: vi.fn(),
+        };
+        rerender(<TestWrapper />);
+
+        // Check that the search input updates
+        expect(screen.getByRole('searchbox')).toHaveValue('Marketing');
+
+        await waitFor(() => {
+          expect(screen.getAllByRole('row')).toHaveLength(2); // 1 header + 1 Marketing row
+        });
+      });
+    });
+  });
 });

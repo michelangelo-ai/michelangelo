@@ -75,6 +75,9 @@
 
 - **Real interactions over mocks**: Reduce dependency mocking to test closer to production
 - **Mock server dependencies**: Don't connect to real servers, use established RPC mocking
+- **Business logic over implementation**: Test your business decisions and logic, not the tools you're using to implement them
+- **Avoid test duplication**: Don't test the same behavior in both unit and integration tests - choose the most appropriate level
+- **Success path plus key edge cases**: Test core functionality and meaningful edge cases. Skip testing scenarios already covered by dependencies. Skip testing unrealistic scenarios
 
 ### Test Organization
 
@@ -82,13 +85,10 @@
 - **Place tests near code**: Use closest `__tests__/` directory
 - **Well-named mocks**: Use descriptive names that explain test intent
 - **Inline when appropriate**: For simple cases tied directly to test expectations
-
-### Fixtures and Mocks
-
-- Well-named mocks: Use descriptive names that explain test intent
-- Inline when appropriate: For simple cases tied directly to test expectations
+- **Inline expect calls**: Prefer `expect(functionCall(args)).toEqual(result)` over assigning to variables when possible
 
 When to mock vs not mock:
 
 - ✅ DO mock: External APIs, RPC calls, server dependencies
-- ✅ DO use real: Internal hooks, components, React context
+- ✅ DO use real: Internal hooks, components, React context, well-tested utilities with error handling
+- ✅ DO use real: Dependencies that are already comprehensively tested and handle edge cases gracefully
