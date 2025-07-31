@@ -60,12 +60,4 @@ for target in $TARGETS; do
     cp "${SRC}"/*.go "${DEST}/"
 done
 
-echo "==> Copying protobuf mock .go files to vendor/..."
-
-SRC="${WORKSPACE_ROOT}/bazel-bin/proto/api/v2/michelangelo_v2mock.go"
-DEST="${VENDOR_DIR}/mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
-echo "    ${SRC} → ${DEST}"
-mkdir -p "${DEST}"
-cp "${SRC}" "${DEST}/"
-
 echo "✅ vendor directory update complete."
