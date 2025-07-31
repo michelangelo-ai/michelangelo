@@ -4,6 +4,7 @@ import { HeadingMedium } from 'baseui/typography';
 
 import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
+import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
 import { Table } from '#core/components/table/table';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
@@ -69,6 +70,14 @@ export function ProjectDetail() {
     },
   });
 
+  const pipelineTableState = useLocalStorageTableState({
+    tableSettingsId: 'pipelines',
+  });
+
+  const pipelineRunTableState = useLocalStorageTableState({
+    tableSettingsId: 'pipeline-runs',
+  });
+
   return (
     <div
       className={css({
@@ -112,6 +121,7 @@ export function ProjectDetail() {
           data={pipelines?.data?.pipelineList.items ?? []}
           columns={PIPELINE_CELL_CONFIG}
           loading={pipelines.isLoading}
+          state={pipelineTableState}
         />
       </Card>
 
@@ -134,6 +144,7 @@ export function ProjectDetail() {
           data={pipelineRuns?.data?.pipelineRunList.items ?? []}
           columns={PIPELINE_RUN_CELL_CONFIG}
           loading={pipelineRuns.isLoading}
+          state={pipelineRunTableState}
         />
       </Card>
     </div>
