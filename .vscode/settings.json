@@ -7,5 +7,16 @@
     },
     "eslint.workingDirectories": [
         "./javascript"
-    ]
+    ],
+    "go.toolsEnvVars": {
+        "GO111MODULE": "on",
+        "GOFLAGS": "-mod=vendor",
+    },
+    "gopls": {
+        "verboseOutput": true,
+        "build.directoryFilters": [
+            "-",
+            "+go",
+        ],
+    }
 }
