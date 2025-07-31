@@ -92,3 +92,48 @@ When to mock vs not mock:
 - ✅ DO mock: External APIs, RPC calls, server dependencies
 - ✅ DO use real: Internal hooks, components, React context, well-tested utilities with error handling
 - ✅ DO use real: Dependencies that are already comprehensively tested and handle edge cases gracefully
+
+---
+
+## Documentation Guidelines
+
+### When to Add Documentation
+
+**Add JSDoc when functions have**:
+
+- **Non-obvious behaviors**: Error handling, side effects, or special logic
+- **Edge cases**: Null handling, validation, or fallback behavior
+- **Public APIs**: Utilities shared across multiple features
+
+**Skip documentation for**:
+
+- Simple getters/setters that match their TypeScript signature
+- Internal implementation details
+
+### JSDoc Style
+
+- **Focus on "why" over "what"**: Explain behavior, not syntax
+- **Include examples for complex functions**: Show real usage scenarios
+- **Document edge cases and error handling**: What happens when inputs are invalid?
+- **Be concise but complete**: Cover important behavior without redundancy
+
+### Inline Comments
+
+**Use inline comments for**:
+
+- **Non-obvious implementation decisions**: Why a specific approach was chosen
+- **Complex logic explanation**: Clarify intricate algorithms or transformations
+- **Important context**: Business rules or constraints that affect the code
+
+**Good examples**:
+
+```typescript
+// Ignore localStorage errors (quota exceeded, private browsing, etc.)
+// Convert MM/DD/YYYY to YYYY/MM/DD format for consistency
+```
+
+### Avoid
+
+- **Type duplication**: Don't restate what TypeScript already expresses
+- **Obvious comments**: `// gets the pipeline run based on name`
+- **AI/agent references**: Keep documentation focused on code purpose
