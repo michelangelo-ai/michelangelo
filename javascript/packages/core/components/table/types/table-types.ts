@@ -128,11 +128,21 @@ export interface TablePropsResolved<T extends TableData = TableData>
 export type TableViewState = 'loading' | 'empty' | 'ready' | 'error' | 'filtered-empty';
 
 /**
+ * Column filter entry containing column ID and filter value
+ */
+export type ColumnFilter = {
+  id: string;
+  value: unknown;
+};
+
+/**
  * Table state containing aspects of table behavior.
  */
 export type TableState = {
   /** Global search/filter value */
   globalFilter: string;
+  /** Column-specific filter values */
+  columnFilters: ColumnFilter[];
 };
 
 /**
@@ -144,4 +154,5 @@ export type ControlledTableState = TableState & {
       | TableState['globalFilter']
       | ((old: TableState['globalFilter']) => TableState['globalFilter'])
   ) => void;
+  setColumnFilters: (updater: ColumnFilter[] | ((old: ColumnFilter[]) => ColumnFilter[])) => void;
 };

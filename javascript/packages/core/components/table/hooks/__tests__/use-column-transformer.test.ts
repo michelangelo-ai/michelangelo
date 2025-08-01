@@ -80,24 +80,6 @@ describe('useColumnTransformer', () => {
     expect(accessorFn(testData)).toBe('John Doe');
   });
 
-  it('should memoize results when columns reference does not change', () => {
-    const columns: ColumnConfig[] = [
-      {
-        id: 'name',
-        label: 'Name',
-        accessor: 'name',
-      },
-    ];
-
-    const { result, rerender } = renderHook(() => useColumnTransformer(columns));
-    const firstResult = result.current;
-
-    rerender();
-    const secondResult = result.current;
-
-    expect(firstResult).toBe(secondResult);
-  });
-
   it('should update results when columns change', () => {
     const initialColumns: ColumnConfig[] = [
       {

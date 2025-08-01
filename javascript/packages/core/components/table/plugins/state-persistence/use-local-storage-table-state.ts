@@ -1,7 +1,7 @@
 import { TABLE_STATE_DEFAULTS } from '#core/components/table/constants';
 import { usePersistedTableState } from './use-persisted-table-state';
 
-import type { ControlledTableState } from '#core/components/table/types/table-types';
+import type { ColumnFilter, ControlledTableState } from '#core/components/table/types/table-types';
 
 /**
  * Primary entry point for adding localStorage persistence to Table components.
@@ -33,8 +33,15 @@ export function useLocalStorageTableState({
     TABLE_STATE_DEFAULTS.globalFilter
   );
 
+  const [columnFilters, setColumnFilters] = usePersistedTableState<ColumnFilter[]>(
+    `${tableSettingsId}.columnFilters`,
+    TABLE_STATE_DEFAULTS.columnFilters
+  );
+
   return {
     globalFilter,
     setGlobalFilter,
+    columnFilters,
+    setColumnFilters,
   };
 }
