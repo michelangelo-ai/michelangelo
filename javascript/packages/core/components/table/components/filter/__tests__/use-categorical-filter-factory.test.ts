@@ -1,6 +1,6 @@
-import { Row } from '@tanstack/react-table';
 import { renderHook } from '@testing-library/react';
 
+import { createMockRow } from '../__fixtures__/mock-row';
 import { useCategoricalFilterFactory } from '../categorical/use-categorical-filter-factory';
 
 const MOCK_COLUMN = {
@@ -89,9 +89,7 @@ describe('Categorical Filter', () => {
       const filterHook = result.current(MOCK_COLUMN);
       const filterFn = filterHook.buildTableFilterFn();
 
-      const mockRow = {
-        getValue: () => 'Engineering',
-      } as unknown as Row<{ department: string }>;
+      const mockRow = createMockRow({ department: 'Engineering' });
 
       expect(filterFn(mockRow, 'department', [])).toBe(true);
     });
@@ -101,15 +99,8 @@ describe('Categorical Filter', () => {
       const filterHook = result.current(MOCK_COLUMN);
       const filterFn = filterHook.buildTableFilterFn();
 
-      const engineeringRow = {
-        getValue: () => 'Engineering',
-        original: { department: 'Engineering' },
-      } as unknown as Row<{ department: string }>;
-
-      const marketingRow = {
-        getValue: () => 'Marketing',
-        original: { department: 'Marketing' },
-      } as unknown as Row<{ department: string }>;
+      const engineeringRow = createMockRow({ department: 'Engineering' });
+      const marketingRow = createMockRow({ department: 'Marketing' });
 
       const filterValue = ['Engineering', 'Design'];
 

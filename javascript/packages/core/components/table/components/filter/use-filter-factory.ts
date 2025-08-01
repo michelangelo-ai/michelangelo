@@ -1,4 +1,6 @@
+import { CellType } from '#core/components/cell/constants';
 import { useCategoricalFilterFactory } from './categorical/use-categorical-filter-factory';
+import { useDatetimeFilterFactory } from './datetime/use-datetime-filter-factory';
 
 import type { ColumnConfig } from '../../types/column-types';
 import type { TableData } from '../../types/data-types';
@@ -11,11 +13,16 @@ import type { FilterHook } from './types';
  */
 export function useFilterFactory<T extends TableData = TableData>(): (
   column: ColumnConfig<T>
-) => FilterHook<T, unknown[]> {
+) => FilterHook<T, unknown> {
   const createCategoricalFilter = useCategoricalFilterFactory<T>();
+  const createDatetimeFilter = useDatetimeFilterFactory<T>();
 
   return (column: ColumnConfig<T>) => {
-    // For now, all filters are categorical. We'll add datetime filter support later.
+    // Route to appropriate filter based on column type
+    if (column.type === CellType.DATE) {
+      return createDatetimeFilter(column);
+    }
+
     return createCategoricalFilter(column);
   };
 }

@@ -625,6 +625,45 @@ describe('Table', () => {
 
         expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
       });
+
+      it('should use datetime filter for DATE columns and categorical for others', () => {
+        const mixedColumns = [
+          { id: 'name', label: 'Name', accessor: 'name' },
+          { id: 'createdAt', label: 'Created At', accessor: 'createdAt', type: 'DATE' },
+          { id: 'department', label: 'Department', accessor: 'department' },
+        ];
+
+        const mixedTestData = [
+          { name: 'Alice', createdAt: 1672531200, department: 'Engineering' }, // 2023-01-01
+          { name: 'Bob', createdAt: 1680307200, department: 'Marketing' }, // 2023-04-01
+        ];
+        render(
+          <Table
+            data={mixedTestData}
+            columns={mixedColumns}
+            state={{
+              globalFilter: '',
+              columnFilters: [
+                {
+                  id: 'createdAt',
+                  value: {
+                    operation: 'RANGE_DATETIME',
+                    range: [new Date('2023-01-01'), new Date('2023-03-01')],
+                    selection: [],
+                    description: 'Q1 2023',
+                    exclude: false,
+                  },
+                },
+                { id: 'department', value: ['Engineering'] },
+              ],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(screen.getByRole('row', { name: /Alice/ })).toBeInTheDocument();
+        expect(screen.queryByRole('row', { name: /Bob/ })).not.toBeInTheDocument();
+      });
     });
   });
 });
