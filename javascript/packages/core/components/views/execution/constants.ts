@@ -1,0 +1,7 @@
+export const TASK_STATE = {
+  ERROR: 'ERROR',
+  PENDING: 'PENDING',
+  RUNNING: 'RUNNING',
+  SUCCESS: 'SUCCESS',
+  SKIPPED: 'SKIPPED',
+} as const;
