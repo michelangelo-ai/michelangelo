@@ -1,6 +1,7 @@
 import { getCoreRowModel, getFilteredRowModel, useReactTable } from '@tanstack/react-table';
 import { StyledTable } from 'baseui/table-semantic';
 
+import { transformFilterableColumns } from './components/table-action-bar/components/table-filter-menu/transform-filterable-columns';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableBody } from './components/table-body/table-body';
@@ -52,6 +53,9 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         globalFilter={table.getState().globalFilter as string}
         setGlobalFilter={table.setGlobalFilter}
         configuration={props.actionBarConfig}
+        filterableColumns={transformFilterableColumns(
+          table.getHeaderGroups().flatMap((group) => group.headers)
+        )}
       />
 
       <StyledTable>

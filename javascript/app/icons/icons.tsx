@@ -1,3 +1,4 @@
+import AddIcon from '@mui/icons-material/Add';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import CancelIcon from '@mui/icons-material/Cancel';
 import CheckCircle from '@mui/icons-material/CheckCircle';
@@ -19,4 +20,5 @@ export const ICONS = {
   circleCheckFilled: createMuiIconAdapter(CheckCircle),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
+  plus: createMuiIconAdapter(AddIcon),
 } as const;

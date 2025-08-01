@@ -1,4 +1,6 @@
-import { StyledTableHead, StyledTableHeadCell, StyledTableHeadRow } from 'baseui/table-semantic';
+import { StyledTableHead, StyledTableHeadRow } from 'baseui/table-semantic';
+
+import { StyledTableHeadCell } from './styled-components';
 
 import type { TableData } from '#core/components/table/types/data-types';
 import type { TableHeaderProps } from './types';

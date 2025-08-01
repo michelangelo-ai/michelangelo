@@ -32,6 +32,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
     error: props.error ?? undefined,
     actionBarConfig: props.actionBarConfig ?? {
       enableSearch: true,
+      enableFilters: true,
     },
     state: props.state ?? undefined,
   };
