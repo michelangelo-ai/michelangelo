@@ -489,5 +489,142 @@ describe('Table', () => {
         });
       });
     });
+
+    describe('column filters', () => {
+      it('should apply column filters to data', () => {
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: '',
+              columnFilters: [
+                { id: 'department', value: ['Engineering'] },
+                { id: 'status', value: ['Active'] },
+              ],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(
+          screen.getByRole('row', { name: 'Alice Johnson Engineering Active' })
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('row', { name: 'Carol Davis Engineering Active' })
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole('row', { name: 'Bob Smith Marketing Inactive' })
+        ).not.toBeInTheDocument();
+        expect(
+          screen.queryByRole('row', { name: 'David Wilson Sales Active' })
+        ).not.toBeInTheDocument();
+      });
+
+      it('should handle empty column filters', () => {
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: '',
+              columnFilters: [],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+      });
+
+      it('should handle column filters with multiple values (OR logic within column)', () => {
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: '',
+              columnFilters: [{ id: 'department', value: ['Engineering', 'Sales'] }],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        // Should show Engineering OR Sales
+        expect(
+          screen.getByRole('row', { name: 'Alice Johnson Engineering Active' })
+        ).toBeInTheDocument();
+        expect(
+          screen.getByRole('row', { name: 'Carol Davis Engineering Active' })
+        ).toBeInTheDocument();
+        expect(screen.getByRole('row', { name: 'David Wilson Sales Active' })).toBeInTheDocument();
+
+        // Not Engineering OR Sales
+        expect(
+          screen.queryByRole('row', { name: 'Bob Smith Marketing Inactive' })
+        ).not.toBeInTheDocument();
+      });
+
+      it('should combine global filter with column filters', () => {
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: 'Alice',
+              columnFilters: [{ id: 'department', value: ['Engineering'] }],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(
+          screen.getByRole('row', { name: 'Alice Johnson Engineering Active' })
+        ).toBeInTheDocument();
+        expect(
+          screen.queryByRole('row', { name: 'Carol Davis Engineering Active' })
+        ).not.toBeInTheDocument(); // Engineering but doesn't match "Alice"
+      });
+
+      it('should show no results when filters conflict', () => {
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: 'Alice',
+              columnFilters: [{ id: 'department', value: ['Marketing'] }],
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(
+          screen.getByText('There is no information available for selected filters')
+        ).toBeInTheDocument();
+      });
+
+      it('should handle undefined/null filter values gracefully', () => {
+        const columnFilters = [
+          { id: 'department', value: undefined },
+          { id: 'status', value: null },
+          { id: 'name', value: [] },
+        ];
+
+        render(
+          <Table
+            data={testData}
+            columns={testColumns}
+            state={{
+              globalFilter: '',
+              columnFilters,
+            }}
+          />,
+          buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+        );
+
+        expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
+      });
+    });
   });
 });

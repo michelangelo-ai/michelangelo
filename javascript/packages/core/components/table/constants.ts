@@ -34,6 +34,7 @@ export const MULTI_COLUMN_DATA_JOIN_STRING = '__JOIN__';
 
 export const TABLE_STATE_DEFAULTS: TableState = {
   globalFilter: '',
+  columnFilters: [],
 } as const;
 
 export const TABLE_LOCAL_STORAGE_KEY = 'ma-studio-table-settings';

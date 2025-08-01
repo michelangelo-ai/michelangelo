@@ -30,6 +30,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     initialState,
     ...(Object.keys(state).length > 0 && { state }),
     ...(state.setGlobalFilter ? { onGlobalFilterChange: state.setGlobalFilter } : {}),
+    ...(state.setColumnFilters ? { onColumnFiltersChange: state.setColumnFilters } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     globalFilterFn: 'includesString',
@@ -39,7 +40,9 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     dataLength: props.data.length,
     error: props.error,
     loading: props.loading,
-    hasFiltersApplied: (table.getState().globalFilter as string)?.length > 0,
+    hasFiltersApplied:
+      (table.getState().globalFilter as string)?.length > 0 ||
+      (table.getState().columnFilters?.length ?? 0) > 0,
     filteredLength: table.getFilteredRowModel().rows.length,
   });
 
@@ -59,7 +62,12 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
 
         {viewState === 'filtered-empty' && (
-          <TableNoResultsState clearFilters={() => table.setGlobalFilter('')} />
+          <TableNoResultsState
+            clearFilters={() => {
+              table.setGlobalFilter('');
+              table.setColumnFilters([]);
+            }}
+          />
         )}
 
         {viewState !== 'error' && (

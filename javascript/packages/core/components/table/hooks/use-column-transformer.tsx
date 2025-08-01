@@ -1,10 +1,12 @@
 import { ReactNode, useMemo } from 'react';
 import { CellContext } from '@tanstack/react-table';
 
+import { useFilterFactory } from '../components/filter/use-filter-factory';
 import { TableCell } from '../components/table-cell/table-cell';
 import { normalizeColumnAccessor } from '../utils/normalize-column-accessor';
 
 import type { AccessorFn } from '#core/types/common/studio-types';
+import type { TableFilterFn } from '../components/filter/types';
 import type { ColumnConfig } from '../types/column-types';
 import type { TableData } from '../types/data-types';
 
@@ -31,9 +33,14 @@ export function useColumnTransformer<T extends TableData = TableData>(
   accessorFn: AccessorFn<T>;
   meta: ColumnConfig<T>;
   cell: (props: CellContext<T, unknown>) => ReactNode;
+  filterFn?: TableFilterFn<T, unknown[]>;
 }[] {
+  const createFilter = useFilterFactory<T>();
+
   return useMemo(() => {
     return columns.map((column: ColumnConfig<T>) => {
+      const filterHook = createFilter(column);
+
       return {
         id: column.id,
         meta: column,
@@ -46,7 +53,8 @@ export function useColumnTransformer<T extends TableData = TableData>(
             value={props.getValue()}
           />
         ),
+        filterFn: filterHook.buildTableFilterFn(),
       };
     });
-  }, [columns]);
+  }, [columns, createFilter]);
 }
