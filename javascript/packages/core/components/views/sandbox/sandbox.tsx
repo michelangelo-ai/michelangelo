@@ -34,6 +34,7 @@ const executionSchema: ExecutionDetailViewSchema = {
   },
   tasks: {
     accessor: 'status.steps',
+    subTasksAccessor: 'subSteps',
     header: {
       heading: 'displayName',
     },
