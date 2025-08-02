@@ -1,3 +1,11 @@
+import React from 'react';
+import { useStyletron } from 'baseui';
+
+import { ErrorView } from '#core/components/error-view/error-view';
+import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
+import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
+import { TaskList } from './components/task-list';
+import { TaskSeparator } from './styled-components';
 import { buildMatrix } from './utils/build-matrix';
 import { buildTaskList } from './utils/build-task-list';
 
@@ -8,32 +16,39 @@ export function Execution<
   TTaskRecord extends object = object,
 >(props: { schema: ExecutionDetailViewSchema<TData, TTaskRecord>; data: TData }) {
   const { schema, data } = props;
+  const [css, theme] = useStyletron();
   const taskList = buildTaskList(schema, data);
 
   if (!taskList.length) {
     return (
-      <div>
-        <h3>{schema.emptyState.title}</h3>
-        {schema.emptyState.description && <p>{schema.emptyState.description}</p>}
-      </div>
+      <ErrorView
+        illustration={
+          <CircleExclamationMark
+            height="64px"
+            width="64px"
+            kind={CircleExclamationMarkKind.PRIMARY}
+          />
+        }
+        title={schema.emptyState.title}
+        description={schema.emptyState.description}
+      />
     );
   }
 
-  // TODO: Implement the styled execution view
   const matrix = buildMatrix(taskList);
 
   return (
-    <div>
+    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
       <div>
         <h3>Overview</h3>
-        <div>
+        <div
+          className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
+        >
           {matrix.map((item, index) => (
-            <div key={index}>
-              <h4>Task Matrix level {index}</h4>
-              {item.taskList.map((task, index) => (
-                <div key={index}>{task.name}</div>
-              ))}
-            </div>
+            <React.Fragment key={index}>
+              {index > 0 && <TaskSeparator />}
+              <TaskList taskList={item.taskList} />
+            </React.Fragment>
           ))}
         </div>
       </div>
