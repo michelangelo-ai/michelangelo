@@ -1,6 +1,14 @@
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TASK_STATE } from './constants';
 
+export type TaskState = (typeof TASK_STATE)[keyof typeof TASK_STATE];
+
+export type StateStyleConfig = {
+  borderColorName: string;
+  backgroundColorName?: string;
+  colorName?: string;
+};
+
 /**
  * Configuration schema for rendering execution views that display hierarchical task lists.
  * Used to transform raw execution data into structured task representations with state tracking.
@@ -127,8 +135,6 @@ export type ExecutionDetailViewSchema<
     ) => TaskState;
   };
 };
-
-export type TaskState = (typeof TASK_STATE)[keyof typeof TASK_STATE];
 
 /**
  * Processed task representation with standardized properties and hierarchy.

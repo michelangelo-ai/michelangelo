@@ -69,6 +69,47 @@
 
 ---
 
+## Styled Components Guidelines
+
+### Styling Approach Strategy
+
+**Follow BaseUI's philosophy: Start with `useStyletron`, extract when needed.**
+
+#### When to Use Each Approach
+
+**1. useStyletron (Inline Styles) - Start Here**
+
+```typescript
+const [css, theme] = useStyletron();
+
+// Simple layouts and basic styling
+<div className={css({ display: 'flex', gap: theme.sizing.scale400 })}>
+<div className={css({ padding: theme.sizing.scale600 })}>
+```
+
+**2. styled() - Extract When Complex**
+
+```typescript
+export const TaskSeparator = styled('div', ({ $theme }) => ({
+  height: '1px',
+  backgroundColor: $theme.colors.borderOpaque,
+  margin: `${$theme.sizing.scale600} 0`,
+}));
+```
+
+#### Decision Criteria for Extraction
+
+**Extract to styled component when you find:**
+
+1. **Complex Multi-Property Styling** (4+ CSS properties, computed values, pseudo-selectors)
+2. **Pattern Reuse** (Used in 2+ places, clear semantic meaning)
+3. **JSX Readability** (Inline styles would make JSX hard to read)
+
+#### Naming Conventions
+
+**❌ Avoid Generic Names:** `Container`, `Card`, `Wrapper` (cause collisions)
+**✅ Use Semantic Names:** `TaskSeparator`, `ExecutionMatrix`, `PipelineHeader`
+
 ## Testing Guidelines
 
 ### What to Test
