@@ -31,7 +31,7 @@ const (
 var Module = fx.Options(
 	fx.Provide(
 		parseConfig,
-		getWebhookClientConfig,
+		getWebhookConversion,
 	),
 	fx.Invoke(StartWebhookServer),
 )
@@ -71,8 +71,8 @@ func parseConfig(provider config.Provider) (*Configuration, error) {
 	return &conf, nil
 }
 
-// getWebhookClientConfig returns the k8s WebhookClientConfig for the webhook server.
-func getWebhookClientConfig(params Params) (*apiextv1.WebhookClientConfig, error) {
+// getWebhookConversion returns the k8s WebhookConversion for the webhook server.
+func getWebhookConversion(params Params) (*apiextv1.WebhookConversion, error) {
 	url := params.Config.URL + "/convert"
 	// read the ca.crt file from the cert dir
 	caCertPath := filepath.Join(params.Config.CertDir, "ca.crt")
@@ -80,9 +80,12 @@ func getWebhookClientConfig(params Params) (*apiextv1.WebhookClientConfig, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to read CA certificate from %s: %w", caCertPath, err)
 	}
-	return &apiextv1.WebhookClientConfig{
-		URL:      &url,
-		CABundle: caCert,
+	return &apiextv1.WebhookConversion{
+		ClientConfig: &apiextv1.WebhookClientConfig{
+			URL:      &url,
+			CABundle: caCert,
+		},
+		ConversionReviewVersions: []string{"v1", "v1beta1"},
 	}, nil
 }
 

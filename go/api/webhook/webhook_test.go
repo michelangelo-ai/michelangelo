@@ -184,10 +184,12 @@ webhook:
 			func() tally.Scope { return tally.NoopScope },
 		),
 		Module,
-		fx.Invoke(func(clientConfig *apiextv1.WebhookClientConfig) {
-			require.NotNil(t, clientConfig)
-			assert.Equal(t, "https://my.webhook.url/convert", *clientConfig.URL)
-			require.NotEmpty(t, clientConfig.CABundle)
+		fx.Invoke(func(webhookConversion *apiextv1.WebhookConversion) {
+			require.NotNil(t, webhookConversion)
+			require.NotNil(t, webhookConversion.ClientConfig)
+			assert.Equal(t, "https://my.webhook.url/convert", *webhookConversion.ClientConfig.URL)
+			require.NotEmpty(t, webhookConversion.ClientConfig.CABundle)
+			assert.Equal(t, []string{"v1", "v1beta1"}, webhookConversion.ConversionReviewVersions)
 		}),
 	)
 
@@ -195,7 +197,7 @@ webhook:
 	testApp.RequireStop()
 }
 
-func TestGetWebhookClientConfig_FileReadError(t *testing.T) {
+func TestGetWebhookConversion_FileReadError(t *testing.T) {
 	t.Parallel()
 
 	emptyDir := t.TempDir()
@@ -205,7 +207,7 @@ func TestGetWebhookClientConfig_FileReadError(t *testing.T) {
 		URL:     "https://my-test-url.com",
 	})
 
-	_, err := getWebhookClientConfig(params)
+	_, err := getWebhookConversion(params)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "failed to read CA certificate")
 }
