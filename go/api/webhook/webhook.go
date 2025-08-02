@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/uber-go/tally"
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -55,10 +54,9 @@ type Configuration struct {
 type Params struct {
 	fx.In
 
-	Config  *Configuration
-	Scheme  *runtime.Scheme
-	Logger  *zap.Logger
-	Metrics tally.Scope
+	Config *Configuration
+	Scheme *runtime.Scheme
+	Logger *zap.Logger
 }
 
 // parseConfig parses the webhook server configuration.

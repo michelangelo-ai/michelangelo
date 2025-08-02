@@ -22,10 +22,9 @@ import (
 // newTestParams creates a new Params for testing.
 func newTestParams(t *testing.T, cfg *Configuration) Params {
 	return Params{
-		Config:  cfg,
-		Scheme:  runtime.NewScheme(),
-		Logger:  zaptest.NewLogger(t),
-		Metrics: tally.NoopScope,
+		Config: cfg,
+		Scheme: runtime.NewScheme(),
+		Logger: zaptest.NewLogger(t),
 	}
 }
 
