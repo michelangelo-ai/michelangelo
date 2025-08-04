@@ -93,6 +93,8 @@ def spark_task(
                 start_time_formated_str=start_time_formated_str,
                 retry_attempt_id=retry_attempt_id,
                 total_retry_attempt=total_retry_attempt,
+                args=args,
+                kwargs=kwargs,
             )
 
             retryable = process_terminated_spark_job(
@@ -190,7 +192,7 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     return retryable
 
-def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt, args, kwargs):
 
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
 
@@ -212,7 +214,8 @@ def execute_spark_task(namespace, task_name, task_path, start_time_formated_str,
         },
         "spec": {
             "pipeline": pipeline,
-            "mainApplicationFile": main_application_file,
+            "mainApplicationFile": "s3://chimera-mlpipeline/artifact/cauldron-test/svc.aip.chimeratest/pipelines/uniflow-poc/michelangelo/uniflow/core/run_task.py",
+            "arguments": ["--task", task_path, "--args", args, "--kwargs", kwargs, "--result-url", get_result_url()]
         },
     }
 
