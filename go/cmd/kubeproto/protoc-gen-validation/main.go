@@ -20,9 +20,23 @@ import (
 )
 
 var validateFuncTmp = template.Must(template.New("validateFunc").Parse(`
+// {{.TypeName}}ValidateExt is an extension hook for additional validation logic
+var {{.TypeName}}ValidateExt func(*{{.TypeName}}) error
+
 func (this *{{.TypeName}}) Validate(prefix string) error {
 {{.ValidateLogic}}
+	// Call extension validation if registered
+	if {{.TypeName}}ValidateExt != nil {
+		if err := {{.TypeName}}ValidateExt(this); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// Register{{.TypeName}}ValidateExt registers an extension validation function
+func Register{{.TypeName}}ValidateExt(f func(*{{.TypeName}}) error) {
+	{{.TypeName}}ValidateExt = f
 }`))
 
 var validateFieldTmp = template.Must(template.New("validateField").Parse(`
