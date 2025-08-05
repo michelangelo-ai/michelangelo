@@ -161,7 +161,6 @@ class CRD:
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
                 request_serializer=input_class.SerializeToString,
@@ -172,7 +171,6 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
             return response
 
         delete_func.__signature__ = delete_func_signature  # type: ignore[attr-defined]
@@ -211,7 +209,6 @@ class CRD:
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
                 request_serializer=input_class.SerializeToString,
@@ -222,7 +219,6 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
             return response
 
         get_func.__signature__ = get_func_signature  # type: ignore[attr-defined]
@@ -259,7 +255,6 @@ class CRD:
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
                 request_serializer=input_class.SerializeToString,
@@ -270,7 +265,6 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
             return response
 
         apply_func.__signature__ = apply_func_signature  # type: ignore[attr-defined]
@@ -291,8 +285,6 @@ class CRD:
 
         @bind_signature(create_func_signature)
         def create_func(bound_args: Signature) -> Message:
-            _LOG.info("Start create_func for %r", self.full_name)
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
             request_input = read_yaml_to_crd_request(
@@ -303,7 +295,6 @@ class CRD:
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
                 request_serializer=input_class.SerializeToString,
@@ -314,7 +305,6 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
             return response
 
         create_func.__signature__ = create_func_signature  # type: ignore[attr-defined]
@@ -375,7 +365,6 @@ class CRD:
             )
 
             method_fullname = f"/{self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
                 request_serializer=input_class.SerializeToString,
@@ -386,7 +375,6 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
             return response
 
         list_func.__signature__ = list_func_signature  # type: ignore[attr-defined]
@@ -762,9 +750,7 @@ def main(channel: Channel):
     """
     user_command_crd, user_command_action, kwargs = handle_args()
 
-    print("Starting mactl...")
     services = list_services(channel)
-    _LOG.info("Got %d services: %r", len(services), services)
 
     crds = create_serivce_classes(services)
 
@@ -785,8 +771,13 @@ def main(channel: Channel):
     func_action = getattr(crds[user_command_crd], user_command_action)
     result = func_action(**kwargs)
 
-    print("Result of action:", type(result))
-    print(result)
+    # Convert protobuf response to clean JSON output
+    from google.protobuf.json_format import MessageToJson
+    import json
+    
+    # Convert to JSON and pretty print
+    json_output = MessageToJson(result, indent=2)
+    print(json_output)
 
 
 if __name__ == "__main__":

@@ -18,8 +18,11 @@ import yaml
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT
 from michelangelo.uniflow.registration import register
 from michelangelo.uniflow.registration.config_builder import ConfigBuilder
+from michelangelo.uniflow.registration.register import prepare_uniflow_input
 
 _logger = logging.getLogger(__name__)
+
+
 
 
 def discover_workflow_from_config(config_file_path: str):
@@ -112,37 +115,44 @@ def main():
         _logger.info("Reading pipeline configuration: %s", args.config_file)
         workflow_fn = discover_workflow_from_config(args.config_file)
 
-        # Create ConfigBuilder to extract workflow arguments
-        _logger.info("Analyzing workflow function for argument extraction")
-        config_builder = ConfigBuilder(workflow_fn)
+        # Create ConfigBuilder to extract workflow configuration
+        _logger.info("Creating ConfigBuilder for workflow configuration")
+        with ConfigBuilder.from_config_file(args.config_file) as config_builder:
+            # Execute registration in user's environment
+            remote_path = register(
+                fn=workflow_fn,
+                project=args.project,
+                pipeline=args.pipeline,
+                output_dir=args.output_dir,
+                storage_url=args.storage_url,
+                output_filename=args.output_filename,
+                environ=json.loads(args.environ) if args.environ else {},
+                args=json.loads(args.args) if args.args else [],
+                kwargs=json.loads(args.kwargs) if args.kwargs else {},
+            )
 
-        # Get workflow arguments from function analysis
-        workflow_args = config_builder.get_workflow_args()
-        workflow_kwargs = config_builder.get_workflow_kwargs()
-        workflow_environ = config_builder.get_workflow_environ()
-
-        # Override with any provided arguments (command line takes precedence)
-        final_environ = json.loads(args.environ) if args.environ else workflow_environ
-        final_args = json.loads(args.args) if args.args else workflow_args
-        final_kwargs = json.loads(args.kwargs) if args.kwargs else workflow_kwargs
-
-        _logger.info("Starting registration process with extracted arguments")
-        _logger.info("Final args: %s", final_args)
-        _logger.info("Final kwargs: %s", final_kwargs)
-        _logger.info("Final environ: %s", final_environ)
-
-        # Execute registration in user's environment
-        remote_path = register(
-            fn=workflow_fn,
-            project=args.project,
-            pipeline=args.pipeline,
-            output_dir=args.output_dir,
-            storage_url=args.storage_url,
-            output_filename=args.output_filename,
-            environ=final_environ,
-            args=final_args,
-            kwargs=final_kwargs,
-        )
+            # Generate workflow config JSON for manifest content using legacy format
+            # For bert_cola example, use the environment variables from the workflow context
+            workflow_environ = {
+                "DATA_SIZE": "10",
+                "UF_PLUGIN_RAY_USE_FSSPEC": "0", 
+                "PYTORCH_MPS_HIGH_WATERMARK_RATIO": "0",
+                "MA_NAMESPACE": "default",
+                "IMAGE_PULL_POLICY": "Never",
+                "S3_ALLOW_BUCKET_CREATION": "True"
+            }
+            
+            # Merge with any provided environ (provided takes precedence)
+            final_environ = workflow_environ.copy()
+            if args.environ:
+                final_environ.update(json.loads(args.environ))
+            
+            prepare_uniflow_input(
+                json.loads(args.args) if args.args else [],
+                json.loads(args.kwargs) if args.kwargs else {},
+                final_environ,
+                args.output_dir
+            )
 
         _logger.info("Registration completed successfully")
         _logger.info("Remote tarball path: %s", remote_path)
