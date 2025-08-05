@@ -1,9 +1,15 @@
 import type { ReactNode } from 'react';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { ColumnFilter } from '#core/components/table/types/table-types';
 
 export interface TableActionBarProps<T extends TableData = TableData> {
   globalFilter: string;
   setGlobalFilter: (value: string) => void;
+  columnFilters: ColumnFilter[];
+  setColumnFilters: (filters: ColumnFilter[]) => void;
+  columns: ColumnConfig<T>[];
+  preFilteredRows: Array<{ getValue: (columnId: string) => unknown }>;
   configuration: TableActionBarConfig;
   filterableColumns?: FilterableColumn<T>[];
 }

@@ -5,6 +5,7 @@ import CheckCircle from '@mui/icons-material/CheckCircle';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import Info from '@mui/icons-material/Info';
+import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
 
@@ -13,6 +14,7 @@ import { createMuiIconAdapter } from './mui-icon-adapter';
 export const ICONS = {
   arrowCircular: createMuiIconAdapter(AutorenewIcon),
   arrowLaunch: createMuiIconAdapter(Launch),
+  arrowLeft: createMuiIconAdapter(KeyboardBackspaceIcon),
   chevronRight: createMuiIconAdapter(ChevronRightIcon),
   circleI: createMuiIconAdapter(Info),
   circleX: createMuiIconAdapter(CancelIcon),

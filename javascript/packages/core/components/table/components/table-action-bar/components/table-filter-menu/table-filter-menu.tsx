@@ -10,7 +10,7 @@ import type { TableData } from '#core/components/table/types/data-types';
 import type { TableFilterMenuProps } from './types';
 
 export function TableFilterMenu<T extends TableData = TableData>(props: TableFilterMenuProps<T>) {
-  const { filterableColumns } = props;
+  const { filterableColumns, columnFilters, setColumnFilters, preFilteredRows } = props;
 
   const [selectedColumn, setSelectedColumn] = useState<FilterableColumn<T> | undefined>();
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
@@ -34,18 +34,25 @@ export function TableFilterMenu<T extends TableData = TableData>(props: TableFil
           },
         },
       }}
-      content={
+      content={({ close }) => (
         <TableFilterMenuContent
+          columnFilters={columnFilters}
           filterableColumns={filterableColumns}
+          onClose={() => {
+            handleMenuClose();
+            close();
+          }}
+          preFilteredRows={preFilteredRows}
           selectedColumn={selectedColumn}
-          onColumnSelect={setSelectedColumn}
+          setColumnFilters={setColumnFilters}
+          setSelectedColumn={setSelectedColumn}
         />
-      }
+      )}
     >
       <Button
         shape={SHAPE.pill}
         size={SIZE.compact}
-        kind={isMenuOpen ? KIND.primary : KIND.secondary}
+        kind={isMenuOpen || columnFilters.length > 0 ? KIND.primary : KIND.secondary}
         startEnhancer={<Icon name="plus" size={16} />}
         overrides={{
           BaseButton: {

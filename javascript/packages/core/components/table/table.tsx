@@ -52,6 +52,10 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       <TableActionBar
         globalFilter={table.getState().globalFilter as string}
         setGlobalFilter={table.setGlobalFilter}
+        columnFilters={table.getState().columnFilters}
+        setColumnFilters={table.setColumnFilters}
+        columns={columns}
+        preFilteredRows={table.getPreFilteredRowModel().rows}
         configuration={props.actionBarConfig}
         filterableColumns={transformFilterableColumns(
           table.getHeaderGroups().flatMap((group) => group.headers)

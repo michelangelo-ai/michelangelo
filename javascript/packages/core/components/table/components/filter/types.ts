@@ -52,4 +52,7 @@ export enum FilterMode {
 export type ColumnFilterProps = {
   columnId: string;
   close: () => void;
+  getFilterValue: () => unknown;
+  setFilterValue: (value: unknown) => void;
+  preFilteredRows: Array<{ getValue: (columnId: string) => unknown }>;
 };
