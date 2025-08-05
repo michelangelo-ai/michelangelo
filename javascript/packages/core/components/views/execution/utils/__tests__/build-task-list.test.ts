@@ -1,13 +1,21 @@
-import { TASK_STATE } from '../../constants';
-import { createSchema, createTask } from '../__fixtures__/build-task-list-fixtures';
+import {
+  buildExecutionSchemaFactory,
+  buildTaskStepFactory,
+} from '#core/components/views/execution/__fixtures__/execution-schema-factory';
+import { TASK_STATE } from '#core/components/views/execution/constants';
 import { buildTaskList } from '../build-task-list';
 
 describe('buildTaskList', () => {
-  const mockSchema = createSchema();
+  const buildSchema = buildExecutionSchemaFactory();
+  const buildTask = buildTaskStepFactory();
+  const mockSchema = buildSchema({ tasks: { accessor: 'steps' } });
 
   it('should build task list from simple data structure', () => {
     const data = {
-      steps: [createTask('Task 1', 'SUCCEEDED'), createTask('Task 2', 'RUNNING')],
+      steps: [
+        buildTask({ displayName: 'Task 1', state: 'SUCCEEDED' }),
+        buildTask({ displayName: 'Task 2', state: 'RUNNING' }),
+      ],
     };
 
     const result = buildTaskList(mockSchema, data);
@@ -69,7 +77,7 @@ describe('buildTaskList', () => {
   });
 
   it('should handle function accessor for task heading', () => {
-    const schemaWithFunctionAccessor = createSchema({
+    const schemaWithFunctionAccessor = buildSchema({
       tasks: {
         accessor: (data: { steps: object[] }) => data.steps,
         header: {
@@ -79,7 +87,14 @@ describe('buildTaskList', () => {
     });
 
     const data = {
-      steps: [createTask('build-task', 'SUCCEEDED', [], { name: 'build-task' })],
+      steps: [
+        buildTask({
+          displayName: 'build-task',
+          state: 'SUCCEEDED',
+          subSteps: [],
+          name: 'build-task',
+        }),
+      ],
     };
 
     expect(buildTaskList(schemaWithFunctionAccessor, data)[0].name).toBe('Custom: build-task');
@@ -100,9 +115,10 @@ describe('buildTaskList', () => {
   });
 
   it('should handle missing subTasksAccessor gracefully', () => {
-    const schemaWithoutSubTasks = createSchema({
+    const schemaWithoutSubTasks = buildSchema({
       tasks: {
-        // @ts-expect-error null ensures merging overrides default subTasksAccessor provided by createSchema
+        accessor: 'steps',
+        // @ts-expect-error null ensures merging overrides default subTasksAccessor provided by buildSchema
         subTasksAccessor: null,
       },
     });
@@ -139,8 +155,9 @@ describe('buildTaskList', () => {
   });
 
   it('should mark last task as focused when all others are success/skipped', () => {
-    const schemaWithSkipped = createSchema({
+    const schemaWithSkipped = buildSchema({
       tasks: {
+        accessor: 'steps',
         stateBuilder: (record: { state: string }) => {
           switch (record.state) {
             case 'SUCCEEDED':
