@@ -17,7 +17,7 @@ from . import subprocess
 
 __all__ = [
     "register",
-    "main", 
+    "main",
     "prepare_uniflow_input",
     "UniflowTarBuilder",
     "prepare_uniflow_tar",
