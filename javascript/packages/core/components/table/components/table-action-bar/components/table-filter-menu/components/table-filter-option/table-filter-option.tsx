@@ -5,7 +5,7 @@ import type { TableFilterOptionProps } from './types';
 
 export function TableFilterOption({ label, onClick }: TableFilterOptionProps) {
   return (
-    <FilterOptionItem onClick={onClick}>
+    <FilterOptionItem onClick={onClick} data-testid={`filter-option-${label}`}>
       {label}
       <Icon name="chevronRight" size={20} />
     </FilterOptionItem>

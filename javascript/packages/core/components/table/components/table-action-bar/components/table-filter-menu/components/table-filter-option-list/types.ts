@@ -3,5 +3,5 @@ import type { TableData } from '#core/components/table/types/data-types';
 
 export interface TableFilterOptionListProps<T extends TableData = TableData> {
   filterableColumns: FilterableColumn<T>[];
-  onColumnSelect: (column: FilterableColumn<T>) => void;
+  setSelectedColumn: (column: FilterableColumn<T>) => void;
 }

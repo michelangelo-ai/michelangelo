@@ -8,7 +8,7 @@ import type { TableFilterOptionListProps } from './types';
 
 export function TableFilterOptionList<T extends TableData = TableData>({
   filterableColumns,
-  onColumnSelect,
+  setSelectedColumn,
 }: TableFilterOptionListProps<T>) {
   const [css, theme] = useStyletron();
 
@@ -38,7 +38,7 @@ export function TableFilterOptionList<T extends TableData = TableData>({
           <TableFilterOption
             key={column.id}
             label={column.title}
-            onClick={() => onColumnSelect(column)}
+            onClick={() => setSelectedColumn(column)}
           />
         ))}
       </ListContainer>

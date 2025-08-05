@@ -7,6 +7,9 @@ import type { TableActionBarProps } from './types';
 export function TableActionBar<T>({
   globalFilter,
   setGlobalFilter,
+  columnFilters,
+  setColumnFilters,
+  preFilteredRows,
   configuration,
   filterableColumns = [],
 }: TableActionBarProps<T>) {
@@ -18,7 +21,12 @@ export function TableActionBar<T>({
         )}
 
         {configuration.enableFilters && filterableColumns.length > 0 && (
-          <TableFilterMenu filterableColumns={filterableColumns} />
+          <TableFilterMenu
+            filterableColumns={filterableColumns}
+            columnFilters={columnFilters}
+            setColumnFilters={setColumnFilters}
+            preFilteredRows={preFilteredRows}
+          />
         )}
 
         {configuration.middle}
