@@ -17,6 +17,7 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
+import "google/protobuf/any.proto";
 import "michelangelo/api/options.proto";
 
 // Defines the Git Commit Info
@@ -30,4 +31,7 @@ message CommitInfo {
 
   // Git branch name
   string branch = 2 [(michelangelo.api.validation) = {required: true}];
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }

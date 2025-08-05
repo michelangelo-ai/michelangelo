@@ -10,6 +10,8 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
+import "google/protobuf/any.proto";
+
 // DataSchema represents a schema definition for structured data.
 // It contains an ordered list of schema items that define the fields,
 // their names, and data types. The schema is used to:
@@ -20,6 +22,9 @@ option go_package = "v2";
 // - Support data serialization/deserialization
 message DataSchema {
   repeated DataSchemaItem schema_items = 1;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // DataSchemaItem represents a single field in a data schema.
@@ -44,6 +49,9 @@ message DataSchemaItem {
 
   // The shape of the data, e.g. [1, 2] indicates the shape is a 2D array with shape (1, 2)
   repeated int32 shape = 3;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // DataType enumerates the supported data types for schema fields.

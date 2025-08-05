@@ -17,6 +17,8 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
+import "google/protobuf/any.proto";
+
 // UserInfo defines information about a user who initiates workloads:
 // - name: LDAP username for authentication and identification
 // - proxy_user: Optional proxy user for delegated execution
@@ -40,4 +42,7 @@ message UserInfo {
   // For example, a service account like "training-service" can run pipelines as other users.
   // This enables automated workflows while maintaining proper ownership attribution.
   string proxy_user = 2;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
