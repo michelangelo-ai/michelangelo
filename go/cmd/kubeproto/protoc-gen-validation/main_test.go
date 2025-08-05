@@ -32,9 +32,27 @@ func TestGen(t *testing.T) {
 	_, err := decorator.Parse(goFile)
 	assert.NoError(t, err)
 
+	// Test that validation functions are generated
 	assert.True(t, strings.Contains(goFile, "func (this *ValidationMsg1) Validate(prefix string) error"))
 	assert.True(t, strings.Contains(goFile, "func (this *ValidationMsg2) Validate(prefix string) error"))
 	assert.True(t, strings.Contains(goFile, "func (this *ValidationMsg3) Validate(prefix string) error"))
+
+	// Test that extension variables are generated
+	assert.True(t, strings.Contains(goFile, "var ValidationMsg1ValidateExt func(*ValidationMsg1) error"))
+	assert.True(t, strings.Contains(goFile, "var ValidationMsg2ValidateExt func(*ValidationMsg2) error"))
+	assert.True(t, strings.Contains(goFile, "var ValidationMsg3ValidateExt func(*ValidationMsg3) error"))
+
+	// Test that extension calls are generated in validation functions
+	assert.True(t, strings.Contains(goFile, "if ValidationMsg1ValidateExt != nil {"))
+	assert.True(t, strings.Contains(goFile, "if err := ValidationMsg1ValidateExt(this); err != nil {"))
+	assert.True(t, strings.Contains(goFile, "if ValidationMsg2ValidateExt != nil {"))
+	assert.True(t, strings.Contains(goFile, "if err := ValidationMsg2ValidateExt(this); err != nil {"))
+
+	// Test that registration functions are generated
+	assert.True(t, strings.Contains(goFile, "func RegisterValidationMsg1ValidateExt(f func(*ValidationMsg1) error) {"))
+	assert.True(t, strings.Contains(goFile, "ValidationMsg1ValidateExt = f"))
+	assert.True(t, strings.Contains(goFile, "func RegisterValidationMsg2ValidateExt(f func(*ValidationMsg2) error) {"))
+	assert.True(t, strings.Contains(goFile, "ValidationMsg2ValidateExt = f"))
 }
 
 func TestNoDefault(t *testing.T) {
@@ -472,5 +490,208 @@ func TestOneof(t *testing.T) {
 		F4: 2,
 	}}
 	err = m.Validate("")
+	assert.NoError(t, err)
+}
+
+// Test extension functionality
+func TestValidationExtension(t *testing.T) {
+	// Test basic extension registration and execution
+	m1 := testpb.ValidationMsg1{
+		F1: 50,
+		F3: "test",
+		F4: testpb.E1_C,
+	}
+
+	// Should pass without extension
+	err := m1.Validate("")
+	assert.NoError(t, err)
+
+	// Register extension that always fails
+	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1) error {
+		return status.Error(codes.InvalidArgument, "extension validation failed")
+	})
+
+	// Should now fail due to extension
+	err = m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "extension validation failed"), err)
+
+	// Register extension that checks custom business logic
+	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1) error {
+		if msg.F1 > 75 {
+			return status.Error(codes.InvalidArgument, "f1 cannot exceed 75 in extension validation")
+		}
+		return nil
+	})
+
+	// Should pass with F1 = 50
+	err = m1.Validate("")
+	assert.NoError(t, err)
+
+	// Should fail with F1 = 80
+	m1.F1 = 80
+	err = m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "f1 cannot exceed 75 in extension validation"), err)
+
+	// Clear extension
+	testpb.RegisterValidationMsg1ValidateExt(nil)
+
+	// Should pass again without extension
+	err = m1.Validate("")
+	assert.NoError(t, err)
+}
+
+func TestValidationExtensionWithComplexMessage(t *testing.T) {
+	// Test extension with more complex message
+	m2 := testpb.ValidationMsg2{
+		F1:  3,
+		F3:  "test",
+		F4:  testpb.E1_B,
+		F5:  &testpb.ValidationMsg3{},
+		F6:  100,
+		F7:  0.5,
+		F9:  []int64{100, 200},
+		F10: []byte{'A'},
+	}
+
+	// Should pass built-in validation
+	err := m2.Validate("")
+	assert.NoError(t, err)
+
+	// Register extension that validates array contents
+	testpb.RegisterValidationMsg2ValidateExt(func(msg *testpb.ValidationMsg2) error {
+		if len(msg.F9) > 0 && msg.F9[0] < 50 {
+			return status.Error(codes.InvalidArgument, "first element of f9 must be >= 50")
+		}
+		return nil
+	})
+
+	// Should pass with current values
+	err = m2.Validate("")
+	assert.NoError(t, err)
+
+	// Should fail with small first element
+	m2.F9[0] = 25
+	err = m2.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "first element of f9 must be >= 50"), err)
+
+	// Clear extension
+	testpb.RegisterValidationMsg2ValidateExt(nil)
+}
+
+func TestMultipleValidationExtensions(t *testing.T) {
+	// Test that extensions work independently for different message types
+	m1 := testpb.ValidationMsg1{
+		F1: 50,
+		F3: "test",
+		F4: testpb.E1_C,
+	}
+
+	m3 := testpb.ValidationMsg3{}
+
+	// Register extensions for both types
+	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1) error {
+		if msg.F3 == "forbidden" {
+			return status.Error(codes.InvalidArgument, "f3 cannot be 'forbidden'")
+		}
+		return nil
+	})
+
+	testpb.RegisterValidationMsg3ValidateExt(func(msg *testpb.ValidationMsg3) error {
+		return status.Error(codes.InvalidArgument, "ValidationMsg3 extension always fails")
+	})
+
+	// m1 should pass
+	err := m1.Validate("")
+	assert.NoError(t, err)
+
+	// m3 should fail due to its extension
+	err = m3.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "ValidationMsg3 extension always fails"), err)
+
+	// m1 should fail when f3 is "forbidden"
+	m1.F3 = "forbidden"
+	err = m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "f3 cannot be 'forbidden'"), err)
+
+	// Clear extensions
+	testpb.RegisterValidationMsg1ValidateExt(nil)
+	testpb.RegisterValidationMsg3ValidateExt(nil)
+
+	// Both should pass now (m1 might still fail built-in validation, but not extension)
+	err = m3.Validate("")
+	assert.NoError(t, err)
+}
+
+func TestValidationExtensionErrorPropagation(t *testing.T) {
+	// Test that extension errors are properly propagated and don't interfere with built-in validation
+	m1 := testpb.ValidationMsg1{
+		F1: 5, // This will fail built-in validation (min is 10)
+		F3: "test",
+		F4: testpb.E1_C,
+	}
+
+	// Should fail built-in validation first
+	err := m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "f1 must be in the range [10,100]"), err)
+
+	// Register extension
+	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1) error {
+		return status.Error(codes.InvalidArgument, "extension validation error")
+	})
+
+	// Should still fail built-in validation first (extension not reached)
+	err = m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "f1 must be in the range [10,100]"), err)
+
+	// Fix built-in validation issue
+	m1.F1 = 50
+
+	// Now should fail extension validation
+	err = m1.Validate("")
+	assert.Error(t, err)
+	assert.Equal(t, status.Error(codes.InvalidArgument, "extension validation error"), err)
+
+	// Clear extension
+	testpb.RegisterValidationMsg1ValidateExt(nil)
+
+	// Should pass now
+	err = m1.Validate("")
+	assert.NoError(t, err)
+}
+
+func TestValidationExtensionNilSafety(t *testing.T) {
+	// Test that nil extensions are handled safely
+	m1 := testpb.ValidationMsg1{
+		F1: 50,
+		F3: "test",
+		F4: testpb.E1_C,
+	}
+
+	// Explicitly set extension to nil
+	testpb.RegisterValidationMsg1ValidateExt(nil)
+
+	// Should pass without issues
+	err := m1.Validate("")
+	assert.NoError(t, err)
+
+	// Register and then clear extension
+	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1) error {
+		return nil
+	})
+
+	err = m1.Validate("")
+	assert.NoError(t, err)
+
+	// Clear extension again
+	testpb.RegisterValidationMsg1ValidateExt(nil)
+
+	err = m1.Validate("")
 	assert.NoError(t, err)
 }
