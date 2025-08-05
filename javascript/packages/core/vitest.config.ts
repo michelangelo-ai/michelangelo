@@ -8,5 +8,8 @@ export default defineConfig({
     include: ['**/__tests__/**/*.{ts,tsx}'],
     setupFiles: ['./test-setup.ts'],
     silent: 'passed-only',
+    env: {
+      TZ: 'UTC', // Force UTC timezone for all tests
+    },
   },
 });

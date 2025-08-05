@@ -11,3 +11,15 @@ import '@testing-library/jest-dom';
 vi.stubGlobal('jest', {
   advanceTimersByTime: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
 });
+
+/**
+ * Force UTC timezone for all tests to prevent timezone-related test failures
+ * This ensures consistent behavior across different development and CI environments
+ */
+process.env.TZ = 'UTC';
+
+// Verify UTC is properly configured
+const timezoneOffset = new Date().getTimezoneOffset();
+if (timezoneOffset !== 0) {
+  console.warn(`⚠️  Expected UTC timezone but got offset: ${timezoneOffset} minutes`);
+}

@@ -540,6 +540,52 @@ describe('Table', () => {
     });
   });
 
+  describe('datetime filter integration', () => {
+    const mixedColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'createdAt', label: 'Created At', type: 'DATE' },
+      { id: 'department', label: 'Department' },
+    ];
+
+    const mixedTestData = [
+      { id: '1', name: 'Alice Johnson', createdAt: 1672531200, department: 'Engineering' }, // 2023-01-01
+      { id: '2', name: 'Bob Smith', createdAt: 1680307200, department: 'Marketing' }, // 2023-04-01
+    ];
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should open datetime filter for DATE columns', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table
+          data={mixedTestData}
+          columns={mixedColumns}
+          actionBarConfig={{ enableFilters: true }}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Open filter menu and select DATE column
+      await user.click(screen.getByRole('button', { name: 'Add filter' }));
+      await user.click(screen.getByTestId('filter-option-Created At'));
+
+      // Should open datetime filter (not categorical filter)
+      // DatetimeFilter should render with Apply button
+      expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument();
+
+      // Should not show categorical filter checkboxes
+      expect(screen.queryByLabelText('Engineering')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Marketing')).not.toBeInTheDocument();
+    });
+  });
+
   describe('state management integration', () => {
     const testData = [
       { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
