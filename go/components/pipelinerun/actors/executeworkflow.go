@@ -29,6 +29,19 @@ const (
 	WorkflowArgsKey            = "args"
 )
 
+// TaskProgress is the struct for the task progress queried from Uniflow Cadence Workflow
+type TaskProgress struct {
+	TaskPath       string `json:"task_path"`
+	TaskName       string `json:"task_name"`
+	TaskLog        string `json:"task_log"`
+	TaskMessage    string `json:"task_message"`
+	TaskState      string `json:"task_state"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Output         string `json:"output"`
+	RetryAttemptID string `json:"retry_attempt_id"`
+}
+
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -94,9 +107,19 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	switch workflowExecution.Status {
 	case clientInterfaces.WorkflowExecutionStatusRunning:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+		orderedStepInfo, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			return nil, err
+		}
+		executeWorkflowStep.SubSteps = orderedStepInfo
 	case clientInterfaces.WorkflowExecutionStatusCompleted:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		orderedStepInfo, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			return nil, err
+		}
+		executeWorkflowStep.SubSteps = orderedStepInfo
 		newCondition.Status = apipb.CONDITION_STATUS_TRUE
 	case clientInterfaces.WorkflowExecutionStatusFailed, clientInterfaces.WorkflowExecutionStatusTimedOut:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
@@ -215,4 +238,177 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
+}
+
+func updateUniflowStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+
+	// update pipelinerun step info
+	err := updatePipelineRunStepInfo(ctx, pipelineRun)
+	if err != nil {
+		log.Error(err, "Error updating PipelineRun Step Info")
+		return err
+	}
+
+	// update final status
+	err = updateFinalStatus(ctx, pipelineRun)
+	if err != nil {
+		log.Error(err, "Error update final status")
+		// do not return error here, we still want to update the substep status
+		// the GetWorkflowExecutionInfo might fail due to transient issue
+		// one example is when MA queries a passive cadecne domain, the workflow status is not fully replicated yet from active region to the passive region
+	}
+	return nil
+}
+
+func updatePipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	newStepInfoList, err := constructPipelineRunStepInfo(ctx, pipelineRun)
+	if err != nil {
+		return err
+	}
+	executeWorkflow := getStepInfoByName(maSharedContants.ExecuteWorkflowStepName, pipelineRun.Status.Steps)
+
+	if len(newStepInfoList) > 0 {
+		executeWorkflow.SubSteps = newStepInfoList
+	}
+	return nil
+}
+
+func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) ([]*v2.PipelineRunStepInfo, error) {
+	workflowID := pipelineRun.Status.WorkflowId
+	runID := pipelineRun.Status.WorkflowRunId
+	cadenceDomain := a.config.CadenceDomain
+	cadenceService := a.config.CadenceService
+	// check the workflow progress
+	workflowProgressStr := []string{}
+	// TODO: how does OSS pipeline run query the workflow progress?
+	err := a.workflowClient.QueryWorkflow(ctx, workflowID, cadenceDomain, cadenceService, runID, maSharedContants.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
+	if err != nil {
+		return []*v2.PipelineRunStepInfo{}, err
+	}
+	// construct the pipelineRunStepInfo
+	orderedStepInfo := []*v2.PipelineRunStepInfo{}
+	stepMap := make(map[string]*v2.PipelineRunStepInfo)
+	stepOrder := []string{}
+	for _, progress := range workflowProgressStr {
+		var taskProgress TaskProgress
+		err := json.Unmarshal([]byte(progress), &taskProgress)
+		if err != nil {
+			log.Error(fmt.Errorf("Can not parase progress string"), err.Error(), "progress", progress)
+			continue
+		}
+		taskName := taskProgress.TaskName
+		if taskName == "" {
+			log.Error(fmt.Errorf("taskName does not exist"), "taskName does not exist", "progress", progress)
+			continue
+		}
+		if _, existingTask := stepMap[taskName]; !existingTask {
+			stepOrder = append(stepOrder, taskName)
+			stepMap[taskName] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+			continue
+		}
+
+		// Merge the task progress into the existing step info
+		oldStepInfo := stepMap[taskName]
+		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
+	}
+
+	for _, stepName := range stepOrder {
+		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
+	}
+	log.Info("Ordered Step Info", "orderedStepInfo", orderedStepInfo)
+	return orderedStepInfo, nil
+}
+
+func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+
+	mergedStepInfo := proto.Clone(newStepInfo).(*v2.PipelineRunStepInfo)
+
+	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
+	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
+
+	// newStepInfo.AttemptIds is a list containiing the latest attempt id, example: ["5"]
+	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
+
+	// Our goal is:
+	// If the latest attempt ID ALREADY exists in the old step info, update the driver URL
+	// If the latest attempt ID DOES NOT exist in the old step info, append the new attempt ID and driver URL
+
+	if attempIDAlreadyExists(oldStepInfo, newStepInfo) {
+
+		mergedStepInfo.AttemptIds = oldStepInfo.AttemptIds
+
+		mergedStepInfo.Resources = oldStepInfo.Resources
+		mergedStepInfo.Resources[len(mergedStepInfo.Resources)-1] = newStepInfo.Resources[0]
+
+	} else { // If the new attempt ID does not exist in the old step info, append the new driver URL to the old step info
+		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
+		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
+	}
+
+	return mergedStepInfo
+}
+
+func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *v2.PipelineRunStepInfo {
+	stepInfo := &v2.PipelineRunStepInfo{}
+	stepInfo.Name = taskProgress.TaskPath
+	stepInfo.DisplayName = taskProgress.TaskName
+	stepInfo.LogUrl = taskProgress.TaskLog
+	if taskProgress.StartTime != "" {
+		// parse utc time str 2024-06-10 17:53:20 to time.Time
+		startTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.StartTime)
+		if err == nil {
+			stepInfo.StartTime = &pbtypes.Timestamp{Seconds: startTime.Unix()}
+		}
+	}
+
+	if taskProgress.EndTime != "" {
+		// parse utc time str 2024-06-10 17:53:20 to time.Time
+		endTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.EndTime)
+		if err == nil {
+			stepInfo.EndTime = &pbtypes.Timestamp{Seconds: endTime.Unix()}
+		}
+	}
+	if taskProgress.Output != "" {
+		stepInfo.StepCachedOutputs = &v2.PipelineRunStepCachedOutputs{
+			IntermediateVars: []*apipb.ResourceIdentifier{
+				{
+					Namespace: namespace,
+					Name:      taskProgress.Output,
+				},
+			},
+		}
+	}
+	switch taskProgress.TaskState {
+	case maSharedContants.UniflowTaskStateRunning:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+	case maSharedContants.UniflowTaskStateSucceeded:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
+	case maSharedContants.UniflowTaskStateFailed:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+		stepInfo.Message = taskProgress.TaskMessage
+	case maSharedContants.UniflowTaskStateKilled:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+		stepInfo.Message = taskProgress.TaskMessage
+	case maSharedContants.UniflowTaskStateSkipped:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SKIPPED
+	default:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
+	}
+
+	if taskProgress.RetryAttemptID != "" {
+		stepInfo.Resources = []*v2.PipelineRunResource{
+			&v2.PipelineRunResource{
+				Resource: &v2.PipelineRunResource_ExternalResource{
+					ExternalResource: &v2.ExternalResource{
+						Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),
+						Url:  taskProgress.TaskLog,
+					},
+				},
+			},
+		}
+		stepInfo.AttemptIds = []string{taskProgress.RetryAttemptID}
+	}
+
+	return stepInfo
 }

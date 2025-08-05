@@ -54,7 +54,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PIPELINERUNSTATUS'].fields_by_name['source_pipeline']._loaded_options = None
   _globals['_PIPELINERUNSTATUS'].fields_by_name['source_pipeline']._serialized_options = b'\340\350\002\001'
   _globals['_PIPELINERUNSTEPCACHEDOUTPUTS'].fields_by_name['intermediate_vars']._loaded_options = None
-  _globals['_PIPELINERUNSTEPCACHEDOUTPUTS'].fields_by_name['intermediate_vars']._serialized_options = b'\332\350\002$\n\"michelangelo.uber.com/CachedOutput'
+  _globals['_'].fields_by_name['intermediate_vars']._serialized_options = b'\332\350\002$\n\"michelangelo.uber.com/CachedOutput'
   _globals['_PIPELINERUNSTEPCACHEDOUTPUTS'].fields_by_name['checkpoints']._loaded_options = None
   _globals['_PIPELINERUNSTEPCACHEDOUTPUTS'].fields_by_name['checkpoints']._serialized_options = b'\332\350\002$\n\"michelangelo.uber.com/CachedOutput'
   _globals['_PIPELINERUNSTEPCACHEDOUTPUTS'].fields_by_name['raw_models']._loaded_options = None
