@@ -9,12 +9,7 @@ import logging
 import uuid
 from typing import Callable, Optional
 
-try:
-    import fsspec
-except ImportError:
-    raise ImportError(
-        "fsspec is required for uniflow registration. Install with: pip install fsspec"
-    )
+import fsspec
 
 from michelangelo.uniflow.core.build import build
 
