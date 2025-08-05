@@ -8,12 +8,12 @@ The module supports both direct registration (for development/testing) and
 subprocess-based registration (for production MaCTL usage with environment isolation).
 """
 
-from .register import register, main, prepare_uniflow_input
-from .uniflow_tar import UniflowTarBuilder, prepare_uniflow_tar
+from michelangelo.uniflow.registration.register import register, main, prepare_uniflow_input
+from michelangelo.uniflow.registration.uniflow_tar import UniflowTarBuilder, prepare_uniflow_tar
 
 # Subprocess module is available for import but not exposed in __all__
 # to maintain clean API surface while allowing MaCTL to access it
-from . import subprocess
+from michelangelo.uniflow.registration import subprocess
 
 __all__ = [
     "register",
