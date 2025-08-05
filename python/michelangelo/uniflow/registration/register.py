@@ -33,29 +33,29 @@ def main(args=None):
     """
     p = register_argument_parser()
     ns = p.parse_args(args=args).__dict__
-    
+
     # Extract and import the function
-    fn_path = ns.pop('fn')
+    fn_path = ns.pop("fn")
     fn = import_attribute(fn_path)
-    
+
     register(fn=fn, **ns)
 
 
 def prepare_uniflow_input(
-    args: Optional[tuple], 
-    kwargs: Optional[dict], 
-    environ: Optional[dict], 
-    output_dir: str
+    args: Optional[tuple],
+    kwargs: Optional[dict],
+    environ: Optional[dict],
+    output_dir: str,
 ):
     """
     Prepare uniflow input file for workflow registration and write it to the output directory.
-    
+
     This creates a JSON file containing the arguments, keyword arguments, and environment
     variables that will be passed to the workflow function during execution.
 
     Args:
         args: Positional arguments to pass to the function
-        kwargs: Keyword arguments to pass to the function  
+        kwargs: Keyword arguments to pass to the function
         environ: Environment variables to set during execution
         output_dir: Directory to write the input file
 
@@ -63,16 +63,12 @@ def prepare_uniflow_input(
         str: Path to the created input file
     """
     _kwargs = list(kwargs.items()) if kwargs else []
-    inputs = {
-        "args": args or (),
-        "kwargs": _kwargs,
-        "environ": environ or {}
-    }
+    inputs = {"args": args or (), "kwargs": _kwargs, "environ": environ or {}}
 
     inputs_path = os.path.join(output_dir, "uniflow_input.txt")
     with open(inputs_path, "w") as f:
         json.dump(inputs, f, default=encoder.default, indent=2)
-    
+
     _logger.info("Wrote uniflow input to: %s", inputs_path)
     return inputs_path
 
@@ -108,51 +104,33 @@ After registration, use mactl to create the pipeline:
   mactl pipeline create pipeline.yaml
         """,
     )
-    
+
     p.add_argument(
         "fn",
         type=str,
-        help="Fully qualified function name (e.g., 'my_module.my_function')"
+        help="Fully qualified function name (e.g., 'my_module.my_function')",
     )
-    p.add_argument(
-        "--project", 
-        required=True,
-        help="The project name"
-    )
-    p.add_argument(
-        "--pipeline", 
-        required=True,
-        help="The pipeline name"
-    )
+    p.add_argument("--project", required=True, help="The project name")
+    p.add_argument("--pipeline", required=True, help="The pipeline name")
     p.add_argument(
         "--output-dir",
         required=True,
-        help="Directory to write pipeline artifacts for mactl consumption"
+        help="Directory to write pipeline artifacts for mactl consumption",
     )
     p.add_argument(
         "--storage-url",
-        help="Storage URL for uploading tarballs (default: s3://default/uniflow)"
+        help="Storage URL for uploading tarballs (default: s3://default/uniflow)",
     )
     p.add_argument(
         "--output-filename",
-        help="Name of the tar path output file (default: uniflow_tar_path.txt)"
+        help="Name of the tar path output file (default: uniflow_tar_path.txt)",
     )
     p.add_argument(
-        "--environ",
-        type=json.loads,
-        help="Environment variables as JSON string"
+        "--environ", type=json.loads, help="Environment variables as JSON string"
     )
-    p.add_argument(
-        "--args", 
-        type=json.loads,
-        help="Positional arguments as JSON array"
-    )
-    p.add_argument(
-        "--kwargs",
-        type=json.loads, 
-        help="Keyword arguments as JSON object"
-    )
-    
+    p.add_argument("--args", type=json.loads, help="Positional arguments as JSON array")
+    p.add_argument("--kwargs", type=json.loads, help="Keyword arguments as JSON object")
+
     return p
 
 
@@ -195,7 +173,7 @@ def register(
     """
     if not fn:
         raise ValueError("Function (fn) is required")
-    
+
     # Set defaults
     environ = environ or {}
     args = args or ()

@@ -13,8 +13,7 @@ try:
     import fsspec
 except ImportError:
     raise ImportError(
-        "fsspec is required for uniflow registration. "
-        "Install with: pip install fsspec"
+        "fsspec is required for uniflow registration. Install with: pip install fsspec"
     )
 
 from michelangelo.uniflow.core.build import build
@@ -25,7 +24,7 @@ _logger = logging.getLogger(__name__)
 class UniflowTarBuilderImpl:
     """
     Storage-agnostic Uniflow tar builder implementation.
-    
+
     This class handles the core functionality of building Uniflow packages
     and uploading them to any fsspec-compatible storage backend.
     """
@@ -62,7 +61,9 @@ class UniflowTarBuilderImpl:
         """Generate a unique tar filename for this pipeline."""
         if self._tar_name is None:
             random_id = str(uuid.uuid4())[:8]
-            self._tar_name = f"{self.project_name}_{self.pipeline_name}_{random_id}.tar.gz"
+            self._tar_name = (
+                f"{self.project_name}_{self.pipeline_name}_{random_id}.tar.gz"
+            )
         return self._tar_name
 
     def get_tar_name(self) -> str:
