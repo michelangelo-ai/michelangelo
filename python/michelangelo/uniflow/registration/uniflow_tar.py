@@ -46,7 +46,7 @@ class UniflowTarBuilder:
 
         Args:
             project_name: Name of the project
-            pipeline_name: Name of the pipeline  
+            pipeline_name: Name of the pipeline
             workflow_function: Fully qualified function name
             workflow_function_obj: Optional callable workflow function object
             storage_base_url: Optional storage URL. Defaults to s3://default/uniflow
@@ -149,7 +149,9 @@ def prepare_uniflow_tar(
     os.makedirs(output_dir, exist_ok=True)
 
     # Use the filename from the builder (either provided or default)
-    actual_filename = output_filename if output_filename is not None else _UNIFLOW_TAR_PATH_FILENAME
+    actual_filename = (
+        output_filename if output_filename is not None else _UNIFLOW_TAR_PATH_FILENAME
+    )
     output_path = os.path.join(output_dir, actual_filename)
 
     # Write the remote path to file for mactl consumption
