@@ -15,7 +15,7 @@ from typing import Callable, Optional
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
 
-from .uniflow_tar import prepare_uniflow_tar
+from michelangelo.uniflow.registration.uniflow_tar import prepare_uniflow_tar
 
 _logger = logging.getLogger(__name__)
 

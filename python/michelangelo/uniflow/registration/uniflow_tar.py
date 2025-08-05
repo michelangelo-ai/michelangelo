@@ -10,7 +10,7 @@ import os
 from typing import Callable, Optional
 
 # Import the storage-agnostic implementation
-from .uniflow_tar_impl import UniflowTarBuilderImpl
+from michelangelo.uniflow.registration.uniflow_tar_impl import UniflowTarBuilderImpl
 
 # Check for s3fs availability
 try:
