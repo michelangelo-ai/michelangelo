@@ -58,6 +58,52 @@ export enum Phase {
   AgentMonitor = 'agent-monitor',
 }
 
+export interface PhaseEntityConfig {
+  /**
+   * Name of the entity as it appears within MA Studio. Should be plural, lower case
+   * version of the name.
+   *
+   * @example
+   * trained models
+   * pipelines
+   * feature consistency (intentionally not pluralized since this entity is never referred
+   *  to as "feature consistencies")
+   */
+  name: string;
+  /**
+   * Unique ID for entity within its phase, used in URL, should be plural form with
+   * no whitespace
+   *
+   * @example
+   * models
+   * pipelines
+   * feature-consistency
+   */
+  id: string;
+}
+
+/**
+ * Simplified phase configuration matching the original studio config structure
+ */
+export interface PhaseConfig {
+  /** Icon name from the application's icon provider system */
+  icon: string;
+  /**
+   * Display name for the phase
+   *
+   * @example
+   * "Prepare & Analyze Data"
+   * "Train & Evaluate"
+   */
+  name: string;
+  /** Optional descriptive text explaining what this phase does */
+  description?: string;
+  /** Optional URL to external documentation for this phase */
+  docUrl?: string;
+  /** List of entities (like pipelines, models) that belong to this phase */
+  entities: PhaseEntityConfig[];
+}
+
 /**
  * @description
  * Defines a way to access a specific property or value from an object.

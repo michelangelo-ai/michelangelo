@@ -8,6 +8,7 @@ import { useLocalStorageTableState } from '#core/components/table/plugins/state-
 import { Table } from '#core/components/table/table';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { PhaseCard } from './components/phase-list/phase-card';
 import {
   PIPELINE_CELL_CONFIG,
   PIPELINE_RUN_CELL_CONFIG,
@@ -101,6 +102,41 @@ export function ProjectDetail() {
       >
         <Row items={SHARED_PROJECT_CELL_CONFIG} record={data?.project} />
       </Box>
+
+      {/* Phase Card Demo */}
+      <div
+        className={css({
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: theme.sizing.scale600,
+        })}
+      >
+        <PhaseCard
+          icon="database"
+          name="Prepare & Analyze Data"
+          description="Create data pipelines and analyze your datasets"
+          docUrl="https://example.com/docs/data"
+          entities={[
+            { id: 'pipelines', name: 'pipelines' },
+            { id: 'datasources', name: 'data sources' },
+            { id: 'runs', name: 'runs' },
+          ]}
+        />
+
+        <PhaseCard
+          icon="chartLine"
+          name="Train & Evaluate"
+          description="Train machine learning models and evaluate their performance"
+          docUrl="https://example.com/docs/train"
+          entities={[
+            { id: 'pipelines', name: 'pipelines' },
+            { id: 'runs', name: 'runs' },
+            { id: 'models', name: 'trained models' },
+            { id: 'evaluations', name: 'evaluations' },
+            { id: 'notebooks', name: 'notebooks' },
+          ]}
+        />
+      </div>
 
       {/* Pipelines Section */}
       <Card
