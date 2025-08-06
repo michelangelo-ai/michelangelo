@@ -787,7 +787,7 @@ def main(channel: Channel):
 
     from google.protobuf.json_format import MessageToJson
     import json
-    
+
     # Convert to JSON and pretty print
     json_output = MessageToJson(result, indent=2)
     print(json_output)

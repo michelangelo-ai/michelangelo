@@ -256,53 +256,46 @@ def convert_crd_metadata_pipeline_create(
 
     # Add uniflow artifacts if registration succeeded
     if workflow_inputs is not None:
-        # Convert protobuf Struct back to dict 
+        # Convert protobuf Struct back to dict
         from google.protobuf.json_format import MessageToDict
+
         input_dict = MessageToDict(workflow_inputs)
-        
+
         # Create manifest content in the format expected by internal code
         # This matches the structure: value.fields.kwargs.list_value.values...
-        
+
         # Build kwargs structure
         kwargs_values = []
         for key, value in input_dict.get("kwargs", []):
-            kwargs_values.append({
-                "list_value": {
-                    "values": [
-                        {"string_value": str(key)},
-                        {"string_value": str(value)}
-                    ]
+            kwargs_values.append(
+                {
+                    "list_value": {
+                        "values": [
+                            {"string_value": str(key)},
+                            {"string_value": str(value)},
+                        ]
+                    }
                 }
-            })
-        
+            )
+
         # Build environ structure
         environ_fields = {}
         for key, value in input_dict.get("environ", {}).items():
             environ_fields[key] = {"string_value": str(value)}
-        
+
         # Build the full content structure matching internal format
         content_dict = {
             "@type": "type.googleapis.com/michelangelo.api.TypedStruct",
             "type_url": "type.googleapis.com/michelangelo.UniFlowConf",
             "value": {
                 "fields": {
-                    "args": {
-                        "list_value": {}
-                    },
-                    "environ": {
-                        "struct_value": {
-                            "fields": environ_fields
-                        }
-                    },
-                    "kwargs": {
-                        "list_value": {
-                            "values": kwargs_values
-                        }
-                    }
+                    "args": {"list_value": {}},
+                    "environ": {"struct_value": {"fields": environ_fields}},
+                    "kwargs": {"list_value": {"values": kwargs_values}},
                 }
-            }
+            },
         }
-        
+
         res["spec"]["manifest"]["content"] = content_dict
         _LOG.debug("Added content to spec manifest")
 
