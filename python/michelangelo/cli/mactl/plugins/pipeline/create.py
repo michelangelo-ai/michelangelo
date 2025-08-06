@@ -133,14 +133,7 @@ def get_pipeline_config_and_tar(
         input_file_path = tmp_path / _UNIFLOW_INPUT_FILENAME
         try:
             content = input_file_path.read_text()
-            # Write to a permanent location for inspection
-            debug_file = Path("/tmp/uniflow_input_debug.txt")
-            debug_file.write_text(content)
-            print(f"DEBUG: uniflow_input.txt content written to {debug_file}")
-            print(f"DEBUG: Raw content: {content}")
-
             input_data = json.loads(content)
-            print(f"DEBUG: Parsed data: {input_data}")
         except FileNotFoundError:
             raise RuntimeError(f"Could not read uniflow input from {input_file_path}")
         except json.JSONDecodeError as e:
@@ -263,35 +256,62 @@ def convert_crd_metadata_pipeline_create(
 
     # Add uniflow artifacts if registration succeeded
     if workflow_inputs is not None:
-        # Create the content field as a protobuf Any message containing the TypedStruct
-        # This matches the internal Go implementation pattern
-        typed_struct = TypedStruct()
-        typed_struct.type_url = "type.googleapis.com/michelangelo.UniFlowConf"
-        typed_struct.value.CopyFrom(workflow_inputs)
-
-        # Pack the TypedStruct into an Any message
-        content_any = Any()
-        content_any.Pack(typed_struct)
-
-        # Convert Any to dict with proper @type field
+        # Convert protobuf Struct back to dict 
         from google.protobuf.json_format import MessageToDict
-
-        content_dict = MessageToDict(content_any)
-
+        input_dict = MessageToDict(workflow_inputs)
+        
+        # Create manifest content in the format expected by internal code
+        # This matches the structure: value.fields.kwargs.list_value.values...
+        
+        # Build kwargs structure
+        kwargs_values = []
+        for key, value in input_dict.get("kwargs", []):
+            kwargs_values.append({
+                "list_value": {
+                    "values": [
+                        {"string_value": str(key)},
+                        {"string_value": str(value)}
+                    ]
+                }
+            })
+        
+        # Build environ structure
+        environ_fields = {}
+        for key, value in input_dict.get("environ", {}).items():
+            environ_fields[key] = {"string_value": str(value)}
+        
+        # Build the full content structure matching internal format
+        content_dict = {
+            "@type": "type.googleapis.com/michelangelo.api.TypedStruct",
+            "type_url": "type.googleapis.com/michelangelo.UniFlowConf",
+            "value": {
+                "fields": {
+                    "args": {
+                        "list_value": {}
+                    },
+                    "environ": {
+                        "struct_value": {
+                            "fields": environ_fields
+                        }
+                    },
+                    "kwargs": {
+                        "list_value": {
+                            "values": kwargs_values
+                        }
+                    }
+                }
+            }
+        }
+        
         res["spec"]["manifest"]["content"] = content_dict
-        _LOG.info(
-            "Added content to spec manifest with Any-wrapped TypedStruct: %s",
-            content_dict,
-        )
+        _LOG.debug("Added content to spec manifest")
 
     if uniflow_tar_path:
         res["spec"]["manifest"]["uniflowTar"] = uniflow_tar_path
-        _LOG.info("Added uniflow tar path to spec: %s", uniflow_tar_path)
 
         # Add workflow function name if available
         if workflow_function_name:
             res["spec"]["manifest"]["uniflowFunction"] = workflow_function_name
-            _LOG.info("Added uniflow function to spec: %s", workflow_function_name)
         else:
             # Fallback to module path if function name not available
             manifest_data = yaml_dict.get("spec", {}).get("manifest", {})
@@ -300,9 +320,6 @@ def convert_crd_metadata_pipeline_create(
             ) or manifest_data.get("filePath")
             if uniflow_function:
                 res["spec"]["manifest"]["uniflowFunction"] = uniflow_function
-                _LOG.info(
-                    "Added uniflow function (fallback) to spec: %s", uniflow_function
-                )
 
     _LOG.debug("Converted CRD metadata: %r", res)
     return res

@@ -785,8 +785,12 @@ def main(channel: Channel):
     func_action = getattr(crds[user_command_crd], user_command_action)
     result = func_action(**kwargs)
 
-    print("Result of action:", type(result))
-    print(result)
+    from google.protobuf.json_format import MessageToJson
+    import json
+    
+    # Convert to JSON and pretty print
+    json_output = MessageToJson(result, indent=2)
+    print(json_output)
 
 
 if __name__ == "__main__":
