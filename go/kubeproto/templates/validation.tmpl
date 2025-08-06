@@ -1,0 +1,18 @@
+ // {{.TypeNameLower}}ValidateExt is an extension hook for additional validation logic
+var {{.TypeNameLower}}ValidateExt func(*{{.TypeName}}, string) error
+
+func (this *{{.TypeName}}) Validate(prefix string) error {
+{{.ValidateLogic}}
+	// Call extension validation if registered
+	if {{.TypeNameLower}}ValidateExt != nil {
+		if err := {{.TypeNameLower}}ValidateExt(this, prefix); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Register{{.TypeName}}ValidateExt registers an extension validation function
+func Register{{.TypeName}}ValidateExt(f func(*{{.TypeName}}, string) error) {
+	{{.TypeNameLower}}ValidateExt = f
+}
