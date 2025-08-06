@@ -9,8 +9,6 @@ from uuid import uuid4
 from git import Repo
 from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
-from google.protobuf.any_pb2 import Any
-from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 from grpc import Channel
 
 from mactl import CRD

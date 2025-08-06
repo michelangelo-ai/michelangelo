@@ -8,9 +8,7 @@ extracting workflow functions, and serializing config data for pipeline manifest
 import inspect
 import json
 import logging
-import sys
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Any, Callable, Dict, Optional
 
 import yaml

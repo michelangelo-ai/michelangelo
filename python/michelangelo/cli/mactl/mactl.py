@@ -786,7 +786,6 @@ def main(channel: Channel):
     result = func_action(**kwargs)
 
     from google.protobuf.json_format import MessageToJson
-    import json
 
     # Convert to JSON and pretty print
     json_output = MessageToJson(result, indent=2)
