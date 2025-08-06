@@ -58,7 +58,12 @@ export function Execution<
         className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
       >
         {taskList.map((task, index) => (
-          <TaskDetails key={index} task={task} metadata={schema.tasks.header.metadata} />
+          <TaskDetails
+            key={index}
+            task={task}
+            metadata={schema.tasks.header.metadata}
+            bodySchema={schema.tasks.body}
+          />
         ))}
       </div>
     </div>
