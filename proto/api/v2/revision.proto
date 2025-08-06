@@ -54,7 +54,7 @@ message RevisionSpec {
   // the same resource type.
   michelangelo.api.ResourceIdentifier parent = 5 [
     (michelangelo.api.resource_reference) = {
-      type: "michelangelo.uber.com/Revision"
+      type: "michelangelo/Revision"
     }
   ];
 
@@ -77,6 +77,9 @@ message RevisionSpec {
 
   // Git commit of the revision if applicable, e.g. for Pipeline
   CommitInfo commit = 10;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Describes the state of a revision resource.
@@ -101,6 +104,9 @@ enum RevisionState {
 // Defines the status of a revision resource.
 message RevisionStatus {
   RevisionState state = 1;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Defines a revision resource that tracks the change history of a
