@@ -4,10 +4,10 @@ import { useStyletron } from 'baseui';
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
-import { TaskList } from './components/task-list';
+import { TaskFlow } from './components/task-flow';
 import { TaskSeparator } from './styled-components';
-import { buildMatrix } from './utils/build-matrix';
 import { buildTaskList } from './utils/build-task-list';
+import { buildTaskMatrix } from './utils/build-task-matrix';
 
 import type { ExecutionDetailViewSchema } from './types';
 
@@ -35,7 +35,7 @@ export function Execution<
     );
   }
 
-  const matrix = buildMatrix(taskList);
+  const matrix = buildTaskMatrix(taskList);
 
   return (
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
@@ -47,7 +47,7 @@ export function Execution<
           {matrix.map((item, index) => (
             <React.Fragment key={index}>
               {index > 0 && <TaskSeparator />}
-              <TaskList taskList={item.taskList} />
+              <TaskFlow taskList={item.taskList} />
             </React.Fragment>
           ))}
         </div>

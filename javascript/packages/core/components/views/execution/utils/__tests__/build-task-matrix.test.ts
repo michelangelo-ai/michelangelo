@@ -1,10 +1,10 @@
 import { TASK_STATE } from '../../constants';
-import { createTask } from '../__fixtures__/build-matrix-fixtures';
-import { buildMatrix } from '../build-matrix';
+import { createTask } from '../__fixtures__/build-task-matrix-fixtures';
+import { buildTaskMatrix } from '../build-task-matrix';
 
-describe('buildMatrix', () => {
+describe('buildTaskMatrix', () => {
   it('should return empty array for empty task list', () => {
-    const result = buildMatrix([]);
+    const result = buildTaskMatrix([]);
     expect(result).toEqual([]);
   });
 
@@ -15,7 +15,7 @@ describe('buildMatrix', () => {
       createTask('Task 3', TASK_STATE.PENDING),
     ];
 
-    const result = buildMatrix(tasks);
+    const result = buildTaskMatrix(tasks);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
@@ -36,7 +36,7 @@ describe('buildMatrix', () => {
       createTask('Task 3', TASK_STATE.PENDING),
     ];
 
-    const result = buildMatrix(tasks);
+    const result = buildTaskMatrix(tasks);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({
@@ -65,7 +65,7 @@ describe('buildMatrix', () => {
       createTask('Task 2', TASK_STATE.RUNNING, true, subTasks),
     ];
 
-    const result = buildMatrix(tasks);
+    const result = buildTaskMatrix(tasks);
 
     expect(result).toHaveLength(3);
     expect(result[0]).toEqual({
@@ -93,7 +93,7 @@ describe('buildMatrix', () => {
       createTask('Task 2', TASK_STATE.PENDING, false, subTasks), // Not focused but has subtasks
     ];
 
-    const result = buildMatrix(tasks);
+    const result = buildTaskMatrix(tasks);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({
@@ -118,7 +118,7 @@ describe('buildMatrix', () => {
       createTask('Task 3', TASK_STATE.PENDING), // No subtasks
     ];
 
-    const result = buildMatrix(tasks);
+    const result = buildTaskMatrix(tasks);
 
     expect(result).toHaveLength(2);
     expect(result[0]).toEqual({
@@ -147,7 +147,7 @@ describe('buildMatrix', () => {
       createTask('Level 1 Task 2', TASK_STATE.RUNNING, true, level2Tasks),
     ];
 
-    const result = buildMatrix(level1Tasks);
+    const result = buildTaskMatrix(level1Tasks);
 
     expect(result).toHaveLength(3);
     expect(result[0].taskList).toBe(level1Tasks);
