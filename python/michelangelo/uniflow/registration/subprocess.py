@@ -18,8 +18,11 @@ import yaml
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT
 from michelangelo.uniflow.registration import register
 from michelangelo.uniflow.registration.config_builder import ConfigBuilder
+from michelangelo.uniflow.registration.register import prepare_uniflow_input
 
 _logger = logging.getLogger(__name__)
+
+
 
 
 def discover_workflow_from_config(config_file_path: str):
@@ -27,7 +30,7 @@ def discover_workflow_from_config(config_file_path: str):
     Discover and import workflow function from pipeline configuration.
 
     This function reads the pipeline YAML configuration, extracts the manifest.path,
-    and discovers @workflow decorated functions in that module.
+    and discovers the workflow function from ctx.run() calls in that module.
 
     Args:
         config_file_path: Path to pipeline YAML configuration file
@@ -36,7 +39,7 @@ def discover_workflow_from_config(config_file_path: str):
         Callable: The discovered workflow function
 
     Raises:
-        ValueError: If no workflow function found or multiple found
+        ValueError: If no workflow function found
         ImportError: If module cannot be imported
     """
     _logger.info("Discovering workflow function from config: %s", config_file_path)
@@ -57,41 +60,75 @@ def discover_workflow_from_config(config_file_path: str):
 
     # Import the module
     try:
-        # Use importlib to import the module directly
         import importlib
-
         module = importlib.import_module(manifest_path)
         _logger.info("Successfully imported module: %s", manifest_path)
     except ImportError as e:
         _logger.error("Failed to import module %s: %s", manifest_path, e)
         raise
 
-    # Find @workflow decorated functions
-    workflow_functions = []
+    # Find workflow function from ctx.run() calls using AST parsing
+    workflow_function_name = None
+    
+    try:
+        import ast
+        import os
+        
+        # Get the module file path
+        module_file = module.__file__
+        if module_file and os.path.exists(module_file):
+            with open(module_file, 'r') as f:
+                source = f.read()
+            
+            # Parse the AST to find ctx.run calls
+            tree = ast.parse(source)
+            
+            for node in ast.walk(tree):
+                # Look for calls like: ctx.run(workflow_function, ...)
+                if (isinstance(node, ast.Call) and
+                    isinstance(node.func, ast.Attribute) and
+                    isinstance(node.func.value, ast.Name) and
+                    node.func.value.id == 'ctx' and
+                    node.func.attr == 'run'):
+                    
+                    # Extract the first argument (workflow function name)
+                    if (len(node.args) > 0 and isinstance(node.args[0], ast.Name)):
+                        workflow_function_name = node.args[0].id
+                        _logger.info("Found ctx.run() call with function: %s", workflow_function_name)
+                        break  # Only one function expected
+    
+    except Exception as e:
+        _logger.warning("Failed to parse AST for ctx.run() calls: %s", e)
 
-    for name, obj in inspect.getmembers(module):
-        if inspect.isfunction(obj):
-            # Check if function has @workflow decorator
-            if hasattr(obj, "__wrapped__") or hasattr(obj, "_uniflow_workflow"):
-                workflow_functions.append((name, obj))
-                _logger.info("Found workflow function: %s", name)
+    # If AST parsing failed, fall back to @workflow decorator discovery
+    if not workflow_function_name:
+        _logger.info("Falling back to @workflow decorator discovery")
+        
+        for name, obj in inspect.getmembers(module):
+            if inspect.isfunction(obj):
+                # Check if function has @workflow decorator
+                if hasattr(obj, "__wrapped__") or hasattr(obj, "_uniflow_workflow"):
+                    workflow_function_name = name
+                    _logger.info("Found @workflow decorated function: %s", name)
+                    break  # Use first one found
 
-    # Validate results
-    if not workflow_functions:
+    # Validate result
+    if not workflow_function_name:
         raise ValueError(
-            f"No @workflow decorated functions found in module {manifest_path}"
+            f"No workflow function found in ctx.run() calls or @workflow decorators in module {manifest_path}"
         )
 
-    if len(workflow_functions) > 1:
-        func_names = [name for name, _ in workflow_functions]
-        _logger.warning(
-            "Multiple workflow functions found: %s. Using first one.", func_names
-        )
-
-    selected_name, selected_func = workflow_functions[0]
-    _logger.info("Selected workflow function: %s", selected_name)
-
-    return selected_func
+    # Get the actual function object
+    try:
+        selected_func = getattr(module, workflow_function_name)
+        if not inspect.isfunction(selected_func):
+            raise ValueError(f"{workflow_function_name} is not a function")
+        
+        _logger.info("Selected workflow function: %s", workflow_function_name)
+        return selected_func
+    
+    except AttributeError:
+        raise ValueError(f"Function {workflow_function_name} not found in module {manifest_path}")
 
 
 def main():
@@ -112,37 +149,49 @@ def main():
         _logger.info("Reading pipeline configuration: %s", args.config_file)
         workflow_fn = discover_workflow_from_config(args.config_file)
 
-        # Create ConfigBuilder to extract workflow arguments
-        _logger.info("Analyzing workflow function for argument extraction")
-        config_builder = ConfigBuilder(workflow_fn)
+        # Create ConfigBuilder to extract workflow configuration
+        _logger.info("Creating ConfigBuilder for workflow configuration")
+        with ConfigBuilder.from_config_file(args.config_file) as config_builder:
+            # Execute registration in user's environment
+            remote_path = register(
+                fn=workflow_fn,
+                project=args.project,
+                pipeline=args.pipeline,
+                output_dir=args.output_dir,
+                storage_url=args.storage_url,
+                output_filename=args.output_filename,
+                environ=json.loads(args.environ) if args.environ else {},
+                args=json.loads(args.args) if args.args else [],
+                kwargs=json.loads(args.kwargs) if args.kwargs else {},
+            )
 
-        # Get workflow arguments from function analysis
-        workflow_args = config_builder.get_workflow_args()
-        workflow_kwargs = config_builder.get_workflow_kwargs()
-        workflow_environ = config_builder.get_workflow_environ()
-
-        # Override with any provided arguments (command line takes precedence)
-        final_environ = json.loads(args.environ) if args.environ else workflow_environ
-        final_args = json.loads(args.args) if args.args else workflow_args
-        final_kwargs = json.loads(args.kwargs) if args.kwargs else workflow_kwargs
-
-        _logger.info("Starting registration process with extracted arguments")
-        _logger.info("Final args: %s", final_args)
-        _logger.info("Final kwargs: %s", final_kwargs)
-        _logger.info("Final environ: %s", final_environ)
-
-        # Execute registration in user's environment
-        remote_path = register(
-            fn=workflow_fn,
-            project=args.project,
-            pipeline=args.pipeline,
-            output_dir=args.output_dir,
-            storage_url=args.storage_url,
-            output_filename=args.output_filename,
-            environ=final_environ,
-            args=final_args,
-            kwargs=final_kwargs,
-        )
+            # Generate workflow config JSON for manifest content using ConfigBuilder
+            workflow_config = config_builder.get_workflow_config_as_manifest_content()
+            
+            # Override with any provided arguments (command line takes precedence)
+            final_args = json.loads(args.args) if args.args else workflow_config["args"]
+            
+            # Handle kwargs: prepare_uniflow_input expects dict in legacy mode
+            if args.kwargs:
+                # Command line kwargs are provided as dict
+                final_kwargs_dict = json.loads(args.kwargs)
+            else:
+                # Convert workflow config kwargs from list format [[k,v], [k,v]] to dict
+                final_kwargs_dict = dict(workflow_config["kwargs"])
+            
+            # Use environment variables from workflow config (extracted from actual workflow)
+            final_environ = workflow_config["environ"].copy()
+            
+            # Override with any provided environ (command line takes precedence)
+            if args.environ:
+                final_environ.update(json.loads(args.environ))
+            
+            prepare_uniflow_input(
+                final_args,
+                final_kwargs_dict,
+                final_environ,
+                args.output_dir
+            )
 
         _logger.info("Registration completed successfully")
         _logger.info("Remote tarball path: %s", remote_path)

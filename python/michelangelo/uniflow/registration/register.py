@@ -16,6 +16,7 @@ from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
 
 from michelangelo.uniflow.registration.uniflow_tar import prepare_uniflow_tar
+from michelangelo.uniflow.registration.config_builder import ConfigBuilder
 
 _logger = logging.getLogger(__name__)
 
@@ -42,35 +43,62 @@ def main(args=None):
 
 
 def prepare_uniflow_input(
-    args: Optional[tuple],
-    kwargs: Optional[dict],
-    environ: Optional[dict],
-    output_dir: str,
+    config_builder_or_args,
+    kwargs_or_output_dir=None,
+    environ=None,
+    output_dir=None,
 ):
     """
-    Prepare uniflow input file for workflow registration and write it to the output directory.
+    Prepare uniflow input file for workflow registration.
 
-    This creates a JSON file containing the arguments, keyword arguments, and environment
-    variables that will be passed to the workflow function during execution.
+    This function supports two calling patterns:
+    1. New pattern: prepare_uniflow_input(config_builder, output_dir)
+    2. Legacy pattern: prepare_uniflow_input(args, kwargs, environ, output_dir)
 
     Args:
-        args: Positional arguments to pass to the function
-        kwargs: Keyword arguments to pass to the function
-        environ: Environment variables to set during execution
-        output_dir: Directory to write the input file
+        config_builder_or_args: Either ConfigBuilder instance or positional args (legacy)
+        kwargs_or_output_dir: Either output directory (new) or kwargs dict (legacy)
+        environ: Environment variables (legacy only)
+        output_dir: Output directory (legacy only)
 
     Returns:
         str: Path to the created input file
     """
-    _kwargs = list(kwargs.items()) if kwargs else []
-    inputs = {"args": args or (), "kwargs": _kwargs, "environ": environ or {}}
+    # Detect calling pattern
+    if isinstance(config_builder_or_args, ConfigBuilder):
+        # New pattern: prepare_uniflow_input(config_builder, output_dir)
+        config_builder = config_builder_or_args
+        output_dir = kwargs_or_output_dir
 
-    inputs_path = os.path.join(output_dir, "uniflow_input.txt")
-    with open(inputs_path, "w") as f:
-        json.dump(inputs, f, default=encoder.default, indent=2)
+        _logger.info("Preparing uniflow input JSON using ConfigBuilder")
 
-    _logger.info("Wrote uniflow input to: %s", inputs_path)
-    return inputs_path
+        # Get workflow configuration as JSON
+        workflow_config_json = config_builder.get_workflow_config_in_json()
+
+        # Write to uniflow input file
+        inputs_path = os.path.join(output_dir, "uniflow_input.txt")
+        with open(inputs_path, "w") as f:
+            f.write(workflow_config_json)
+
+        _logger.info("Wrote uniflow input to: %s", inputs_path)
+        return inputs_path
+
+    else:
+        # Legacy pattern: prepare_uniflow_input(args, kwargs, environ, output_dir)
+        args = config_builder_or_args
+        kwargs = kwargs_or_output_dir
+
+        _logger.info("Preparing uniflow input JSON using legacy pattern")
+
+        _kwargs = list(kwargs.items()) if kwargs else []
+        inputs = {"args": args or (), "kwargs": _kwargs, "environ": environ or {}}
+
+        inputs_path = os.path.join(output_dir, "uniflow_input.txt")
+        with open(inputs_path, "w") as f:
+            json.dump(inputs, f, default=encoder.default, indent=2)
+
+        _logger.info("Wrote uniflow input to: %s", inputs_path)
+        return inputs_path
 
 
 def register_argument_parser():
@@ -217,6 +245,53 @@ def register(
     except Exception as e:
         _logger.error("Registration failed: %s", e)
         raise
+
+
+def register_pipeline(
+    project: str, pipeline: str, output_dir: str, workflow_config: str
+):
+    """
+    Main registration function following the specification pattern.
+
+    This function implements the complete registration process:
+    1. Create and upload workflow tarball
+    2. Generate workflow config JSON
+    3. Generate task image metadata (skipped for now)
+
+    Args:
+        project: Project name
+        pipeline: Pipeline name
+        output_dir: Directory to write artifacts
+        workflow_config: Path to workflow configuration file
+
+    Returns:
+        str: Remote path to uploaded tarball
+    """
+    _logger.info(
+        "Starting pipeline registration for project=%s, pipeline=%s", project, pipeline
+    )
+
+    with ConfigBuilder.from_config_file(workflow_config) as wf_conf_builder:
+        # 1. Create and upload workflow tarball
+        remote_path = prepare_uniflow_tar(
+            project_name=project,
+            pipeline_name=pipeline,
+            output_dir=output_dir,
+            workflow_function=wf_conf_builder.workflow_function,
+            workflow_function_obj=wf_conf_builder.get_workflow_func_with_task_override(),
+            storage_base_url="s3://default/uniflow",  # Hard-coded for now
+        )
+
+        # 2. Generate workflow config JSON
+        prepare_uniflow_input(wf_conf_builder, output_dir)
+
+        # 3. Generate task image metadata (skipped as requested)
+        # prepare_task_images(wf_conf_builder, output_dir)
+
+        _logger.info("Pipeline registration completed successfully")
+        _logger.info("Tarball uploaded to: %s", remote_path)
+
+        return remote_path
 
 
 if __name__ == "__main__":
