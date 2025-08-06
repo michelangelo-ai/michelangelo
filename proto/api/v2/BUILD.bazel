@@ -33,6 +33,7 @@ proto_library(
         "ray_cluster_svc.proto",
         "ray_job.proto",
         "ray_job_svc.proto",
+        "revision.proto",
         "schema.proto",
         "spark_job.proto",
         "spark_job_svc.proto",

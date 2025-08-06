@@ -1,0 +1,166 @@
+// Revision API provides interfaces for managing revision history in Michelangelo.
+// A revision represents a versioned snapshot of a base resource like Pipeline, Model, or Deployment.
+// The revision definition includes:
+// - Revision spec that contains the versioned content and metadata
+// - Revision status that tracks the build and validation state
+// - Parent-child relationships between revisions
+// - Git commit information for code-based resources
+//
+// Key concepts:
+// - Revisions track changes to base resources over time
+// - Each revision has a unique ID within its base resource scope
+// - Revisions can be created automatically by controllers or manually by users
+// - Revisions support parent-child relationships for branching workflows
+// - Terminal states (READY/ERROR) make revisions immutable
+// - Git integration tracks commit information for pipeline revisions
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/any.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/git.proto";
+import "michelangelo/api/v2/user.proto";
+
+// Defines the spec of a `Revision` resource that tracks the change
+// history of a base resource like Pipeline, Model, Deployment
+// etc. For Pipeline, the `Revision` resource also represents the
+// draft change a user is making to the Pipeline.
+message RevisionSpec {
+
+  // Type of the base resource object this revision is tracking,
+  // e.g. Pipeline.
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta base_type = 1;
+
+  // Identifier of the base resource object this revision is tracking.
+  michelangelo.api.ResourceIdentifier base_resource = 2;
+
+  // Content of the revision for a specific base resource object. We
+  // are using Any instead of Struct here so that we can store the
+  // revision content more efficiently since the whole resource object
+  // is saved for each revision.
+  google.protobuf.Any content = 3;
+
+  // The owner who created this revision, e.g. the author of a
+  // pipeline revision or the user who starts the training pipeline
+  // run which creates a model revision.
+  UserInfo owner = 4;
+
+  // Parent revision object this revision is forked from. Must have
+  // the same resource type.
+  michelangelo.api.ResourceIdentifier parent = 5 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // TODO: deprecate this field
+  string git_ref = 6;
+
+  // TODO: deprecate this field
+  string git_branch = 7;
+
+  // The URL to the code review tool such as Differential or Review
+  // Board for this revision.
+  string review_tool_url = 8;
+
+  // revision id represents the id of this revision
+  // each revision of the same parent object has a unique id
+  // e.g.
+  // Pipeline revision id is the corresponding git sha-1
+  // Model revision id is a sequential number
+  string revision_id = 9;
+
+  // Git commit of the revision if applicable, e.g. for Pipeline
+  CommitInfo commit = 10;
+}
+
+// Describes the state of a revision resource.
+enum RevisionState {
+  // The revision state is invalid.
+  REVISION_STATE_INVALID = 0;
+
+  // The revision has been created but hasn't been built and not
+  // runnable yet.
+  REVISION_STATE_CREATED = 1;
+
+  // The revision is building
+  REVISION_STATE_BUILDING = 2;
+
+  // The revision is ready. This is a terminate state.
+  REVISION_STATE_READY = 3;
+
+  // The revision has build errors. This is a terminate state
+  REVISION_STATE_ERROR = 4;
+}
+
+// Defines the status of a revision resource.
+message RevisionStatus {
+  RevisionState state = 1;
+}
+
+// Defines a revision resource that tracks the change history of a
+// base resource object like Pipeline, Model, Deployment etc.. A
+// revision could be created in two ways:
+//
+// (1) implicitly by the controller of the base resource when the
+//     base resource is updated, such as a new Pipeline revision is
+//     landed to main branch or a new Model revision.is incrementally
+//     trained.
+// (2) explicitly by the user via UI or CLI when the user wants to edit
+//     the content of an existing revision, such as Pipeline.
+//
+// All revisions of a given base resource can be retrieved by the
+// `List` opeartion with a filter on the `base_resource` field.
+message Revision {
+  option (michelangelo.api.resource) = {};
+
+  option (michelangelo.api.index) = {
+    path: "spec.base_resource",
+    key: "base_resource",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.base_type.kind",
+    key: "base_type",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.owner.name",
+    key: "owner",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.commit.branch",
+    key: "commit_branch",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.commit.git_ref",
+    key: "git_ref",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the revision.
+  RevisionSpec spec = 3;
+
+  // Most recently observed status of the revision.
+  RevisionStatus status = 4;
+}
+
+// A list of Revision objects.
+message RevisionList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of revisions
+  repeated Revision items = 3;
+}
