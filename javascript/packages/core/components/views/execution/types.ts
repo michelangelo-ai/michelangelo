@@ -1,3 +1,4 @@
+import type { Cell } from '#core/components/cell/types';
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TASK_STATE } from './constants';
 
@@ -105,6 +106,20 @@ export type ExecutionDetailViewSchema<
        * ```
        */
       heading: Accessor<string>;
+
+      /**
+       * Optional metadata fields to display as rich content below the task heading.
+       * Each field uses cell renderers for consistent formatting (dates, states, etc.).
+       *
+       * @example
+       * ```typescript
+       * metadata: [
+       *   { id: 'lastUpdatedTimestamp', label: 'Last updated', type: 'DATE', accessor: 'lastUpdated' },
+       *   { id: 'status', label: 'State', type: 'STATE', accessor: 'status' }
+       * ]
+       * ```
+       */
+      metadata?: Cell[];
     };
 
     /**

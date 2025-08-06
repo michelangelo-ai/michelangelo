@@ -116,8 +116,8 @@ export const TaskSeparator = styled('div', ({ $theme }) => ({
 
 - **Real interactions over mocks**: Reduce dependency mocking to test closer to production
 - **Mock server dependencies**: Don't connect to real servers, use established RPC mocking
-- **Business logic over implementation**: Test your business decisions and logic, not the tools you're using to implement them
-- **Avoid test duplication**: Don't test the same behavior in both unit and integration tests - choose the most appropriate level
+- **Business logic over implementation**: Test your business decisions and logic, not the tools you're using to implement them. Follow React Testing Library's guidance: test what users see (`screen.getByText()`, `screen.getByRole()`) rather than component internals (`container.firstChild`, prop verification)
+- **Avoid test duplication**: Don't test the same behavior in both unit and integration tests - choose the most appropriate level. If higher-level tests already verify user-facing behavior, don't also test implementation details in lower-level tests
 - **Success path plus key edge cases**: Test core functionality and meaningful edge cases. Skip testing scenarios already covered by dependencies. Skip testing unrealistic scenarios
 
 ### Test Organization
