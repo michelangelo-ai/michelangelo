@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { TASK_STATE } from '../../../constants';
+import { TASK_STATE } from '#core/components/views/execution/constants';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskBody } from '../task-body';
 
@@ -48,5 +48,51 @@ describe('TaskBody', () => {
     expect(screen.getByText('Success Task')).toBeInTheDocument();
     expect(screen.getByText('Running Task')).toBeInTheDocument();
     expect(screen.getByText('Error Task')).toBeInTheDocument();
+  });
+
+  it('should render body schema when no subtasks exist', () => {
+    const leafTask = createTask({
+      name: 'Leaf Task',
+      record: {
+        displayName: 'Leaf Task',
+        output: { result: 'success' },
+      },
+    });
+
+    const bodySchema = [
+      {
+        type: 'struct',
+        label: 'Task Output',
+        accessor: 'output',
+      },
+    ];
+
+    render(<TaskBody task={leafTask} bodySchema={bodySchema} />);
+
+    expect(screen.getByText('Task Output')).toBeInTheDocument();
+  });
+
+  it('should prioritize subtasks over body schema', () => {
+    const taskWithBoth = createTask({
+      name: 'Parent Task',
+      subTasks: [createTask({ name: 'Child Task' })],
+      record: {
+        output: { result: 'success' },
+      },
+    });
+
+    const bodySchema = [
+      {
+        type: 'struct',
+        label: 'Should Not Render',
+        accessor: 'output',
+      },
+    ];
+
+    render(<TaskBody task={taskWithBoth} bodySchema={bodySchema} />);
+
+    // Should render subtask, not body schema
+    expect(screen.getByText('Child Task')).toBeInTheDocument();
+    expect(screen.queryByText('Should Not Render')).not.toBeInTheDocument();
   });
 });

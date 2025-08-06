@@ -84,6 +84,23 @@ const executionSchema: ExecutionDetailViewSchema = {
         },
       ],
     },
+    body: [
+      {
+        type: 'struct',
+        label: 'Input Parameters',
+        accessor: 'input',
+      },
+      {
+        type: 'struct',
+        label: 'Output Results',
+        accessor: 'output',
+      },
+      {
+        type: 'struct',
+        label: 'Cached Outputs',
+        accessor: 'stepCachedOutputs',
+      },
+    ],
     stateBuilder: (record: { state: string }) => {
       switch (record.state) {
         case 'PIPELINE_RUN_STEP_STATE_SUCCEEDED':

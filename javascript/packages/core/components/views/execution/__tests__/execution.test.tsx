@@ -135,4 +135,46 @@ describe('Execution view', () => {
     expect(screen.getByText('No execution data')).toBeInTheDocument();
     expect(screen.getByText('No tasks available')).toBeInTheDocument();
   });
+
+  it('should render body schema content for leaf tasks', async () => {
+    const user = userEvent.setup();
+    const schemaWithBody = buildSchema({
+      tasks: {
+        body: [
+          {
+            type: 'struct',
+            label: 'Input Parameters',
+            accessor: 'input',
+          },
+        ],
+      },
+    });
+
+    const executionData = {
+      status: {
+        steps: [
+          buildStep({
+            displayName: 'Data Processing Task',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            input: {
+              fields: {
+                dataset: { stringValue: 'training_data.csv', kind: 'stringValue' },
+              },
+            },
+          }),
+        ],
+      },
+    };
+
+    render(<Execution schema={schemaWithBody} data={executionData} />);
+
+    // No body content should be visible before accordion is expanded
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+
+    // Expand accordion to see body content
+    await user.click(screen.getByRole('button', { name: 'Data Processing Task Down Small' }));
+    await user.click(screen.getByRole('button', { name: /Input Parameters/ }));
+    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByText('"training_data.csv"')).toBeInTheDocument();
+  });
 });

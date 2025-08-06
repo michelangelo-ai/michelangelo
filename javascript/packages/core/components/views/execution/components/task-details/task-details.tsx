@@ -3,7 +3,6 @@ import { StatefulPanel } from 'baseui/accordion';
 import { TaskBody } from './task-body';
 import { TaskHeader } from './task-header';
 
-import type { Task } from '../../types';
 import type { TaskDetailsProps } from './types';
 
 /**
@@ -14,29 +13,23 @@ import type { TaskDetailsProps } from './types';
  * @param task - The task data to display
  * @param onClick - Optional click handler for task interaction
  * @param metadata - Optional metadata field configurations for rich display
+ * @param bodySchema - Optional body content schema for leaf tasks
  */
 export function TaskDetails<TTaskRecord extends object = object>(
   props: TaskDetailsProps<TTaskRecord>
 ) {
-  const { task, onClick, metadata } = props;
+  const { task, onClick, metadata, bodySchema } = props;
 
-  if (shouldRenderBody(task)) {
+  if (!!task.subTasks?.length || bodySchema?.length) {
     return (
       <StatefulPanel
         title={<TaskHeader task={task} onClick={onClick} metadata={metadata} />}
         initialState={{ expanded: false }}
       >
-        <TaskBody task={task} />
+        <TaskBody task={task} bodySchema={bodySchema} />
       </StatefulPanel>
     );
   }
 
   return <TaskHeader task={task} onClick={onClick} metadata={metadata} />;
-}
-
-/**
- * Determines if task should render accordion body (when it has subtasks).
- */
-function shouldRenderBody<TTaskRecord extends object>(task: Task<TTaskRecord>): boolean {
-  return !!task.subTasks?.length;
 }

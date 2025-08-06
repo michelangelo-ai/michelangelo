@@ -5,6 +5,16 @@ import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskDetails } from '../task-details';
 
 describe('TaskDetails', () => {
+  it('should render simple header when task has no subtasks and no bodySchema', () => {
+    const leafTask = createTask({ name: 'Leaf Task' });
+
+    render(<TaskDetails task={leafTask} />);
+
+    expect(screen.getByText('Leaf Task')).toBeInTheDocument();
+
+    expect(screen.queryByRole('button', { expanded: false })).not.toBeInTheDocument();
+  });
+
   it('should render accordion when task has subtasks', () => {
     const taskWithSubtasks = createTask({
       name: 'Parent Task',
@@ -19,14 +29,22 @@ describe('TaskDetails', () => {
     expect(accordionPanel).toBeInTheDocument();
   });
 
-  it('should render simple header when task has no subtasks', () => {
-    const leafTask = createTask({ name: 'Leaf Task' });
+  it('should render accordion when task has bodySchema but no subtasks', () => {
+    const leafTaskWithBodySchema = createTask({ name: 'Data Processing Task' });
+    const bodySchema = [
+      {
+        type: 'struct',
+        label: 'Input Parameters',
+        accessor: 'input',
+      },
+    ];
 
-    render(<TaskDetails task={leafTask} />);
+    render(<TaskDetails task={leafTaskWithBodySchema} bodySchema={bodySchema} />);
 
-    expect(screen.getByText('Leaf Task')).toBeInTheDocument();
+    expect(screen.getByText('Data Processing Task')).toBeInTheDocument();
 
-    expect(screen.queryByRole('button', { expanded: false })).not.toBeInTheDocument();
+    const accordionPanel = screen.getByRole('button', { expanded: false });
+    expect(accordionPanel).toBeInTheDocument();
   });
 
   it('should start accordion collapsed by default', () => {

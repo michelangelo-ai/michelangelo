@@ -1,5 +1,6 @@
 import type { Cell } from '#core/components/cell/types';
 import type { Accessor } from '#core/types/common/studio-types';
+import type { TaskBodySchema } from './components/task-details/renderers/types';
 import type { TASK_STATE } from './constants';
 
 export type TaskState = (typeof TASK_STATE)[keyof typeof TASK_STATE];
@@ -121,6 +122,20 @@ export type ExecutionDetailViewSchema<
        */
       metadata?: Cell[];
     };
+
+    /**
+     * Optional array of body content configurations for rendering detailed task information.
+     * Each configuration specifies how to extract and display specific aspects of task data.
+     *
+     * @example
+     * ```typescript
+     * body: [
+     *   { type: 'struct', label: 'Input', accessor: 'input' },
+     *   { type: 'struct', label: 'Output', accessor: 'output' }
+     * ]
+     * ```
+     */
+    body?: TaskBodySchema[];
 
     /**
      * Transforms raw task records into standardized task states.

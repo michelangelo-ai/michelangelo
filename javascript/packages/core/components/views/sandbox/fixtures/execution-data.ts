@@ -3,6 +3,28 @@ export const successfulPipelineRun = {
   status: {
     steps: [
       {
+        subSteps: [],
+        displayName: 'Data Validation',
+        state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+        startTime: { seconds: '1704067000', nanos: 0 },
+        endTime: { seconds: '1704067100', nanos: 0 },
+        input: {
+          fields: {
+            dataset_path: { stringValue: '/data/training.csv', kind: 'stringValue' },
+            validation_rules: { stringValue: 'schema_v1.json', kind: 'stringValue' },
+          },
+        },
+        output: {
+          fields: {
+            valid_rows: { numberValue: 1000, kind: 'numberValue' },
+            invalid_rows: { numberValue: 5, kind: 'numberValue' },
+          },
+        },
+        stepCachedOutputs: {
+          intermediateVars: [{ namespace: 'ml-workspace', name: 'validation-cache-123' }],
+        },
+      },
+      {
         subSteps: [
           {
             subSteps: [],
