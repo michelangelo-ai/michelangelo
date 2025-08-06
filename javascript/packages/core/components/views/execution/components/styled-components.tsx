@@ -2,7 +2,7 @@ import { styled } from 'baseui';
 
 import type { ColorTokens } from 'baseui/styles';
 
-export const TaskListContainer = styled('div', ({ $theme }) => ({
+export const TaskFlowContainer = styled('div', ({ $theme }) => ({
   display: 'flex',
   flex: 'auto',
   gap: $theme.sizing.scale300,

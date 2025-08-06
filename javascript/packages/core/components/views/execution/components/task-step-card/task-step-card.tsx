@@ -2,20 +2,22 @@ import { useStyletron } from 'baseui';
 
 import { TaskIndicator } from '#core/components/views/execution/components/styled-components';
 import { TaskStateIcon } from '#core/components/views/execution/components/task-state-icon';
-import { TaskCard, TaskName } from './styled-components';
+import { TaskStepCardContainer, TaskStepName } from './styled-components';
 
-import type { TaskNodeProps } from './types';
+import type { TaskStepCardProps } from './types';
 
-export function TaskNode<TTaskRecord extends object = object>(props: TaskNodeProps<TTaskRecord>) {
+export function TaskStepCard<TTaskRecord extends object = object>(
+  props: TaskStepCardProps<TTaskRecord>
+) {
   const { task, onClick } = props;
   const { focused, name, state, subTasks } = task;
   const hasSubTasks = !!subTasks?.length;
   const [css] = useStyletron();
 
   return (
-    <TaskCard $state={state} role="button" tabIndex={0} onClick={onClick}>
+    <TaskStepCardContainer $state={state} role="button" tabIndex={0} onClick={onClick}>
       <TaskStateIcon state={state} size={20} />
-      <TaskName>{name}</TaskName>
+      <TaskStepName>{name}</TaskStepName>
       {hasSubTasks && focused ? (
         <div
           className={css({
@@ -28,6 +30,6 @@ export function TaskNode<TTaskRecord extends object = object>(props: TaskNodePro
           <TaskIndicator $color="contentInverseTertiary" $direction="up" />
         </div>
       ) : null}
-    </TaskCard>
+    </TaskStepCardContainer>
   );
 }

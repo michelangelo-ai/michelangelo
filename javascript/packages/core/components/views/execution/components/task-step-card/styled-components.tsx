@@ -11,7 +11,7 @@ import type { TaskState } from '#core/components/views/execution/types';
  *
  * @param $state - Task execution state that determines visual styling
  */
-export const TaskCard = styled<'div', { $state: TaskState }>(
+export const TaskStepCardContainer = styled<'div', { $state: TaskState }>(
   'div',
   ({ $theme: { colors, sizing }, $state }) => {
     const {
@@ -38,7 +38,7 @@ export const TaskCard = styled<'div', { $state: TaskState }>(
   }
 );
 
-export const TaskName = styled('div', ({ $theme: { typography } }) => ({
+export const TaskStepName = styled('div', ({ $theme: { typography } }) => ({
   ...typography.LabelSmall,
   ...ELLIPSIS_STYLES,
 }));
