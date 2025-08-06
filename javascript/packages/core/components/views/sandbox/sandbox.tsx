@@ -4,6 +4,7 @@ import { Block } from 'baseui/block';
 import { Tab, Tabs } from 'baseui/tabs';
 import { HeadingXXLarge } from 'baseui/typography';
 
+import { CellType } from '#core/components/cell/constants';
 import { TextEditor } from '#core/components/text-editor/text-editor';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { Execution } from '#core/components/views/execution/execution';
@@ -37,6 +38,51 @@ const executionSchema: ExecutionDetailViewSchema = {
     subTasksAccessor: 'subSteps',
     header: {
       heading: 'displayName',
+      metadata: [
+        {
+          id: 'state',
+          label: 'Status',
+          type: CellType.STATE,
+          stateTextMap: {
+            PIPELINE_RUN_STEP_STATE_SUCCEEDED: 'Success',
+            PIPELINE_RUN_STEP_STATE_RUNNING: 'Running',
+            PIPELINE_RUN_STEP_STATE_PENDING: 'Pending',
+            PIPELINE_RUN_STEP_STATE_FAILED: 'Failed',
+            PIPELINE_RUN_STEP_STATE_SKIPPED: 'Skipped',
+          },
+          stateColorMap: {
+            PIPELINE_RUN_STEP_STATE_SUCCEEDED: 'green',
+            PIPELINE_RUN_STEP_STATE_RUNNING: 'blue',
+            PIPELINE_RUN_STEP_STATE_PENDING: 'blue',
+            PIPELINE_RUN_STEP_STATE_FAILED: 'red',
+            PIPELINE_RUN_STEP_STATE_SKIPPED: 'gray',
+          },
+        },
+        {
+          id: 'startTime.seconds',
+          label: 'Started',
+          type: CellType.DATE,
+        },
+        {
+          id: 'duration',
+          label: 'Duration',
+          type: CellType.TEXT,
+          accessor: (record: { startTime: { seconds: string }; endTime: { seconds: string } }) => {
+            if (record.startTime?.seconds && record.endTime?.seconds) {
+              const start = parseInt(record.startTime.seconds) * 1000;
+              const end = parseInt(record.endTime.seconds) * 1000;
+              const durationMs = end - start;
+              const durationSec = Math.round(durationMs / 1000);
+              return `${durationSec}s`;
+            }
+            return null;
+          },
+        },
+        {
+          id: 'logUrl',
+          label: 'Logs',
+        },
+      ],
     },
     stateBuilder: (record: { state: string }) => {
       switch (record.state) {

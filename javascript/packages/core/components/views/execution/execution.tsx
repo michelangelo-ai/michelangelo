@@ -4,6 +4,7 @@ import { useStyletron } from 'baseui';
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
+import { TaskDetails } from './components/task-details/task-details';
 import { TaskFlow } from './components/task-flow';
 import { TaskSeparator } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
@@ -53,14 +54,11 @@ export function Execution<
         </div>
       </div>
 
-      <div>
+      <div
+        className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
+      >
         {taskList.map((task, index) => (
-          <div key={index}>
-            <h4>{task.name}</h4>
-            <p>State: {task.state}</p>
-            <p>Focused: {task.focused ? 'Yes' : 'No'}</p>
-            {/* Task body content will be implemented in next iteration */}
-          </div>
+          <TaskDetails key={index} task={task} metadata={schema.tasks.header.metadata} />
         ))}
       </div>
     </div>
