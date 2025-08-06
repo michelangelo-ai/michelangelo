@@ -7,6 +7,7 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//go/kubeproto/pboptions:go_default_library",
+        "//go/kubeproto/templates:go_default_library",
         "//go/kubeproto/util:go_default_library",
         "@org_golang_google_protobuf//compiler/protogen:go_default_library",
         "@org_golang_google_protobuf//reflect/protoreflect:go_default_library",

@@ -12,6 +12,7 @@ go_library(
         "mysql_main_table_columns.tmpl",
         "mysql_main_table_indices.tmpl",
         "unmarshal_enum.tmpl",
+        "validation.tmpl",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/templates",
     visibility = ["//visibility:public"],

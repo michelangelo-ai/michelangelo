@@ -7,9 +7,11 @@ import (
 	"os"
 	"regexp"
 	"strconv"
+	"strings"
 	"text/template"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 
 	"google.golang.org/protobuf/compiler/protogen"
@@ -18,26 +20,6 @@ import (
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
 )
-
-var validateFuncTmp = template.Must(template.New("validateFunc").Parse(`
-// {{.TypeName}}ValidateExt is an extension hook for additional validation logic
-var {{.TypeName}}ValidateExt func(*{{.TypeName}}) error
-
-func (this *{{.TypeName}}) Validate(prefix string) error {
-{{.ValidateLogic}}
-	// Call extension validation if registered
-	if {{.TypeName}}ValidateExt != nil {
-		if err := {{.TypeName}}ValidateExt(this); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// Register{{.TypeName}}ValidateExt registers an extension validation function
-func Register{{.TypeName}}ValidateExt(f func(*{{.TypeName}}) error) {
-	{{.TypeName}}ValidateExt = f
-}`))
 
 var validateFieldTmp = template.Must(template.New("validateField").Parse(`
 		if {{.Condition}} {
@@ -280,11 +262,20 @@ var _ = strconv.Itoa
 			g.P(sets[i])
 		}
 
+		// Use the template from the templates package
 		var buf bytes.Buffer
-		validateFuncTmp.Execute(&buf, struct {
+		typeName := msg.GoIdent.GoName
+		typeNameLower := strings.ToLower(typeName[:1]) + typeName[1:]
+		
+		templates.Validation.Execute(&buf, struct {
 			TypeName      string
+			TypeNameLower string
 			ValidateLogic string
-		}{msg.GoIdent.GoName, validateCode})
+		}{
+			TypeName:      typeName,
+			TypeNameLower: typeNameLower,
+			ValidateLogic: validateCode,
+		})
 		g.P(buf.String())
 	}
 

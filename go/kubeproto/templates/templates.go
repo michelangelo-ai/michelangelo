@@ -18,6 +18,12 @@ var crdListTmpl string
 // CRDList template of CRD list type
 var CRDList = template.Must(template.New("crdList").Parse(crdListTmpl))
 
+//go:embed validation.tmpl
+var validationTmpl string
+
+// Validation template for validation functions with extension hooks
+var Validation = template.Must(template.New("validation").Parse(validationTmpl))
+
 // RegisterCRDObject is a template that registers CRD Object to CrdObjects map
 var RegisterCRDObject = template.Must(template.New("registerCrdObject").Parse(`func init() {
 	CrdObjects["{{.Kind}}"] = &{{.Kind}}{
