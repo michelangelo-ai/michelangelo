@@ -80,6 +80,8 @@ export interface PhaseEntityConfig {
    * feature-consistency
    */
   id: string;
+  /** State controlling whether this entity is interactive */
+  state: PhaseEntityState;
 }
 
 /**
@@ -100,9 +102,30 @@ export interface PhaseConfig {
   description?: string;
   /** Optional URL to external documentation for this phase */
   docUrl?: string;
+  /** State controlling overall phase behavior and appearance */
+  state: PhaseState;
   /** List of entities (like pipelines, models) that belong to this phase */
   entities: PhaseEntityConfig[];
 }
+
+/**
+ * Phase state controlling overall phase behavior and appearance
+ *
+ * @example
+ * `active` - The phase is fully functional and can be interacted with
+ * `comingSoon` - The phase is not yet available but will be in the future
+ * `disabled` - The phase is not available and cannot be interacted with
+ */
+export type PhaseState = 'active' | 'comingSoon' | 'disabled';
+
+/**
+ * Entity state controlling individual entity behavior within a phase
+ *
+ * @example
+ * `active` - The entity is fully functional and can be interacted with
+ * `disabled` - The entity is not available and cannot be interacted with
+ */
+export type PhaseEntityState = 'active' | 'disabled';
 
 /**
  * @description

@@ -8,8 +8,12 @@ import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
-export function PhaseCard({ icon, name, description, docUrl, entities }: PhaseConfig) {
+export function PhaseCard(props: PhaseConfig) {
+  const { icon, name, description, docUrl, state, entities } = props;
   const [css, theme] = useStyletron();
+
+  const isPhaseDisabled = state === 'disabled' || state === 'comingSoon';
+  const isComingSoon = state === 'comingSoon';
 
   return (
     <Box
@@ -37,9 +41,38 @@ export function PhaseCard({ icon, name, description, docUrl, entities }: PhaseCo
         )
       }
     >
-      {entities && entities.length > 0 && (
+      {isComingSoon ? (
+        <div
+          className={css({
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            flex: '1',
+            color: theme.colors.contentTertiary,
+          })}
+        >
+          Coming soon
+        </div>
+      ) : (
         <div className={css({ display: 'flex', flexDirection: 'column' })}>
           {entities.map((entity) => {
+            const isEntityDisabled = isPhaseDisabled || entity.state === 'disabled';
+
+            if (isEntityDisabled) {
+              return (
+                <span
+                  key={entity.id}
+                  className={css({
+                    ...theme.typography.ParagraphSmall,
+                    cursor: 'default',
+                    color: theme.colors.contentTertiary,
+                  })}
+                >
+                  {capitalizeFirstLetter(entity.name)}
+                </span>
+              );
+            }
+
             return (
               <Link
                 key={entity.id}
@@ -52,16 +85,19 @@ export function PhaseCard({ icon, name, description, docUrl, entities }: PhaseCo
           })}
         </div>
       )}
-      <Button
-        kind={KIND.secondary}
-        onClick={() => {
-          console.log('Navigate to phase');
-        }}
-        shape={SHAPE.circle}
-        overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}
-      >
-        <Icon name="chevronRight" size={theme.sizing.scale700} />
-      </Button>
+
+      {!isPhaseDisabled && (
+        <Button
+          kind={KIND.secondary}
+          onClick={() => {
+            console.log('Navigate to phase');
+          }}
+          shape={SHAPE.circle}
+          overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}
+        >
+          <Icon name="chevronRight" size={theme.sizing.scale700} />
+        </Button>
+      )}
     </Box>
   );
 }
