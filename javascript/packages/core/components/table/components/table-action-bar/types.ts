@@ -45,6 +45,8 @@ export interface TableActionBarConfig {
 
 export interface FilterableColumn<_T extends TableData = TableData> {
   id: string;
-  title: string;
-  columnType: string;
+  label: string;
+  type: string;
+  getFilterValue: () => unknown;
+  setFilterValue: (value: unknown) => void;
 }

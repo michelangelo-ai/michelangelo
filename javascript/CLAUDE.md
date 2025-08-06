@@ -32,6 +32,23 @@
   - **Simple "Props"**: When component file contains single component
   - **"ComponentNameProps"**: When multiple components exist or props are exported
 
+#### Event Handlers
+
+- **Use semantic function names**: Focus on intent rather than event type
+- **Avoid redundant prefixes**: Don't use `handleOn*` since "handle" already implies event handling
+
+**❌ Avoid:**
+```typescript
+const handleOnMouseEnter = () => { /* show tooltip */ };
+const handleOnClick = () => { /* toggle menu */ };
+```
+
+**✅ Prefer:**
+```typescript
+const showTooltipAfterDelay = () => { /* show tooltip */ };
+const toggleMenu = () => { /* toggle menu */ };
+```
+
 ### Type Safety
 
 - **Prefer `unknown` over `any`**: For better compile-time safety when creating new types

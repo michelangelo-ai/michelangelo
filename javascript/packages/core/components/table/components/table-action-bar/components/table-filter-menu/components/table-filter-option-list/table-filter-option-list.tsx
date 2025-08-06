@@ -37,7 +37,7 @@ export function TableFilterOptionList<T extends TableData = TableData>({
         {filterableColumns.map((column) => (
           <TableFilterOption
             key={column.id}
-            label={column.title}
+            label={column.label}
             onClick={() => setSelectedColumn(column)}
           />
         ))}
