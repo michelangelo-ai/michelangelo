@@ -427,7 +427,8 @@ message ModelSpec {
 // - The parent model revision being incrementally updated
 // - Transform step checkpoint for feature engineering
 // - Training step checkpoint for model weights
-// This enables efficient model retraining by building upon previous versions.
+// This enables efficient training by building on existing models rather than
+// starting from scratch. The checkpoints allow resuming from intermediate steps.
 message IncrementalTrainingSpec {
   // The parent revision ID that identifies the base model version being incrementally updated.
   // This ID:
