@@ -266,7 +266,7 @@ var _ = strconv.Itoa
 		var buf bytes.Buffer
 		typeName := msg.GoIdent.GoName
 		typeNameLower := strings.ToLower(typeName[:1]) + typeName[1:]
-		
+
 		templates.Validation.Execute(&buf, struct {
 			TypeName      string
 			TypeNameLower string
