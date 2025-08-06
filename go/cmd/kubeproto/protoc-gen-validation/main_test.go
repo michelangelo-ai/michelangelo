@@ -508,7 +508,7 @@ func TestValidationExtension(t *testing.T) {
 
 	// Register extension that always fails and uses prefix
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
-		return status.Error(codes.InvalidArgument, prefix + "extension validation failed")
+		return status.Error(codes.InvalidArgument, prefix+"extension validation failed")
 	})
 
 	// Should now fail due to extension
@@ -519,7 +519,7 @@ func TestValidationExtension(t *testing.T) {
 	// Register extension that checks custom business logic with prefix
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
 		if msg.F1 > 75 {
-			return status.Error(codes.InvalidArgument, prefix + "f1 cannot exceed 75 in extension validation")
+			return status.Error(codes.InvalidArgument, prefix+"f1 cannot exceed 75 in extension validation")
 		}
 		return nil
 	})
@@ -562,7 +562,7 @@ func TestValidationExtensionWithComplexMessage(t *testing.T) {
 	// Register extension that validates array contents and uses prefix
 	testpb.RegisterValidationMsg2ValidateExt(func(msg *testpb.ValidationMsg2, prefix string) error {
 		if len(msg.F9) > 0 && msg.F9[0] < 50 {
-			return status.Error(codes.InvalidArgument, prefix + "first element of f9 must be >= 50")
+			return status.Error(codes.InvalidArgument, prefix+"first element of f9 must be >= 50")
 		}
 		return nil
 	})
@@ -594,13 +594,13 @@ func TestMultipleValidationExtensions(t *testing.T) {
 	// Register extensions for both types with prefix usage
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
 		if msg.F3 == "forbidden" {
-			return status.Error(codes.InvalidArgument, prefix + "f3 cannot be 'forbidden'")
+			return status.Error(codes.InvalidArgument, prefix+"f3 cannot be 'forbidden'")
 		}
 		return nil
 	})
 
 	testpb.RegisterValidationMsg3ValidateExt(func(msg *testpb.ValidationMsg3, prefix string) error {
-		return status.Error(codes.InvalidArgument, prefix + "ValidationMsg3 extension always fails")
+		return status.Error(codes.InvalidArgument, prefix+"ValidationMsg3 extension always fails")
 	})
 
 	// m1 should pass
@@ -642,7 +642,7 @@ func TestValidationExtensionErrorPropagation(t *testing.T) {
 
 	// Register extension with prefix
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
-		return status.Error(codes.InvalidArgument, prefix + "extension validation error")
+		return status.Error(codes.InvalidArgument, prefix+"extension validation error")
 	})
 
 	// Should still fail built-in validation first (extension not reached)
