@@ -34,6 +34,7 @@ proto_library(
         "ray_job.proto",
         "ray_job_svc.proto",
         "revision.proto",
+        "revision_svc.proto",
         "schema.proto",
         "spark_job.proto",
         "spark_job_svc.proto",
