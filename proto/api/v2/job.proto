@@ -20,6 +20,7 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "google/protobuf/any.proto";
 
 // ResourceAffinity defines rules for selecting compute resources based on their properties.
 // It allows specifying preferences and requirements for:
@@ -55,7 +56,7 @@ message Affinity {
   // - Provides fine-grained control over workload placement
   // For example:
   // - Select GPU-enabled resources: {gpu: "true"}
-  // - Target specific regions: {resourcepool.michelangelo/region=us-west: "us-west"} 
+  // - Target specific regions: {resourcepool.michelangelo/region=us-west: "us-west"}
   // - Match production resources: {env: "prod"}
   ResourceAffinity resource_affinity = 2;
 
@@ -130,6 +131,9 @@ message TerminationSpec {
   // - "Input data validation failed"
   // - "Container crashed with exit code 1"
   string reason = 2;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // SchedulingSpec defines configuration for job scheduling and resource allocation.
@@ -154,6 +158,9 @@ message SchedulingSpec {
   bool preemptible = 1;
 
   // TODO: Add priority related information
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // SchedulingInfo tracks job scheduling attempts and history.

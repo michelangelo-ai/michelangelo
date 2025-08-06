@@ -19,6 +19,7 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "michelangelo/api/options.proto";
+import "google/protobuf/any.proto";
 
 // ResourceSpec defines compute resource requirements for a Pod.
 // It specifies hardware limits and constraints for:
@@ -51,7 +52,7 @@ message ResourceSpec {
 
   // Disk size limit in bytes. This field specifies:
   // - The maximum disk storage allocated to the Pod
-  // - Must be a non-negative string value (e.g. "100G", "1024M") 
+  // - Must be a non-negative string value (e.g. "100G", "1024M")
   // - Used for resource scheduling and limits
   // - Supports units like G (gigabytes), M (megabytes), K (kilobytes)
   // For example: "100G" means 100 gigabytes, "1024M" means 1024 megabytes
@@ -72,6 +73,20 @@ message ResourceSpec {
   // - Critical for workloads that open many files/sockets
   // For example: 1024 means the Pod can have up to 1024 open files/sockets
   int32 file_descriptors = 5 [(michelangelo.api.validation) = {min: "0"}];
+
+  // File descriptor limit for the Pod. This field specifies:
+  // - Maximum number of open file descriptors allowed
+  // - Used to prevent resource exhaustion
+  // - Default system limits apply if not specified
+  // - Higher limits may be needed for:
+  //   - Database connections
+  //   - Network-intensive workloads
+  //   - File processing jobs
+  // For example: 65536 for high-throughput applications
+  int32 fd_limit = 7;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 
   // GPU SKU identifier that specifies:
   // - The type/model of GPU required (e.g. "nvidia-tesla-v100")
@@ -205,6 +220,9 @@ message PodSpec {
   // - Model serving commands: ["tritonserver", "--model-repository=/models"]
   // - Data processing jobs: ["spark-submit", "process.py", "--input=/data"]
   repeated string command = 7;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 // EnvFromSource represents the source of a set of ConfigMaps or Secrets
 message EnvFromSource {

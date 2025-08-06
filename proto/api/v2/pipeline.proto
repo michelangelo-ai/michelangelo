@@ -5,7 +5,7 @@
 // - Pipeline manifest that defines the workflow steps and dependencies
 // - Pipeline spec that configures runtime behavior like triggers and notifications
 // - Pipeline status that tracks execution state and history
-// 
+//
 // Key concepts:
 // - Pipeline manifests can be defined in YAML, Python or UniFlow formats
 // - Pipelines can be triggered manually or on schedule
@@ -47,6 +47,9 @@ message TaskSpec {
   // This hash uniquely identifies the built container image target and is used to detect changes
   // in the image build configuration. When the hash changes, it indicates the image needs to be rebuilt.
   string image_target_hash = 3;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // PipelineManifest defines the configuration for a pipeline workflow:
@@ -113,7 +116,7 @@ message PipelineManifest {
   // This URL points to a blob containing field definitions that can be overridden at runtime.
   // The blob specifies which pipeline parameters and fields can be modified when:
   // - Triggering pipeline runs
-  // - Creating pipeline revisions 
+  // - Creating pipeline revisions
   // - Updating pipeline configurations
   // For example:
   // - Model hyperparameters that can be tuned
@@ -162,7 +165,7 @@ enum PipelineType {
 // Defines the specification for a machine learning pipeline in Michelangelo.
 // A pipeline represents a workflow that can be customized for different ML tasks:
 // - Training pipelines for model development
-// - Evaluation pipelines for model validation 
+// - Evaluation pipelines for model validation
 // - Inference pipelines for inference
 // The pipeline definition includes:
 // - Pipeline type and template configuration
@@ -190,6 +193,9 @@ message PipelineSpec {
 
   // Notifications settings for the pipeline.
   repeated Notification notifications = 9;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Describes the state of a pipeline resource:
@@ -263,6 +269,9 @@ message PipelineStatus {
   // - Resource configuration issues
   // This helps users diagnose and fix pipeline build problems.
   string error_message = 6;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Pipeline defines a machine learning pipeline resource that encapsulates:

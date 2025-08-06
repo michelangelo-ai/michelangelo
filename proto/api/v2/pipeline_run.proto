@@ -114,11 +114,14 @@ message PipelineRunSpec {
 
   // Configures notifications that will be sent during pipeline execution:
   // - Success/failure notifications
-  // - Progress updates and milestones 
+  // - Progress updates and milestones
   // - Custom notification triggers
   // Each notification specifies the notification channel (email, slack etc),
   // recipients, and conditions for when to send notifications.
   repeated Notification notifications = 11;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // PipelineRunState represents the current execution state of a pipeline run.
@@ -212,7 +215,7 @@ message PipelineRunStatus {
   // This provides details about what went wrong to help with debugging and troubleshooting.
   // For example:
   // - Task execution errors
-  // - Resource allocation failures 
+  // - Resource allocation failures
   // - Configuration issues
   // - System errors
   string error_message = 3;
@@ -272,6 +275,9 @@ message PipelineRunStatus {
 
   // The ID of the workflow execution for this pipeline run.
   string workflow_run_id = 13;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // PipelineRunExceptionType indicates the category of failure for a failed PipelineRun.
@@ -284,7 +290,7 @@ enum PipelineRunExceptionType {
   // PipelineRunExceptionType_Invalid represents an invalid/unspecified exception type.
   // This is the default value and should not be used explicitly.
   PIPELINE_RUN_EXCEPTION_TYPE_INVALID = 0;
-  
+
   // SystemException represents infrastructure or platform-level errors like:
   // - Network connectivity issues
   // - Resource allocation failures
@@ -292,7 +298,7 @@ enum PipelineRunExceptionType {
   // - Platform service disruptions
   // These errors are not caused by user configuration or inputs.
   PIPELINE_RUN_EXCEPTION_TYPE_SYSTEM = 1;
-  
+
   // UserException represents errors caused by user configuration or inputs like:
   // - Invalid parameter values
   // - Missing required inputs
@@ -306,7 +312,7 @@ enum PipelineRunExceptionType {
 // It tracks the lifecycle of a step from pending through completion:
 // - Pending: Step is queued and waiting to start
 // - Running: Step is actively executing
-// - Succeeded: Step completed successfully 
+// - Succeeded: Step completed successfully
 // - Failed: Step encountered an error
 // - Killed: Step was terminated
 // - Skipped: Step was skipped due to upstream failure
@@ -471,7 +477,7 @@ message PipelineRunStepCachedOutputs {
 // PipelineRunResource represents a resource associated with a pipeline run step.
 // Resources provide additional context and links for pipeline steps, such as:
 // - References to model artifacts
-// - Links to monitoring dashboards 
+// - Links to monitoring dashboards
 // - Pointers to evaluation results
 // - URLs to external tools and systems
 // The resource can be either internal (Unified API entity) or external (URL link).
@@ -480,7 +486,7 @@ message PipelineRunResource {
     // Reference to an API entity that provides additional context for the pipeline run step.
     // For example, this could point to a model artifact, evaluation result, or other internal resource.
     InternalResource internal_resource = 1;
-    
+
     // Reference to an external resource (outside of the Unified API) like monitoring dashboards,
     // external tools, or third-party systems that provide additional context for the pipeline run
     ExternalResource external_resource = 2;
@@ -520,7 +526,7 @@ message ExternalResource {
   // and indicate what kind of resource is being referenced (e.g. "Training Dashboard",
   // "Model Documentation", "Evaluation Results")
   string name = 1;
-  
+
   // URL of the external resource that provides additional context for the pipeline run step.
   // This should be a valid web URL that points to the external system, tool, or dashboard.
   // For example: monitoring dashboard URL, documentation page, or third-party service link.
@@ -618,7 +624,7 @@ message PipelineRun {
 
   // Spec defines the desired behavior and configuration for this pipeline run:
   // - Pipeline reference and version
-  // - Input parameters and overrides 
+  // - Input parameters and overrides
   // - Runtime configuration
   // - Execution triggers and scheduling
   // - Resume/retry behavior
@@ -638,7 +644,7 @@ message PipelineRun {
 // PipelineRunList represents a collection of PipelineRun resources.
 // It provides:
 // - Batch operations on multiple pipeline runs
-// - Pagination and filtering support 
+// - Pagination and filtering support
 // - Consistent list format for API responses
 // - Metadata about the list contents
 // - Efficient pipeline run enumeration
@@ -646,7 +652,7 @@ message PipelineRunList {
   option (michelangelo.api.resource_list) = {};
 
   k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
-  
+
   k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
 
   // List of PipelineRun resources.
