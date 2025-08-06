@@ -116,10 +116,11 @@ export function ProjectDetail() {
           name="Prepare & Analyze Data"
           description="Create data pipelines and analyze your datasets"
           docUrl="https://example.com/docs/data"
+          state="disabled"
           entities={[
-            { id: 'pipelines', name: 'pipelines' },
-            { id: 'datasources', name: 'data sources' },
-            { id: 'runs', name: 'runs' },
+            { id: 'pipelines', name: 'pipelines', state: 'active' },
+            { id: 'datasources', name: 'data sources', state: 'active' },
+            { id: 'runs', name: 'runs', state: 'active' },
           ]}
         />
 
@@ -128,13 +129,23 @@ export function ProjectDetail() {
           name="Train & Evaluate"
           description="Train machine learning models and evaluate their performance"
           docUrl="https://example.com/docs/train"
+          state="active"
           entities={[
-            { id: 'pipelines', name: 'pipelines' },
-            { id: 'runs', name: 'runs' },
-            { id: 'models', name: 'trained models' },
-            { id: 'evaluations', name: 'evaluations' },
-            { id: 'notebooks', name: 'notebooks' },
+            { id: 'pipelines', name: 'pipelines', state: 'active' },
+            { id: 'runs', name: 'runs', state: 'active' },
+            { id: 'models', name: 'trained models', state: 'disabled' },
+            { id: 'evaluations', name: 'evaluations', state: 'disabled' },
+            { id: 'notebooks', name: 'notebooks', state: 'disabled' },
           ]}
+        />
+
+        <PhaseCard
+          icon="database"
+          name="Deploy & Predict"
+          description="Deploy your models and predict new data"
+          docUrl="https://example.com/docs/predict"
+          state="comingSoon"
+          entities={[]}
         />
       </div>
 
