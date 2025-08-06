@@ -24,7 +24,7 @@ export function TableFilterMenuContent<T extends TableData = TableData>(
   const [css, theme] = useStyletron();
 
   if (selectedColumn) {
-    const FilterComponent = getColumnFilter(selectedColumn.columnType);
+    const FilterComponent = getColumnFilter(selectedColumn.type);
 
     return (
       <div className={css({ backgroundColor: theme.colors.backgroundPrimary })}>

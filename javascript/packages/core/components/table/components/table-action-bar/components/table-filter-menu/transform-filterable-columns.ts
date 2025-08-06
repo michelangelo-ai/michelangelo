@@ -15,12 +15,14 @@ export function transformFilterableColumns<T extends TableData = TableData>(
     .filter((header) => header.column.getCanFilter())
     .map((header) => {
       const columnConfig = header.column.columnDef.meta as ColumnConfig<T>;
-      const title = columnConfig.label ?? header.id;
+      const label = columnConfig.label ?? header.id;
 
       return {
         id: header.id,
-        title,
-        columnType: columnConfig.type ?? CellType.TEXT,
+        label,
+        type: columnConfig.type ?? CellType.TEXT,
+        getFilterValue: header.column.getFilterValue,
+        setFilterValue: header.column.setFilterValue,
       };
     });
 }
