@@ -18,7 +18,10 @@ from michelangelo.uniflow.registration.uniflow_tar import (
     UniflowTarBuilder,
     prepare_uniflow_tar,
 )
-from michelangelo.uniflow.registration.config_builder import ConfigBuilder, ConfigEncoder
+from michelangelo.uniflow.registration.config_builder import (
+    ConfigBuilder,
+    ConfigEncoder,
+)
 
 # Subprocess module is available for import but not exposed in __all__
 # to maintain clean API surface while allowing MaCTL to access it
@@ -26,7 +29,7 @@ from michelangelo.uniflow.registration import subprocess
 
 __all__ = [
     "register",
-    "register_pipeline", 
+    "register_pipeline",
     "main",
     "prepare_uniflow_input",
     "UniflowTarBuilder",

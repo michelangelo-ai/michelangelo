@@ -23,8 +23,6 @@ from michelangelo.uniflow.registration.register import prepare_uniflow_input
 _logger = logging.getLogger(__name__)
 
 
-
-
 def discover_workflow_from_config(config_file_path: str):
     """
     Discover and import workflow function from pipeline configuration.
@@ -61,6 +59,7 @@ def discover_workflow_from_config(config_file_path: str):
     # Import the module
     try:
         import importlib
+
         module = importlib.import_module(manifest_path)
         _logger.info("Successfully imported module: %s", manifest_path)
     except ImportError as e:
@@ -69,41 +68,45 @@ def discover_workflow_from_config(config_file_path: str):
 
     # Find workflow function from ctx.run() calls using AST parsing
     workflow_function_name = None
-    
+
     try:
         import ast
         import os
-        
+
         # Get the module file path
         module_file = module.__file__
         if module_file and os.path.exists(module_file):
-            with open(module_file, 'r') as f:
+            with open(module_file, "r") as f:
                 source = f.read()
-            
+
             # Parse the AST to find ctx.run calls
             tree = ast.parse(source)
-            
+
             for node in ast.walk(tree):
                 # Look for calls like: ctx.run(workflow_function, ...)
-                if (isinstance(node, ast.Call) and
-                    isinstance(node.func, ast.Attribute) and
-                    isinstance(node.func.value, ast.Name) and
-                    node.func.value.id == 'ctx' and
-                    node.func.attr == 'run'):
-                    
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Attribute)
+                    and isinstance(node.func.value, ast.Name)
+                    and node.func.value.id == "ctx"
+                    and node.func.attr == "run"
+                ):
                     # Extract the first argument (workflow function name)
-                    if (len(node.args) > 0 and isinstance(node.args[0], ast.Name)):
+                    if len(node.args) > 0 and isinstance(node.args[0], ast.Name):
                         workflow_function_name = node.args[0].id
-                        _logger.info("Found ctx.run() call with function: %s", workflow_function_name)
+                        _logger.info(
+                            "Found ctx.run() call with function: %s",
+                            workflow_function_name,
+                        )
                         break  # Only one function expected
-    
+
     except Exception as e:
         _logger.warning("Failed to parse AST for ctx.run() calls: %s", e)
 
     # If AST parsing failed, fall back to @workflow decorator discovery
     if not workflow_function_name:
         _logger.info("Falling back to @workflow decorator discovery")
-        
+
         for name, obj in inspect.getmembers(module):
             if inspect.isfunction(obj):
                 # Check if function has @workflow decorator
@@ -123,12 +126,14 @@ def discover_workflow_from_config(config_file_path: str):
         selected_func = getattr(module, workflow_function_name)
         if not inspect.isfunction(selected_func):
             raise ValueError(f"{workflow_function_name} is not a function")
-        
+
         _logger.info("Selected workflow function: %s", workflow_function_name)
         return selected_func
-    
+
     except AttributeError:
-        raise ValueError(f"Function {workflow_function_name} not found in module {manifest_path}")
+        raise ValueError(
+            f"Function {workflow_function_name} not found in module {manifest_path}"
+        )
 
 
 def main():
@@ -167,10 +172,10 @@ def main():
 
             # Generate workflow config JSON for manifest content using ConfigBuilder
             workflow_config = config_builder.get_workflow_config_as_manifest_content()
-            
+
             # Override with any provided arguments (command line takes precedence)
             final_args = json.loads(args.args) if args.args else workflow_config["args"]
-            
+
             # Handle kwargs: prepare_uniflow_input expects dict in legacy mode
             if args.kwargs:
                 # Command line kwargs are provided as dict
@@ -178,19 +183,16 @@ def main():
             else:
                 # Convert workflow config kwargs from list format [[k,v], [k,v]] to dict
                 final_kwargs_dict = dict(workflow_config["kwargs"])
-            
+
             # Use environment variables from workflow config (extracted from actual workflow)
             final_environ = workflow_config["environ"].copy()
-            
+
             # Override with any provided environ (command line takes precedence)
             if args.environ:
                 final_environ.update(json.loads(args.environ))
-            
+
             prepare_uniflow_input(
-                final_args,
-                final_kwargs_dict,
-                final_environ,
-                args.output_dir
+                final_args, final_kwargs_dict, final_environ, args.output_dir
             )
 
         _logger.info("Registration completed successfully")

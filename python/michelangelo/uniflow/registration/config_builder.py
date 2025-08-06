@@ -133,7 +133,9 @@ class ConfigBuilder:
             try:
                 # Import the specific function
                 workflow_function = import_attribute(f"{module_path}.{function_name}")
-                _logger.info("Successfully imported workflow function: %s", function_name)
+                _logger.info(
+                    "Successfully imported workflow function: %s", function_name
+                )
                 return workflow_function
             except (ImportError, AttributeError) as e:
                 raise ImportError(
@@ -145,37 +147,47 @@ class ConfigBuilder:
             try:
                 # Import the module directly (like subprocess.py does)
                 import importlib
+
                 module = importlib.import_module(module_path)
-                
+
                 # Find workflow-decorated functions in the module
                 workflow_functions = []
                 for attr_name in dir(module):
                     attr = getattr(module, attr_name)
-                    if callable(attr) and hasattr(attr, '__name__'):
+                    if callable(attr) and hasattr(attr, "__name__"):
                         # Check if it's decorated with @workflow (look for workflow decorator metadata)
-                        if hasattr(attr, '_workflow_config') or 'workflow' in attr_name.lower():
+                        if (
+                            hasattr(attr, "_workflow_config")
+                            or "workflow" in attr_name.lower()
+                        ):
                             workflow_functions.append((attr_name, attr))
-                
+
                 if len(workflow_functions) == 0:
-                    raise ValueError(f"No workflow function found in module {module_path}")
+                    raise ValueError(
+                        f"No workflow function found in module {module_path}"
+                    )
                 elif len(workflow_functions) == 1:
                     function_name, workflow_function = workflow_functions[0]
-                    _logger.info("Successfully found workflow function: %s", function_name)
+                    _logger.info(
+                        "Successfully found workflow function: %s", function_name
+                    )
                     return workflow_function
                 else:
                     # Multiple workflow functions found, try to pick the most likely one
                     function_names = [name for name, _ in workflow_functions]
-                    _logger.warning("Multiple workflow functions found: %s", function_names)
+                    _logger.warning(
+                        "Multiple workflow functions found: %s", function_names
+                    )
                     # Pick the first one that contains 'workflow' in name
                     for name, func in workflow_functions:
-                        if 'workflow' in name:
+                        if "workflow" in name:
                             _logger.info("Selected workflow function: %s", name)
                             return func
                     # Fallback to first one
                     function_name, workflow_function = workflow_functions[0]
                     _logger.info("Selected first workflow function: %s", function_name)
                     return workflow_function
-                    
+
             except (ImportError, AttributeError) as e:
                 raise ImportError(f"Could not import module {module_path}: {e}")
 
@@ -246,7 +258,7 @@ class ConfigBuilder:
     def get_workflow_args(self) -> list:
         """
         Extract positional arguments for the workflow function.
-        
+
         Returns:
             list: List of positional argument values (empty for workflows using kwargs)
         """
@@ -257,46 +269,48 @@ class ConfigBuilder:
     def get_workflow_kwargs(self) -> dict:
         """
         Extract keyword arguments for the workflow function.
-        
+
         First tries to extract from ctx.run() calls in the module,
         then falls back to default parameter values.
-        
+
         Returns:
             dict: Dictionary of parameter names and their values
         """
         sig = inspect.signature(self._workflow_function_obj)
         kwargs = {}
-        
+
         # First, try to extract kwargs from ctx.run() calls in the module
         try:
             module = import_attribute(self._workflow_function_obj.__module__)
-            
+
             # Read the module source to extract ctx.run calls
             import ast
             import os
-            
+
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, 'r') as f:
+                with open(module_file, "r") as f:
                     source = f.read()
-                
+
                 # Parse the AST to find ctx.run calls
                 tree = ast.parse(source)
-                
+
                 for node in ast.walk(tree):
                     # Look for calls like: ctx.run(train_workflow, param=value)
-                    if (isinstance(node, ast.Call) and
-                        isinstance(node.func, ast.Attribute) and
-                        isinstance(node.func.value, ast.Name) and
-                        node.func.value.id == 'ctx' and
-                        node.func.attr == 'run'):
-                        
+                    if (
+                        isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "ctx"
+                        and node.func.attr == "run"
+                    ):
                         # Check if this is calling our workflow function
-                        if (len(node.args) > 0 and
-                            isinstance(node.args[0], ast.Name) and
-                            node.args[0].id == self._workflow_function_obj.__name__):
-                            
+                        if (
+                            len(node.args) > 0
+                            and isinstance(node.args[0], ast.Name)
+                            and node.args[0].id == self._workflow_function_obj.__name__
+                        ):
                             # Extract keyword arguments from the ctx.run call
                             for keyword in node.keywords:
                                 if isinstance(keyword.value, ast.Constant):
@@ -304,54 +318,55 @@ class ConfigBuilder:
                                 elif isinstance(keyword.value, ast.Str):  # Python < 3.8
                                     kwargs[keyword.arg] = keyword.value.s
                             break
-                        
+
         except Exception as e:
             _logger.warning("Could not extract kwargs from ctx.run calls: %s", e)
-        
+
         # Fall back to extracting parameters with default values
         for param_name, param in sig.parameters.items():
             if param_name not in kwargs and param.default != inspect.Parameter.empty:
                 kwargs[param_name] = param.default
-        
+
         _logger.info("Extracted workflow kwargs: %s", kwargs)
         return kwargs
 
     def get_workflow_environ(self) -> dict:
         """
         Get workflow environment variables by analyzing the workflow module.
-        
+
         Returns:
             dict: Environment variables for the workflow
         """
         environ = {}
-        
+
         # Try to extract environment variables from the workflow module
         try:
             module = import_attribute(self._workflow_function_obj.__module__)
-            
+
             # Read the module source to extract ctx.environ assignments
             import ast
             import os
-            
+
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, 'r') as f:
+                with open(module_file, "r") as f:
                     source = f.read()
-                
+
                 # Parse the AST to find ctx.environ assignments
                 tree = ast.parse(source)
-                
+
                 for node in ast.walk(tree):
                     # Look for assignments like: ctx.environ["KEY"] = "value"
-                    if (isinstance(node, ast.Assign) and 
-                        len(node.targets) == 1 and
-                        isinstance(node.targets[0], ast.Subscript) and
-                        isinstance(node.targets[0].value, ast.Attribute) and
-                        isinstance(node.targets[0].value.value, ast.Name) and
-                        node.targets[0].value.value.id == 'ctx' and
-                        node.targets[0].value.attr == 'environ'):
-                        
+                    if (
+                        isinstance(node, ast.Assign)
+                        and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Subscript)
+                        and isinstance(node.targets[0].value, ast.Attribute)
+                        and isinstance(node.targets[0].value.value, ast.Name)
+                        and node.targets[0].value.value.id == "ctx"
+                        and node.targets[0].value.attr == "environ"
+                    ):
                         # Extract key and value
                         if isinstance(node.targets[0].slice, ast.Constant):
                             key = node.targets[0].slice.value
@@ -359,35 +374,37 @@ class ConfigBuilder:
                             key = node.targets[0].slice.s
                         else:
                             continue
-                            
+
                         if isinstance(node.value, ast.Constant):
                             value = node.value.value
                         elif isinstance(node.value, ast.Str):  # Python < 3.8
                             value = node.value.s
                         else:
                             continue
-                            
+
                         environ[key] = str(value)
-                        
+
         except Exception as e:
-            _logger.warning("Could not extract environment variables from workflow: %s", e)
-        
+            _logger.warning(
+                "Could not extract environment variables from workflow: %s", e
+            )
+
         # Extract environment variables from config data if available
         if self._config_data and "environ" in self._config_data:
             environ.update(self._config_data["environ"])
-            
+
         _logger.info("Extracted workflow environ: %s", environ)
         return environ
 
     def get_workflow_config_as_manifest_content(self) -> dict:
         """
         Get workflow configuration formatted for manifest content.
-        
+
         Returns:
             dict: Configuration in the format expected by manifest content
         """
         return {
             "args": self.get_workflow_args(),
             "kwargs": [[k, v] for k, v in self.get_workflow_kwargs().items()],
-            "environ": self.get_workflow_environ()
+            "environ": self.get_workflow_environ(),
         }
