@@ -29,7 +29,7 @@ const (
 	WorkflowArgsKey            = "args"
 )
 
-// TaskProgress is the struct for the task progress queried from Uniflow Cadence Workflow
+// TaskProgress is the struct for the task progress queried from Cadence Workflow
 type TaskProgress struct {
 	TaskPath       string `json:"task_path"`
 	TaskName       string `json:"task_name"`
@@ -241,18 +241,19 @@ func (a *ExecuteWorkflowActor) GetType() string {
 }
 
 func updateUniflowStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 
 	// update pipelinerun step info
 	err := updatePipelineRunStepInfo(ctx, pipelineRun)
 	if err != nil {
-		log.Error(err, "Error updating PipelineRun Step Info")
+		logger.Error(err, "Error updating PipelineRun Step Info")
 		return err
 	}
 
 	// update final status
 	err = updateFinalStatus(ctx, pipelineRun)
 	if err != nil {
-		log.Error(err, "Error update final status")
+		logger.Error(err, "Error update final status")
 		// do not return error here, we still want to update the substep status
 		// the GetWorkflowExecutionInfo might fail due to transient issue
 		// one example is when MA queries a passive cadecne domain, the workflow status is not fully replicated yet from active region to the passive region
@@ -260,12 +261,46 @@ func updateUniflowStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error
 	return nil
 }
 
+func (a *ExecuteWorkflowActor) updateFinalStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	workflowID := pipelineRun.Status.OrchestrationWorkflowId
+	runID := pipelineRun.Status.OrchestrationExecutionId
+	cadenceDomain := a.config.CadenceDomain
+	cadenceService := a.config.CadenceService
+
+	// check the workflow final status
+	workflowExecutionInfo, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, workflowID, runID)
+	if err != nil {
+		return err
+	}
+	if workflowExecutionInfo == nil {
+		return fmt.Errorf("workflow execution info is nil")
+	}
+
+	if workflowExecutionInfo.IsSetCloseStatus() {
+		closeStatus := workflowExecutionInfo.GetCloseStatus()
+		executeWorkflow := getStepInfoByName(pipelinerunutils.ExecuteWorkflowStepName, pipelineRun.Status.Steps)
+		executeWorkflow.EndTime = pbtypes.TimestampNow()
+		switch closeStatus {
+		case cadenceShared.WorkflowExecutionCloseStatusCompleted:
+			executeWorkflow.State = v2beta1.PIPELINE_RUN_STEP_STATE_SUCCEEDED
+		case cadenceShared.WorkflowExecutionCloseStatusCanceled:
+			executeWorkflow.State = v2beta1.PIPELINE_RUN_STEP_STATE_KILLED
+			executeWorkflow.Message = "Cadence Workflow Execution Close Status: " + closeStatus.String()
+		case cadenceShared.WorkflowExecutionCloseStatusTerminated, cadenceShared.WorkflowExecutionCloseStatusFailed, cadenceShared.WorkflowExecutionCloseStatusTimedOut, cadenceShared.WorkflowExecutionCloseStatusContinuedAsNew: // We will not retry at pipelinerun controller
+			executeWorkflow.State = v2beta1.PIPELINE_RUN_STEP_STATE_FAILED
+			executeWorkflow.Message = "Cadence Workflow Execution Close Status: " + closeStatus.String()
+		}
+	}
+	return nil
+
+}
+
 func updatePipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) error {
 	newStepInfoList, err := constructPipelineRunStepInfo(ctx, pipelineRun)
 	if err != nil {
 		return err
 	}
-	executeWorkflow := getStepInfoByName(maSharedContants.ExecuteWorkflowStepName, pipelineRun.Status.Steps)
+	executeWorkflow := getStepInfoByName(pipelinerunutils.ExecuteWorkflowStepName, pipelineRun.Status.Steps)
 
 	if len(newStepInfoList) > 0 {
 		executeWorkflow.SubSteps = newStepInfoList
@@ -273,15 +308,24 @@ func updatePipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun)
 	return nil
 }
 
+func getStepInfoByName(stepName string, steps []*v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+	for _, step := range steps {
+		if step.Name == stepName {
+			return step
+		}
+	}
+	return nil
+}
+
 func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) ([]*v2.PipelineRunStepInfo, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 	workflowID := pipelineRun.Status.WorkflowId
 	runID := pipelineRun.Status.WorkflowRunId
 	cadenceDomain := a.config.CadenceDomain
 	cadenceService := a.config.CadenceService
 	// check the workflow progress
 	workflowProgressStr := []string{}
-	// TODO: how does OSS pipeline run query the workflow progress?
-	err := a.workflowClient.QueryWorkflow(ctx, workflowID, cadenceDomain, cadenceService, runID, maSharedContants.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
+	err := a.workflowClient.QueryWorkflow(ctx, workflowID, runID, pipelinerunutils.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
 	if err != nil {
 		return []*v2.PipelineRunStepInfo{}, err
 	}
@@ -293,12 +337,12 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 		var taskProgress TaskProgress
 		err := json.Unmarshal([]byte(progress), &taskProgress)
 		if err != nil {
-			log.Error(fmt.Errorf("Can not parase progress string"), err.Error(), "progress", progress)
+			logger.Error(fmt.Errorf("Can not parase progress string"), err.Error(), "progress", progress)
 			continue
 		}
 		taskName := taskProgress.TaskName
 		if taskName == "" {
-			log.Error(fmt.Errorf("taskName does not exist"), "taskName does not exist", "progress", progress)
+			logger.Error(fmt.Errorf("taskName does not exist"), "taskName does not exist", "progress", progress)
 			continue
 		}
 		if _, existingTask := stepMap[taskName]; !existingTask {
@@ -316,7 +360,7 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 	for _, stepName := range stepOrder {
 		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
 	}
-	log.Info("Ordered Step Info", "orderedStepInfo", orderedStepInfo)
+	logger.Info("Ordered Step Info", "orderedStepInfo", orderedStepInfo)
 	return orderedStepInfo, nil
 }
 
@@ -334,7 +378,7 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 	// If the latest attempt ID ALREADY exists in the old step info, update the driver URL
 	// If the latest attempt ID DOES NOT exist in the old step info, append the new attempt ID and driver URL
 
-	if attempIDAlreadyExists(oldStepInfo, newStepInfo) {
+	if attemptIDAlreadyExists(oldStepInfo, newStepInfo) {
 
 		mergedStepInfo.AttemptIds = oldStepInfo.AttemptIds
 
@@ -347,6 +391,24 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 	}
 
 	return mergedStepInfo
+}
+
+func attemptIDAlreadyExists(oldStepInfo *v2beta1.PipelineRunStepInfo, newStepInfo *v2beta1.PipelineRunStepInfo) bool {
+
+	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
+	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
+
+	// newStepInfo.AttemptIds is a list containiing the latest attempt id, example: ["5"]
+	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
+
+	// This function checks if the new attempt ID already exists, and is the last item in the old step info
+
+	if len(newStepInfo.AttemptIds) > 0 {
+		if len(oldStepInfo.AttemptIds) > 0 && newStepInfo.AttemptIds[0] == oldStepInfo.AttemptIds[len(oldStepInfo.AttemptIds)-1] {
+			return true
+		}
+	}
+	return false
 }
 
 func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *v2.PipelineRunStepInfo {
@@ -380,17 +442,17 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 		}
 	}
 	switch taskProgress.TaskState {
-	case maSharedContants.UniflowTaskStateRunning:
+	case pipelinerunutils.UniflowTaskStateRunning:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
-	case maSharedContants.UniflowTaskStateSucceeded:
+	case pipelinerunutils.UniflowTaskStateSucceeded:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
-	case maSharedContants.UniflowTaskStateFailed:
+	case pipelinerunutils.UniflowTaskStateFailed:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
 		stepInfo.Message = taskProgress.TaskMessage
-	case maSharedContants.UniflowTaskStateKilled:
+	case pipelinerunutils.UniflowTaskStateKilled:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		stepInfo.Message = taskProgress.TaskMessage
-	case maSharedContants.UniflowTaskStateSkipped:
+	case pipelinerunutils.UniflowTaskStateSkipped:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SKIPPED
 	default:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
