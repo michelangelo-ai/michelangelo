@@ -96,9 +96,32 @@ const executionSchema: ExecutionDetailViewSchema = {
         accessor: 'output',
       },
       {
-        type: 'struct',
-        label: 'Cached Outputs',
-        accessor: 'stepCachedOutputs',
+        type: 'metadata',
+        label: 'Execution Info',
+        accessor: (record: { displayName?: string; logUrl?: string }) => {
+          return {
+            executionName: record.displayName ?? 'N/A',
+            logUrl: record.logUrl ?? '',
+          };
+        },
+        cells: [
+          {
+            id: 'executionName',
+            label: 'Execution Name',
+            type: CellType.TEXT,
+            accessor: 'executionName',
+          },
+          {
+            id: 'logUrl',
+            label: 'Log URL',
+          },
+        ],
+      },
+      {
+        type: 'textarea',
+        label: 'Task Message',
+        accessor: 'message',
+        markdown: false,
       },
     ],
     stateBuilder: (record: { state: string }) => {

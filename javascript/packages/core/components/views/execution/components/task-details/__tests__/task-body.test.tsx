@@ -1,8 +1,12 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
+import { CellType } from '#core/components/cell/constants';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskBody } from '../task-body';
+
+import type { TaskBodySchema } from '../renderers/types';
 
 describe('TaskBody', () => {
   it('should render TaskNodeList when subtasks exist', () => {
@@ -94,5 +98,90 @@ describe('TaskBody', () => {
     // Should render subtask, not body schema
     expect(screen.getByText('Child Task')).toBeInTheDocument();
     expect(screen.queryByText('Should Not Render')).not.toBeInTheDocument();
+  });
+
+  it('should render textarea renderer for textarea type', () => {
+    const taskWithTextarea = createTask({
+      name: 'Log Task',
+      record: {
+        errorLog: 'Pipeline failed at step 3',
+      },
+    });
+
+    const bodySchema = [
+      {
+        type: 'textarea',
+        label: 'Error Log',
+        accessor: 'errorLog',
+        markdown: false,
+      },
+    ];
+
+    render(<TaskBody task={taskWithTextarea} bodySchema={bodySchema} />);
+
+    expect(screen.getByText('Error Log')).toBeInTheDocument();
+    expect(screen.getByText('Pipeline failed at step 3')).toBeInTheDocument();
+  });
+
+  it('should render metadata renderer for metadata type', async () => {
+    const user = userEvent.setup();
+    const taskWithMetadata = createTask({
+      name: 'Task with Metadata',
+      record: {
+        metadata: {
+          status: 'Success',
+          duration: '5m 30s',
+        },
+      },
+    });
+
+    const bodySchema = [
+      {
+        type: 'metadata',
+        label: 'Task Metadata',
+        accessor: 'metadata',
+        cells: [
+          {
+            id: 'status',
+            label: 'Status',
+            type: CellType.TEXT,
+            accessor: 'status',
+          },
+          {
+            id: 'duration',
+            label: 'Duration',
+            type: CellType.TEXT,
+            accessor: 'duration',
+          },
+        ],
+      },
+    ];
+
+    render(<TaskBody task={taskWithMetadata} bodySchema={bodySchema} />);
+
+    const accordionButton = screen.getByRole('button', { name: /Task Metadata/ });
+    await user.click(accordionButton);
+
+    expect(screen.getByText('Success')).toBeInTheDocument();
+    expect(screen.getByText('5m 30s')).toBeInTheDocument();
+  });
+
+  it('should handle unknown schema types gracefully', () => {
+    const taskWithUnknownSchema = createTask({
+      name: 'Task with Unknown Schema',
+      record: { data: 'some data' },
+    });
+
+    const bodySchema = [
+      {
+        type: 'unknown-type',
+        label: 'Unknown',
+        accessor: 'data',
+      } as unknown as TaskBodySchema,
+    ];
+
+    render(<TaskBody task={taskWithUnknownSchema} bodySchema={bodySchema} />);
+
+    expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });
 });

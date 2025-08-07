@@ -8,6 +8,8 @@ export const successfulPipelineRun = {
         state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
         startTime: { seconds: '1704067000', nanos: 0 },
         endTime: { seconds: '1704067100', nanos: 0 },
+        message:
+          'Successfully validated dataset with 1000 valid rows and 5 invalid rows. Schema validation passed.',
         input: {
           fields: {
             dataset_path: { stringValue: '/data/training.csv', kind: 'stringValue' },
@@ -23,6 +25,7 @@ export const successfulPipelineRun = {
         stepCachedOutputs: {
           intermediateVars: [{ namespace: 'ml-workspace', name: 'validation-cache-123' }],
         },
+        logUrl: 'https://example.com/logs/data-validation',
       },
       {
         subSteps: [
@@ -123,7 +126,8 @@ export const successfulPipelineRun = {
           seconds: '1704067800',
           nanos: 424685937,
         },
-        logUrl: '',
+        logUrl: 'https://build.example.com/logs/image-build-20240101',
+        message: 'All container images built successfully. Ready for deployment phase.',
         output: {
           fields: {
             preprocess: {
@@ -140,7 +144,6 @@ export const successfulPipelineRun = {
             },
           },
         },
-        message: '',
         displayName: 'Image Build',
         input: null,
         stepCachedOutputs: null,
@@ -276,7 +279,7 @@ export const successfulPipelineRun = {
         },
         logUrl: 'https://workflow.example.com/executions/run-20240101-120000/summary',
         output: null,
-        message: '',
+        message: 'Workflow completed successfully. All tasks executed without errors.',
         displayName: 'Execute Workflow',
         input: null,
         stepCachedOutputs: null,

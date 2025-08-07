@@ -1,6 +1,7 @@
+import type { RowCell } from '#core/components/row/types';
 import type { Accessor } from '#core/types/common/studio-types';
 
-export type TaskBodySchema = SharedTaskBodySchema;
+export type TaskBodySchema = SharedTaskBodySchema | TaskBodyTextareaSchema | TaskBodyMetadataSchema;
 
 export interface SharedTaskBodySchema {
   /**
@@ -19,4 +20,21 @@ export interface SharedTaskBodySchema {
    * @example (task) => task.input
    */
   accessor: Accessor<unknown>;
+}
+
+export interface TaskBodyTextareaSchema extends SharedTaskBodySchema {
+  error?: boolean;
+  markdown?: boolean;
+}
+
+export interface TaskBodyMetadataSchema extends SharedTaskBodySchema {
+  cells: RowCell[];
+}
+
+export interface TaskBodyTextAreaProps extends Omit<TaskBodyTextareaSchema, 'type' | 'accessor'> {
+  value?: string;
+}
+
+export interface TaskBodyMetadataProps extends Omit<TaskBodyMetadataSchema, 'type' | 'accessor'> {
+  value?: Record<string, unknown>;
 }
