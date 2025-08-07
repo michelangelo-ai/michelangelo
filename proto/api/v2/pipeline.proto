@@ -47,9 +47,6 @@ message TaskSpec {
   // This hash uniquely identifies the built container image target and is used to detect changes
   // in the image build configuration. When the hash changes, it indicates the image needs to be rebuilt.
   string image_target_hash = 3;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // PipelineManifest defines the configuration for a pipeline workflow:

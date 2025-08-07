@@ -131,9 +131,6 @@ message TerminationSpec {
   // - "Input data validation failed"
   // - "Container crashed with exit code 1"
   string reason = 2;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // SchedulingSpec defines configuration for job scheduling and resource allocation.
@@ -158,9 +155,6 @@ message SchedulingSpec {
   bool preemptible = 1;
 
   // TODO: Add priority related information
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // SchedulingInfo tracks job scheduling attempts and history.
