@@ -146,6 +146,25 @@ describe('Execution view', () => {
             label: 'Input Parameters',
             accessor: 'input',
           },
+          {
+            type: 'textarea',
+            label: 'Logs',
+            accessor: 'logs',
+            markdown: false,
+          },
+          {
+            type: 'metadata',
+            label: 'Performance',
+            accessor: 'performance',
+            cells: [
+              {
+                id: 'duration',
+                label: 'Duration',
+                type: CellType.TEXT,
+                accessor: 'duration',
+              },
+            ],
+          },
         ],
       },
     });
@@ -161,6 +180,10 @@ describe('Execution view', () => {
                 dataset: { stringValue: 'training_data.csv', kind: 'stringValue' },
               },
             },
+            logs: 'Model training completed',
+            performance: {
+              duration: '2h 15m',
+            },
           }),
         ],
       },
@@ -169,12 +192,26 @@ describe('Execution view', () => {
     render(<Execution schema={schemaWithBody} data={executionData} />);
 
     // No body content should be visible before accordion is expanded
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
+    expect(screen.queryByText('Logs')).not.toBeInTheDocument();
+    expect(screen.queryByText('Performance')).not.toBeInTheDocument();
 
-    // Expand accordion to see body content
+    // All body schema labels should be present after accordion is expanded
     await user.click(screen.getByRole('button', { name: 'Data Processing Task Down Small' }));
+    expect(screen.getByText('Input Parameters')).toBeInTheDocument();
+    expect(screen.getByText('Logs')).toBeInTheDocument();
+    expect(screen.getByText('Performance')).toBeInTheDocument();
+
+    // Textarea content should be immediately visible
+    expect(screen.getByLabelText('Logs')).toHaveTextContent('Model training completed');
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryByText('2h 15m')).not.toBeInTheDocument();
+
     await user.click(screen.getByRole('button', { name: /Input Parameters/ }));
     expect(screen.getByRole('textbox')).toBeInTheDocument();
     expect(screen.getByText('"training_data.csv"')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Performance/ }));
+    expect(screen.getByText('2h 15m')).toBeInTheDocument();
   });
 });
