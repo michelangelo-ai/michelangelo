@@ -35,8 +35,10 @@ type Metadata struct {
 
 // Spec represents the specification of a SparkOne.
 type Spec struct {
-	Pipeline            string `json:"pipeline,omitempty"`
-	MainApplicationFile string `json:"mainApplicationFile,omitempty"`
+	Pipeline            string   `json:"pipeline,omitempty"`
+	MainApplicationFile string   `json:"mainApplicationFile,omitempty"`
+	Arguments           []string `json:"arguments,omitempty"`
+	JobEnv              string   `json:"jobEnv,omitempty"`
 }
 
 // SparkOne represents a SparkOne resource.
