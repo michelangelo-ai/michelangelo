@@ -1,7 +1,7 @@
-import { StatefulPanel } from 'baseui/accordion';
 import { LabelSmall } from 'baseui/typography';
 
 import { TextEditor } from '#core/components/text-editor/text-editor';
+import { TaskPanel } from '#core/components/views/execution/styled-components';
 import { decodeStruct, isStruct } from '#core/utils/proto/struct-utils';
 
 export function TaskBodyStruct(props: { label: string; value: object | undefined | null }) {
@@ -11,8 +11,8 @@ export function TaskBodyStruct(props: { label: string; value: object | undefined
   const prettyJson = JSON.stringify(decodedValue, null, 2);
 
   return (
-    <StatefulPanel title={<LabelSmall>{label}</LabelSmall>}>
+    <TaskPanel title={<LabelSmall>{label}</LabelSmall>}>
       <TextEditor readOnly language="json" value={prettyJson} onChange={() => null} />
-    </StatefulPanel>
+    </TaskPanel>
   );
 }

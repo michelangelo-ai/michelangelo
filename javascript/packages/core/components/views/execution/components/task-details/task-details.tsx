@@ -1,5 +1,4 @@
-import { StatefulPanel } from 'baseui/accordion';
-
+import { TaskPanel } from '#core/components/views/execution/styled-components';
 import { TaskBody } from './task-body';
 import { TaskHeader } from './task-header';
 
@@ -22,12 +21,12 @@ export function TaskDetails<TTaskRecord extends object = object>(
 
   if (!!task.subTasks?.length || bodySchema?.length) {
     return (
-      <StatefulPanel
+      <TaskPanel
         title={<TaskHeader task={task} onClick={onClick} metadata={metadata} />}
         initialState={{ expanded: false }}
       >
         <TaskBody task={task} bodySchema={bodySchema} />
-      </StatefulPanel>
+      </TaskPanel>
     );
   }
 

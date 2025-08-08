@@ -17,7 +17,7 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
       <div className={css({ display: 'flex', gap: theme.sizing.scale500 })}>
         <div className={css({ marginTop: '2px' })}>
-          <TaskStateIcon state={state} size={20} />
+          <TaskStateIcon state={state} />
         </div>
         <div
           className={css({
