@@ -40,6 +40,7 @@ export function getRouterWrapper(options?: { location?: string }) {
     return (
       <MemoryRouter initialEntries={[location]}>
         <Routes>
+          <Route path=":projectId/:phase/:entity?" element={children} />
           <Route path=":projectId" element={children} />
           <Route path="*" element={children} />
         </Routes>
