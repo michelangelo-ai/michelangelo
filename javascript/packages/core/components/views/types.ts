@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 
-export type Props = {
+export type MainViewContainerProps = {
   children: ReactNode;
   hasBreadcrumb?: boolean;
 };
