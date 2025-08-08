@@ -6,9 +6,12 @@ import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
 import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
 import { Table } from '#core/components/table/table';
+import { DATA_PHASE } from '#core/config/phases/data';
+import { DEPLOY_PHASE } from '#core/config/phases/deploy';
+import { TRAIN_PHASE } from '#core/config/phases/train';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
-import { PhaseCard } from './components/phase-list/phase-card';
+import { PhaseCard } from './components/phase-card';
 import {
   PIPELINE_CELL_CONFIG,
   PIPELINE_RUN_CELL_CONFIG,
@@ -103,53 +106,19 @@ export function ProjectDetail() {
         <Row items={SHARED_PROJECT_CELL_CONFIG} record={data?.project} />
       </Box>
 
-      {/* Phase Card Demo */}
       <div
         className={css({
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
           gap: theme.sizing.scale600,
+          padding: theme.sizing.scale400,
         })}
       >
-        <PhaseCard
-          icon="database"
-          name="Prepare & Analyze Data"
-          description="Create data pipelines and analyze your datasets"
-          docUrl="https://example.com/docs/data"
-          state="disabled"
-          entities={[
-            { id: 'pipelines', name: 'pipelines', state: 'active' },
-            { id: 'datasources', name: 'data sources', state: 'active' },
-            { id: 'runs', name: 'runs', state: 'active' },
-          ]}
-        />
-
-        <PhaseCard
-          icon="chartLine"
-          name="Train & Evaluate"
-          description="Train machine learning models and evaluate their performance"
-          docUrl="https://example.com/docs/train"
-          state="active"
-          entities={[
-            { id: 'pipelines', name: 'pipelines', state: 'active' },
-            { id: 'runs', name: 'runs', state: 'active' },
-            { id: 'models', name: 'trained models', state: 'disabled' },
-            { id: 'evaluations', name: 'evaluations', state: 'disabled' },
-            { id: 'notebooks', name: 'notebooks', state: 'disabled' },
-          ]}
-        />
-
-        <PhaseCard
-          icon="database"
-          name="Deploy & Predict"
-          description="Deploy your models and predict new data"
-          docUrl="https://example.com/docs/predict"
-          state="comingSoon"
-          entities={[]}
-        />
+        {[DATA_PHASE, TRAIN_PHASE, DEPLOY_PHASE].map((phase, index) => (
+          <PhaseCard key={`${phase.name}-${index}`} {...phase} projectId={projectId} />
+        ))}
       </div>
 
-      {/* Pipelines Section */}
       <Card
         overrides={{
           Root: {
@@ -172,7 +141,6 @@ export function ProjectDetail() {
         />
       </Card>
 
-      {/* Pipeline Runs Section */}
       <Card
         overrides={{
           Root: {

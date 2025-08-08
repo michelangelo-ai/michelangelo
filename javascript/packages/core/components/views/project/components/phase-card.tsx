@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom-v5-compat';
 import { useStyletron } from 'baseui';
 import { Button, KIND, SHAPE, SIZE } from 'baseui/button';
 
@@ -8,8 +9,9 @@ import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
-export function PhaseCard(props: PhaseConfig) {
-  const { icon, name, description, docUrl, state, entities } = props;
+export function PhaseCard(props: PhaseConfig & { projectId: string }) {
+  const { id, icon, name, description, docUrl, state, entities, projectId } = props;
+  const navigate = useNavigate();
   const [css, theme] = useStyletron();
 
   const isPhaseDisabled = state === 'disabled' || state === 'comingSoon';
@@ -76,7 +78,7 @@ export function PhaseCard(props: PhaseConfig) {
             return (
               <Link
                 key={entity.id}
-                href={entity.id}
+                href={`/${projectId}/${id}/${entity.id}`}
                 overrides={{ Link: { style: theme.typography.ParagraphSmall } }}
               >
                 {capitalizeFirstLetter(entity.name)}
@@ -86,11 +88,12 @@ export function PhaseCard(props: PhaseConfig) {
         </div>
       )}
 
-      {!isPhaseDisabled && (
+      {!isPhaseDisabled && entities.length > 0 && (
         <Button
           kind={KIND.secondary}
           onClick={() => {
-            console.log('Navigate to phase');
+            const firstEntity = entities.find((entity) => entity.state === 'active') ?? entities[0];
+            navigate(`/${projectId}/${id}/${firstEntity.id}`);
           }}
           shape={SHAPE.circle}
           overrides={{ BaseButton: { style: { marginTop: 'auto' } } }}
