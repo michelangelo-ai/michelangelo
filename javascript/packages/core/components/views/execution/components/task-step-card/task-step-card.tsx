@@ -16,7 +16,7 @@ export function TaskStepCard<TTaskRecord extends object = object>(
 
   return (
     <TaskStepCardContainer $state={state} role="button" tabIndex={0} onClick={onClick}>
-      <TaskStateIcon state={state} size={20} />
+      <TaskStateIcon state={state} />
       <TaskStepName>{name}</TaskStepName>
       {hasSubTasks && focused ? (
         <div
