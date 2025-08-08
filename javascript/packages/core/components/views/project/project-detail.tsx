@@ -6,17 +6,15 @@ import { Box } from '#core/components/box/box';
 import { Row } from '#core/components/row/row';
 import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
 import { Table } from '#core/components/table/table';
+import { PIPELINE_CELL_CONFIG } from '#core/config/entities/pipeline/list';
+import { PIPELINE_RUN_CELL_CONFIG } from '#core/config/entities/run/list';
 import { DATA_PHASE } from '#core/config/phases/data';
 import { DEPLOY_PHASE } from '#core/config/phases/deploy';
 import { TRAIN_PHASE } from '#core/config/phases/train';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { PhaseCard } from './components/phase-card';
-import {
-  PIPELINE_CELL_CONFIG,
-  PIPELINE_RUN_CELL_CONFIG,
-  SHARED_PROJECT_CELL_CONFIG,
-} from './constants';
+import { SHARED_PROJECT_CELL_CONFIG } from './constants';
 
 import type { Theme } from 'baseui';
 

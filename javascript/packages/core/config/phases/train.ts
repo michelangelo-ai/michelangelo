@@ -1,3 +1,5 @@
+import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
+import { RUN_ENTITY_CONFIG } from '#core/config/entities/run/run';
 import { PhaseConfig } from '#core/types/common/studio-types';
 
 export const TRAIN_PHASE: PhaseConfig = {
@@ -8,10 +10,28 @@ export const TRAIN_PHASE: PhaseConfig = {
   docUrl: 'https://example.com/docs/train',
   state: 'active' as const,
   entities: [
-    { id: 'pipelines', name: 'pipelines', state: 'active' },
-    { id: 'runs', name: 'runs', state: 'active' },
-    { id: 'models', name: 'trained models', state: 'disabled' },
-    { id: 'evaluations', name: 'evaluations', state: 'disabled' },
-    { id: 'notebooks', name: 'notebooks', state: 'disabled' },
+    PIPELINE_ENTITY_CONFIG,
+    RUN_ENTITY_CONFIG,
+    {
+      id: 'models',
+      name: 'trained models',
+      state: 'disabled',
+      service: 'model',
+      views: [],
+    },
+    {
+      id: 'evaluations',
+      name: 'evaluations',
+      state: 'disabled',
+      service: 'evaluationReport',
+      views: [],
+    },
+    {
+      id: 'notebooks',
+      name: 'notebooks',
+      state: 'disabled',
+      service: 'notebook',
+      views: [],
+    },
   ],
 };

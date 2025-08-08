@@ -1,3 +1,5 @@
+import type { ViewConfig } from '#core/components/views/types';
+
 /**
  * Represents the different phases in the Michelangelo Studio workflow.
  * Each phase corresponds to a specific stage in the machine learning lifecycle.
@@ -80,14 +82,33 @@ export interface PhaseEntityConfig {
    * feature-consistency
    */
   id: string;
+  /**
+   * @description
+   * Name of underlying service that the entity is primarily tied to. Should be an
+   * exact match to the service's root protobuf field name.
+   *
+   * This field is used to access queries defined within RPC handlers.
+   *
+   * @example
+   * For PipelineService, root protobuf field name is pipeline. This
+   * field should be pipeline. Query will be ListPipeline.
+   *
+   * For PipelineRunService, root protobuf field name is pipelineRun. This field
+   * should be pipelineRun. Query will be ListPipelineRun.
+   */
+  service: string;
   /** State controlling whether this entity is interactive */
   state: PhaseEntityState;
+  /** List of view configurations for this entity */
+  views: ViewConfig[];
 }
 
 /**
  * Simplified phase configuration matching the original studio config structure
  */
 export interface PhaseConfig {
+  /** Unique ID for the phase, used in URL routing */
+  id: string;
   /** Icon name from the application's icon provider system */
   icon: string;
   /**
