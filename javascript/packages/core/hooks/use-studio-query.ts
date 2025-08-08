@@ -31,6 +31,7 @@ export const useStudioQuery = <TData>(args: {
       try {
         return (await request(queryName, { ...serviceOptions, namespace })) as Promise<TData>;
       } catch (error) {
+        console.log('error', error);
         throw normalizeError(error)!;
       }
     },
