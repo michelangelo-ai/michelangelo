@@ -1,7 +1,13 @@
+import { useState } from 'react';
+
 import { TABLE_STATE_DEFAULTS } from '#core/components/table/constants';
 import { usePersistedTableState } from './use-persisted-table-state';
 
-import type { ColumnFilter, ControlledTableState } from '#core/components/table/types/table-types';
+import type {
+  ColumnFilter,
+  ControlledTableState,
+  PaginationState,
+} from '#core/components/table/types/table-types';
 
 /**
  * Primary entry point for adding localStorage persistence to Table components.
@@ -38,10 +44,28 @@ export function useLocalStorageTableState({
     TABLE_STATE_DEFAULTS.columnFilters
   );
 
+  const [pageSize, setPageSize] = usePersistedTableState<number>(
+    `${tableSettingsId}.pageSize`,
+    TABLE_STATE_DEFAULTS.pagination.pageSize
+  );
+
+  // pageIndex is not persisted (resets on reload)
+  const [pageIndex, setPageIndex] = useState<number>(0);
+
   return {
     globalFilter,
     setGlobalFilter,
     columnFilters,
     setColumnFilters,
+    pagination: {
+      pageIndex,
+      pageSize,
+    },
+    setPagination: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => {
+      const currentState = { pageIndex, pageSize };
+      const newState = typeof updater === 'function' ? updater(currentState) : updater;
+      setPageIndex(newState.pageIndex);
+      setPageSize(newState.pageSize);
+    },
   };
 }

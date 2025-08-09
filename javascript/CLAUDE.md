@@ -139,7 +139,7 @@ export const TaskSeparator = styled('div', ({ $theme }) => ({
 
 ### Test Organization
 
-- **Follow existing test structure**: Use `describe` to group, `it('should...')` to document
+- **Use `describe` blocks only when tests truly benefit from grouping**: shared setup, complex state management, or related assertions that build on each other. Keep tests flat when individual test names are descriptive enough
 - **Place tests near code**: Use closest `__tests__/` directory
 - **Well-named mocks**: Use descriptive names that explain test intent
 - **Inline when appropriate**: For simple cases tied directly to test expectations

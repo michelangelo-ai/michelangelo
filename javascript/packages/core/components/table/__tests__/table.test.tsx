@@ -11,6 +11,8 @@ import { ApplicationError } from '#core/types/error-types';
 import { buildTableColumns, buildTableData } from '../__fixtures__/table-test-helpers';
 import { Table } from '../table';
 
+import type { TablePaginationProps } from '../components/table-pagination/types';
+
 describe('Table', () => {
   describe('with many columns and many rows', () => {
     const numberOfRows = 3;
@@ -767,6 +769,251 @@ describe('Table', () => {
         expect(screen.getByRole('row', { name: /Alice/ })).toBeInTheDocument();
         expect(screen.queryByRole('row', { name: /Bob/ })).not.toBeInTheDocument();
       });
+    });
+  });
+
+  describe('pagination integration', () => {
+    const buildLargeDataset = (totalRows = 100) => buildTableData(totalRows, 3);
+    const testColumns = buildTableColumns(3);
+
+    it('limits rows to page size when pagination is enabled', () => {
+      render(
+        <Table
+          data={buildLargeDataset(100)}
+          columns={testColumns}
+          pageSizes={[
+            { id: 10, label: '10' },
+            { id: 25, label: '25' },
+          ]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Pagination should limit the displayed rows
+      expect(screen.getAllByRole('row')).toHaveLength(11); // header + 10 data rows
+      expect(screen.getByText('row1-col1-data')).toBeInTheDocument();
+      expect(screen.getByText('row10-col1-data')).toBeInTheDocument();
+      expect(screen.queryByText('row11-col1-data')).not.toBeInTheDocument();
+    });
+
+    it('hides pagination when disablePagination is true', () => {
+      render(
+        <Table data={buildLargeDataset(100)} columns={testColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /previous/i })).not.toBeInTheDocument();
+    });
+
+    it('shows all rows when pagination is disabled', () => {
+      const testData = buildLargeDataset(25);
+      render(
+        <Table data={testData} columns={testColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getAllByRole('row')).toHaveLength(26);
+    });
+
+    it('renders custom pagination component instead of default', () => {
+      const CustomPaginationComponent = (props: TablePaginationProps) => (
+        <div data-testid="custom-pagination">
+          <span>Custom Pagination - Page {props.state.pageIndex + 1}</span>
+          <button onClick={() => props.gotoPage(props.state.pageIndex + 1)}>Custom Next</button>
+        </div>
+      );
+
+      render(
+        <Table
+          data={buildLargeDataset(50)}
+          columns={testColumns}
+          pagination={CustomPaginationComponent}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByTestId('custom-pagination')).toBeInTheDocument();
+      expect(screen.getByText('Custom Pagination - Page 1')).toBeInTheDocument();
+      expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
+    });
+
+    it('respects disablePagination even with custom component', () => {
+      const CustomPaginationComponent = (props: TablePaginationProps) => (
+        <div data-testid="custom-pagination">
+          Custom Pagination - Page {props.state.pageIndex + 1}
+        </div>
+      );
+
+      render(
+        <Table
+          data={buildLargeDataset(30)}
+          columns={testColumns}
+          pagination={CustomPaginationComponent}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByTestId('custom-pagination')).not.toBeInTheDocument();
+      expect(screen.getAllByRole('row')).toHaveLength(31);
+    });
+
+    it('shows different data when navigating between pages with custom pagination', async () => {
+      const user = userEvent.setup();
+      const pagedData = buildTableData(50, 3);
+
+      const CustomPagination = (props: TablePaginationProps) => (
+        <div>
+          <span>
+            Page {props.state.pageIndex + 1} of {props.pageCount}
+          </span>
+          <button onClick={() => props.gotoPage(props.state.pageIndex + 1)}>Next</button>
+        </div>
+      );
+
+      render(
+        <Table
+          data={pagedData}
+          columns={testColumns}
+          pageSizes={[{ id: 10, label: '10' }]}
+          pagination={CustomPagination}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByText('row1-col1-data')).toBeInTheDocument();
+      expect(screen.queryByText('row11-col1-data')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Next' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('row11-col1-data')).toBeInTheDocument();
+        expect(screen.queryByText('row1-col1-data')).not.toBeInTheDocument();
+      });
+    });
+
+    it('changes page size with custom pagination', async () => {
+      const user = userEvent.setup();
+      const pagedData = buildLargeDataset(50);
+
+      const CustomPagination = (props: TablePaginationProps) => (
+        <div>
+          <span>
+            Page {props.state.pageIndex + 1} of {props.pageCount}
+          </span>
+          <select
+            value={props.state.pageSize}
+            onChange={(e) => props.setPageSize(Number(e.target.value))}
+          >
+            {props.pageSizes.map((size) => (
+              <option key={size.id} value={size.id}>
+                {size.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      );
+
+      render(
+        <Table
+          data={pagedData}
+          columns={testColumns}
+          pageSizes={[
+            { id: 10, label: '10' },
+            { id: 25, label: '25' },
+          ]}
+          pagination={CustomPagination}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByText('Page 1 of 5')).toBeInTheDocument();
+
+      await user.selectOptions(screen.getByRole('combobox'), '25');
+
+      await waitFor(() => {
+        expect(screen.getByText('Page 1 of 2')).toBeInTheDocument();
+      });
+    });
+
+    it('shows pagination state for single page with custom pagination', () => {
+      const singlePageData = buildLargeDataset(15);
+
+      const CustomPagination = (props: TablePaginationProps) => (
+        <div>
+          <span>
+            Page {props.state.pageIndex + 1} of {props.pageCount}
+          </span>
+          <button
+            onClick={() => props.gotoPage(props.state.pageIndex + 1)}
+            disabled={props.state.pageIndex >= props.pageCount - 1}
+          >
+            Next
+          </button>
+        </div>
+      );
+
+      render(
+        <Table
+          data={singlePageData}
+          columns={testColumns}
+          pageSizes={[{ id: 15, label: '15' }]}
+          pagination={CustomPagination}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    });
+
+    it('hides pagination for empty data', () => {
+      render(
+        <Table data={[]} columns={testColumns} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+      expect(screen.getByText('No data')).toBeInTheDocument();
     });
   });
 });

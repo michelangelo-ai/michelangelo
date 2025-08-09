@@ -2,6 +2,7 @@ import { EmptyState } from '../components/table-empty-state/types';
 
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableActionBarConfig } from '../components/table-action-bar/types';
+import type { PageSizeOption, TablePaginationProps } from '../components/table-pagination/types';
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
 
@@ -82,6 +83,23 @@ export interface TableRequiredFunctionalityProps {
 
   /**
    * @description
+   * If true, table will display all data in a single page without pagination controls.
+   *
+   * @default false
+   */
+  disablePagination: boolean;
+
+  /**
+   * @description
+   * Available page sizes for the table, formatted to provide to a dropdown
+   * so user can modify page size during runtime.
+   *
+   * @default [{ id: 15, label: '15' }, { id: 25, label: '25' }, { id: 50, label: '50' }]
+   */
+  pageSizes: PageSizeOption[];
+
+  /**
+   * @description
    * Table state for managing filters and other table state.
    * Can include both controlled state (with setters) and initial state (without setters).
    *
@@ -104,6 +122,26 @@ export interface TableRequiredFunctionalityProps {
    * @default undefined
    */
   state: Partial<ControlledTableState> | undefined;
+
+  /**
+   * @description
+   * Pagination component to render at the bottom of the table for tables that have pagination enabled.
+   *
+   * @default TablePagination
+   */
+  pagination: React.ComponentType<TablePaginationProps>;
+
+  /**
+   * @description
+   * Server-side pagination plugin for handling infinite scroll or "load more" functionality.
+   * When provided, enables fetching additional data when reaching the last page.
+   *
+   * @default undefined
+   */
+  fetchPlugin?: {
+    fetchNextPage: () => void;
+    isFetchNextPageInProgress: boolean;
+  };
 }
 
 /**
@@ -135,6 +173,13 @@ export type ColumnFilter = {
   value: unknown;
 };
 
+export type PaginationState = {
+  /** Current page index (0-based) */
+  pageIndex: number;
+  /** Number of rows per page */
+  pageSize: number;
+};
+
 /**
  * Table state containing aspects of table behavior.
  */
@@ -143,6 +188,8 @@ export type TableState = {
   globalFilter: string;
   /** Column-specific filter values */
   columnFilters: ColumnFilter[];
+  /** Pagination state */
+  pagination: PaginationState;
 };
 
 /**
@@ -155,4 +202,5 @@ export type ControlledTableState = TableState & {
       | ((old: TableState['globalFilter']) => TableState['globalFilter'])
   ) => void;
   setColumnFilters: (updater: ColumnFilter[] | ((old: ColumnFilter[]) => ColumnFilter[])) => void;
+  setPagination: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
 };

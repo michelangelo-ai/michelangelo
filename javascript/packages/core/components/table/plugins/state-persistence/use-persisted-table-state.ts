@@ -4,7 +4,6 @@ import { get } from 'lodash';
 import { getAllTableUserSettings, updateUserTableSettings } from './utils';
 
 import type { Dispatch, SetStateAction } from 'react';
-import type { TableState } from '#core/components/table/types/table-types';
 
 /**
  * Custom hook to manage and persist individual pieces of table state.
@@ -16,7 +15,7 @@ import type { TableState } from '#core/components/table/types/table-types';
  * @param defaultValue - The default value for the state
  * @returns Tuple of [currentState, setStateFunction]
  */
-export function usePersistedTableState<StateType extends TableState[keyof TableState]>(
+export function usePersistedTableState<StateType>(
   id: string,
   defaultValue: StateType
 ): [StateType, Dispatch<SetStateAction<StateType>>] {

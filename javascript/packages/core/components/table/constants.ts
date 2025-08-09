@@ -1,3 +1,5 @@
+import { DEFAULT_PAGE_SIZE } from './components/table-pagination/constants';
+
 import type { TableState } from './types/table-types';
 
 /**
@@ -35,6 +37,10 @@ export const MULTI_COLUMN_DATA_JOIN_STRING = '__JOIN__';
 export const TABLE_STATE_DEFAULTS: TableState = {
   globalFilter: '',
   columnFilters: [],
+  pagination: {
+    pageIndex: 0,
+    pageSize: DEFAULT_PAGE_SIZE,
+  },
 } as const;
 
 export const TABLE_LOCAL_STORAGE_KEY = 'ma-studio-table-settings';

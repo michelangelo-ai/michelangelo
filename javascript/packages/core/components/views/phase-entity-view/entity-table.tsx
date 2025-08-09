@@ -37,6 +37,10 @@ export function EntityTable({ service, listViewConfig, tableSettingsId }: Entity
       error={error ?? undefined}
       columns={listViewConfig.columns}
       loading={isLoading}
+      pageSizes={[
+        { id: 1, label: '1' },
+        { id: 2, label: '2' },
+      ]}
       state={entityTableState}
     />
   );

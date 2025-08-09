@@ -1,9 +1,13 @@
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { TableLoadingState } from '../components/table-loading-state';
+import { PAGE_SIZE_SELECTION_OPTIONS } from '../components/table-pagination/constants';
+import { TablePagination } from '../components/table-pagination/table-pagination';
+import { normalizePageSize } from '../components/table-pagination/utils';
 
+import type { PageSizeOption } from '../components/table-pagination/types';
 import type { TableData } from '../types/data-types';
-import type { TableProps, TablePropsResolved } from '../types/table-types';
+import type { ControlledTableState, TableProps, TablePropsResolved } from '../types/table-types';
 
 /**
  * Applies default properties to the given table properties.
@@ -14,6 +18,9 @@ import type { TableProps, TablePropsResolved } from '../types/table-types';
 export function applyDefaultProps<T extends TableData = TableData>(
   props: TableProps<T>
 ): TablePropsResolved<T> {
+  const disablePagination = props.disablePagination ?? false;
+  const pageSizes = props.pageSizes ?? PAGE_SIZE_SELECTION_OPTIONS;
+
   return {
     ...props,
     emptyState: props.emptyState ?? {
@@ -34,6 +41,31 @@ export function applyDefaultProps<T extends TableData = TableData>(
       enableSearch: true,
       enableFilters: true,
     },
-    state: props.state ?? undefined,
+    disablePagination,
+    pageSizes,
+    state: resolveTableState(props.state, disablePagination, pageSizes),
+    pagination: props.pagination ?? TablePagination,
+  };
+}
+
+function resolveTableState(
+  userState: Partial<ControlledTableState> | undefined,
+  disablePagination: boolean,
+  pageSizes: PageSizeOption[]
+): Partial<ControlledTableState> | undefined {
+  if (disablePagination || userState?.setPagination) {
+    return userState;
+  }
+
+  const requestedPageSize = userState?.pagination?.pageSize;
+  const normalizedPageSize = normalizePageSize(requestedPageSize, pageSizes);
+
+  return {
+    ...userState,
+    pagination: {
+      pageIndex: 0,
+      ...userState?.pagination,
+      pageSize: normalizedPageSize,
+    },
   };
 }
