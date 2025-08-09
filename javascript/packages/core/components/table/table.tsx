@@ -1,4 +1,9 @@
-import { getCoreRowModel, getFilteredRowModel, useReactTable } from '@tanstack/react-table';
+import {
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  useReactTable,
+} from '@tanstack/react-table';
 import { StyledTable } from 'baseui/table-semantic';
 
 import { transformFilterableColumns } from './components/table-action-bar/components/table-filter-menu/transform-filterable-columns';
@@ -32,8 +37,10 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     ...(Object.keys(state).length > 0 && { state }),
     ...(state.setGlobalFilter ? { onGlobalFilterChange: state.setGlobalFilter } : {}),
     ...(state.setColumnFilters ? { onColumnFiltersChange: state.setColumnFilters } : {}),
+    ...(state.setPagination ? { onPaginationChange: state.setPagination } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    ...(!props.disablePagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     globalFilterFn: 'includesString',
   });
 
@@ -85,9 +92,26 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         )}
 
         {viewState === 'ready' && (
-          <TableBody<T> rows={transformRows<T>(table.getFilteredRowModel().rows)} />
+          <TableBody<T>
+            rows={transformRows<T>(
+              !props.disablePagination
+                ? table.getPaginationRowModel().rows
+                : table.getFilteredRowModel().rows
+            )}
+          />
         )}
       </StyledTable>
+
+      {!props.disablePagination && viewState === 'ready' && (
+        <props.pagination
+          gotoPage={table.setPageIndex}
+          pageCount={table.getPageCount()}
+          setPageSize={table.setPageSize}
+          state={table.getState().pagination}
+          pageSizes={props.pageSizes}
+          fetchPlugin={props.fetchPlugin}
+        />
+      )}
     </TableContainer>
   );
 }
