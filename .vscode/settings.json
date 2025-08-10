@@ -1,22 +1,54 @@
 {
-    "python.analysis.extraPaths": [
-        "./python"
+  // python
+  "python.analysis.extraPaths": [
+    "./python"
+  ],
+  // yaml
+  "[yaml]": {
+    "editor.formatOnSave": false
+  },
+  // javascript
+  "eslint.workingDirectories": [
+    "./javascript"
+  ],
+
+  // go
+  "go.toolsEnvVars": {
+    "GOPACKAGESDRIVER": "${workspaceFolder}/tools/gopackagesdriver.sh"
+  },
+  "go.enableCodeLens": {
+    "runtest": false
+  },
+  "gopls": {
+    "build.workspaceFiles": [
+      "**/BUILD",
+      "**/WORKSPACE",
+      "**/*.{bzl,bazel}",
     ],
-    "[yaml]": {
-        "editor.formatOnSave": false
-    },
-    "eslint.workingDirectories": [
-        "./javascript"
+    "build.directoryFilters": [
+      "-bazel-bin",
+      "-bazel-out",
+      "-bazel-testlogs",
+      "-bazel-michelangelo",
     ],
-    "go.toolsEnvVars": {
-        "GO111MODULE": "on",
-        "GOFLAGS": "-mod=vendor",
+    "formatting.gofumpt": true,
+    "formatting.local": "github.com/michelangelo-ai/michelangelo",
+    "ui.completion.usePlaceholders": true,
+    "ui.semanticTokens": true,
+    "ui.codelenses": {
+      "gc_details": false,
+      "regenerate_cgo": false,
+      "generate": false,
+      "test": false,
+      "tidy": false,
+      "upgrade_dependency": false,
+      "vendor": false
     },
-    "gopls": {
-        "verboseOutput": true,
-        "build.directoryFilters": [
-            "-",
-            "+go",
-        ],
-    }
+  },
+  "go.useLanguageServer": true,
+  "go.buildOnSave": "off",
+  "go.lintOnSave": "off",
+  "go.vetOnSave": "off",
+  // bazel
+  "bazel.lsp.command": "bazel-lsp",
 }
