@@ -11,6 +11,13 @@ jobs:
         working-directory: ./python
     steps:
       #----------------------------------------------
+      #  Checkout repository first (required for local actions)
+      #----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for git operations
+      #----------------------------------------------
       #  Setup Python and Poetry using composite action
       #----------------------------------------------
       - name: Setup Python and Poetry
