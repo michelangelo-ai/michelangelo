@@ -1,0 +1,31 @@
+# Build and upload release when a version tag (a tag starting with v) is pushed
+name: build-release
+on:
+  push:
+    tags: ["v*"]
+jobs:
+  build-upload:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python
+    steps:
+      #----------------------------------------------
+      #  Setup Python and Poetry using composite action
+      #----------------------------------------------
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
+        with:
+          working-directory: './python'
+      #----------------------------------------------
+      #  Build the wheel file
+      #----------------------------------------------
+      - run: |
+          poetry build -f wheel
+      #----------------------------------------------
+      #  Upload the wheel file to the release
+      #----------------------------------------------
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: dist/*.whl
