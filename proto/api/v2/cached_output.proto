@@ -48,7 +48,6 @@ message VariableSpec {
 
   // metadata for UI display
   google.protobuf.Struct metadata = 3;
-
 }
 
 // Describes the generated checkpoints CACHED_OUTPUT_TYPE_TRANSFORM_CKPT / CACHED_OUTPUT_TYPE_TRAINING_CKPT
@@ -57,7 +56,6 @@ message CheckpointSpec {
   string id = 1;
   // metadata for UI display
   google.protobuf.Struct metadata = 2;
-
 }
 
 // Describes the spec for raw model
