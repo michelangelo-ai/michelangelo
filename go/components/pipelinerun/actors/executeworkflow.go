@@ -29,6 +29,19 @@ const (
 	WorkflowArgsKey            = "args"
 )
 
+// TaskProgress is the struct for the task progress queried from Cadence Workflow
+type TaskProgress struct {
+	TaskPath       string `json:"task_path"`
+	TaskName       string `json:"task_name"`
+	TaskLog        string `json:"task_log"`
+	TaskMessage    string `json:"task_message"`
+	TaskState      string `json:"task_state"`
+	StartTime      string `json:"start_time"`
+	EndTime        string `json:"end_time"`
+	Output         string `json:"output"`
+	RetryAttemptID string `json:"retry_attempt_id"`
+}
+
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -94,17 +107,45 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	switch workflowExecution.Status {
 	case clientInterfaces.WorkflowExecutionStatusRunning:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+		// Query and update task-level status
+		taskSteps, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			logger.Warn("Failed to query task progress", zap.Error(err))
+		} else if len(taskSteps) > 0 {
+			executeWorkflowStep.SubSteps = taskSteps
+		}
 	case clientInterfaces.WorkflowExecutionStatusCompleted:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		// Query final task-level status
+		taskSteps, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			logger.Warn("Failed to query final task progress", zap.Error(err))
+		} else if len(taskSteps) > 0 {
+			executeWorkflowStep.SubSteps = taskSteps
+		}
 		newCondition.Status = apipb.CONDITION_STATUS_TRUE
 	case clientInterfaces.WorkflowExecutionStatusFailed, clientInterfaces.WorkflowExecutionStatusTimedOut:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		// Query task-level status to identify which task failed
+		taskSteps, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			logger.Warn("Failed to query task progress on failure", zap.Error(err))
+		} else if len(taskSteps) > 0 {
+			executeWorkflowStep.SubSteps = taskSteps
+		}
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
 	case clientInterfaces.WorkflowExecutionStatusCanceled, clientInterfaces.WorkflowExecutionStatusTerminated:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+		// Query task-level status
+		taskSteps, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+		if err != nil {
+			logger.Warn("Failed to query task progress on cancel", zap.Error(err))
+		} else if len(taskSteps) > 0 {
+			executeWorkflowStep.SubSteps = taskSteps
+		}
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
 	}
 	return newCondition, nil
@@ -215,4 +256,125 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
+}
+
+// constructPipelineRunStepInfo queries the workflow for task progress and constructs PipelineRunStepInfo for each task
+func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) ([]*v2.PipelineRunStepInfo, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+	workflowID := pipelineRun.Status.WorkflowId
+	runID := pipelineRun.Status.WorkflowRunId
+	
+	// Query workflow for task progress
+	var workflowProgressStr []string
+	err := a.workflowClient.QueryWorkflow(ctx, workflowID, runID, pipelinerunutils.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query workflow task progress: %w", err)
+	}
+	
+	// Construct PipelineRunStepInfo for each task
+	orderedStepInfo := []*v2.PipelineRunStepInfo{}
+	stepMap := make(map[string]*v2.PipelineRunStepInfo)
+	stepOrder := []string{}
+	
+	for _, progress := range workflowProgressStr {
+		var taskProgress TaskProgress
+		err := json.Unmarshal([]byte(progress), &taskProgress)
+		if err != nil {
+			logger.Error("Failed to parse task progress", zap.Error(err), zap.String("progress", progress))
+			continue
+		}
+		
+		taskName := taskProgress.TaskName
+		if taskName == "" {
+			logger.Warn("Task name is empty", zap.String("progress", progress))
+			continue
+		}
+		
+		if _, exists := stepMap[taskName]; !exists {
+			stepOrder = append(stepOrder, taskName)
+			stepMap[taskName] = a.getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+		} else {
+			// Merge task progress for retries
+			oldStepInfo := stepMap[taskName]
+			newStepInfo := a.getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+			stepMap[taskName] = a.mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
+		}
+	}
+	
+	for _, stepName := range stepOrder {
+		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
+	}
+	
+	logger.Debug("Constructed task step info", zap.Int("count", len(orderedStepInfo)))
+	return orderedStepInfo, nil
+}
+
+// getStepInfoFromTaskProgress converts TaskProgress to PipelineRunStepInfo
+func (a *ExecuteWorkflowActor) getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *v2.PipelineRunStepInfo {
+	stepInfo := &v2.PipelineRunStepInfo{
+		Name:        taskProgress.TaskPath,
+		DisplayName: taskProgress.TaskName,
+	}
+	
+	// Parse start time
+	if taskProgress.StartTime != "" {
+		startTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.StartTime)
+		if err == nil {
+			stepInfo.StartTime = &pbtypes.Timestamp{Seconds: startTime.Unix()}
+		}
+	}
+	
+	// Parse end time
+	if taskProgress.EndTime != "" {
+		endTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.EndTime)
+		if err == nil {
+			stepInfo.EndTime = &pbtypes.Timestamp{Seconds: endTime.Unix()}
+		}
+	}
+	
+	// Set output if available
+	if taskProgress.Output != "" {
+		stepInfo.Output = &pbtypes.Struct{
+			Fields: map[string]*pbtypes.Value{
+				"output": {
+					Kind: &pbtypes.Value_StringValue{
+						StringValue: taskProgress.Output,
+					},
+				},
+			},
+		}
+	}
+	
+	// Map task state to PipelineRunStepState
+	switch taskProgress.TaskState {
+	case pipelinerunutils.UniflowTaskStateRunning:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+	case pipelinerunutils.UniflowTaskStateSucceeded:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
+	case pipelinerunutils.UniflowTaskStateFailed:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+		stepInfo.Message = taskProgress.TaskMessage
+	case pipelinerunutils.UniflowTaskStateKilled:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+		stepInfo.Message = taskProgress.TaskMessage
+	case pipelinerunutils.UniflowTaskStateSkipped:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SKIPPED
+	default:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
+	}
+	
+	return stepInfo
+}
+
+// mergePipelineRunStepInfo merges retry attempt information into existing step info
+func (a *ExecuteWorkflowActor) mergePipelineRunStepInfo(oldStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+	// Use the latest step info as base
+	mergedStepInfo := proto.Clone(newStepInfo).(*v2.PipelineRunStepInfo)
+	
+	// Preserve sub-steps from old step if they exist and new doesn't have them
+	if len(oldStepInfo.SubSteps) > 0 && len(newStepInfo.SubSteps) == 0 {
+		mergedStepInfo.SubSteps = oldStepInfo.SubSteps
+	}
+	
+	return mergedStepInfo
 }
