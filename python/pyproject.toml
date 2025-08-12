@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Michelangelo is an end-to-end model lifecycle management system at large scale"
 authors = ["Michelangelo Team <michelangelo-oss-group@uber.com>"]
 readme = "README.md"
-exclude = ["michelangelo"]    # TODO: temporary exclude all codes in package building
+exclude = ["michelangelo/example", "michelangelo/tests", "michelangelo/tools"]    # TODO: temporary exclude all codes in package building
 packages = [
     { include = "michelangelo" },
 ]
@@ -72,8 +72,8 @@ pythonpath = [
 
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core", "poetry-dynamic-versioning"]
+build-backend = "poetry_dynamic_versioning.backend"
 
 
 [tool.ruff]
@@ -156,3 +156,8 @@ docstring-code-format = false
 # This only has an effect when the `docstring-code-format` setting is
 # enabled.
 docstring-code-line-length = "dynamic"
+
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "pep440"

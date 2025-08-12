@@ -37,49 +37,21 @@ jobs:
         working-directory: ./python
 
     steps:
-      # Reference
-      # https://github.com/marketplace/actions/install-poetry-action
+      #----------------------------------------------
+      #  Checkout repository first (required for local actions)
+      #----------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch full history for git operations
 
       #----------------------------------------------
-      #       check-out repo and set-up python
+      #  Setup Python and Poetry using composite action
       #----------------------------------------------
-      - name: Check out repository
-        uses: actions/checkout@v4
-      - name: Set up python
-        id: setup-python
-        uses: actions/setup-python@v5
+      - name: Setup Python and Poetry
+        uses: ./.github/actions/setup-python-poetry
         with:
-          python-version: '3.9'
-      #----------------------------------------------
-      #  -----  install & configure poetry  -----
-      #----------------------------------------------
-      - name: Install Poetry
-        uses: snok/install-poetry@v1
-        with:
-          virtualenvs-create: true
-          virtualenvs-in-project: true
-          virtualenvs-path: .venv
-          installer-parallel: true
-      #----------------------------------------------
-      #       load cached venv if cache exists
-      #----------------------------------------------
-      - name: Load cached venv
-        id: cached-poetry-dependencies
-        uses: actions/cache@v4
-        with:
-          path: .venv
-          key: venv-${{ runner.os }}-${{ steps.setup-python.outputs.python-version }}-${{ hashFiles('**/poetry.lock') }}
-      #----------------------------------------------
-      # install dependencies if cache does not exist
-      #----------------------------------------------
-      - name: Install dependencies
-        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
-        run: poetry install --no-interaction --no-root -E dev
-      #----------------------------------------------
-      # install your root project, if required
-      #----------------------------------------------
-      - name: Install project
-        run: poetry install --no-interaction
+          working-directory: './python'
       #----------------------------------------------
       #              run test suite
       #----------------------------------------------
