@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"github.com/gogo/protobuf/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -75,7 +76,7 @@ var (
 				Tier:        3,
 				GitRepo:     "repo",
 				RootDir:     "root",
-				Ext:         &v2pb.Ext{Any: &v2pb.Any{}},
+				Ext:         &types.Any{},
 			},
 		},
 	}
