@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "rayhttp", "time")
-load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "DEFAULT_RETRY_ATTEMPTS", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_iam_role", "get_task_architecture", "get_task_name", "io_read_json", "normalize_task_name", "report_progress", "resource_dict", "get_task_pipeline", COMMONS_ENV = "ENV")
 
 CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -271,7 +271,7 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
             retryable = True
         else:
             print("Ray task failed after all (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") attempts were exhausted")
-            fail("Ray task failed after all retry attempts were exhausted ", "internal:", "message:bad job status:", job["status"]["state"], job)
+            fail("Ray task failed after all retry attempts were exhausted ", "internal:", job)
 
     return retryable
 
@@ -302,6 +302,9 @@ def execute_ray_task(
     env.update(RAY_ENV)
     env.update(os.environ)
     env.update({"_RAY_INIT_KWARGS": str(ray_init_kwargs)})
+    env.update({"MLP_PIPELINE": get_task_pipeline()})
+    env.update({"NAMESPACE": "svc-aip-chimeratest"})
+    env.update({"MLFLOW_ARTIFACT_LOCATION": "s3://chimera-mlpipeline/data-cauldron-test-dev/mlflow"})
     env = [
         {"name": k, "value": v}
         for k, v in env.items()

@@ -36,6 +36,7 @@ def spark_task(
         start_time_seconds = time.time()
         start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
         final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
+
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
             cached_output = get_cached_output(namespace, cache_keys)
@@ -81,7 +82,7 @@ def spark_task(
 
         result_url = get_result_url()
         _args = json.dumps(args) if args else "[]"
-        _kwargs = json.dumps(kwargs) if kwargs else "{}"
+        _kwargs = "\'" + json.dumps(kwargs) + "\'" if kwargs else "'{}'"
 
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
@@ -93,8 +94,9 @@ def spark_task(
                 start_time_formated_str=start_time_formated_str,
                 retry_attempt_id=retry_attempt_id,
                 total_retry_attempt=total_retry_attempt,
-                args=args,
-                kwargs=kwargs,
+                result_url=result_url,
+                args=_args,
+                kwargs=_kwargs,
             )
 
             retryable = process_terminated_spark_job(
@@ -115,9 +117,9 @@ def spark_task(
             if retryable == False:
                 break
 
-        # result = io_read_json(result_url)
-        # print("spark | caching", "result:", result)
-        return "NA"
+        result = io_read_json(result_url)
+        print("spark | caching", "result:", result)
+        return result
 
     def with_overrides(alias = alias, config = spark_config(), retry_attempts = DEFAULT_RETRY_ATTEMPTS):
         return spark_task(
@@ -147,16 +149,16 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     if job_state == TASK_STATE_SUCCEEDED:
 
-        # cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        # print("spark | caching with key", "key:", cache_keys)
-        # created_cached_output = create_cached_output(
-        #     namespace = namespace,
-        #     cache_keys = cache_keys,
-        #     zone = "",
-        #     ttl_in_days = 0,
-        #     task_name = task_name,
-        #     result_json_url = result_url,
-        # )
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        print("spark | caching with key", "key:", cache_keys)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
         end_time_seconds = time.time()
         end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
 
@@ -172,7 +174,7 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
             # task_log = driver_log_url,
             end_time = end_time_formated_str,
             task_message = "Spark job succeeded",
-            # output = created_cached_output.get("metadata", {}).get("name", ""),
+            output = created_cached_output.get("metadata", {}).get("name", ""),
             retry_attempt_id = retry_attempt_id,
         )
         print("Spark job succeeded, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") succeeded")
@@ -192,16 +194,25 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     return retryable
 
-def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt, args, kwargs):
+def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt, result_url, args, kwargs):
 
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
 
     # driver_log_url = ""
 
-    # task_path: examples.bert_cola.uniflow_spark.uf_test_spark_query
-    name = task_path.split(".")[1].replace("_", "-")
+    # task_path: uniflow.bert_cola.sparkone_example.uniflow_spark.spark_query
+    uniflow_folder = task_path.split(".")[1]
+    job_folder = task_path.split(".")[2]
     main_application_file = task_name + ".py"
     pipeline = get_task_pipeline()
+
+    env = dict(COMMONS_ENV.items())
+    env.update(SPARK_ENV)
+    env.update(os.environ)
+    env = " ".join([
+        "{}='{}'".format(k, v)
+        for k, v in env.items()
+    ])
 
     # submit spark job
     print("spark | submit job. ns:", namespace, "task_name:", task_name)
@@ -210,12 +221,14 @@ def execute_spark_task(namespace, task_name, task_path, start_time_formated_str,
         "kind": "SparkOne",
         "apiVersion": "ml.chimera.kubebuilder.io/v1",
         "metadata": {
-            "name": name,
+            "name": job_folder.replace("_", "-"),
         },
         "spec": {
             "pipeline": pipeline,
             "mainApplicationFile": "s3://chimera-mlpipeline/artifact/cauldron-test/svc.aip.chimeratest/pipelines/uniflow-poc/michelangelo/uniflow/core/run_task.py",
-            "arguments": ["--task", task_path, "--args", args, "--kwargs", kwargs, "--result-url", get_result_url()]
+            "arguments": ["--task", task_path, "--args", args, "--kwargs", kwargs, "--result-url", result_url],
+            "jobEnv": env,
+            "uniflow": uniflow_folder,
         },
     }
 

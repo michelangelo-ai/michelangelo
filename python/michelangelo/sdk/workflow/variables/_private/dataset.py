@@ -1,13 +1,9 @@
 from dataclasses import dataclass
 
-from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
-from michelangelo.uniflow.plugins.spark.io import SparkIO
-
 from .base import Variable
 
 import pandas as pd
 import pyspark
-import ray
 
 import importlib
 
@@ -61,12 +57,14 @@ class DatasetVariable(Variable):
         """
         Load the value as Spark DataFrame.
         """
+        from michelangelo.uniflow.plugins.spark.io import SparkIO
         self._load_value_using_io(SparkIO)
 
     def load_ray_dataset(self):
         """
         Load the value as Ray Dataset.
         """
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
         self._load_value_using_io(RayDatasetIO)
 
     def save(self):
@@ -78,24 +76,29 @@ class DatasetVariable(Variable):
 
         if isinstance(self.value, pyspark.sql.DataFrame):
             self.save_spark_dataframe()
+            return
 
-        elif isinstance(self.value, ray.data.Dataset):
-            self.save_ray_dataset()
-
-        elif isinstance(self.value, pd.DataFrame):
+        if isinstance(self.value, pd.DataFrame):
             self.save_pandas_dataframe()
+            return
 
-        else:
-            raise TypeError(f"Unsupported value type")
+        import ray
+        if isinstance(self.value, ray.data.Dataset):
+            self.save_ray_dataset()
+            return
+
+        raise TypeError(f"Unsupported value type")
 
     def save_spark_dataframe(self):
         """
         Save the value as Spark DataFrame.
         """
+        from michelangelo.uniflow.plugins.spark.io import SparkIO
         self._save_value_using_io(SparkIO)
 
     def save_ray_dataset(self):
         """
         Save the value as Ray Dataset.
         """
+        from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
         self._save_value_using_io(RayDatasetIO)
