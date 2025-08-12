@@ -34,12 +34,9 @@ func extractJobName(responseObject map[string]interface{}) (string, error) {
 }
 
 // buildRequirementFilePath constructs the S3 path for the requirement file
-func buildRequirementFilePath(workspace, username, pipeline, name string) string {
-	// Replace hyphens with underscores in the name
-	sanitizedName := strings.ReplaceAll(name, "-", "_")
-
-	return fmt.Sprintf("s3://chimera-mlpipeline/artifact/%s/%s/pipelines/%s/uniflow/%s/requirements-compiled.txt",
-		workspace, username, pipeline, sanitizedName)
+func buildRequirementFilePath(workspace, username, pipeline, uniflowName, taskName string) string {
+	return fmt.Sprintf("s3://chimera-mlpipeline/artifact/%s/%s/pipelines/%s/uniflow/%s/%s/requirements-compiled.txt",
+		workspace, username, pipeline, uniflowName, strings.ReplaceAll(taskName, "-", "_"))
 }
 
 // activities struct encapsulates the HTTP client for Spark operations.
@@ -77,6 +74,7 @@ type ListSparkOnesRequest struct {
 type CreateSparkOneDepsRequest struct {
 	Username string `json:"username"`
 	Pipeline string `json:"pipeline"`
+	Uniflow  string `json:"uniflow"`
 	JobName  string `json:"jobName"`
 }
 
@@ -122,7 +120,7 @@ func (r *activities) CreateSparkOne(ctx context.Context, request CreateSparkOneR
 	}
 
 	// Make HTTP POST request to create the SparkOne using the correct API format
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/sparkones", r.apiBaseURL, r.workspace, r.environment)
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/uniflow/sparkones", r.apiBaseURL, r.workspace, r.environment)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(sparkOneBytes))
 	if err != nil {
 		logger.Error(err, "activity-error: failed to create request")
@@ -192,7 +190,7 @@ func (r *activities) SensorSparkOne(ctx context.Context, request GetSparkOneRequ
 		return nil, errors.New("spark job name is required")
 	}
 
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/sparkones/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/uniflow/sparkones/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		logger.Error(err, "activity-error: failed to get request")
@@ -268,12 +266,12 @@ func (r *activities) CreateSparkOneDeps(ctx context.Context, request CreateSpark
 	logger := log.FromContext(ctx)
 	logger.Info("spark-http-deps-activity-start", zap.Any("request", request))
 
-	if request.Username == "" || request.Pipeline == "" || request.JobName == "" {
-		return nil, errors.New("username, pipeline, and jobName are required")
+	if request.Username == "" || request.Pipeline == "" || request.JobName == "" || request.Uniflow == "" {
+		return nil, errors.New("username, pipeline, uniflowName and jobName are required")
 	}
 
 	// Build requirement file path using workspace from activities configuration
-	requirementFile := buildRequirementFilePath(r.workspace, request.Username, request.Pipeline, request.JobName)
+	requirementFile := buildRequirementFilePath(r.workspace, request.Username, request.Pipeline, request.Uniflow, request.JobName)
 	logger.Info("constructed-requirement-file-path", zap.String("path", requirementFile))
 
 	// Create the request body for Mjolnir API

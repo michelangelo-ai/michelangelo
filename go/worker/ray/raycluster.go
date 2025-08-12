@@ -6,20 +6,22 @@ import (
 
 // HeadGroupSpec represents the specification for the head group of a Ray cluster.
 type HeadGroupSpec struct {
-	Resources   corev1.ResourceList `json:"resources,omitempty"`
-	Annotations map[string]string   `json:"annotations,omitempty"`
-	Env         []EnvVar            `json:"env,omitempty"`
+	Resources    corev1.ResourceList `json:"resources,omitempty"`
+	Annotations  map[string]string   `json:"annotations,omitempty"`
+	Env          []EnvVar            `json:"env,omitempty"`
+	Architecture string              `json:"architecture,omitempty"`
 }
 
 // WorkerGroupSpec represents the specification for the worker group of a Ray cluster.
 type WorkerGroupSpec struct {
-	Replicas    int                 `json:"replicas,omitempty"`
-	MinReplicas int                 `json:"minReplicas,omitempty"`
-	MaxReplicas int                 `json:"maxReplicas,omitempty"`
-	Resources   corev1.ResourceList `json:"resources,omitempty"`
-	GroupName   string              `json:"groupName,omitempty"`
-	Annotations map[string]string   `json:"annotations,omitempty"`
-	Env         []EnvVar            `json:"env,omitempty"`
+	Replicas     int                 `json:"replicas,omitempty"`
+	MinReplicas  int                 `json:"minReplicas,omitempty"`
+	MaxReplicas  int                 `json:"maxReplicas,omitempty"`
+	Resources    corev1.ResourceList `json:"resources,omitempty"`
+	GroupName    string              `json:"groupName,omitempty"`
+	Annotations  map[string]string   `json:"annotations,omitempty"`
+	Env          []EnvVar            `json:"env,omitempty"`
+	Architecture string              `json:"architecture,omitempty"`
 }
 
 // RayClusterSpec represents the specification for a Ray cluster.

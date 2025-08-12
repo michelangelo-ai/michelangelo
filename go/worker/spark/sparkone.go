@@ -39,6 +39,7 @@ type Spec struct {
 	MainApplicationFile string   `json:"mainApplicationFile,omitempty"`
 	Arguments           []string `json:"arguments,omitempty"`
 	JobEnv              string   `json:"jobEnv,omitempty"`
+	Uniflow             string   `json:"uniflow,omitempty"`
 }
 
 // SparkOne represents a SparkOne resource.

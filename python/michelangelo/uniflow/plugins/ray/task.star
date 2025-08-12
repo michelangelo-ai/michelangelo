@@ -322,13 +322,13 @@ def execute_ray_task(
             "name": "uf-rj-" + normalize_task_name(task_name),
         },
         "spec": {
-            "submitterImage": cluster_image,
             "entrypoint": entrypoint,
-            "architecture": architecture,
+            "submitterImage": "rayproject/ray:2.48.0",
             "rayClusterSpec": {
                 "image": cluster_image,
                 "headGroupSpec": {
                     "resources": head_resource,
+                    "architecture": architecture,
                     "env": env,
                     "annotations": {
                         "iam.amazonaws.com/role": iam_role,
@@ -339,6 +339,7 @@ def execute_ray_task(
                     "minReplicas": worker_min_instances,
                     "maxReplicas": worker_max_instances,
                     "resources": worker_resource,
+                    "architecture": architecture,
                     "env": env,
                     "annotations": {
                         "iam.amazonaws.com/role": iam_role,

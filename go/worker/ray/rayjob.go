@@ -38,7 +38,6 @@ type Spec struct {
 	Pipeline              string         `json:"pipeline,omitempty"`
 	ActiveDeadlineSeconds int            `json:"activeDeadlineSeconds,omitempty"`
 	Entrypoint            string         `json:"entrypoint,omitempty"`
-	Architecture          string         `json:"architecture,omitempty"`
 	RayClusterSpec        RayClusterSpec `json:"rayClusterSpec,omitempty"`
 	SubmitterImage        string         `json:"submitterImage,omitempty"`
 	CPU                   string         `json:"cpu,omitempty"`
