@@ -13,6 +13,7 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "google/protobuf/struct.proto";
+import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/schema.proto";
@@ -64,6 +65,8 @@ enum DeployableModelPackageType {
 // - Error details for failed models
 // This helps monitor model health and enables debugging of issues.
 message ModelStatus {
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // LLMSpec defines the configuration for a Large Language Model (LLM).
@@ -97,6 +100,9 @@ message LLMSpec {
   // - Distinguishes between different fine-tuned versions
   // Leave empty for base models that have not been fine-tuned.
   string fine_tuned_model_id = 3;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // ModelSpec defines the configuration and metadata for a trained ML model.
@@ -411,6 +417,9 @@ message ModelSpec {
 
   // Output schema defines the schema of the output of the model.
   DataSchema output_schema = 32 [(michelangelo.api.external_storage) = true];
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // IncrementalTrainingSpec defines configuration for incremental model training.
@@ -452,6 +461,9 @@ message IncrementalTrainingSpec {
      type: "michelangelo.uber.com/CachedOutput"
    }
   ];
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Model represents a trained ML model in the Michelangelo platform.

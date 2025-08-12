@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -75,6 +76,7 @@ var (
 				Tier:        3,
 				GitRepo:     "repo",
 				RootDir:     "root",
+				Ext:         &types.Any{},
 			},
 		},
 	}
