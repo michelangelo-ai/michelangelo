@@ -240,11 +240,11 @@ func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }
 
-func updateUniflowStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+func (a *ExecuteWorkflowActor) updateUniflowStatus(ctx context.Context, pipelineRun *v2.PipelineRun) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 
 	// update pipelinerun step info
-	err := updatePipelineRunStepInfo(ctx, pipelineRun)
+	err := a.updatePipelineRunStepInfo(ctx, pipelineRun)
 	if err != nil {
 		logger.Error(err, "Error updating PipelineRun Step Info")
 		return err
@@ -295,8 +295,8 @@ func (a *ExecuteWorkflowActor) updateFinalStatus(ctx context.Context, pipelineRu
 
 }
 
-func updatePipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) error {
-	newStepInfoList, err := constructPipelineRunStepInfo(ctx, pipelineRun)
+func (a *ExecuteWorkflowActor) updatePipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	newStepInfoList, err := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if err != nil {
 		return err
 	}
