@@ -42,6 +42,7 @@ runs:
         virtualenvs-in-project: true
         virtualenvs-path: .venv
         installer-parallel: true
+        plugins: poetry-dynamic-versioning[plugin]
 
     #----------------------------------------------
     #       load cached venv if cache exists
