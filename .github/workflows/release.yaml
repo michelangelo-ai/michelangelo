@@ -6,6 +6,8 @@ on:
 jobs:
   build-upload:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: ./python
@@ -35,4 +37,4 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          files: dist/*.whl
+          files: python/dist/*.whl
