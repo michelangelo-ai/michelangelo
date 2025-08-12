@@ -75,6 +75,7 @@ var (
 				Tier:        3,
 				GitRepo:     "repo",
 				RootDir:     "root",
+				Ext:         &v2pb.Ext{Any: &v2pb.Any{}},
 			},
 		},
 	}
