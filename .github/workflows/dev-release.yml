@@ -16,7 +16,7 @@ jobs:
     strategy:
       # max-parallel: 1
       matrix:
-        service: [worker]
+        service: [controllermgr, worker]
 
     permissions:
       contents: read
