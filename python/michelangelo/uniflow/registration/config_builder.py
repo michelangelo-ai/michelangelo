@@ -12,6 +12,9 @@ from contextlib import contextmanager
 from typing import Any, Callable, Dict, Optional
 
 import yaml
+import ast
+import os
+import importlib
 
 from michelangelo.canvas.lib.shared.json_data import JSONData
 from michelangelo.uniflow.core.utils import import_attribute
@@ -143,9 +146,6 @@ class ConfigBuilder:
             # No function specified, import module and find workflow function
             module_path = manifest_path
             try:
-                # Import the module directly (like subprocess.py does)
-                import importlib
-
                 module = importlib.import_module(module_path)
 
                 # Find workflow-decorated functions in the module
@@ -281,10 +281,6 @@ class ConfigBuilder:
         try:
             module = import_attribute(self._workflow_function_obj.__module__)
 
-            # Read the module source to extract ctx.run calls
-            import ast
-            import os
-
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
@@ -340,10 +336,6 @@ class ConfigBuilder:
         # Try to extract environment variables from the workflow module
         try:
             module = import_attribute(self._workflow_function_obj.__module__)
-
-            # Read the module source to extract ctx.environ assignments
-            import ast
-            import os
 
             # Get the module file path
             module_file = module.__file__
