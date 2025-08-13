@@ -10,12 +10,14 @@ from michelangelo.uniflow.core.remote_run import (
     DEFAULT_EXECUTION_TIMEOUT_SECONDS,
     RemoteRun,
     RemoteRunTemporal,
+    RemoteRunPipeline,
 )
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, ArgparseEnvironAction
 
 log = logging.getLogger(__name__)
 cadence = "cadence"
 temporal = "temporal"
+pipeline = "pipeline"
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,11 @@ class Context:
         if self._target in ("remote-run", "cluster-run"):
             p = _remote_run_argument_parser(environ=True)
             ns = p.parse_args(self._args).__dict__
+
+            # Map argument parser's 'pipeline' to function parameter 'pipeline_param'
+            if 'pipeline' in ns:
+                ns['pipeline_param'] = ns.pop('pipeline')
+
             _remote_run(
                 environ={**self.environ, **ns.pop("environ")},
                 fn=fn,
@@ -133,8 +140,8 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     p = argparse.ArgumentParser()
     p.add_argument(
         "--workflow",
-        default=cadence,
-        help="The workflow engine to use for remote execution. Options: cadence, temporal. Default is cadence.",
+        default=pipeline,
+        help="The workflow engine to use for remote execution. Options: cadence, temporal, pipeline. Default is pipeline.",
     )
     p.add_argument(
         "--storage-url",
@@ -201,9 +208,9 @@ def _remote_run(
     iam_role: str = "",
     architecture: str = "",
     user_token: str = "",
-    pipeline: str = "",
+    pipeline_param: str = "",  # Renamed to avoid conflict with pipeline constant
     yes: bool = False,
-    workflow: str = cadence,
+    workflow: str = pipeline,
 ):
     """
     Execute a given workflow function in Remote Mode.
@@ -220,13 +227,10 @@ def _remote_run(
         iam_role: Container IAM role to use for running workflow tasks.
         architecture: Architecture for running workflow tasks: amd64 or arm64.
         user_token: User token to submit workflow tasks via ComputeAPI.
-        pipeline: Pipeline name for the workflow.
+        pipeline_param: Pipeline name for the workflow.
         yes: Automatically answer yes to confirmation prompts.
+        workflow: The workflow engine to use (cadence, temporal, or pipeline).
     """
-    assert storage_url
-    assert image
-    assert iam_role
-    assert user_token
 
     environ = environ or {}
     args = args or ()
@@ -235,12 +239,29 @@ def _remote_run(
     assert isinstance(environ, dict)
 
     if workflow == cadence:
+        assert storage_url
+        assert image
+        assert iam_role
+        assert user_token
+
         rr = RemoteRun(
             fn=fn,
             image=image,
             storage_url=storage_url,
         )
+        rr.environ = environ
+        rr.args = args
+        rr.kwargs = kwargs
+        rr.execution_timeout_seconds = execution_timeout_seconds
+        rr.cron = cron
+        rr.yes = yes
+
     elif workflow == temporal:
+        assert storage_url
+        assert image
+        assert iam_role
+        assert user_token
+
         rr = RemoteRunTemporal(
             fn=fn,
             image=image,
@@ -248,12 +269,37 @@ def _remote_run(
             iam_role=iam_role,
             architecture=architecture,
             user_token=user_token,
-            pipeline=pipeline,
+            pipeline=pipeline_param,
         )
-    rr.environ = environ
-    rr.args = args
-    rr.kwargs = kwargs
-    rr.execution_timeout_seconds = execution_timeout_seconds
-    rr.cron = cron
-    rr.yes = yes
+        rr.environ = environ
+        rr.args = args
+        rr.kwargs = kwargs
+        rr.execution_timeout_seconds = execution_timeout_seconds
+        rr.cron = cron
+        rr.yes = yes
+
+    elif workflow == pipeline:
+        assert storage_url
+        assert image
+        assert iam_role
+        assert user_token
+        assert architecture
+        assert pipeline_param
+
+        rr = RemoteRunPipeline(
+            fn=fn,
+            pipeline_name=pipeline_param,
+            iam_role=iam_role,
+            user_token=user_token,
+            architecture=architecture,
+            pipeline=pipeline_param,
+            image=image,
+            storage_url=storage_url,
+        )
+        rr.args = args
+        rr.kwargs = kwargs
+        rr.yes = yes
+    else:
+        raise ValueError(f"Unsupported workflow type: {workflow}")
+
     rr.run()
