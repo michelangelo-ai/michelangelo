@@ -10,12 +10,11 @@ option go_package = "kubeproto_ext";
 // Option to specify the original proto for comparison
 option (michelangelo.api.ext_original_proto) = "michelangelo/test/kubeproto/validation_ut.proto";
 
-// Enum1 must match the original
+// Enum1 must match the original exactly
 enum Enum1 {
-  ENUM1_VALUE_INVALID = 0;
-  ENUM1_VALUE1 = 1;
-  ENUM1_VALUE2 = 2;
-  ENUM1_VALUE3 = 3;
+  E1_A = 0;
+  E1_B = 1;
+  E1_C = 2;
 }
 
 // ValidationMsg1 extends the original with same fields and types
@@ -117,26 +116,25 @@ message ValidationMsg10 {
   map<string,bytes> f7 = 7 [(michelangelo.api.validation) = {keys: {uuid: true}, values: {min_length: "3"}}];
 }
 
-// ValidationMsg11 with oneof validation
+// ValidationMsg11 with oneof validation - must match original exactly
 message ValidationMsg11 {
   oneof test {
-    string test_string = 1;
-    int32 test_int = 2;
-    bool test_bool = 3;
-  }
-}
-
-// ValidationMsg12 with required oneof
-message ValidationMsg12 {
-  oneof test {
     option (michelangelo.api.required) = true;
-    string test_string = 1;
-    int32 test_int = 2;
+    int32 f1 = 1;
+    ValidationMsg1 f2 = 2;
   }
 }
 
-// ValidationMsg13 with unique_items validation
-message ValidationMsg13 {
-  repeated string f1 = 1 [(michelangelo.api.validation) = {unique_items: true}];
-  repeated int32 f2 = 2 [(michelangelo.api.validation) = {unique_items: true, min_items: "2"}];
+// ValidationMsg12 with required oneof - must match original exactly
+message ValidationMsg12 {
+  option (michelangelo.api.no_default) = true;
+  oneof test_oneof {
+    int32 f1 = 1;
+    ValidationMsg1 f2 = 2;
+  }
+  oneof test_oneof_optional {
+    option (michelangelo.api.optional) = true;
+    int32 f3 = 3;
+    ValidationMsg1 f4 = 4;
+  }
 }

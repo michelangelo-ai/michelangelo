@@ -1,6 +1,3 @@
- // {{.TypeNameLower}}ValidateExt is an extension hook for additional validation logic
-var {{.TypeNameLower}}ValidateExt func(*{{.TypeName}}, string) error
-
 func (this *{{.TypeName}}) Validate(prefix string) error {
 {{.ValidateLogic}}
 	// Call extension validation if registered
@@ -16,3 +13,6 @@ func (this *{{.TypeName}}) Validate(prefix string) error {
 func Register{{.TypeName}}ValidateExt(f func(*{{.TypeName}}, string) error) {
 	{{.TypeNameLower}}ValidateExt = f
 }
+
+// {{.TypeNameLower}}ValidateExt is an extension hook for additional validation logic
+var {{.TypeNameLower}}ValidateExt func(*{{.TypeName}}, string) error

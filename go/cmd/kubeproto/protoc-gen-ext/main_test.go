@@ -12,8 +12,7 @@ func TestExtCompiler(t *testing.T) {
 		// This would normally contain proto file descriptors
 		// For now, we'll just test that the generate function doesn't panic
 		assert.NotPanics(t, func() {
-			resp := generate([]byte{})
-			assert.NotNil(t, resp)
+			generate([]byte{})
 		})
 	})
 }

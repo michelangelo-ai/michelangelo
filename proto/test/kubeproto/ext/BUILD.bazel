@@ -14,6 +14,7 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:api_proto",
+        "//proto/test/kubeproto:kubeproto_proto",  # Add original proto for comparison
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )

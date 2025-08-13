@@ -28,7 +28,7 @@ go_proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:go_default_library",
-        "//proto/api/v2:go_default_library",
+        "//proto/api/v2:go_default_library",  # This includes the validation Register functions
         "@io_k8s_api//core/v1:core",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
