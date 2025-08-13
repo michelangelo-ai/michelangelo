@@ -9,13 +9,13 @@ import "michelangelo/api/v2/schema.proto";
 option go_package = "v2_ext";
 option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/schema.proto";
 
-// DataSchema_Ext extends the original DataSchema with additional validation
-message DataSchema_Ext {
-  repeated DataSchemaItem_Ext schema_items = 1;
+// DataSchema extends the original DataSchema with additional validation
+message DataSchema {
+  repeated DataSchemaItem schema_items = 1;
 }
 
-// DataSchemaItem_Ext extends the original DataSchemaItem
-message DataSchemaItem_Ext {
+// DataSchemaItem extends the original DataSchemaItem
+message DataSchemaItem {
   // The name that uniquely identifies this schema item
   string name = 1 [(michelangelo.api.validation) = {
     required: true
@@ -25,7 +25,7 @@ message DataSchemaItem_Ext {
   }];
 
   // The data type that specifies what kind of values this field can contain
-  DataType_Ext data_type = 2 [(michelangelo.api.validation) = {required: true}];
+  DataType data_type = 2 [(michelangelo.api.validation) = {required: true}];
 
   // The shape of the data
   repeated int32 shape = 3 [(michelangelo.api.validation) = {
@@ -33,8 +33,8 @@ message DataSchemaItem_Ext {
   }];
 }
 
-// DataType_Ext enum matching the original DataType exactly
-enum DataType_Ext {
+// DataType enum matching the original DataType exactly
+enum DataType {
   DATA_TYPE_INVALID = 0;
   DATA_TYPE_UNKNOWN = 1;
   DATA_TYPE_STRING = 7;

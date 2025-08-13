@@ -150,8 +150,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 				tempSetCounter := 0
 				validateCode, _, _, _ := generateValidationCode(msg, extTypes, &tempPatternCounter, &tempSetCounter)
 				if validateCode != "" {
-					// Extract the base type name (remove _Ext suffix if present)
-					typeName := strings.TrimSuffix(msg.GoIdent.GoName, "_Ext")
+					// Use the message name directly (no _Ext suffix to strip)
+					typeName := msg.GoIdent.GoName
 					
 					g.P(fmt.Sprintf(`	// Register validation for %s`, msg.GoIdent.GoName))
 					g.P(fmt.Sprintf(`	ValidationRegistry["%s"] = func(obj interface{}, prefix string) error {`, msg.GoIdent.GoName))
@@ -219,12 +219,12 @@ func verifyProtoMatch(extFile *protogen.File, originalFile *protogen.File) error
 
 	// Check each ext message
 	for _, extMsg := range extFile.Messages {
-		// Extract base name (remove _Ext suffix)
-		baseName := strings.TrimSuffix(string(extMsg.Desc.Name()), "_Ext")
+		// Use the message name directly (ext and original should have same name in different packages)
+		messageName := string(extMsg.Desc.Name())
 		
-		originalMsg, exists := originalMessages[baseName]
+		originalMsg, exists := originalMessages[messageName]
 		if !exists {
-			return fmt.Errorf("ext message %s does not have corresponding original message %s", extMsg.Desc.Name(), baseName)
+			return fmt.Errorf("ext message %s does not have corresponding original message %s", extMsg.Desc.Name(), messageName)
 		}
 
 		// Verify fields match

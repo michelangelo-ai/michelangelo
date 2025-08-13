@@ -8,9 +8,9 @@ import (
 )
 
 func TestDataSchemaExtValidation(t *testing.T) {
-	t.Run("DataSchemaItem_Ext_RequiredFields", func(t *testing.T) {
+	t.Run("DataSchemaItem_RequiredFields", func(t *testing.T) {
 		// Test that required fields are validated
-		item := &v2_ext.DataSchemaItem_Ext{}
+		item := &v2_ext.DataSchemaItem{}
 
 		// Should fail with empty name
 		err := item.Validate("")
@@ -20,7 +20,7 @@ func TestDataSchemaExtValidation(t *testing.T) {
 
 		// Should fail with invalid name pattern
 		item.Name = "123invalid" // Starts with number
-		item.DataType = v2_ext.DataType_Ext_DATA_TYPE_STRING
+		item.DataType = v2_ext.DataType_DATA_TYPE_STRING
 		err = item.Validate("")
 		assert.Error(t, err, "Should fail with invalid name pattern")
 		assert.Contains(t, err.Error(), "must match pattern")
@@ -31,9 +31,9 @@ func TestDataSchemaExtValidation(t *testing.T) {
 		assert.NoError(t, err, "Should pass with valid name and data type")
 	})
 
-	t.Run("DataSchemaItem_Ext_NameValidation", func(t *testing.T) {
-		item := &v2_ext.DataSchemaItem_Ext{
-			DataType: v2_ext.DataType_Ext_DATA_TYPE_INT,
+	t.Run("DataSchemaItem_NameValidation", func(t *testing.T) {
+		item := &v2_ext.DataSchemaItem{
+			DataType: v2_ext.DataType_DATA_TYPE_INT,
 		}
 
 		// Test empty name fails
@@ -54,10 +54,10 @@ func TestDataSchemaExtValidation(t *testing.T) {
 		assert.NoError(t, err, "Should pass with valid name")
 	})
 
-	t.Run("DataSchemaItem_Ext_ShapeValidation", func(t *testing.T) {
-		item := &v2_ext.DataSchemaItem_Ext{
+	t.Run("DataSchemaItem_ShapeValidation", func(t *testing.T) {
+		item := &v2_ext.DataSchemaItem{
 			Name:     "tensor_field",
-			DataType: v2_ext.DataType_Ext_DATA_TYPE_FLOAT,
+			DataType: v2_ext.DataType_DATA_TYPE_FLOAT,
 		}
 
 		// Test valid shape values
@@ -84,20 +84,20 @@ func TestDataSchemaExtValidation(t *testing.T) {
 		assert.NotNil(t, v2_ext.ValidationRegistry)
 		assert.Greater(t, len(v2_ext.ValidationRegistry), 0, "Registry should have entries")
 
-		// Test registry lookup for DataSchemaItem_Ext
-		item := &v2_ext.DataSchemaItem_Ext{
+		// Test registry lookup for DataSchemaItem
+		item := &v2_ext.DataSchemaItem{
 			Name:     "test_field",
-			DataType: v2_ext.DataType_Ext_DATA_TYPE_STRING,
+			DataType: v2_ext.DataType_DATA_TYPE_STRING,
 		}
 
-		err := v2_ext.Validate("DataSchemaItem_Ext", item, "")
+		err := v2_ext.Validate("DataSchemaItem", item, "")
 		assert.NoError(t, err, "Should validate through registry")
 
 		// Test with invalid data through registry
-		invalidItem := &v2_ext.DataSchemaItem_Ext{
+		invalidItem := &v2_ext.DataSchemaItem{
 			Name: "", // Invalid: empty name
 		}
-		err = v2_ext.Validate("DataSchemaItem_Ext", invalidItem, "")
+		err = v2_ext.Validate("DataSchemaItem", invalidItem, "")
 		assert.Error(t, err, "Should fail validation through registry")
 	})
 }

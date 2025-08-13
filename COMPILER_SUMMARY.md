@@ -179,8 +179,8 @@ bazel build //proto/api/v2:v2_go_proto
 # Build with ext validation
 bazel build //proto/test/kubeproto/ext:ext_go_proto
 
-# Build with all compilers
-bazel build //proto/test/all_compilers_demo:demo_go_proto_all
+# Build with validation and ext compilers
+bazel build //proto/api/v2_ext:v2_ext_go_proto
 
 # Generate SQL schemas
 bazel build //proto/api/v2:v2_kube_proto_sql
