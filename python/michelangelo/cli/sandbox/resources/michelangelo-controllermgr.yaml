@@ -70,7 +70,7 @@ data:
       awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
     
     workflowClient:
-      service: cadence-frontend
-      host: cadence:7833
+      service: temporal-frontend
+      host: temporal.stg-myteksi.com:7233
       transport: grpc
-      domain: default
+      domain: uniflow

@@ -162,11 +162,14 @@ func newTemporalWorker(factory TemporalClientFactory, conf Config, log *zap.Logg
 	scope, _ := tallyv4.NewRootScope(tallyv4.ScopeOptions{
 		Prefix: "temporal",
 	}, time.Second)
-	// Create Temporal client
+
+	// Create Temporal client with reversible Base64PayloadCodec
+	baseDataConverter := temporal.DataConverter{Logger: log}
+
 	c, err := factory.NewTemporalClient(tempclient.Options{
 		HostPort:       conf.Host,
 		Namespace:      conf.Client.Domain,
-		DataConverter:  temporal.DataConverter{},
+		DataConverter:  baseDataConverter,
 		MetricsHandler: temptally.NewMetricsHandler(scope),
 		Logger:         temporal.NewZapLoggerAdapter(log),
 	})

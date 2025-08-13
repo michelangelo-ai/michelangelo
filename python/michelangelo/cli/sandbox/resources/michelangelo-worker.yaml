@@ -51,7 +51,6 @@ data:
           domain: default
 
     minio:
-      awsRegion: us-east-1
-      awsAccessKeyId: minioadmin
-      awsSecretAccessKey: minioadmin
-      awsEndpointUrl: minio:9091
+      awsRegion: ap-southeast-1
+      awsEndpointUrl: s3.amazonaws.com
+      

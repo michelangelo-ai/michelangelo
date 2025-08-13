@@ -1,14 +1,14 @@
 apiVersion: michelangelo.api/v2
 kind: Project
 metadata:
-  name: ma-dev-test
-  namespace: ma-dev-test
+  name:  svc-aip-chimeratest
+  namespace:  svc-aip-chimeratest
 spec:
   description: My ML Project
   owner:
-    owningTeam: "michelangelo"
+    owningTeam: "cauldron"
     owners:
-      - craig.marker
+      - eric.w
   tier: 4
   gitRepo: https://github.com/uber/michelangelo
   rootDir: python/michelangelo/cli/sandbox/crds

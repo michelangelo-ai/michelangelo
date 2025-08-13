@@ -12,6 +12,7 @@ go_library(
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/base/workflowclient/cadenceclient:go_default_library",
+        "//go/base/workflowclient/temporalclient:go_default_library",
         "//go/base/zapfx:go_default_library",
         "//go/components/pipeline:go_default_library",
         "//go/components/pipelinerun:go_default_library",
