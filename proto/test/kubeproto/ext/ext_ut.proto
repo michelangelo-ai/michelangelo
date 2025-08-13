@@ -1,0 +1,142 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto_ext;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+
+option go_package = "kubeproto_ext";
+
+// Option to specify the original proto for comparison
+option (michelangelo.api.ext_original_proto) = "michelangelo/test/kubeproto/validation_ut.proto";
+
+// Enum1 must match the original
+enum Enum1 {
+  ENUM1_VALUE_INVALID = 0;
+  ENUM1_VALUE1 = 1;
+  ENUM1_VALUE2 = 2;
+  ENUM1_VALUE3 = 3;
+}
+
+// ValidationMsg1 extends the original with same fields and types
+message ValidationMsg1 {
+  int32 f1 = 1 [
+    (michelangelo.api.validation) = {required: true},
+    (michelangelo.api.validation) = {min: "10", max: "100"}
+  ];
+  bool f2 = 2;
+  string f3 = 3 [(michelangelo.api.validation) = {required: true, msg: "custom error message"}];
+  Enum1 f4 = 4 [(michelangelo.api.validation) = {min: "2"}];
+  ValidationMsg3 f5 = 5;
+  repeated int64 f6 = 6;
+}
+
+// ValidationMsg2 extends the original with same fields
+message ValidationMsg2 {
+  option (michelangelo.api.no_default) = true;
+  int32 f1 = 1 [(michelangelo.api.validation) = {max: "5"}];
+  bool f2 = 2;
+  string f3 = 3;
+  Enum1 f4 = 4;
+  ValidationMsg3 f5 = 5;
+  int64 f6 = 6;
+  double f7 = 7 [
+    (michelangelo.api.validation) = {min: "-1", excl_min: true, msg: "custom msg min"},
+    (michelangelo.api.validation) = {max: "1.0", msg: "custom msg max"}
+  ];
+  float f8 = 8 [(michelangelo.api.validation) = {min: "-0.1", max: "0.5", excl_max: true, optional: true}];
+  repeated int64 f9 = 9;
+  bytes f10 = 10;
+}
+
+// ValidationMsg3 matches the original empty message
+message ValidationMsg3 {
+}
+
+// ValidationMsg4 with length and items validation
+message ValidationMsg4 {
+  string f1 = 1 [(michelangelo.api.validation) = {min_length: "3", max_length:"10"}];
+  repeated int32 f2 = 2 [(michelangelo.api.validation) = {min_items: "2"}];
+  bytes f3 = 3 [(michelangelo.api.validation) = {min_length: "1", max_length:"100"}];
+  map<int64, string> f4 = 4 [(michelangelo.api.validation) = {min_items: "1", max_items: "3"}];
+}
+
+// ValidationMsg5 with pattern validation
+message ValidationMsg5 {
+  string f1 = 1 [(michelangelo.api.validation) = {pattern: "[ab]+", not_pattern: "aa.*"}];
+  string f2 = 2 [(michelangelo.api.validation) = {pattern: "[1-9][0-9]*", msg: "must be a positive number"}];
+}
+
+// ValidationMsg6 with in/not_in validation
+message ValidationMsg6 {
+  string f1 = 1 [(michelangelo.api.validation) = {in: ["a", "b"]}];
+  int32 f2 = 2 [(michelangelo.api.validation) = {in: ["1", "2"], msg: "custom msg"}];
+  Enum1 f3 = 3 [(michelangelo.api.validation) = {in: ["1", "2"]}];
+  string f4 = 4 [
+    (michelangelo.api.validation) = {not_in: ["a", "b"]},
+    (michelangelo.api.validation) = {not_in: ["c"]}
+  ];
+  uint64 f5 = 5  [(michelangelo.api.validation) = {not_in: ["100", "200", "300"]}];
+  double f6 = 6 [(michelangelo.api.validation) = {in: ["1.0", "2.0"]}];
+}
+
+// ValidationMsg7 with well-known format validation
+message ValidationMsg7 {
+  string f1 = 1 [(michelangelo.api.validation) = {uuid: true}];
+  string f2 = 2 [(michelangelo.api.validation) = {email: true}];
+  string f3 = 3 [(michelangelo.api.validation) = {uri: true}];
+  string f4 = 4 [(michelangelo.api.validation) = {ipv4: true}];
+  string f5 = 5 [(michelangelo.api.validation) = {ipv6: true}];
+  string f6 = 6 [(michelangelo.api.validation) = {ip: true}];
+}
+
+// ValidationMsg8 with nested messages
+message ValidationMsg8 {
+  ValidationMsg9 f1 = 1;
+  ValidationMsg5 f2 = 2;
+}
+
+// ValidationMsg9 with no_default option
+message ValidationMsg9 {
+  option (michelangelo.api.no_default) = true;
+  int32 f1 = 1;
+  ValidationMsg5 f2 = 2;
+}
+
+// ValidationMsg10 with items/keys/values validation
+message ValidationMsg10 {
+  repeated string f1 = 1 [(michelangelo.api.validation) = {items: {pattern: "[ab]+"}}];
+  map<int32,string> f2 = 2 [(michelangelo.api.validation) = {min_items: "2", keys: {min: "1", max: "5"}, values: {pattern: "[a-z]+"}}];
+  repeated int32 f3 = 3 [
+    (michelangelo.api.validation) = {items: {min: "10", msg: "custom msg1"}, msg: "msg"},
+    (michelangelo.api.validation) = {items: {max: "100", msg: "custom msg2"}}
+  ];
+  repeated ValidationMsg1 f4 = 4;
+  map<string,ValidationMsg1> f5 = 5;
+  repeated string f6 = 6 [(michelangelo.api.validation) = {items: {in: ["one", "two", "three"]}}];
+  map<string,bytes> f7 = 7 [(michelangelo.api.validation) = {keys: {uuid: true}, values: {min_length: "3"}}];
+}
+
+// ValidationMsg11 with oneof validation
+message ValidationMsg11 {
+  oneof test {
+    string test_string = 1;
+    int32 test_int = 2;
+    bool test_bool = 3;
+  }
+}
+
+// ValidationMsg12 with required oneof
+message ValidationMsg12 {
+  oneof test {
+    option (michelangelo.api.required) = true;
+    string test_string = 1;
+    int32 test_int = 2;
+  }
+}
+
+// ValidationMsg13 with unique_items validation
+message ValidationMsg13 {
+  repeated string f1 = 1 [(michelangelo.api.validation) = {unique_items: true}];
+  repeated int32 f2 = 2 [(michelangelo.api.validation) = {unique_items: true, min_items: "2"}];
+}

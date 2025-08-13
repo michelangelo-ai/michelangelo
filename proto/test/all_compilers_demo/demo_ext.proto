@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package michelangelo.test.all_compilers_demo_ext;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "all_compilers_demo_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/test/all_compilers_demo/demo.proto";
+
+// DemoMessage_Ext extends the original DemoMessage with additional validation
+message DemoMessage_Ext {
+  // ID field with stricter validation
+  string id = 1 [(michelangelo.api.validation) = {
+    required: true
+    pattern: "^[a-zA-Z0-9-]+$"
+    min_length: "5"  // Stricter than original
+    max_length: "50"  // Stricter than original
+  }];
+
+  // Name field
+  string name = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "2"
+    max_length: "200"
+  }];
+
+  // Score field with stricter range
+  int32 score = 3 [(michelangelo.api.validation) = {
+    min: "10"  // Higher minimum
+    max: "90"  // Lower maximum
+  }];
+
+  // Email field with well-known format validation
+  string email = 4 [(michelangelo.api.validation) = {
+    required: true  // Made required
+    well_known: "email"
+  }];
+}

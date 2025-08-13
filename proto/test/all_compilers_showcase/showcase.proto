@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package michelangelo.test.all_compilers_showcase;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "all_compilers_showcase";
+
+// ShowcaseMessage demonstrates all compiler features
+message ShowcaseMessage {
+  // Basic field with validation
+  string id = 1 [(michelangelo.api.validation) = {
+    required: true
+    pattern: "^[a-zA-Z0-9-]+$"
+  }];
+
+  // Field with multiple validation rules
+  int32 value = 2 [(michelangelo.api.validation) = {
+    min: "1"
+    max: "100"
+  }];
+}
+
+// ShowcaseService for RPC generation
+service ShowcaseService {
+  rpc GetShowcase(ShowcaseRequest) returns (ShowcaseResponse);
+}
+
+message ShowcaseRequest {
+  string id = 1;
+}
+
+message ShowcaseResponse {
+  ShowcaseMessage message = 1;
+}

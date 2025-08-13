@@ -180,6 +180,8 @@ message RelationshipDescriptor {
 
 extend google.protobuf.FileOptions {
   GroupInfo group_info = 5730;
+  // ext_original_proto specifies the original proto file for ext comparison
+  string ext_original_proto = 5731;
 }
 
 // Kubernetes API group info

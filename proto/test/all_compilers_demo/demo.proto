@@ -1,0 +1,60 @@
+syntax = "proto3";
+
+package michelangelo.test.all_compilers_demo;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "all_compilers_demo";
+
+// DemoMessage shows all compiler outputs
+message DemoMessage {
+  // ID field with validation
+  string id = 1 [(michelangelo.api.validation) = {
+    required: true
+    pattern: "^[a-zA-Z0-9-]+$"
+    min_length: "3"
+    max_length: "64"
+  }];
+
+  // Name field
+  string name = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+  }];
+
+  // Score field with range validation
+  int32 score = 3 [(michelangelo.api.validation) = {
+    min: "0"
+    max: "100"
+  }];
+
+  // Email field with email format validation
+  string email = 4 [(michelangelo.api.validation) = {
+    email: true
+  }];
+}
+
+// DemoService for YARPC generation
+service DemoService {
+  rpc GetDemo(DemoRequest) returns (DemoResponse);
+  rpc ListDemos(ListRequest) returns (ListResponse);
+}
+
+message DemoRequest {
+  string id = 1;
+}
+
+message DemoResponse {
+  DemoMessage demo = 1;
+}
+
+message ListRequest {
+  int32 page_size = 1;
+  string page_token = 2;
+}
+
+message ListResponse {
+  repeated DemoMessage demos = 1;
+  string next_page_token = 2;
+}

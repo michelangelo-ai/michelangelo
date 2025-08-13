@@ -97,3 +97,17 @@ go_proto_compiler(
         "@org_golang_google_grpc//status:go_default_library",
     ] + WELL_KNOWN_TYPE_RULES.values(),
 )
+
+# Generate go ext code that extends validation for proto files
+go_proto_compiler(
+    name = "go_ext",
+    plugin = "//go/cmd/kubeproto/protoc-gen-ext:protoc-gen-ext",
+    suffix = ".ext.go",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "@com_github_google_uuid//:go_default_library",
+        "@org_golang_google_grpc//codes:go_default_library",
+        "@org_golang_google_grpc//status:go_default_library",
+    ] + WELL_KNOWN_TYPE_RULES.values(),
+)
