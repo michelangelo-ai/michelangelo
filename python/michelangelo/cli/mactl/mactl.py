@@ -16,6 +16,7 @@ from google.protobuf.descriptor_pb2 import (
     FileDescriptorProto,
     MethodDescriptorProto,
 )
+from google.protobuf.json_format import MessageToJson
 from google.protobuf.descriptor_pool import DescriptorPool
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
@@ -784,8 +785,6 @@ def main(channel: Channel):
     assert hasattr(crds[user_command_crd], user_command_action)
     func_action = getattr(crds[user_command_crd], user_command_action)
     result = func_action(**kwargs)
-
-    from google.protobuf.json_format import MessageToJson
 
     # Convert to JSON and pretty print
     json_output = MessageToJson(result, indent=2)
