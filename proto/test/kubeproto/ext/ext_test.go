@@ -19,7 +19,7 @@ func TestExtValidation(t *testing.T) {
 		// Test with valid values
 		msg.F1 = 50 // Between 10 and 100
 		msg.F3 = "test value"
-		msg.F4 = ext.ENUM1_VALUE2 // Must be >= 2
+		msg.F4 = ext.E1_C // Must be >= 2
 		err = msg.Validate("")
 		assert.NoError(t, err, "Should pass with valid values")
 
@@ -56,31 +56,25 @@ func TestExtValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("ValidationMsg7_WellKnownFormats", func(t *testing.T) {
-		msg := &ext.ValidationMsg7{}
+	t.Run("ValidationMsg4_LengthValidation", func(t *testing.T) {
+		msg := &ext.ValidationMsg4{}
 
-		// Test UUID validation
-		msg.F1 = "not-a-uuid"
+		// Test string length validation
+		msg.F1 = "ab" // Too short (min 3)
 		err := msg.Validate("")
-		assert.Error(t, err, "Should fail with invalid UUID")
+		assert.Error(t, err, "Should fail with string too short")
 
-		msg.F1 = "550e8400-e29b-41d4-a716-446655440000"
-		msg.F2 = "test@example.com" // Valid email
-		msg.F3 = "https://example.com" // Valid URI
-		msg.F4 = "192.168.1.1" // Valid IPv4
-		msg.F5 = "::1" // Valid IPv6
-		msg.F6 = "192.168.1.1" // Valid IP
+		msg.F1 = "abc" // Valid length
+		msg.F2 = []int32{1, 2} // Valid count (min 2)
+		msg.F3 = []byte("test") // Valid byte length
+		msg.F4 = map[int64]string{1: "test"} // Valid map with at least 1 item
 		err = msg.Validate("")
-		assert.NoError(t, err, "Should pass with all valid formats")
+		assert.NoError(t, err, "Should pass with valid lengths")
 
-		// Test email validation failure
-		msg.F2 = "invalid-email"
+		// Test max validation
+		msg.F1 = "abcdefghijklmnopqrstuvwxyz" // Too long (max 10)
 		err = msg.Validate("")
-		assert.Error(t, err, "Should fail with invalid email")
-
-		msg.F4 = "::1" // IPv6 address
-		err = msg.Validate("")
-		assert.Error(t, err, "Should fail with IPv6 when expecting IPv4")
+		assert.Error(t, err, "Should fail with string too long")
 	})
 
 	t.Run("ValidationRegistry", func(t *testing.T) {
@@ -89,12 +83,12 @@ func TestExtValidation(t *testing.T) {
 		assert.Greater(t, len(ext.ValidationRegistry), 0, "Registry should have entries")
 
 		// Test Validate function using the registry
-		msg := &ext.ValidationMsg1{F1: 50, F3: "test", F4: ext.ENUM1_VALUE2}
+		msg := &ext.ValidationMsg1{F1: 50, F3: "test", F4: ext.E1_C}
 		err := ext.Validate("ValidationMsg1", msg, "")
 		assert.NoError(t, err, "Should validate through registry")
 
 		// Test with invalid data through registry
-		invalidMsg := &ext.ValidationMsg1{F1: 5, F3: "test", F4: ext.ENUM1_VALUE2}
+		invalidMsg := &ext.ValidationMsg1{F1: 5, F3: "test", F4: ext.E1_C}
 		err = ext.Validate("ValidationMsg1", invalidMsg, "")
 		assert.Error(t, err, "Should fail validation through registry")
 	})
