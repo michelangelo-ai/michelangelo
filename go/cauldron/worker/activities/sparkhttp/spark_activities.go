@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/michelangelo-ai/michelangelo/go/worker/spark"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/compute/spark"
 )
 
 var Activities = (*activities)(nil)

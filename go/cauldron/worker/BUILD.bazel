@@ -3,13 +3,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = ["module.go"],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/starlark",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/cauldron/worker",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/cauldron/worker/http:go_default_library",
         "//go/cauldron/worker/plugins/rayhttp:go_default_library",
         "//go/cauldron/worker/plugins/sparkhttp:go_default_library",
-        "//go/worker/plugins/cachedoutput:go_default_library",
-        "//go/worker/plugins/storage:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//plugin:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
         "@org_uber_go_fx//:go_default_library",

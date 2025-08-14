@@ -6,9 +6,9 @@ import (
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/transport/grpc"
 
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/http"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/sparkhttp"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/rayhttp"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/sparkhttp"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 

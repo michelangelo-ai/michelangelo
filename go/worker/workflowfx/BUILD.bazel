@@ -18,7 +18,6 @@ go_library(
         "@com_github_uber_go_tally//:go_default_library",
         "@com_github_uber_go_tally_v4//:go_default_library",
         "@io_temporal_go_sdk//client:go_default_library",
-        "@io_temporal_go_sdk//converter:go_default_library",
         "@io_temporal_go_sdk//worker:go_default_library",
         "@io_temporal_go_sdk_contrib_tally//:go_default_library",
         "@org_uber_go_cadence//.gen/go/cadence/workflowserviceclient:go_default_library",

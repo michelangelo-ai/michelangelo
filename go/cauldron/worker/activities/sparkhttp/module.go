@@ -6,7 +6,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 
-	httpconfig "github.com/michelangelo-ai/michelangelo/go/worker/activities/http"
+	httpconfig "github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
 )
 
 // Config contains configuration options for the Spark HTTP API client.

@@ -7,9 +7,9 @@ import (
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/rayhttp"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/rayhttp"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	"github.com/michelangelo-ai/michelangelo/go/worker/ray"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/compute/ray"
 	"go.starlark.net/starlark"
 	"go.uber.org/zap"
 )

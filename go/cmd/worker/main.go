@@ -4,6 +4,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	cauldronworker "github.com/michelangelo-ai/michelangelo/go/cauldron/worker"
 	"github.com/michelangelo-ai/michelangelo/go/worker"
 
 	"go.uber.org/fx"
@@ -19,5 +20,6 @@ func options() fx.Option {
 		env.Module,
 		config.Module,
 		zapfx.Module,
+		cauldronworker.Module,
 	)
 }

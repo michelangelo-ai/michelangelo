@@ -14,7 +14,7 @@ import (
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/michelangelo-ai/michelangelo/go/worker/ray"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/compute/ray"
 )
 
 var Activities = (*activities)(nil)

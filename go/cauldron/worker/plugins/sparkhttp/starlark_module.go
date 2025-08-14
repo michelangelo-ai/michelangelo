@@ -10,9 +10,9 @@ import (
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	"github.com/michelangelo-ai/michelangelo/go/worker/activities/sparkhttp"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/sparkhttp"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	"github.com/michelangelo-ai/michelangelo/go/worker/spark"
+	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/compute/spark"
 	"go.starlark.net/starlark"
 	"go.uber.org/zap"
 )
