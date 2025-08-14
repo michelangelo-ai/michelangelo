@@ -11,9 +11,9 @@ import type { TaskState } from '#core/components/views/execution/types';
  *
  * @param $state - Task execution state that determines visual styling
  */
-export const TaskStepCardContainer = styled<'div', { $state: TaskState }>(
+export const TaskStepCardContainer = styled<'div', { role?: string; $state: TaskState }>(
   'div',
-  ({ $theme: { colors, sizing }, $state }) => {
+  ({ $theme: { colors, sizing }, $state, role }) => {
     const {
       colorName = 'contentPrimary',
       backgroundColorName = 'backgroundPrimary',
@@ -33,7 +33,7 @@ export const TaskStepCardContainer = styled<'div', { $state: TaskState }>(
       borderRadius: '12px',
       backgroundColor: colors[backgroundColorName],
       color: colors[colorName],
-      cursor: 'pointer',
+      cursor: role === 'button' ? 'pointer' : 'default',
     };
   }
 );

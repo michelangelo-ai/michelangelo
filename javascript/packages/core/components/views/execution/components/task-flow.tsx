@@ -16,7 +16,11 @@ export function TaskFlow<TTaskRecord extends object = object>(props: {
       {taskList.map((task, index) => (
         <React.Fragment key={index}>
           {index > 0 && <TaskIndicator $color="contentInverseSecondary" $direction="right" />}
-          <TaskStepCard key={index} task={task} onClick={() => onTaskClick?.(task)} />
+          <TaskStepCard
+            key={index}
+            task={task}
+            {...(onTaskClick ? { onClick: () => onTaskClick(task) } : {})}
+          />
         </React.Fragment>
       ))}
     </TaskFlowContainer>

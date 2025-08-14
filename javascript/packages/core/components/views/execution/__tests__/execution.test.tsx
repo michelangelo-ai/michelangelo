@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
 import {
@@ -256,5 +257,71 @@ describe('Execution view', () => {
     // Expanding unfocused task should show body content
     await user.click(screen.getByRole('button', { name: 'Hidden Task Down Small' }));
     expect(screen.getAllByText('Input Parameters')).toHaveLength(2);
+  });
+
+  describe('scroll navigation integration', () => {
+    const mockScrollTo = vi.fn();
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      Object.defineProperty(window, 'scrollTo', {
+        value: mockScrollTo,
+        writable: true,
+      });
+    });
+
+    it('should scroll when clicking task name in overview', async () => {
+      const user = userEvent.setup();
+      const executionData = {
+        status: {
+          steps: [
+            buildStep({
+              displayName: 'Build Pipeline',
+              state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            }),
+          ],
+        },
+      };
+
+      render(<Execution schema={buildSchema()} data={executionData} />);
+
+      // Click task name in overview
+      await user.click(screen.getAllByText('Build Pipeline')[0]);
+
+      expect(mockScrollTo).toHaveBeenCalledWith({
+        top: expect.any(Number) as number,
+        behavior: 'smooth',
+      });
+    });
+
+    it('should navigate to subtasks', async () => {
+      const user = userEvent.setup();
+      const executionData = {
+        status: {
+          steps: [
+            buildStep({
+              displayName: 'Execute Workflow',
+              state: 'PIPELINE_RUN_STEP_STATE_RUNNING',
+              subSteps: [
+                buildStep({
+                  displayName: 'feature_prep',
+                  state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+                }),
+              ],
+            }),
+          ],
+        },
+      };
+
+      render(<Execution schema={buildSchema()} data={executionData} />);
+
+      // Click subtask name in overview
+      await user.click(screen.getAllByText('feature_prep')[0]);
+
+      expect(mockScrollTo).toHaveBeenCalledWith({
+        top: expect.any(Number) as number,
+        behavior: 'smooth',
+      });
+    });
   });
 });
