@@ -15,7 +15,11 @@ export function TaskStepCard<TTaskRecord extends object = object>(
   const [css] = useStyletron();
 
   return (
-    <TaskStepCardContainer $state={state} role="button" tabIndex={0} onClick={onClick}>
+    <TaskStepCardContainer
+      $state={state}
+      tabIndex={0}
+      {...(onClick ? { role: 'button', onClick } : {})}
+    >
       <TaskStateIcon state={state} />
       <TaskStepName>{name}</TaskStepName>
       {hasSubTasks && focused ? (

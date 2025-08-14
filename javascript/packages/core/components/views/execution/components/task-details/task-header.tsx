@@ -11,11 +11,11 @@ import type { TaskHeaderProps } from './types';
  */
 export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TTaskRecord>) {
   const [css, theme] = useStyletron();
-  const { task, metadata } = props;
+  const { task, id, metadata } = props;
   const { name, state } = task;
 
   return (
-    <TaskContentStack>
+    <TaskContentStack id={id}>
       <div className={css({ display: 'flex', gap: theme.sizing.scale500 })}>
         <div className={css({ marginTop: '2px' })}>
           <TaskStateIcon state={state} />

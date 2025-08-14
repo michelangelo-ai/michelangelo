@@ -12,6 +12,7 @@ import { TaskContentStack, TaskSeparator } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
 import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
+import { scrollToTask } from './utils/scroll-to-task';
 
 import type { ExecutionDetailViewSchema } from './types';
 

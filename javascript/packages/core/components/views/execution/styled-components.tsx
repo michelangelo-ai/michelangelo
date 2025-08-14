@@ -22,14 +22,18 @@ export const TaskContentStack = styled('div', ({ $theme }) => ({
   gap: $theme.sizing.scale800,
 }));
 
-export function TaskPanel(props: StatefulPanelProps) {
+export function TaskPanel(props: StatefulPanelProps & { id?: string }) {
+  const { id, ...restProps } = props;
   return (
     <StatefulPanel
-      {...props}
+      {...restProps}
       overrides={{
         PanelContainer: {
           component: StyledBoxContainer,
-          props: { onClick: (e: MouseEvent) => e.stopPropagation() },
+          props: {
+            id,
+            onClick: (e: MouseEvent) => e.stopPropagation(),
+          },
           style: ({ $theme, $expanded }: { $expanded: boolean; $theme: Theme }) => ({
             ...(!$expanded && { gap: 0 }),
             transitionProperty: 'gap',
