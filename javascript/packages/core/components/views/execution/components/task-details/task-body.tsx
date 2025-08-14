@@ -1,12 +1,14 @@
 import { useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
+import { TaskContentStack } from '#core/components/views/execution/styled-components';
 import { getObjectValue } from '#core/utils/object-utils';
 import { TaskFlow } from '../task-flow';
 import { TaskBodyMetadata } from './renderers/task-body-metadata';
 import { TaskBodyStruct } from './renderers/task-body-struct';
 import { TaskBodyTextarea } from './renderers/task-body-textarea';
 import { TaskBodyMetadataSchema, TaskBodyTextareaSchema } from './renderers/types';
+import { TaskDetails } from './task-details';
 
 import type { TaskBodyProps } from './types';
 
@@ -17,9 +19,14 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
 
   if (subTasks?.length) {
     return (
-      <Box>
-        <TaskFlow taskList={subTasks} />
-      </Box>
+      <TaskContentStack>
+        <Box>
+          <TaskFlow taskList={subTasks} />
+        </Box>
+        {subTasks.map((task, index) => (
+          <TaskDetails key={index} task={task} bodySchema={bodySchema} />
+        ))}
+      </TaskContentStack>
     );
   }
 
