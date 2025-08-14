@@ -120,6 +120,7 @@ func (r *activities) CreateSparkOne(ctx context.Context, request CreateSparkOneR
 
 	// Make HTTP POST request to create the SparkOne using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/uniflow/sparkones", r.apiBaseURL, r.workspace, r.environment)
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/sparkones", r.apiBaseURL, r.workspace, r.environment)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(sparkOneBytes))
 	if err != nil {
 		logger.Error(err, "activity-error: failed to create request")

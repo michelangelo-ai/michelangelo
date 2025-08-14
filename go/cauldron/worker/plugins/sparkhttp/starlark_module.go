@@ -163,6 +163,7 @@ func (r *module) createSparkOne(thread *starlark.Thread, _ *starlark.Builtin, ar
 
 	// Execute the create activity
 	var createResponse spark.CreateSparkOneResponse
+	srp := utils.CadenceDefaultRetryPolicy
 	srp = utils.CadenceDefaultRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
