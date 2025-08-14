@@ -1,6 +1,8 @@
 package worker
 
 import (
+	"github.com/cadence-workflow/starlark-worker/plugin"
+	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
@@ -10,7 +12,17 @@ import (
 	"go.uber.org/fx"
 )
 
-// Module provides YARPC client instances.
+// ProvidePluginRegistry creates a new plugin registry based on the global registry.
+func ProvidePluginRegistry() map[string]service.IPlugin {
+	// Start with the global plugin registry as base
+	registry := make(map[string]service.IPlugin)
+	for id, p := range plugin.Registry {
+		registry[id] = p
+	}
+	return registry
+}
+
+// Module provides HTTP client instances for all HTTP-based activities.
 var Module = fx.Options(
 	fx.Provide(NewConfig, NewYARPCDispatcher),
 	fx.Provide(
@@ -18,6 +30,9 @@ var Module = fx.Options(
 		NewRayJobServiceClient,
 		NewSparkJobServiceClient,
 		NewCachedOutputServiceClient,
+		GetRayHTTPConfig,
+		GetSparkHTTPConfig,
+		ProvidePluginRegistry,
 	),
 	workflowfx.Module,
 	activities.Module,
