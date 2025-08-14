@@ -12,6 +12,16 @@ export const TaskSeparator = styled('hr', ({ $theme }) => ({
   margin: `${$theme.sizing.scale200} 0`,
 }));
 
+/**
+ * Standard vertical stack layout for organizing task-related content.
+ * Provides consistent spacing between task components, sections, and lists.
+ */
+export const TaskContentStack = styled('div', ({ $theme }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  gap: $theme.sizing.scale800,
+}));
+
 export function TaskPanel(props: StatefulPanelProps) {
   return (
     <StatefulPanel

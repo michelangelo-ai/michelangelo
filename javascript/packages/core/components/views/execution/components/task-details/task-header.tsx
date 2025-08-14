@@ -1,6 +1,7 @@
 import { useStyletron } from 'baseui';
 
 import { Row } from '#core/components/row/row';
+import { TaskContentStack } from '#core/components/views/execution/styled-components';
 import { TaskStateIcon } from '../task-state-icon';
 
 import type { TaskHeaderProps } from './types';
@@ -14,7 +15,7 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
   const { name, state } = task;
 
   return (
-    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
+    <TaskContentStack>
       <div className={css({ display: 'flex', gap: theme.sizing.scale500 })}>
         <div className={css({ marginTop: '2px' })}>
           <TaskStateIcon state={state} />
@@ -29,6 +30,6 @@ export function TaskHeader<TTaskRecord extends object>(props: TaskHeaderProps<TT
         </div>
       </div>
       {metadata && <Row items={metadata} record={task.record as Record<string, unknown>} />}
-    </div>
+    </TaskContentStack>
   );
 }

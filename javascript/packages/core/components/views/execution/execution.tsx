@@ -8,7 +8,7 @@ import { CircleExclamationMarkKind } from '#core/components/illustrations/circle
 import { TaskDetails } from './components/task-details/task-details';
 import { TaskFlow } from './components/task-flow';
 import { TaskStateIcon } from './components/task-state-icon';
-import { TaskSeparator } from './styled-components';
+import { TaskContentStack, TaskSeparator } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
 import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
@@ -42,7 +42,7 @@ export function Execution<
   const matrix = buildTaskMatrix(taskList);
 
   return (
-    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale800 })}>
+    <TaskContentStack>
       <Box
         title={
           <div
@@ -53,21 +53,22 @@ export function Execution<
           </div>
         }
       >
-        <div
-          className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
-        >
+        <TaskContentStack>
           {matrix.map((item, index) => (
             <React.Fragment key={index}>
               {index > 0 && <TaskSeparator />}
-              <TaskFlow taskList={item.taskList} />
+              <TaskFlow
+                taskList={item.taskList}
+                onTaskClick={(clickedTask) => {
+                  scrollToTask(clickedTask);
+                }}
+              />
             </React.Fragment>
           ))}
-        </div>
+        </TaskContentStack>
       </Box>
 
-      <div
-        className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
-      >
+      <TaskContentStack>
         {taskList.map((task, index) => (
           <TaskDetails
             key={index}
@@ -76,7 +77,7 @@ export function Execution<
             bodySchema={schema.tasks.body}
           />
         ))}
-      </div>
-    </div>
+      </TaskContentStack>
+    </TaskContentStack>
   );
 }
