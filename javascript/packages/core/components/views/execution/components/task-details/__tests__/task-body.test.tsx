@@ -9,7 +9,7 @@ import { TaskBody } from '../task-body';
 import type { TaskBodySchema } from '../renderers/types';
 
 describe('TaskBody', () => {
-  it('should render TaskNodeList when subtasks exist', () => {
+  it('should render task overview and details when subtasks exist', () => {
     const taskWithSubtasks = createTask({
       name: 'Parent Task',
       subTasks: [
@@ -21,9 +21,9 @@ describe('TaskBody', () => {
 
     render(<TaskBody task={taskWithSubtasks} />);
 
-    expect(screen.getByText('Child Task 1')).toBeInTheDocument();
-    expect(screen.getByText('Child Task 2')).toBeInTheDocument();
-    expect(screen.getByText('Child Task 3')).toBeInTheDocument();
+    expect(screen.getAllByText('Child Task 1')).toHaveLength(2);
+    expect(screen.getAllByText('Child Task 2')).toHaveLength(2);
+    expect(screen.getAllByText('Child Task 3')).toHaveLength(2);
   });
 
   it('should handle single subtask correctly', () => {
@@ -34,7 +34,7 @@ describe('TaskBody', () => {
 
     render(<TaskBody task={taskWithOneSubtask} />);
 
-    expect(screen.getByText('Only Child')).toBeInTheDocument();
+    expect(screen.getAllByText('Only Child')).toHaveLength(2);
   });
 
   it('should handle tasks with different states in subtasks', () => {
@@ -49,9 +49,9 @@ describe('TaskBody', () => {
 
     render(<TaskBody task={taskWithMixedSubtasks} />);
 
-    expect(screen.getByText('Success Task')).toBeInTheDocument();
-    expect(screen.getByText('Running Task')).toBeInTheDocument();
-    expect(screen.getByText('Error Task')).toBeInTheDocument();
+    expect(screen.getAllByText('Success Task')).toHaveLength(2);
+    expect(screen.getAllByText('Running Task')).toHaveLength(2);
+    expect(screen.getAllByText('Error Task')).toHaveLength(2);
   });
 
   it('should render body schema when no subtasks exist', () => {
@@ -96,7 +96,7 @@ describe('TaskBody', () => {
     render(<TaskBody task={taskWithBoth} bodySchema={bodySchema} />);
 
     // Should render subtask, not body schema
-    expect(screen.getByText('Child Task')).toBeInTheDocument();
+    expect(screen.getAllByText('Child Task')).toHaveLength(2);
     expect(screen.queryByText('Should Not Render')).not.toBeInTheDocument();
   });
 

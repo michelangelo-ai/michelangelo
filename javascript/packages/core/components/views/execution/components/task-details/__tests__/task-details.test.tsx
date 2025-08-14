@@ -73,8 +73,8 @@ describe('TaskDetails', () => {
     const accordionPanel = screen.getByRole('button', { expanded: false });
     await user.click(accordionPanel);
 
-    expect(screen.getByText('Child Task 1')).toBeInTheDocument();
-    expect(screen.getByText('Child Task 2')).toBeInTheDocument();
+    expect(screen.getAllByText('Child Task 1')).toHaveLength(2);
+    expect(screen.getAllByText('Child Task 2')).toHaveLength(2);
   });
 
   it('should handle tasks with empty subtasks array as leaf task', () => {

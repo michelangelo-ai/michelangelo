@@ -23,7 +23,7 @@ export function TaskDetails<TTaskRecord extends object = object>(
     return (
       <TaskPanel
         title={<TaskHeader task={task} onClick={onClick} metadata={metadata} />}
-        initialState={{ expanded: false }}
+        initialState={{ expanded: task.focused }}
       >
         <TaskBody task={task} bodySchema={bodySchema} />
       </TaskPanel>

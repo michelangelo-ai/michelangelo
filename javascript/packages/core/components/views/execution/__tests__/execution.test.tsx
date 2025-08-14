@@ -41,11 +41,31 @@ describe('Execution view', () => {
       status: {
         steps: [
           buildStep({
-            displayName: 'Complex Pipeline',
+            displayName: 'Unfocused Step',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            subSteps: [
+              buildStep({
+                displayName: 'Unfocused Subtask 1',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+              }),
+              buildStep({
+                displayName: 'Unfocused Subtask 2',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+              }),
+            ],
+          }),
+          buildStep({
+            displayName: 'Focused Step',
             state: 'PIPELINE_RUN_STEP_STATE_RUNNING',
             subSteps: [
-              buildStep({ displayName: 'Stage 1', state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED' }),
-              buildStep({ displayName: 'Stage 2', state: 'PIPELINE_RUN_STEP_STATE_RUNNING' }),
+              buildStep({
+                displayName: 'Focused Subtask 1',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+              }),
+              buildStep({
+                displayName: 'Focused Subtask 2',
+                state: 'PIPELINE_RUN_STEP_STATE_RUNNING',
+              }),
             ],
           }),
         ],
@@ -55,20 +75,32 @@ describe('Execution view', () => {
     render(<Execution schema={buildSchema()} data={executionData} />);
 
     // Should render parent task in both sections
-    expect(screen.getAllByText('Complex Pipeline')).toHaveLength(2);
+    expect(screen.getAllByText('Unfocused Step')).toHaveLength(2);
+    expect(screen.getAllByText('Focused Step')).toHaveLength(2);
 
-    const accordionPanel = screen.getByRole('button', { expanded: false });
-    expect(accordionPanel).toBeInTheDocument();
+    // Accordion for focused task is expanded
+    expect(screen.getByRole('button', { name: 'Focused Step Down Small' })).toHaveAttribute(
+      'aria-expanded',
+      'true'
+    );
 
-    // Subtasks are visible in Overview section but not in collapsed accordion
-    // Note: Overview section shows all tasks in flat structure
-    expect(screen.getAllByText('Stage 1')).toHaveLength(1);
-    expect(screen.getAllByText('Stage 2')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Unfocused Step Down Small' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    );
 
-    await user.click(accordionPanel);
+    // Unfocused subtasks are not visible in collapsed accordion or overview
+    expect(screen.queryByText('Unfocused Subtask 1')).not.toBeInTheDocument();
+    expect(screen.queryByText('Unfocused Subtask 2')).not.toBeInTheDocument();
 
-    expect(screen.getAllByText('Stage 1')).toHaveLength(2);
-    expect(screen.getAllByText('Stage 2')).toHaveLength(2);
+    // Unfocused subtasks are visible in expanded accordion
+    await user.click(screen.getByRole('button', { name: 'Unfocused Step Down Small' }));
+    expect(screen.getAllByText('Unfocused Subtask 1')).toHaveLength(2);
+    expect(screen.getAllByText('Unfocused Subtask 2')).toHaveLength(2);
+
+    // Focused subtasks are visible twice in expanded accordion and once in overview
+    expect(screen.getAllByText('Focused Subtask 1')).toHaveLength(3);
+    expect(screen.getAllByText('Focused Subtask 2')).toHaveLength(3);
   });
 
   it('should render metadata ', () => {
@@ -173,6 +205,19 @@ describe('Execution view', () => {
       status: {
         steps: [
           buildStep({
+            displayName: 'Hidden Task',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            input: {
+              fields: {
+                dataset: { stringValue: 'training_data.csv', kind: 'stringValue' },
+              },
+            },
+            logs: 'Model training completed',
+            performance: {
+              duration: '2h 15m',
+            },
+          }),
+          buildStep({
             displayName: 'Data Processing Task',
             state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
             input: {
@@ -191,13 +236,7 @@ describe('Execution view', () => {
 
     render(<Execution schema={schemaWithBody} data={executionData} />);
 
-    // No body content should be visible before accordion is expanded
-    expect(screen.queryByText('Input Parameters')).not.toBeInTheDocument();
-    expect(screen.queryByText('Logs')).not.toBeInTheDocument();
-    expect(screen.queryByText('Performance')).not.toBeInTheDocument();
-
-    // All body schema labels should be present after accordion is expanded
-    await user.click(screen.getByRole('button', { name: 'Data Processing Task Down Small' }));
+    // All body schema labels should be present for focused task
     expect(screen.getByText('Input Parameters')).toBeInTheDocument();
     expect(screen.getByText('Logs')).toBeInTheDocument();
     expect(screen.getByText('Performance')).toBeInTheDocument();
@@ -213,5 +252,9 @@ describe('Execution view', () => {
 
     await user.click(screen.getByRole('button', { name: /Performance/ }));
     expect(screen.getByText('2h 15m')).toBeInTheDocument();
+
+    // Expanding unfocused task should show body content
+    await user.click(screen.getByRole('button', { name: 'Hidden Task Down Small' }));
+    expect(screen.getAllByText('Input Parameters')).toHaveLength(2);
   });
 });
