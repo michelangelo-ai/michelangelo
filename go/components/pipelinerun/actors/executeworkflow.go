@@ -94,18 +94,18 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			Status: apipb.CONDITION_STATUS_UNKNOWN,
 		}, nil
 	}
-	
+
 	logger.Info("Workflow run ID is not empty, checking workflow status")
 	workflowExecution, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	newCondition := &apipb.Condition{
 		Type:   ExecuteWorkflowType,
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
 	}
-	
+
 	// Query and update task-level status for all workflow states
 	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if queryErr != nil {
@@ -113,7 +113,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
 	}
-	
+
 	switch workflowExecution.Status {
 	case clientInterfaces.WorkflowExecutionStatusRunning:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
@@ -241,21 +241,21 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 	workflowID := pipelineRun.Status.WorkflowId
 	runID := pipelineRun.Status.WorkflowRunId
-	
+
 	// Query workflow for task progress
 	var workflowProgressStr []string
 	err := a.workflowClient.QueryWorkflow(ctx, workflowID, runID, pipelinerunutils.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
 	if err != nil {
 		return []*v2.PipelineRunStepInfo{}, err
 	}
-	
+
 	logger.Info("Get Uniflow Progress", zap.Strings("progress", workflowProgressStr))
-	
+
 	// Construct PipelineRunStepInfo for each task
 	orderedStepInfo := []*v2.PipelineRunStepInfo{}
 	stepMap := make(map[string]*v2.PipelineRunStepInfo)
 	stepOrder := []string{}
-	
+
 	for _, progress := range workflowProgressStr {
 		var taskProgress TaskProgress
 		err := json.Unmarshal([]byte(progress), &taskProgress)
@@ -263,46 +263,46 @@ func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context,
 			logger.Error("Cannot parse progress string", zap.Error(err), zap.String("progress", progress))
 			continue
 		}
-		
+
 		taskName := taskProgress.TaskName
 		if taskName == "" {
 			logger.Error("taskName does not exist", zap.String("progress", progress))
 			continue
 		}
-		
+
 		if _, existingTask := stepMap[taskName]; !existingTask {
 			stepOrder = append(stepOrder, taskName)
 			stepMap[taskName] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 			continue
 		}
-		
+
 		// Merge the task progress into the existing step info
 		oldStepInfo := stepMap[taskName]
 		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
 		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
 	}
-	
+
 	for _, stepName := range stepOrder {
 		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
 	}
-	
+
 	logger.Info("Ordered Step Info", zap.Any("orderedStepInfo", orderedStepInfo))
 	return orderedStepInfo, nil
 }
 
 func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
 	mergedStepInfo := proto.Clone(newStepInfo).(*v2.PipelineRunStepInfo)
-	
+
 	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
 	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
-	
+
 	// newStepInfo.AttemptIds is a list containing the latest attempt id, example: ["5"]
 	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
-	
+
 	// Our goal is:
 	// If the latest attempt ID ALREADY exists in the old step info, update the driver URL
 	// If the latest attempt ID DOES NOT exist in the old step info, append the new attempt ID and driver URL
-	
+
 	if attemptIDAlreadyExists(oldStepInfo, newStepInfo) {
 		mergedStepInfo.AttemptIds = oldStepInfo.AttemptIds
 		mergedStepInfo.Resources = oldStepInfo.Resources
@@ -313,19 +313,19 @@ func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *
 		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
 		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
 	}
-	
+
 	return mergedStepInfo
 }
 
 func attemptIDAlreadyExists(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) bool {
 	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
 	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
-	
+
 	// newStepInfo.AttemptIds is a list containing the latest attempt id, example: ["5"]
 	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
-	
+
 	// This function checks if the new attempt ID already exists, and is the last item in the old step info
-	
+
 	if len(newStepInfo.AttemptIds) > 0 {
 		if len(oldStepInfo.AttemptIds) > 0 && newStepInfo.AttemptIds[0] == oldStepInfo.AttemptIds[len(oldStepInfo.AttemptIds)-1] {
 			return true
@@ -339,7 +339,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	stepInfo.Name = taskProgress.TaskPath
 	stepInfo.DisplayName = taskProgress.TaskName
 	stepInfo.LogUrl = taskProgress.TaskLog
-	
+
 	if taskProgress.StartTime != "" {
 		// parse utc time str 2024-06-10 17:53:20 to time.Time
 		startTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.StartTime)
@@ -347,7 +347,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 			stepInfo.StartTime = &pbtypes.Timestamp{Seconds: startTime.Unix()}
 		}
 	}
-	
+
 	if taskProgress.EndTime != "" {
 		// parse utc time str 2024-06-10 17:53:20 to time.Time
 		endTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.EndTime)
@@ -355,7 +355,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 			stepInfo.EndTime = &pbtypes.Timestamp{Seconds: endTime.Unix()}
 		}
 	}
-	
+
 	if taskProgress.Output != "" {
 		stepInfo.StepCachedOutputs = &v2.PipelineRunStepCachedOutputs{
 			IntermediateVars: []*apipb.ResourceIdentifier{
@@ -366,7 +366,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 			},
 		}
 	}
-	
+
 	switch taskProgress.TaskState {
 	case pipelinerunutils.UniflowTaskStateRunning:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
@@ -383,7 +383,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	default:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
 	}
-	
+
 	if taskProgress.RetryAttemptID != "" {
 		stepInfo.Resources = []*v2.PipelineRunResource{
 			&v2.PipelineRunResource{
@@ -397,6 +397,6 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 		}
 		stepInfo.AttemptIds = []string{taskProgress.RetryAttemptID}
 	}
-	
+
 	return stepInfo
 }
