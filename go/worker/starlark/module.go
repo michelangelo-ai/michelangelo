@@ -55,5 +55,4 @@ var Module = fx.Options(
 	fx.Invoke(RegisterRayPlugin),
 	fx.Invoke(RegisterSparkPlugin),
 	fx.Invoke(CreateStarlarkService),
-	fx.Invoke(CreateStarlarkService),
 )
