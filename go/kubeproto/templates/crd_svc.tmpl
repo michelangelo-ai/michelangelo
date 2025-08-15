@@ -153,7 +153,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 	ctx context.Context, request *Create{{.KindName}}Request) (resp *Create{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
 
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Create{{.KindName}} Request Called")
@@ -225,7 +225,7 @@ func (c {{.LowerKindName}}ServiceHandler) Create{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 	ctx context.Context, request *Get{{.KindName}}Request) (resp *Get{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Get{{.KindName}} Request Called")
@@ -284,7 +284,7 @@ func (c {{.LowerKindName}}ServiceHandler) Get{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 	ctx context.Context, request *Update{{.KindName}}Request) (resp *Update{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Update{{.KindName}} Request Called")
@@ -356,7 +356,7 @@ func (c {{.LowerKindName}}ServiceHandler) Update{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 	ctx context.Context, request *Delete{{.KindName}}Request) (resp *Delete{{.KindName}}Response, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Delete{{.KindName}} Request Called")
@@ -430,7 +430,7 @@ func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}(
 func (c {{.LowerKindName}}ServiceHandler) Delete{{.KindName}}Collection(
 	ctx context.Context, request *Delete{{.KindName}}CollectionRequest) (resp *Delete{{.KindName}}CollectionResponse, err error) {
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("Delete{{.KindName}}Collection Request Called")
@@ -506,7 +506,7 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
 	ctx context.Context, request *List{{.KindName}}Request) (resp *List{{.KindName}}Response, err error) {
 
 	logger := logging.GetLogrLoggerOrPanic()
-	requestJSON := logging.MarshalToString(request)
+	requestJSON := logging.MarshalToStringForLogging(request)
 
 	logger = logger.WithValues("request", requestJSON, "context", ctx)
 	logger.Info("List{{.KindName}} Request Called")
@@ -564,8 +564,8 @@ func (c {{.LowerKindName}}ServiceHandler) List{{.KindName}}(
 
 func (c {{.LowerKindName}}ServiceHandler) buildAuditLogEvent(
 	ctx context.Context, procedure string, entityType string, requestNamespace string, requestName string, request interface{}, response interface{}, grpcErr error) *logging.AuditLogEvent {
-	requestJSON := logging.MarshalToString(request)
-	responseJSON := logging.MarshalToString(response)
+	requestJSON := logging.MarshalToStringForLogging(request)
+	responseJSON := logging.MarshalToStringForLogging(response)
 	errMsg := ""
 	if grpcErr != nil {
 		errMsg = grpcErr.Error()
@@ -628,7 +628,7 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForUpda
 	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
 
 	if err == nil {
-		preCRD = logging.MarshalToString(result)
+		preCRD = logging.MarshalToStringForLogging(result)
 	}
 
 	event.PreCRD = preCRD
@@ -656,7 +656,7 @@ func (c {{.LowerKindName}}ServiceHandler) build{{.KindName}}AuditLogEventForDele
 	err := c.apiHandler.Get(ctx, requestNamespace, requestName, getOptions, result)
 
 	if err == nil {
-		preCRD = logging.MarshalToString(result)
+		preCRD = logging.MarshalToStringForLogging(result)
 	}
 
 	event.PreCRD = preCRD
