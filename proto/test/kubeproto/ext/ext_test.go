@@ -77,19 +77,15 @@ func TestExtValidation(t *testing.T) {
 		assert.Error(t, err, "Should fail with string too long")
 	})
 
-	t.Run("ValidationRegistry", func(t *testing.T) {
-		// Test that the validation registry is populated
-		assert.NotNil(t, ext.ValidationRegistry)
-		assert.Greater(t, len(ext.ValidationRegistry), 0, "Registry should have entries")
-
-		// Test Validate function using the registry
+	t.Run("DirectValidation", func(t *testing.T) {
+		// Test direct validation approach (no registry needed)
 		msg := &ext.ValidationMsg1{F1: 50, F3: "test", F4: ext.E1_C}
-		err := ext.Validate("ValidationMsg1", msg, "")
-		assert.NoError(t, err, "Should validate through registry")
+		err := msg.Validate("")
+		assert.NoError(t, err, "Should validate directly")
 
-		// Test with invalid data through registry
+		// Test with invalid data through direct validation
 		invalidMsg := &ext.ValidationMsg1{F1: 5, F3: "test", F4: ext.E1_C}
-		err = ext.Validate("ValidationMsg1", invalidMsg, "")
-		assert.Error(t, err, "Should fail validation through registry")
+		err = invalidMsg.Validate("")
+		assert.Error(t, err, "Should fail validation directly")
 	})
 }

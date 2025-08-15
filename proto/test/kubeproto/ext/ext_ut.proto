@@ -143,7 +143,9 @@ message ValidationMsg12 {
 message ValidationMsg13 {
   option (michelangelo.api.no_default) = true;
   oneof test_oneof {
-    int32 f1 = 1;
+    int32 f1 = 1[
+      (michelangelo.api.validation) = {min: "1", max: "20"}
+    ];
     ValidationMsg1 f2 = 2;
   }
   oneof test_oneof_optional {

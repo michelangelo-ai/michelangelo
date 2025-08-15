@@ -41,29 +41,30 @@ func (this *DemoMessage) Validate(prefix string) error {
 ### 4. **go_ext** ✅ (NEW - Created by us)
 - **Location**: `//bazel/rules/proto:go_ext`
 - **Output**: `.ext.go`
-- **Purpose**: Extension validation with field verification and registry
+- **Purpose**: Extension validation with field verification and direct integration
 - **Key Features**:
   - Field comparison with original proto
-  - Validation registry with init() function
-  - Runtime validation lookup
+  - Direct validation using unsafe pointer conversion
+  - Integration with original proto validation system
 - **Example Generated Code**:
 ```go
-var ValidationRegistry = make(map[string]func(interface{}, string) error)
-
-func init() {
-    ValidationRegistry["DemoMessage"] = func(obj interface{}, prefix string) error {
-        if msg, ok := obj.(*DemoMessage); ok {
-            return msg.Validate(prefix)
-        }
-        return nil
+func (this *DemoMessage) Validate(prefix string) error {
+    if this.Id == "" {
+        return status.Error(codes.InvalidArgument, prefix+"id is required")
     }
-}
-
-func Validate(typeName string, obj interface{}, prefix string) error {
-    if fn, ok := ValidationRegistry[typeName]; ok {
-        return fn(obj, prefix)
+    if !pattern0.MatchString(this.Id) {
+        return status.Error(codes.InvalidArgument, prefix+"id must match pattern")
     }
     return nil
+}
+
+func init() {
+    v2.RegisterDemoMessageValidateExt(func(orig *v2.DemoMessage, prefix string) error {
+        // Call ext validation directly on original type using unsafe pointer conversion
+        // Types have identical structure, so this is safe
+        extMsg := (*DemoMessage)(unsafe.Pointer(orig))
+        return extMsg.Validate(prefix)
+    })
 }
 ```
 
@@ -148,7 +149,7 @@ For a proto file `example.proto`, the compilers generate:
 
 1. `example.pb.go` - Core protobuf code (go_proto/gogoslick)
 2. `example.pb.validation.go` - Validation functions (go_validation)
-3. `example.ext.go` - Extension validation with registry (go_ext)
+3. `example.ext.go` - Extension validation with direct integration (go_ext)
 4. `example.pb.yarpc.go` - YARPC RPC code (go_yarpc)
 5. `example.pb.kubeyarpc.go` - Kubernetes YARPC (go_kubeyarpc)
 6. `example.sql` - SQL schema (kube_proto_sql)
@@ -159,8 +160,8 @@ For a proto file `example.proto`, the compilers generate:
 The **go_ext** compiler we created adds unique capabilities:
 
 1. **Field Verification**: Ensures ext protos match original proto structure
-2. **Validation Registry**: Dynamic runtime validation lookup
-3. **Init Function**: Automatic registration of validators
+2. **Direct Validation**: High-performance validation using unsafe pointer conversion
+3. **Integration Hooks**: Automatic registration with original proto validation system
 4. **Separate Package Support**: Can generate in different packages
 5. **Template Sharing**: Uses centralized templates from `/go/kubeproto/templates/`
 
@@ -168,7 +169,7 @@ This allows teams to:
 - Add validation to existing protos without modifying them
 - Create stricter validation rules for specific use cases
 - Maintain backward compatibility
-- Dynamically discover and apply validations at runtime
+- Integrate seamlessly with existing validation infrastructure
 
 ## Build Examples
 

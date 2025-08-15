@@ -103,15 +103,12 @@ flowchart TD
     GenPatterns --> GenSets[Generate Set Variables<br/>var set0 = map[string]bool{...}]
     
     GenSets --> GenValidate[Generate Validate() Function<br/>with ext validation logic]
-    GenValidate --> GenRegistry[Generate ValidationRegistry<br/>map[string]func(interface{}, string) error]
+    GenValidate --> GenInit[Generate init() Function]
     
-    GenRegistry --> GenInit[Generate init() Function]
-    GenInit --> RegLocal[Register in Local Registry<br/>ValidationRegistry["DataSchemaItem_Ext"]]
-    
-    RegLocal --> ImportOrig[Import Original Package<br/>v2 "github.com/.../proto/api/v2"]
+    GenInit --> ImportOrig[Import Original Package<br/>v2 "github.com/.../proto/api/v2"]
     ImportOrig --> CallReg[Call Original Register Function<br/>v2.RegisterDataSchemaItemValidateExt()]
     
-    CallReg --> GenGlobal[Generate Global Validate Function<br/>func Validate(typeName, obj, prefix)]
+    CallReg --> UnsafeConv[Use Unsafe Pointer Conversion<br/>extMsg := (*ExtType)(unsafe.Pointer(orig))]
     
     ForMsg -->|More Messages| ReadVal
     ForMsg -->|Done| WriteFile[Write .ext.go File]
@@ -153,7 +150,6 @@ sequenceDiagram
     
     Note over App,Reg: Initialization Phase
     App->>V2Ext: Package Import (triggers init())
-    V2Ext->>Reg: Register in ValidationRegistry
     V2Ext->>V2: v2.RegisterDataSchemaItemValidateExt(hookFunc)
     V2->>V2: Store hookFunc in dataSchemaItemValidateExt
     
@@ -164,12 +160,9 @@ sequenceDiagram
     V2Ext->>V2Ext: Check shape array items
     V2Ext-->>App: Return validation result
     
-    Note over App,Reg: Validation Phase - Registry Lookup
-    App->>Reg: v2_ext.Validate("DataSchemaItem_Ext", obj, "")
-    Reg->>V2Ext: Call registered function
-    V2Ext->>V2Ext: obj.Validate("")
-    V2Ext-->>Reg: Return result
-    Reg-->>App: Return result
+    Note over App,Reg: Validation Phase - Cross-package Integration
+    Note right of App: v2 and v2_ext types have identical structures
+    Note right of App: Direct validation without registry needed
     
     Note over App,Reg: Validation Phase - Original with Ext Hook
     App->>V2: originalObj.Validate("")
@@ -193,7 +186,7 @@ graph LR
     subgraph "Build Phase 2: Ext Compiler"
         V2EXT[v2_ext/schema_ext.proto] --> ECO[Ext Compiler]
         VGO --> ECO
-        ECO --> EGO[schema_ext.ext.go<br/>✓ Ext Validate() functions<br/>✓ ValidationRegistry<br/>✓ Runtime integration]
+        ECO --> EGO[schema_ext.ext.go<br/>✓ Ext Validate() functions<br/>✓ Direct unsafe conversion<br/>✓ Runtime integration]
     end
     
     subgraph "Runtime"
