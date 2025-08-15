@@ -6,19 +6,15 @@ import (
 	"go.uber.org/yarpc"
 	"go.uber.org/yarpc/transport/grpc"
 
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/rayhttp"
-	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/sparkhttp"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const configKey = "worker"
 
-// Config represents the worker configuration.
+// Config represents the worker YARPC configuration.
 type Config struct {
-	MaAPIServiceName string      `yaml:"maApiServiceName"`
-	Address          string      `yaml:"address"`
-	HTTP             http.Config `yaml:"http"`
+	MaAPIServiceName string `yaml:"maApiServiceName"`
+	Address          string `yaml:"address"`
 }
 
 // Params provides dependencies for YARPC dispatcher.
@@ -76,14 +72,4 @@ func NewSparkJobServiceClient(p ClientParams) v2pb.SparkJobServiceYARPCClient {
 // NewCachedOutputServiceClient creates a CachedOutputService YARPC client.
 func NewCachedOutputServiceClient(p ClientParams) v2pb.CachedOutputServiceYARPCClient {
 	return v2pb.NewCachedOutputServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
-}
-
-// GetRayHTTPConfig returns the Ray HTTP API configuration.
-func GetRayHTTPConfig(p Params) rayhttp.Config {
-	return rayhttp.Config{Config: p.Config.HTTP}
-}
-
-// GetSparkHTTPConfig returns the Spark HTTP API configuration.
-func GetSparkHTTPConfig(p Params) sparkhttp.Config {
-	return sparkhttp.Config{Config: p.Config.HTTP}
 }

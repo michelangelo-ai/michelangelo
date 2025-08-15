@@ -1,10 +1,12 @@
 worker:
   address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
-  http:
-    baseUrl: http://127.0.0.1:8000
-    workspace: cauldron-test
-    environment: dev
+
+compute:
+  baseUrl: http://127.0.0.1:8000
+  workspace: cauldron-test
+  environment: dev
+  sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
 
 logging:
   level: info
@@ -23,7 +25,7 @@ workflow-engine:
   provider: temporal
   workers:
     - domain: default
-      taskList: zhou-xian
+      taskList: ericw
   client:
     domain: uniflow
 

@@ -9,11 +9,6 @@ import (
 	httpconfig "github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
 )
 
-// Config contains configuration options for the Ray HTTP API client.
-type Config struct {
-	httpconfig.Config
-}
-
 // Module defines the dependency injection options for the fx framework.
 // It registers activities with the worker.
 var Module = fx.Options(
@@ -21,7 +16,7 @@ var Module = fx.Options(
 )
 
 // register initializes and registers the Ray HTTP activities with the worker.
-func register(workers []worker.Worker, httpClient *http.Client, config Config) {
+func register(workers []worker.Worker, httpClient *http.Client, config httpconfig.Config) {
 	// Initialize the activities with the HTTP client and configuration
 	a := &activities{
 		httpClient:  httpClient,
