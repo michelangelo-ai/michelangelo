@@ -4,6 +4,8 @@ package michelangelo.test.kubeproto;
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
+import "google/protobuf/any.proto";
+
 
 option go_package = "kubeproto";
 
@@ -116,6 +118,21 @@ message ValidationMsg12 {
     ValidationMsg1 f4 = 4;
   }
 }
+
+message ValidationMsg13 {
+  option (michelangelo.api.no_default) = true;
+  oneof test_oneof {
+    int32 f1 = 1;
+    ValidationMsg1 f2 = 2;
+  }
+  oneof test_oneof_optional {
+    option (michelangelo.api.optional) = true;
+    int32 f3 = 3;
+    ValidationMsg1 f4 = 4;
+  }
+  google.protobuf.Any ext = 999;
+}
+
 
 enum Enum1 {
   E1_A = 0;

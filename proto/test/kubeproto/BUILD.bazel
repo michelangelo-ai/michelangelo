@@ -4,6 +4,10 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 
 # gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_validation,//bazel/rules/proto:go_kubeproto_unittest
 
+exports_files([
+    "validation_ut.proto",
+])
+
 proto_library(
     name = "kubeproto_proto",
     srcs = [

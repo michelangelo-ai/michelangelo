@@ -14,7 +14,8 @@ proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:api_proto",
-        "//proto/test/kubeproto:kubeproto_proto",  # Add original proto for comparison
+        "//proto/test/kubeproto:kubeproto_proto",  # Include original proto for field comparison and access to validation_ut.proto
+        "@com_google_protobuf//:any_proto",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )
@@ -30,6 +31,7 @@ go_proto_library(
     visibility = ["//visibility:public"],
     deps = [
         "//proto/api:go_default_library",
+        "//proto/test/kubeproto:go_default_library",  # Add original proto go_library for Register functions
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )

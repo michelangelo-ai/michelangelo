@@ -6,12 +6,24 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 # Export proto files for visibility from other packages
 exports_files([
     "schema_ext.proto",
+    "user_ext.proto",
+    "parameter_ext.proto",
+    "git_ext.proto",
+    "groupversion_info_ext.proto",
+    "notification_ext.proto",
+    "model_ext.proto",
 ])
 
 proto_library(
     name = "v2_ext_proto",
     srcs = [
         "schema_ext.proto",
+        "user_ext.proto",
+        "parameter_ext.proto",
+        "git_ext.proto",
+        "groupversion_info_ext.proto",
+        "notification_ext.proto",
+        "model_ext.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
@@ -19,6 +31,9 @@ proto_library(
     deps = [
         "//proto/api:api_proto",
         "//proto/api/v2:v2_proto",  # Include v2 proto for field comparison
+        "@com_google_protobuf//:any_proto",
+        "@com_google_protobuf//:struct_proto",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )
 

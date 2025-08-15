@@ -1,0 +1,26 @@
+// Example ext proto file for extending v2 user validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/user.proto";
+
+// UserInfo extends the original UserInfo with additional validation
+message UserInfo {
+  // LDAP username of the user who initiated the workload
+  string name = 1 [(michelangelo.api.validation) = {
+    required: true
+    pattern: "^[a-zA-Z][a-zA-Z0-9_.-]*$"
+    min_length: "1"
+    max_length: "100"
+  }];
+
+  // Optional proxy user for delegated execution
+  string proxy_user = 2 [(michelangelo.api.validation) = {
+    max_length: "100"
+  }];
+}

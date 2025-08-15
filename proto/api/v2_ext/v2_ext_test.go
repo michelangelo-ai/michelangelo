@@ -79,25 +79,182 @@ func TestDataSchemaExtValidation(t *testing.T) {
 		assert.Contains(t, err.Error(), "must be less than 10000")
 	})
 
-	t.Run("ValidationRegistry", func(t *testing.T) {
-		// Test that the validation registry is populated
-		assert.NotNil(t, v2_ext.ValidationRegistry)
-		assert.Greater(t, len(v2_ext.ValidationRegistry), 0, "Registry should have entries")
-
-		// Test registry lookup for DataSchemaItem
+	t.Run("DirectValidation", func(t *testing.T) {
+		// Test direct validation of DataSchemaItem
 		item := &v2_ext.DataSchemaItem{
 			Name:     "test_field",
 			DataType: v2_ext.DataType_DATA_TYPE_STRING,
 		}
 
-		err := v2_ext.Validate("DataSchemaItem", item, "")
-		assert.NoError(t, err, "Should validate through registry")
+		err := item.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
 
-		// Test with invalid data through registry
+		// Test with invalid data
 		invalidItem := &v2_ext.DataSchemaItem{
 			Name: "", // Invalid: empty name
 		}
-		err = v2_ext.Validate("DataSchemaItem", invalidItem, "")
-		assert.Error(t, err, "Should fail validation through registry")
+		err = invalidItem.Validate("")
+		assert.Error(t, err, "Should fail validation")
+	})
+	
+	t.Run("UserInfoValidation", func(t *testing.T) {
+		// Test UserInfo validation
+		user := &v2_ext.UserInfo{
+			Name: "test_user",
+		}
+
+		err := user.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test with invalid name
+		invalidUser := &v2_ext.UserInfo{
+			Name: "", // Invalid: empty name
+		}
+		err = invalidUser.Validate("")
+		assert.Error(t, err, "Should fail validation")
+		assert.Contains(t, err.Error(), "is required")
+
+		// Test with invalid pattern
+		invalidPatternUser := &v2_ext.UserInfo{
+			Name: "123invalid", // Invalid: starts with number
+		}
+		err = invalidPatternUser.Validate("")
+		assert.Error(t, err, "Should fail pattern validation")
+		assert.Contains(t, err.Error(), "must match pattern")
+	})
+
+	t.Run("PipelineExecutionParametersValidation", func(t *testing.T) {
+		// Test valid parameters
+		params := &v2_ext.PipelineExecutionParameters{
+			ParameterMap: map[string]string{
+				"learning_rate": "0.01",
+				"batch_size":    "32",
+				"epochs":        "100",
+			},
+		}
+
+		err := params.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test invalid parameter key (starts with number)
+		invalidParams := &v2_ext.PipelineExecutionParameters{
+			ParameterMap: map[string]string{
+				"123invalid": "value",
+			},
+		}
+		err = invalidParams.Validate("")
+		assert.Error(t, err, "Should fail validation for invalid key pattern")
+		assert.Contains(t, err.Error(), "must match pattern")
+
+		// Test empty parameter key
+		invalidParams2 := &v2_ext.PipelineExecutionParameters{
+			ParameterMap: map[string]string{
+				"": "value",
+			},
+		}
+		err = invalidParams2.Validate("")
+		assert.Error(t, err, "Should fail validation for empty key")
+		assert.Contains(t, err.Error(), "must match pattern")
+	})
+
+	t.Run("CommitInfoValidation", func(t *testing.T) {
+		// Test valid commit info
+		commit := &v2_ext.CommitInfo{
+			GitRef: "abc123def456",
+			Branch: "main",
+		}
+
+		err := commit.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test valid with branch name
+		commit2 := &v2_ext.CommitInfo{
+			GitRef: "feature/my-feature",
+			Branch: "feature/my-feature",
+		}
+
+		err = commit2.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test empty git_ref
+		invalidCommit := &v2_ext.CommitInfo{
+			GitRef: "",
+			Branch: "main",
+		}
+		err = invalidCommit.Validate("")
+		assert.Error(t, err, "Should fail validation for empty git_ref")
+		assert.Contains(t, err.Error(), "is required")
+
+		// Test empty branch
+		invalidCommit2 := &v2_ext.CommitInfo{
+			GitRef: "abc123",
+			Branch: "",
+		}
+		err = invalidCommit2.Validate("")
+		assert.Error(t, err, "Should fail validation for empty branch")
+		assert.Contains(t, err.Error(), "is required")
+
+		// Test invalid characters in git_ref
+		invalidCommit3 := &v2_ext.CommitInfo{
+			GitRef: "abc 123",  // space not allowed
+			Branch: "main",
+		}
+		err = invalidCommit3.Validate("")
+		assert.Error(t, err, "Should fail validation for invalid characters")
+		assert.Contains(t, err.Error(), "must match pattern")
+	})
+
+	t.Run("NotificationValidation", func(t *testing.T) {
+		// Test valid notification
+		notification := &v2_ext.Notification{
+			NotificationType: v2_ext.Notification_NOTIFICATION_TYPE_EMAIL,
+			EventTypes: []v2_ext.Notification_EventType{
+				v2_ext.Notification_EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED,
+				v2_ext.Notification_EVENT_TYPE_PIPELINE_RUN_STATE_FAILED,
+			},
+			ResourceType: v2_ext.Notification_RESOURCE_TYPE_PIPELINE_RUN,
+			Emails:       []string{"user@example.com", "admin@company.org"},
+		}
+
+		err := notification.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test slack notification
+		slackNotification := &v2_ext.Notification{
+			NotificationType: v2_ext.Notification_NOTIFICATION_TYPE_SLACK,
+			EventTypes: []v2_ext.Notification_EventType{
+				v2_ext.Notification_EVENT_TYPE_TRIGGER_RUN_STATE_FAILED,
+			},
+			ResourceType:      v2_ext.Notification_RESOURCE_TYPE_TRIGGER_RUN,
+			SlackDestinations: []string{"#alerts", "#team-notifications"},
+		}
+
+		err = slackNotification.Validate("")
+		assert.NoError(t, err, "Should validate successfully")
+
+		// Test invalid notification type
+		invalidNotification := &v2_ext.Notification{
+			NotificationType: v2_ext.Notification_NOTIFICATION_TYPE_INVALID,
+			EventTypes: []v2_ext.Notification_EventType{
+				v2_ext.Notification_EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED,
+			},
+			ResourceType: v2_ext.Notification_RESOURCE_TYPE_PIPELINE_RUN,
+		}
+		err = invalidNotification.Validate("")
+		assert.Error(t, err, "Should fail validation for invalid notification type")
+		assert.Contains(t, err.Error(), "is required")
+
+		// Test invalid email format
+		invalidEmail := &v2_ext.Notification{
+			NotificationType: v2_ext.Notification_NOTIFICATION_TYPE_EMAIL,
+			EventTypes: []v2_ext.Notification_EventType{
+				v2_ext.Notification_EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED,
+			},
+			ResourceType: v2_ext.Notification_RESOURCE_TYPE_PIPELINE_RUN,
+			Emails:       []string{"invalid-email"},
+		}
+		err = invalidEmail.Validate("")
+		assert.Error(t, err, "Should fail validation for invalid email format")
+		assert.Contains(t, err.Error(), "must match pattern")
 	})
 }

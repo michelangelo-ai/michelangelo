@@ -207,6 +207,9 @@ extend google.protobuf.FieldOptions {
   // This means that these fields contain information that should only be visible
   // to authorized users.
   bool sensitive = 5773;
+  // An annotation that specifies the type name for fields like google.protobuf.Any.
+  // This indicates what message type the field should contain or represent.
+  string type = 5774;
 }
 
 // Identifier of a resource.

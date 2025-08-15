@@ -1,0 +1,20 @@
+// Example ext proto file for extending v2 parameter validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/parameter.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/parameter.proto";
+
+// PipelineExecutionParameters extends the original with additional validation
+message PipelineExecutionParameters {
+  // Pipeline execution parameters stored in string key-value map
+  map<string, string> parameter_map = 1 [(michelangelo.api.validation) = {
+    keys: {
+      pattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+    }
+  }];
+}

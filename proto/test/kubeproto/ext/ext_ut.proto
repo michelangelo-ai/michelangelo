@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package michelangelo.test.kubeproto_ext;
 
+import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 
@@ -137,4 +138,22 @@ message ValidationMsg12 {
     int32 f3 = 3;
     ValidationMsg1 f4 = 4;
   }
+}
+
+message ValidationMsg13 {
+  option (michelangelo.api.no_default) = true;
+  oneof test_oneof {
+    int32 f1 = 1;
+    ValidationMsg1 f2 = 2;
+  }
+  oneof test_oneof_optional {
+    option (michelangelo.api.optional) = true;
+    int32 f3 = 3;
+    ValidationMsg1 f4 = 4;
+  }
+  google.protobuf.Any ext = 999 [(michelangelo.api.type) = "Himanshu"];
+}
+
+message Himanshu{
+  string name = 1;
 }

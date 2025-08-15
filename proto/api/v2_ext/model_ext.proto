@@ -1,0 +1,283 @@
+// Example ext proto file for extending v2 model validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/model.proto";
+import "michelangelo/api/v2_ext/schema_ext.proto";
+import "michelangelo/api/v2_ext/user_ext.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/any.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/model.proto";
+
+// ModelKind enum matching the original ModelKind exactly
+enum ModelKind {
+  MODEL_KIND_INVALID = 0;
+  MODEL_KIND_CUSTOM = 1;
+  MODEL_KIND_REGRESSION = 2;
+  MODEL_KIND_BINARY_CLASSIFICATION = 3;
+  MODEL_KIND_MULTICLASS_CLASSIFICATION = 4;
+  MODEL_KIND_CLUSTERING = 5;
+  MODEL_KIND_LLM_COMPLETION = 6;
+  MODEL_KIND_LLM_CHAT_COMPLETION = 7;
+  MODEL_KIND_LLM_EMBEDDING = 8;
+}
+
+// DeployableModelPackageType enum matching the original exactly
+enum DeployableModelPackageType {
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_INVALID = 0;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_SPARK_PIPELINE = 1;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_TRITON = 2;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_RAW = 3;
+  DEPLOYABLE_MODEL_PACKAGE_TYPE_MOBILE = 4;
+}
+
+// ModelStatus extends the original ModelStatus with additional validation
+message ModelStatus {
+  google.protobuf.Any ext = 999;
+}
+
+// LLMSpec extends the original LLMSpec with additional validation
+message LLMSpec {
+  string vendor = 1 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "100"
+  }];
+
+  string model_name = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+  }];
+
+  string fine_tuned_model_id = 3 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  google.protobuf.Any ext = 999;
+}
+
+// ModelSpec extends the original ModelSpec with additional validation
+message ModelSpec {
+  // Owner with extended validation via UserInfo from user_ext
+  UserInfo owner = 1 [(michelangelo.api.validation) = {required: true}];
+
+  string description = 2 [(michelangelo.api.validation) = {
+    max_length: "2000"
+  }];
+
+  ModelKind kind = 3 [(michelangelo.api.validation) = {required: true}];
+
+  string algorithm = 4 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  string training_framework = 5 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  string source = 6 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  // Schema fields using DataSchema from schema_ext for extended validation
+  DataSchema input_schema = 8 [(michelangelo.api.external_storage) = true];
+  DataSchema predict_fields = 9 [(michelangelo.api.external_storage) = true];
+  DataSchema published_fields = 10 [(michelangelo.api.external_storage) = true];
+  DataSchema derived_fields = 11 [(michelangelo.api.external_storage) = true];
+
+  string positive_label = 12 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  double decision_threshold = 13 [(michelangelo.api.validation) = {
+    min: "0.0"
+    max: "1.0"
+  }];
+
+  michelangelo.api.ResourceIdentifier source_pipeline_run = 14 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/PipelineRun"
+    }
+  ];
+
+  michelangelo.api.ResourceIdentifier performance_evaluation_report = 15 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  michelangelo.api.ResourceIdentifier feature_evaluation_report = 16 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  int32 revision_id = 17 [(michelangelo.api.validation) = {
+    min: "0"
+  }];
+
+  bool sealed = 18;
+
+  michelangelo.api.ResourceIdentifier feature_quality_report = 19 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  repeated ModelQualityScore quality_scores = 20;
+
+  repeated michelangelo.api.ResourceIdentifier feature_store_features = 21 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Feature"
+    }
+  ];
+
+  michelangelo.api.ResourceIdentifier model_family = 23 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/ModelFamily"
+    }
+  ];
+
+  message PredictionResult {
+    string train_table_name = 1 [(michelangelo.api.validation) = {
+      max_length: "500"
+    }];
+    string test_table_name = 2 [(michelangelo.api.validation) = {
+      max_length: "500"
+    }];
+  }
+  PredictionResult prediction_result = 24;
+
+  IncrementalTrainingSpec incremental_training = 25;
+
+  DeployableModelPackageType package_type = 26;
+
+  repeated string deployable_artifact_uri = 27 [(michelangelo.api.validation) = {
+    items: {max_length: "1000"}
+  }];
+
+  repeated string model_artifact_uri = 28 [(michelangelo.api.validation) = {
+    items: {max_length: "1000"}
+  }];
+
+  LLMSpec llm_spec = 29;
+
+  michelangelo.api.ResourceIdentifier explainability_report = 30 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/EvaluationReport"
+    }
+  ];
+
+  repeated FeatureImportanceMap feature_importance_list = 31;
+
+  // Output schema using DataSchema from schema_ext
+  DataSchema output_schema = 32 [(michelangelo.api.external_storage) = true];
+
+  google.protobuf.Any ext = 999;
+}
+
+// ModelQualityScore extends the original ModelQualityScore with additional validation
+message ModelQualityScore {
+  string name = 1 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+  }];
+
+  string source = 2 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  string scoping = 3 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+
+  double value = 4 [(michelangelo.api.validation) = {
+    required: true
+  }];
+
+  google.protobuf.Struct metadata = 5;
+
+  bool primary = 6;
+}
+
+// IncrementalTrainingSpec extends the original IncrementalTrainingSpec with additional validation
+message IncrementalTrainingSpec {
+  int32 parent_revision_id = 1 [(michelangelo.api.validation) = {
+    min: "0"
+  }];
+
+  michelangelo.api.ResourceIdentifier transform_checkpoint = 2 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/CachedOutput"
+    }
+  ];
+
+  michelangelo.api.ResourceIdentifier training_checkpoint = 3 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/CachedOutput"
+    }
+  ];
+
+  google.protobuf.Any ext = 999;
+}
+
+// BaselineValue extends the original BaselineValue with additional validation
+message BaselineValue {
+  oneof value_type {
+    float float_value = 1;
+    string string_value = 2 [(michelangelo.api.validation) = {
+      max_length: "1000"
+    }];
+    bool bool_value = 3;
+    int32 int_value = 4;
+  }
+}
+
+// FeatureImportance extends the original FeatureImportance with additional validation
+message FeatureImportance {
+  double mean = 1;
+  double abs_mean = 2 [(michelangelo.api.validation) = {
+    min: "0.0"
+  }];
+  double std_dev = 3 [(michelangelo.api.validation) = {
+    min: "0.0"
+  }];
+  BaselineValue baseline = 4;
+}
+
+// FeatureImportanceMap extends the original FeatureImportanceMap with additional validation
+message FeatureImportanceMap {
+  map<string, FeatureImportance> feature_importance = 1;
+
+  string output_name = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+  }];
+
+  string explainer_module = 3 [(michelangelo.api.validation) = {
+    max_length: "255"
+  }];
+}
+
+// Model extends the original Model with additional validation
+message Model {
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+  ModelSpec spec = 3 [(michelangelo.api.validation) = {required: true}];
+  ModelStatus status = 4;
+}
+
+// ModelList extends the original ModelList with additional validation
+message ModelList {
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+  repeated Model items = 3;
+}

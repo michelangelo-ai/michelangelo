@@ -1,0 +1,17 @@
+// Example ext proto file for extending v2 groupversion_info validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/groupversion_info.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/groupversion_info.proto";
+
+// This file only contains package options, which will use the group_info 
+// from the original groupversion_info.proto
+option (michelangelo.api.group_info) = {
+  name: "michelangelo.api";
+  version: "v2_ext";
+};
