@@ -28,6 +28,10 @@ message ProjectSpec {
   // Testing enum that appears in another proto under the same package.
   // to make sure we don't generate two version of unmarshalJson method
   DataType data_type = 7;
+
+  // Testing enum that appears in another proto under the same package.
+  // to make sure we don't generate two version of unmarshalJson method
+  string sensitive_field = 8 [(michelangelo.api.sensitive) = true];;
 }
 
 // Defines the status of a ML project
