@@ -128,7 +128,6 @@ func (r *module) createSparkOne(thread *starlark.Thread, _ *starlark.Builtin, ar
 	depsRequest := sparkhttp.CreateSparkOneDepsRequest{
 		Username: username,
 		Pipeline: sparkOne.Spec.Pipeline,
-		Uniflow:  sparkOne.Spec.Uniflow,
 		JobName:  sparkOne.Metadata.Name,
 	}
 
