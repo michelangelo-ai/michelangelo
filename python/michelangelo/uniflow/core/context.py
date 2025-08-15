@@ -155,7 +155,7 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--iam-role",
-        required=True,
+        required=False,
         help="Container iam role to assume for running workflow tasks.",
     )
     p.add_argument(
@@ -259,7 +259,6 @@ def _remote_run(
     elif workflow == temporal:
         assert storage_url
         assert image
-        assert iam_role
         assert user_token
 
         rr = RemoteRunTemporal(

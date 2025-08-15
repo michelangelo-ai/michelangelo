@@ -29,7 +29,8 @@ def spark_task(
         executor_memory = SPARK_DEFAULT_EXECUTOR_MEMORY,
         executor_disk = SPARK_DEFAULT_EXECUTOR_DISK,
         executor_gpu = SPARK_DEFAULT_EXECUTOR_GPU,
-        executor_instances = SPARK_DEFAULT_EXECUTOR_INSTANCES):
+        executor_instances = SPARK_DEFAULT_EXECUTOR_INSTANCES,
+        spark_conf = {}):
     def callable(*args, **kwargs):
         task_name = get_task_name(task_path, alias)
         namespace = os.environ.get("MA_NAMESPACE", "default")
@@ -97,6 +98,7 @@ def spark_task(
                 result_url=result_url,
                 args=_args,
                 kwargs=_kwargs,
+                spark_conf=spark_conf,
             )
 
             retryable = process_terminated_spark_job(
@@ -137,6 +139,7 @@ def spark_task(
             executor_disk = executor_disk if "executor_disk" not in config else config["executor_disk"],
             executor_gpu = executor_gpu if "executor_gpu" not in config else config["executor_gpu"],
             executor_instances = executor_instances if "executor_instances" not in config else config["executor_instances"],
+            spark_conf = spark_conf if "spark_conf" not in config else config["spark_conf"],
         )
 
     callable = callable_object(callable)
@@ -194,16 +197,13 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     return retryable
 
-def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt, result_url, args, kwargs):
-
+def execute_spark_task(namespace, task_name, task_path, start_time_formated_str, retry_attempt_id, total_retry_attempt, result_url, args, kwargs, spark_conf):
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
 
     # driver_log_url = ""
 
-    # task_path: uniflow.bert_cola.sparkone_example.uniflow_spark.spark_query
-    uniflow_folder = task_path.split(".")[1]
-    job_folder = task_path.split(".")[2]
-    main_application_file = task_name + ".py"
+    # task_path: tasks.data.data.data
+    job_folder = task_path.split(".")[1]
     pipeline = get_task_pipeline()
 
     env = dict(COMMONS_ENV.items())
@@ -228,7 +228,7 @@ def execute_spark_task(namespace, task_name, task_path, start_time_formated_str,
             "mainApplicationFile": "s3://chimera-mlpipeline/artifact/cauldron-test/svc.aip.chimeratest/pipelines/uniflow-poc/michelangelo/uniflow/core/run_task.py",
             "arguments": ["--task", task_path, "--args", args, "--kwargs", kwargs, "--result-url", result_url],
             "jobEnv": env,
-            "uniflow": uniflow_folder,
+            "sparkConf": spark_conf,
         },
     }
 
@@ -301,7 +301,8 @@ def spark_config(
         executor_memory = None,
         executor_disk = None,
         executor_gpu = None,
-        executor_instances = None):
+        executor_instances = None,
+        spark_conf = None):
     config_overrides = {
         "driver_cpu": driver_cpu,
         "driver_memory": driver_memory,
@@ -312,5 +313,6 @@ def spark_config(
         "executor_disk": executor_disk,
         "executor_gpu": executor_gpu,
         "executor_instances": executor_instances,
+        "spark_conf": spark_conf,
     }
     return {key: value for key, value in config_overrides.items() if value != None}

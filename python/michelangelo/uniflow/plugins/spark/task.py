@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Any
+from typing import Optional, Any, Dict
 
 from pyspark.sql import DataFrame
 from pyspark.sql import SparkSession
@@ -91,6 +91,7 @@ class SparkTask(TaskConfig):
     executor_disk: Optional[str] = None
     executor_gpu: Optional[int] = None
     executor_instances: Optional[int] = None
+    spark_conf: Optional[Dict[str, str]] = None
 
     def get_binding(self) -> TaskBinding:
         return _binding
