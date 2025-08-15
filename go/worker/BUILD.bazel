@@ -11,9 +11,6 @@ go_library(
     deps = [
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/minio:go_default_library",
-        "//go/cauldron/worker/http:go_default_library",
-        "//go/cauldron/worker/activities/rayhttp:go_default_library",
-        "//go/cauldron/worker/activities/sparkhttp:go_default_library",
         "//go/worker/activities:go_default_library",
         "//go/worker/starlark:go_default_library",
         "//go/worker/workflowfx:go_default_library",
