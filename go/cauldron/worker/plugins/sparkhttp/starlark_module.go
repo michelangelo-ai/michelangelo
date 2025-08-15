@@ -163,7 +163,6 @@ func (r *module) createSparkOne(thread *starlark.Thread, _ *starlark.Builtin, ar
 
 	// Execute the create activity
 	var createResponse spark.CreateSparkOneResponse
-	srp := utils.CadenceDefaultRetryPolicy
 	srp = utils.CadenceDefaultRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
@@ -190,7 +189,7 @@ func (r *module) createSparkOne(thread *starlark.Thread, _ *starlark.Builtin, ar
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
 	// Monitor job until it's in a terminal state
-	var getResponse spark.GetSparkOneResponse
+	var getResponse sparkhttp.GetSparkOneResponse
 
 	if err := workflow.ExecuteActivity(sensorCtx, sparkhttp.Activities.SensorSparkOne, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)

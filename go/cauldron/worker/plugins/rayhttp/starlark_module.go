@@ -80,7 +80,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	request.UserToken = userToken
 
 	// Execute the create activity
-	var createResponse ray.CreateRayJobResponse
+	var createResponse rayhttp.CreateRayJobResponse
 	srp := utils.CadenceDefaultRetryPolicy
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	createCtx := workflow.WithRetryPolicy(ctx, srp)
@@ -107,9 +107,9 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
 	// Monitor job until it's in a terminal state
-	var getResponse ray.GetRayJobResponse
+	var getResponse rayhttp.GetRayJobResponse
 
-	if err := workflow.ExecuteActivity(sensorCtx, rayhttp.Activities.SensorRayJob, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
+	if err := workflow.ExecuteActivity(sensorCtx, rayhttp.Activities.GetRayJob, sensorRequest).Get(sensorCtx, &getResponse); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
