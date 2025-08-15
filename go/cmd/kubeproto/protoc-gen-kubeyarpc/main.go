@@ -17,6 +17,32 @@ import (
 
 var logger = log.New(os.Stderr, "", 0)
 
+// collectSensitiveFields scans all messages in the file for fields marked with [(michelangelo.api.sensitive) = true]
+func collectSensitiveFields(file *protogen.File, extTypes *protoregistry.Types) []string {
+	var sensitiveFields []string
+	
+	for _, msg := range file.Messages {
+		for _, field := range msg.Fields {
+			fieldOptions := field.Desc.Options().(*descriptorpb.FieldOptions)
+			options, err := pboptions.ReadOptions(extTypes, fieldOptions)
+			if err != nil {
+				logger.Printf("Warning: Failed to parse field options for %v.%v: %v", msg.GoIdent.GoName, field.GoName, err)
+				continue
+			}
+			
+			// Check if field has (michelangelo.api.sensitive) = true
+			if options.Bool("sensitive") {
+				// Use the JSON field name (snake_case) for consistency with logging
+				jsonName := field.Desc.JSONName()
+				sensitiveFields = append(sensitiveFields, jsonName)
+				logger.Printf("Found sensitive field: %s.%s (JSON: %s)", msg.GoIdent.GoName, field.GoName, jsonName)
+			}
+		}
+	}
+	
+	return sensitiveFields
+}
+
 func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregistry.Types) *protogen.GeneratedFile {
 	options, err := pboptions.ReadOptions(extTypes, file.Proto.Options)
 
@@ -33,6 +59,8 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 
 	if options == nil || !options.Bool("has_group_info") {
 		hasCrdImport := false
+		sensitiveFields := collectSensitiveFields(file, extTypes)
+		
 		for _, msg := range file.Messages {
 			pbOptions := msg.Desc.Options().(*descriptorpb.MessageOptions)
 			options, err := pboptions.ReadOptions(extTypes, pbOptions)
@@ -57,10 +85,12 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 					KindName        string
 					LowerKindName   string
 					LowerPluralName string
+					SensitiveFields []string
 				}{
 					KindName:        kindName,
 					LowerKindName:   lowerKindName,
 					LowerPluralName: lowerPluralName,
+					SensitiveFields: sensitiveFields,
 				}
 				templates.CrdSvcHandler.Execute(&buf, crdInfo)
 				g.Write(buf.Bytes())

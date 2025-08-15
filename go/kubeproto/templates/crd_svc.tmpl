@@ -25,6 +25,11 @@ func Clear{{.KindName}}APIHooks() {
 }
 
 func New{{.KindName}}ServiceHandler(params Fx{{.KindName}}ServiceHandlerParams) {{.KindName}}ServiceYARPCServer {
+	// Register sensitive fields for logging redaction
+	{{- range .SensitiveFields}}
+	logging.RegisterSensitiveField("{{.}}")
+	{{- end}}
+	
 	return &{{.LowerKindName}}ServiceHandler{
 		apiHandler:      params.Handler,
 		MetricsScope:    params.MetricsScope.SubScope(logging.MichelangeloAPIScopeName),

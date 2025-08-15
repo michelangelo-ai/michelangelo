@@ -18,34 +18,25 @@ func MarshalToString(v interface{}) string {
 }
 
 // MarshalToStringForLogging marshals the input message to JSON while filtering out sensitive fields.
-// Fields containing sensitive keywords or marked as sensitive will be redacted.
+// Only fields explicitly registered with RegisterSensitiveField will be redacted.
+// This is specifically designed for protobuf fields marked with [(michelangelo.api.sensitive) = true].
 func MarshalToStringForLogging(v interface{}) string {
 	filtered := filterSensitiveFields(v)
 	b, _ := json.Marshal(filtered)
 	return string(b)
 }
 
-// sensitiveFieldPatterns contains patterns that indicate a field contains sensitive data
-var sensitiveFieldPatterns = []string{
-	"password",
-	"secret",
-	"token",
-	"key",
-	"credential",
-	"auth",
-	"private",
-}
-
 // registeredSensitiveFields contains field names that have been explicitly marked as sensitive
-// This can be used to register fields that had [(michelangelo.api.sensitive) = true] in protobuf
+// This is used for fields that had [(michelangelo.api.sensitive) = true] in protobuf
 var registeredSensitiveFields = make(map[string]bool)
 
 // RegisterSensitiveField registers a field name as sensitive for logging purposes
 // This is useful for protobuf fields marked with [(michelangelo.api.sensitive) = true]
 //
 // Example usage:
-//   // For a protobuf field: repeated RiskAssessmentCategory high_risk_assessment = 18 [(michelangelo.api.sensitive) = true];
-//   logging.RegisterSensitiveField("high_risk_assessment")
+//
+//	// For a protobuf field: repeated RiskAssessmentCategory high_risk_assessment = 18 [(michelangelo.api.sensitive) = true];
+//	logging.RegisterSensitiveField("high_risk_assessment")
 func RegisterSensitiveField(fieldName string) {
 	registeredSensitiveFields[fieldName] = true
 }
@@ -60,55 +51,19 @@ func ClearSensitiveFields() {
 	registeredSensitiveFields = make(map[string]bool)
 }
 
-// isSensitiveField determines if a field should be considered sensitive based on various criteria
-func isSensitiveField(fieldName string, fieldType reflect.StructField) bool {
-	// Check if field is explicitly registered as sensitive
+// isSensitiveField determines if a field should be considered sensitive
+// Only fields explicitly registered (from protobuf [(michelangelo.api.sensitive) = true]) are sensitive
+func isSensitiveField(fieldName string) bool {
+	// Only check if field is explicitly registered as sensitive
 	// This handles fields marked with [(michelangelo.api.sensitive) = true] in protobuf
-	if registeredSensitiveFields[fieldName] {
-		return true
-	}
-
-	// Check JSON tag for sensitive marker
-	jsonTag := fieldType.Tag.Get("json")
-	if jsonTag != "" {
-		tagParts := strings.Split(jsonTag, ",")
-		for _, part := range tagParts {
-			if strings.Contains(strings.ToLower(part), "sensitive") {
-				return true
-			}
-		}
-	}
-
-	// Check for custom "sensitive" tag (for manually tagged fields)
-	if sensitiveTag := fieldType.Tag.Get("sensitive"); sensitiveTag == "true" {
-		return true
-	}
-
-	// Check field name for sensitive keywords
-	fieldNameLower := strings.ToLower(fieldName)
-	for _, pattern := range sensitiveFieldPatterns {
-		if strings.Contains(fieldNameLower, pattern) {
-			return true
-		}
-	}
-	
-	return false
+	return registeredSensitiveFields[fieldName]
 }
 
 // isSensitiveMapKey determines if a map key indicates sensitive data
+// Only keys explicitly registered (from protobuf [(michelangelo.api.sensitive) = true]) are sensitive
 func isSensitiveMapKey(key string) bool {
-	// Check if key is explicitly registered as sensitive
-	if registeredSensitiveFields[key] {
-		return true
-	}
-
-	keyLower := strings.ToLower(key)
-	for _, pattern := range sensitiveFieldPatterns {
-		if strings.Contains(keyLower, pattern) {
-			return true
-		}
-	}
-	return false
+	// Only check if key is explicitly registered as sensitive
+	return registeredSensitiveFields[key]
 }
 
 // filterSensitiveFields recursively filters out sensitive fields from a struct
@@ -157,7 +112,7 @@ func filterSensitiveFields(v interface{}) interface{} {
 			}
 
 			// Check if field is marked as sensitive
-			isSensitive := isSensitiveField(fieldName, fieldType)
+			isSensitive := isSensitiveField(fieldName)
 
 			if isSensitive {
 				result[fieldName] = "[REDACTED]"
