@@ -351,9 +351,9 @@ func generateValidationCode(msg *protogen.Message, extTypes *protoregistry.Types
 
 	// Process fields
 	for _, field := range msg.Fields {
-		// Skip ext fields unless they have field number 999
-		if strings.ToLower(field.GoName) == "ext" && field.Desc.Number() != 999 {
-			continue // Skip validation for ext fields that are not field 999
+		// Skip ext fields - no validation needed for ext container fields
+		if strings.ToLower(field.GoName) == "ext" {
+			continue // Skip validation for all ext fields
 		}
 		
 		pbOptions := field.Desc.Options().(*descriptorpb.FieldOptions)
