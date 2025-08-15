@@ -43,7 +43,7 @@ data:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
       http:
-        baseUrl: https://compute.cauldron.myteksi.net
+        baseUrl: https://compute-stg.cauldron.myteksi.net
         workspace: cauldron-test
         environment: dev
         sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
@@ -61,7 +61,7 @@ data:
         provider: temporal
         workers:
           - domain: default
-            taskList: zhou-xian
+            taskList: cauldron-test
         client:
           domain: uniflow
 

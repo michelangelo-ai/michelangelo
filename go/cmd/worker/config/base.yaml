@@ -24,7 +24,7 @@ workflow-engine:
   provider: temporal
   workers:
     - domain: default
-      taskList: ericw
+      taskList: cauldron-test
   client:
     domain: uniflow
 
