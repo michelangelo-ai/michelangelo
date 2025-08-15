@@ -54,6 +54,7 @@ proto_library(
     ],
 )
 
+
 go_proto_library(
     name = "v2_go_proto",
     compilers = [

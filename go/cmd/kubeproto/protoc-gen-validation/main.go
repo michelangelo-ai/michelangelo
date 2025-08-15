@@ -52,6 +52,24 @@ var validateOneofFmt = `
 var logger = log.New(os.Stderr, "", 0)
 
 func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregistry.Types) *protogen.GeneratedFile {
+	// Check if this file has ext_original_proto option
+	fileOptions := file.Desc.Options().(*descriptorpb.FileOptions)
+	pbFileOptions, err := pboptions.ReadOptions(extTypes, fileOptions)
+	if err != nil {
+		logger.Printf("Error reading file options: %v", err)
+		return nil
+	}
+
+	originalProtoPath := pbFileOptions.String("ext_original_proto")
+	if originalProtoPath != "" {
+		// This is an EXT proto - SKIP validation generation
+		logger.Printf("Skipping validation generation for ext proto: %s", file.Desc.Path())
+		return nil
+	}
+
+	// This is a regular proto - CONTINUE with validation generation
+	logger.Printf("Generating validation for regular proto: %s", file.Desc.Path())
+	
 	filename := file.GeneratedFilenamePrefix + ".pb.validation.go"
 	g := gen.NewGeneratedFile(filename, file.GoImportPath)
 	header := fmt.Sprintf(templates.FileHeader, "protoc-gen-validation", file.GoPackageName)

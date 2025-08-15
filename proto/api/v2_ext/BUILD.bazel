@@ -3,6 +3,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
 
+# Export proto files for visibility from other packages
+exports_files([
+    "schema_ext.proto",
+])
+
 proto_library(
     name = "v2_ext_proto",
     srcs = [

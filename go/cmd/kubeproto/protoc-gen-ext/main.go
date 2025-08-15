@@ -164,14 +164,57 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 					
 					// Call the original validation register function
 					g.P(`	// Register ext validation with original proto validation system`)
-					originalTypeName := g.QualifiedGoIdent(originalFile.GoImportPath.Ident(typeName))
 					registerFuncName := g.QualifiedGoIdent(originalFile.GoImportPath.Ident("Register" + typeName + "ValidateExt"))
-					g.P(fmt.Sprintf(`	%s(func(orig *%s, prefix string) error {`, registerFuncName, originalTypeName))
-					g.P(`		// Create ext version from original for validation`)
+					g.P(fmt.Sprintf(`	%s(func(orig *%s, prefix string) error {`, registerFuncName, g.QualifiedGoIdent(originalFile.GoImportPath.Ident(typeName))))
+					g.P(`		// Create ext version with data from original`)
 					g.P(fmt.Sprintf(`		extObj := &%s{}`, msg.GoIdent.GoName))
-					g.P(`		// Copy fields from original to ext (field mapping logic here)`)
-					g.P(`		// For now, we'll skip this advanced feature`)
-					g.P(`		_ = orig // unused for now`)
+					g.P(`		// Copy fields from original to ext`)
+					
+					// Generate field mapping based on the ext message's fields
+					for _, field := range msg.Fields {
+						fieldName := field.GoName
+						if field.Desc.IsList() {
+							if field.Desc.Message() != nil {
+								// For repeated message fields, copy each item
+								g.P(fmt.Sprintf(`		for _, item := range orig.%s {`, fieldName))
+								g.P(fmt.Sprintf(`			extItem := &%s{`, field.Message.GoIdent.GoName))
+								// Copy fields from original item to ext item
+								for _, subField := range field.Message.Fields {
+									if subField.Desc.Enum() != nil {
+										g.P(fmt.Sprintf(`				%s: %s(item.%s),`, subField.GoName, subField.Enum.GoIdent.GoName, subField.GoName))
+									} else {
+										g.P(fmt.Sprintf(`				%s: item.%s,`, subField.GoName, subField.GoName))
+									}
+								}
+								g.P(`			}`)
+								g.P(fmt.Sprintf(`			extObj.%s = append(extObj.%s, extItem)`, fieldName, fieldName))
+								g.P(`		}`)
+							} else {
+								// For primitive repeated fields, direct copy
+								g.P(fmt.Sprintf(`		extObj.%s = orig.%s`, fieldName, fieldName))
+							}
+						} else if field.Desc.Message() != nil {
+							// For single message fields, copy if not nil
+							g.P(fmt.Sprintf(`		if orig.%s != nil {`, fieldName))
+							g.P(fmt.Sprintf(`			extObj.%s = &%s{`, fieldName, field.Message.GoIdent.GoName))
+							for _, subField := range field.Message.Fields {
+								if subField.Desc.Enum() != nil {
+									g.P(fmt.Sprintf(`				%s: %s(orig.%s.%s),`, subField.GoName, subField.Enum.GoIdent.GoName, fieldName, subField.GoName))
+								} else {
+									g.P(fmt.Sprintf(`				%s: orig.%s.%s,`, subField.GoName, fieldName, subField.GoName))
+								}
+							}
+							g.P(`			}`)
+							g.P(`		}`)
+						} else if field.Desc.Enum() != nil {
+							// For enum fields, cast to ext enum type
+							g.P(fmt.Sprintf(`		extObj.%s = %s(orig.%s)`, fieldName, field.Enum.GoIdent.GoName, fieldName))
+						} else {
+							// For primitive fields, direct copy
+							g.P(fmt.Sprintf(`		extObj.%s = orig.%s`, fieldName, fieldName))
+						}
+					}
+					
 					g.P(`		return extObj.Validate(prefix)`)
 					g.P(`	})`)
 				}
@@ -716,12 +759,23 @@ func indent(s string) string {
 	return strings.Join(lines, "\n")
 }
 
+// findMessageByName finds a message by name in the given proto file
+func findMessageByName(file *protogen.File, name string) *protogen.Message {
+	for _, msg := range file.Messages {
+		if msg.GoIdent.GoName == name {
+			return msg
+		}
+	}
+	return nil
+}
+
 func generate(reqData []byte) {
 	gen, extTypes, err := util.GetPluginAndExtensions(reqData, false)
 	if err != nil {
 		logger.Panic(err)
 	}
 
+	// Only generate files for ext protos (filter happens in generateFile)
 	for _, f := range gen.Files {
 		if !f.Generate {
 			continue
