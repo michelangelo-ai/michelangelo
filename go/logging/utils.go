@@ -41,15 +41,7 @@ func RegisterSensitiveField(fieldName string) {
 	registeredSensitiveFields[fieldName] = true
 }
 
-// UnregisterSensitiveField removes a field name from the sensitive fields registry
-func UnregisterSensitiveField(fieldName string) {
-	delete(registeredSensitiveFields, fieldName)
-}
 
-// ClearSensitiveFields clears all registered sensitive fields
-func ClearSensitiveFields() {
-	registeredSensitiveFields = make(map[string]bool)
-}
 
 // isSensitiveField determines if a field should be considered sensitive
 // Only fields explicitly registered (from protobuf [(michelangelo.api.sensitive) = true]) are sensitive

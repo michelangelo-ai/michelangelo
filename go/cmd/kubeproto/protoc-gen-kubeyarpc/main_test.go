@@ -75,9 +75,6 @@ func TestSensitiveFieldEndToEnd(t *testing.T) {
 	// Verify that sensitiveField is auto-registered in the generated service handler
 	assert.Contains(t, content, `logging.RegisterSensitiveField("sensitiveField")`)
 
-	// Clear any existing sensitive field registrations for clean test
-	logging.ClearSensitiveFields()
-
 	// Manually register the sensitive field (simulating what the generated code would do)
 	logging.RegisterSensitiveField("sensitiveField")
 
@@ -111,7 +108,4 @@ func TestSensitiveFieldEndToEnd(t *testing.T) {
 	// Verify normal marshaling preserves the actual value
 	normalSpec := normal["spec"].(map[string]interface{})
 	assert.Equal(t, "secret-data-should-be-redacted", normalSpec["sensitiveField"])
-
-	// Clean up
-	logging.ClearSensitiveFields()
 }

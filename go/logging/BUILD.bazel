@@ -22,7 +22,6 @@ go_test(
     name = "go_default_test",
     srcs = [
         "audit_logger_test.go",
-        "integration_test.go",
         "utils_test.go",
     ],
     embed = [":go_default_library"],

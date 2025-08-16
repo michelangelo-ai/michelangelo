@@ -41,9 +41,6 @@ func TestMarshalToString(t *testing.T) {
 
 func TestMarshalToStringForLogging(t *testing.T) {
 	t.Run("map with registered sensitive field", func(t *testing.T) {
-		// Clean up after test
-		defer ClearSensitiveFields()
-		
 		// Register the field as sensitive
 		RegisterSensitiveField("sensitive_field")
 		
@@ -87,9 +84,6 @@ func TestMarshalToStringForLogging(t *testing.T) {
 
 func TestMarshalToStringForLogging_KeywordFields(t *testing.T) {
 	t.Run("fields with sensitive keywords are NOT redacted unless explicitly registered", func(t *testing.T) {
-		// Clean up after test
-		defer ClearSensitiveFields()
-		
 		input := map[string]interface{}{
 			"username": "user1",
 			"password": "secret123",  // Should NOT be redacted
@@ -112,9 +106,6 @@ func TestMarshalToStringForLogging_KeywordFields(t *testing.T) {
 	})
 	
 	t.Run("only explicitly registered fields are redacted", func(t *testing.T) {
-		// Clean up after test
-		defer ClearSensitiveFields()
-		
 		// Only register "secret" as sensitive
 		RegisterSensitiveField("secret")
 		
@@ -135,46 +126,6 @@ func TestMarshalToStringForLogging_KeywordFields(t *testing.T) {
 	})
 }
 
-func TestSensitiveFieldRegistry_Integration(t *testing.T) {
-	t.Run("field registration and cleanup", func(t *testing.T) {
-		// Start with clean state
-		ClearSensitiveFields()
-		
-		// Register some fields
-		RegisterSensitiveField("test_field")
-		RegisterSensitiveField("another_field")
-		
-		// Test with registered field
-		testStruct := map[string]interface{}{
-			"test_field":    "sensitive data",
-			"another_field": "more sensitive data",
-			"normal_field":  "normal data",
-		}
-		
-		result := MarshalToStringForLogging(testStruct)
-		
-		assert.Contains(t, result, `"test_field":"[REDACTED]"`)
-		assert.Contains(t, result, `"another_field":"[REDACTED]"`)
-		assert.Contains(t, result, `"normal_field":"normal data"`)
-		
-		// Unregister one field
-		UnregisterSensitiveField("test_field")
-		
-		result2 := MarshalToStringForLogging(testStruct)
-		
-		assert.NotContains(t, result2, `"test_field":"[REDACTED]"`)
-		assert.Contains(t, result2, `"test_field":"sensitive data"`)
-		assert.Contains(t, result2, `"another_field":"[REDACTED]"`)
-		
-		// Clear all
-		ClearSensitiveFields()
-		
-		result3 := MarshalToStringForLogging(testStruct)
-		
-		assert.Contains(t, result3, `"test_field":"sensitive data"`)
-		assert.Contains(t, result3, `"another_field":"more sensitive data"`)
-	})
-}
 
 func TestGetLogrLoggerOrPanic(t *testing.T) {
 	t.Run("successful logger creation", func(t *testing.T) {
