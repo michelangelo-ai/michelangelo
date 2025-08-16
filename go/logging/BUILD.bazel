@@ -31,3 +31,15 @@ go_test(
         "@org_uber_go_fx//fxtest:go_default_library",
     ],
 )
+
+go_test(
+    name = "integration_test",
+    srcs = [
+        "integration_test.go",
+    ],
+    embed = [":go_default_library"],
+    deps = [
+        "//proto/test/kubeproto:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+    ],
+)

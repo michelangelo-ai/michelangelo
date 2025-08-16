@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-web-config
+  labels:
+    app: michelangelo-web
+data:
+  # API endpoint configuration
+  MICHELANGELO_API_ENDPOINT: "http://michelangelo-apiserver:14566"
+  # gRPC-Web proxy endpoint (through envoy)
+  MICHELANGELO_GRPC_WEB_ENDPOINT: "http://envoy:8081"
+  # UI configuration
+  APP_TITLE: "Michelangelo"
+  APP_VERSION: "latest"
+  # Feature flags
+  ENABLE_DEBUG_MODE: "false"
+  ENABLE_DEVELOPMENT_FEATURES: "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-web
+  labels:
+    app: michelangelo-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: michelangelo-web
+  template:
+    metadata:
+      labels:
+        app: michelangelo-web
+    spec:
+      containers:
+      - name: michelangelo-web
+        image: ghcr.io/michelangelo-ai/web:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: NODE_ENV
+          value: "production"
+        envFrom:
+        - configMapRef:
+            name: michelangelo-web-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "100m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: michelangelo-web
+  labels:
+    app: michelangelo-web
+spec:
+  type: NodePort
+  selector:
+    app: michelangelo-web
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    nodePort: 30080  # External port for sandbox access
+    protocol: TCP

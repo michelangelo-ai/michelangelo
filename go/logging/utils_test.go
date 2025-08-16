@@ -39,45 +39,34 @@ func TestMarshalToString(t *testing.T) {
 	}
 }
 
-// Test struct simulating protobuf generated code with sensitive field
-type TestRequestWithSensitiveField struct {
-	Name               string                     `json:"name"`
-	HighRiskAssessment []RiskAssessmentCategory   `json:"high_risk_assessment"`
-	PublicData         string                     `json:"public_data"`
-}
-
-type RiskAssessmentCategory struct {
-	Category string `json:"category"`
-	Score    int    `json:"score"`
-}
-
 func TestMarshalToStringForLogging(t *testing.T) {
-	t.Run("protobuf field registered as sensitive - simulates [(michelangelo.api.sensitive) = true]", func(t *testing.T) {
+	t.Run("map with registered sensitive field", func(t *testing.T) {
 		// Clean up after test
 		defer ClearSensitiveFields()
 		
-		// Register the field as sensitive (this would be done when protobuf code is generated)
-		RegisterSensitiveField("high_risk_assessment")
+		// Register the field as sensitive
+		RegisterSensitiveField("sensitive_field")
 		
-		// This simulates a request with high_risk_assessment field marked as sensitive
-		// in protobuf: repeated RiskAssessmentCategory high_risk_assessment = 18 [(michelangelo.api.sensitive) = true];
+		// Test map with mixed sensitive and non-sensitive fields
 		requestMap := map[string]interface{}{
-			"name": "test-model",
-			"high_risk_assessment": []RiskAssessmentCategory{
-				{Category: "financial", Score: 95},
-				{Category: "privacy", Score: 87},
+			"meta": map[string]interface{}{
+				"name":       "test-project",
+				"project_id": "proj-123",
 			},
-			"public_data": "public information",
+			"sensitive_field": "secret-api-key-data",
+			"data_type":       "BATCH",
 		}
 		
 		result := MarshalToStringForLogging(requestMap)
 		
 		// Should contain non-sensitive fields
-		assert.Contains(t, result, `"name":"test-model"`)
-		assert.Contains(t, result, `"public_data":"public information"`)
+		assert.Contains(t, result, `"name":"test-project"`)
+		assert.Contains(t, result, `"project_id":"proj-123"`)
+		assert.Contains(t, result, `"data_type":"BATCH"`)
 		
-		// Should redact high_risk_assessment since it was registered as sensitive
-		assert.Contains(t, result, `"high_risk_assessment":"[REDACTED]"`)
+		// Should redact sensitive_field since it was registered as sensitive
+		assert.Contains(t, result, `"sensitive_field":"[REDACTED]"`)
+		assert.NotContains(t, result, "secret-api-key-data")
 	})
 	
 	t.Run("regular struct without sensitive fields", func(t *testing.T) {
@@ -96,7 +85,7 @@ func TestMarshalToStringForLogging(t *testing.T) {
 	})
 }
 
-func TestMarshalToStringForLogging_OnlyExplicitFields(t *testing.T) {
+func TestMarshalToStringForLogging_KeywordFields(t *testing.T) {
 	t.Run("fields with sensitive keywords are NOT redacted unless explicitly registered", func(t *testing.T) {
 		// Clean up after test
 		defer ClearSensitiveFields()
@@ -146,7 +135,7 @@ func TestMarshalToStringForLogging_OnlyExplicitFields(t *testing.T) {
 	})
 }
 
-func TestSensitiveFieldRegistry(t *testing.T) {
+func TestSensitiveFieldRegistry_Integration(t *testing.T) {
 	t.Run("field registration and cleanup", func(t *testing.T) {
 		// Start with clean state
 		ClearSensitiveFields()
