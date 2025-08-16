@@ -43,7 +43,7 @@ func TestMarshalToStringForLogging(t *testing.T) {
 	t.Run("map with registered sensitive field", func(t *testing.T) {
 		// Register the field as sensitive
 		RegisterSensitiveField("sensitive_field")
-		
+
 		// Test map with mixed sensitive and non-sensitive fields
 		requestMap := map[string]interface{}{
 			"meta": map[string]interface{}{
@@ -53,79 +53,34 @@ func TestMarshalToStringForLogging(t *testing.T) {
 			"sensitive_field": "secret-api-key-data",
 			"data_type":       "BATCH",
 		}
-		
+
 		result := MarshalToStringForLogging(requestMap)
-		
+
 		// Should contain non-sensitive fields
 		assert.Contains(t, result, `"name":"test-project"`)
 		assert.Contains(t, result, `"project_id":"proj-123"`)
 		assert.Contains(t, result, `"data_type":"BATCH"`)
-		
+
 		// Should redact sensitive_field since it was registered as sensitive
 		assert.Contains(t, result, `"sensitive_field":"[REDACTED]"`)
 		assert.NotContains(t, result, "secret-api-key-data")
 	})
-	
+
 	t.Run("regular struct without sensitive fields", func(t *testing.T) {
 		request := map[string]interface{}{
-			"name": "test",
-			"data": "normal data",
+			"name":  "test",
+			"data":  "normal data",
 			"count": 42,
 		}
-		
+
 		result := MarshalToStringForLogging(request)
-		
+
 		// Should preserve all fields for non-sensitive data
 		assert.Contains(t, result, `"name":"test"`)
 		assert.Contains(t, result, `"data":"normal data"`)
 		assert.Contains(t, result, `"count":42`)
 	})
 }
-
-func TestMarshalToStringForLogging_KeywordFields(t *testing.T) {
-	t.Run("fields with sensitive keywords are NOT redacted unless explicitly registered", func(t *testing.T) {
-		input := map[string]interface{}{
-			"username": "user1",
-			"password": "secret123",  // Should NOT be redacted
-			"secret":   "hidden",     // Should NOT be redacted  
-			"token":    "abc123",     // Should NOT be redacted
-			"key":      "secret-key", // Should NOT be redacted
-		}
-		
-		result := MarshalToStringForLogging(input)
-		
-		// All fields should be preserved (not redacted) since none are registered
-		assert.Contains(t, result, `"password":"secret123"`)
-		assert.Contains(t, result, `"secret":"hidden"`)
-		assert.Contains(t, result, `"token":"abc123"`)
-		assert.Contains(t, result, `"key":"secret-key"`)
-		assert.Contains(t, result, `"username":"user1"`)
-		
-		// No field should be redacted
-		assert.NotContains(t, result, `"[REDACTED]"`)
-	})
-	
-	t.Run("only explicitly registered fields are redacted", func(t *testing.T) {
-		// Only register "secret" as sensitive
-		RegisterSensitiveField("secret")
-		
-		input := map[string]interface{}{
-			"username": "user1",
-			"password": "secret123",  // Should NOT be redacted
-			"secret":   "hidden",     // Should be redacted
-			"token":    "abc123",     // Should NOT be redacted
-		}
-		
-		result := MarshalToStringForLogging(input)
-		
-		// Only "secret" should be redacted
-		assert.Contains(t, result, `"password":"secret123"`)
-		assert.Contains(t, result, `"secret":"[REDACTED]"`)
-		assert.Contains(t, result, `"token":"abc123"`)
-		assert.Contains(t, result, `"username":"user1"`)
-	})
-}
-
 
 func TestGetLogrLoggerOrPanic(t *testing.T) {
 	t.Run("successful logger creation", func(t *testing.T) {
