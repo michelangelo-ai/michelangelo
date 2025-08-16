@@ -35,7 +35,6 @@ go_proto_library(
     compilers = [
         "//bazel/rules/proto:go_kubeproto",
         "//bazel/rules/proto:go_validation",
-        "//bazel/rules/proto:go_kubeyarpc",
         "//bazel/rules/proto:go_kubeproto_unittest",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto",

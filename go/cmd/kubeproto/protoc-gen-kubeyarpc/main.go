@@ -67,8 +67,6 @@ func generateFile(gen *protogen.Plugin, file *protogen.File, extTypes *protoregi
 			if err != nil {
 				logger.Panicf("Failed to parse the options of message %v: %v", msg.GoIdent.GoName, err)
 			}
-			// Debug logging
-			logger.Printf("Processing message %s, has_resource: %v, sensitive fields: %v", msg.GoIdent.GoName, options.Bool("has_resource"), sensitiveFields)
 			if options.Bool("has_resource") {
 				if !hasCrdImport {
 					g.P(templates.CrdSvcHandlerImports)

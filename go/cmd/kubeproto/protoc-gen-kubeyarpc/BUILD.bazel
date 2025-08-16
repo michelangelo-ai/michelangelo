@@ -27,6 +27,7 @@ go_test(
     srcs = ["main_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/logging:go_default_library",
         "//proto/test/kubeproto:go_default_library",
         "@com_github_dave_dst//:go_default_library",
         "@com_github_dave_dst//decorator:go_default_library",
