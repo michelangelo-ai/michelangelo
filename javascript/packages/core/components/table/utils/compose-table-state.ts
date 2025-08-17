@@ -4,6 +4,7 @@ const STATE_NAME_TO_STATE_SETTER_NAME = {
   globalFilter: 'setGlobalFilter',
   columnFilters: 'setColumnFilters',
   pagination: 'setPagination',
+  sorting: 'setSorting',
 } as const;
 
 /**

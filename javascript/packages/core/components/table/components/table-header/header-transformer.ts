@@ -14,5 +14,8 @@ export function transformHeaders<T extends TableData = TableData>(
   return tanstackHeaders.map((header) => ({
     id: header.id,
     content: flexRender(header.column.columnDef.header, header.getContext()),
+    canSort: header.column.getCanSort(),
+    onToggleSort: header.column.getToggleSortingHandler(),
+    sortDirection: header.column.getIsSorted(),
   }));
 }

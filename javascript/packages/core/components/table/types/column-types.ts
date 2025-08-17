@@ -18,4 +18,9 @@ export type ColumnConfig<TData extends TableData = TableData> = Cell<TData> & {
    * @default FilterMode.NONE
    */
   filterMode?: FilterMode;
+
+  /**
+   * @default true
+   */
+  enableSorting?: boolean;
 };

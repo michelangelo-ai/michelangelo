@@ -5,6 +5,7 @@ import { vi } from 'vitest';
 import { GrpcStatusCode } from '#core/constants/grpc-status-codes';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
+import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { ApplicationError } from '#core/types/error-types';
@@ -1014,6 +1015,146 @@ describe('Table', () => {
       expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
       expect(screen.getByText('No data')).toBeInTheDocument();
+    });
+  });
+
+  describe('sorting functionality', () => {
+    const sortableTestData = [
+      { id: '1', name: 'Charlie', age: 25, status: 'active' },
+      { id: '2', name: 'Alice', age: 30, status: 'inactive' },
+      { id: '3', name: 'Bob', age: 20, status: 'active' },
+    ];
+
+    const sortableColumns = [
+      { id: 'name', label: 'Name', accessor: 'name', enableSorting: true },
+      { id: 'age', label: 'Age', accessor: 'age', enableSorting: true },
+      { id: 'status', label: 'Status', accessor: 'status', enableSorting: false },
+    ];
+
+    const mockIcons = {
+      sortAscending: () => <div>Sort Ascending</div>,
+      sortDescending: () => <div>Sort Descending</div>,
+    };
+
+    it('sorts data when clicking sortable headers', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={sortableTestData} columns={sortableColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Initial order: Charlie, Alice, Bob
+      expect(screen.getAllByRole('row')[1]).toHaveTextContent('Charlie');
+
+      await user.click(screen.getByRole('columnheader', { name: /name/i }));
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
+        expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
+        expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+      });
+    });
+
+    it('toggles sort direction on repeated clicks', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={sortableTestData} columns={sortableColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const nameHeader = screen.getByRole('columnheader', { name: /name/i });
+
+      // First click: ascending
+      await user.click(nameHeader);
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
+      });
+
+      // Second click: descending
+      await user.click(nameHeader);
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('Charlie');
+      });
+    });
+
+    it('does not sort when enableSorting is false for column', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={sortableTestData} columns={sortableColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Click on non-sortable status column
+      await user.click(screen.getByRole('columnheader', { name: /status/i }));
+
+      expect(screen.getAllByRole('row')[1]).toHaveTextContent('Charlie');
+      expect(screen.getAllByRole('row')[2]).toHaveTextContent('Alice');
+      expect(screen.getAllByRole('row')[3]).toHaveTextContent('Bob');
+    });
+
+    it('disables all sorting when disableSorting prop is true', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table
+          data={sortableTestData}
+          columns={sortableColumns}
+          disableSorting={true}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      await user.click(screen.getByRole('columnheader', { name: /name/i }));
+
+      expect(screen.getAllByRole('row')[1]).toHaveTextContent('Charlie');
+      expect(screen.getAllByRole('row')[2]).toHaveTextContent('Alice');
+      expect(screen.getAllByRole('row')[3]).toHaveTextContent('Bob');
+    });
+
+    it('respects initial sorting state', () => {
+      render(
+        <Table
+          data={sortableTestData}
+          columns={sortableColumns}
+          state={{ sorting: [{ id: 'name', desc: false }] }}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Should be sorted alphabetically by name from initial state
+      expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
+      expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
+      expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
     });
   });
 });

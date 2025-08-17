@@ -7,6 +7,7 @@ import type {
   ColumnFilter,
   ControlledTableState,
   PaginationState,
+  SortingState,
 } from '#core/components/table/types/table-types';
 
 /**
@@ -49,6 +50,11 @@ export function useLocalStorageTableState({
     TABLE_STATE_DEFAULTS.pagination.pageSize
   );
 
+  const [sorting, setSorting] = usePersistedTableState<SortingState>(
+    `${tableSettingsId}.sorting`,
+    TABLE_STATE_DEFAULTS.sorting
+  );
+
   // pageIndex is not persisted (resets on reload)
   const [pageIndex, setPageIndex] = useState<number>(0);
 
@@ -67,5 +73,7 @@ export function useLocalStorageTableState({
       setPageIndex(newState.pageIndex);
       setPageSize(newState.pageSize);
     },
+    sorting,
+    setSorting,
   };
 }

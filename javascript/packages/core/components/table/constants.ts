@@ -41,6 +41,7 @@ export const TABLE_STATE_DEFAULTS: TableState = {
     pageIndex: 0,
     pageSize: DEFAULT_PAGE_SIZE,
   },
+  sorting: [],
 } as const;
 
 export const TABLE_LOCAL_STORAGE_KEY = 'ma-studio-table-settings';
