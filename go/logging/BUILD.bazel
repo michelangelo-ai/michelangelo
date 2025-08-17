@@ -26,7 +26,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//proto/test/kubeproto:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_fx//fxtest:go_default_library",
