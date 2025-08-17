@@ -19,6 +19,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
   props: TableProps<T>
 ): TablePropsResolved<T> {
   const disablePagination = props.disablePagination ?? false;
+  const disableSorting = props.disableSorting ?? false;
   const pageSizes = props.pageSizes ?? PAGE_SIZE_SELECTION_OPTIONS;
 
   return {
@@ -42,6 +43,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
       enableFilters: true,
     },
     disablePagination,
+    disableSorting,
     pageSizes,
     state: resolveTableState(props.state, disablePagination, pageSizes),
     pagination: props.pagination ?? TablePagination,

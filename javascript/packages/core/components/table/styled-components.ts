@@ -5,10 +5,13 @@ import {
   StyledTableBodyRow as BaseStyledTableBodyRow,
 } from 'baseui/table-semantic';
 
-export const TableContainer = styled('div', {
+export const TableContainer = styled('div', ({ $theme }) => ({
   overflow: 'auto',
   position: 'relative',
-});
+  display: 'flex',
+  flexDirection: 'column',
+  gap: $theme.sizing.scale400,
+}));
 
 export const StyledTableBody = withStyle(BaseStyledTableBody, ({ $theme }) => ({
   backgroundColor: $theme.colors.tableHeadBackgroundColor,

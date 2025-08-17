@@ -54,6 +54,8 @@ export function useColumnTransformer<T extends TableData = TableData>(
           />
         ),
         filterFn: filterHook.buildTableFilterFn(),
+        enableSorting: column.enableSorting ?? true,
+        sortUndefined: 'last',
       };
     });
   }, [columns, createFilter]);

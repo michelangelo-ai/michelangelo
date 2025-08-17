@@ -1,4 +1,6 @@
 import AddIcon from '@mui/icons-material/Add';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import CancelIcon from '@mui/icons-material/Cancel';
@@ -27,6 +29,8 @@ export const ICONS = {
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   plus: createMuiIconAdapter(AddIcon),
+  sortAscending: createMuiIconAdapter(ArrowUpwardIcon),
+  sortDescending: createMuiIconAdapter(ArrowDownwardIcon),
   stars: createMuiIconAdapter(AutoAwesomeIcon),
   x: createMuiIconAdapter(CloseIcon),
 } as const;

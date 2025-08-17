@@ -91,6 +91,14 @@ export interface TableRequiredFunctionalityProps {
 
   /**
    * @description
+   * If true, all columns will be non-sortable and sorting functionality will be disabled.
+   *
+   * @default false
+   */
+  disableSorting: boolean;
+
+  /**
+   * @description
    * Available page sizes for the table, formatted to provide to a dropdown
    * so user can modify page size during runtime.
    *
@@ -180,6 +188,11 @@ export type PaginationState = {
   pageSize: number;
 };
 
+export type SortingState = Array<{
+  id: string;
+  desc: boolean;
+}>;
+
 /**
  * Table state containing aspects of table behavior.
  */
@@ -190,6 +203,8 @@ export type TableState = {
   columnFilters: ColumnFilter[];
   /** Pagination state */
   pagination: PaginationState;
+  /** Sorting state */
+  sorting: SortingState;
 };
 
 /**
@@ -203,4 +218,5 @@ export type ControlledTableState = TableState & {
   ) => void;
   setColumnFilters: (updater: ColumnFilter[] | ((old: ColumnFilter[]) => ColumnFilter[])) => void;
   setPagination: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
+  setSorting: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
 };

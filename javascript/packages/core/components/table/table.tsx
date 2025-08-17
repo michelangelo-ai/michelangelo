@@ -2,6 +2,7 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
 import { StyledTable } from 'baseui/table-semantic';
@@ -38,8 +39,12 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     ...(state.setGlobalFilter ? { onGlobalFilterChange: state.setGlobalFilter } : {}),
     ...(state.setColumnFilters ? { onColumnFiltersChange: state.setColumnFilters } : {}),
     ...(state.setPagination ? { onPaginationChange: state.setPagination } : {}),
+    ...(state.setSorting ? { onSortingChange: state.setSorting } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    ...(!props.disableSorting
+      ? { getSortedRowModel: getSortedRowModel() }
+      : { enableSorting: false }),
     ...(!props.disablePagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
     globalFilterFn: 'includesString',
   });
@@ -92,13 +97,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         )}
 
         {viewState === 'ready' && (
-          <TableBody<T>
-            rows={transformRows<T>(
-              !props.disablePagination
-                ? table.getPaginationRowModel().rows
-                : table.getFilteredRowModel().rows
-            )}
-          />
+          <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
         )}
       </StyledTable>
 
