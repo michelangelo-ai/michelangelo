@@ -28,6 +28,10 @@ import (
 	"k8s.io/client-go/rest"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"github.com/go-logr/logr"
+	"github.com/go-logr/zapr"
 )
 
 var (
@@ -456,4 +460,98 @@ func TestNewAPIServerHandler(t *testing.T) {
 	})
 	assert.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "test dialer failure"))
+}
+
+func TestIsSchemaCompatibilityError(t *testing.T) {
+	tests := []struct {
+		name        string
+		err         error
+		expected    SchemaErrorType
+		description string
+	}{
+		{
+			name:        "UnknownEnumValue",
+			err:         errors.New(`failed to list *v2.Pipeline: unknown value "PIPELINE_MANIFEST_TYPE_TEST" for enum michelangelo.api.v2.PipelineManifest_Type`),
+			expected:    SchemaErrorUnknownEnum,
+			description: "Should detect unknown enum values in protobuf deserialization",
+		},
+		{
+			name:        "UnknownField",
+			err:         errors.New("proto: unknown field task_specs in v2.PipelineManifest"),
+			expected:    SchemaErrorUnknownField,
+			description: "Should detect unknown field errors",
+		},
+		{
+			name:        "UnmarshalFailure", 
+			err:         errors.New("failed to unmarshal protobuf message: invalid wire type"),
+			expected:    SchemaErrorUnmarshal,
+			description: "Should detect unmarshal failures",
+		},
+		{
+			name:        "UnknownType",
+			err:         errors.New("no kind is registered for the type v2.NewResource"),
+			expected:    SchemaErrorUnknownType,
+			description: "Should detect unknown resource types",
+		},
+		{
+			name:        "DecodingFailure",
+			err:         errors.New("strict decoding error: found unknown field"),
+			expected:    SchemaErrorUnknownField, // Actually matches unknown_field first
+			description: "Should detect strict decoding errors (matches unknown_field pattern first)",
+		},
+		{
+			name:        "K8sInvalidErrorWithUnknownMessage",
+			err:         apiErrors.NewBadRequest("field contains unknown value"),
+			expected:    SchemaErrorUnknownEnum, // Actually matches unknown_enum due to "unknown value" pattern
+			description: "Should detect field-related k8s bad request errors (matches unknown_enum pattern first)",
+		},
+		{
+			name:        "K8sBadRequestWithUnknown",
+			err:         apiErrors.NewBadRequest("request contains unknown field"),
+			expected:    SchemaErrorUnknownField,
+			description: "Should detect unknown field in bad request errors",
+		},
+		{
+			name:        "NotFound",
+			err:         apiErrors.NewNotFound(schema.GroupResource{Group: "test", Resource: "tests"}, "test-resource"),
+			expected:    "",
+			description: "Should not treat NotFound as schema error",
+		},
+		{
+			name:        "RegularError",
+			err:         errors.New("connection timeout"),
+			expected:    "",
+			description: "Should not treat regular errors as schema errors",
+		},
+		{
+			name:        "NetworkError", 
+			err:         errors.New("dial tcp: connection refused"),
+			expected:    "",
+			description: "Should not treat network errors as schema errors",
+		},
+		{
+			name:        "NilError",
+			err:         nil,
+			expected:    "",
+			description: "Should handle nil errors gracefully",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := isSchemaCompatibilityError(tt.err)
+			assert.Equal(t, tt.expected, result, "Test case: %s. %s", tt.name, tt.description)
+			
+			if tt.err != nil {
+				t.Logf("Input error: %v", tt.err.Error())
+			}
+			t.Logf("Expected: %s, Got: %s", tt.expected, result)
+		})
+	}
+}
+
+
+func testLogger() logr.Logger {
+	zapLogger, _ := zap.NewDevelopment()
+	return zapr.NewLogger(zapLogger)
 }
