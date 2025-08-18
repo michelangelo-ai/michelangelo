@@ -2,12 +2,12 @@ import { useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
 import { TaskContentStack } from '#core/components/views/execution/styled-components';
+import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { getObjectValue } from '#core/utils/object-utils';
 import { TaskFlow } from '../task-flow';
 import { TaskBodyMetadata } from './renderers/task-body-metadata';
 import { TaskBodyStruct } from './renderers/task-body-struct';
 import { TaskBodyTextarea } from './renderers/task-body-textarea';
-import { TaskBodyMetadataSchema, TaskBodyTextareaSchema } from './renderers/types';
 import { TaskDetails } from './task-details';
 
 import type { TaskBodyProps } from './types';
@@ -16,6 +16,7 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
   const [css, theme] = useStyletron();
   const { task, bodySchema } = props;
   const { subTasks } = task;
+  const resolver = useInterpolationResolver();
 
   if (subTasks?.length) {
     return (
@@ -31,25 +32,27 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
   }
 
   if (bodySchema?.length) {
+    const resolvedBodySchema = resolver(bodySchema, { row: task });
     return (
       <div
         className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
       >
-        {bodySchema.map((schema, index) => {
+        {resolvedBodySchema.map((schema, index) => {
           const { label } = schema;
-          const value = getObjectValue<unknown>(task.record, schema.accessor);
 
           if (schema.type === 'struct') {
-            return <TaskBodyStruct key={index} label={label} value={value as object} />;
+            const value = getObjectValue<object>(task.record, schema.accessor);
+            return <TaskBodyStruct key={index} label={label} value={value} />;
           }
 
           if (schema.type === 'textarea') {
-            const { error, markdown } = schema as TaskBodyTextareaSchema;
+            const value = getObjectValue<string>(task.record, schema.accessor);
+            const { error, markdown } = schema;
             return (
               <TaskBodyTextarea
                 key={index}
                 label={label}
-                value={value as string}
+                value={value}
                 error={error}
                 markdown={markdown}
               />
@@ -57,12 +60,12 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
           }
 
           if (schema.type === 'metadata') {
-            const { cells } = schema as TaskBodyMetadataSchema;
+            const { cells } = schema;
             return (
               <TaskBodyMetadata
                 key={index}
                 label={label}
-                value={value as Record<string, unknown>}
+                value={task.record as Record<string, unknown>}
                 cells={cells}
               />
             );

@@ -39,8 +39,11 @@ export function buildTaskList<TData extends object, TTaskRecord extends object>(
       return state !== TASK_STATE.SUCCESS && state !== TASK_STATE.SKIPPED;
     });
 
+    const primaryHeading = getObjectValue(taskRecord, tasks.header.heading);
+    const fallbackName = get(taskRecord, 'name');
+
     return {
-      name: (getObjectValue(taskRecord, tasks.header.heading) ?? get(taskRecord, 'name'))!,
+      name: (primaryHeading?.trim() ? primaryHeading : fallbackName)!,
       state: schema.tasks.stateBuilder(taskRecord, taskIndex, siblingTasks, data),
       subTasks: subTasksAccessor
         ? getObjectValue(taskRecord, subTasksAccessor, [])!.map(buildTask)

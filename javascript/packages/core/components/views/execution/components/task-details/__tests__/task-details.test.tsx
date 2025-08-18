@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskDetails } from '../task-details';
 
@@ -8,7 +10,7 @@ describe('TaskDetails', () => {
   it('should render simple header when task has no subtasks and no bodySchema', () => {
     const leafTask = createTask({ name: 'Leaf Task' });
 
-    render(<TaskDetails task={leafTask} />);
+    render(<TaskDetails task={leafTask} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Leaf Task')).toBeInTheDocument();
 
@@ -21,7 +23,7 @@ describe('TaskDetails', () => {
       subTasks: [createTask({ name: 'Child Task 1' }), createTask({ name: 'Child Task 2' })],
     });
 
-    render(<TaskDetails task={taskWithSubtasks} />);
+    render(<TaskDetails task={taskWithSubtasks} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Parent Task')).toBeInTheDocument();
 
@@ -33,13 +35,13 @@ describe('TaskDetails', () => {
     const leafTaskWithBodySchema = createTask({ name: 'Data Processing Task' });
     const bodySchema = [
       {
-        type: 'struct',
+        type: 'struct' as const,
         label: 'Input Parameters',
         accessor: 'input',
       },
     ];
 
-    render(<TaskDetails task={leafTaskWithBodySchema} bodySchema={bodySchema} />);
+    render(<TaskDetails task={leafTaskWithBodySchema} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Data Processing Task')).toBeInTheDocument();
 
@@ -53,7 +55,7 @@ describe('TaskDetails', () => {
       subTasks: [createTask({ name: 'Child Task' })],
     });
 
-    render(<TaskDetails task={taskWithSubtasks} />);
+    render(<TaskDetails task={taskWithSubtasks} />, buildWrapper([getRouterWrapper()]));
 
     const accordionPanel = screen.getByRole('button', { expanded: false });
     expect(accordionPanel).toBeInTheDocument();
@@ -68,7 +70,7 @@ describe('TaskDetails', () => {
       subTasks: [createTask({ name: 'Child Task 1' }), createTask({ name: 'Child Task 2' })],
     });
 
-    render(<TaskDetails task={taskWithSubtasks} />);
+    render(<TaskDetails task={taskWithSubtasks} />, buildWrapper([getRouterWrapper()]));
 
     const accordionPanel = screen.getByRole('button', { expanded: false });
     await user.click(accordionPanel);
@@ -80,7 +82,7 @@ describe('TaskDetails', () => {
   it('should handle tasks with empty subtasks array as leaf task', () => {
     const taskWithEmptySubtasks = createTask({ name: 'Task', subTasks: [] });
 
-    render(<TaskDetails task={taskWithEmptySubtasks} />);
+    render(<TaskDetails task={taskWithEmptySubtasks} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Task')).toBeInTheDocument();
     expect(screen.queryByRole('button', { expanded: false })).not.toBeInTheDocument();

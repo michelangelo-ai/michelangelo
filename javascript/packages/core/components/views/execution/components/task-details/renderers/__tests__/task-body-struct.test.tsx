@@ -44,7 +44,7 @@ describe('TaskBodyStruct', () => {
   it('should handle null and undefined values', async () => {
     const user = userEvent.setup();
 
-    const { rerender } = render(<TaskBodyStruct label="Empty Value" value={null} />);
+    const { rerender } = render(<TaskBodyStruct label="Empty Value" value={undefined} />);
 
     const accordionButton = screen.getByRole('button', { name: /Empty Value/ });
     await user.click(accordionButton);

@@ -4,7 +4,9 @@ import { TextEditor } from '#core/components/text-editor/text-editor';
 import { TaskPanel } from '#core/components/views/execution/styled-components';
 import { decodeStruct, isStruct } from '#core/utils/proto/struct-utils';
 
-export function TaskBodyStruct(props: { label: string; value: object | undefined | null }) {
+import type { TaskBodyStructProps } from './types';
+
+export function TaskBodyStruct(props: TaskBodyStructProps) {
   const { label, value } = props;
 
   const decodedValue = isStruct(value) ? decodeStruct(value) : value;
