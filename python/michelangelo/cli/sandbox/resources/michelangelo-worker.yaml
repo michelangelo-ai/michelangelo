@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
+      image: ghcr.io/michelangelo-ai/worker:dev-release-with-cluster-crd
       volumeMounts:
         - name: worker-config-volume
           mountPath: /config

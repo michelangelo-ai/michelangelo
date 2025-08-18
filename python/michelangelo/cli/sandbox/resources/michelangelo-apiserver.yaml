@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
     - name: michelangelo-apiserver
-      image: ghcr.io/michelangelo-ai/apiserver:main
+      image: ghcr.io/michelangelo-ai/apiserver:dev-release-with-cluster-crd
       ports:
         - containerPort: 14566
       volumeMounts:
