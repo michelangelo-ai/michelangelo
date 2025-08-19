@@ -44,7 +44,7 @@ data:
       awsEndpointUrl: minio:9091
     
     workflowClient:
-      service: cadence-frontend
-      host: cadence:7833
+      service: temporaltest-frontend
+      host: temporaltest-frontend:7233
       transport: grpc
       domain: default

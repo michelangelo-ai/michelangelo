@@ -72,7 +72,7 @@ func options() fx.Option {
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
 		ray.Module,
-		cadenceclient.Module,
+		temporalclient.Module,
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
