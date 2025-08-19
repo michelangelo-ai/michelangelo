@@ -44,7 +44,7 @@ data:
       awsEndpointUrl: minio:9091
     
     workflowClient:
-      service: temporaltest-frontend
-      host: temporaltest-frontend:7233
+      service: temporal-frontend
+      host: temporal.stg-myteksi.com:7233
       transport: grpc
-      domain: default
+      domain: uniflow
