@@ -65,3 +65,12 @@ export type SortingCapability = {
   onToggleSort: (e: React.MouseEvent<HTMLDivElement>) => void;
   sortDirection: false | 'asc' | 'desc';
 };
+
+/**
+ * Defines a column's visibility capabilities and current state.
+ * Used to hide columns from the table.
+ */
+export type VisibilityCapability = {
+  canHide: boolean;
+  isVisible: boolean;
+};

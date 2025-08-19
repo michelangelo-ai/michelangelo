@@ -193,6 +193,10 @@ export type SortingState = Array<{
   desc: boolean;
 }>;
 
+export type ColumnOrderState = string[];
+
+export type ColumnVisibilityState = Record<string, boolean>;
+
 /**
  * Table state containing aspects of table behavior.
  */
@@ -205,6 +209,10 @@ export type TableState = {
   pagination: PaginationState;
   /** Sorting state */
   sorting: SortingState;
+  /** Column order state */
+  columnOrder: ColumnOrderState;
+  /** Column visibility state */
+  columnVisibility: ColumnVisibilityState;
 };
 
 /**
@@ -219,4 +227,10 @@ export type ControlledTableState = TableState & {
   setColumnFilters: (updater: ColumnFilter[] | ((old: ColumnFilter[]) => ColumnFilter[])) => void;
   setPagination: (updater: PaginationState | ((old: PaginationState) => PaginationState)) => void;
   setSorting: (updater: SortingState | ((old: SortingState) => SortingState)) => void;
+  setColumnOrder: (
+    updater: ColumnOrderState | ((old: ColumnOrderState) => ColumnOrderState)
+  ) => void;
+  setColumnVisibility: (
+    updater: ColumnVisibilityState | ((old: ColumnVisibilityState) => ColumnVisibilityState)
+  ) => void;
 };

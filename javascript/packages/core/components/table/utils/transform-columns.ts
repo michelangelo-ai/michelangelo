@@ -6,6 +6,7 @@ import type {
   ColumnRenderState,
   FilteringCapability,
   SortingCapability,
+  VisibilityCapability,
 } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
 
@@ -14,7 +15,7 @@ import type { TableData } from '#core/components/table/types/data-types';
  */
 export function transformColumns<T extends TableData = TableData>(
   columns: Column<T, unknown>[]
-): Array<ColumnRenderState<T> & FilteringCapability & SortingCapability> {
+): Array<ColumnRenderState<T> & FilteringCapability & SortingCapability & VisibilityCapability> {
   return columns.map((column) => {
     const columnConfig = column.columnDef.meta as ColumnConfig<T>;
     const label = columnConfig.label ?? column.id;
@@ -31,6 +32,9 @@ export function transformColumns<T extends TableData = TableData>(
       canSort: column.getCanSort(),
       onToggleSort: column.getToggleSortingHandler() ?? (() => undefined),
       sortDirection: column.getIsSorted(),
+
+      canHide: column.getCanHide(),
+      isVisible: column.getIsVisible(),
     };
   });
 }

@@ -5,6 +5,8 @@ import { usePersistedTableState } from './use-persisted-table-state';
 
 import type {
   ColumnFilter,
+  ColumnOrderState,
+  ColumnVisibilityState,
   ControlledTableState,
   PaginationState,
   SortingState,
@@ -55,6 +57,16 @@ export function useLocalStorageTableState({
     TABLE_STATE_DEFAULTS.sorting
   );
 
+  const [columnOrder, setColumnOrder] = usePersistedTableState<ColumnOrderState>(
+    `${tableSettingsId}.columnOrder`,
+    TABLE_STATE_DEFAULTS.columnOrder
+  );
+
+  const [columnVisibility, setColumnVisibility] = usePersistedTableState<ColumnVisibilityState>(
+    `${tableSettingsId}.columnVisibility`,
+    TABLE_STATE_DEFAULTS.columnVisibility
+  );
+
   // pageIndex is not persisted (resets on reload)
   const [pageIndex, setPageIndex] = useState<number>(0);
 
@@ -75,5 +87,9 @@ export function useLocalStorageTableState({
     },
     sorting,
     setSorting,
+    columnOrder,
+    setColumnOrder,
+    columnVisibility,
+    setColumnVisibility,
   };
 }

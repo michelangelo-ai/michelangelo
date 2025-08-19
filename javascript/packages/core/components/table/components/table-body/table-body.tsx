@@ -13,6 +13,8 @@ export const TableBody = <T extends TableData = TableData>({ rows }: TableBodyPr
           {row.cells.map((cell) => (
             <StyledTableBodyCell key={cell.id}>{cell.content}</StyledTableBodyCell>
           ))}
+          {/* Placeholder action cell to align with column configuration button */}
+          <StyledTableBodyCell />
         </StyledTableBodyRow>
       ))}
     </StyledTableBody>

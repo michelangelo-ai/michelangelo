@@ -9,7 +9,11 @@ import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wr
 import { getInterpolationProviderWrapper } from '#core/test/wrappers/get-interpolation-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { ApplicationError } from '#core/types/error-types';
-import { buildTableColumns, buildTableData } from '../__fixtures__/table-test-helpers';
+import {
+  buildTableColumns,
+  buildTableData,
+  expectTableHeaders,
+} from '../__fixtures__/table-test-helpers';
 import { Table } from '../table';
 
 import type { TablePaginationProps } from '../components/table-pagination/types';
@@ -34,7 +38,7 @@ describe('Table', () => {
     });
 
     it('renders column headers', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(numberOfColumns);
+      expectTableHeaders({ dataColumns: numberOfColumns });
       expect(
         screen.getByRole('row', { name: 'Column1 Column2 Column3 Column4' })
       ).toBeInTheDocument();
@@ -67,7 +71,7 @@ describe('Table', () => {
     });
 
     it('renders column headers', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(numberOfColumns);
+      expectTableHeaders({ dataColumns: numberOfColumns });
       expect(screen.getByRole('row', { name: 'Column1 Column2 Column3' })).toBeInTheDocument();
     });
   });
@@ -90,7 +94,7 @@ describe('Table', () => {
     });
 
     it('renders column headers', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(numberOfColumns);
+      expectTableHeaders({ dataColumns: numberOfColumns });
       expect(
         screen.getByRole('row', { name: 'Column1 Column2 Column3 Column4' })
       ).toBeInTheDocument();
@@ -120,7 +124,7 @@ describe('Table', () => {
     });
 
     it('renders column headers', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(1);
+      expectTableHeaders({ dataColumns: 1 });
       expect(screen.getByRole('row', { name: 'Column1' })).toBeInTheDocument();
     });
 
@@ -151,7 +155,7 @@ describe('Table', () => {
     });
 
     it('renders column headers when loading', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(4);
+      expectTableHeaders({ dataColumns: 4 });
     });
 
     it('does not render data rows when loading', () => {
@@ -183,7 +187,7 @@ describe('Table', () => {
     });
 
     it('renders column headers when loading', () => {
-      expect(screen.getAllByRole('columnheader')).toHaveLength(3);
+      expectTableHeaders({ dataColumns: 3 });
     });
 
     it('does not render data rows when loading', () => {
@@ -1155,6 +1159,126 @@ describe('Table', () => {
       expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
       expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
       expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+    });
+  });
+
+  describe('column configuration integration', () => {
+    const testData = buildTableData(3, 4);
+    const testColumns = buildTableColumns(4);
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+      localStorage.clear();
+    });
+
+    it('renders column configuration button in table header', () => {
+      render(
+        <Table data={testData} columns={testColumns} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.getByTitle('Configure columns')).toBeInTheDocument();
+    });
+
+    it('opens column configuration popover when button is clicked', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={testData} columns={testColumns} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Column header text is rendered
+      expect(screen.getByText('Column1')).toBeInTheDocument();
+      expect(screen.getByText('Column2')).toBeInTheDocument();
+      expect(screen.getByText('Column3')).toBeInTheDocument();
+      expect(screen.getByText('Column4')).toBeInTheDocument();
+
+      await user.click(screen.getByTitle('Configure columns'));
+
+      // First column is the unique identifier column, so it is not rendered in the popover
+      expect(screen.getByText('Column1')).toBeInTheDocument();
+
+      // Column headers are rendered twice, once in the table header and once in the popover
+      expect(screen.getAllByText('Column2')).toHaveLength(2);
+      expect(screen.getAllByText('Column3')).toHaveLength(2);
+      expect(screen.getAllByText('Column4')).toHaveLength(2);
+    });
+
+    it('reorders columns and reflects changes in table headers', () => {
+      render(
+        <Table
+          data={testData}
+          columns={testColumns}
+          state={{ columnOrder: ['col2', 'col1', 'col3', 'col4'] }}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const headers = screen.getAllByRole('columnheader');
+      expect(headers[0]).toHaveTextContent('Column2');
+      expect(headers[1]).toHaveTextContent('Column1');
+      expect(headers[2]).toHaveTextContent('Column3');
+      expect(headers[3]).toHaveTextContent('Column4');
+
+      const firstDataRow = screen.getByRole('row', {
+        name: 'row1-col2-data row1-col1-data row1-col3-data row1-col4-data',
+      });
+      expect(firstDataRow).toBeInTheDocument();
+    });
+
+    it('hides column and reflects changes in table structure', () => {
+      render(
+        <Table
+          data={testData}
+          columns={testColumns}
+          state={{ columnVisibility: { col2: false } }}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Should only show 3 data columns (Column2 is hidden)
+      expectTableHeaders({ dataColumns: 3 });
+      expect(screen.getByRole('columnheader', { name: 'Column1' })).toBeInTheDocument();
+      expect(screen.queryByRole('columnheader', { name: 'Column2' })).not.toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: 'Column3' })).toBeInTheDocument();
+      expect(screen.getByRole('columnheader', { name: 'Column4' })).toBeInTheDocument();
+
+      // Data rows should exclude the hidden column
+      const firstDataRow = screen.getByRole('row', {
+        name: 'row1-col1-data row1-col3-data row1-col4-data',
+      });
+      expect(firstDataRow).toBeInTheDocument();
+    });
+
+    it('handles empty columns gracefully', () => {
+      render(
+        <Table data={[]} columns={[]} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const configButton = screen.getByTitle('Configure columns');
+      expect(configButton).toBeInTheDocument();
     });
   });
 });
