@@ -39,6 +39,8 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     ...(state.setColumnFilters ? { onColumnFiltersChange: state.setColumnFilters } : {}),
     ...(state.setPagination ? { onPaginationChange: state.setPagination } : {}),
     ...(state.setSorting ? { onSortingChange: state.setSorting } : {}),
+    ...(state.setColumnOrder ? { onColumnOrderChange: state.setColumnOrder } : {}),
+    ...(state.setColumnVisibility ? { onColumnVisibilityChange: state.setColumnVisibility } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     ...(!props.disableSorting
@@ -58,7 +60,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     filteredLength: table.getFilteredRowModel().rows.length,
   });
 
-  const transformedColumns = transformColumns(table.getAllColumns());
+  const transformedColumns = transformColumns(table.getAllLeafColumns());
 
   return (
     <TableContainer>
@@ -89,7 +91,13 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           />
         )}
 
-        {viewState !== 'error' && <TableHeader<T> columns={transformedColumns} />}
+        {viewState !== 'error' && (
+          <TableHeader<T>
+            columns={transformedColumns}
+            setColumnOrder={table.setColumnOrder}
+            setColumnVisibility={table.setColumnVisibility}
+          />
+        )}
 
         {viewState === 'ready' && (
           <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />

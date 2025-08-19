@@ -11,6 +11,8 @@ export const getTanstackColumn = (overrides?: {
   sortDirection?: false | 'asc' | 'desc';
   canFilter?: boolean;
   filterValue?: string;
+  canHide?: boolean;
+  isVisible?: boolean;
   columnConfig?: Partial<ColumnConfig<TableData>>;
 }): Column<TableData, unknown> =>
   ({
@@ -28,5 +30,7 @@ export const getTanstackColumn = (overrides?: {
     getCanFilter: vi.fn(() => overrides?.canFilter ?? true),
     getFilterValue: vi.fn(() => overrides?.filterValue ?? ''),
     setFilterValue: vi.fn(),
+    getCanHide: vi.fn(() => overrides?.canHide ?? true),
+    getIsVisible: vi.fn(() => overrides?.isVisible ?? true),
     getContext: vi.fn(() => ({})),
   }) as unknown as Column<TableData, unknown>;

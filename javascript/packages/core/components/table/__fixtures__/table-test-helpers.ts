@@ -1,3 +1,4 @@
+import { screen } from '@testing-library/react';
 import { fromPairs } from 'lodash';
 
 import type { ColumnConfig } from '../types/column-types';
@@ -26,4 +27,15 @@ export function buildTableColumns(numberOfColumns: number): ColumnConfig[] {
 
 export function getArrayWithLength(length: number): number[] {
   return Array.from({ length }, (_, i) => i + 1);
+}
+
+/**
+ * Helper to assert expected column header count, accounting for table structure.
+ * By default includes the column configuration button.
+ */
+export function expectTableHeaders(options: { dataColumns: number; hasConfigButton?: boolean }) {
+  let expectedCount = options.dataColumns;
+  if (options.hasConfigButton !== false) expectedCount += 1; // defaults to true
+
+  expect(screen.getAllByRole('columnheader')).toHaveLength(expectedCount);
 }
