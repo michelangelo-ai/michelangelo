@@ -1,4 +1,5 @@
 import type { Row } from '@tanstack/react-table';
+import type { FilteringCapability } from '#core/components/table/types/column-types';
 import type { TableData } from '../../types/data-types';
 
 /**
@@ -52,7 +53,5 @@ export enum FilterMode {
 export type ColumnFilterProps = {
   columnId: string;
   close: () => void;
-  getFilterValue: () => unknown;
-  setFilterValue: (value: unknown) => void;
   preFilteredRows: Array<{ getValue: (columnId: string) => unknown }>;
-};
+} & Omit<FilteringCapability, 'canFilter'>;

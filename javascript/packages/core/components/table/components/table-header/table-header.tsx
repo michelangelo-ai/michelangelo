@@ -7,17 +7,17 @@ import { StyledSortableTableHeadCell, StyledTableHeadCell } from './styled-compo
 import type { TableData } from '#core/components/table/types/data-types';
 import type { TableHeaderProps } from './types';
 
-export const TableHeader = <T extends TableData = TableData>({ headers }: TableHeaderProps<T>) => {
+export const TableHeader = <T extends TableData = TableData>({ columns }: TableHeaderProps<T>) => {
   const [css, theme] = useStyletron();
   return (
     <StyledTableHead>
       <StyledTableHeadRow>
-        {headers.map((header) =>
-          header.canSort ? (
+        {columns.map((column) =>
+          column.canSort ? (
             <StyledSortableTableHeadCell
-              key={header.id}
+              key={column.id}
               $isFocusVisible={false}
-              onClick={header.onToggleSort}
+              onClick={column.onToggleSort}
               role="columnheader"
             >
               <div
@@ -27,13 +27,13 @@ export const TableHeader = <T extends TableData = TableData>({ headers }: TableH
                   gap: theme.sizing.scale300,
                 })}
               >
-                <div>{header.content}</div>
-                <TableSortIcon column={{ getIsSorted: () => header.sortDirection ?? false }} />
+                <div>{column.label}</div>
+                <TableSortIcon column={{ getIsSorted: () => column.sortDirection ?? false }} />
               </div>
             </StyledSortableTableHeadCell>
           ) : (
-            <StyledTableHeadCell key={header.id} role="columnheader">
-              {header.content}
+            <StyledTableHeadCell key={column.id} role="columnheader">
+              {column.label}
             </StyledTableHeadCell>
           )
         )}

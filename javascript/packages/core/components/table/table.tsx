@@ -7,13 +7,11 @@ import {
 } from '@tanstack/react-table';
 import { StyledTable } from 'baseui/table-semantic';
 
-import { transformFilterableColumns } from './components/table-action-bar/components/table-filter-menu/transform-filterable-columns';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableBody } from './components/table-body/table-body';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
 import { TableErrorState } from './components/table-error-state/table-error-state';
-import { transformHeaders } from './components/table-header/header-transformer';
 import { TableHeader } from './components/table-header/table-header';
 import { TableNoResultsState } from './components/table-no-results-state/table-no-results-state';
 import { useColumnTransformer } from './hooks/use-column-transformer';
@@ -21,6 +19,7 @@ import { TableContainer } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
+import { transformColumns } from './utils/transform-columns';
 
 import type { TableData } from './types/data-types';
 import type { TableProps } from './types/table-types';
@@ -59,6 +58,8 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     filteredLength: table.getFilteredRowModel().rows.length,
   });
 
+  const transformedColumns = transformColumns(table.getAllColumns());
+
   return (
     <TableContainer>
       <TableActionBar
@@ -69,9 +70,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         columns={columns}
         preFilteredRows={table.getPreFilteredRowModel().rows}
         configuration={props.actionBarConfig}
-        filterableColumns={transformFilterableColumns(
-          table.getHeaderGroups().flatMap((group) => group.headers)
-        )}
+        filterableColumns={transformedColumns.filter((column) => column.canFilter)}
       />
 
       <StyledTable>
@@ -90,11 +89,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           />
         )}
 
-        {viewState !== 'error' && (
-          <TableHeader<T>
-            headers={transformHeaders<T>(table.getHeaderGroups().flatMap((group) => group.headers))}
-          />
-        )}
+        {viewState !== 'error' && <TableHeader<T> columns={transformedColumns} />}
 
         {viewState === 'ready' && (
           <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
