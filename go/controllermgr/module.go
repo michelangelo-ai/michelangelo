@@ -99,65 +99,163 @@ func start(lc fx.Lifecycle, mgr manager.Manager) error {
 	return nil
 }
 
-// _start starts the Kubernetes controller manager with enhanced error logging.
+// _start starts the Kubernetes controller manager with enhanced schema validation logging.
 func _start(mgr manager.Manager) {
-	fmt.Printf("🚀 Starting controller manager with enhanced error logging...\n")
+	fmt.Printf("Starting controller manager with enhanced schema validation...\n")
 	
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		fmt.Printf("❌ Controller Manager execution failed: %v\n", err)
+		fmt.Printf("Controller Manager execution failed: %v\n", err)
 		
-		// Enhanced logging for specific error types
-		if isEnumCompatibilityError(err) {
-			fmt.Printf("🎯 ENUM COMPATIBILITY ERROR DETECTED!\n")
-			fmt.Printf("📋 Error Details: %v\n", err)
-			fmt.Printf("💡 This indicates resources with unknown enum values exist in the cluster\n")
-			fmt.Printf("🔍 To identify the problematic resource, run:\n")
-			if unknownValue := extractUnknownEnumValue(err.Error()); unknownValue != "" {
-				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml | grep -C5 '%s'\n", unknownValue)
+		// Enhanced logging for schema compatibility errors
+		if schemaErrorType := isSchemaCompatibilityError(err); schemaErrorType != "" {
+			fmt.Printf("SCHEMA COMPATIBILITY ERROR DETECTED!\n")
+			fmt.Printf("Error Type: %s\n", schemaErrorType)
+			fmt.Printf("Error Details: %v\n", err)
+			fmt.Printf("This indicates resources with schema compatibility issues exist in the cluster\n")
+			fmt.Printf("To identify the problematic resource, run:\n")
+			
+			if problemValue := extractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
+				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml | grep -C5 '%s'\n", problemValue)
 			} else {
-				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml | grep -A5 -B5 'unknown.*enum'\n")
+				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml\n")
 			}
+			
+			// Provide guidance based on error type
+			provideStartupSchemaGuidance(schemaErrorType)
 		} else {
-			fmt.Printf("❌ Non-enum error detected\n")
+			fmt.Printf("Non-schema error detected\n")
 		}
 		
 		os.Exit(1)
 	}
 }
 
-// isEnumCompatibilityError checks if error is related to enum compatibility
-func isEnumCompatibilityError(err error) bool {
-	if err == nil {
-		return false
-	}
-	
-	errStr := strings.ToLower(err.Error())
-	enumPatterns := []string{
+// SchemaErrorType represents different types of schema compatibility errors
+type SchemaErrorType string
+
+const (
+	SchemaErrorUnknownEnum   SchemaErrorType = "unknown_enum"
+	SchemaErrorUnknownField  SchemaErrorType = "unknown_field"
+	SchemaErrorUnmarshal     SchemaErrorType = "unmarshal_failure"
+	SchemaErrorUnknownType   SchemaErrorType = "unknown_type"
+	SchemaErrorDecoding      SchemaErrorType = "decoding_failure"
+	SchemaErrorVersionMismatch SchemaErrorType = "version_mismatch"
+)
+
+// schemaErrorPatterns maps error patterns to their corresponding error types
+var schemaErrorPatterns = map[SchemaErrorType][]string{
+	SchemaErrorUnknownEnum: {
 		"unknown value",
-		"for enum", 
-		"enum value",
+		"for enum",
+	},
+	SchemaErrorUnknownField: {
+		"unknown field",
+		"unrecognized field",
+		"proto: unknown field",
+	},
+	SchemaErrorUnmarshal: {
+		"failed to unmarshal",
+		"cannot unmarshal",
+		"unmarshal error",
+	},
+	SchemaErrorUnknownType: {
+		"no kind is registered",
+		"unknown type",
+	},
+	SchemaErrorDecoding: {
+		"strict decoding error",
+		"decoding failure",
+		"serialization error",
+	},
+	SchemaErrorVersionMismatch: {
+		"version mismatch",
+		"unsupported version",
+		"api version",
+	},
+}
+
+// isSchemaCompatibilityError checks if an error is due to schema compatibility issues
+func isSchemaCompatibilityError(err error) SchemaErrorType {
+	if err == nil {
+		return ""
 	}
 	
-	for _, pattern := range enumPatterns {
-		if strings.Contains(errStr, pattern) {
-			return true
+	errorStr := strings.ToLower(err.Error())
+	
+	// Check each error type pattern
+	for errorType, patterns := range schemaErrorPatterns {
+		// First check if all patterns match (most specific)
+		allPatternsMatch := true
+		for _, pattern := range patterns {
+			if !strings.Contains(errorStr, strings.ToLower(pattern)) {
+				allPatternsMatch = false
+				break
+			}
+		}
+		if allPatternsMatch {
+			return errorType
+		}
+		
+		// Also check if any single pattern matches (for backwards compatibility)
+		for _, pattern := range patterns {
+			if strings.Contains(errorStr, strings.ToLower(pattern)) {
+				return errorType
+			}
 		}
 	}
 	
-	return false
+	return ""
 }
 
-// extractUnknownEnumValue extracts the unknown enum value from error messages
-func extractUnknownEnumValue(errorMsg string) string {
-	if strings.Contains(errorMsg, "unknown value") && strings.Contains(errorMsg, "for enum") {
-		start := strings.Index(errorMsg, "unknown value \"")
-		if start != -1 {
-			start += len("unknown value \"")
-			end := strings.Index(errorMsg[start:], "\"")
-			if end != -1 {
-				return errorMsg[start : start+end]
+// extractSchemaErrorValue extracts problematic values from schema error messages
+func extractSchemaErrorValue(errorMsg string, errorType SchemaErrorType) string {
+	switch errorType {
+	case SchemaErrorUnknownEnum:
+		// Look for pattern: unknown value "VALUE" for enum
+		if strings.Contains(errorMsg, "unknown value") && strings.Contains(errorMsg, "for enum") {
+			start := strings.Index(errorMsg, "unknown value \"")
+			if start != -1 {
+				start += len("unknown value \"")
+				end := strings.Index(errorMsg[start:], "\"")
+				if end != -1 {
+					return errorMsg[start : start+end]
+				}
+			}
+		}
+	case SchemaErrorUnknownField:
+		// Look for pattern: unknown field "fieldname"
+		if strings.Contains(errorMsg, "unknown field") {
+			start := strings.Index(errorMsg, "unknown field \"")
+			if start != -1 {
+				start += len("unknown field \"")
+				end := strings.Index(errorMsg[start:], "\"")
+				if end != -1 {
+					return errorMsg[start : start+end]
+				}
 			}
 		}
 	}
 	return ""
+}
+
+// provideStartupSchemaGuidance provides startup-specific guidance for schema errors
+func provideStartupSchemaGuidance(errorType SchemaErrorType) {
+	switch errorType {
+	case SchemaErrorUnknownEnum:
+		fmt.Printf("GUIDANCE: Unknown enum value detected during startup\n")
+		fmt.Printf("- Update the enum value to a supported version\n")
+		fmt.Printf("- Or upgrade the controller to support the enum value\n")
+	case SchemaErrorUnknownField:
+		fmt.Printf("GUIDANCE: Unknown field detected during startup\n")
+		fmt.Printf("- Remove unsupported fields from resources\n")
+		fmt.Printf("- Or upgrade the controller to support new fields\n")
+	case SchemaErrorVersionMismatch:
+		fmt.Printf("GUIDANCE: API version mismatch detected during startup\n")
+		fmt.Printf("- Ensure resource API versions match controller expectations\n")
+		fmt.Printf("- Consider migrating resources to supported versions\n")
+	default:
+		fmt.Printf("GUIDANCE: Schema compatibility issue detected during startup\n")
+		fmt.Printf("- Check resource definitions against current schema\n")
+		fmt.Printf("- Ensure controller and resources are compatible\n")
+	}
 }
