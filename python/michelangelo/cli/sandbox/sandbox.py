@@ -27,6 +27,7 @@ _kube_ports = [
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
+    "8090:30011",  # Michelangelo UI
 ]
 
 # Workflow engine ports
@@ -193,6 +194,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         resources.append("michelangelo-controllermgr.yaml")
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
+        resources.append("michelangelo-ui.yaml")
 
     for r in resources:
         _kube_create(_dir / "resources" / r)
