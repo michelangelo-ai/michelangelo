@@ -1,0 +1,572 @@
+package controllermgr
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
+)
+
+// SchemaErrorType represents different types of schema compatibility errors
+type SchemaErrorType string
+
+const (
+	SchemaErrorUnknownEnum     SchemaErrorType = "unknown_enum"
+	SchemaErrorUnknownField    SchemaErrorType = "unknown_field"
+	SchemaErrorUnmarshal       SchemaErrorType = "unmarshal_failure"
+	SchemaErrorUnknownType     SchemaErrorType = "unknown_type"
+	SchemaErrorDecoding        SchemaErrorType = "decoding_failure"
+	SchemaErrorVersionMismatch SchemaErrorType = "version_mismatch"
+)
+
+// schemaErrorPatterns maps error patterns to their corresponding error types
+var schemaErrorPatterns = map[SchemaErrorType][]string{
+	SchemaErrorUnknownEnum: {
+		"unknown value",
+		"for enum",
+	},
+	SchemaErrorUnknownField: {
+		"unknown field",
+		"unrecognized field",
+		"proto: unknown field",
+	},
+	SchemaErrorUnmarshal: {
+		"failed to unmarshal",
+		"cannot unmarshal",
+		"unmarshal error",
+	},
+	SchemaErrorUnknownType: {
+		"no kind is registered",
+		"unknown type",
+	},
+	SchemaErrorDecoding: {
+		"strict decoding error",
+		"decoding failure",
+		"serialization error",
+	},
+	SchemaErrorVersionMismatch: {
+		"version mismatch",
+		"unsupported version",
+		"api version",
+	},
+}
+
+// SchemaValidatorInterface defines the interface for schema validation
+type SchemaValidatorInterface interface {
+	IsSchemaCompatibilityError(err error) SchemaErrorType
+	ExtractSchemaErrorValue(errorMsg string, errorType SchemaErrorType) string
+	MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger)
+	ValidateResourceSchema(item *unstructured.Unstructured, logger *zap.Logger) bool
+	DiagnoseResourceOnError(gvr schema.GroupVersionResource, problemNamespace, problemName string, schemaErrorType SchemaErrorType, logger *zap.Logger)
+	ValidateAllResourcesOfType(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) (int, int)
+}
+
+// schemaValidator implements SchemaValidatorInterface
+type schemaValidator struct{}
+
+var (
+	// SchemaValidator provides centralized schema validation for all controllers
+	SchemaValidator = &schemaValidator{}
+)
+
+// IsSchemaCompatibilityError checks if an error is due to schema compatibility issues
+func (sv *schemaValidator) IsSchemaCompatibilityError(err error) SchemaErrorType {
+	if err == nil {
+		return ""
+	}
+
+	errorStr := strings.ToLower(err.Error())
+
+	// Check each error type pattern
+	for errorType, patterns := range schemaErrorPatterns {
+		// Check if all patterns match
+		allPatternsMatch := true
+		for _, pattern := range patterns {
+			if !strings.Contains(errorStr, strings.ToLower(pattern)) {
+				allPatternsMatch = false
+				break
+			}
+		}
+		if allPatternsMatch {
+			return errorType
+		}
+	}
+
+	return ""
+}
+
+// ExtractSchemaErrorValue extracts problematic values from schema error messages
+func (sv *schemaValidator) ExtractSchemaErrorValue(errorMsg string, errorType SchemaErrorType) string {
+	switch errorType {
+	case SchemaErrorUnknownEnum:
+		// Look for pattern: unknown value "VALUE" for enum
+		if strings.Contains(errorMsg, "unknown value") && strings.Contains(errorMsg, "for enum") {
+			start := strings.Index(errorMsg, "unknown value \"")
+			if start != -1 {
+				start += len("unknown value \"")
+				end := strings.Index(errorMsg[start:], "\"")
+				if end != -1 {
+					return errorMsg[start : start+end]
+				}
+			}
+		}
+	case SchemaErrorUnknownField:
+		// Look for pattern: unknown field "fieldname"
+		if strings.Contains(errorMsg, "unknown field") {
+			start := strings.Index(errorMsg, "unknown field \"")
+			if start != -1 {
+				start += len("unknown field \"")
+				end := strings.Index(errorMsg[start:], "\"")
+				if end != -1 {
+					return errorMsg[start : start+end]
+				}
+			}
+		}
+	}
+	return ""
+}
+
+
+// checkCacheSync performs cache sync check with timeout and optional schema error handling
+func (sv *schemaValidator) checkCacheSync(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger, checkType string) bool {
+	mgrCache := mgr.GetCache()
+	
+	if checkType == "initial" {
+		// For initial check, use a timeout
+		// Timeout recommendations based on entity volume:
+		// - Small deployments (<1k entities): 10 minutes
+		// - Medium deployments (1k-5k entities): 20 minutes
+		// - Large deployments (5k-10k entities): 30 minutes
+		// - Very large deployments (>10k entities): 60 minutes
+		// Default: 30 minutes for most production scenarios
+		syncTimeout := 10 * time.Second
+		logger.Info("Cache sync timeout configured", zap.Duration("timeout", syncTimeout))
+		ctx, cancel := context.WithTimeout(context.Background(), syncTimeout)
+		defer cancel()
+		
+		logger.Info("Waiting for resource informer to sync...", zap.String("resource", gvr.Resource))
+		return mgrCache.WaitForCacheSync(ctx)
+	} else {
+		// For runtime checks, use background context (no timeout)
+		ctx := context.Background()
+		return mgrCache.WaitForCacheSync(ctx)
+	}
+}
+
+// MonitorResourceSchemaHealth monitors schema health for a specific resource type
+func (sv *schemaValidator) MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
+	// Wait for controller to start
+	time.Sleep(2 * time.Second)
+
+	logger.Info("Starting schema compatibility monitoring for resource",
+		zap.String("resource", gvr.Resource),
+		zap.String("group", gvr.Group),
+		zap.String("version", gvr.Version))
+
+	// Perform initial sync check
+	if !sv.checkCacheSync(mgr, gvr, logger, "initial") {
+		logger.Warn("SCHEMA ERROR DETECTED: Resource informer failed to sync!",
+			zap.String("resource", gvr.Resource))
+		logger.Warn("This indicates schema compatibility issues - running diagnostic...")
+		sv.runSchemaValidationDiagnostic(mgr, gvr, logger)
+	} else {
+		logger.Info("Resource informer synced successfully - no schema errors",
+			zap.String("resource", gvr.Resource))
+		logger.Info("Diagnostic will not run since no errors were detected")
+	}
+
+	// Start continuous runtime monitoring to detect schema errors that occur after initialization
+	go sv.startRuntimeSchemaMonitoring(mgr, gvr, logger)
+}
+
+// startRuntimeSchemaMonitoring continuously monitors for schema errors during runtime
+func (sv *schemaValidator) startRuntimeSchemaMonitoring(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
+	// Monitor every 10 seconds for schema health
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			logger.Info("Starting continuous runtime schema monitoring",
+				zap.String("resource", gvr.Resource))
+			
+			// Use the shared cache sync check function
+			if !sv.checkCacheSync(mgr, gvr, logger, "runtime") {
+				logger.Error("RUNTIME SCHEMA ERROR DETECTED!",
+					zap.String("resource", gvr.Resource))
+				logger.Error("A problematic resource was likely added during runtime operation")
+				logger.Error("Running diagnostic to identify the problematic resource...")
+
+				// Run diagnostic to identify the specific problematic resource
+				sv.runSchemaValidationDiagnostic(mgr, gvr, logger)
+
+				// Continue monitoring - the error might be fixed
+			}
+		}
+	}
+}
+
+// ValidateResourceSchema checks a single resource for schema issues
+func (sv *schemaValidator) ValidateResourceSchema(item *unstructured.Unstructured, logger *zap.Logger) bool {
+	name := item.GetName()
+	namespace := item.GetNamespace()
+	gvk := item.GroupVersionKind()
+
+	logger.Info("Validating individual resource",
+		zap.String("name", name),
+		zap.String("namespace", namespace),
+		zap.String("gvk", gvk.String()))
+
+	// For Pipeline resources, try to unmarshal into the actual protobuf struct to catch enum errors
+	if gvk.Group == "michelangelo.api" && gvk.Version == "v2" && gvk.Kind == "Pipeline" {
+		return sv.validatePipelineResource(item, logger)
+	}
+
+	// For other resource types, do basic validation
+	jsonBytes, err := json.Marshal(item.Object)
+	if err != nil {
+		logger.Error("Failed to marshal resource to JSON",
+			zap.String("name", name),
+			zap.String("namespace", namespace),
+			zap.String("gvk", gvk.String()),
+			zap.Error(err))
+		return false
+	}
+
+	// Try basic JSON unmarshal to detect schema issues
+	var testObj map[string]interface{}
+	if err := json.Unmarshal(jsonBytes, &testObj); err != nil {
+		// Analyze schema error type
+		if schemaErrorType := sv.IsSchemaCompatibilityError(err); schemaErrorType != "" {
+			logger.Error("PROBLEMATIC RESOURCE IDENTIFIED!",
+				zap.String("name", name),
+				zap.String("namespace", namespace),
+				zap.String("gvk", gvk.String()),
+				zap.String("schema_error_type", string(schemaErrorType)),
+				zap.Error(err))
+
+			logger.Info("This resource contains schema compatibility issues")
+			logger.Info("To fix, run:",
+				zap.String("command", fmt.Sprintf("kubectl edit %s %s -n %s",
+					strings.ToLower(gvk.Kind), name, namespace)))
+
+			// Extract and report problematic value if possible
+			if problemValue := sv.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
+				logger.Error("Found problematic value in resource",
+					zap.String("name", name),
+					zap.String("namespace", namespace),
+					zap.String("schema_error_type", string(schemaErrorType)),
+					zap.String("problematic_value", problemValue))
+			}
+
+			return false
+		} else {
+			logger.Error("PROBLEMATIC RESOURCE IDENTIFIED!",
+				zap.String("name", name),
+				zap.String("namespace", namespace),
+				zap.String("gvk", gvk.String()),
+				zap.Error(err))
+			logger.Info("This resource contains validation errors")
+			return false
+		}
+	}
+
+	logger.Debug("Resource is valid",
+		zap.String("name", name),
+		zap.String("namespace", namespace),
+		zap.String("gvk", gvk.String()))
+	return true
+}
+
+// runSchemaValidationDiagnostic runs diagnostic when schema errors are detected
+func (sv *schemaValidator) runSchemaValidationDiagnostic(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
+	logger.Info("RUNNING SCHEMA VALIDATION DIAGNOSTIC DUE TO DETECTED SCHEMA ERROR",
+		zap.String("resource", gvr.Resource))
+
+	// Get dynamic client
+	config := mgr.GetConfig()
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		logger.Error("Failed to create dynamic client for diagnostic", zap.Error(err))
+		return
+	}
+
+	// Try to list resources
+	result, err := dynamicClient.Resource(gvr).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		logger.Error("CONFIRMED: Failed to list resources!",
+			zap.String("resource", gvr.Resource),
+			zap.Error(err))
+
+		// Analyze schema error type and extract problematic values
+		if schemaErrorType := sv.IsSchemaCompatibilityError(err); schemaErrorType != "" {
+			logger.Error("SCHEMA COMPATIBILITY ISSUE IDENTIFIED!",
+				zap.String("schema_error_type", string(schemaErrorType)),
+				zap.String("resource", gvr.Resource))
+
+			if problemValue := sv.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
+				logger.Error("PROBLEMATIC VALUE IDENTIFIED!", zap.String("problematic_value", problemValue))
+				logger.Info("To find the problematic resource, run:")
+				logger.Info(fmt.Sprintf("   kubectl get %s.%s.%s -A -o yaml | grep -C5 '%s'",
+					gvr.Resource, gvr.Version, gvr.Group, problemValue))
+			} else {
+				logger.Info("To find the problematic resource, run:")
+				logger.Info(fmt.Sprintf("   kubectl get %s.%s.%s -A -o yaml",
+					gvr.Resource, gvr.Version, gvr.Group))
+			}
+
+		}
+		return
+	}
+
+	// If we get here, list succeeded, so check individual resources
+	logger.Info("Successfully listed resources",
+		zap.String("resource", gvr.Resource),
+		zap.Int("count", len(result.Items)))
+	for _, item := range result.Items {
+		sv.ValidateResourceSchema(&item, logger)
+	}
+}
+
+// DiagnoseResourceOnError identifies problematic resources when a schema error occurs
+func (sv *schemaValidator) DiagnoseResourceOnError(gvr schema.GroupVersionResource, problemNamespace, problemName string, schemaErrorType SchemaErrorType, logger *zap.Logger) {
+	logger.Info("Starting on-demand diagnostic for schema error...",
+		zap.String("triggered_by", fmt.Sprintf("%s/%s", problemNamespace, problemName)),
+		zap.String("resource", gvr.Resource),
+		zap.String("schema_error_type", string(schemaErrorType)))
+
+	logger.Info("For immediate identification, run:")
+	switch schemaErrorType {
+	case SchemaErrorUnknownEnum:
+		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml | grep -E '.*_TYPE_.*'", gvr.Resource, problemName, problemNamespace))
+	case SchemaErrorUnknownField:
+		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml", gvr.Resource, problemName, problemNamespace))
+	default:
+		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml", gvr.Resource, problemName, problemNamespace))
+	}
+
+}
+
+// validatePipelineResource specifically validates Pipeline resources by unmarshaling into protobuf struct
+func (sv *schemaValidator) validatePipelineResource(item *unstructured.Unstructured, logger *zap.Logger) bool {
+	name := item.GetName()
+	namespace := item.GetNamespace()
+
+	logger.Info("Validating Pipeline resource with protobuf unmarshaling",
+		zap.String("name", name),
+		zap.String("namespace", namespace))
+
+	// Convert unstructured to JSON first
+	jsonBytes, err := json.Marshal(item.Object)
+	if err != nil {
+		logger.Error("Failed to marshal Pipeline resource to JSON",
+			zap.String("name", name),
+			zap.String("namespace", namespace),
+			zap.Error(err))
+		return false
+	}
+
+	// Try to unmarshal into v2pb.Pipeline - this will catch enum validation errors
+	var pipeline v2pb.Pipeline
+	if err := json.Unmarshal(jsonBytes, &pipeline); err != nil {
+		// This is where enum errors will be caught
+		if schemaErrorType := sv.IsSchemaCompatibilityError(err); schemaErrorType != "" {
+			logger.Error("PROBLEMATIC PIPELINE RESOURCE IDENTIFIED!",
+				zap.String("name", name),
+				zap.String("namespace", namespace),
+				zap.String("schema_error_type", string(schemaErrorType)),
+				zap.Error(err))
+
+			// Extract and report the specific problematic value
+			if problemValue := sv.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
+				logger.Error("PROBLEMATIC VALUE FOUND IN PIPELINE!",
+					zap.String("pipeline_name", name),
+					zap.String("pipeline_namespace", namespace),
+					zap.String("problematic_value", problemValue),
+					zap.String("schema_error_type", string(schemaErrorType)))
+
+				logger.Info("To fix this Pipeline resource, run:",
+					zap.String("command", fmt.Sprintf("kubectl edit pipeline %s -n %s", name, namespace)))
+			}
+
+			return false
+		} else {
+			logger.Error("PROBLEMATIC PIPELINE RESOURCE IDENTIFIED!",
+				zap.String("name", name),
+				zap.String("namespace", namespace),
+				zap.Error(err))
+			return false
+		}
+	}
+
+	logger.Debug("Pipeline resource is valid",
+		zap.String("name", name),
+		zap.String("namespace", namespace))
+	return true
+}
+
+// ValidateAllResourcesOfType validates all resources of a given type and returns (total, valid) counts
+func (sv *schemaValidator) ValidateAllResourcesOfType(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) (int, int) {
+	logger.Info("Validating all resources of type",
+		zap.String("resource", gvr.Resource),
+		zap.String("group", gvr.Group),
+		zap.String("version", gvr.Version))
+
+	// Get dynamic client
+	config := mgr.GetConfig()
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		logger.Error("Failed to create dynamic client for validation", zap.Error(err))
+		return 0, 0
+	}
+
+	// Try to list resources
+	result, err := dynamicClient.Resource(gvr).List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		logger.Error("Failed to list resources for validation",
+			zap.String("resource", gvr.Resource),
+			zap.Error(err))
+		return 0, 0
+	}
+
+	total := len(result.Items)
+	valid := 0
+
+	logger.Info("Starting validation of resources",
+		zap.String("resource", gvr.Resource),
+		zap.Int("total_count", total))
+
+	// Validate each resource
+	for _, item := range result.Items {
+		if sv.ValidateResourceSchema(&item, logger) {
+			valid++
+		}
+	}
+
+	logger.Info("Validation completed",
+		zap.String("resource", gvr.Resource),
+		zap.Int("total", total),
+		zap.Int("valid", valid),
+		zap.Int("invalid", total-valid))
+
+	return total, valid
+}
+
+// customWatchErrorHandler handles watch errors from the reflector with schema validation
+func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, mgr manager.Manager) {
+	// Check if this is a schema compatibility error
+	if schemaErrorType := SchemaValidator.IsSchemaCompatibilityError(err); schemaErrorType != "" {
+		logger.Error("REFLECTOR SCHEMA ERROR DETECTED!",
+			zap.String("reflector_name", r.LastSyncResourceVersion()),
+			zap.String("schema_error_type", string(schemaErrorType)),
+			zap.Error(err))
+
+		// Extract problematic value if possible
+		if problemValue := SchemaValidator.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
+			logger.Error("PROBLEMATIC VALUE IDENTIFIED IN REFLECTOR!",
+				zap.String("problematic_value", problemValue),
+				zap.String("schema_error_type", string(schemaErrorType)))
+		}
+
+		// Run diagnostic to identify the specific problematic resource
+		logger.Error("RUNNING DIAGNOSTIC TO IDENTIFY PROBLEMATIC PIPELINE...")
+		gvr := schema.GroupVersionResource{Group: "michelangelo.api", Version: "v2", Resource: "pipelines"}
+		SchemaValidator.runSchemaValidationDiagnostic(mgr, gvr, logger)
+
+	} else {
+		// For non-schema errors, log at debug level
+		logger.Debug("Non-schema error in reflector", zap.Error(err))
+	}
+
+	// Call default handler for standard error handling
+	cache.DefaultWatchErrorHandler(r, err)
+}
+
+// SetupPipelineWatchErrorHandler configures custom error handling for Pipeline informers
+func SetupPipelineWatchErrorHandler(mgr manager.Manager, logger *zap.Logger) error {
+	logger.Info("Starting SetupPipelineWatchErrorHandler function")
+
+	// Get the cache from the manager
+	cacheInterface := mgr.GetCache()
+
+	// Get informer for Pipeline resources
+	ctx := context.Background()
+	pipelineInformer, err := cacheInterface.GetInformer(ctx, &v2pb.Pipeline{})
+	if err != nil {
+		logger.Error("Failed to get Pipeline informer for watch error handler setup", zap.Error(err))
+		return err
+	}
+
+	// Try to cast to SharedIndexInformer to access SetWatchErrorHandler
+	if sharedInformer, ok := pipelineInformer.(cache.SharedIndexInformer); ok {
+		// Set custom watch error handler
+		err = sharedInformer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
+			customWatchErrorHandler(r, err, logger, mgr)
+		})
+		if err != nil {
+			logger.Error("Failed to set watch error handler for Pipeline informer", zap.Error(err))
+			return err
+		}
+		logger.Info("Successfully configured custom watch error handler for Pipeline resources")
+	} else {
+		logger.Warn("Pipeline informer does not support SetWatchErrorHandler - unable to configure custom error handling")
+		logger.Info("Watch error handler functionality will not be available for Pipeline resources")
+	}
+
+	return nil
+}
+
+// ProvideStartupSchemaGuidance provides startup-specific guidance for schema errors
+func ProvideStartupSchemaGuidance(errorType SchemaErrorType) {
+	switch errorType {
+	case SchemaErrorUnknownEnum:
+		fmt.Printf("GUIDANCE: Unknown enum value detected during startup\n")
+		fmt.Printf("- Update the enum value to a supported version\n")
+		fmt.Printf("- Or upgrade the controller to support the enum value\n")
+	case SchemaErrorUnknownField:
+		fmt.Printf("GUIDANCE: Unknown field detected during startup\n")
+		fmt.Printf("- Remove unsupported fields from resources\n")
+		fmt.Printf("- Or upgrade the controller to support new fields\n")
+	case SchemaErrorVersionMismatch:
+		fmt.Printf("GUIDANCE: API version mismatch detected during startup\n")
+		fmt.Printf("- Ensure resource API versions match controller expectations\n")
+		fmt.Printf("- Consider migrating resources to supported versions\n")
+	default:
+		fmt.Printf("GUIDANCE: Schema compatibility issue detected during startup\n")
+		fmt.Printf("- Check resource definitions against current schema\n")
+		fmt.Printf("- Ensure controller and resources are compatible\n")
+	}
+}
+
+// Public wrapper functions for schema validation
+
+// IsSchemaCompatibilityError checks if an error is due to schema compatibility issues
+func IsSchemaCompatibilityError(err error) SchemaErrorType {
+	return SchemaValidator.IsSchemaCompatibilityError(err)
+}
+
+// ExtractSchemaErrorValue extracts problematic values from schema error messages
+func ExtractSchemaErrorValue(errorMsg string, errorType SchemaErrorType) string {
+	return SchemaValidator.ExtractSchemaErrorValue(errorMsg, errorType)
+}
+
+// MonitorResourceSchemaHealth monitors schema health for a specific resource type
+func MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
+	SchemaValidator.MonitorResourceSchemaHealth(mgr, gvr, logger)
+}
+
+// DiagnoseResourceOnError identifies problematic resources when a schema error occurs
+func DiagnoseResourceOnError(gvr schema.GroupVersionResource, problemNamespace, problemName string, schemaErrorType SchemaErrorType, logger *zap.Logger) {
+	SchemaValidator.DiagnoseResourceOnError(gvr, problemNamespace, problemName, schemaErrorType, logger)
+}
