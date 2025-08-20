@@ -2,7 +2,7 @@ from copy import deepcopy
 from importlib.util import spec_from_file_location, module_from_spec
 from inspect import Signature, Parameter
 from logging import basicConfig, getLogger, WARNING
-from os import getenv
+from os import getenv, environ
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Union
@@ -17,7 +17,7 @@ from google.protobuf.descriptor_pb2 import (
     MethodDescriptorProto,
 )
 from google.protobuf.descriptor_pool import DescriptorPool
-from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
 from google.protobuf.message import Message
 from grpc import Channel, insecure_channel
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
@@ -43,6 +43,10 @@ METADATA = [
     ("rpc-encoding", "proto"),
 ]
 
+# Allow overriding the API server address via environment variable
+# This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
+ADDRESS = getenv("MACTL_ADDRESS", ADDRESS)
+
 
 METADATA_STUB = METADATA + [("ttl", "600")]
 
@@ -54,6 +58,7 @@ _LOG = getLogger(__name__)
 
 PWD = Path(__file__).parent.resolve()
 DEFAULT_DIR_PLUGINS = PWD / "plugins"
+CONFIG_FILE = PWD / "config.yaml"
 
 
 def camel_to_snake(name: str) -> str:
@@ -847,6 +852,18 @@ def main(channel: Channel):
     """
     Main function for mactl
     """
+    # Load config and set environment variables
+    if CONFIG_FILE.exists():
+        with open(CONFIG_FILE, 'r') as f:
+            config = yaml_safe_load(f) or {}
+        minio_config = config.get("minio", {})
+        if not getenv("AWS_ACCESS_KEY_ID"):
+            environ["AWS_ACCESS_KEY_ID"] = minio_config.get("access_key_id", "")
+        if not getenv("AWS_SECRET_ACCESS_KEY"):
+            environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
+        if not getenv("AWS_ENDPOINT_URL"):
+            environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
+
     user_command_crd, user_command_action, kwargs = handle_args()
 
     print("Starting mactl...")
@@ -872,8 +889,13 @@ def main(channel: Channel):
     func_action = getattr(crds[user_command_crd], user_command_action)
     result = func_action(**kwargs)
 
-    print("Result of action:", type(result))
-    print(result)
+    # Convert to JSON and pretty print
+    json_output = MessageToJson(
+        result, 
+        always_print_fields_with_no_presence=True, 
+        preserving_proto_field_name=True
+    )
+    print(json_output)
 
 
 if __name__ == "__main__":
