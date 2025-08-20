@@ -1,25 +1,11 @@
 # MaCTL Configuration File
 # This file contains default settings for the Michelangelo CLI tool
-
-# MinIO / S3 Configuration
-# These credentials match the sandbox cluster defaults
 minio:
   access_key_id: minioadmin
   secret_access_key: minioadmin
   endpoint_url: http://localhost:9091
 
-# Default settings for pipeline operations
-defaults:
-  # Default Docker image to use for pipeline runs
-  image: docker.io/library/examples:latest
-  
-  # Default namespace for operations
-  namespace: ma-dev-test
-
 # API Server Configuration
 api:
-  # Default API server address (matches sandbox)
   address: 127.0.0.1:14566
-  
-  # Timeout for API operations (seconds)
   timeout: 30
