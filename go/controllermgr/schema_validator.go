@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/tools/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -464,10 +465,13 @@ func (sv *schemaValidator) ValidateAllResourcesOfType(mgr manager.Manager, gvr s
 }
 
 // customWatchErrorHandler handles watch errors from the reflector with schema validation
-func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, mgr manager.Manager) {
+func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, mgr manager.Manager, gvr schema.GroupVersionResource) {
+	resourceName := fmt.Sprintf("%s.%s.%s", gvr.Resource, gvr.Version, gvr.Group)
+	
 	// Check if this is a schema compatibility error
 	if schemaErrorType := SchemaValidator.IsSchemaCompatibilityError(err); schemaErrorType != "" {
 		logger.Error("REFLECTOR SCHEMA ERROR DETECTED!",
+			zap.String("resource", resourceName),
 			zap.String("reflector_name", r.LastSyncResourceVersion()),
 			zap.String("schema_error_type", string(schemaErrorType)),
 			zap.Error(err))
@@ -475,55 +479,83 @@ func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, 
 		// Extract problematic value if possible
 		if problemValue := SchemaValidator.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
 			logger.Error("PROBLEMATIC VALUE IDENTIFIED IN REFLECTOR!",
+				zap.String("resource", resourceName),
 				zap.String("problematic_value", problemValue),
 				zap.String("schema_error_type", string(schemaErrorType)))
 		}
 
 		// Run diagnostic to identify the specific problematic resource
-		logger.Error("RUNNING DIAGNOSTIC TO IDENTIFY PROBLEMATIC PIPELINE...")
-		gvr := schema.GroupVersionResource{Group: "michelangelo.api", Version: "v2", Resource: "pipelines"}
+		logger.Error("RUNNING DIAGNOSTIC TO IDENTIFY PROBLEMATIC RESOURCE...",
+			zap.String("resource", resourceName))
 		SchemaValidator.runSchemaValidationDiagnostic(mgr, gvr, logger)
 
 	} else {
 		// For non-schema errors, log at debug level
-		logger.Debug("Non-schema error in reflector", zap.Error(err))
+		logger.Debug("Non-schema error in reflector", 
+			zap.String("resource", resourceName), zap.Error(err))
 	}
 
 	// Call default handler for standard error handling
 	cache.DefaultWatchErrorHandler(r, err)
 }
 
-// SetupPipelineWatchErrorHandler configures custom error handling for Pipeline informers
-func SetupPipelineWatchErrorHandler(mgr manager.Manager, logger *zap.Logger) error {
-	logger.Info("Starting SetupPipelineWatchErrorHandler function")
+// SetupWatchErrorHandler configures custom error handling for any resource type informers
+func SetupWatchErrorHandler(mgr manager.Manager, obj client.Object, gvr schema.GroupVersionResource, logger *zap.Logger) error {
+	resourceName := fmt.Sprintf("%s.%s.%s", gvr.Resource, gvr.Version, gvr.Group)
+	logger.Info("Starting watch error handler setup", zap.String("resource", resourceName))
 
 	// Get the cache from the manager
 	cacheInterface := mgr.GetCache()
 
-	// Get informer for Pipeline resources
+	// Get informer for the resource
 	ctx := context.Background()
-	pipelineInformer, err := cacheInterface.GetInformer(ctx, &v2pb.Pipeline{})
+	informer, err := cacheInterface.GetInformer(ctx, obj)
 	if err != nil {
-		logger.Error("Failed to get Pipeline informer for watch error handler setup", zap.Error(err))
+		logger.Error("Failed to get informer for watch error handler setup", 
+			zap.String("resource", resourceName), zap.Error(err))
 		return err
 	}
 
 	// Try to cast to SharedIndexInformer to access SetWatchErrorHandler
-	if sharedInformer, ok := pipelineInformer.(cache.SharedIndexInformer); ok {
+	if sharedInformer, ok := informer.(cache.SharedIndexInformer); ok {
 		// Set custom watch error handler
 		err = sharedInformer.SetWatchErrorHandler(func(r *cache.Reflector, err error) {
-			customWatchErrorHandler(r, err, logger, mgr)
+			customWatchErrorHandler(r, err, logger, mgr, gvr)
 		})
 		if err != nil {
-			logger.Error("Failed to set watch error handler for Pipeline informer", zap.Error(err))
+			logger.Error("Failed to set watch error handler for informer", 
+				zap.String("resource", resourceName), zap.Error(err))
 			return err
 		}
-		logger.Info("Successfully configured custom watch error handler for Pipeline resources")
+		logger.Info("Successfully configured custom watch error handler", 
+			zap.String("resource", resourceName))
 	} else {
-		logger.Warn("Pipeline informer does not support SetWatchErrorHandler - unable to configure custom error handling")
-		logger.Info("Watch error handler functionality will not be available for Pipeline resources")
+		logger.Warn("Informer does not support SetWatchErrorHandler - unable to configure custom error handling",
+			zap.String("resource", resourceName))
+		logger.Info("Watch error handler functionality will not be available", 
+			zap.String("resource", resourceName))
 	}
 
+	return nil
+}
+
+// SetupSchemaMonitoringForResource sets up both watch error handler and schema monitoring for a resource type
+// This is a convenience function that controllers can call to enable comprehensive schema monitoring
+func SetupSchemaMonitoringForResource(mgr manager.Manager, obj client.Object, gvr schema.GroupVersionResource, logger *zap.Logger) error {
+	resourceName := fmt.Sprintf("%s.%s.%s", gvr.Resource, gvr.Version, gvr.Group)
+	logger.Info("Setting up comprehensive schema monitoring", zap.String("resource", resourceName))
+	
+	// Set up watch error handler
+	if err := SetupWatchErrorHandler(mgr, obj, gvr, logger); err != nil {
+		logger.Error("Failed to setup watch error handler", 
+			zap.String("resource", resourceName), zap.Error(err))
+		// Don't return error to avoid blocking controller startup - just log the issue
+	}
+	
+	// Start schema health monitoring in background
+	go MonitorResourceSchemaHealth(mgr, gvr, logger)
+	
+	logger.Info("Schema monitoring setup completed", zap.String("resource", resourceName))
 	return nil
 }
 

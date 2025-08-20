@@ -640,4 +640,3 @@ func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMet
 
 	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
 }
-
