@@ -415,3 +415,62 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 
 	return stepInfo
 }
+
+// addTaskCacheEnv adds task cache environment variables following the same logic as internal Uber implementation
+func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+	envs[CacheEnabledVarName] = "false"
+	envs[CacheVersionVarName] = pipelineRun.Name
+	
+	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
+		return nil
+	}
+
+	// if resume from a previous run, enable cache
+	envs[CacheEnabledVarName] = "true"
+	resumePipelineRunID := pipelineRun.Spec.Resume.PipelineRun
+	taskCacheVersion := map[string]string{}
+
+	// Loop continues as long as resumePipelineRunID is not nil
+	for resumePipelineRunID != nil {
+		resumePipelineRun := &v2.PipelineRun{}
+		err := a.apiHandler.Get(ctx, resumePipelineRunID.Namespace, resumePipelineRunID.Name, &metav1.GetOptions{}, resumePipelineRun)
+		if err != nil {
+			logger.Error("failed to get resume pipeline run", zap.Error(err))
+			return fmt.Errorf("failed to get resume pipeline run: %v", err)
+		}
+		getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
+		if resumePipelineRun.Spec.Resume == nil || resumePipelineRun.Spec.Resume.PipelineRun == nil {
+			break
+		}
+		logger.Info("Task Cache Version from resume pipeline run", zap.Any("taskCacheVersion", taskCacheVersion), zap.String("resumePipelineRun", resumePipelineRun.Name))
+		resumePipelineRunID = resumePipelineRun.Spec.Resume.PipelineRun
+	}
+	logger.Info("Final Task Cache Version", zap.Any("taskCacheVersion", taskCacheVersion))
+	for taskName, cacheVersion := range taskCacheVersion {
+		envs[fmt.Sprintf("%s_%s_%s", CacheVersionVarName, CacheOperationGet, taskName)] = cacheVersion
+	}
+	// Finally, we disable cache for the specified task
+	resumeFromTasks := pipelineRun.Spec.Resume.ResumeFrom
+	if resumeFromTasks != nil && len(resumeFromTasks) > 0 {
+		for _, resumeFromTask := range resumeFromTasks {
+			envs[fmt.Sprintf("%s_%s", CacheEnabledVarName, resumeFromTask)] = "false"
+		}
+	}
+	return nil
+}
+
+// getTaskCacheVersionFromResumePipelineRun extracts task cache version information from a resume pipeline run
+func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
+	executeWorkflowStep := pipelinerunutils.GetStep(resumePipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep == nil {
+		return
+	}
+	for _, subStepInfo := range executeWorkflowStep.SubSteps {
+		if subStepInfo.StepCachedOutputs != nil && subStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED {
+			if _, ok := taskCacheVersion[subStepInfo.DisplayName]; !ok {
+				taskCacheVersion[subStepInfo.DisplayName] = resumePipelineRun.Name
+			}
+		}
+	}
+}

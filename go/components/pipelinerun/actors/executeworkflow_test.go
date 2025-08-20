@@ -269,5 +269,5 @@ func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.
 			"mock": blobStoreClient,
 		},
 	}
-	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore)
+	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, nil)
 }
