@@ -45,6 +45,6 @@ data:
     
     workflowClient:
       service: temporal-frontend
-      host: temporal.stg-myteksi.com:7233
+      host: localhost:7233
       transport: grpc
       domain: uniflow
