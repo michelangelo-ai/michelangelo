@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -183,19 +182,6 @@ func (handler *apiHandler) Get(
 			log.Info("Find object in ETCD")
 			return nil
 		}
-	}
-	// Check if this is a recoverable schema compatibility error
-	if errorType := isSchemaCompatibilityError(err); errorType != "" {
-		log.Error(err, "Schema compatibility error detected", 
-			"errorType", string(errorType),
-			"namespace", namespace, 
-			"name", name,
-			"kind", kind,
-			"suggestion", "Consider restarting controller manager to load latest schema definitions")
-		// Return a specific gRPC error that indicates schema incompatibility
-		return status.Errorf(codes.FailedPrecondition, 
-			"schema compatibility error (%s) for %s/%s: %v. Controller may need to be restarted to handle new schema changes", 
-			errorType, namespace, name, err)
 	}
 	// if the k8s client error is not "not found", return the error
 	if !apiErrors.IsNotFound(err) {
@@ -390,20 +376,6 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 	}
 
 	err = handler.k8sClient.List(ctx, list, parsedListOptions)
-	
-	// Check if this is a recoverable schema compatibility error in list operation
-	if errorType := isSchemaCompatibilityError(err); errorType != "" {
-		log.Error(err, "Schema compatibility error detected during list operation", 
-			"errorType", string(errorType),
-			"namespace", namespace, 
-			"kind", kind,
-			"suggestion", "Consider restarting controller manager to load latest schema definitions")
-		// Return a specific gRPC error that indicates schema incompatibility
-		return status.Errorf(codes.FailedPrecondition, 
-			"schema compatibility error (%s) during list operation for %s in namespace %s: %v. Controller may need to be restarted to handle new schema changes", 
-			errorType, kind, namespace, err)
-	}
-	
 	return surfaceGrpcError(err, "list", namespace, "")
 }
 
@@ -669,84 +641,3 @@ func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMet
 	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
 }
 
-// SchemaErrorType represents different types of schema compatibility errors
-type SchemaErrorType string
-
-const (
-	SchemaErrorUnknownEnum   SchemaErrorType = "unknown_enum"
-	SchemaErrorUnknownField  SchemaErrorType = "unknown_field"
-	SchemaErrorUnmarshal     SchemaErrorType = "unmarshal_failure"
-	SchemaErrorUnknownType   SchemaErrorType = "unknown_type"
-	SchemaErrorDecoding      SchemaErrorType = "decoding_failure"
-)
-
-// schemaErrorPatterns maps error patterns to their corresponding error types
-var schemaErrorPatterns = map[SchemaErrorType][]string{
-	SchemaErrorUnknownEnum: {
-		"unknown value",
-		"for enum",
-	},
-	SchemaErrorUnknownField: {
-		"unknown field",
-		"unrecognized field",
-		"proto: unknown field",
-	},
-	SchemaErrorUnmarshal: {
-		"failed to unmarshal",
-		"cannot unmarshal",
-		"unmarshal error",
-	},
-	SchemaErrorUnknownType: {
-		"no kind is registered",
-		"unknown type",
-	},
-	SchemaErrorDecoding: {
-		"strict decoding error",
-		"decoding failure",
-		"serialization error",
-	},
-}
-
-// isSchemaCompatibilityError checks if an error is due to schema compatibility issues
-// and returns the specific error type if found, or empty string if not a schema error.
-func isSchemaCompatibilityError(err error) SchemaErrorType {
-	if err == nil {
-		return ""
-	}
-	
-	errorStr := strings.ToLower(err.Error())
-	
-	// Check each error type pattern
-	for errorType, patterns := range schemaErrorPatterns {
-		allPatternsMatch := true
-		for _, pattern := range patterns {
-			if !strings.Contains(errorStr, strings.ToLower(pattern)) {
-				allPatternsMatch = false
-				break
-			}
-		}
-		// If all patterns for this error type match, return it
-		if allPatternsMatch {
-			return errorType
-		}
-		
-		// Also check if any single pattern matches (for backwards compatibility)
-		for _, pattern := range patterns {
-			if strings.Contains(errorStr, strings.ToLower(pattern)) {
-				return errorType
-			}
-		}
-	}
-	
-	// Check for specific Kubernetes API machinery errors that indicate schema issues
-	if apiErrors.IsInvalid(err) || apiErrors.IsBadRequest(err) {
-		// Additional check for schema-related invalid/bad request errors
-		if strings.Contains(errorStr, "field") || 
-		   strings.Contains(errorStr, "unknown") ||
-		   strings.Contains(errorStr, "marshal") {
-			return SchemaErrorUnknownField
-		}
-	}
-	
-	return ""
-}
