@@ -67,7 +67,6 @@ var schemaErrorPatterns = map[SchemaErrorType][]string{
 // SchemaValidatorInterface defines the interface for schema validation
 type SchemaValidatorInterface interface {
 	IsSchemaCompatibilityError(err error) SchemaErrorType
-	MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger)
 }
 
 // schemaValidator implements SchemaValidatorInterface
@@ -168,58 +167,6 @@ func (sv *schemaValidator) checkCacheSync(mgr manager.Manager, gvr schema.GroupV
 		// For runtime checks, use background context (no timeout)
 		ctx := context.Background()
 		return mgrCache.WaitForCacheSync(ctx)
-	}
-}
-
-// MonitorResourceSchemaHealth monitors schema health for a specific resource type
-func (sv *schemaValidator) MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
-	// Wait for controller to start
-	time.Sleep(2 * time.Second)
-
-	logger.Info("Starting schema compatibility monitoring for resource",
-		zap.String("resource", gvr.Resource),
-		zap.String("group", gvr.Group),
-		zap.String("version", gvr.Version))
-
-	// Perform initial sync check
-	if !sv.checkCacheSync(mgr, gvr, logger, "initial") {
-		logger.Warn("SCHEMA ERROR DETECTED: Resource informer failed to sync!",
-			zap.String("resource", gvr.Resource))
-		logger.Warn("This indicates schema compatibility issues - running diagnostic...")
-		sv.runSchemaValidationDiagnostic(mgr, gvr, logger)
-	} else {
-		logger.Info("Resource informer synced successfully - no schema errors",
-			zap.String("resource", gvr.Resource))
-		logger.Info("Diagnostic will not run since no errors were detected")
-	}
-
-	// Start continuous runtime monitoring to detect schema errors that occur after initialization
-	go sv.startRuntimeSchemaMonitoring(mgr, gvr, logger)
-}
-
-// startRuntimeSchemaMonitoring continuously monitors for schema errors during runtime
-func (sv *schemaValidator) startRuntimeSchemaMonitoring(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
-	// Monitor every 10 seconds for schema health
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			logger.Info("Starting continuous runtime schema monitoring",
-				zap.String("resource", gvr.Resource))
-
-			// Use the shared cache sync check function
-			if !sv.checkCacheSync(mgr, gvr, logger, "runtime") {
-				logger.Error("RUNTIME SCHEMA ERROR DETECTED!",
-					zap.String("resource", gvr.Resource))
-				logger.Error("A problematic resource was likely added during runtime operation")
-				logger.Error("Running diagnostic to identify the problematic resource...")
-
-				// Run diagnostic to identify the specific problematic resource
-				sv.runSchemaValidationDiagnostic(mgr, gvr, logger)
-			}
-		}
 	}
 }
 
@@ -406,14 +353,6 @@ func SetupSchemaMonitoringForResource(mgr manager.Manager, obj client.Object, gv
 		// Don't return error to avoid blocking controller startup - just log the issue
 	}
 
-	// Start schema health monitoring in background
-	go MonitorResourceSchemaHealth(mgr, gvr, logger)
-
 	logger.Info("Schema monitoring setup completed", zap.String("resource", resourceName))
 	return nil
-}
-
-// MonitorResourceSchemaHealth monitors schema health for a specific resource type
-func MonitorResourceSchemaHealth(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) {
-	SchemaValidator.MonitorResourceSchemaHealth(mgr, gvr, logger)
 }
