@@ -442,6 +442,24 @@ def _kube_create(path: Path):
     _exec("kubectl", "create", "-f", str(path))
 
 
+def _apply_jobs_rbac(cluster_name: str):
+    """Apply RBAC for Ray management in the jobs cluster.
+
+    This creates the ServiceAccount `ray-manager`, a namespaced Role with permissions on
+    Ray resources, and a RoleBinding to bind them, in the `default` namespace of the
+    jobs cluster.
+    """
+    rbac_path = _dir / "resources" / "rbac-ray.yaml"
+    _exec(
+        "kubectl",
+        "--context",
+        f"k3d-{cluster_name}",
+        "apply",
+        "-f",
+        str(rbac_path),
+    )
+
+
 def _kube_run(
     image: str,
     command: list[str],
@@ -554,6 +572,19 @@ def _create_jobs_cluster(cluster_name: str):
 
     _exec(*args)
 
+    # Add kuberay operator to the jobs cluster
+    _exec(
+        "kubectl",
+        "--context",
+        f"k3d-{cluster_name}",
+        "create",
+        "-k",
+        "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0",
+    )
+
+    # Apply RBAC for ray-manager in the jobs cluster
+    _apply_jobs_rbac(cluster_name)
+
     print(f"\nJobs cluster '{cluster_name}' created successfully.")
 
 
@@ -630,13 +661,14 @@ def _create_cluster_secrets(cluster_name: str):
     )
     if not ca_data:
         raise ValueError("certificate-authority-data not found in kubeconfig")
+    ca_data_decoded = base64.b64decode(ca_data).decode()
 
     # Create a secret for the certificate-authority-data
     ca_secret = {
         "apiVersion": "v1",
         "kind": "Secret",
         "metadata": {"name": f"cluster-{cluster_name}-ca-data", "namespace": "default"},
-        "data": {"cadata": ca_data},
+        "stringData": {"cadata": ca_data_decoded},
     }
 
     # Create a temporary file for the CA secret
@@ -644,27 +676,29 @@ def _create_cluster_secrets(cluster_name: str):
         yaml.dump(ca_secret, ca_file)
         ca_file.flush()
 
-        # Apply the CA secret to the sandbox cluster
-        _exec("kubectl", "apply", "-f", ca_file.name)
-
-    # Create a new token for the default service account
-    token_raw = (
-        subprocess.check_output(
-            [
-                "kubectl",
-                "--context",
-                f"k3d-{cluster_name}",
-                "-n",
-                "default",
-                "create",
-                "token",
-                "default",
-            ]
+        # Apply the CA secret to the sandbox cluster (explicit context)
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_kube_name}",
+            "apply",
+            "-f",
+            ca_file.name,
         )
-        .decode()
-        .strip()
-    )
-    token = base64.b64encode(token_raw.encode()).decode()
+
+    # Create a new token for the ray-manager service account in the jobs cluster
+    token_decoded = subprocess.check_output(
+        [
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "-n",
+            "default",
+            "create",
+            "token",
+            "ray-manager",
+        ]
+    ).decode().strip()
 
     # Create a secret for the user token
     token_secret = {
@@ -674,7 +708,7 @@ def _create_cluster_secrets(cluster_name: str):
             "name": f"cluster-{cluster_name}-client-token",
             "namespace": "default",
         },
-        "data": {"token": token},
+        "stringData": {"token": token_decoded},
     }
 
     # Create a temporary file for the token secret
@@ -682,8 +716,15 @@ def _create_cluster_secrets(cluster_name: str):
         yaml.dump(token_secret, token_file)
         token_file.flush()
 
-        # Apply the token secret to the sandbox cluster
-        _exec("kubectl", "apply", "-f", token_file.name)
+        # Apply the token secret to the sandbox cluster (explicit context)
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_kube_name}",
+            "apply",
+            "-f",
+            token_file.name,
+        )
 
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
