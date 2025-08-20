@@ -2,7 +2,6 @@ package controllermgr
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -265,41 +264,6 @@ func (sv *schemaValidator) ValidateResourceSchema(item *unstructured.Unstructure
 			}
 		}
 		return valid
-	}
-
-	// For other resource types, do basic validation
-	jsonBytes, err := json.Marshal(item.Object)
-	if err != nil {
-		logger.Error("Failed to marshal resource to JSON",
-			zap.String("name", name),
-			zap.String("namespace", namespace),
-			zap.String("gvk", gvk.String()),
-			zap.Error(err))
-		return false
-	}
-
-	// Try basic JSON unmarshal to detect schema issues
-	var testObj map[string]interface{}
-	if err := json.Unmarshal(jsonBytes, &testObj); err != nil {
-		// Analyze schema error type
-		if schemaErrorType := sv.IsSchemaCompatibilityError(err); schemaErrorType != "" {
-			logger.Error("PROBLEMATIC RESOURCE IDENTIFIED!",
-				zap.String("name", name),
-				zap.String("namespace", namespace),
-				zap.String("gvk", gvk.String()),
-				zap.String("schema_error_type", string(schemaErrorType)),
-				zap.Error(err))
-
-			return false
-		} else {
-			logger.Error("PROBLEMATIC RESOURCE IDENTIFIED!",
-				zap.String("name", name),
-				zap.String("namespace", namespace),
-				zap.String("gvk", gvk.String()),
-				zap.Error(err))
-			logger.Info("This resource contains validation errors")
-			return false
-		}
 	}
 
 	logger.Debug("Resource is valid",
