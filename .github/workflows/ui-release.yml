@@ -77,12 +77,32 @@ jobs:
             type=ref,prefix=pr-,event=pr
             type=raw,value=v${{ needs.check-version-change.outputs.new-version }},enable={{is_default_branch}}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.11.0
+          cache: 'yarn'
+          cache-dependency-path: javascript/yarn.lock
+
+      - name: Set up buf CLI
+        uses: bufbuild/buf-setup-action@v1
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build UI Assets
+        run: |
+          cd javascript
+          yarn setup
+          yarn workspace @michelangelo/app build
+        env:
+          WORKSPACE_ROOT: ${{ github.workspace }}
+
       - name: Build & Push UI Image
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/app.Dockerfile
+          file: docker/app-simple.Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64  # TODO: Add linux/arm64 after fixing network timeouts
+          platforms: linux/amd64,linux/arm64  # Now both platforms work!
           push: true
