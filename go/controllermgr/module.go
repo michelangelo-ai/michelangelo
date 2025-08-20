@@ -8,7 +8,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,7 +23,6 @@ var (
 		minio.Module,
 		fx.Provide(newConfig),
 		fx.Provide(create),
-		fx.Invoke(setupWatchErrorHandlers),
 		fx.Invoke(start),
 	)
 )
@@ -100,19 +98,6 @@ func start(lc fx.Lifecycle, mgr manager.Manager) error {
 	return nil
 }
 
-// setupWatchErrorHandlers sets up custom watch error handlers before the manager starts
-func setupWatchErrorHandlers(mgr manager.Manager, logger *zap.Logger) error {
-	logger.Info("Setting up watch error handlers for all resource types...")
-	
-	// Set up watch error handler for Pipeline resources
-	if err := SetupPipelineWatchErrorHandler(mgr, logger); err != nil {
-		logger.Error("Failed to setup Pipeline watch error handler", zap.Error(err))
-		// Don't return error to avoid blocking startup - just log the issue
-	}
-	
-	logger.Info("Watch error handlers setup completed")
-	return nil
-}
 
 // _start starts the Kubernetes controller manager with enhanced schema validation logging.
 func _start(mgr manager.Manager) {
