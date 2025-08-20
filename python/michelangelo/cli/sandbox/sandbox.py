@@ -26,6 +26,7 @@ _kube_ports = [
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
+    "5174:30011",  # Michelangelo UI
 ]
 
 # Workflow engine ports
@@ -52,6 +53,11 @@ def init_arguments(p: argparse.ArgumentParser):
         choices=["cadence", "temporal"],
         default="cadence",
         help="Choose workflow engine: cadence or temporal (default: cadence).",
+    )
+    create_p.add_argument(
+        "--ui-dev",
+        action="store_true",
+        help="Use local UI image for development (requires building michelangelo-ui:latest locally).",
     )
 
     _ = sp.add_parser(
@@ -143,12 +149,12 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _exec(*args)
 
     # Provision a ServiceAccount for fluent-bit DaemonSet execution.
-    _exec(
-        "kubectl",
-        "create",
-        "serviceaccount",
-        "fluent-bit",
-    )
+    # _exec(
+    #     "kubectl",
+    #     "create",
+    #     "serviceaccount",
+    #     "fluent-bit",
+    # )
 
     resources = [
         "boot.yaml",
@@ -158,8 +164,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
-        "fluent-bit.yaml",
-        "fluent-bit-config.yaml",
     ]
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
@@ -167,6 +171,10 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         resources.append("michelangelo-controllermgr.yaml")
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
+        if ns.ui_dev:
+            resources.append("michelangelo-ui-dev.yaml")
+        else:
+            resources.append("michelangelo-ui.yaml")
 
     for r in resources:
         _kube_create(_dir / "resources" / r)

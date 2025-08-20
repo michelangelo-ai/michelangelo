@@ -19,7 +19,7 @@
     "generate": "../tools/gen-grpc-client.sh --clients javascript",
     "lint": "eslint .",
     "prebuild": "yarn generate",
-    "setup": "yarn install && yarn generate",
+    "setup": "yarn install --frozen-lockfile && yarn generate",
     "typecheck": "tsc -b",
     "test": "yarn workspace @uber/michelangelo-core test"
   },

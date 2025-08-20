@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-ui
+  labels:
+    app: michelangelo-ui
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: michelangelo-ui
+  template:
+    metadata:
+      labels:
+        app: michelangelo-ui
+    spec:
+      containers:
+      - name: ui
+        image: ghcr.io/michelangelo-ai/ui:main
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: michelangelo-ui
+  labels:
+    app: michelangelo-ui
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 80
+    nodePort: 30011
+  selector:
+    app: michelangelo-ui
