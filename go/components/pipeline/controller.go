@@ -8,12 +8,10 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,38 +31,13 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 }
 
-// Reconcile is the main entrypoint for the controller with enhanced schema error logging.
+// Reconcile is the main entrypoint for the controller.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
-	logger.Info("Reconciling pipeline starts with enhanced schema validation")
-
+	logger.Info("Reconciling pipeline starts")
 	pipeline := &v2pb.Pipeline{}
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipeline); err != nil {
-		if client.IgnoreNotFound(err) == nil {
-			logger.Debug("Pipeline not found, ignoring")
-			return ctrl.Result{}, nil
-		}
-
-		// Enhanced schema compatibility error detection using centralized validator
-		if schemaErrorType := controllermgr.IsSchemaCompatibilityError(err); schemaErrorType != "" {
-			logger.Error("SCHEMA COMPATIBILITY ERROR detected during pipeline get operation!")
-			logger.Error("Error details:", zap.Error(err))
-			logger.Error("Schema error type:", zap.String("error_type", string(schemaErrorType)))
-			logger.Error("This indicates the Pipeline resource has schema compatibility issues")
-			logger.Error("Triggering diagnostic to identify problematic resources...")
-
-			// Trigger diagnostic when schema error is detected using centralized validator
-			gvr := schema.GroupVersionResource{
-				Group:    "michelangelo.api",
-				Version:  "v2", 
-				Resource: "pipelines",
-			}
-			go controllermgr.DiagnoseResourceOnError(gvr, req.Namespace, req.Name, schemaErrorType, logger)
-		} else {
-			logger.Error("Failed to get pipeline (non-schema error)", zap.Error(err))
-		}
-
-		return ctrl.Result{}, err
+		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 	originalPipeline := pipeline.DeepCopy()
 	state := pipeline.Status.State
@@ -103,35 +76,14 @@ func isTerminatedState(state v2pb.PipelineState) bool {
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
-// Register is used to register the controller with enhanced error logging.
+// Register is used to register the controller with the manager.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
 	}
 	r.Handler = handler
-
-	r.logger.Info("Registering Pipeline controller with SCHEMA-BASED DIAGNOSTIC")
-	r.logger.Info("Diagnostic will ONLY run when schema compatibility errors are detected")
-
-	// Use standard controller registration
-	err = ctrl.NewControllerManagedBy(mgr).
+	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Pipeline{}).
 		Complete(r)
-
-	if err != nil {
-		r.logger.Error("Pipeline controller registration failed", zap.Error(err))
-		return err
-	}
-
-	// Monitor for schema compatibility errors after successful registration using centralized validator
-	gvr := schema.GroupVersionResource{
-		Group:    "michelangelo.api",
-		Version:  "v2",
-		Resource: "pipelines",
-	}
-	go controllermgr.MonitorResourceSchemaHealth(mgr, gvr, r.logger)
-
-	r.logger.Info("Pipeline controller registered successfully")
-	return nil
 }
