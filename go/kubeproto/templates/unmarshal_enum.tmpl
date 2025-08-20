@@ -17,22 +17,7 @@ func (m *{{.EnumTypeName}}) UnmarshalJSON(b []byte) error {
 	// Check if the string exists in the map
 	val, exists := {{.EnumTypeName}}_value[s]
 	if !exists {
-		// Log details to help identify the problematic resource
-		fmt.Printf("SCHEMA VALIDATION ERROR: Unknown enum value '%s' for type {{.EnumTypeName}}\n", s)
-		fmt.Printf("Available values: %v\n", func() []string {
-			keys := make([]string, 0, len({{.EnumTypeName}}_value))
-			for k := range {{.EnumTypeName}}_value {
-				keys = append(keys, k)
-			}
-			return keys
-		}())
-		fmt.Printf("To identify the problematic resource, run:\n")
-		fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml | grep -C5 '%s'\n", s)
-		fmt.Printf("GUIDANCE: This indicates a schema compatibility issue\n")
-		fmt.Printf("- Update the enum value to a supported version\n")
-		fmt.Printf("- Or upgrade the controller to support this enum value\n")
-		
-		return fmt.Errorf("unknown value \"%s\" for enum {{.EnumTypeName}}", s)
+		return fmt.Errorf("invalid DataType: %s", s)
 	}
 
 	*m = {{.EnumTypeName}}(val)
