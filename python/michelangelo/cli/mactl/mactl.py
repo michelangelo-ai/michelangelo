@@ -325,89 +325,6 @@ class CRD:
         create_func.__signature__ = create_func_signature  # type: ignore[attr-defined]
         self.create = MethodType(create_func, self)
 
-    def generate_run(self, channel: Channel):
-        """
-        Generate run function for pipeline runs.
-        """
-        _LOG.info("Generate RUN method for %r / %r", self.name, self.full_name)
-
-        # Only allow specific resource types for run command
-        supported_run_resources = ["pipeline"]
-        if self.name not in supported_run_resources:
-            _LOG.error("'run %s' is not supported. Supported resources for run: %s", 
-                      self.name, ", ".join(supported_run_resources))
-            raise ValueError(f"'run {self.name}' is not supported. Supported resources for run: {', '.join(supported_run_resources)}")
-
-        if self.name == "pipeline":
-            pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
-            methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
-            method_name = "CreatePipelineRun"
-
-        _LOG.info("Run input/output of method %r", method_name)
-        try:
-            method_create = methods[method_name]
-        except KeyError:
-            _LOG.warning(
-                "Method %r not found in service %r",
-                method_name,
-                self.full_name,
-            )
-            _LOG.info("Method details: %r", methods)
-            return
-
-        _LOG.info("Run method input type: %r", method_create.input_type)
-        _LOG.info("Run method output type: %r", method_create.output_type)
-        input_class = get_message_class_by_name(method_pool, method_create.input_type[1:])
-        output_class = get_message_class_by_name(
-            method_pool, method_create.output_type[1:]
-        )
-        _LOG.info("Retrieved method input class: %r", input_class)
-        _LOG.info("Retrieved method output class: %r", output_class)
-
-        run_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in ["namespace", "name"]]
-        )
-
-        @bind_signature(run_func_signature)
-        def run_func(bound_args: Signature) -> Message:
-            _LOG.info("Start run_func for %r", self.full_name)
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
-            _self: CRD = bound_args.arguments["self"]
-
-            run_kwargs = {
-                "namespace": bound_args.arguments["namespace"],
-                "name": bound_args.arguments["name"]
-            }
-            
-            pipeline_run_dict = _self.func_crd_metadata_converter(
-                run_kwargs, input_class, None
-            )
-            
-            request_input = input_class()
-            from google.protobuf.json_format import ParseDict
-            ParseDict(pipeline_run_dict, request_input)
-            if _self.name == "pipeline":
-                service_name = "michelangelo.api.v2.PipelineRunService"
-            else:
-                service_name = _self.full_name
-            method_fullname = f"/{service_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-            stub_method = channel.unary_unary(
-                method_fullname,
-                request_serializer=input_class.SerializeToString,
-                response_deserializer=output_class.FromString,
-            )
-            response = stub_method(
-                request_input,
-                metadata=METADATA_STUB,
-                timeout=30,
-            )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
-            return response
-
-        run_func.__signature__ = run_func_signature  # type: ignore[attr-defined]
-        self.run = MethodType(run_func, self)
 
     def generate_list(self, channel: Channel):
         """
@@ -834,8 +751,7 @@ def handle_args() -> tuple[str, str, dict[str, str]]:
     if user_command_action not in ["apply", "create", "run"]:
         user_command_crd = args[1]
     elif user_command_action == "run":
-        # For run command: mactl run pipeline --namespace=<namespace> --name=<name>
-        user_command_crd = args[1]  # This should be "pipeline"
+        user_command_crd = args[1]  # e.g., "pipeline" from "run pipeline"
     else:
         _LOG.info("Action is 'apply', read user_command_crd from yaml")
         user_command_crd = camel_to_snake(get_crd_name_from_yaml(kwargs["file"]))
@@ -863,6 +779,28 @@ def main(channel: Channel):
             environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
         if not getenv("AWS_ENDPOINT_URL"):
             environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
+
+    # Check for pipeline-specific run command first
+    args, kwargs = parse_args()
+    if len(args) >= 2 and args[0] == "run" and args[1] == "pipeline":
+        print("Starting mactl...")
+        # Handle pipeline run command via plugin
+        sys.path.insert(0, str(PWD))
+        from plugins.pipeline.main import handle_pipeline_command
+        # Reorder args for the plugin: ["pipeline", "run"]
+        plugin_args = [args[1], args[0]]  # ["pipeline", "run"]
+        result = handle_pipeline_command(plugin_args, kwargs, channel)
+        if result:
+            json_output = MessageToJson(
+                result, 
+                always_print_fields_with_no_presence=True, 
+                preserving_proto_field_name=True
+            )
+            print(json_output)
+            return
+        else:
+            print("Failed to handle pipeline command")
+            return
 
     user_command_crd, user_command_action, kwargs = handle_args()
 
