@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 )
 
 type Reconciler struct {
@@ -78,6 +79,14 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	}
 	r.Handler = handler
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(controller.Options{
+			MaxConcurrentReconciles: 0,
+			Reconciler:              nil,
+			RateLimiter:             nil,
+			LogConstructor:          nil,
+			CacheSyncTimeout:        0,
+			RecoverPanic:            false,
+		}).
 		For(&v2pb.PipelineRun{}).
 		Complete(r)
 }
