@@ -1,21 +1,35 @@
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: michelangelo-worker
   labels:
     app: michelangelo-worker
 spec:
-  containers:
-    - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: michelangelo-worker
+  template:
+    metadata:
+      annotations:
+        iam.amazonaws.com/role: arn:aws:iam::095116963143:role/chimera/michelangelo_role
+      labels:
+        app: michelangelo-worker
+    spec:
+      containers:
+        - name: app
+          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:grab-poc
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: worker-config-volume
+              mountPath: /config
+      volumes:
         - name: worker-config-volume
-          mountPath: /config
-  volumes:
-    - name: worker-config-volume
-      configMap:
-        name: michelangelo-worker-config
+          configMap:
+            name: michelangelo-worker-config
+      nodeSelector:
+        node.kubernetes.io/scaling-group: nodes
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -28,6 +42,11 @@ data:
     worker:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
+      http:
+        baseUrl: https://compute.cauldron.myteksi.net
+        workspace: cauldron-test
+        environment: dev
+        sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
 
     logging:
       level: info
@@ -36,18 +55,17 @@ data:
 
     workflow-engine:
       # for temporal
-        host: temporaltest-frontend:7233
+        host: temporal.stg-myteksi.com:7233
         transport: grpc
         # for temporal
         provider: temporal
         workers:
           - domain: default
-            taskList: default
+            taskList: cauldron-test
         client:
-          domain: default
+          domain: uniflow
 
     minio:
-      awsRegion: us-east-1
-      awsAccessKeyId: minioadmin
-      awsSecretAccessKey: minioadmin
-      awsEndpointUrl: minio:9091
+      awsRegion: ap-southeast-1
+      awsEndpointUrl: s3.amazonaws.com
+      useIam: true
