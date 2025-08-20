@@ -219,8 +219,6 @@ func (sv *schemaValidator) startRuntimeSchemaMonitoring(mgr manager.Manager, gvr
 
 				// Run diagnostic to identify the specific problematic resource
 				sv.runSchemaValidationDiagnostic(mgr, gvr, logger)
-
-				// Continue monitoring - the error might be fixed
 			}
 		}
 	}
@@ -292,20 +290,6 @@ func (sv *schemaValidator) ValidateResourceSchema(item *unstructured.Unstructure
 				zap.String("schema_error_type", string(schemaErrorType)),
 				zap.Error(err))
 
-			logger.Info("This resource contains schema compatibility issues")
-			logger.Info("To fix, run:",
-				zap.String("command", fmt.Sprintf("kubectl edit %s %s -n %s",
-					strings.ToLower(gvk.Kind), name, namespace)))
-
-			// Extract and report problematic value if possible
-			if problemValue := sv.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
-				logger.Error("Found problematic value in resource",
-					zap.String("name", name),
-					zap.String("namespace", namespace),
-					zap.String("schema_error_type", string(schemaErrorType)),
-					zap.String("problematic_value", problemValue))
-			}
-
 			return false
 		} else {
 			logger.Error("PROBLEMATIC RESOURCE IDENTIFIED!",
@@ -375,72 +359,6 @@ func (sv *schemaValidator) runSchemaValidationDiagnostic(mgr manager.Manager, gv
 	}
 }
 
-// DiagnoseResourceOnError identifies problematic resources when a schema error occurs
-func (sv *schemaValidator) DiagnoseResourceOnError(gvr schema.GroupVersionResource, problemNamespace, problemName string, schemaErrorType SchemaErrorType, logger *zap.Logger) {
-	logger.Info("Starting on-demand diagnostic for schema error...",
-		zap.String("triggered_by", fmt.Sprintf("%s/%s", problemNamespace, problemName)),
-		zap.String("resource", gvr.Resource),
-		zap.String("schema_error_type", string(schemaErrorType)))
-
-	logger.Info("For immediate identification, run:")
-	switch schemaErrorType {
-	case SchemaErrorUnknownEnum:
-		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml | grep -E '.*_TYPE_.*'", gvr.Resource, problemName, problemNamespace))
-	case SchemaErrorUnknownField:
-		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml", gvr.Resource, problemName, problemNamespace))
-	default:
-		logger.Info(fmt.Sprintf("   kubectl get %s %s -n %s -o yaml", gvr.Resource, problemName, problemNamespace))
-	}
-
-}
-
-// ValidateAllResourcesOfType validates all resources of a given type and returns (total, valid) counts
-func (sv *schemaValidator) ValidateAllResourcesOfType(mgr manager.Manager, gvr schema.GroupVersionResource, logger *zap.Logger) (int, int) {
-	logger.Info("Validating all resources of type",
-		zap.String("resource", gvr.Resource),
-		zap.String("group", gvr.Group),
-		zap.String("version", gvr.Version))
-
-	// Get dynamic client
-	config := mgr.GetConfig()
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		logger.Error("Failed to create dynamic client for validation", zap.Error(err))
-		return 0, 0
-	}
-
-	// Try to list resources
-	result, err := dynamicClient.Resource(gvr).List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		logger.Error("Failed to list resources for validation",
-			zap.String("resource", gvr.Resource),
-			zap.Error(err))
-		return 0, 0
-	}
-
-	total := len(result.Items)
-	valid := 0
-
-	logger.Info("Starting validation of resources",
-		zap.String("resource", gvr.Resource),
-		zap.Int("total_count", total))
-
-	// Validate each resource
-	for _, item := range result.Items {
-		if sv.ValidateResourceSchema(&item, logger) {
-			valid++
-		}
-	}
-
-	logger.Info("Validation completed",
-		zap.String("resource", gvr.Resource),
-		zap.Int("total", total),
-		zap.Int("valid", valid),
-		zap.Int("invalid", total-valid))
-
-	return total, valid
-}
-
 // customWatchErrorHandler handles watch errors from the reflector with schema validation
 func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, mgr manager.Manager, gvr schema.GroupVersionResource) {
 	resourceName := fmt.Sprintf("%s.%s.%s", gvr.Resource, gvr.Version, gvr.Group)
@@ -452,14 +370,6 @@ func customWatchErrorHandler(r *cache.Reflector, err error, logger *zap.Logger, 
 			zap.String("reflector_name", r.LastSyncResourceVersion()),
 			zap.String("schema_error_type", string(schemaErrorType)),
 			zap.Error(err))
-
-		// Extract problematic value if possible
-		if problemValue := SchemaValidator.ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
-			logger.Error("PROBLEMATIC VALUE IDENTIFIED IN REFLECTOR!",
-				zap.String("resource", resourceName),
-				zap.String("problematic_value", problemValue),
-				zap.String("schema_error_type", string(schemaErrorType)))
-		}
 
 		// Run diagnostic to identify the specific problematic resource
 		logger.Error("RUNNING DIAGNOSTIC TO IDENTIFY PROBLEMATIC RESOURCE...",
