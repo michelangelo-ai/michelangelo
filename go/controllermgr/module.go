@@ -98,34 +98,16 @@ func start(lc fx.Lifecycle, mgr manager.Manager) error {
 	return nil
 }
 
-
-// _start starts the Kubernetes controller manager with enhanced schema validation logging.
+// _start starts the Kubernetes controller manager and handles runtime errors.
+// If the manager fails to start, it logs the error and exits the application.
+//
+// Params:
+//
+//	mgr (manager.Manager): Kubernetes controller manager to be started.
 func _start(mgr manager.Manager) {
-	fmt.Printf("Starting controller manager with enhanced schema validation...\n")
-
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		fmt.Printf("Controller Manager execution failed: %v\n", err)
-
-		// Enhanced logging for schema compatibility errors
-		if schemaErrorType := IsSchemaCompatibilityError(err); schemaErrorType != "" {
-			fmt.Printf("SCHEMA COMPATIBILITY ERROR DETECTED!\n")
-			fmt.Printf("Error Type: %s\n", schemaErrorType)
-			fmt.Printf("Error Details: %v\n", err)
-			fmt.Printf("This indicates resources with schema compatibility issues exist in the cluster\n")
-			fmt.Printf("To identify the problematic resource, run:\n")
-
-			if problemValue := ExtractSchemaErrorValue(err.Error(), schemaErrorType); problemValue != "" {
-				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml | grep -C5 '%s'\n", problemValue)
-			} else {
-				fmt.Printf("   kubectl get pipelines.v2.michelangelo.api -A -o yaml\n")
-			}
-
-			// Provide guidance based on error type
-			ProvideStartupSchemaGuidance(schemaErrorType)
-		} else {
-			fmt.Printf("Non-schema error detected\n")
-		}
-
+		// TODO: handle error properly. Exit app? Propagate to the parent thread?
+		fmt.Printf("ERR: Controller Manager execution failed: %v", err)
 		os.Exit(1)
 	}
 }
