@@ -9,12 +9,14 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"go.uber.org/zap"
 )
 
@@ -26,6 +28,9 @@ const (
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"
+	CacheEnabledVarName        = "CACHE_ENABLED"
+	CacheVersionVarName        = "CACHE_VERSION"
+	CacheOperationGet          = "GET"
 )
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
@@ -46,13 +51,15 @@ type ExecuteWorkflowActor struct {
 	logger         *zap.Logger
 	workflowClient clientInterfaces.WorkflowClient
 	blobStore      *blobstore.BlobStore
+	apiHandler     api.Handler
 }
 
-func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore) *ExecuteWorkflowActor {
+func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),
 		workflowClient: workflowClient,
 		blobStore:      blobStore,
+		apiHandler:     apiHandler,
 	}
 }
 
@@ -135,7 +142,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {
 
-	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
+	args, kwArgs, envs, err := a.getWorkflowInputs(ctx, pipelineRun)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get workflow inputs: %v", err)
 	}
@@ -168,7 +175,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 	return workflowExecution, nil
 }
 
-func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{}, map[string]interface{}, error) {
+func (a *ExecuteWorkflowActor) getWorkflowInputs(ctx context.Context, pipelineRun *v2.PipelineRun) ([]interface{}, []interface{}, map[string]interface{}, error) {
 
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
@@ -196,6 +203,14 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
 	envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
 	addTaskImageToEnv(pipelineRun, envs)
+
+	// Add task cache environment variables following the same logic as internal Uber implementation
+	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
+	if err != nil {
+		a.logger.Error("failed to add task cache env", zap.Error(err))
+		return nil, nil, nil, fmt.Errorf("failed to add task cache env: %v", err)
+	}
+
 	return args, kwArgs, envs, nil
 }
 
