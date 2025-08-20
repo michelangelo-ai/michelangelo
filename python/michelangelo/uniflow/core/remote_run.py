@@ -1,3 +1,4 @@
+import argparse
 import base64
 import json
 import logging
@@ -8,15 +9,16 @@ import string
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from michelangelo.uniflow.core.build import build
-from michelangelo.uniflow.core.codec import encoder
-from michelangelo.uniflow.core.utils import dot_path
 from typing import Callable, Optional
+
+from michelangelo.uniflow.core.codec import encoder
+from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 
 DEFAULT_EXECUTION_TIMEOUT_SECONDS = (
-        60 * 60 * 24 * 365 * 10
+    60 * 60 * 24 * 365 * 10
 )  # 3650 days, practically no timeout
 
 _RUN_ID_SEARCH_RE = re.compile(
@@ -167,10 +169,6 @@ class RemoteRunTemporal:
     fn: Callable
     image: str
     storage_url: str
-    iam_role: str
-    architecture: str
-    user_token: str
-    pipeline: str
     metadata_storage_url: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
@@ -199,10 +197,6 @@ class RemoteRunTemporal:
         environ = self.environ.copy()
         environ["UF_TASK_IMAGE"] = self.image
         environ["UF_STORAGE_URL"] = self.storage_url
-        environ["UF_TASK_IAM_ROLE"] = self.iam_role
-        environ["UF_TASK_ARCHITECTURE"] = self.architecture
-        environ["UF_TASK_WORKSPACE_TOKEN"] = self.user_token
-        environ["UF_TASK_PIPELINE"] = self.pipeline
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 
@@ -244,17 +238,15 @@ class RemoteRunTemporal:
         # Set required parameters
         cmd += [
             "--namespace",
-            os.environ.get("UFC_TEMPORAL_NAMESPACE", "uniflow"),
+            os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
             "--task-queue",
-            os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "cauldron-test"),
+            os.environ.get("UFC_TEMPORAL_TASK_QUEUE", "default"),
             "--type",
             os.environ.get("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"),
             "--execution-timeout",
             f"{self.execution_timeout_seconds}s",  # Append "s" to indicate seconds unit
             "--workflow-id",
             workflow_id,
-            "--address",
-            "temporal.stg-myteksi.com:7233",
         ]
 
         # Add optional parameters if set
@@ -312,157 +304,3 @@ class RemoteRunTemporal:
         print(
             "Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary"
         )
-
-
-@dataclass
-class RemoteRunPipeline:
-    fn: Callable
-    pipeline_name: str
-    iam_role: str
-    user_token: str
-    architecture: str
-    pipeline: str
-    image: str
-    storage_url: str
-    namespace: Optional[str] = "default"
-    kubeconfig: Optional[str] = None
-    args: tuple = field(default_factory=tuple)
-    kwargs: dict = field(default_factory=dict)
-    yes: bool = False
-
-    def _generate_pipeline_run_yaml(self) -> str:
-        import yaml as yaml_lib
-
-        # Generate tarball content same as temporal workflow
-        tarball = build(self.fn).to_tarball_bytes()
-        log.info("tarball: total bytes: %d", len(tarball))
-
-        tarball = base64.standard_b64encode(tarball)
-        log.info("tarball_b64: total bytes: %d", len(tarball))
-
-        tarball = tarball.decode("utf-8")
-
-        # Generate a short, RFC 1123 compliant run name
-        rand_str = "".join(random.choices(string.ascii_lowercase + string.digits, k=5))
-
-        # Read the pipeline.yaml from geo_ray_eta_transformer folder
-        fn_dir = os.path.dirname(os.path.abspath(sys.modules[self.fn.__module__].__file__))
-        pipeline_path = os.path.join(fn_dir, "pipeline.yaml")
-
-        log.info("Using pipeline.yaml from: %s", pipeline_path)
-
-        if not os.path.exists(pipeline_path):
-            raise RuntimeError(f"pipeline.yaml not found at {pipeline_path}")
-
-        with open(pipeline_path, 'r') as f:
-            pipeline_yaml = yaml_lib.safe_load(f)
-
-        log.info("Loaded pipeline: %s from namespace: %s",
-                 pipeline_yaml['metadata']['name'],
-                 pipeline_yaml['metadata']['namespace'])
-
-        run_name = f"run-{pipeline_yaml['metadata']['name']}-{rand_str}"
-
-        # Log arguments and kwargs like RemoteRunTemporal does
-        for i, a in enumerate(self.args):
-            log.info("arg: %d: %r", i, a)
-
-        for k, v in self.kwargs.items():
-            log.info("arg: %s: %r", k, v)
-
-        # Create environment variables similar to RemoteRunTemporal
-        environ = {
-            'UF_TASK_IAM_ROLE': self.iam_role,
-            'UF_TASK_ARCHITECTURE': self.architecture,
-            'UF_TASK_WORKSPACE_TOKEN': self.user_token,
-            'UF_TASK_PIPELINE': self.pipeline,
-        }
-
-        for k, v in environ.items():
-            log.info("environ: %s: %s", k, v)
-
-        input_ = {
-            'tarball': tarball,
-            'workflow_name': "",
-            'func_name': "",
-            'args': self.args,
-            'kwargs': list(self.kwargs.items()),
-            'environ': environ
-        }
-
-        input_data = input_
-        pipelinerun_yaml = {
-            'apiVersion': 'michelangelo.api/v2',
-            'kind': 'PipelineRun',
-            'metadata': {
-                'name': run_name,
-                'namespace': pipeline_yaml['metadata']['namespace']  # Use same namespace as pipeline
-            },
-            'spec': {
-                'pipeline': {
-                    'name': pipeline_yaml['metadata']['name'],
-                    'namespace': pipeline_yaml['metadata']['namespace']
-                },
-                'image': self.image,
-                'storageUrl': self.storage_url,
-                'tarContent': tarball,  # Add tarball content (protobuf field 14)
-                'input': self.kwargs,  # Structured input data (protobuf field 4)
-                'envs': environ  # Environment variables (protobuf field 15)
-            }
-        }
-
-        # Convert to YAML string
-        yaml_content = yaml_lib.dump(pipelinerun_yaml, default_flow_style=False)
-        return yaml_content
-
-    def run(self):
-        yaml_content = self._generate_pipeline_run_yaml()
-
-        log.info("Applying PipelineRun YAML via kubectl")
-        log.info("Generated YAML content:\n%s", yaml_content)
-
-        cmd = ["kubectl", "apply", "-f", "-"]
-
-        if self.kubeconfig:
-            cmd += ["--kubeconfig", self.kubeconfig]
-
-        log.info("kubectl command: %r", cmd)
-
-        if not self.yes:
-            print()
-            print("PipelineRun YAML to be applied:")
-            print("-" * 50)
-            print(yaml_content)
-            print("-" * 50)
-            a = None
-            while a not in ("y", "n", ""):
-                a = input("Apply this PipelineRun to Kubernetes? [Y/n]").lower()
-            if a == "n":
-                raise RuntimeError("User interrupted the Pipeline Run submission")
-
-        try:
-            process = subprocess.Popen(
-                cmd,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True
-            )
-            stdout, stderr = process.communicate(input=yaml_content)
-
-            if process.returncode != 0:
-                log.error("kubectl apply failed with return code %d", process.returncode)
-                log.error("stderr: %s", stderr)
-                raise RuntimeError(f"kubectl apply failed: {stderr}")
-
-        except KeyboardInterrupt:
-            sys.exit(130)
-
-        print("kubectl apply output:")
-        print(stdout)
-
-        if stderr:
-            print("kubectl apply warnings/errors:")
-            print(stderr)
-
-        log.info("PipelineRun successfully applied to Kubernetes cluster")

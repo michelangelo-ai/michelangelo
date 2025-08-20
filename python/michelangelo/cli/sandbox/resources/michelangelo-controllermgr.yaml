@@ -1,32 +1,21 @@
 ---
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
   name: michelangelo-controllermgr
   labels:
     app: michelangelo-controllermgr
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: michelangelo-controllermgr
-  template:
-    metadata:
-      labels:
-        app: michelangelo-controllermgr
-    spec:
-      containers:
-        - name: app
-          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/controllermgr:main
-          volumeMounts:
-            - name: config-volume
-              mountPath: /config
-      volumes:
+  containers:
+    - name: app
+      image: ghcr.io/michelangelo-ai/controllermgr:main
+      volumeMounts:
         - name: config-volume
-          configMap:
-            name: michelangelo-controllermgr-config
-      nodeSelector:
-        node.kubernetes.io/scaling-group: nodes
+          mountPath: /config
+  volumes:
+    - name: config-volume
+      configMap:
+        name: michelangelo-controllermgr-config
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -49,8 +38,10 @@ data:
         k8sBurst: 600
 
     minio:
-      awsRegion: ap-southeast-1
-      awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
+      awsRegion: us-east-1
+      awsAccessKeyId: minioadmin
+      awsSecretAccessKey: minioadmin
+      awsEndpointUrl: minio:9091
     
     workflowClient:
       service: temporal-frontend
