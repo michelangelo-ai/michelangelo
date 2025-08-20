@@ -6,6 +6,12 @@ from grpc import Channel
 
 from mactl import CRD
 
+from inspect import Signature, Parameter
+from types import MethodType
+from google.protobuf.message import Message
+from google.protobuf.json_format import ParseDict
+from mactl import get_methods_from_service, get_message_class_by_name, bind_signature, METADATA_STUB
+
 
 _LOG = getLogger(__name__)
 
@@ -16,8 +22,64 @@ def generate_run(crd: CRD, channel: Channel):
     """
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
     
-    crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
-    crd.generate_create(channel)
+    pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
+    methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
+    method_name = "CreatePipelineRun"
+    
+    _LOG.info("Run input/output of method %r", method_name)
+    try:
+        method_create = methods[method_name]
+    except KeyError:
+        _LOG.warning("Method %r not found in service %r", method_name, pipeline_run_service)
+        return
+    
+    _LOG.info("Run method input type: %r", method_create.input_type)
+    _LOG.info("Run method output type: %r", method_create.output_type)
+    input_class = get_message_class_by_name(method_pool, method_create.input_type[1:])
+    output_class = get_message_class_by_name(method_pool, method_create.output_type[1:])
+    
+    run_func_signature = Signature(
+        [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+        + [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in ["namespace", "name"]]
+    )
+    
+    @bind_signature(run_func_signature)
+    def run_func(bound_args: Signature) -> Message:
+        _LOG.info("Start run_func for pipeline")
+        _LOG.info("Bound arguments: %r", bound_args.arguments)
+        _self: CRD = bound_args.arguments["self"]
+        
+        run_kwargs = {
+            "namespace": bound_args.arguments["namespace"],
+            "name": bound_args.arguments["name"]
+        }
+        
+        pipeline_run_dict = _self.func_crd_metadata_converter(
+            run_kwargs, input_class, None
+        )
+        
+        request_input = input_class()
+        ParseDict(pipeline_run_dict, request_input)
+        
+        service_name = "michelangelo.api.v2.PipelineRunService"
+        method_fullname = f"/{service_name}/{method_name}"
+        _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+        
+        stub_method = channel.unary_unary(
+            method_fullname,
+            request_serializer=input_class.SerializeToString,
+            response_deserializer=output_class.FromString,
+        )
+        response = stub_method(
+            request_input,
+            metadata=METADATA_STUB,
+            timeout=30,
+        )
+        _LOG.info("Stub method completed (%r): %r", type(response), response)
+        return response
+    
+    run_func.__signature__ = run_func_signature  # type: ignore[attr-defined]
+    crd.run = MethodType(run_func, crd)
 
 
 def convert_crd_metadata_pipeline_run(
@@ -49,7 +111,6 @@ def convert_crd_metadata_pipeline_run(
     _LOG.info("Generating pipeline run: %s for pipeline: %s in namespace: %s", 
               run_name, pipeline_name, namespace)
     
-    # Create pipeline run object
     pipeline_run = generate_pipeline_run_object(
         run_name=run_name,
         pipeline_name=pipeline_name,
