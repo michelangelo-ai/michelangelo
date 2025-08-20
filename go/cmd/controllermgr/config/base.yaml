@@ -1,15 +1,15 @@
 controllermgr:
-  metricsBindAddress: localhost:8082
-  healthProbeBindAddress: localhost:8083
+  metricsBindAddress: ${METRICS_ADDRESS::8080}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
   port: 9443
 
 workflowClient:
-  service: temporal-frontend
-  host: temporal.stg-myteksi.com:7233
+  service: cadence-frontend
+  host: michelangelo-worker:7833
   transport: grpc
-  domain: uniflow
+  domain: default
     
 k8s:
   qps: 300
@@ -21,8 +21,3 @@ controllers:
   rayCluster:
     k8sQps: 300
     k8sBurst: 600
-
-minio:
-  awsRegion: ap-southeast-1
-  awsEndpointUrl: s3.amazonaws.com
-  useEnvAws: true
