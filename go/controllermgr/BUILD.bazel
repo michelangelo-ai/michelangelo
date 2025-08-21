@@ -12,7 +12,9 @@ go_library(
     deps = [
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/minio:go_default_library",
+        "//go/kubeproto/metrics:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
