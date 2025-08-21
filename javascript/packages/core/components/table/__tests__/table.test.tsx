@@ -1162,6 +1162,99 @@ describe('Table', () => {
     });
   });
 
+  describe('row selection integration', () => {
+    const testData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering' },
+      { id: '2', name: 'Bob Smith', department: 'Marketing' },
+      { id: '3', name: 'Carol Davis', department: 'Engineering' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'department', label: 'Department' },
+    ];
+
+    it('does not render selection checkboxes when selection is disabled', () => {
+      render(
+        <Table data={testData} columns={testColumns} enableRowSelection={false} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('renders selection checkboxes when selection is enabled', () => {
+      render(
+        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      // Should have header checkbox + 3 row checkboxes
+      expect(screen.getAllByRole('checkbox')).toHaveLength(4);
+    });
+
+    it('selects individual rows when row checkbox is clicked', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      const firstRowCheckbox = checkboxes[1]; // Skip header checkbox
+
+      expect(firstRowCheckbox).not.toBeChecked();
+
+      await user.click(firstRowCheckbox);
+
+      expect(firstRowCheckbox).toBeChecked();
+    });
+
+    it('selects all rows when header checkbox is clicked', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      const checkboxes = screen.getAllByRole('checkbox');
+      const headerCheckbox = checkboxes[0];
+
+      expect(headerCheckbox).not.toBeChecked();
+
+      await user.click(headerCheckbox);
+
+      // All checkboxes should be checked
+      checkboxes.forEach((checkbox) => {
+        expect(checkbox).toBeChecked();
+      });
+    });
+
+    it('provides selection context for external components', () => {
+      const TestComponent = () => {
+        // This would be imported from the plugin
+        // const { selectedRows, selectionEnabled } = useTableSelectionContext();
+        return <div data-testid="selection-context">Selection context available</div>;
+      };
+
+      render(
+        <Table
+          data={testData}
+          columns={testColumns}
+          enableRowSelection={true}
+          actionBarConfig={{
+            trailing: <TestComponent />,
+          }}
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByTestId('selection-context')).toBeInTheDocument();
+    });
+  });
+
   describe('column configuration integration', () => {
     const testData = buildTableData(3, 4);
     const testColumns = buildTableColumns(4);

@@ -15,6 +15,7 @@ import { TableErrorState } from './components/table-error-state/table-error-stat
 import { TableHeader } from './components/table-header/table-header';
 import { TableNoResultsState } from './components/table-no-results-state/table-no-results-state';
 import { useColumnTransformer } from './hooks/use-column-transformer';
+import { TableSelectionProvider } from './plugins/selection/table-selection-provider';
 import { TableContainer } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
@@ -41,12 +42,14 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     ...(state.setSorting ? { onSortingChange: state.setSorting } : {}),
     ...(state.setColumnOrder ? { onColumnOrderChange: state.setColumnOrder } : {}),
     ...(state.setColumnVisibility ? { onColumnVisibilityChange: state.setColumnVisibility } : {}),
+    ...(state.setRowSelection ? { onRowSelectionChange: state.setRowSelection } : {}),
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     ...(!props.disableSorting
       ? { getSortedRowModel: getSortedRowModel() }
       : { enableSorting: false }),
     ...(!props.disablePagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
+    enableRowSelection: props.enableRowSelection,
     globalFilterFn: 'includesString',
   });
 
@@ -63,57 +66,73 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
   const transformedColumns = transformColumns(table.getAllLeafColumns());
 
   return (
-    <TableContainer>
-      <TableActionBar
-        globalFilter={table.getState().globalFilter as string}
-        setGlobalFilter={table.setGlobalFilter}
-        columnFilters={table.getState().columnFilters}
-        setColumnFilters={table.setColumnFilters}
-        columns={columns}
-        preFilteredRows={table.getPreFilteredRowModel().rows}
-        configuration={props.actionBarConfig}
-        filterableColumns={transformedColumns.filter((column) => column.canFilter)}
-      />
-
-      <StyledTable>
-        {viewState === 'loading' && <props.loadingView />}
-
-        {viewState === 'error' && <TableErrorState error={props.error!} />}
-
-        {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
-
-        {viewState === 'filtered-empty' && (
-          <TableNoResultsState
-            clearFilters={() => {
-              table.setGlobalFilter('');
-              table.setColumnFilters([]);
-            }}
-          />
-        )}
-
-        {viewState !== 'error' && (
-          <TableHeader<T>
-            columns={transformedColumns}
-            setColumnOrder={table.setColumnOrder}
-            setColumnVisibility={table.setColumnVisibility}
-          />
-        )}
-
-        {viewState === 'ready' && (
-          <TableBody<T> rows={transformRows<T>(table.getRowModel().rows)} />
-        )}
-      </StyledTable>
-
-      {!props.disablePagination && viewState === 'ready' && (
-        <props.pagination
-          gotoPage={table.setPageIndex}
-          pageCount={table.getPageCount()}
-          setPageSize={table.setPageSize}
-          state={table.getState().pagination}
-          pageSizes={props.pageSizes}
-          fetchPlugin={props.fetchPlugin}
+    <TableSelectionProvider
+      value={{
+        selectedRows: table.getSelectedRowModel().flatRows.map((row) => row.original),
+        selectionEnabled: props.enableRowSelection,
+        toggleAllRowsSelected: (selected: boolean) => table.toggleAllRowsSelected(selected),
+        getIsAllRowsSelected: () => table.getIsAllRowsSelected(),
+        getIsSomeRowsSelected: () => table.getIsSomeRowsSelected(),
+      }}
+    >
+      <TableContainer>
+        <TableActionBar
+          globalFilter={table.getState().globalFilter as string}
+          setGlobalFilter={table.setGlobalFilter}
+          columnFilters={table.getState().columnFilters}
+          setColumnFilters={table.setColumnFilters}
+          columns={columns}
+          preFilteredRows={table.getPreFilteredRowModel().rows}
+          configuration={props.actionBarConfig}
+          filterableColumns={transformedColumns.filter((column) => column.canFilter)}
         />
-      )}
-    </TableContainer>
+
+        <StyledTable>
+          {viewState === 'loading' && <props.loadingView />}
+
+          {viewState === 'error' && <TableErrorState error={props.error!} />}
+
+          {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
+
+          {viewState === 'filtered-empty' && (
+            <TableNoResultsState
+              clearFilters={() => {
+                table.setGlobalFilter('');
+                table.setColumnFilters([]);
+              }}
+            />
+          )}
+
+          {viewState !== 'error' && (
+            <TableHeader<T>
+              columns={transformedColumns}
+              setColumnOrder={table.setColumnOrder}
+              setColumnVisibility={table.setColumnVisibility}
+              enableRowSelection={props.enableRowSelection}
+              isSelected={table.getIsAllRowsSelected()}
+              onToggleSelection={(selected: boolean) => table.toggleAllRowsSelected(selected)}
+            />
+          )}
+
+          {viewState === 'ready' && (
+            <TableBody<T>
+              rows={transformRows<T>(table.getRowModel().rows)}
+              enableRowSelection={props.enableRowSelection}
+            />
+          )}
+        </StyledTable>
+
+        {!props.disablePagination && viewState === 'ready' && (
+          <props.pagination
+            gotoPage={table.setPageIndex}
+            pageCount={table.getPageCount()}
+            setPageSize={table.setPageSize}
+            state={table.getState().pagination}
+            pageSizes={props.pageSizes}
+            fetchPlugin={props.fetchPlugin}
+          />
+        )}
+      </TableContainer>
+    </TableSelectionProvider>
   );
 }

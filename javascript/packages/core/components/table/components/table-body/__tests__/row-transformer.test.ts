@@ -17,6 +17,9 @@ describe('transformRows', () => {
           { id: 'row-1-cell-0', content: 'John' },
           { id: 'row-1-cell-1', content: '30' },
         ],
+        canSelect: true,
+        isSelected: false,
+        onToggleSelection: expect.any(Function) as (selected: boolean) => void,
       },
       {
         id: 'row-2',
@@ -24,6 +27,9 @@ describe('transformRows', () => {
           { id: 'row-2-cell-0', content: 'Jane' },
           { id: 'row-2-cell-1', content: '25' },
         ],
+        canSelect: true,
+        isSelected: false,
+        onToggleSelection: expect.any(Function) as (selected: boolean) => void,
       },
     ]);
   });

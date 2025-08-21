@@ -7,6 +7,7 @@ const STATE_NAME_TO_STATE_SETTER_NAME = {
   sorting: 'setSorting',
   columnOrder: 'setColumnOrder',
   columnVisibility: 'setColumnVisibility',
+  rowSelection: 'setRowSelection',
 } as const;
 
 /**

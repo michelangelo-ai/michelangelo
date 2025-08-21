@@ -38,15 +38,17 @@ export function applyDefaultProps<T extends TableData = TableData>(
     loading: props.loading ?? false,
     loadingView: props.loadingView ?? TableLoadingState,
     error: props.error ?? undefined,
-    actionBarConfig: props.actionBarConfig ?? {
+    actionBarConfig: {
       enableSearch: true,
       enableFilters: true,
+      ...props.actionBarConfig,
     },
     disablePagination,
     disableSorting,
     pageSizes,
     state: resolveTableState(props.state, disablePagination, pageSizes),
     pagination: props.pagination ?? TablePagination,
+    enableRowSelection: props.enableRowSelection ?? false,
   };
 }
 

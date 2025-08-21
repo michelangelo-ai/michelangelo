@@ -1,5 +1,6 @@
 import type {
   ColumnRenderState,
+  SelectableCapability,
   SortingCapability,
   VisibilityCapability,
 } from '#core/components/table/types/column-types';
@@ -10,4 +11,5 @@ export type TableHeaderProps<T extends TableData = TableData> = {
   columns: Array<ColumnRenderState<T> & SortingCapability & VisibilityCapability>;
   setColumnOrder: ControlledTableState['setColumnOrder'];
   setColumnVisibility: ControlledTableState['setColumnVisibility'];
-};
+  enableRowSelection?: boolean;
+} & Omit<SelectableCapability, 'canSelect'>;

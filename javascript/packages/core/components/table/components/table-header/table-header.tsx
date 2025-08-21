@@ -1,6 +1,8 @@
 import { useStyletron } from 'baseui';
 import { StyledTableHead, StyledTableHeadRow } from 'baseui/table-semantic';
 
+import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
+import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
 import { TableColumnConfigurationButton } from './components/table-column-configuration-button/table-column-configuration-button';
 import { TableSortIcon } from './components/table-sort-icon/table-sort-icon';
 import { StyledSortableTableHeadCell, StyledTableHeadCell } from './styled-components';
@@ -12,11 +14,27 @@ export const TableHeader = <T extends TableData = TableData>({
   columns,
   setColumnOrder,
   setColumnVisibility,
+  enableRowSelection,
+  isSelected,
+  onToggleSelection,
 }: TableHeaderProps<T>) => {
   const [css, theme] = useStyletron();
   return (
     <StyledTableHead>
       <StyledTableHeadRow>
+        {enableRowSelection && (
+          <StyledTableHeadCell
+            role="columnheader"
+            className={css(getSelectionColumnCellStyles(theme))}
+          >
+            <TableSelectionColumn
+              canSelect={enableRowSelection}
+              isSelected={isSelected}
+              onToggleSelection={onToggleSelection}
+            />
+          </StyledTableHeadCell>
+        )}
+
         {columns
           .filter((column) => column.isVisible)
           .map((column) =>

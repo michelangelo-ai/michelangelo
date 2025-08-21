@@ -150,6 +150,15 @@ export interface TableRequiredFunctionalityProps {
     fetchNextPage: () => void;
     isFetchNextPageInProgress: boolean;
   };
+
+  /**
+   * @description
+   * If true, enables row selection functionality with checkboxes in the first column.
+   * Selection state is ephemeral and resets on component unmount.
+   *
+   * @default false
+   */
+  enableRowSelection: boolean;
 }
 
 /**
@@ -197,6 +206,8 @@ export type ColumnOrderState = string[];
 
 export type ColumnVisibilityState = Record<string, boolean>;
 
+export type RowSelectionState = Record<string, boolean>;
+
 /**
  * Table state containing aspects of table behavior.
  */
@@ -213,6 +224,8 @@ export type TableState = {
   columnOrder: ColumnOrderState;
   /** Column visibility state */
   columnVisibility: ColumnVisibilityState;
+  /** Row selection state */
+  rowSelection: RowSelectionState;
 };
 
 /**
@@ -232,5 +245,8 @@ export type ControlledTableState = TableState & {
   ) => void;
   setColumnVisibility: (
     updater: ColumnVisibilityState | ((old: ColumnVisibilityState) => ColumnVisibilityState)
+  ) => void;
+  setRowSelection: (
+    updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)
   ) => void;
 };
