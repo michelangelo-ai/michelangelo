@@ -32,6 +32,9 @@ data:
       leaderElectionID: decaf1259.michelangelo.uber.com
       port: 9443
 
+    crdSync:
+      syncInterval: 5m
+
     controllers:
       rayCluster:
         k8sQps: 300
@@ -42,7 +45,7 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-    
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833
