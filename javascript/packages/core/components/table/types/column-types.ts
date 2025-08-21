@@ -74,3 +74,20 @@ export type VisibilityCapability = {
   canHide: boolean;
   isVisible: boolean;
 };
+
+/**
+ * Defines a column's selection capabilities and current state.
+ * Used by selectable cell components to enable row selection interactions.
+ *
+ * @example
+ * ```ts
+ * // isSelected = false
+ * onToggleSelection(true)
+ * expect(isSelected).toBe(true)
+ * ```
+ */
+export type SelectableCapability = {
+  canSelect: boolean;
+  isSelected: boolean;
+  onToggleSelection: (selected: boolean) => void;
+};

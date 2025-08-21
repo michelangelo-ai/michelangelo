@@ -9,6 +9,7 @@ import type {
   ColumnVisibilityState,
   ControlledTableState,
   PaginationState,
+  RowSelectionState,
   SortingState,
 } from '#core/components/table/types/table-types';
 
@@ -67,8 +68,9 @@ export function useLocalStorageTableState({
     TABLE_STATE_DEFAULTS.columnVisibility
   );
 
-  // pageIndex is not persisted (resets on reload)
+  // pageIndex and rowSelection are not persisted (reset on reload)
   const [pageIndex, setPageIndex] = useState<number>(0);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   return {
     globalFilter,
@@ -91,5 +93,7 @@ export function useLocalStorageTableState({
     setColumnOrder,
     columnVisibility,
     setColumnVisibility,
+    rowSelection,
+    setRowSelection,
   };
 }
