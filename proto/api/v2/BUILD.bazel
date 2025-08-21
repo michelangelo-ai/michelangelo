@@ -66,6 +66,7 @@ go_proto_library(
     proto = ":v2_proto",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/kubeproto/metrics:go_default_library",
         "//proto/api:go_default_library",
         "@io_k8s_api//core/v1:core",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
@@ -77,6 +78,9 @@ go_library(
     embed = [":v2_go_proto"],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2",
     visibility = ["//visibility:public"],
+    deps = [
+        "//go/kubeproto/metrics:go_default_library",
+    ],
 )
 
 kube_proto_yaml(

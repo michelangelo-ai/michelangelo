@@ -340,6 +340,9 @@ func SetupWatchErrorHandler(mgr manager.Manager, obj client.Object, gvr schema.G
 // SetupSchemaMonitoringForResource sets up both watch error handler and schema monitoring for a resource type
 // This is a convenience function that controllers can call to enable comprehensive schema monitoring
 func SetupSchemaMonitoringForResource(mgr manager.Manager, obj client.Object, gvr schema.GroupVersionResource, validator ResourceValidator, logger *zap.Logger) error {
+	if true {
+		return nil
+	}
 	resourceName := fmt.Sprintf("%s.%s.%s", gvr.Resource, gvr.Version, gvr.Group)
 	logger.Info("Setting up comprehensive schema monitoring", zap.String("resource", resourceName))
 

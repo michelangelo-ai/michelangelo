@@ -26,6 +26,7 @@ _kube_ports = [
     "9090:30008",  # MinIO
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
+    "3000:30011",  # Grafana
 ]
 
 # Workflow engine ports
@@ -158,8 +159,9 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
-        "fluent-bit.yaml",
-        "fluent-bit-config.yaml",
+        "grafana.yaml",
+        # "fluent-bit.yaml",
+        # "fluent-bit-config.yaml",
     ]
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
@@ -215,6 +217,11 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _create_spark_operator(helm_existing_repos)
 
     print("\nSandbox created successfully.")
+    print("\nGrafana Dashboard: http://localhost:3000")
+    print("  - Username: admin")
+    print("  - Password: admin")
+    print("  - Prometheus data source configured automatically")
+    print("  - CRD Metrics dashboard available")
 
 
 def _create_spark_operator(helm_existing_repos):

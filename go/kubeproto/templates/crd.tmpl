@@ -315,11 +315,23 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 	  AnyResolver: &util.GenericResolver{},
 	}).Unmarshal(bytes.NewReader(b), m)
 	if err == nil {
+        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_success", map[string]string{
+                "resource_type": "{{.Name}}",
+                "field_type": "spec",
+            })
+
 	    return nil
 	}
 
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
+        fmt.Printf("{{.Name}}Spec.UnmarshalJSON: failed to unmarshal: %v, raw data: %q\n", err, string(b))
+        // Emit metrics for unmarshal errors
+        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
+            "resource_type": "{{.Name}}",
+            "field_type": "spec",
+            "error_type": "unmarshal_error",
+        })
         return err
     }
 
@@ -356,6 +368,13 @@ func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
     }
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
+        fmt.Printf("{{.Name}}Status.UnmarshalJSON: failed to unmarshal: %v, raw data: %q\n", err, string(b))
+        // Emit metrics for unmarshal errors
+        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
+            "resource_type": "{{.Name}}",
+            "field_type": "status", 
+            "error_type": "unmarshal_error",
+        })
         return err
     }
 
