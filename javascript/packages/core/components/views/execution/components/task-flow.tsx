@@ -1,28 +1,37 @@
 import React from 'react';
+import { getOverrides } from 'baseui';
 
-import { TaskFlowContainer, TaskIndicator } from './styled-components';
-import { TaskStepCard } from './task-step-card/task-step-card';
+import { TaskSeparator } from '../styled-components';
+import { TaskFlowContainer } from './styled-components';
+import { TaskListRenderer } from './task-list-renderer';
 
-import type { Task } from '#core/components/views/execution/types';
+import type { TaskFlowProps } from './types';
 
-export function TaskFlow<TTaskRecord extends object = object>(props: {
-  taskList: Task<TTaskRecord>[];
-  onTaskClick?: (task: Task<TTaskRecord>) => void;
-}) {
-  const { taskList, onTaskClick } = props;
+export function TaskFlow<TTaskRecord extends object = object>({
+  matrix,
+  onTaskClick,
+  overrides,
+}: TaskFlowProps<TTaskRecord>) {
+  const [TaskListRendererComponent, taskListRendererProps] = getOverrides(
+    overrides?.TaskListRenderer,
+    TaskListRenderer
+  );
 
   return (
-    <TaskFlowContainer>
-      {taskList.map((task, index) => (
+    <>
+      {matrix.map((item, index) => (
         <React.Fragment key={index}>
-          {index > 0 && <TaskIndicator $color="contentInverseSecondary" $direction="right" />}
-          <TaskStepCard
-            key={index}
-            task={task}
-            {...(onTaskClick ? { onClick: () => onTaskClick(task) } : {})}
-          />
+          {index > 0 && <TaskSeparator />}
+          <TaskFlowContainer>
+            <TaskListRendererComponent
+              taskList={item.taskList}
+              onTaskClick={onTaskClick}
+              parent={item.parent}
+              {...taskListRendererProps}
+            />
+          </TaskFlowContainer>
         </React.Fragment>
       ))}
-    </TaskFlowContainer>
+    </>
   );
 }

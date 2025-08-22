@@ -11,6 +11,8 @@ import {
 } from '../__fixtures__/execution-schema-factory';
 import { Execution } from '../execution';
 
+import type { Task } from '../types';
+
 describe('Execution view', () => {
   const buildSchema = buildExecutionSchemaFactory();
   const buildStep = buildTaskStepFactory();
@@ -345,5 +347,95 @@ describe('Execution view', () => {
         behavior: 'smooth',
       });
     });
+  });
+
+  it('should use custom TaskListRenderer component when provided', () => {
+    const CustomTaskListRenderer = ({
+      taskList,
+      parent,
+    }: {
+      taskList: unknown[];
+      parent?: Task;
+    }) => (
+      <div data-testid="custom-task-list-renderer">
+        Custom TaskListRenderer for {parent ? `${parent.name} subtasks` : 'main execution'} with{' '}
+        {taskList.length} tasks
+      </div>
+    );
+
+    const executionData = {
+      status: {
+        steps: [
+          buildStep({
+            displayName: 'Parent Task',
+            state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+            subSteps: [
+              buildStep({
+                displayName: 'Child Task 1',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+              }),
+              buildStep({
+                displayName: 'Child Task 2',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+              }),
+            ],
+          }),
+        ],
+      },
+    };
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={executionData}
+        overrides={{
+          TaskListRenderer: { component: CustomTaskListRenderer },
+        }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    // Should use custom renderer for main execution overview (1 parent task)
+    expect(
+      screen.getByText('Custom TaskListRenderer for main execution with 1 tasks')
+    ).toBeInTheDocument();
+
+    // Should use custom renderer for Parent Task subtasks (2 child tasks)
+    expect(
+      screen.getByText('Custom TaskListRenderer for Parent Task subtasks with 2 tasks')
+    ).toBeInTheDocument();
+  });
+
+  it('should use custom taskList when provided', () => {
+    const customTaskList = [
+      {
+        name: 'Custom Task 1',
+        state: 'SUCCESS' as const,
+        subTasks: [],
+        record: { displayName: 'Custom Task 1' },
+        focused: false,
+      },
+      {
+        name: 'Custom Task 2',
+        state: 'ERROR' as const,
+        subTasks: [],
+        record: { displayName: 'Custom Task 2' },
+        focused: true,
+      },
+    ];
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={{}}
+        overrides={{
+          taskList: customTaskList,
+        }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getAllByText('Custom Task 1')).toHaveLength(2); // Overview + Details
+    expect(screen.getAllByText('Custom Task 2')).toHaveLength(2); // Overview + Details
   });
 });
