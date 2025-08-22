@@ -150,6 +150,8 @@ describe('useColumnTransformer', () => {
         columnDef: {
           meta: { id: 'name', label: 'Name', accessor: 'name' },
         },
+        getFilterValue: () => 'John Doe',
+        setFilterValue: vi.fn(),
       },
       row: {
         original: { name: 'John Doe' },

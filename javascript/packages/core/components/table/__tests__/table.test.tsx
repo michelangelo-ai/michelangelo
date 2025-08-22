@@ -13,6 +13,7 @@ import {
   buildTableColumns,
   buildTableData,
   expectTableHeaders,
+  expectTableRows,
 } from '../__fixtures__/table-test-helpers';
 import { Table } from '../table';
 
@@ -1372,6 +1373,53 @@ describe('Table', () => {
 
       const configButton = screen.getByTitle('Configure columns');
       expect(configButton).toBeInTheDocument();
+    });
+  });
+
+  describe('tooltip filter integration', () => {
+    it('changes displayed table data when tooltip filter is applied', async () => {
+      const user = userEvent.setup();
+      const testData = [
+        { id: '1', name: 'Alice Johnson', department: 'Engineering' },
+        { id: '2', name: 'Bob Smith', department: 'Marketing' },
+        { id: '3', name: 'Carol Davis', department: 'Engineering' },
+      ];
+
+      const columns = [
+        {
+          id: 'name',
+          label: 'Name',
+          tooltip: {
+            content: 'Click to filter by this name',
+            action: 'filter' as const,
+          },
+        },
+        { id: 'department', label: 'Department' },
+      ];
+
+      render(
+        <Table data={testData} columns={columns} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+          getIconProviderWrapper({
+            icons: {
+              chevronRight: () => <div>Chevron Right</div>,
+            },
+          }),
+        ])
+      );
+
+      expectTableRows({ dataRows: 3 });
+      await user.hover(screen.getByText('Alice Johnson'));
+      const tooltip = await screen.findByText('Click to filter by this name');
+      await user.click(tooltip);
+
+      await waitFor(() => {
+        expectTableRows({ dataRows: 1 });
+        expect(screen.getByRole('row', { name: 'Alice Johnson Engineering' })).toBeInTheDocument();
+      });
     });
   });
 });

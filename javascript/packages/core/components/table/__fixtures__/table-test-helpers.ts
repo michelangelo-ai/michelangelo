@@ -39,3 +39,12 @@ export function expectTableHeaders(options: { dataColumns: number; hasConfigButt
 
   expect(screen.getAllByRole('columnheader')).toHaveLength(expectedCount);
 }
+
+/**
+ * Helper to assert expected row count, accounting for table structure.
+ */
+export function expectTableRows(options: { dataRows: number }) {
+  const expectedCount = options.dataRows + 1; // Header row
+
+  expect(screen.getAllByRole('row')).toHaveLength(expectedCount);
+}
