@@ -326,6 +326,13 @@ class CRD:
         create_func.__signature__ = create_func_signature  # type: ignore[attr-defined]
         self.create = MethodType(create_func, self)
 
+    def generate_run(self, channel: Channel):
+        """
+        Generate run function - delegated to plugins.
+        This is a placeholder that plugins will override.
+        """
+        _LOG.info("Generate RUN method for %r / %r", self.name, self.full_name)
+        pass
 
     def generate_list(self, channel: Channel):
         """
@@ -780,28 +787,6 @@ def main(channel: Channel):
             environ["AWS_SECRET_ACCESS_KEY"] = minio_config.get("secret_access_key", "")
         if not getenv("AWS_ENDPOINT_URL"):
             environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
-
-    # Check for pipeline-specific run command first
-    args, kwargs = parse_args()
-    if len(args) >= 2 and args[0] == "run" and args[1] == "pipeline":
-        print("Starting mactl...")
-        # Handle pipeline run command via plugin
-        sys.path.insert(0, str(PWD))
-        from plugins.pipeline.main import handle_pipeline_command
-        # Reorder args for the plugin: ["pipeline", "run"]
-        plugin_args = [args[1], args[0]]  # ["pipeline", "run"]
-        result = handle_pipeline_command(plugin_args, kwargs, channel)
-        if result:
-            json_output = MessageToJson(
-                result, 
-                always_print_fields_with_no_presence=True, 
-                preserving_proto_field_name=True
-            )
-            print(json_output)
-            return
-        else:
-            print("Failed to handle pipeline command")
-            return
 
     user_command_crd, user_command_action, kwargs = handle_args()
 
