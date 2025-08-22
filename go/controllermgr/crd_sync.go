@@ -152,7 +152,7 @@ func compareSchemasWithServerList(ctx context.Context, metricsLogger *MetricsLog
 		}
 
 		// Compare schemas and emit metrics/logs for any mismatches
-		if hasChange := !reflect.DeepEqual(serverCRD.Spec.Versions, localCRD.Spec.Versions); hasChange {
+		if hasChange := hasCRDSchemaChanges(localCRD, serverCRD); hasChange {
 			metricsLogger.LogSchemaMismatch(name)
 		} else {
 			metricsLogger.LogSchemaMatch(name)
@@ -160,4 +160,313 @@ func compareSchemasWithServerList(ctx context.Context, metricsLogger *MetricsLog
 	}
 
 	return nil
+}
+
+// hasCRDSchemaChanges performs comprehensive comparison of CRD schemas
+func hasCRDSchemaChanges(localCRD, serverCRD *apiextv1.CustomResourceDefinition) bool {
+	// Compare basic spec fields
+	if localCRD.Spec.Group != serverCRD.Spec.Group {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localCRD.Spec.Names, serverCRD.Spec.Names) {
+		return true
+	}
+	
+	if localCRD.Spec.Scope != serverCRD.Spec.Scope {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localCRD.Spec.Conversion, serverCRD.Spec.Conversion) {
+		return true
+	}
+	
+	if localCRD.Spec.PreserveUnknownFields != serverCRD.Spec.PreserveUnknownFields {
+		return true
+	}
+	
+	// Compare versions - this is the most complex part
+	if len(localCRD.Spec.Versions) != len(serverCRD.Spec.Versions) {
+		return true
+	}
+	
+	// Create maps for version comparison
+	localVersions := make(map[string]apiextv1.CustomResourceDefinitionVersion)
+	serverVersions := make(map[string]apiextv1.CustomResourceDefinitionVersion)
+	
+	for _, v := range localCRD.Spec.Versions {
+		localVersions[v.Name] = v
+	}
+	
+	for _, v := range serverCRD.Spec.Versions {
+		serverVersions[v.Name] = v
+	}
+	
+	// Compare each version
+	for versionName, localVersion := range localVersions {
+		serverVersion, exists := serverVersions[versionName]
+		if !exists {
+			return true
+		}
+		
+		if hasVersionSchemaChanges(localVersion, serverVersion) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// hasVersionSchemaChanges compares individual version schemas recursively
+func hasVersionSchemaChanges(localVersion, serverVersion apiextv1.CustomResourceDefinitionVersion) bool {
+	// Compare basic version fields
+	if localVersion.Name != serverVersion.Name {
+		return true
+	}
+	
+	if localVersion.Served != serverVersion.Served {
+		return true
+	}
+	
+	if localVersion.Storage != serverVersion.Storage {
+		return true
+	}
+	
+	if localVersion.Deprecated != serverVersion.Deprecated {
+		return true
+	}
+	
+	if localVersion.DeprecationWarning != nil && serverVersion.DeprecationWarning != nil {
+		if *localVersion.DeprecationWarning != *serverVersion.DeprecationWarning {
+			return true
+		}
+	} else if localVersion.DeprecationWarning != serverVersion.DeprecationWarning {
+		return true
+	}
+	
+	// Compare schemas recursively
+	if localVersion.Schema != nil && serverVersion.Schema != nil {
+		return hasJSONSchemaChanges(localVersion.Schema.OpenAPIV3Schema, serverVersion.Schema.OpenAPIV3Schema)
+	} else if localVersion.Schema != serverVersion.Schema {
+		return true
+	}
+	
+	// Compare subresources
+	if !reflect.DeepEqual(localVersion.Subresources, serverVersion.Subresources) {
+		return true
+	}
+	
+	// Compare additional printer columns
+	if !reflect.DeepEqual(localVersion.AdditionalPrinterColumns, serverVersion.AdditionalPrinterColumns) {
+		return true
+	}
+	
+	return false
+}
+
+// hasJSONSchemaChanges recursively compares JSON schema structures
+func hasJSONSchemaChanges(localSchema, serverSchema *apiextv1.JSONSchemaProps) bool {
+	if localSchema == nil && serverSchema == nil {
+		return false
+	}
+	
+	if localSchema == nil || serverSchema == nil {
+		return true
+	}
+	
+	// Compare basic schema properties
+	if localSchema.Type != serverSchema.Type {
+		return true
+	}
+	
+	if localSchema.Format != serverSchema.Format {
+		return true
+	}
+	
+	if localSchema.Title != serverSchema.Title {
+		return true
+	}
+	
+	if localSchema.Description != serverSchema.Description {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.Default, serverSchema.Default) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.Example, serverSchema.Example) {
+		return true
+	}
+	
+	// Compare numeric constraints
+	if !reflect.DeepEqual(localSchema.Maximum, serverSchema.Maximum) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.Minimum, serverSchema.Minimum) {
+		return true
+	}
+	
+	if localSchema.ExclusiveMaximum != serverSchema.ExclusiveMaximum {
+		return true
+	}
+	
+	if localSchema.ExclusiveMinimum != serverSchema.ExclusiveMinimum {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MaxLength, serverSchema.MaxLength) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MinLength, serverSchema.MinLength) {
+		return true
+	}
+	
+	if localSchema.Pattern != serverSchema.Pattern {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MaxItems, serverSchema.MaxItems) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MinItems, serverSchema.MinItems) {
+		return true
+	}
+	
+	if localSchema.UniqueItems != serverSchema.UniqueItems {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MultipleOf, serverSchema.MultipleOf) {
+		return true
+	}
+	
+	// Compare array constraints
+	if !reflect.DeepEqual(localSchema.MaxProperties, serverSchema.MaxProperties) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.MinProperties, serverSchema.MinProperties) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.Required, serverSchema.Required) {
+		return true
+	}
+	
+	if !reflect.DeepEqual(localSchema.Enum, serverSchema.Enum) {
+		return true
+	}
+	
+	// Compare items schema (for arrays)
+	if localSchema.Items != nil && serverSchema.Items != nil {
+		if localSchema.Items.Schema != nil && serverSchema.Items.Schema != nil {
+			if hasJSONSchemaChanges(localSchema.Items.Schema, serverSchema.Items.Schema) {
+				return true
+			}
+		} else if !reflect.DeepEqual(localSchema.Items, serverSchema.Items) {
+			return true
+		}
+	} else if localSchema.Items != serverSchema.Items {
+		return true
+	}
+	
+	// Compare properties (for objects) - this is the key recursive part
+	if len(localSchema.Properties) != len(serverSchema.Properties) {
+		return true
+	}
+	
+	for propName, localProp := range localSchema.Properties {
+		serverProp, exists := serverSchema.Properties[propName]
+		if !exists {
+			return true
+		}
+		
+		if hasJSONSchemaChanges(&localProp, &serverProp) {
+			return true
+		}
+	}
+	
+	// Compare additional properties
+	if localSchema.AdditionalProperties != nil && serverSchema.AdditionalProperties != nil {
+		if localSchema.AdditionalProperties.Schema != nil && serverSchema.AdditionalProperties.Schema != nil {
+			if hasJSONSchemaChanges(localSchema.AdditionalProperties.Schema, serverSchema.AdditionalProperties.Schema) {
+				return true
+			}
+		} else if !reflect.DeepEqual(localSchema.AdditionalProperties, serverSchema.AdditionalProperties) {
+			return true
+		}
+	} else if localSchema.AdditionalProperties != serverSchema.AdditionalProperties {
+		return true
+	}
+	
+	// Compare pattern properties
+	if len(localSchema.PatternProperties) != len(serverSchema.PatternProperties) {
+		return true
+	}
+	
+	for pattern, localProp := range localSchema.PatternProperties {
+		serverProp, exists := serverSchema.PatternProperties[pattern]
+		if !exists {
+			return true
+		}
+		
+		if hasJSONSchemaChanges(&localProp, &serverProp) {
+			return true
+		}
+	}
+	
+	// Compare dependencies
+	if !reflect.DeepEqual(localSchema.Dependencies, serverSchema.Dependencies) {
+		return true
+	}
+	
+	// Compare allOf, anyOf, oneOf, not schemas
+	if len(localSchema.AllOf) != len(serverSchema.AllOf) {
+		return true
+	}
+	
+	for i, localAllOf := range localSchema.AllOf {
+		if i >= len(serverSchema.AllOf) || hasJSONSchemaChanges(&localAllOf, &serverSchema.AllOf[i]) {
+			return true
+		}
+	}
+	
+	if len(localSchema.AnyOf) != len(serverSchema.AnyOf) {
+		return true
+	}
+	
+	for i, localAnyOf := range localSchema.AnyOf {
+		if i >= len(serverSchema.AnyOf) || hasJSONSchemaChanges(&localAnyOf, &serverSchema.AnyOf[i]) {
+			return true
+		}
+	}
+	
+	if len(localSchema.OneOf) != len(serverSchema.OneOf) {
+		return true
+	}
+	
+	for i, localOneOf := range localSchema.OneOf {
+		if i >= len(serverSchema.OneOf) || hasJSONSchemaChanges(&localOneOf, &serverSchema.OneOf[i]) {
+			return true
+		}
+	}
+	
+	if localSchema.Not != nil && serverSchema.Not != nil {
+		if hasJSONSchemaChanges(localSchema.Not, serverSchema.Not) {
+			return true
+		}
+	} else if localSchema.Not != serverSchema.Not {
+		return true
+	}
+	
+	// Compare external documentation
+	if !reflect.DeepEqual(localSchema.ExternalDocs, serverSchema.ExternalDocs) {
+		return true
+	}
+	
+	return false
 }
