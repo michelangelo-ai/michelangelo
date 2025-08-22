@@ -51,6 +51,8 @@ export function useColumnTransformer<T extends TableData = TableData>(
             column={props.column.columnDef.meta as ColumnConfig}
             record={props.row.original as object}
             value={props.getValue()}
+            columnFilterValue={props.column.getFilterValue()}
+            setColumnFilterValue={props.column.setFilterValue}
           />
         ),
         filterFn: filterHook.buildTableFilterFn(),
