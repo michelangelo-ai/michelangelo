@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
-	"github.com/uber-go/tally"
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -28,7 +27,6 @@ type CRDSyncParams struct {
 	Config    *CRDSyncConfig
 	Logger    *zap.Logger
 	Gateway   crd.Gateway
-	Scope     tally.Scope `optional:"true"`
 }
 
 // CRDSyncModule provides CRD sync functionality for controller manager
@@ -53,18 +51,10 @@ func startCRDSync(p CRDSyncParams) error {
 	logger := p.Logger.With(zap.String("module", "crd-sync"))
 	logger.Info("Starting CRD schema comparison service", zap.Duration("interval", p.Config.SyncInterval))
 
-	// Create metrics if scope is available
-	var metrics *Metrics
-	if p.Scope != nil {
-		metrics = NewMetrics(p.Scope)
-	}
-
-	metricsLogger := NewMetricsLogger(logger, metrics)
-
 	p.Lifecycle.Append(fx.Hook{
 		OnStart: func(ctx context.Context) error {
 			// Start periodic schema comparison
-			go startPeriodicSchemaComparison(ctx, metricsLogger, p.Config, p.Gateway)
+			go startPeriodicSchemaComparison(ctx, logger, p.Config, p.Gateway)
 			return nil
 		},
 		OnStop: nil,
@@ -73,13 +63,13 @@ func startCRDSync(p CRDSyncParams) error {
 	return nil
 }
 
-func startPeriodicSchemaComparison(ctx context.Context, metricsLogger *MetricsLogger, config *CRDSyncConfig, gateway crd.Gateway) {
+func startPeriodicSchemaComparison(ctx context.Context, logger *zap.Logger, config *CRDSyncConfig, gateway crd.Gateway) {
 	interval := config.SyncInterval
 
-	metricsLogger.LogInfo("Starting periodic schema comparison", zap.Duration("interval", interval))
+	logger.Info("Starting periodic schema comparison", zap.Duration("interval", interval))
 
 	// Perform initial comparison immediately
-	performSchemaComparison(ctx, metricsLogger, gateway)
+	performSchemaComparison(ctx, logger, gateway)
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -87,24 +77,16 @@ func startPeriodicSchemaComparison(ctx context.Context, metricsLogger *MetricsLo
 	for {
 		select {
 		case <-ctx.Done():
-			metricsLogger.LogInfo("Stopping periodic schema comparison")
+			logger.Info("Stopping periodic schema comparison")
 			return
 		case <-ticker.C:
-			performSchemaComparison(ctx, metricsLogger, gateway)
+			performSchemaComparison(ctx, logger, gateway)
 		}
 	}
 }
 
-func performSchemaComparison(ctx context.Context, metricsLogger *MetricsLogger, gateway crd.Gateway) {
-	startTime := time.Now()
-	defer func() {
-		if metricsLogger.metrics != nil {
-			duration := time.Since(startTime)
-			metricsLogger.metrics.RecordComparisonDuration(duration)
-		}
-	}()
-
-	metricsLogger.LogDebug("Performing schema comparison")
+func performSchemaComparison(ctx context.Context, logger *zap.Logger, gateway crd.Gateway) {
+	logger.Debug("Performing schema comparison")
 
 	// Get local schemas from YAML
 	localSchemas := make(map[string]*apiextv1.CustomResourceDefinition)
@@ -112,7 +94,7 @@ func performSchemaComparison(ctx context.Context, metricsLogger *MetricsLogger, 
 		crd := apiextv1.CustomResourceDefinition{}
 		err := yaml.NewYAMLToJSONDecoder(strings.NewReader(yamlStr)).Decode(&crd)
 		if err != nil {
-			metricsLogger.LogError("Failed to deserialize CRD from yaml for comparison",
+			logger.Error("Failed to deserialize CRD from yaml for comparison",
 				zap.String("name", name), zap.Error(err))
 			continue
 		}
@@ -122,18 +104,18 @@ func performSchemaComparison(ctx context.Context, metricsLogger *MetricsLogger, 
 	// Get all CRDs from API Server
 	serverCRDs, err := gateway.List(ctx)
 	if err != nil {
-		metricsLogger.LogError("Failed to list CRDs from API Server", zap.Error(err))
+		logger.Error("Failed to list CRDs from API Server", zap.Error(err))
 		return
 	}
 
 	// Perform schema comparison
-	if err := compareSchemasWithServerList(ctx, metricsLogger, localSchemas, serverCRDs); err != nil {
-		metricsLogger.LogError("Failed to compare schemas with API Server", zap.Error(err))
+	if err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs); err != nil {
+		logger.Error("Failed to compare schemas with API Server", zap.Error(err))
 	}
 }
 
 // compareSchemasWithServerList compares local schemas with API Server schemas without performing any updates
-func compareSchemasWithServerList(ctx context.Context, metricsLogger *MetricsLogger,
+func compareSchemasWithServerList(ctx context.Context, logger *zap.Logger,
 	localSchemas map[string]*apiextv1.CustomResourceDefinition,
 	serverCRDs *apiextv1.CustomResourceDefinitionList) error {
 
@@ -147,15 +129,12 @@ func compareSchemasWithServerList(ctx context.Context, metricsLogger *MetricsLog
 	for name, localCRD := range localSchemas {
 		serverCRD, exists := serverSchemas[name]
 		if !exists {
-			metricsLogger.LogCRDNotFound(name)
 			continue
 		}
 
-		// Compare schemas and emit metrics/logs for any mismatches
+		// Only emit log when there is a schema mismatch
 		if !reflect.DeepEqual(localCRD.Spec, serverCRD.Spec) {
-			metricsLogger.LogSchemaMismatch(name)
-		} else {
-			metricsLogger.LogSchemaMatch(name)
+			logger.Warn("CRD schema mismatch detected", zap.String("crd_name", name))
 		}
 	}
 

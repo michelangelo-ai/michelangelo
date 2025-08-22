@@ -41,7 +41,6 @@ func (m *MockGateway) List(ctx context.Context) (*apiextv1.CustomResourceDefinit
 
 func TestCompareSchemasWithServerList_MatchingSchemas(t *testing.T) {
 	logger := zaptest.NewLogger(t)
-	metricsLogger := NewMetricsLogger(logger, nil)
 	ctx := context.Background()
 
 	// Create identical local and server CRDs
@@ -77,7 +76,7 @@ func TestCompareSchemasWithServerList_MatchingSchemas(t *testing.T) {
 	}
 
 	// Should not log any mismatches for identical schemas
-	err := compareSchemasWithServerList(ctx, metricsLogger, localSchemas, serverCRDs)
+	err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
 	assert.NoError(t, err)
 }
 
@@ -126,8 +125,7 @@ func TestCompareSchemasWithServerList_SchemaMismatch(t *testing.T) {
 	}
 
 	// Should detect schema mismatch
-	metricsLogger := NewMetricsLogger(logger, nil)
-	err := compareSchemasWithServerList(ctx, metricsLogger, localSchemas, serverCRDs)
+	err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
 	assert.NoError(t, err)
 }
 
@@ -154,8 +152,7 @@ func TestCompareSchemasWithServerList_CRDNotFoundOnServer(t *testing.T) {
 	}
 
 	// Should log that CRD is not found on server
-	metricsLogger := NewMetricsLogger(logger, nil)
-	err := compareSchemasWithServerList(ctx, metricsLogger, localSchemas, serverCRDs)
+	err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
 	assert.NoError(t, err)
 }
 
@@ -167,8 +164,7 @@ func TestPerformSchemaComparison_GatewayListError(t *testing.T) {
 	mockGateway.On("List", ctx).Return(nil, errors.New("API server connection failed"))
 
 	// Should handle gateway.List() error gracefully
-	metricsLogger := NewMetricsLogger(logger, nil)
-	performSchemaComparison(ctx, metricsLogger, mockGateway)
+	performSchemaComparison(ctx, logger, mockGateway)
 
 	mockGateway.AssertExpectations(t)
 }
@@ -194,8 +190,7 @@ func TestPerformSchemaComparison_Success(t *testing.T) {
 	mockGateway.On("List", ctx).Return(serverCRDs, nil)
 
 	// Should complete successfully
-	metricsLogger := NewMetricsLogger(logger, nil)
-	performSchemaComparison(ctx, metricsLogger, mockGateway)
+	performSchemaComparison(ctx, logger, mockGateway)
 
 	mockGateway.AssertExpectations(t)
 }
@@ -214,9 +209,8 @@ func TestStartPeriodicSchemaComparison_ContextCancellation(t *testing.T) {
 	
 	// Start the periodic comparison in a goroutine
 	done := make(chan bool)
-	metricsLogger := NewMetricsLogger(logger, nil)
 	go func() {
-		startPeriodicSchemaComparison(ctx, metricsLogger, config, mockGateway)
+		startPeriodicSchemaComparison(ctx, logger, config, mockGateway)
 		done <- true
 	}()
 
