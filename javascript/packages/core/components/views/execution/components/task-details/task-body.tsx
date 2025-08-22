@@ -2,6 +2,8 @@ import { useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
 import { TaskContentStack } from '#core/components/views/execution/styled-components';
+import { buildTaskMatrix } from '#core/components/views/execution/utils/build-task-matrix';
+import { scrollToTask } from '#core/components/views/execution/utils/scroll-to-task';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { getObjectValue } from '#core/utils/object-utils';
 import { TaskFlow } from '../task-flow';
@@ -14,18 +16,19 @@ import type { TaskBodyProps } from './types';
 
 export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskRecord>) {
   const [css, theme] = useStyletron();
-  const { task, bodySchema } = props;
+  const { task, bodySchema, overrides } = props;
   const { subTasks } = task;
   const resolver = useInterpolationResolver();
 
   if (subTasks?.length) {
+    const matrix = buildTaskMatrix(subTasks);
     return (
       <TaskContentStack>
         <Box>
-          <TaskFlow taskList={subTasks} />
+          <TaskFlow matrix={matrix} onTaskClick={scrollToTask} />
         </Box>
         {subTasks.map((task, index) => (
-          <TaskDetails key={index} task={task} bodySchema={bodySchema} />
+          <TaskDetails key={index} task={task} bodySchema={bodySchema} overrides={overrides} />
         ))}
       </TaskContentStack>
     );

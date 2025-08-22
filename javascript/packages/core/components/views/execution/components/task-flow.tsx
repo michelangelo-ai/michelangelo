@@ -1,28 +1,35 @@
 import React from 'react';
 
+import { TaskSeparator } from '../styled-components';
 import { TaskFlowContainer, TaskIndicator } from './styled-components';
 import { TaskStepCard } from './task-step-card/task-step-card';
 
-import type { Task } from '#core/components/views/execution/types';
+import type { TaskFlowProps } from './task-flow-types';
 
-export function TaskFlow<TTaskRecord extends object = object>(props: {
-  taskList: Task<TTaskRecord>[];
-  onTaskClick?: (task: Task<TTaskRecord>) => void;
-}) {
-  const { taskList, onTaskClick } = props;
-
+export function TaskFlow<TTaskRecord extends object = object>({
+  matrix,
+  onTaskClick,
+}: TaskFlowProps<TTaskRecord>) {
   return (
-    <TaskFlowContainer>
-      {taskList.map((task, index) => (
+    <>
+      {matrix.map((item, index) => (
         <React.Fragment key={index}>
-          {index > 0 && <TaskIndicator $color="contentInverseSecondary" $direction="right" />}
-          <TaskStepCard
-            key={index}
-            task={task}
-            {...(onTaskClick ? { onClick: () => onTaskClick(task) } : {})}
-          />
+          {index > 0 && <TaskSeparator />}
+          <TaskFlowContainer>
+            {item.taskList.map((task, taskIndex) => (
+              <React.Fragment key={taskIndex}>
+                {taskIndex > 0 && (
+                  <TaskIndicator $color="contentInverseSecondary" $direction="right" />
+                )}
+                <TaskStepCard
+                  task={task}
+                  {...(onTaskClick ? { onClick: () => onTaskClick(task) } : {})}
+                />
+              </React.Fragment>
+            ))}
+          </TaskFlowContainer>
         </React.Fragment>
       ))}
-    </TaskFlowContainer>
+    </>
   );
 }

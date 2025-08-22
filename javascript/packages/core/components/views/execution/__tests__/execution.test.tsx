@@ -325,4 +325,65 @@ describe('Execution view', () => {
       });
     });
   });
+
+  it('should use custom TaskFlow component when provided', () => {
+    const CustomTaskFlow = ({ matrix }: { matrix: unknown[]; onTaskClick?: unknown }) => (
+      <div data-testid="custom-task-flow">Custom TaskFlow with {matrix.length} matrix items</div>
+    );
+
+    const executionData = {
+      status: {
+        steps: [
+          buildStep({ displayName: 'Test Task', state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED' }),
+        ],
+      },
+    };
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={executionData}
+        overrides={{
+          TaskFlow: { component: CustomTaskFlow },
+        }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getByTestId('custom-task-flow')).toBeInTheDocument();
+    expect(screen.getByText('Custom TaskFlow with 1 matrix items')).toBeInTheDocument();
+  });
+
+  it('should use custom taskList when provided', () => {
+    const customTaskList = [
+      {
+        name: 'Custom Task 1',
+        state: 'SUCCESS' as const,
+        subTasks: [],
+        record: { displayName: 'Custom Task 1' },
+        focused: false,
+      },
+      {
+        name: 'Custom Task 2',
+        state: 'ERROR' as const,
+        subTasks: [],
+        record: { displayName: 'Custom Task 2' },
+        focused: true,
+      },
+    ];
+
+    render(
+      <Execution
+        schema={buildSchema()}
+        data={{}}
+        overrides={{
+          taskList: customTaskList,
+        }}
+      />,
+      buildWrapper([getRouterWrapper()])
+    );
+
+    expect(screen.getAllByText('Custom Task 1')).toHaveLength(2); // Overview + Details
+    expect(screen.getAllByText('Custom Task 2')).toHaveLength(2); // Overview + Details
+  });
 });

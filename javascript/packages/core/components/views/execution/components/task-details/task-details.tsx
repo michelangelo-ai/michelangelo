@@ -18,7 +18,7 @@ import type { TaskDetailsProps } from './types';
 export function TaskDetails<TTaskRecord extends object = object>(
   props: TaskDetailsProps<TTaskRecord>
 ) {
-  const { task, metadata, bodySchema } = props;
+  const { task, metadata, bodySchema, overrides } = props;
   const scrollId = buildTaskScrollId(task);
 
   if (!!task.subTasks?.length || bodySchema?.length) {
@@ -28,7 +28,7 @@ export function TaskDetails<TTaskRecord extends object = object>(
         title={<TaskHeader task={task} metadata={metadata} />}
         initialState={{ expanded: task.focused }}
       >
-        <TaskBody task={task} bodySchema={bodySchema} />
+        <TaskBody task={task} bodySchema={bodySchema} overrides={overrides} />
       </TaskPanel>
     );
   }
