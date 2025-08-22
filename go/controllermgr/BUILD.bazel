@@ -15,7 +15,6 @@ go_library(
         "//go/base/blobstore/minio:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
-        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_apimachinery//pkg/util/yaml:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
