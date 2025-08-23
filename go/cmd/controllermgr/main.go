@@ -1,6 +1,10 @@
 package main
 
 import (
+	"fmt"
+	"net/http"
+	"sync"
+
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -18,11 +22,46 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 )
 
 const serverName = "ma-controllermgr"
+
+// Simple metrics collector for demonstration
+type MetricsCollector struct {
+	mu      sync.RWMutex
+	metrics map[string]float64
+}
+
+func (mc *MetricsCollector) Increment(name string, tags map[string]string) {
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+	
+	// Create a key from metric name and tags
+	key := name
+	for k, v := range tags {
+		key += fmt.Sprintf("_%s_%s", k, v)
+	}
+	
+	mc.metrics[key]++
+}
+
+func (mc *MetricsCollector) GetMetrics() map[string]float64 {
+	mc.mu.RLock()
+	defer mc.mu.RUnlock()
+	
+	result := make(map[string]float64)
+	for k, v := range mc.metrics {
+		result[k] = v
+	}
+	return result
+}
+
+var globalMetrics = &MetricsCollector{
+	metrics: make(map[string]float64),
+}
 
 // scheme provides a Kubernetes runtime.Scheme object.
 //
@@ -44,9 +83,40 @@ func scheme() (*runtime.Scheme, error) {
 }
 
 func getTallyScope() (tally.Scope, error) {
+	// Create basic tally scope with console output for now
 	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
+	
+	// Initialize the metrics collector for CRD templates
+	metrics.InitializeCollector(globalMetrics)
+	
+	// Start Prometheus-compatible metrics endpoint
+	go func() {
+		http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
+			metricsData := globalMetrics.GetMetrics()
+			w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+			
+			// Convert our metrics to Prometheus text format
+			for metricName, value := range metricsData {
+				// Write Prometheus format: metric_name{labels} value
+				fmt.Fprintf(w, "# HELP %s CRD unmarshal error counter\n", metricName)
+				fmt.Fprintf(w, "# TYPE %s counter\n", metricName)
+				fmt.Fprintf(w, "%s %.0f\n", metricName, value)
+			}
+		})
+		
+		http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("OK"))
+		})
+		
+		fmt.Println("Starting metrics server on 0.0.0.0:8090")
+		if err := http.ListenAndServe("0.0.0.0:8090", nil); err != nil {
+			fmt.Printf("Failed to start metrics server: %v\n", err)
+		}
+	}()
+	
 	return s, nil
 }
 

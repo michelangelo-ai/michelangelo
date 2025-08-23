@@ -58,3 +58,59 @@ ma sandbox --workflow cadence
 
 For detailed instructions and additional setup options, please follow the [Temporal Development Environment Guide](https://learn.temporal.io/getting_started/typescript/dev_environment/).
 
+## Monitoring and Metrics
+
+The sandbox includes monitoring capabilities with Grafana and Prometheus to visualize CRD schema validation metrics from the controller manager.
+
+### Setting up Monitoring
+
+1. **Deploy Prometheus and Grafana:**
+   ```bash
+   kubectl apply -f resources/prometheus.yaml
+   kubectl apply -f resources/grafana.yaml
+   ```
+
+2. **Wait for deployments to be ready:**
+   ```bash
+   kubectl wait --for=condition=available deployment/prometheus --timeout=60s
+   kubectl wait --for=condition=available deployment/grafana --timeout=60s
+   ```
+
+3. **Set up port forwarding:**
+   ```bash
+   # Forward Grafana (runs in background)
+   kubectl port-forward svc/grafana 3000:3000 &
+   
+   # Forward Prometheus (runs in background)  
+   kubectl port-forward svc/prometheus 9090:9090 &
+   ```
+
+4. **Access the monitoring dashboards:**
+   - **Grafana**: http://localhost:3000 (admin/admin)
+   - **Prometheus**: http://localhost:9090
+
+### Available Metrics
+
+The controller manager exposes the following CRD unmarshal metrics:
+
+- `crd_unmarshal_success_resource_type_Pipeline_field_type_spec` - Successful Pipeline spec unmarshals
+- `crd_unmarshal_errors_resource_type_Pipeline_field_type_spec_error_type_unmarshal_error` - Pipeline spec unmarshal errors
+
+### Creating Custom Dashboards
+
+In Grafana, you can create dashboards using these Prometheus queries:
+
+- **Error rate**: `rate(crd_unmarshal_errors_resource_type_Pipeline_field_type_spec_error_type_unmarshal_error[5m])`
+- **Success count**: `crd_unmarshal_success_resource_type_Pipeline_field_type_spec`
+- **Total errors**: `sum(crd_unmarshal_errors_resource_type_Pipeline_field_type_spec_error_type_unmarshal_error)`
+
+### Architecture
+
+The monitoring setup consists of:
+
+1. **Controller Manager** - Exposes metrics at `:8090/metrics` in Prometheus format
+2. **Prometheus** - Scrapes metrics from the controller manager every 5 seconds
+3. **Grafana** - Queries Prometheus for visualization and dashboards
+
+The controller manager runs on the host (outside k3d) while Prometheus and Grafana run inside the k3d cluster. Network connectivity is established using the host gateway IP (`192.168.65.254:8090`).
+
