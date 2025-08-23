@@ -17,7 +17,6 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/controller:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
