@@ -1,3 +1,4 @@
+import { RUN_DETAIL_CONFIG } from './detail';
 import { RUN_LIST_CONFIG } from './list';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
@@ -7,5 +8,5 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
   name: 'Pipeline Runs',
   service: 'pipelineRun',
   state: 'active',
-  views: [RUN_LIST_CONFIG],
+  views: [RUN_LIST_CONFIG, RUN_DETAIL_CONFIG],
 };
