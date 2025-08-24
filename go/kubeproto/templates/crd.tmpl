@@ -315,17 +315,18 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 	  AnyResolver: &util.GenericResolver{},
 	}).Unmarshal(bytes.NewReader(b), m)
 	if err == nil {
-        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_success", map[string]string{
-                "resource_type": "{{.Name}}",
-                "field_type": "spec",
-            })
-
-	    return nil
+        return nil
 	}
 
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
-        fmt.Printf("{{.Name}}Spec.UnmarshalJSON: failed to unmarshal: %v, raw data: %q\n", err, string(b))
+        // Use structured logging instead of fmt.Printf
+        logger := log.Log.WithName("crd-unmarshal")
+        logger.Error(err, "Failed to unmarshal CRD spec",
+            "resourceType", "{{.Name}}",
+            "fieldType", "spec",
+            "rawDataLength", len(b))
+        
         // Emit metrics for unmarshal errors
         metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
             "resource_type": "{{.Name}}",
@@ -368,7 +369,13 @@ func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
     }
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
-        fmt.Printf("{{.Name}}Status.UnmarshalJSON: failed to unmarshal: %v, raw data: %q\n", err, string(b))
+        // Use structured logging instead of fmt.Printf
+        logger := log.Log.WithName("crd-unmarshal")
+        logger.Error(err, "Failed to unmarshal CRD status",
+            "resourceType", "{{.Name}}",
+            "fieldType", "status",
+            "rawDataLength", len(b))
+        
         // Emit metrics for unmarshal errors
         metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
             "resource_type": "{{.Name}}",

@@ -62,6 +62,7 @@ func TestTemplates(t *testing.T) {
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	k8sruntime "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 `, CRDImports)
 
 	buf.Reset()
