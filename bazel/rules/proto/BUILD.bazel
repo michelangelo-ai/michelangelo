@@ -32,6 +32,7 @@ go_proto_compiler(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api:go_default_library",
+        "//go/kubeproto/metrics:go_default_library",
         "//go/kubeproto/util:go_default_library",
         "//go/storage:go_default_library",
         "@com_github_gogo_protobuf//gogoproto:go_default_library",

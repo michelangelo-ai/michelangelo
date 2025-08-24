@@ -2,10 +2,15 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["registry.go"],
+    srcs = [
+        "prometheus.go",
+        "registry.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics",
     visibility = ["//visibility:public"],
     deps = [
+        "@com_github_prometheus_client_golang//prometheus:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/metrics:go_default_library",
     ],
 )
