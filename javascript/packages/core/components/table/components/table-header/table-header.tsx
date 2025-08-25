@@ -3,12 +3,15 @@ import { StyledTableHead, StyledTableHeadRow } from 'baseui/table-semantic';
 
 import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
 import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
+import { withStickySides } from '../with-sticky-sides/with-sticky-sides';
 import { TableColumnConfigurationButton } from './components/table-column-configuration-button/table-column-configuration-button';
 import { TableSortIcon } from './components/table-sort-icon/table-sort-icon';
 import { StyledSortableTableHeadCell, StyledTableHeadCell } from './styled-components';
 
 import type { TableData } from '#core/components/table/types/data-types';
 import type { TableHeaderProps } from './types';
+
+const StickySidesTableHeadRow = withStickySides(StyledTableHeadRow);
 
 export const TableHeader = <T extends TableData = TableData>({
   columns,
@@ -17,11 +20,20 @@ export const TableHeader = <T extends TableData = TableData>({
   enableRowSelection,
   isSelected,
   onToggleSelection,
+  enableStickySides,
+  scrollRatio,
 }: TableHeaderProps<T>) => {
   const [css, theme] = useStyletron();
+
   return (
     <StyledTableHead>
-      <StyledTableHeadRow>
+      <StickySidesTableHeadRow
+        enableStickySides={enableStickySides}
+        enableRowSelection={enableRowSelection}
+        lastColumnIndex={columns.filter((column) => column.isVisible).length + 1}
+        scrollRatio={scrollRatio}
+        role="header"
+      >
         {enableRowSelection && (
           <StyledTableHeadCell
             role="columnheader"
@@ -74,7 +86,7 @@ export const TableHeader = <T extends TableData = TableData>({
             </div>
           </StyledTableHeadCell>
         )}
-      </StyledTableHeadRow>
+      </StickySidesTableHeadRow>
     </StyledTableHead>
   );
 };

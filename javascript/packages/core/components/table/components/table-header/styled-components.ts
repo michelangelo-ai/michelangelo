@@ -4,12 +4,12 @@ import {
   StyledTableHeadCellSortable as BaseStyledTableHeadCellSortable,
 } from 'baseui/table-semantic';
 
-// Unset z-index to prevent interference with popovers and overlays
-export const StyledTableHeadCell = withStyle(BaseStyledTableHeadCell, {
-  zIndex: 'unset',
-});
+export const StyledTableHeadCell = withStyle(BaseStyledTableHeadCell, () => ({
+  zIndex: 'unset', // Unset z-index to prevent interference with popovers and overlays
+  position: 'inherit', // Position inherit to allow for sticky columns
+}));
 
-// Unset z-index to prevent interference with popovers and overlays
-export const StyledSortableTableHeadCell = withStyle(BaseStyledTableHeadCellSortable, {
-  zIndex: 'unset',
-});
+export const StyledSortableTableHeadCell = withStyle(BaseStyledTableHeadCellSortable, () => ({
+  zIndex: 'unset', // Unset z-index to prevent interference with popovers and overlays
+  position: 'inherit', // Position inherit to allow for sticky columns
+}));
