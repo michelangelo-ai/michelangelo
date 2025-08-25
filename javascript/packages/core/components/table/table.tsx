@@ -5,8 +5,10 @@ import {
   getSortedRowModel,
   useReactTable,
 } from '@tanstack/react-table';
+import { useStyletron } from 'baseui';
 import { StyledTable } from 'baseui/table-semantic';
 
+import { useScrollRatio } from '#core/hooks/use-scroll';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableBody } from './components/table-body/table-body';
@@ -16,7 +18,6 @@ import { TableHeader } from './components/table-header/table-header';
 import { TableNoResultsState } from './components/table-no-results-state/table-no-results-state';
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { TableSelectionProvider } from './plugins/selection/table-selection-provider';
-import { TableContainer } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
@@ -28,8 +29,10 @@ import type { TableProps } from './types/table-types';
 export function Table<T extends TableData = TableData>(inputProps: TableProps<T>) {
   const props = applyDefaultProps<T>(inputProps);
   const columns = useColumnTransformer<T>(props.columns);
+  const [css, theme] = useStyletron();
 
   const { state, initialState } = composeTableState(props.state ?? {});
+  const { scrollRatio, tableRef, updateScrollRatio } = useScrollRatio(columns);
 
   const table = useReactTable<T>({
     data: props.data,
@@ -66,16 +69,16 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
   const transformedColumns = transformColumns(table.getAllLeafColumns());
 
   return (
-    <TableSelectionProvider
-      value={{
-        selectedRows: table.getSelectedRowModel().flatRows.map((row) => row.original),
-        selectionEnabled: props.enableRowSelection,
-        toggleAllRowsSelected: (selected: boolean) => table.toggleAllRowsSelected(selected),
-        getIsAllRowsSelected: () => table.getIsAllRowsSelected(),
-        getIsSomeRowsSelected: () => table.getIsSomeRowsSelected(),
-      }}
-    >
-      <TableContainer>
+    <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale400 })}>
+      <TableSelectionProvider
+        value={{
+          selectedRows: table.getSelectedRowModel().flatRows.map((row) => row.original),
+          selectionEnabled: props.enableRowSelection,
+          toggleAllRowsSelected: (selected: boolean) => table.toggleAllRowsSelected(selected),
+          getIsAllRowsSelected: () => table.getIsAllRowsSelected(),
+          getIsSomeRowsSelected: () => table.getIsSomeRowsSelected(),
+        }}
+      >
         <TableActionBar
           globalFilter={table.getState().globalFilter as string}
           setGlobalFilter={table.setGlobalFilter}
@@ -87,41 +90,50 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           filterableColumns={transformedColumns.filter((column) => column.canFilter)}
         />
 
-        <StyledTable>
-          {viewState === 'loading' && <props.loadingView />}
+        <div
+          className={css({ overflow: 'auto', position: 'relative' })}
+          ref={tableRef as React.RefObject<HTMLDivElement>}
+          onScroll={updateScrollRatio}
+        >
+          <StyledTable>
+            {viewState === 'loading' && <props.loadingView />}
 
-          {viewState === 'error' && <TableErrorState error={props.error!} />}
+            {viewState === 'error' && <TableErrorState error={props.error!} />}
 
-          {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
+            {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
 
-          {viewState === 'filtered-empty' && (
-            <TableNoResultsState
-              clearFilters={() => {
-                table.setGlobalFilter('');
-                table.setColumnFilters([]);
-              }}
-            />
-          )}
+            {viewState === 'filtered-empty' && (
+              <TableNoResultsState
+                clearFilters={() => {
+                  table.setGlobalFilter('');
+                  table.setColumnFilters([]);
+                }}
+              />
+            )}
 
-          {viewState !== 'error' && (
-            <TableHeader<T>
-              columns={transformedColumns}
-              setColumnOrder={table.setColumnOrder}
-              setColumnVisibility={table.setColumnVisibility}
-              enableRowSelection={props.enableRowSelection}
-              isSelected={table.getIsAllRowsSelected()}
-              onToggleSelection={(selected: boolean) => table.toggleAllRowsSelected(selected)}
-            />
-          )}
+            {viewState !== 'error' && (
+              <TableHeader<T>
+                columns={transformedColumns}
+                setColumnOrder={table.setColumnOrder}
+                setColumnVisibility={table.setColumnVisibility}
+                enableRowSelection={props.enableRowSelection}
+                isSelected={table.getIsAllRowsSelected()}
+                onToggleSelection={(selected: boolean) => table.toggleAllRowsSelected(selected)}
+                enableStickySides={props.enableStickySides}
+                scrollRatio={scrollRatio}
+              />
+            )}
 
-          {viewState === 'ready' && (
-            <TableBody<T>
-              rows={transformRows<T>(table.getRowModel().rows)}
-              enableRowSelection={props.enableRowSelection}
-            />
-          )}
-        </StyledTable>
-
+            {viewState === 'ready' && (
+              <TableBody<T>
+                rows={transformRows<T>(table.getRowModel().rows)}
+                enableRowSelection={props.enableRowSelection}
+                enableStickySides={props.enableStickySides}
+                scrollRatio={scrollRatio}
+              />
+            )}
+          </StyledTable>
+        </div>
         {!props.disablePagination && viewState === 'ready' && (
           <props.pagination
             gotoPage={table.setPageIndex}
@@ -132,7 +144,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             fetchPlugin={props.fetchPlugin}
           />
         )}
-      </TableContainer>
-    </TableSelectionProvider>
+      </TableSelectionProvider>
+    </div>
   );
 }

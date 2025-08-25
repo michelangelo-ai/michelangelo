@@ -2,13 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 
 import { useScrollRatio } from '../use-scroll';
 
-// Mock ResizeObserver
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}));
-
 describe('useScrollRatio', () => {
   it('should return -1 initially', () => {
     const { result } = renderHook(() => useScrollRatio([]));

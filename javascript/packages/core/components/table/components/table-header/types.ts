@@ -6,10 +6,12 @@ import type {
 } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
 import type { ControlledTableState } from '#core/components/table/types/table-types';
+import type { WithStickySidesProps } from '../with-sticky-sides/types';
 
 export type TableHeaderProps<T extends TableData = TableData> = {
   columns: Array<ColumnRenderState<T> & SortingCapability & VisibilityCapability>;
   setColumnOrder: ControlledTableState['setColumnOrder'];
   setColumnVisibility: ControlledTableState['setColumnVisibility'];
-  enableRowSelection?: boolean;
-} & Omit<SelectableCapability, 'canSelect'>;
+  enableRowSelection: boolean;
+} & Omit<SelectableCapability, 'canSelect'> &
+  Pick<WithStickySidesProps, 'enableStickySides' | 'scrollRatio'>;

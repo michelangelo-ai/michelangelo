@@ -1,17 +1,9 @@
-import { styled, withStyle } from 'baseui';
+import { withStyle } from 'baseui';
 import {
   StyledTableBody as BaseStyledTableBody,
   StyledTableBodyCell as BaseStyledTableBodyCell,
   StyledTableBodyRow as BaseStyledTableBodyRow,
 } from 'baseui/table-semantic';
-
-export const TableContainer = styled('div', ({ $theme }) => ({
-  overflow: 'auto',
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: $theme.sizing.scale400,
-}));
 
 export const StyledTableBody = withStyle(BaseStyledTableBody, ({ $theme }) => ({
   backgroundColor: $theme.colors.tableHeadBackgroundColor,

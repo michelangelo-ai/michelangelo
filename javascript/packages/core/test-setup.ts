@@ -23,3 +23,13 @@ const timezoneOffset = new Date().getTimezoneOffset();
 if (timezoneOffset !== 0) {
   console.warn(`⚠️  Expected UTC timezone but got offset: ${timezoneOffset} minutes`);
 }
+
+/**
+ * Mock ResizeObserver for components that use it (like sticky table columns)
+ * JSDOM doesn't provide ResizeObserver, so we need to mock it globally
+ */
+global.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}));

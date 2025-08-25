@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { SelectableCapability } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { WithStickySidesProps } from '../with-sticky-sides/types';
 
 export type TableCell<_T extends TableData = TableData> = {
   id: string;
@@ -14,5 +15,5 @@ export type TableRow<T extends TableData = TableData> = {
 
 export type TableBodyProps<T extends TableData = TableData> = {
   rows: TableRow<T>[];
-  enableRowSelection?: boolean;
-};
+  enableRowSelection: boolean;
+} & Pick<WithStickySidesProps, 'enableStickySides' | 'scrollRatio'>;

@@ -159,6 +159,15 @@ export interface TableRequiredFunctionalityProps {
    * @default false
    */
   enableRowSelection: boolean;
+
+  /**
+   * @description
+   * If true, enables sticky column functionality for better horizontal scrolling experience.
+   * First and last columns will remain visible during horizontal scroll.
+   *
+   * @default false
+   */
+  enableStickySides: boolean;
 }
 
 /**

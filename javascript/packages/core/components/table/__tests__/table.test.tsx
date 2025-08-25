@@ -1422,4 +1422,31 @@ describe('Table', () => {
       });
     });
   });
+
+  describe('sticky sides integration', () => {
+    const testData = buildTableData(3, 4);
+    const testColumns = buildTableColumns(4);
+
+    it('applies sticky positioning to columns when enableStickySides is true', () => {
+      render(
+        <Table data={testData} columns={testColumns} enableStickySides={true} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      // Check for sticky column test IDs that the withStickySides HOC adds
+      // Should have sticky cells for both header and data rows in first column
+      const stickyCells = screen.getAllByTestId('sticky-cell-left-sticky');
+      expect(stickyCells.length).toBeGreaterThan(0);
+    });
+
+    it('does not apply sticky positioning when enableStickySides is false', () => {
+      render(
+        <Table data={testData} columns={testColumns} enableStickySides={false} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      // Should not have sticky cell test IDs
+      expect(screen.queryByTestId('sticky-cell-left-sticky')).not.toBeInTheDocument();
+    });
+  });
 });
