@@ -61,14 +61,6 @@ func (r *Registry) IncrementCounter(name string, tags map[string]string) {
 			getTagValueOrDefault(tags, "namespace"),
 			getTagValueOrDefault(tags, "error_type"),
 		)
-	case "crd_unmarshal_success":
-		// For success metrics, we could define a separate counter or just increment the opposite
-		// For now, we'll use the existing CRD error counter with "success" as error_type
-		IncCRDUnmarshalError(
-			getTagValueOrDefault(tags, "resource_type"),
-			getTagValueOrDefault(tags, "namespace"),
-			"success",
-		)
 	}
 }
 
