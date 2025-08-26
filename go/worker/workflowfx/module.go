@@ -166,7 +166,7 @@ func newTemporalWorker(factory TemporalClientFactory, conf Config, log *zap.Logg
 	c, err := factory.NewTemporalClient(tempclient.Options{
 		HostPort:       conf.Host,
 		Namespace:      conf.Client.Domain,
-		DataConverter:  temporal.DataConverter{},
+		DataConverter:  &temporal.DataConverter{Logger: log},
 		MetricsHandler: temptally.NewMetricsHandler(scope),
 		Logger:         temporal.NewZapLoggerAdapter(log),
 	})
