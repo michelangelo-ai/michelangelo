@@ -104,5 +104,5 @@ jobs:
           file: docker/ui-prebuilt.Dockerfile
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64  # Now both platforms work!
+          platforms: linux/amd64,linux/arm64
           push: true
