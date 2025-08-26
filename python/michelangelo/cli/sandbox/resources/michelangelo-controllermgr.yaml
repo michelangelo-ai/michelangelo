@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:main
+      image: ghcr.io/michelangelo-ai/controllermgr:npuppala-per-task-status-tracking
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -47,4 +47,4 @@ data:
       service: temporal-frontend
       host: localhost:7233
       transport: grpc
-      domain: uniflow
+      domain: default
