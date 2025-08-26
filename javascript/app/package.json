@@ -1,9 +1,10 @@
 {
   "name": "@michelangelo/app",
   "license": "UNLICENSED",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "scripts": {
+    "build": "vite build --config vite.config.ts",
     "dev": "vite --config vite.config.ts",
     "dev-production": "vite --config vite.config.production.ts"
   },
