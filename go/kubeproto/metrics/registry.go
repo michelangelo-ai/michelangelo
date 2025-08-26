@@ -6,7 +6,6 @@ import (
 	"github.com/uber-go/tally"
 )
 
-
 var (
 	globalRegistry *Registry
 	once           sync.Once
@@ -66,7 +65,7 @@ func (r *Registry) IncrementCounter(name string, tags map[string]string) {
 		// For success metrics, we could define a separate counter or just increment the opposite
 		// For now, we'll use the existing CRD error counter with "success" as error_type
 		IncCRDUnmarshalError(
-			getTagValueOrDefault(tags, "resource_type"), 
+			getTagValueOrDefault(tags, "resource_type"),
 			getTagValueOrDefault(tags, "namespace"),
 			"success",
 		)

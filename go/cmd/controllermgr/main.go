@@ -25,7 +25,6 @@ import (
 
 const serverName = "ma-controllermgr"
 
-
 // scheme provides a Kubernetes runtime.Scheme object.
 //
 // This function creates a new Kubernetes runtime scheme and registers both the standard Kubernetes API types
@@ -50,10 +49,10 @@ func getTallyScope() (tally.Scope, error) {
 	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
-	
+
 	// Register Prometheus metrics with controller-runtime
 	metrics.RegisterMetrics()
-	
+
 	return s, nil
 }
 

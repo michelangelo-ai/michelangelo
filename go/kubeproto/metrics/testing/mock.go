@@ -22,13 +22,13 @@ func NewMockMetricsCollector() *MockMetricsCollector {
 func (m *MockMetricsCollector) Increment(name string, tags map[string]string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	// Create a key from metric name and tags for test verification
 	key := name
 	for k, v := range tags {
 		key += "_" + k + "_" + v
 	}
-	
+
 	m.metrics[key]++
 }
 
@@ -36,7 +36,7 @@ func (m *MockMetricsCollector) Increment(name string, tags map[string]string) {
 func (m *MockMetricsCollector) GetMetrics() map[string]float64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	result := make(map[string]float64)
 	for k, v := range m.metrics {
 		result[k] = v
@@ -48,12 +48,12 @@ func (m *MockMetricsCollector) GetMetrics() map[string]float64 {
 func (m *MockMetricsCollector) GetMetric(name string, tags map[string]string) float64 {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	
+
 	key := name
 	for k, v := range tags {
 		key += "_" + k + "_" + v
 	}
-	
+
 	return m.metrics[key]
 }
 
@@ -61,6 +61,6 @@ func (m *MockMetricsCollector) GetMetric(name string, tags map[string]string) fl
 func (m *MockMetricsCollector) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	
+
 	m.metrics = make(map[string]float64)
 }
