@@ -64,8 +64,8 @@ func create(p params) (result, error) {
 
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme: p.Scheme,
-		//MetricsBindAddress:     p.Config.MetricsBindAddress,
-		//Port:                   p.Config.Port,
+		MetricsBindAddress:     p.Config.MetricsBindAddress,
+		Port:                   p.Config.Port,
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
