@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
+      image: ghcr.io/michelangelo-ai/worker:npuppala-per-task-status-tracking
       volumeMounts:
         - name: worker-config-volume
           mountPath: /config
@@ -36,14 +36,14 @@ data:
 
     workflow-engine:
       # for cadence
-        host: cadence:7833
+      # host: cadence:7833
       # for temporal
-      #  host: 127.0.0.1:7233
+      host: localhost:7233
         transport: grpc
           # for cadence
-        provider: cadence
+          # provider: cadence
         # for temporal
-      #  provider: temporal
+        provider: temporal
         workers:
           - domain: default
             taskList: default
