@@ -320,20 +320,6 @@ func (m *{{.Name}}Spec) UnmarshalJSON(b []byte) error {
 
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
-        // Use structured logging instead of fmt.Printf
-        logger := log.Log.WithName("crd-unmarshal")
-        logger.Error(err, "Failed to unmarshal CRD spec",
-            "resourceType", "{{.Name}}",
-            "fieldType", "spec",
-            "rawDataLength", len(b),
-            "rawDataPreview", string(b[:min(len(b), 200)]))
-        
-        // Emit metrics for unmarshal errors
-        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
-            "resource_type": "{{.Name}}",
-            "field_type": "spec",
-            "error_type": "unmarshal_error",
-        })
         return err
     }
 
@@ -370,20 +356,6 @@ func (m *{{.Name}}Status) UnmarshalJSON(b []byte) error {
     }
     if !(strings.Contains(err.Error(), "cannot unmarshal string into Go value of type map[string]json.RawMessage") ||
          strings.Contains(err.Error(), "cannot unmarshal number into Go value of type map[string]json.RawMessage")) {
-        // Use structured logging instead of fmt.Printf
-        logger := log.Log.WithName("crd-unmarshal")
-        logger.Error(err, "Failed to unmarshal CRD status",
-            "resourceType", "{{.Name}}",
-            "fieldType", "status",
-            "rawDataLength", len(b),
-            "rawDataPreview", string(b[:min(len(b), 200)]))
-        
-        // Emit metrics for unmarshal errors
-        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", map[string]string{
-            "resource_type": "{{.Name}}",
-            "field_type": "status", 
-            "error_type": "unmarshal_error",
-        })
         return err
     }
 
@@ -423,14 +395,14 @@ func (in *{{.Name}}) DeepCopyInto(out *{{.Name}}) {
 	out.Status = *proto.Clone(&in.Status).(*{{.Name}}Status)
 }
 
-// UnmarshalJSON unmarshals the full CRD and provides detailed logging with resource context
+// UnmarshalJSON unmarshals the full CR and provides detailed logging with resource context
 func (m *{{.Name}}) UnmarshalJSON(b []byte) error {
     // Use standard JSON unmarshalling first
     type Alias {{.Name}}
     aux := (*Alias)(m)
     if err := json.Unmarshal(b, aux); err != nil {
         // Log with full resource context when available
-        logger := log.Log.WithName("crd-unmarshal")
+        logger := log.Log.WithName("cr-unmarshal")
         logFields := []interface{}{
             "resourceType", "{{.Name}}",
             "fieldType", "full_object",
@@ -446,7 +418,7 @@ func (m *{{.Name}}) UnmarshalJSON(b []byte) error {
             logFields = append(logFields, "resourceNamespace", m.ObjectMeta.Namespace)
         }
         
-        logger.Error(err, "Failed to unmarshal full CRD object", logFields...)
+        logger.Error(err, "Failed to unmarshal full CR object", logFields...)
         
         // Emit metrics for unmarshal errors
         metricLabels := map[string]string{
