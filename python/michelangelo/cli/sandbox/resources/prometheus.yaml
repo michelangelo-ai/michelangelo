@@ -10,7 +10,7 @@ data:
     scrape_configs:
     - job_name: 'michelangelo-controller'
       static_configs:
-      - targets: ['michelangelo-controllermgr:8090']
+      - targets: ['michelangelo-controllermgr:8091']
       scrape_interval: 5s
       metrics_path: /metrics
 

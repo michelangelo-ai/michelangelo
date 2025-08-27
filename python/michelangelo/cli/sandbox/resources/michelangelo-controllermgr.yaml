@@ -28,8 +28,8 @@ spec:
     app: michelangelo-controllermgr
   ports:
   - name: metrics
-    port: 8090
-    targetPort: 8090
+    port: 8091
+    targetPort: 8091
   - name: health
     port: 8081
     targetPort: 8081
@@ -43,7 +43,7 @@ metadata:
 data:
   base.yaml: |
     controllermgr:
-      metricsBindAddress: ${METRICS_ADDRESS::8090}
+      metricsBindAddress: ${METRICS_ADDRESS::8091}
       healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
       leaderElection: false
       leaderElectionID: decaf1259.michelangelo.uber.com
