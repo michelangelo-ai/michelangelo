@@ -15,6 +15,7 @@ import {
   expectTableHeaders,
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
+import { TableRow } from '../components/table-body/types';
 import { Table } from '../table';
 
 import type { TablePaginationProps } from '../components/table-pagination/types';
@@ -1447,6 +1448,104 @@ describe('Table', () => {
 
       // Should not have sticky cell test IDs
       expect(screen.queryByTestId('sticky-cell-left-sticky')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('row expansion integration', () => {
+    const testData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering' },
+      { id: '2', name: 'Bob Smith', department: 'Marketing' },
+      { id: '3', name: 'Carol Davis', department: 'Engineering' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'department', label: 'Department' },
+    ];
+
+    const TestSubRow = ({ row }: { row: TableRow }) => <span>Expanded details for {row.id}</span>;
+
+    const mockIcons = {
+      chevronRight: (props: { title: string }) => <div title={props.title}>Chevron Right</div>,
+      chevronDown: (props: { title: string }) => <div title={props.title}>Chevron Down</div>,
+    };
+
+    it('does not render expand controls when subRow prop is not provided', () => {
+      render(
+        <Table data={testData} columns={testColumns} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.queryByTitle('Expand')).not.toBeInTheDocument();
+    });
+
+    it('renders expand controls and handles expansion workflow', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={testData} columns={testColumns} subRow={TestSubRow} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+        ])
+      );
+
+      // All rows should have expand controls, no sub-rows initially
+      expect(screen.getAllByTitle('Expand')).toHaveLength(3);
+      expect(screen.queryByTitle('Collapse')).not.toBeInTheDocument();
+      expect(screen.queryByText('Expanded details for 1')).not.toBeInTheDocument();
+
+      // Expand first row
+      const firstExpandButton = screen.getAllByTitle('Expand')[0];
+      await user.click(firstExpandButton);
+
+      await waitFor(() => {
+        expect(screen.getByText('Expanded details for 0')).toBeInTheDocument();
+        expect(screen.getByTitle('Collapse')).toBeInTheDocument();
+        expect(screen.getAllByTitle('Expand')).toHaveLength(2);
+      });
+
+      // Other rows should remain collapsed
+      expect(screen.queryByText('Expanded details for 1')).not.toBeInTheDocument();
+      expect(screen.queryByText('Expanded details for 2')).not.toBeInTheDocument();
+
+      const collapseButton = screen.getByTitle('Collapse');
+      await user.click(collapseButton);
+
+      await waitFor(() => {
+        expect(screen.queryByText('Expanded details for 0')).not.toBeInTheDocument();
+        expect(screen.getAllByTitle('Expand')).toHaveLength(3);
+        expect(screen.queryByTitle('Collapse')).not.toBeInTheDocument();
+      });
+    });
+
+    it('allows multiple rows to be expanded simultaneously', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={testData} columns={testColumns} subRow={TestSubRow} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+        ])
+      );
+
+      const expandButtons = screen.getAllByTitle('Expand');
+
+      await user.click(expandButtons[0]);
+      await user.click(expandButtons[2]);
+
+      await waitFor(() => {
+        expect(screen.getByText('Expanded details for 0')).toBeInTheDocument();
+        expect(screen.queryByText('Expanded details for 1')).not.toBeInTheDocument();
+        expect(screen.getByText('Expanded details for 2')).toBeInTheDocument();
+        expect(screen.getAllByTitle('Expand')).toHaveLength(1);
+        expect(screen.getAllByTitle('Collapse')).toHaveLength(2);
+      });
     });
   });
 });

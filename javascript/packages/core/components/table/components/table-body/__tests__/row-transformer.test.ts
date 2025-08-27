@@ -20,6 +20,9 @@ describe('transformRows', () => {
         canSelect: true,
         isSelected: false,
         onToggleSelection: expect.any(Function) as (selected: boolean) => void,
+        canExpand: true,
+        isExpanded: false,
+        onToggleExpanded: expect.any(Function) as () => void,
       },
       {
         id: 'row-2',
@@ -30,6 +33,9 @@ describe('transformRows', () => {
         canSelect: true,
         isSelected: false,
         onToggleSelection: expect.any(Function) as (selected: boolean) => void,
+        canExpand: true,
+        isExpanded: false,
+        onToggleExpanded: expect.any(Function) as () => void,
       },
     ]);
   });

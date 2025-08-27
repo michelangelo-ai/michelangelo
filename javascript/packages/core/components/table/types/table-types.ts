@@ -2,6 +2,7 @@ import { EmptyState } from '../components/table-empty-state/types';
 
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableActionBarConfig } from '../components/table-action-bar/types';
+import type { TableRow } from '../components/table-body/types';
 import type { PageSizeOption, TablePaginationProps } from '../components/table-pagination/types';
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
@@ -170,20 +171,34 @@ export interface TableRequiredFunctionalityProps {
   enableStickySides: boolean;
 }
 
+interface TableOptionalProps {
+  /**
+   * @description
+   * Component to render sub-rows for expandable row functionality.
+   * When provided, rows will show expand/collapse controls in the first column.
+   * Sub-rows are rendered below the main row content spanning all columns.
+   *
+   * @default undefined
+   */
+  subRow?: React.ComponentType<{ row: TableRow<TableData> }>;
+}
+
 /**
  * Input props that users provide to the Table component.
  * Optional props will be filled with defaults via applyDefaultProps.
  */
 export interface TableProps<T extends TableData = TableData>
   extends TableRequiredUserProps<T>,
-    Partial<TableRequiredFunctionalityProps> {}
+    Partial<TableRequiredFunctionalityProps>,
+    TableOptionalProps {}
 /**
  * Resolved props with all defaults applied.
  * Child components can rely on these props being defined.
  */
 export interface TablePropsResolved<T extends TableData = TableData>
   extends TableRequiredUserProps<T>,
-    TableRequiredFunctionalityProps {}
+    TableRequiredFunctionalityProps,
+    TableOptionalProps {}
 
 /**
  * Represents the possible view states of a table component.

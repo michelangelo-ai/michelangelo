@@ -28,5 +28,8 @@ export const getTanstackRowFixture = (overrides?: {
     getCanSelect: vi.fn(() => true),
     getIsSelected: vi.fn(() => false),
     toggleSelected: vi.fn(),
+    getCanExpand: vi.fn(() => true),
+    getIsExpanded: vi.fn(() => false),
+    onToggleExpanded: vi.fn(),
   } as unknown as Row<TableData>;
 };
