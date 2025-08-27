@@ -16,8 +16,12 @@ export const StyledTableBodyRow = BaseStyledTableBodyRow;
  */
 export const StyledTableBodyCell = withStyle<
   typeof BaseStyledTableBodyCell,
-  { $columnNumber?: number }
->(BaseStyledTableBodyCell, ({ $columnNumber }) => ({
-  fontWeight: $columnNumber === 0 ? 500 : 'normal',
-  verticalAlign: 'middle',
-}));
+  { $columnNumber?: number; $enableRowSelection?: boolean }
+>(BaseStyledTableBodyCell, ({ $columnNumber, $enableRowSelection }) => {
+  const firstDataColumnIndex = $enableRowSelection ? 1 : 0;
+
+  return {
+    fontWeight: $columnNumber === firstDataColumnIndex ? 500 : 'normal',
+    verticalAlign: 'middle',
+  };
+});

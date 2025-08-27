@@ -1,7 +1,9 @@
+import React from 'react';
 import { useStyletron } from 'baseui';
-import { StyledTableBodyCell, StyledTableBodyRow } from 'baseui/table-semantic';
+import { StyledTableBodyRow } from 'baseui/table-semantic';
 
-import { StyledTableBody } from '#core/components/table/styled-components';
+import { StyledTableBody, StyledTableBodyCell } from '#core/components/table/styled-components';
+import { TableExpandIcon } from '../table-expand-icon/table-expand-icon';
 import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
 import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
 import { withStickySides } from '../with-sticky-sides/with-sticky-sides';
@@ -16,6 +18,7 @@ export const TableBody = <T extends TableData = TableData>({
   enableRowSelection,
   enableStickySides,
   scrollRatio,
+  subRow,
 }: TableBodyProps<T>) => {
   const [css, theme] = useStyletron();
 
@@ -24,31 +27,61 @@ export const TableBody = <T extends TableData = TableData>({
   return (
     <StyledTableBody>
       {rows.map((row) => (
-        <StickySidesTableBodyRow
-          key={row.id}
-          enableStickySides={enableStickySides}
-          enableRowSelection={enableRowSelection}
-          lastColumnIndex={lastColumnIndex}
-          scrollRatio={scrollRatio}
-          role="row"
-        >
-          {enableRowSelection && (
-            <StyledTableBodyCell className={css(getSelectionColumnCellStyles(theme))}>
-              <TableSelectionColumn
-                canSelect={row.canSelect ?? false}
-                isSelected={row.isSelected ?? false}
-                onToggleSelection={row.onToggleSelection ?? (() => undefined)}
-              />
-            </StyledTableBodyCell>
+        <React.Fragment key={row.id}>
+          <StickySidesTableBodyRow
+            enableStickySides={enableStickySides}
+            enableRowSelection={enableRowSelection}
+            lastColumnIndex={lastColumnIndex}
+            scrollRatio={scrollRatio}
+            role="row"
+          >
+            {enableRowSelection && (
+              <StyledTableBodyCell className={css(getSelectionColumnCellStyles(theme))}>
+                <TableSelectionColumn
+                  canSelect={row.canSelect ?? false}
+                  isSelected={row.isSelected ?? false}
+                  onToggleSelection={row.onToggleSelection ?? (() => undefined)}
+                />
+              </StyledTableBodyCell>
+            )}
+
+            {row.cells.map((cell, cellIndex) => (
+              <StyledTableBodyCell
+                key={cell.id}
+                $columnNumber={cellIndex}
+                $enableRowSelection={enableRowSelection}
+              >
+                {row.canExpand && cellIndex === 0 ? (
+                  <div
+                    className={css({
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      gap: theme.sizing.scale100,
+                    })}
+                    onClick={row.onToggleExpanded}
+                  >
+                    <TableExpandIcon expanded={row.isExpanded} />
+                    {cell.content}
+                  </div>
+                ) : (
+                  cell.content
+                )}
+              </StyledTableBodyCell>
+            ))}
+
+            {/* Placeholder action cell to align with column configuration button */}
+            <StyledTableBodyCell />
+          </StickySidesTableBodyRow>
+
+          {subRow && row.isExpanded && (
+            <StyledTableBodyRow>
+              <StyledTableBodyCell colSpan={row.cells.length + (enableRowSelection ? 2 : 1)}>
+                {React.createElement(subRow, { row })}
+              </StyledTableBodyCell>
+            </StyledTableBodyRow>
           )}
-
-          {row.cells.map((cell) => (
-            <StyledTableBodyCell key={cell.id}>{cell.content}</StyledTableBodyCell>
-          ))}
-
-          {/* Placeholder action cell to align with column configuration button */}
-          <StyledTableBodyCell />
-        </StickySidesTableBodyRow>
+        </React.Fragment>
       ))}
     </StyledTableBody>
   );

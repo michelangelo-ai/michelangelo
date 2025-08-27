@@ -16,5 +16,8 @@ export function transformRows<T extends TableData = TableData>(
     canSelect: row.getCanSelect(),
     isSelected: row.getIsSelected(),
     onToggleSelection: (selected: boolean) => row.toggleSelected(selected),
+    canExpand: row.getCanExpand(),
+    isExpanded: row.getIsExpanded(),
+    onToggleExpanded: () => row.toggleExpanded(),
   }));
 }

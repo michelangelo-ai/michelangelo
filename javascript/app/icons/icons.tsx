@@ -9,6 +9,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import CropSquareIcon from '@mui/icons-material/CropSquare';
 import Info from '@mui/icons-material/Info';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -23,6 +24,7 @@ export const ICONS = {
   arrowLeft: createMuiIconAdapter(KeyboardBackspaceIcon),
   chartLine: createMuiIconAdapter(ShowChartIcon),
   chevronRight: createMuiIconAdapter(ChevronRightIcon),
+  chevronDown: createMuiIconAdapter(KeyboardArrowDownIcon),
   circleI: createMuiIconAdapter(Info),
   circleX: createMuiIconAdapter(CancelIcon),
   circleCheck: createMuiIconAdapter(CheckCircle),

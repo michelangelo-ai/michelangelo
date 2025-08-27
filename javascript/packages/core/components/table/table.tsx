@@ -1,5 +1,6 @@
 import {
   getCoreRowModel,
+  getExpandedRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -52,6 +53,12 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       ? { getSortedRowModel: getSortedRowModel() }
       : { enableSorting: false }),
     ...(!props.disablePagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
+    ...(props.subRow
+      ? {
+          getExpandedRowModel: getExpandedRowModel(),
+          getRowCanExpand: () => true,
+        }
+      : {}),
     enableRowSelection: props.enableRowSelection,
     globalFilterFn: 'includesString',
   });
@@ -130,6 +137,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
                 enableRowSelection={props.enableRowSelection}
                 enableStickySides={props.enableStickySides}
                 scrollRatio={scrollRatio}
+                subRow={props.subRow}
               />
             )}
           </StyledTable>

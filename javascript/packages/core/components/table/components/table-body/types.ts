@@ -11,9 +11,28 @@ export type TableCell<_T extends TableData = TableData> = {
 export type TableRow<T extends TableData = TableData> = {
   id: string;
   cells: TableCell<T>[];
-} & SelectableCapability;
+} & SelectableCapability &
+  ExpandableCapability;
 
 export type TableBodyProps<T extends TableData = TableData> = {
   rows: TableRow<T>[];
   enableRowSelection: boolean;
+  subRow?: React.ComponentType<{ row: TableRow<T> }>;
 } & Pick<WithStickySidesProps, 'enableStickySides' | 'scrollRatio'>;
+
+/**
+ * Defines a row's expansion capabilities and current state.
+ * Used by expandable row components to enable sub-row expansion interactions.
+ *
+ * @example
+ * ```ts
+ * // isExpanded = false
+ * onToggleExpanded()
+ * expect(isExpanded).toBe(true)
+ * ```
+ */
+export type ExpandableCapability = {
+  canExpand: boolean;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
+};
