@@ -12,7 +12,6 @@ import { StyledTable } from 'baseui/table-semantic';
 import { useScrollRatio } from '#core/hooks/use-scroll';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
-import { TableBody } from './components/table-body/table-body';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
 import { TableErrorState } from './components/table-error-state/table-error-state';
 import { TableHeader } from './components/table-header/table-header';
@@ -132,12 +131,13 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             )}
 
             {viewState === 'ready' && (
-              <TableBody<T>
+              <props.body
                 rows={transformRows<T>(table.getRowModel().rows)}
                 enableRowSelection={props.enableRowSelection}
                 enableStickySides={props.enableStickySides}
                 scrollRatio={scrollRatio}
                 subRow={props.subRow}
+                actions={props.actions}
               />
             )}
           </StyledTable>

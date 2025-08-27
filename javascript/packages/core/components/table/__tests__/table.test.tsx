@@ -15,7 +15,7 @@ import {
   expectTableHeaders,
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
-import { TableRow } from '../components/table-body/types';
+import { TableBodyProps, TableRow } from '../components/table-body/types';
 import { Table } from '../table';
 
 import type { TablePaginationProps } from '../components/table-pagination/types';
@@ -1448,6 +1448,82 @@ describe('Table', () => {
 
       // Should not have sticky cell test IDs
       expect(screen.queryByTestId('sticky-cell-left-sticky')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('actions column integration', () => {
+    const testData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering' },
+      { id: '2', name: 'Bob Smith', department: 'Marketing' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'department', label: 'Department' },
+    ];
+
+    const TestActions = ({ row }: { row: TableRow }) => (
+      <div>
+        <button>Edit row {row.id}</button>
+        <button>Delete row {row.id}</button>
+      </div>
+    );
+
+    it('renders actions component when actions prop is provided', () => {
+      render(
+        <Table data={testData} columns={testColumns} actions={TestActions} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByRole('button', { name: 'Edit row 0' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete row 0' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Edit row 1' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Delete row 1' })).toBeInTheDocument();
+    });
+  });
+
+  describe('custom body override integration', () => {
+    const testData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering' },
+      { id: '2', name: 'Bob Smith', department: 'Marketing' },
+    ];
+
+    const testColumns = [
+      { id: 'name', label: 'Name' },
+      { id: 'department', label: 'Department' },
+    ];
+
+    const CustomTableBody = (props: TableBodyProps) => (
+      <tbody>
+        <tr>
+          <td colSpan={2}>Custom body rendering {props.rows.length} rows</td>
+        </tr>
+        {props.rows.map((row: TableRow) => (
+          <tr key={row.id}>
+            <td>Custom: {row.cells[0].content}</td>
+            <td>Custom: {row.cells[1].content}</td>
+          </tr>
+        ))}
+      </tbody>
+    );
+
+    it('uses custom table body when body prop is provided', () => {
+      render(
+        <Table data={testData} columns={testColumns} body={CustomTableBody} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByText('Custom body rendering 2 rows')).toBeInTheDocument();
+      expect(
+        screen.getByText((_content, element) => {
+          return element?.textContent === 'Custom: Alice Johnson';
+        })
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText((_content, element) => {
+          return element?.textContent === 'Custom: Bob Smith';
+        })
+      ).toBeInTheDocument();
     });
   });
 

@@ -18,6 +18,7 @@ export type TableBodyProps<T extends TableData = TableData> = {
   rows: TableRow<T>[];
   enableRowSelection: boolean;
   subRow?: React.ComponentType<{ row: TableRow<T> }>;
+  actions?: React.ComponentType<{ row: TableRow<T> }>;
 } & Pick<WithStickySidesProps, 'enableStickySides' | 'scrollRatio'>;
 
 /**
