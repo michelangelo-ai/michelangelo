@@ -94,7 +94,7 @@ The sandbox includes Fluent Bit for collecting Ray job logs and storing them in 
 The controller manager exposes comprehensive metrics including:
 
 **CRD Unmarshal Metrics:**
-- `crd_unmarshal_errors_total{crd_type="Pipeline",namespace="...",error_type="unmarshal_error"}` - CRD unmarshal errors by type and namespace
+- `cr_unmarshal_errors_total{crd_type="Pipeline",namespace="...",error_type="unmarshal_error"}` - CRD unmarshal errors by type and namespace
 
 **Controller Runtime Metrics:**
 - `controller_runtime_reconcile_total{controller="pipeline|raycluster|rayjob",result="success|error|requeue"}` - Reconciliation results
@@ -110,7 +110,7 @@ The controller manager exposes comprehensive metrics including:
 
 Use these queries in the Prometheus UI:
 
-- **CRD unmarshal error rate**: `rate(crd_unmarshal_errors_total[5m])`
+- **CRD unmarshal error rate**: `rate(cr_unmarshal_errors_total[5m])`
 - **Controller reconciliation success rate**: `rate(controller_runtime_reconcile_total{result="success"}[5m])`
 - **Active workers per controller**: `controller_runtime_active_workers`
 - **Memory usage**: `go_gc_heap_objects_bytes`

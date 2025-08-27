@@ -187,8 +187,8 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
         "grafana.yaml",
-        # "fluent-bit.yaml",
-        # "fluent-bit-config.yaml",
+        "fluent-bit.yaml",
+        "fluent-bit-config.yaml",
     ]
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
