@@ -52,6 +52,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
     enableRowSelection: props.enableRowSelection ?? false,
     enableStickySides: props.enableStickySides ?? false,
     body: props.body ?? TableBody,
+    unFilteredData: props.unFilteredData ?? props.data,
   };
 }
 

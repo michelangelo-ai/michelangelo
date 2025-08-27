@@ -177,6 +177,16 @@ export interface TableRequiredFunctionalityProps {
    * @default TableBody
    */
   body: React.ComponentType<TableBodyProps<TableData>>;
+
+  /**
+   * @description
+   * Complete dataset used to populate filter options, before any server-side filtering is applied.
+   * For client-side filtering scenarios, this typically matches the data prop.
+   * For server-side filtering scenarios, this contains the full dataset while data contains server-filtered results.
+   *
+   * @default props.data
+   */
+  unFilteredData: Array<TableData>;
 }
 
 interface TableOptionalProps {

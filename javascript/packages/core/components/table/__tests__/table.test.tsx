@@ -547,6 +547,50 @@ describe('Table', () => {
         ).not.toBeInTheDocument();
       });
     });
+
+    describe('unFilteredData integration', () => {
+      it('uses unFilteredData for filter options in server-side filtering scenarios', async () => {
+        const user = userEvent.setup();
+
+        const filteredData = [
+          { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+        ];
+
+        const completeData = [
+          { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+          { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
+          { id: '3', name: 'Carol Davis', department: 'Sales', status: 'Active' },
+        ];
+
+        render(
+          <Table
+            data={filteredData}
+            columns={testColumns}
+            unFilteredData={completeData}
+            actionBarConfig={{ enableFilters: true }}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        // Should show only filtered data in table
+        expect(screen.getByText('Alice Johnson')).toBeInTheDocument();
+        expect(screen.queryByText('Bob Smith')).not.toBeInTheDocument();
+        expect(screen.queryByText('Carol Davis')).not.toBeInTheDocument();
+
+        // But filter options should include all departments from unFilteredData
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        await user.click(screen.getByTestId('filter-option-Department'));
+
+        // Should have all department options available (Engineering, Marketing, Sales)
+        expect(screen.getByLabelText('Engineering')).toBeInTheDocument();
+        expect(screen.getByLabelText('Marketing')).toBeInTheDocument();
+        expect(screen.getByLabelText('Sales')).toBeInTheDocument();
+      });
+    });
   });
 
   describe('datetime filter integration', () => {
