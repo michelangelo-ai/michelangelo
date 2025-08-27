@@ -7,7 +7,7 @@ controllermgr:
 
 workflowClient:
   service: temporal-frontend
-  host: michelangelo-worker:7833
+  host: localhost:7233
   transport: grpc
   domain: default
     
