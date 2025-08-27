@@ -6,11 +6,11 @@ import (
 )
 
 var (
-	// CRD-related metrics
+	// CR-related metrics
 	crdUnmarshalErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "crd_unmarshal_errors_total",
-			Help: "Total number of CRD unmarshal errors",
+			Help: "Total number of CR unmarshal errors",
 		},
 		[]string{"crd_type", "namespace", "error_type"},
 	)
