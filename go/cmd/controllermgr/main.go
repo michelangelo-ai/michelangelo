@@ -18,6 +18,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 )
@@ -44,9 +45,14 @@ func scheme() (*runtime.Scheme, error) {
 }
 
 func getTallyScope() (tally.Scope, error) {
+	// Create basic tally scope with console output for now
 	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
+
+	// Register Prometheus metrics with controller-runtime
+	metrics.RegisterMetrics()
+
 	return s, nil
 }
 

@@ -7,6 +7,8 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
+	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,6 +26,7 @@ var (
 		fx.Provide(newConfig),
 		fx.Provide(create),
 		fx.Invoke(start),
+		fx.Invoke(initializeMetrics),
 	)
 )
 
@@ -60,9 +63,9 @@ func create(p params) (result, error) {
 	}
 
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
-		Scheme: p.Scheme,
-		//MetricsBindAddress:     p.Config.MetricsBindAddress,
-		//Port:                   p.Config.Port,
+		Scheme:                 p.Scheme,
+		MetricsBindAddress:     p.Config.MetricsBindAddress,
+		Port:                   p.Config.Port,
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
@@ -110,4 +113,14 @@ func _start(mgr manager.Manager) {
 		fmt.Printf("ERR: Controller Manager execution failed: %v", err)
 		os.Exit(1)
 	}
+}
+
+// initializeMetrics initializes the global metrics registry with the FX-injected tally scope.
+// This allows generated protobuf code to emit metrics through the same scope used by the rest of the application.
+//
+// Params:
+//
+//	scope (tally.Scope): The tally scope provided by FX dependency injection.
+func initializeMetrics(scope tally.Scope) {
+	metrics.InitializeFromFX(scope)
 }
