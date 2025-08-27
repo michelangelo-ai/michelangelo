@@ -4,6 +4,9 @@ metadata:
   name: "fluent-bit-config"
 data:
   fluent-bit.yaml: |
+    plugins:
+      - "/fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so"
+
     service:
       flush: 1
       daemon: "off"
@@ -40,11 +43,8 @@ data:
             - "level INFO"
 
       outputs:
-        # Use built-in S3 output instead of custom CLP plugin for ARM64 compatibility
-        - name: "s3"
+        # For each unique tag match, append compressed logs to Minio using the filename "<tag>.clp.zst"
+        - name: "out_clp_s3_v2"
           match: "*/*"
-          bucket: "logs"
-          region: "us-east-1"
-          endpoint: "http://minio:9091"
-          use_put_object: "On"
-          s3_key_format: "/%Y/%m/%d/fluent-bit-logs_%H%M%S.json"
+          log_bucket: "logs"
+          log_level_key: "level"
