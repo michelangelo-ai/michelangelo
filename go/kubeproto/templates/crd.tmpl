@@ -429,7 +429,7 @@ func (m *{{.Name}}) UnmarshalJSON(b []byte) error {
         if m.ObjectMeta.Namespace != "" {
             metricLabels["namespace"] = m.ObjectMeta.Namespace
         }
-        metrics.GetGlobalRegistry().IncrementCounter("crd_unmarshal_errors", metricLabels)
+        metrics.GetGlobalRegistry().IncrementCounter("cr_unmarshal_errors", metricLabels)
         return err
     }
     return nil

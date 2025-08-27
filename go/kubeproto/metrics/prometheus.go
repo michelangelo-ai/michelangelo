@@ -7,9 +7,9 @@ import (
 
 var (
 	// CR-related metrics
-	crdUnmarshalErrors = prometheus.NewCounterVec(
+	crUnmarshalErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
-			Name: "crd_unmarshal_errors_total",
+			Name: "cr_unmarshal_errors_total",
 			Help: "Total number of CR unmarshal errors",
 		},
 		[]string{"crd_type", "namespace", "error_type"},
@@ -19,13 +19,13 @@ var (
 // RegisterMetrics registers all metrics with the controller-runtime metrics registry
 func RegisterMetrics() {
 	metrics.Registry.MustRegister(
-		crdUnmarshalErrors,
+		crUnmarshalErrors,
 	)
 }
 
 // Metric accessor functions for direct use by controllers
 
-// IncCRDUnmarshalError increments the CRD unmarshal error counter
-func IncCRDUnmarshalError(crdType, namespace, errorType string) {
-	crdUnmarshalErrors.WithLabelValues(crdType, namespace, errorType).Inc()
+// IncCRUnmarshalError increments the CRD unmarshal error counter
+func IncCRUnmarshalError(crdType, namespace, errorType string) {
+	crUnmarshalErrors.WithLabelValues(crdType, namespace, errorType).Inc()
 }

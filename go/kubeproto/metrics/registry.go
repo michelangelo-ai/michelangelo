@@ -55,8 +55,8 @@ func (r *Registry) Tagged(tags map[string]string) tally.Scope {
 func (r *Registry) IncrementCounter(name string, tags map[string]string) {
 	// Delegate to Prometheus metrics based on the metric name
 	switch name {
-	case "crd_unmarshal_errors":
-		IncCRDUnmarshalError(
+	case "cr_unmarshal_errors":
+		IncCRUnmarshalError(
 			getTagValueOrDefault(tags, "resource_type"),
 			getTagValueOrDefault(tags, "namespace"),
 			getTagValueOrDefault(tags, "error_type"),
