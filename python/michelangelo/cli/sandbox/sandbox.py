@@ -28,7 +28,7 @@ _kube_ports = [
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
-    "3000:30011",  # Grafana
+    "3000:30012",  # Grafana
 ]
 
 # Workflow engine ports

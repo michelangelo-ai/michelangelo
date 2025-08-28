@@ -165,5 +165,5 @@ spec:
   - name: grafana
     port: 3000
     targetPort: 3000
-    nodePort: 30011
+    nodePort: 30012
   type: NodePort
