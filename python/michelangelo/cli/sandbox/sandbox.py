@@ -70,6 +70,12 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Create an additional cluster for Ray jobs.",
     )
     create_p.add_argument(
+        "--include-experimental",
+        help="Include experimental services.",
+        nargs="+",
+        default=[],
+    )
+    create_p.add_argument(
         "--jobs-cluster-name",
         default=_default_job_hosting_kube_cluster_name,
         help="Name of the jobs cluster to create when --create-jobs-cluster is used (default: %s)."
@@ -170,14 +176,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
     _exec(*args)
 
-    # Provision a ServiceAccount for fluent-bit DaemonSet execution.
-    _exec(
-        "kubectl",
-        "create",
-        "serviceaccount",
-        "fluent-bit",
-    )
-
     resources = [
         "boot.yaml",
         "mysql.yaml",
@@ -187,8 +185,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
         "grafana.yaml",
-        "fluent-bit.yaml",
-        "fluent-bit-config.yaml",
     ]
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
@@ -197,6 +193,21 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
         resources.append("michelangelo-ui.yaml")
+
+    if "fluent-bit" in ns.include_experimental:
+        # Provision a ServiceAccount for fluent-bit DaemonSet execution.
+        _exec(
+            "kubectl",
+            "create",
+            "serviceaccount",
+            "fluent-bit",
+        )
+        resources.extend(
+            [
+                "fluent-bit.yaml",
+                "fluent-bit-config.yaml",
+            ]
+        )
 
     for r in resources:
         _kube_create(_dir / "resources" / r)
