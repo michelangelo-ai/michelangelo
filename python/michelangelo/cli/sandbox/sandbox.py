@@ -689,7 +689,7 @@ def _create_cluster_secrets(cluster_name: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_kube_name}",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
             "apply",
             "-f",
             ca_file.name,
@@ -729,7 +729,7 @@ def _create_cluster_secrets(cluster_name: str):
         _exec(
             "kubectl",
             "--context",
-            f"k3d-{_kube_name}",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
             "apply",
             "-f",
             token_file.name,
