@@ -3,7 +3,7 @@ name: UI Release
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ badcount/ui ]
     paths:
       - 'javascript/**'
 
