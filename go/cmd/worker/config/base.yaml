@@ -14,9 +14,9 @@ workflow-engine:
   host: 127.0.0.1:7233
   transport: grpc
   # for cadence
-  provider: cadence
+  # provider: cadence
     # for temporal
-#  provider: temporal
+  provider: temporal
   workers:
     - domain: default
       taskList: default

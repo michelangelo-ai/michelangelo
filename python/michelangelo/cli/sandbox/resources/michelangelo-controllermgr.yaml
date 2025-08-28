@@ -45,6 +45,6 @@ data:
     
     workflowClient:
       service: temporal-frontend
-      host: localhost:7233
+      host: 127.0.0.1:7233
       transport: grpc
       domain: default

@@ -36,7 +36,7 @@ data:
 
     workflow-engine:
       # for temporal
-        host: localhost:7233
+        host: 127.0.0.1:7233
         transport: grpc
         # for temporal
         provider: temporal
