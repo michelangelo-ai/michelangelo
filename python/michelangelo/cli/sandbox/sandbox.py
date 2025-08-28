@@ -217,9 +217,25 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "--selector=!job-name",
         "--timeout=600s",
     )
-    _exec(
-        "kubectl", "wait", "--all", "jobs", "--for=condition=complete", "--timeout=600s"
-    )
+
+    # Wait for Jobs only if any jobs exist
+    try:
+        job_names = (
+            subprocess.check_output(["kubectl", "get", "jobs", "-o", "name"]).decode().strip()
+        )
+    except subprocess.CalledProcessError:
+        job_names = ""
+    if job_names:
+        _exec(
+            "kubectl",
+            "wait",
+            "--all",
+            "jobs",
+            "--for=condition=complete",
+            "--timeout=600s",
+        )
+    else:
+        print("[*] No Kubernetes Jobs found; skipping wait for jobs.")
 
     links = []
     _assert_command(
