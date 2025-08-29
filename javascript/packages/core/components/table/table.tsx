@@ -12,7 +12,6 @@ import { StyledTable } from 'baseui/table-semantic';
 import { useScrollRatio } from '#core/hooks/use-scroll';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
-import { TableBody } from './components/table-body/table-body';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
 import { TableErrorState } from './components/table-error-state/table-error-state';
 import { TableHeader } from './components/table-header/table-header';
@@ -22,6 +21,7 @@ import { TableSelectionProvider } from './plugins/selection/table-selection-prov
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
+import { normalizeColumnAccessor } from './utils/normalize-column-accessor';
 import { transformColumns } from './utils/transform-columns';
 
 import type { TableData } from './types/data-types';
@@ -75,6 +75,15 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
 
   const transformedColumns = transformColumns(table.getAllLeafColumns());
 
+  // Create lightweight row objects for filter components that only need getValue()
+  const preFilteredRows = props.unFilteredData.map((rowData) => ({
+    getValue: (columnId: string) => {
+      const column = columns.find((col) => col.id === columnId);
+      if (!column) return undefined;
+      return normalizeColumnAccessor(column)(rowData);
+    },
+  }));
+
   return (
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale400 })}>
       <TableSelectionProvider
@@ -92,7 +101,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           columnFilters={table.getState().columnFilters}
           setColumnFilters={table.setColumnFilters}
           columns={columns}
-          preFilteredRows={table.getPreFilteredRowModel().rows}
+          preFilteredRows={preFilteredRows}
           configuration={props.actionBarConfig}
           filterableColumns={transformedColumns.filter((column) => column.canFilter)}
         />
@@ -132,12 +141,13 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             )}
 
             {viewState === 'ready' && (
-              <TableBody<T>
+              <props.body
                 rows={transformRows<T>(table.getRowModel().rows)}
                 enableRowSelection={props.enableRowSelection}
                 enableStickySides={props.enableStickySides}
                 scrollRatio={scrollRatio}
                 subRow={props.subRow}
+                actions={props.actions}
               />
             )}
           </StyledTable>

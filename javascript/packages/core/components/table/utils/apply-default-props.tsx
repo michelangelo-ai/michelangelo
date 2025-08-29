@@ -1,5 +1,6 @@
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
+import { TableBody } from '../components/table-body/table-body';
 import { TableLoadingState } from '../components/table-loading-state';
 import { PAGE_SIZE_SELECTION_OPTIONS } from '../components/table-pagination/constants';
 import { TablePagination } from '../components/table-pagination/table-pagination';
@@ -50,6 +51,8 @@ export function applyDefaultProps<T extends TableData = TableData>(
     pagination: props.pagination ?? TablePagination,
     enableRowSelection: props.enableRowSelection ?? false,
     enableStickySides: props.enableStickySides ?? false,
+    body: props.body ?? TableBody,
+    unFilteredData: props.unFilteredData ?? props.data,
   };
 }
 

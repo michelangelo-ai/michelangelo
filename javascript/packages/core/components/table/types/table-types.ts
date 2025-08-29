@@ -2,7 +2,7 @@ import { EmptyState } from '../components/table-empty-state/types';
 
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableActionBarConfig } from '../components/table-action-bar/types';
-import type { TableRow } from '../components/table-body/types';
+import type { TableBodyProps, TableRow } from '../components/table-body/types';
 import type { PageSizeOption, TablePaginationProps } from '../components/table-pagination/types';
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
@@ -169,6 +169,24 @@ export interface TableRequiredFunctionalityProps {
    * @default false
    */
   enableStickySides: boolean;
+
+  /**
+   * @description
+   * Table body component to render the table rows.
+   *
+   * @default TableBody
+   */
+  body: React.ComponentType<TableBodyProps<TableData>>;
+
+  /**
+   * @description
+   * Complete dataset used to populate filter options, before any server-side filtering is applied.
+   * For client-side filtering scenarios, this typically matches the data prop.
+   * For server-side filtering scenarios, this contains the full dataset while data contains server-filtered results.
+   *
+   * @default props.data
+   */
+  unFilteredData: Array<TableData>;
 }
 
 interface TableOptionalProps {
@@ -181,6 +199,16 @@ interface TableOptionalProps {
    * @default undefined
    */
   subRow?: React.ComponentType<{ row: TableRow<TableData> }>;
+
+  /**
+   * @description
+   * Component to render in the actions column (last column) for each row.
+   * Typically used for row-specific actions like delete buttons, edit links, or dropdown menus.
+   * Renders in the last column of body rows only, not affecting the header column configuration.
+   *
+   * @default undefined
+   */
+  actions?: React.ComponentType<{ row: TableRow<TableData> }>;
 }
 
 /**

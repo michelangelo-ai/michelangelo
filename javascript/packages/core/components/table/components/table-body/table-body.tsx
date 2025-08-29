@@ -19,6 +19,7 @@ export const TableBody = <T extends TableData = TableData>({
   enableStickySides,
   scrollRatio,
   subRow,
+  actions,
 }: TableBodyProps<T>) => {
   const [css, theme] = useStyletron();
 
@@ -70,8 +71,9 @@ export const TableBody = <T extends TableData = TableData>({
               </StyledTableBodyCell>
             ))}
 
-            {/* Placeholder action cell to align with column configuration button */}
-            <StyledTableBodyCell />
+            <StyledTableBodyCell>
+              {actions && React.createElement(actions, { row })}
+            </StyledTableBodyCell>
           </StickySidesTableBodyRow>
 
           {subRow && row.isExpanded && (
