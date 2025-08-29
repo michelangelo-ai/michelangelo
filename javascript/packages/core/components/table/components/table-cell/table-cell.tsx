@@ -1,13 +1,17 @@
+import { useStyletron } from 'baseui';
+
 import { CellTooltipContentRenderer } from '#core/components/cell/components/tooltip/cell-tooltip-content-renderer';
 import { CellTooltipWrapper } from '#core/components/cell/components/tooltip/cell-tooltip-wrapper';
 import { TooltipHOCProps } from '#core/components/cell/components/tooltip/types';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
+import { getResponsiveColumnWidth } from './get-responsive-column-width';
 import { isFilterAlreadyApplied } from './utils';
 
 import type { TableCellProps } from './types';
 
 export const TableCell = (props: TableCellProps) => {
+  const [css, theme] = useStyletron();
   const { record, value, columnFilterValue, setColumnFilterValue } = props;
   const resolver = useInterpolationResolver();
   const column = resolver(props.column, { row: record });
@@ -15,7 +19,11 @@ export const TableCell = (props: TableCellProps) => {
   const getCellRenderer = useGetCellRenderer();
   const ColumnRenderer = getCellRenderer({ column, record, value });
 
-  const renderedCell = <ColumnRenderer column={column} record={record} value={value} />;
+  const renderedCell = (
+    <div className={css({ ...getResponsiveColumnWidth(theme), overflow: 'hidden' })}>
+      <ColumnRenderer column={column} record={record} value={value} CellComponent={TableCell} />
+    </div>
+  );
 
   if (column.tooltip) {
     const { action } = column.tooltip;
