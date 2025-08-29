@@ -76,7 +76,7 @@ func options() fx.Option {
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
-		controllermgr.CRDSyncModule,
+		controllermgr.CRDCheckModule,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),

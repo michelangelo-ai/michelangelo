@@ -4,7 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "config.go",
-        "crd_sync.go",
+        "crd_check.go",
         "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/controllermgr",
@@ -17,25 +17,29 @@ go_library(
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_apimachinery//pkg/util/yaml:go_default_library",
-        "@io_k8s_sigs_controller_runtime//:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = ["crd_sync_test.go"],
+    srcs = [
+        "crd_check_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//go/api/crd:go_default_library",
+        "//go/api/crd/crdmocks:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//mock:go_default_library",
         "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
-        "@org_uber_go_zap//zaptest:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ],
 )

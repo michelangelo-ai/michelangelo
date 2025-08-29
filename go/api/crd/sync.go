@@ -17,8 +17,8 @@ import (
 )
 
 const (
-	crdSyncConfigKey = "apiserver.crdSync"
-	k8sMaxRetries    = 3
+	crdCheckConfigKey = "apiserver.crdCheck"
+	k8sMaxRetries     = 3
 )
 
 // Configuration crd register configuration
@@ -31,7 +31,7 @@ type Configuration struct {
 
 // VersionConfig defines how the versions of a CRD will be handled.
 type VersionConfig struct {
-	// Versions is a list of versions of the CRD that will be synced to the cluster.
+	// Versions is a list of versions of the CRD that will be checked against the cluster.
 	Versions []string `yaml:"versions"`
 	// StorageVersion is the version that will be used as the storage version for the CRD.
 	StorageVersion string `yaml:"storageVersion"`
@@ -39,14 +39,14 @@ type VersionConfig struct {
 
 func ParseConfig(provider config.Provider) (*Configuration, error) {
 	conf := Configuration{}
-	err := provider.Get(crdSyncConfigKey).Populate(&conf)
+	err := provider.Get(crdCheckConfigKey).Populate(&conf)
 	if err != nil {
 		return nil, err
 	}
 	return &conf, nil
 }
 
-type SyncCRDsParams struct {
+type CheckCRDsParams struct {
 	fx.In
 
 	Lifecycle fx.Lifecycle
@@ -55,7 +55,7 @@ type SyncCRDsParams struct {
 	Gateway   Gateway
 }
 
-// SyncCRDs syncs CRDs in the specified k8s API group
+// CheckCRDs checks CRDs in the specified k8s API group
 //
 // This function is used to ensure that the CRDs in the cluster match the CRDs defined in the yamlSchemas.
 // yamlSchemas is a list of CRD kind (name) to CRD yaml schema map. Each map corresponds to a version of the CRDs.
@@ -76,14 +76,14 @@ type SyncCRDsParams struct {
 //     Otherwise, it will return an error
 //  7. If a CRD version in the cluster does not have a corresponding entry in yamlSchemas, an error will be returned,
 //     as we don't currently support removing versions of CRDs in the cluster.
-func SyncCRDs(group string, yamlSchemas ...map[string]string) fx.Option {
-	return fx.Invoke(func(p SyncCRDsParams) error {
+func CheckCRDs(group string, yamlSchemas ...map[string]string) fx.Option {
+	return fx.Invoke(func(p CheckCRDsParams) error {
 		logger := p.Logger.With(zap.String("module", moduleName))
-		logger.Info("CRD sync config", zap.Any("config", p.Config))
+		logger.Info("CRD check config", zap.Any("config", p.Config))
 		if p.Config.EnableCRDUpdate {
 			p.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
-					return syncCRDs(ctx, logger, group, p.Config.EnableIncompatibleUpdate, p.Config.EnableCRDDeletion,
+					return checkCRDs(ctx, logger, group, p.Config.EnableIncompatibleUpdate, p.Config.EnableCRDDeletion,
 						p.Gateway, p.Config.CRDVersions, yamlSchemas...)
 				},
 				OnStop: nil,
@@ -94,7 +94,7 @@ func SyncCRDs(group string, yamlSchemas ...map[string]string) fx.Option {
 	})
 }
 
-func syncCRDs(ctx context.Context,
+func checkCRDs(ctx context.Context,
 	logger *zap.Logger,
 	group string,
 	enableIncompatibleUpdate bool,
@@ -207,28 +207,20 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 // in crdVersions[crd.Name], that version is automatically set as the storage version.
 //
 // The function returns a list of merged CRDs, where all the versions of each CRD are combined into a single
-// CustomResourceDefinition object. If any of the rules are violated, an error is returned.
-func mergeCRDVersions(
-	crdList []*apiextv1.CustomResourceDefinition,
-	crdVersions map[string]VersionConfig) ([]*apiextv1.CustomResourceDefinition, error) {
-	var result []*apiextv1.CustomResourceDefinition
-	// group CRDs by names and versions
+// CRD object.
+func mergeCRDVersions(crdList []*apiextv1.CustomResourceDefinition, crdVersions map[string]VersionConfig) ([]*apiextv1.CustomResourceDefinition, error) {
+	// group CRDs by name and version
 	crds := make(map[string]map[string]*apiextv1.CustomResourceDefinition)
 	for _, crd := range crdList {
-		if _, exists := crds[crd.Name]; !exists {
+		if crds[crd.Name] == nil {
 			crds[crd.Name] = make(map[string]*apiextv1.CustomResourceDefinition)
 		}
-		if len(crd.Spec.Versions) != 1 {
-			return nil, fmt.Errorf(
-				"each CRD item must only have one version. CRD %s has %d versions",
-				crd.Name, len(crd.Spec.Versions))
-		}
-		if _, exists := crds[crd.Name][crd.Spec.Versions[0].Name]; exists {
-			return nil, fmt.Errorf("CRD %s has duplicated definitions of version %s",
-				crd.Name, crd.Spec.Versions[0].Name)
-		}
-		crds[crd.Name][crd.Spec.Versions[0].Name] = crd
+		// assume each CRD has only one version
+		version := crd.Spec.Versions[0].Name
+		crds[crd.Name][version] = crd
 	}
+
+	var result []*apiextv1.CustomResourceDefinition
 
 	// merge versions for each CRD
 	for name, versions := range crds {

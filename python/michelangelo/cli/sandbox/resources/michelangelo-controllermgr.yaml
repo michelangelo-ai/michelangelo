@@ -32,8 +32,8 @@ data:
       leaderElectionID: decaf1259.michelangelo.uber.com
       port: 9443
 
-    crdSync:
-      syncInterval: 5m
+    crdCheck:
+      checkInterval: 5m
 
     controllers:
       rayCluster:

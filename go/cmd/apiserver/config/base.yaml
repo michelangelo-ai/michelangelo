@@ -2,7 +2,7 @@ apiserver:
   yarpc:
     host: "localhost"
     port: 14566
-  crdSync:
+  crdCheck:
     enableCRDUpdate: true
     enableIncompatibleUpdate: false
     enableCRDDeletion: true

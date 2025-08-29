@@ -51,6 +51,6 @@ data:
         burst: 600
       metadataStorage:
         enableMetadataStorage: false
-      crdSync:
+      crdCheck:
         enableCRDUpdate: true
         enableIncompatibleUpdate: false
