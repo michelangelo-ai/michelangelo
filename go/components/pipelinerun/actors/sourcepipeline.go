@@ -44,6 +44,7 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 	if previousCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
 		// the previous condition is terminal, so we don't need to run the actor again
 		logger.Info("pipeline run has a terminal condition, skipping")
+		logger.Info("previous condition", zap.Any("previousCondition", previousCondition))
 		return previousCondition, nil
 	}
 
