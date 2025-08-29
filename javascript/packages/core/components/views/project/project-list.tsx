@@ -33,6 +33,7 @@ export function ProjectList() {
         data={data?.projectList.items ?? []}
         columns={SHARED_PROJECT_CELL_CONFIG}
         loading={isLoading}
+        enableStickySides
       />
     </div>
   );
