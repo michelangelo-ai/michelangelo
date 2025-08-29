@@ -21,7 +21,7 @@ spec:
           command: [
             "sh",
             "-c",
-            "wget -O /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so https://raw.githubusercontent.com/y-scope/fluent-bit-clp/refs/heads/irv2-beta/pre-built/out_clp_s3_v2_linux_amd64.so"
+"wget -O /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so https://github.com/uber/michelangelo/raw/main/plugins/out_clp_s3_v2_linux_amd64.so && chmod 755 /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so && ls -lh /fluent-bit/plugins/"
           ]
           volumeMounts:
             - name: "fluent-bit-plugins-volume"
