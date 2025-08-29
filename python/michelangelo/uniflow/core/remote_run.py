@@ -1,4 +1,3 @@
-import argparse
 import base64
 import json
 import logging
@@ -140,11 +139,9 @@ class RemoteRun:
                 raise RuntimeError("User interrupted the Remote Run submission")
 
         try:
-            stdout = subprocess.check_output(cmd, text=True)
+            stdout = _subprocess_run(cmd)
         except KeyboardInterrupt:
             sys.exit(130)
-
-        print(stdout)
 
         dashboard_url = os.environ.get("UFC_CADENCE_DASHBOARD_URL", "")
 
@@ -282,11 +279,9 @@ class RemoteRunTemporal:
 
         # Run the Temporal workflow
         try:
-            stdout = subprocess.check_output(cmd, text=True)
+            stdout = _subprocess_run(cmd)
         except KeyboardInterrupt:
             sys.exit(130)
-
-        print(stdout)
 
         # Extract Run ID and print dashboard link if applicable
         dashboard_url = os.environ.get("UFC_TEMPORAL_DASHBOARD_URL", "")
@@ -304,3 +299,32 @@ class RemoteRunTemporal:
         print(
             "Dashboard:", f"{dashboard_url}/workflows/{workflow_id}/{run_id[0]}/summary"
         )
+
+
+def _subprocess_run(args: list[str]) -> str:
+    """
+    Executes a subprocess command, prints stdout and stderr, and returns the stdout as text string.
+
+    Args:
+        args: Command to execute.
+
+    Returns:
+        str: The stdout output from the subprocess, or empty string if none.
+
+    Raises:
+        subprocess.CalledProcessError: If the subprocess returns a non-zero exit code.
+    """
+    r = subprocess.run(
+        args,
+        text=True,
+        capture_output=True,
+    )
+    if r.stdout:
+        sys.stdout.write(r.stdout)
+        sys.stdout.flush()
+    if r.stderr:
+        sys.stderr.write(r.stderr)
+        sys.stderr.flush()
+
+    r.check_returncode()
+    return r.stdout or ""
