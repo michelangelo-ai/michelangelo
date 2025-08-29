@@ -29,6 +29,8 @@ class Test(unittest.TestCase):
         """
         This test case verifies the remote run command with a minimal set of arguments.
         """
+        subprocess_run.return_value.stdout = ""
+        subprocess_run.return_value.stderr = ""
         # Provide a minimal set of the arguments required to run the workflow in the remote mode.
 
         rr = RemoteRun(
@@ -99,6 +101,8 @@ class Test(unittest.TestCase):
         This test case verifies that user-provided arguments and environment variables are properly encoded
         and passed to the Cadence workflow execution input.
         """
+        subprocess_run.return_value.stdout = ""
+        subprocess_run.return_value.stderr = ""
         # Run my_workflow with arguments and environment variables.
         # Users may provide multiple arguments encoded in JSON. Example:
         #
