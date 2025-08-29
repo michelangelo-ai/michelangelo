@@ -76,6 +76,21 @@ describe('useLocalStorageTableState', () => {
       expect(result.current.globalFilter).toBe('restored-filter');
     });
 
+    it('uses initial state when no persisted data exists', () => {
+      const { result } = renderHook(() =>
+        useLocalStorageTableState({
+          tableSettingsId: 'test-table',
+          initialState: {
+            globalFilter: 'initial-filter',
+            columnVisibility: { name: false },
+          },
+        })
+      );
+
+      expect(result.current.globalFilter).toBe('initial-filter');
+      expect(result.current.columnVisibility).toEqual({ name: false });
+    });
+
     it('handles localStorage errors gracefully', () => {
       const originalGetItem = localStorage.getItem.bind(localStorage) as unknown as () => string;
       localStorage.getItem = vi.fn(() => {
