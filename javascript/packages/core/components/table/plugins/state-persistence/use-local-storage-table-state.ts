@@ -15,17 +15,33 @@ import type {
 
 /**
  * Primary entry point for adding localStorage persistence to Table components.
- * This hook manages table state with automatic localStorage persistence, falling back to
- * {@link TABLE_STATE_DEFAULTS} when values are not found in localStorage.
+ * This hook manages table state with automatic localStorage persistence.
+ *
+ * **State Priority (highest to lowest):**
+ * 1. **Persisted state** from localStorage (user's saved preferences)
+ * 2. **Initial state** from props (schema defaults, initial configuration)
+ * 3. **Table defaults** from {@link TABLE_STATE_DEFAULTS}
  *
  * Use this hook to provide a `state` prop to the Table component for persistent
  * user preferences across browser sessions.
  *
+ * @param tableSettingsId - Unique identifier for this table's settings in localStorage
+ * @param initialState - Optional initial state to use when no persisted state exists
+ *
  * @example
  * ```tsx
- * // In your table component
+ * // Basic usage
  * const tableState = useLocalStorageTableState({
  *   tableSettingsId: 'user-dashboard-table',
+ * });
+ *
+ * // With initial state (e.g., hidden columns from schema)
+ * const tableState = useLocalStorageTableState({
+ *   tableSettingsId: 'user-dashboard-table',
+ *   initialState: {
+ *     columnVisibility: { hiddenColumnId: false },
+ *     sorting: [{ id: 'name', desc: false }],
+ *   },
  * });
  *
  * return <Table data={data} columns={columns} state={tableState} />;
@@ -35,37 +51,39 @@ import type {
  */
 export function useLocalStorageTableState({
   tableSettingsId,
+  initialState,
 }: {
   tableSettingsId: string;
+  initialState?: Partial<ControlledTableState>;
 }): ControlledTableState {
   const [globalFilter, setGlobalFilter] = usePersistedTableState<string>(
     `${tableSettingsId}.globalFilter`,
-    TABLE_STATE_DEFAULTS.globalFilter
+    initialState?.globalFilter ?? TABLE_STATE_DEFAULTS.globalFilter
   );
 
   const [columnFilters, setColumnFilters] = usePersistedTableState<ColumnFilter[]>(
     `${tableSettingsId}.columnFilters`,
-    TABLE_STATE_DEFAULTS.columnFilters
+    initialState?.columnFilters ?? TABLE_STATE_DEFAULTS.columnFilters
   );
 
   const [pageSize, setPageSize] = usePersistedTableState<number>(
     `${tableSettingsId}.pageSize`,
-    TABLE_STATE_DEFAULTS.pagination.pageSize
+    initialState?.pagination?.pageSize ?? TABLE_STATE_DEFAULTS.pagination.pageSize
   );
 
   const [sorting, setSorting] = usePersistedTableState<SortingState>(
     `${tableSettingsId}.sorting`,
-    TABLE_STATE_DEFAULTS.sorting
+    initialState?.sorting ?? TABLE_STATE_DEFAULTS.sorting
   );
 
   const [columnOrder, setColumnOrder] = usePersistedTableState<ColumnOrderState>(
     `${tableSettingsId}.columnOrder`,
-    TABLE_STATE_DEFAULTS.columnOrder
+    initialState?.columnOrder ?? TABLE_STATE_DEFAULTS.columnOrder
   );
 
   const [columnVisibility, setColumnVisibility] = usePersistedTableState<ColumnVisibilityState>(
     `${tableSettingsId}.columnVisibility`,
-    TABLE_STATE_DEFAULTS.columnVisibility
+    initialState?.columnVisibility ?? TABLE_STATE_DEFAULTS.columnVisibility
   );
 
   // pageIndex and rowSelection are not persisted (reset on reload)
