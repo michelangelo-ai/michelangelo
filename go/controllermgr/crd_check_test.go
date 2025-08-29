@@ -61,11 +61,10 @@ func TestPerformSchemaComparison(t *testing.T) {
 	})
 }
 
-func TestCompareSchemasWithServerList(t *testing.T) {
+func TestCompareSchemasForVersion(t *testing.T) {
 	logger := zap.NewNop()
 
-	t.Run("compare local and server schemas", func(t *testing.T) {
-		// Create local schemas
+	t.Run("successful schema comparison", func(t *testing.T) {
 		localSchemas := map[string]*apiextv1.CustomResourceDefinition{
 			"projects.test": {
 				ObjectMeta: metav1.ObjectMeta{
@@ -88,25 +87,22 @@ func TestCompareSchemasWithServerList(t *testing.T) {
 			},
 		}
 
-		// Create server CRDs
-		serverCRDs := &apiextv1.CustomResourceDefinitionList{
-			Items: []apiextv1.CustomResourceDefinition{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "projects.test",
+		serverCRDs := []*apiextv1.CustomResourceDefinition{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "projects.test",
+				},
+				Spec: apiextv1.CustomResourceDefinitionSpec{
+					Group: "test",
+					Names: apiextv1.CustomResourceDefinitionNames{
+						Kind:   "Project",
+						Plural: "projects",
 					},
-					Spec: apiextv1.CustomResourceDefinitionSpec{
-						Group: "test",
-						Names: apiextv1.CustomResourceDefinitionNames{
-							Kind:   "Project",
-							Plural: "projects",
-						},
-						Versions: []apiextv1.CustomResourceDefinitionVersion{
-							{
-								Name:    "v2",
-								Served:  true,
-								Storage: true,
-							},
+					Versions: []apiextv1.CustomResourceDefinitionVersion{
+						{
+							Name:    "v2",
+							Served:  true,
+							Storage: true,
 						},
 					},
 				},
@@ -114,8 +110,7 @@ func TestCompareSchemasWithServerList(t *testing.T) {
 		}
 
 		ctx := context.Background()
-		err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
-		assert.NoError(t, err)
+		compareSchemasForVersion(ctx, logger, localSchemas, serverCRDs, "test/v2")
 	})
 
 	t.Run("missing CRD on server", func(t *testing.T) {
@@ -134,38 +129,32 @@ func TestCompareSchemasWithServerList(t *testing.T) {
 			},
 		}
 
-		serverCRDs := &apiextv1.CustomResourceDefinitionList{
-			Items: []apiextv1.CustomResourceDefinition{},
-		}
+		serverCRDs := []*apiextv1.CustomResourceDefinition{}
 
 		ctx := context.Background()
-		err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
-		assert.NoError(t, err)
+		compareSchemasForVersion(ctx, logger, localSchemas, serverCRDs, "test/v2")
 	})
 
 	t.Run("extra CRD on server", func(t *testing.T) {
 		localSchemas := map[string]*apiextv1.CustomResourceDefinition{}
 
-		serverCRDs := &apiextv1.CustomResourceDefinitionList{
-			Items: []apiextv1.CustomResourceDefinition{
-				{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: "projects.test",
-					},
-					Spec: apiextv1.CustomResourceDefinitionSpec{
-						Group: "test",
-						Names: apiextv1.CustomResourceDefinitionNames{
-							Kind:   "Project",
-							Plural: "projects",
-						},
+		serverCRDs := []*apiextv1.CustomResourceDefinition{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "projects.test",
+				},
+				Spec: apiextv1.CustomResourceDefinitionSpec{
+					Group: "test",
+					Names: apiextv1.CustomResourceDefinitionNames{
+						Kind:   "Project",
+						Plural: "projects",
 					},
 				},
 			},
 		}
 
 		ctx := context.Background()
-		err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs)
-		assert.NoError(t, err)
+		compareSchemasForVersion(ctx, logger, localSchemas, serverCRDs, "test/v2")
 	})
 }
 
@@ -193,7 +182,7 @@ func TestCompareAndLogDifferences(t *testing.T) {
 			},
 		}
 
-		compareAndLogDifferences(logger, "projects.test", crd, crd)
+		compareAndLogDifferences(logger, "projects.test", crd, crd, "test/v2")
 	})
 
 	t.Run("different group", func(t *testing.T) {
@@ -223,75 +212,7 @@ func TestCompareAndLogDifferences(t *testing.T) {
 			},
 		}
 
-		compareAndLogDifferences(logger, "projects.test", localCRD, serverCRD)
-	})
-}
-
-func TestCompareVersions(t *testing.T) {
-	logger := zap.NewNop()
-
-	t.Run("identical versions", func(t *testing.T) {
-		versions := []apiextv1.CustomResourceDefinitionVersion{
-			{
-				Name:    "v2",
-				Served:  true,
-				Storage: true,
-			},
-		}
-
-		hasDifferences := compareVersions(logger, "projects.test", versions, versions)
-		assert.False(t, hasDifferences)
-	})
-
-	t.Run("missing version on server", func(t *testing.T) {
-		localVersions := []apiextv1.CustomResourceDefinitionVersion{
-			{
-				Name:    "v2",
-				Served:  true,
-				Storage: true,
-			},
-		}
-
-		serverVersions := []apiextv1.CustomResourceDefinitionVersion{}
-
-		hasDifferences := compareVersions(logger, "projects.test", localVersions, serverVersions)
-		assert.True(t, hasDifferences)
-	})
-
-	t.Run("extra version on server", func(t *testing.T) {
-		localVersions := []apiextv1.CustomResourceDefinitionVersion{}
-
-		serverVersions := []apiextv1.CustomResourceDefinitionVersion{
-			{
-				Name:    "v2",
-				Served:  true,
-				Storage: true,
-			},
-		}
-
-		hasDifferences := compareVersions(logger, "projects.test", localVersions, serverVersions)
-		assert.True(t, hasDifferences)
-	})
-
-	t.Run("different served property", func(t *testing.T) {
-		localVersions := []apiextv1.CustomResourceDefinitionVersion{
-			{
-				Name:    "v2",
-				Served:  true,
-				Storage: true,
-			},
-		}
-
-		serverVersions := []apiextv1.CustomResourceDefinitionVersion{
-			{
-				Name:    "v2",
-				Served:  false,
-				Storage: true,
-			},
-		}
-
-		hasDifferences := compareVersions(logger, "projects.test", localVersions, serverVersions)
-		assert.True(t, hasDifferences)
+		compareAndLogDifferences(logger, "projects.test", localCRD, serverCRD, "test/v2")
 	})
 }
 
@@ -306,6 +227,12 @@ func TestStartCRDCheck(t *testing.T) {
 		config := &CRDCheckConfig{
 			CheckInterval: 1 * time.Second,
 		}
+
+		// Mock the List call that will be made by the periodic schema comparison
+		serverCRDs := &apiextv1.CustomResourceDefinitionList{
+			Items: []apiextv1.CustomResourceDefinition{},
+		}
+		mockGateway.EXPECT().List(gomock.Any()).Return(serverCRDs, nil).AnyTimes()
 
 		params := CRDCheckParams{
 			Config:  config,

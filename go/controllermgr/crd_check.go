@@ -2,6 +2,7 @@ package controllermgr
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"time"
@@ -78,55 +79,141 @@ func startPeriodicSchemaComparison(ctx context.Context, logger *zap.Logger, conf
 	}
 }
 
+// VersionInfo represents information about an API version
+type VersionInfo struct {
+	Group   string
+	Version string
+	CRDs    []*apiextv1.CustomResourceDefinition
+}
+
 func performSchemaComparison(ctx context.Context, logger *zap.Logger, gateway crd.Gateway) {
 	logger.Debug("Performing schema comparison")
 
-	// Get local schemas from YAML
-	localSchemas := make(map[string]*apiextv1.CustomResourceDefinition)
-	for name, yamlStr := range v2pb.YamlSchemas {
-		crd := apiextv1.CustomResourceDefinition{}
-		err := yaml.NewYAMLToJSONDecoder(strings.NewReader(yamlStr)).Decode(&crd)
-		if err != nil {
-			logger.Error("Failed to deserialize CRD from yaml for comparison",
-				zap.String("name", name), zap.Error(err))
-			continue
-		}
-		localSchemas[crd.Name] = &crd
-	}
-
-	// Get all CRDs from API Server
+	// Step 1: Get all CRDs from API Server FIRST
 	serverCRDs, err := gateway.List(ctx)
 	if err != nil {
 		logger.Error("Failed to list CRDs from API Server", zap.Error(err))
 		return
 	}
 
-	// Perform schema comparison
-	if err := compareSchemasWithServerList(ctx, logger, localSchemas, serverCRDs); err != nil {
-		logger.Error("Failed to compare schemas with API Server", zap.Error(err))
+	// Step 2: Detect versions from server CRDs
+	detectedVersions := detectVersionsFromServer(serverCRDs)
+	logger.Info("Detected versions from server",
+		zap.Int("version_count", len(detectedVersions)),
+		zap.Any("versions", getVersionKeys(detectedVersions)))
+
+	// Step 3: Load local schemas for detected versions
+	localSchemasByVersion := loadLocalSchemasForVersions(detectedVersions, logger)
+
+	// Step 4: Compare schemas for each detected version
+	for versionKey, versionInfo := range detectedVersions {
+		logger.Debug("Comparing schemas for version", zap.String("version", versionKey))
+
+		localSchemas := localSchemasByVersion[versionKey]
+		if len(localSchemas) == 0 {
+			logger.Warn("No local schemas found for version", zap.String("version", versionKey))
+			continue
+		}
+
+		// Compare schemas for this version
+		compareSchemasForVersion(ctx, logger, localSchemas, versionInfo.CRDs, versionKey)
 	}
 }
 
-// compareSchemasWithServerList compares local schemas with API Server schemas without performing any updates
-func compareSchemasWithServerList(ctx context.Context, logger *zap.Logger,
+// detectVersionsFromServer extracts version information from server CRDs
+func detectVersionsFromServer(serverCRDs *apiextv1.CustomResourceDefinitionList) map[string]VersionInfo {
+	versionMap := make(map[string]VersionInfo)
+
+	for _, crd := range serverCRDs.Items {
+		group := crd.Spec.Group
+		for _, version := range crd.Spec.Versions {
+			versionKey := fmt.Sprintf("%s/%s", group, version.Name)
+
+			if _, exists := versionMap[versionKey]; !exists {
+				versionMap[versionKey] = VersionInfo{
+					Group:   group,
+					Version: version.Name,
+					CRDs:    make([]*apiextv1.CustomResourceDefinition, 0),
+				}
+			}
+
+			// Add this CRD to the version's CRD list
+			versionInfo := versionMap[versionKey]
+			versionInfo.CRDs = append(versionInfo.CRDs, &crd)
+			versionMap[versionKey] = versionInfo
+		}
+	}
+
+	return versionMap
+}
+
+// getVersionKeys returns a slice of version keys for logging
+func getVersionKeys(versionMap map[string]VersionInfo) []string {
+	keys := make([]string, 0, len(versionMap))
+	for key := range versionMap {
+		keys = append(keys, key)
+	}
+	return keys
+}
+
+// loadLocalSchemasForVersions loads local YAML schemas based on detected versions
+func loadLocalSchemasForVersions(detectedVersions map[string]VersionInfo, logger *zap.Logger) map[string]map[string]*apiextv1.CustomResourceDefinition {
+	localSchemas := make(map[string]map[string]*apiextv1.CustomResourceDefinition)
+
+	for versionKey, versionInfo := range detectedVersions {
+		localSchemas[versionKey] = make(map[string]*apiextv1.CustomResourceDefinition)
+
+		// Load schemas based on detected version
+		switch versionInfo.Version {
+		case "v2":
+			loadV2Schemas(localSchemas[versionKey], logger)
+		case "v3":
+			// Future: Load v3 schemas when v3pb is available
+			logger.Debug("v3 schemas not yet implemented", zap.String("version", versionKey))
+		default:
+			logger.Warn("Unknown version detected", zap.String("version", versionInfo.Version))
+		}
+	}
+
+	return localSchemas
+}
+
+// loadV2Schemas loads v2 schemas from YAML
+func loadV2Schemas(schemas map[string]*apiextv1.CustomResourceDefinition, logger *zap.Logger) {
+	for name, yamlStr := range v2pb.YamlSchemas {
+		crd := apiextv1.CustomResourceDefinition{}
+		err := yaml.NewYAMLToJSONDecoder(strings.NewReader(yamlStr)).Decode(&crd)
+		if err != nil {
+			logger.Error("Failed to deserialize CRD from yaml",
+				zap.String("name", name), zap.Error(err))
+			continue
+		}
+		schemas[crd.Name] = &crd
+	}
+}
+
+// compareSchemasForVersion compares local and server schemas for a specific version
+func compareSchemasForVersion(ctx context.Context, logger *zap.Logger,
 	localSchemas map[string]*apiextv1.CustomResourceDefinition,
-	serverCRDs *apiextv1.CustomResourceDefinitionList) error {
+	serverCRDs []*apiextv1.CustomResourceDefinition,
+	versionKey string) {
 
 	// Create a map of server CRDs for easy lookup
 	serverCRDMap := make(map[string]*apiextv1.CustomResourceDefinition)
-	for i := range serverCRDs.Items {
-		serverCRDMap[serverCRDs.Items[i].Name] = &serverCRDs.Items[i]
+	for _, crd := range serverCRDs {
+		serverCRDMap[crd.Name] = crd
 	}
 
 	// Compare each local schema with server schema
 	for crdName, localCRD := range localSchemas {
 		if serverCRD, exists := serverCRDMap[crdName]; exists {
 			// CRD exists on server, compare schemas
-			compareAndLogDifferences(logger, crdName, localCRD, serverCRD)
+			compareAndLogDifferences(logger, crdName, localCRD, serverCRD, versionKey)
 		} else {
 			// CRD missing on server
 			logger.Warn("CRD missing on server",
 				zap.String("crd_name", crdName),
+				zap.String("version", versionKey),
 				zap.String("group", localCRD.Spec.Group),
 				zap.String("kind", localCRD.Spec.Names.Kind))
 		}
@@ -137,173 +224,24 @@ func compareSchemasWithServerList(ctx context.Context, logger *zap.Logger,
 		if _, exists := localSchemas[crdName]; !exists {
 			logger.Warn("Extra CRD on server not in local schemas",
 				zap.String("crd_name", crdName),
+				zap.String("version", versionKey),
 				zap.String("group", serverCRD.Spec.Group),
 				zap.String("kind", serverCRD.Spec.Names.Kind))
 		}
 	}
-
-	return nil
 }
 
-// compareAndLogDifferences performs detailed comparison and logs specific differences
-func compareAndLogDifferences(logger *zap.Logger, crdName string, localCRD, serverCRD *apiextv1.CustomResourceDefinition) {
-	// Use reflect.DeepEqual for the overall comparison first
+// compareAndLogDifferences performs comparison using reflect.DeepEqual and logs differences
+func compareAndLogDifferences(logger *zap.Logger, crdName string, localCRD, serverCRD *apiextv1.CustomResourceDefinition, versionKey string) {
+	// Use reflect.DeepEqual for the overall comparison
 	if reflect.DeepEqual(localCRD.Spec, serverCRD.Spec) {
 		return // No differences, early return
 	}
 
-	// If there are differences, perform detailed field-by-field comparison for logging
-	hasDifferences := false
-
-	if localCRD.Spec.Group != serverCRD.Spec.Group {
-		logger.Warn("CRD group mismatch",
-			zap.String("crd_name", crdName),
-			zap.String("field", "spec.group"),
-			zap.String("local", localCRD.Spec.Group),
-			zap.String("server", serverCRD.Spec.Group))
-		hasDifferences = true
-	}
-
-	if localCRD.Spec.Scope != serverCRD.Spec.Scope {
-		logger.Warn("CRD scope mismatch",
-			zap.String("crd_name", crdName),
-			zap.String("field", "spec.scope"),
-			zap.String("local", string(localCRD.Spec.Scope)),
-			zap.String("server", string(serverCRD.Spec.Scope)))
-		hasDifferences = true
-	}
-
-	if !reflect.DeepEqual(localCRD.Spec.Names, serverCRD.Spec.Names) {
-		if localCRD.Spec.Names.Kind != serverCRD.Spec.Names.Kind {
-			logger.Warn("CRD kind mismatch",
-				zap.String("crd_name", crdName),
-				zap.String("field", "spec.names.kind"),
-				zap.String("local", localCRD.Spec.Names.Kind),
-				zap.String("server", serverCRD.Spec.Names.Kind))
-		}
-		if localCRD.Spec.Names.Plural != serverCRD.Spec.Names.Plural {
-			logger.Warn("CRD plural name mismatch",
-				zap.String("crd_name", crdName),
-				zap.String("field", "spec.names.plural"),
-				zap.String("local", localCRD.Spec.Names.Plural),
-				zap.String("server", serverCRD.Spec.Names.Plural))
-		}
-		if localCRD.Spec.Names.Singular != serverCRD.Spec.Names.Singular {
-			logger.Warn("CRD singular name mismatch",
-				zap.String("crd_name", crdName),
-				zap.String("field", "spec.names.singular"),
-				zap.String("local", localCRD.Spec.Names.Singular),
-				zap.String("server", serverCRD.Spec.Names.Singular))
-		}
-		hasDifferences = true
-	}
-
-	if !reflect.DeepEqual(localCRD.Spec.Conversion, serverCRD.Spec.Conversion) {
-		logger.Warn("CRD conversion settings mismatch",
-			zap.String("crd_name", crdName),
-			zap.String("field", "spec.conversion"))
-		hasDifferences = true
-	}
-
-	if !reflect.DeepEqual(localCRD.Spec.Versions, serverCRD.Spec.Versions) {
-		if compareVersions(logger, crdName, localCRD.Spec.Versions, serverCRD.Spec.Versions) {
-			hasDifferences = true
-		}
-	}
-
-	if hasDifferences {
-		logger.Warn("CRD schema differences detected", zap.String("crd_name", crdName))
-	}
-}
-
-// compareVersions compares version arrays and logs specific version differences
-func compareVersions(logger *zap.Logger, crdName string, localVersions, serverVersions []apiextv1.CustomResourceDefinitionVersion) bool {
-	hasDifferences := false
-	// Create maps for easy lookup
-	localVersionMap := make(map[string]apiextv1.CustomResourceDefinitionVersion)
-	serverVersionMap := make(map[string]apiextv1.CustomResourceDefinitionVersion)
-
-	for _, v := range localVersions {
-		localVersionMap[v.Name] = v
-	}
-	for _, v := range serverVersions {
-		serverVersionMap[v.Name] = v
-	}
-
-	// Check for missing versions on server
-	for versionName := range localVersionMap {
-		if _, exists := serverVersionMap[versionName]; !exists {
-			logger.Warn("Version missing on server",
-				zap.String("crd_name", crdName),
-				zap.String("version", versionName),
-				zap.String("field", "spec.versions"))
-			hasDifferences = true
-		}
-	}
-
-	// Check for extra versions on server
-	for versionName := range serverVersionMap {
-		if _, exists := localVersionMap[versionName]; !exists {
-			logger.Warn("Extra version on server",
-				zap.String("crd_name", crdName),
-				zap.String("version", versionName),
-				zap.String("field", "spec.versions"))
-			hasDifferences = true
-		}
-	}
-
-	// Compare each version that exists in both
-	for versionName, localVersion := range localVersionMap {
-		if serverVersion, exists := serverVersionMap[versionName]; exists {
-			// Compare version properties
-			if localVersion.Served != serverVersion.Served {
-				logger.Warn("Version served property mismatch",
-					zap.String("crd_name", crdName),
-					zap.String("version", versionName),
-					zap.String("field", "spec.versions[].served"),
-					zap.Bool("local", localVersion.Served),
-					zap.Bool("server", serverVersion.Served))
-				hasDifferences = true
-			}
-
-			if localVersion.Storage != serverVersion.Storage {
-				logger.Warn("Version storage property mismatch",
-					zap.String("crd_name", crdName),
-					zap.String("version", versionName),
-					zap.String("field", "spec.versions[].storage"),
-					zap.Bool("local", localVersion.Storage),
-					zap.Bool("server", serverVersion.Storage))
-				hasDifferences = true
-			}
-
-			// Compare schemas
-			if !reflect.DeepEqual(localVersion.Schema, serverVersion.Schema) {
-				logger.Warn("Version schema mismatch",
-					zap.String("crd_name", crdName),
-					zap.String("version", versionName),
-					zap.String("field", "spec.versions[].schema"))
-				hasDifferences = true
-			}
-
-			// Compare additional printer columns
-			if !reflect.DeepEqual(localVersion.AdditionalPrinterColumns, serverVersion.AdditionalPrinterColumns) {
-				logger.Warn("Version additional printer columns mismatch",
-					zap.String("crd_name", crdName),
-					zap.String("version", versionName),
-					zap.String("field", "spec.versions[].additionalPrinterColumns"))
-				hasDifferences = true
-			}
-
-			// Compare subresources
-			if !reflect.DeepEqual(localVersion.Subresources, serverVersion.Subresources) {
-				logger.Warn("Version subresources mismatch",
-					zap.String("crd_name", crdName),
-					zap.String("version", versionName),
-					zap.String("field", "spec.versions[].subresources"))
-				hasDifferences = true
-			}
-		}
-	}
-
-	return hasDifferences
+	// Log the difference with version information
+	logger.Warn("CRD schema differences detected",
+		zap.String("crd_name", crdName),
+		zap.String("version", versionKey),
+		zap.String("group", localCRD.Spec.Group),
+		zap.String("kind", localCRD.Spec.Names.Kind))
 }
