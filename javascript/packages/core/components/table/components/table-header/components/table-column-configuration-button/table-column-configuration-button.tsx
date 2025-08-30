@@ -63,7 +63,7 @@ export function TableColumnConfigurationButton<T extends TableData = TableData>(
       )}
     >
       <Button title="Configure columns" size={SIZE.mini} kind={KIND.tertiary}>
-        <Icon name="settings" size={theme.sizing.scale700} />
+        <Icon name="settings" />
       </Button>
     </StatefulPopover>
   );

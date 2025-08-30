@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search } from 'baseui/icon';
 import { Input, SIZE } from 'baseui/input';
+
+import { Icon } from '#core/components/icon/icon';
 
 import type { TableSearchInputProps } from './types';
 
@@ -38,7 +39,7 @@ export function TableSearchInput({ value, onChange }: TableSearchInputProps) {
         ClearIcon: { props: { size: 20 } },
       }}
       placeholder="Search..."
-      startEnhancer={<Search size={20} />}
+      startEnhancer={<Icon name="search" />}
     />
   );
 }

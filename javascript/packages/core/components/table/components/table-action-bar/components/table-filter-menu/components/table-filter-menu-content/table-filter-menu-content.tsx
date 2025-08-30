@@ -33,7 +33,7 @@ export function TableFilterMenuContent<T extends TableData = TableData>(
           kind={KIND.tertiary}
           size={SIZE.compact}
         >
-          <Icon name="arrowLeft" size={18} />
+          <Icon name="arrowLeft" size={theme.sizing.scale650} />
         </Button>
         <FilterComponent
           columnId={selectedColumn.id}

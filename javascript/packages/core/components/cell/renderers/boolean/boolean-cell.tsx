@@ -20,7 +20,7 @@ export const BooleanCell = ({ value, column }: CellRendererProps<boolean>) => {
         ...theme.typography.ParagraphSmall,
       })}
     >
-      <Icon name="circleCheckFilled" kind={IconKind.ACCENT} size={14} />
+      <Icon name="circleCheckFilled" kind={IconKind.ACCENT} size={theme.sizing.scale550} />
       {BooleanCell.toString({ column, value })}
     </div>
   );

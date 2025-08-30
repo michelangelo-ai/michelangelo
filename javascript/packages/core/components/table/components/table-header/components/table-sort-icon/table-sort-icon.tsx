@@ -10,5 +10,5 @@ export function TableSortIcon(props: TableSortIconProps) {
   const iconName = sortDirection === 'desc' ? 'sortDescending' : 'sortAscending';
   const iconKind = sortDirection ? IconKind.ACCENT : IconKind.TERTIARY;
 
-  return <Icon name={iconName} kind={iconKind} title="Toggle Sort" size={16} />;
+  return <Icon name={iconName} kind={iconKind} title="Toggle Sort" />;
 }

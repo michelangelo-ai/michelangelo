@@ -1,3 +1,4 @@
+import { useStyletron } from 'baseui';
 import { ACCESSIBILITY_TYPE, PLACEMENT, StatefulTooltip } from 'baseui/tooltip';
 
 import { Icon } from '#core/components/icon/icon';
@@ -7,6 +8,7 @@ import type { TooltipWrapperProps } from './types';
 
 export function CellTooltipWrapper(props: TooltipWrapperProps) {
   const { actionHandler, children, content } = props;
+  const [, theme] = useStyletron();
 
   return (
     <StatefulTooltip
@@ -18,7 +20,7 @@ export function CellTooltipWrapper(props: TooltipWrapperProps) {
       content={
         <ClickableContainer onClick={actionHandler}>
           {content}
-          {!!actionHandler && <Icon name="chevronRight" size="18px" />}
+          {!!actionHandler && <Icon name="chevronRight" size={theme.sizing.scale650} />}
         </ClickableContainer>
       }
     >

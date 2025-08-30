@@ -8,7 +8,7 @@ import type { CellRenderer } from '#core/components/cell/types';
 import type { MultiCellConfig } from './types';
 
 export const MultiCell: CellRenderer<unknown, MultiCellConfig> = (props) => {
-  const [css] = useStyletron();
+  const [css, theme] = useStyletron();
   const { column, record, CellComponent = DefaultCellRenderer } = props;
   const { items } = column;
 
@@ -18,7 +18,7 @@ export const MultiCell: CellRenderer<unknown, MultiCellConfig> = (props) => {
 
   return (
     <div className={css(COLUMN_WRAPPER)}>
-      {column.icon && <Icon name={column.icon} size={16} width="32px" />}
+      {column.icon && <Icon name={column.icon} size={theme.sizing.scale600} width="32px" />}
       <div className={css(ITEMS_WRAPPER)}>
         {items.map((item, index) => {
           const value = getObjectValue<unknown>(record, item.accessor ?? item.id);

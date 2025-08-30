@@ -12,6 +12,7 @@ import Info from '@mui/icons-material/Info';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardBackspaceIcon from '@mui/icons-material/KeyboardBackspace';
 import Launch from '@mui/icons-material/Launch';
+import SearchIcon from '@mui/icons-material/Search';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ShowChartIcon from '@mui/icons-material/ShowChart';
 import SkipNextIcon from '@mui/icons-material/SkipNext';
@@ -32,6 +33,7 @@ export const ICONS = {
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   plus: createMuiIconAdapter(AddIcon),
+  search: createMuiIconAdapter(SearchIcon),
   settings: createMuiIconAdapter(SettingsIcon),
   sortAscending: createMuiIconAdapter(ArrowUpwardIcon),
   sortDescending: createMuiIconAdapter(ArrowDownwardIcon),
