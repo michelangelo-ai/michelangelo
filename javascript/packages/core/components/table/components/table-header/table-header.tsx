@@ -6,7 +6,11 @@ import { TableSelectionColumn } from '../table-selection-column/table-selection-
 import { withStickySides } from '../with-sticky-sides/with-sticky-sides';
 import { TableColumnConfigurationButton } from './components/table-column-configuration-button/table-column-configuration-button';
 import { TableSortIcon } from './components/table-sort-icon/table-sort-icon';
-import { StyledSortableTableHeadCell, StyledTableHeadCell } from './styled-components';
+import {
+  StyledSortableTableHeadCell,
+  StyledTableConfigurationButtonHeadCell,
+  StyledTableHeadCell,
+} from './styled-components';
 
 import type { TableData } from '#core/components/table/types/data-types';
 import type { TableHeaderProps } from './types';
@@ -76,7 +80,7 @@ export const TableHeader = <T extends TableData = TableData>({
           )}
 
         {setColumnOrder && setColumnVisibility && (
-          <StyledTableHeadCell role="columnheader">
+          <StyledTableConfigurationButtonHeadCell role="columnheader">
             <div className={css({ display: 'flex', justifyContent: 'center' })}>
               <TableColumnConfigurationButton
                 columns={columns}
@@ -84,7 +88,7 @@ export const TableHeader = <T extends TableData = TableData>({
                 setColumnVisibility={setColumnVisibility}
               />
             </div>
-          </StyledTableHeadCell>
+          </StyledTableConfigurationButtonHeadCell>
         )}
       </StickySidesTableHeadRow>
     </StyledTableHead>
