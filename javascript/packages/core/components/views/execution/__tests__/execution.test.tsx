@@ -3,6 +3,8 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import {
   buildExecutionSchemaFactory,
   buildTaskStepFactory,
@@ -29,7 +31,7 @@ describe('Execution view', () => {
       },
     };
 
-    render(<Execution schema={buildSchema()} data={executionData} />);
+    render(<Execution schema={buildSchema()} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
     // Should render each parent task in both overview and details sections
     expect(screen.getAllByText('Build Pipeline')).toHaveLength(2);
@@ -73,7 +75,7 @@ describe('Execution view', () => {
       },
     };
 
-    render(<Execution schema={buildSchema()} data={executionData} />);
+    render(<Execution schema={buildSchema()} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
     // Should render parent task in both sections
     expect(screen.getAllByText('Unfocused Step')).toHaveLength(2);
@@ -150,7 +152,7 @@ describe('Execution view', () => {
       },
     };
 
-    render(<Execution schema={schemaWithMetadata} data={executionData} />);
+    render(<Execution schema={schemaWithMetadata} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
     // Should render task name in both sections (Overview + Details)
     expect(screen.getAllByText('Build Task')).toHaveLength(2);
@@ -163,7 +165,7 @@ describe('Execution view', () => {
   it('should handle empty execution data gracefully', () => {
     const emptyData = {};
 
-    render(<Execution schema={buildSchema()} data={emptyData} />);
+    render(<Execution schema={buildSchema()} data={emptyData} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('No execution data')).toBeInTheDocument();
     expect(screen.getByText('No tasks available')).toBeInTheDocument();
@@ -186,15 +188,14 @@ describe('Execution view', () => {
             markdown: false,
           },
           {
-            type: 'metadata',
+            type: 'metadata' as const,
             label: 'Performance',
-            accessor: 'performance',
             cells: [
               {
                 id: 'duration',
                 label: 'Duration',
                 type: CellType.TEXT,
-                accessor: 'duration',
+                accessor: 'performance.duration',
               },
             ],
           },
@@ -235,7 +236,7 @@ describe('Execution view', () => {
       },
     };
 
-    render(<Execution schema={schemaWithBody} data={executionData} />);
+    render(<Execution schema={schemaWithBody} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
     // All body schema labels should be present for focused task
     expect(screen.getByText('Input Parameters')).toBeInTheDocument();
@@ -283,7 +284,7 @@ describe('Execution view', () => {
         },
       };
 
-      render(<Execution schema={buildSchema()} data={executionData} />);
+      render(<Execution schema={buildSchema()} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
       // Click task name in overview
       await user.click(screen.getAllByText('Build Pipeline')[0]);
@@ -313,7 +314,7 @@ describe('Execution view', () => {
         },
       };
 
-      render(<Execution schema={buildSchema()} data={executionData} />);
+      render(<Execution schema={buildSchema()} data={executionData} />, buildWrapper([getRouterWrapper()]));
 
       // Click subtask name in overview
       await user.click(screen.getAllByText('feature_prep')[0]);

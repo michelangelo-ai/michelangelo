@@ -96,24 +96,19 @@ const executionSchema: ExecutionDetailViewSchema = {
         accessor: 'output',
       },
       {
-        type: 'metadata',
+        type: 'metadata' as const,
         label: 'Execution Info',
-        accessor: (record: { displayName?: string; logUrl?: string }) => {
-          return {
-            executionName: record.displayName ?? 'N/A',
-            logUrl: record.logUrl ?? '',
-          };
-        },
         cells: [
           {
-            id: 'executionName',
+            id: 'displayName',
             label: 'Execution Name',
             type: CellType.TEXT,
-            accessor: 'executionName',
+            accessor: 'displayName',
           },
           {
             id: 'logUrl',
             label: 'Log URL',
+            accessor: 'logUrl',
           },
         ],
       },

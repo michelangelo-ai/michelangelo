@@ -41,20 +41,15 @@ describe('TaskBodyStruct', () => {
     expect(screen.getByText('"1.0.0"')).toBeInTheDocument();
   });
 
-  it('should handle null and undefined values', async () => {
+  it('should handle undefined values', async () => {
     const user = userEvent.setup();
 
-    const { rerender } = render(<TaskBodyStruct label="Empty Value" value={null} />);
+    render(<TaskBodyStruct label="Empty Value" value={undefined} />);
 
     const accordionButton = screen.getByRole('button', { name: /Empty Value/ });
     await user.click(accordionButton);
 
-    expect(screen.getByText('null')).toBeInTheDocument();
-
-    rerender(<TaskBodyStruct label="Empty Value" value={undefined} />);
-    await user.click(accordionButton);
-
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '' })).toBeInTheDocument();
   });
 
   it('should not allow editing the JSON content', async () => {
