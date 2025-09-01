@@ -50,17 +50,13 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 }
 
 func newAPIServerHandler(params Params) (api.Handler, error) {
-	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
-	if err != nil {
-		return nil, err
-	}
-	factory := newK8sAndMetadataStorageFactory(params)
-	return factory.GetAPIHandler(k8sClient)
+	// Use the new builder pattern
+	return NewAPIServerHandler(params)
 }
 
 func newCtrlManagerHandler(params Params) (api.Handler, error) {
-	factory := newK8sAndMetadataStorageFactory(params)
-	return factory.GetAPIHandler(params.Manager.GetClient())
+	// Use the new builder pattern
+	return NewCtrlManagerHandler(params)
 }
 
 type factoryImpl struct {
