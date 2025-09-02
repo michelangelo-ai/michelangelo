@@ -1,4 +1,3 @@
-import React from 'react';
 import { useStyletron } from 'baseui';
 
 import { Box } from '#core/components/box/box';
@@ -8,21 +7,25 @@ import { CircleExclamationMarkKind } from '#core/components/illustrations/circle
 import { TaskDetails } from './components/task-details/task-details';
 import { TaskFlow } from './components/task-flow';
 import { TaskStateIcon } from './components/task-state-icon';
-import { TaskContentStack, TaskSeparator } from './styled-components';
+import { TaskContentStack } from './styled-components';
 import { buildTaskList } from './utils/build-task-list';
 import { buildTaskMatrix } from './utils/build-task-matrix';
 import { determineExecutionState } from './utils/determine-execution-state';
 import { scrollToTask } from './utils/scroll-to-task';
 
-import type { ExecutionDetailViewSchema } from './types';
+import type { ExecutionDetailViewSchema, ExecutionOverrides } from './types';
 
 export function Execution<
   TData extends object = object,
   TTaskRecord extends object = object,
->(props: { schema: ExecutionDetailViewSchema<TData, TTaskRecord>; data: TData }) {
-  const { schema, data } = props;
+>(props: {
+  schema: ExecutionDetailViewSchema<TData, TTaskRecord>;
+  data: TData;
+  overrides?: ExecutionOverrides<TTaskRecord>;
+}) {
+  const { schema, data, overrides } = props;
   const [css, theme] = useStyletron();
-  const taskList = buildTaskList(schema, data);
+  const taskList = overrides?.taskList ?? buildTaskList(schema, data);
 
   if (!taskList.length) {
     return (
@@ -55,17 +58,13 @@ export function Execution<
         }
       >
         <TaskContentStack>
-          {matrix.map((item, index) => (
-            <React.Fragment key={index}>
-              {index > 0 && <TaskSeparator />}
-              <TaskFlow
-                taskList={item.taskList}
-                onTaskClick={(clickedTask) => {
-                  scrollToTask(clickedTask);
-                }}
-              />
-            </React.Fragment>
-          ))}
+          <TaskFlow
+            matrix={matrix}
+            onTaskClick={(clickedTask) => {
+              scrollToTask(clickedTask);
+            }}
+            overrides={{ TaskListRenderer: overrides?.TaskListRenderer }}
+          />
         </TaskContentStack>
       </Box>
 
@@ -76,6 +75,7 @@ export function Execution<
             task={task}
             metadata={schema.tasks.header.metadata}
             bodySchema={schema.tasks.body}
+            overrides={overrides}
           />
         ))}
       </TaskContentStack>

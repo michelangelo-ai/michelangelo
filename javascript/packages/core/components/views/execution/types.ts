@@ -1,6 +1,8 @@
+import type { ComponentType } from 'react';
 import type { Cell } from '#core/components/cell/types';
 import type { Accessor } from '#core/types/common/studio-types';
 import type { TaskBodySchema } from './components/task-details/renderers/types';
+import type { TaskListRendererProps } from './components/types';
 import type { TASK_STATE } from './constants';
 
 export type TaskState = (typeof TASK_STATE)[keyof typeof TASK_STATE];
@@ -183,4 +185,27 @@ export type Task<TTaskRecord extends object = object> = {
   record: TTaskRecord;
   /** True for the task that should receive UI focus and attention */
   focused: boolean;
+};
+
+/**
+ * BaseUI-style overrides for Execution component
+ *
+ * Enables customization of execution rendering for different pipeline types:
+ * - taskList: Override task data (bypasses buildTaskList)
+ * - TaskListRenderer: Override how each taskList within matrix items is rendered
+ *
+ * Example usage for ASL pipeline types:
+ * ```
+ * const overrides = {
+ *   taskList: enhancedTasksWithASL,
+ *   TaskListRenderer: { component: ASLTaskListRenderer }
+ * };
+ * ```
+ */
+export type ExecutionOverrides<TTaskRecord extends object = object> = {
+  TaskListRenderer?: {
+    component?: ComponentType<TaskListRendererProps<TTaskRecord>>;
+    props?: Partial<TaskListRendererProps<TTaskRecord>>;
+  };
+  taskList?: Task<TTaskRecord>[];
 };
