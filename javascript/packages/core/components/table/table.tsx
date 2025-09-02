@@ -60,6 +60,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       : {}),
     enableRowSelection: props.enableRowSelection,
     globalFilterFn: 'includesString',
+    autoResetPageIndex: false,
   });
 
   const viewState = getTableViewState({
