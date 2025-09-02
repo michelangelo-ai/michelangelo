@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
+	"go.uber.org/yarpc/yarpcerrors"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/compute/ray"
@@ -48,6 +49,34 @@ type CreateRayJobRequest struct {
 // CreateRayJobResponse wraps the response from creating a Ray job.
 type CreateRayJobResponse struct {
 	Object map[string]interface{} `json:"object"`
+}
+
+// BuildRayJobImageRequest defines parameters for building a Ray job image.
+type BuildRayJobImageRequest struct {
+	Object           map[string]interface{} `json:"Object"`
+	UsePipelineImage bool                   `json:"UsePipelineImage"`
+	CommitHash       string                 `json:"CommitHash"`
+	UserToken        string                 `json:"userToken"`
+}
+
+// BuildRayJobImageResponse wraps the response from building a Ray job image.
+type BuildRayJobImageResponse struct {
+	JobName          string   `json:"jobName"`
+	Status           string   `json:"status"`
+	ImageRegistry    string   `json:"imageRegistry"`
+	ImageTag         []string `json:"imageTag"`
+	PipelineS3Prefix string   `json:"pipelineS3Prefix"`
+}
+
+// SensorRayJobImageRequest defines parameters for sensing Ray job image build status.
+type SensorRayJobImageRequest struct {
+	JobName   string `json:"jobName"`
+	UserToken string `json:"userToken"`
+}
+
+// SensorRayJobImageResponse wraps the response from sensing Ray job image build status.
+type SensorRayJobImageResponse struct {
+	Status map[string]interface{} `json:"status"`
 }
 
 // GetRayJobRequest defines parameters for getting a Ray job.
@@ -94,6 +123,127 @@ type TerminateRayClusterRequest struct {
 	Namespace string `json:"namespace"`
 	Type      string `json:"type"`
 	Reason    string `json:"reason"`
+}
+
+// BuildRayJobImage builds a Ray job image using the provided request parameters via HTTP API.
+//
+// This method is executed as part of a Starlark worker activity.
+//
+// Params:
+// - ctx: The context for the operation.
+// - request: The request containing details of the Ray job image to build.
+//
+// Returns:
+// - *BuildRayJobImageResponse: Response containing the build job details.
+// - error: Error information if the operation fails.
+func (r *activities) BuildRayJobImage(ctx context.Context, request BuildRayJobImageRequest) (*BuildRayJobImageResponse, error) {
+	logger := log.FromContext(ctx)
+	logger.Info("ray-http-build-image-activity-start", zap.Any("request", request))
+
+	// Convert request to JSON for HTTP POST
+	requestBody := map[string]interface{}{
+		"Object":           request.Object,
+		"UsePipelineImage": request.UsePipelineImage,
+		"CommitHash":       request.CommitHash,
+	}
+
+	requestBytes, err := json.Marshal(requestBody)
+	if err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+
+	// Make HTTP POST request to build the Ray job image
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/cimages/uniflowtask", r.apiBaseURL, r.workspace, r.environment)
+	req, err := http.NewRequest("POST", url, bytes.NewReader(requestBytes))
+	if err != nil {
+		logger.Error(err, "activity-error: failed to create request")
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.UserToken))
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		logger.Error(err, "activity-error: failed to execute request")
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to build ray job image", resp.StatusCode)
+	}
+
+	var responseData BuildRayJobImageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+
+	// Check if the build was initiated successfully
+	if responseData.Status != "succeed" {
+		return nil, fmt.Errorf("ray job image build failed with status: %s", responseData.Status)
+	}
+
+	return &responseData, nil
+}
+
+// SensorRayJobImage senses the status of a Ray job image build via HTTP API.
+//
+// This method is executed as part of a Starlark worker activity.
+//
+// Params:
+// - ctx: The context for the operation.
+// - request: The request containing the job name to sense.
+//
+// Returns:
+// - *SensorRayJobImageResponse: Response containing the build status.
+// - error: Error information if the operation fails.
+func (r *activities) SensorRayJobImage(ctx context.Context, request SensorRayJobImageRequest) (*SensorRayJobImageResponse, error) {
+	logger := log.FromContext(ctx)
+	logger.Info("ray-http-sensor-image-activity-start", zap.Any("request", request))
+
+	if request.JobName == "" {
+		return nil, errors.New("job name is required")
+	}
+
+	// Make HTTP GET request to sense the Ray job image build status
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/cimages/status/%s", r.apiBaseURL, r.workspace, r.environment, request.JobName)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		logger.Error(err, "activity-error: failed to create request")
+		return nil, err
+	}
+
+	// Set headers
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.UserToken))
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		logger.Error(err, "activity-error: failed to execute request")
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d: failed to sense ray job image build status", resp.StatusCode)
+	}
+
+	var responseData SensorRayJobImageResponse
+	if err := json.NewDecoder(resp.Body).Decode(&responseData); err != nil {
+		logger.Error(err, "activity-error")
+		return nil, err
+	}
+
+	// Check if the build is complete
+	if status, ok := responseData.Status["succeeded"].(float64); ok && status == 1 {
+		return &responseData, nil
+	}
+
+	// If build is not complete, return a retryable error
+	return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "image build not complete")
 }
 
 // CreateRayJob creates a new Ray job using the provided request parameters via HTTP API.
@@ -146,15 +296,19 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 		logger.Error(err, "activity-error")
 		return nil, err
 	}
+	objectData, ok := rayJobData["object"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("missing object in HTTP response")
+	}
 
 	response := &CreateRayJobResponse{
-		Object: rayJobData,
+		Object: objectData,
 	}
 
 	return response, nil
 }
 
-// GetRayJob retrieves details of a Ray job via HTTP API.
+// SensorRayJob retrieves details of a Ray job via HTTP API.
 //
 // Params:
 // - ctx: The context for the operation.
@@ -163,7 +317,7 @@ func (r *activities) CreateRayJob(ctx context.Context, request CreateRayJobReque
 // Returns:
 // - *GetRayJobResponse: Response containing the job details.
 // - error: Error information if the operation fails.
-func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*GetRayJobResponse, error) {
+func (r *activities) SensorRayJob(ctx context.Context, request GetRayJobRequest) (*GetRayJobResponse, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("ray-http-activity-start", zap.Any("request", request))
 
@@ -171,263 +325,60 @@ func (r *activities) GetRayJob(ctx context.Context, request GetRayJobRequest) (*
 		return nil, errors.New("ray job name is required")
 	}
 
-	// Make HTTP GET request to the Ray API using the correct API format
 	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayjobs/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		logger.Error(err, "activity-error: failed to get request")
 		return nil, err
 	}
-
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", request.UserToken))
-
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
 		logger.Error(err, "activity-error: failed to execute request")
 		return nil, err
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("HTTP %d: failed to get ray job", resp.StatusCode)
 	}
 
-	var rayJobData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rayJobData); err != nil {
-		logger.Error(err, "activity-error")
-		return nil, err
-	}
-
-	response := &GetRayJobResponse{
-		Object: rayJobData,
-	}
-
-	terminalStates := map[string]bool{"SUCCEEDED": true, "FAILED": true, "STOPPED": true}
-
-	object, ok := rayJobData["object"].(map[string]interface{})
-	if !ok {
-		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "no object in response")
-	}
-
-	status, ok := object["status"].(map[string]interface{})
-	if !ok {
-		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "no status in object")
-	}
-
-	jobStatus, ok := status["state"].(string)
-	if !ok {
-		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", status)
-	}
-
-	if terminalStates[jobStatus] {
-		return nil, workflow.NewCustomError(ctx, "FAILED_PRECONDITION", "job is not in a terminal state")
-	}
-
-	return response, nil
-}
-
-// ListRayJobs lists all Ray jobs in a namespace via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: Request containing the namespace.
-//
-// Returns:
-// - *ray.ListRayJobsResponse: Response containing the list of jobs.
-// - error: Error information if the operation fails.
-func (r *activities) ListRayJobs(ctx context.Context, request ListRayJobsRequest) (*ray.ListRayJobsResponse, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	// Implement HTTP client call to list Ray jobs
-	// This is a placeholder - actual implementation would use the HTTP client to get from the Ray API
-
-	// Simulating a successful response with empty list
-	response := &ray.ListRayJobsResponse{
-		Items: []unstructured.Unstructured{},
-	}
-
-	return response, nil
-}
-
-// DeleteRayJob deletes a Ray job via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: Request containing the job name and namespace.
-//
-// Returns:
-// - bool: True if deletion was successful.
-// - error: Error information if the operation fails.
-func (r *activities) DeleteRayJob(ctx context.Context, request GetRayJobRequest) (bool, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	// Implement HTTP client call to delete a Ray job
-	// This is a placeholder - actual implementation would use the HTTP client to delete from the Ray API
-
-	if request.Name == "" {
-		return false, errors.New("ray job name is required")
-	}
-
-	// Simulating a successful deletion
-	return true, nil
-}
-
-// TerminateRayJob terminates a Ray job via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: Request containing the job name, namespace, and termination details.
-//
-// Returns:
-// - bool: True if termination was successful.
-// - error: Error information if the operation fails.
-func (r *activities) TerminateRayJob(ctx context.Context, request struct {
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Reason    string `json:"reason"`
-}) (bool, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	// Implement HTTP client call to terminate a Ray job
-	// This is a placeholder - actual implementation would use the HTTP client to post termination to the Ray API
-
-	if request.Name == "" {
-		return false, errors.New("ray job name is required")
-	}
-
-	// Simulating a successful termination
-	return true, nil
-}
-
-// CreateRayCluster creates a new Ray cluster via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: The request containing the Ray cluster specification.
-//
-// Returns:
-// - *CreateRayClusterResponse: Response containing the created Ray cluster details.
-// - error: Error information if the operation fails.
-func (r *activities) CreateRayCluster(ctx context.Context, request CreateRayClusterRequest) (*CreateRayClusterResponse, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	// Extract metadata from the cluster spec
-	metadata, ok := request.ClusterSpec["metadata"].(map[string]interface{})
-	if !ok {
-		return nil, errors.New("invalid cluster spec: missing metadata")
-	}
-
-	// Extract namespace from metadata
-	namespace := ""
-	if ns, ok := metadata["namespace"].(string); ok {
-		namespace = ns
-	}
-	if namespace == "" {
-		return nil, errors.New("namespace is required in cluster spec metadata")
-	}
-
-	// Convert cluster spec to JSON for HTTP POST
-	clusterBytes, err := json.Marshal(request.ClusterSpec)
+	// Read response body as string first for logging
+	bodyBytes, err := io.ReadAll(resp.Body)
 	if err != nil {
-		logger.Error(err, "activity-error")
+		logger.Error(err, "activity-error reading response body")
 		return nil, err
 	}
 
-	// Make HTTP POST request to create the Ray cluster using the correct API format
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters", r.apiBaseURL, r.workspace, r.environment)
-	resp, err := r.httpClient.Post(url, "application/json", bytes.NewReader(clusterBytes))
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, err
-	}
-	defer resp.Body.Close()
+	responseBodyStr := string(bodyBytes)
+	logger.Info("ray-http-sensor-response", zap.String("response", responseBodyStr))
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: failed to create ray cluster", resp.StatusCode)
-	}
-
-	var rayClusterData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
-		logger.Error(err, "activity-error")
+	// Decode the full HTTP response which includes the "object" wrapper
+	var httpResponse map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &httpResponse); err != nil {
+		logger.Error(err, "activity-error decoding response", zap.String("response", responseBodyStr))
 		return nil, err
 	}
 
-	response := &CreateRayClusterResponse{
-		Object: rayClusterData,
+	// Extract the "object" from the HTTP response (same as CreateRayJob does)
+	objectData, ok := httpResponse["object"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("missing object in HTTP response")
 	}
 
-	return response, nil
-}
-
-// GetRayCluster retrieves details of a Ray cluster via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: Request containing the cluster name and namespace.
-//
-// Returns:
-// - *GetRayClusterResponse: Response containing the cluster details.
-// - error: Error information if the operation fails.
-func (r *activities) GetRayCluster(ctx context.Context, request GetRayClusterRequest) (*GetRayClusterResponse, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	if request.Name == "" {
-		return nil, errors.New("ray cluster name is required")
+	// Check if the job has reached a terminal state
+	if status, ok := objectData["status"].(map[string]interface{}); ok {
+		if jobStatus, ok := status["jobStatus"].(string); ok {
+			if jobStatus == "SUCCEEDED" || jobStatus == "FAILED" {
+				return &GetRayJobResponse{
+					Object: objectData,
+				}, nil
+			}
+		}
 	}
 
-	// Make HTTP GET request to the Ray API using the correct API format
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/rayclusters/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
-	resp, err := r.httpClient.Get(url)
-	if err != nil {
-		logger.Error(err, "activity-error")
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d: failed to get ray cluster", resp.StatusCode)
-	}
-
-	var rayClusterData map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&rayClusterData); err != nil {
-		logger.Error(err, "activity-error")
-		return nil, err
-	}
-
-	response := &GetRayClusterResponse{
-		Object: rayClusterData,
-	}
-
-	return response, nil
-}
-
-// TerminateRayCluster terminates a Ray cluster via HTTP API.
-//
-// Params:
-// - ctx: The context for the operation.
-// - request: Request containing the cluster name, namespace, and termination details.
-//
-// Returns:
-// - bool: True if termination was successful.
-// - error: Error information if the operation fails.
-func (r *activities) TerminateRayCluster(ctx context.Context, request TerminateRayClusterRequest) (bool, error) {
-	logger := log.FromContext(ctx)
-	logger.Info("ray-http-activity-start", zap.Any("request", request))
-
-	// Implement HTTP client call to terminate a Ray cluster
-	// This is a placeholder - actual implementation would use the HTTP client to post termination to the Ray API
-
-	if request.Name == "" {
-		return false, errors.New("ray cluster name is required")
-	}
-
-	// Simulating a successful termination
-	return true, nil
+	// If we can't determine status, assume it's not ready yet
+	logger.Info("ray-job-status-unknown", zap.String("jobName", request.Name))
+	return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeFailedPrecondition.String(), "unknown status")
 }

@@ -6,6 +6,8 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/cauldron/worker",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/cauldron/worker/activities/rayhttp:go_default_library",
+        "//go/cauldron/worker/activities/sparkhttp:go_default_library",
         "//go/cauldron/worker/http:go_default_library",
         "//go/cauldron/worker/plugins/rayhttp:go_default_library",
         "//go/cauldron/worker/plugins/sparkhttp:go_default_library",

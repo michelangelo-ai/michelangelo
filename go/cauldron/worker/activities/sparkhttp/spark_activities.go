@@ -38,7 +38,7 @@ func buildRequirementFilePath(workspace, username, pipeline, name string) string
 	// Replace hyphens with underscores in the name
 	sanitizedName := strings.ReplaceAll(name, "-", "_")
 
-	return fmt.Sprintf("s3://chimera-mlpipeline/artifact/%s/%s/pipelines/%s/uniflow/%s/requirements-compiled.txt",
+	return fmt.Sprintf("s3://chimera-mlpipeline/artifact/%s/%s/pipelines/%s/uniflow_tasks/%s/requirements-compiled.txt",
 		workspace, username, pipeline, sanitizedName)
 }
 
@@ -122,7 +122,7 @@ func (r *activities) CreateSparkOne(ctx context.Context, request CreateSparkOneR
 	}
 
 	// Make HTTP POST request to create the SparkOne using the correct API format
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/sparkones", r.apiBaseURL, r.workspace, r.environment)
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/uniflow/sparkones", r.apiBaseURL, r.workspace, r.environment)
 	req, err := http.NewRequest("POST", url, bytes.NewReader(sparkOneBytes))
 	if err != nil {
 		logger.Error(err, "activity-error: failed to create request")
@@ -192,7 +192,7 @@ func (r *activities) SensorSparkOne(ctx context.Context, request GetSparkOneRequ
 		return nil, errors.New("spark job name is required")
 	}
 
-	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/sparkones/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
+	url := fmt.Sprintf("%s/api/v1/workspaces/%s/env/%s/uniflow/sparkones/%s", r.apiBaseURL, r.workspace, r.environment, request.Name)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		logger.Error(err, "activity-error: failed to get request")

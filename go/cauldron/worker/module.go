@@ -2,6 +2,8 @@ package worker
 
 import (
 	"github.com/cadence-workflow/starlark-worker/service"
+	activitiesrayhttp "github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/rayhttp"
+	activitiessparkyhttp "github.com/michelangelo-ai/michelangelo/go/cauldron/worker/activities/sparkhttp"
 	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/http"
 	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/plugins/rayhttp"
 	"github.com/michelangelo-ai/michelangelo/go/cauldron/worker/plugins/sparkhttp"
@@ -21,5 +23,7 @@ func RegisterSparkHTTPPlugin(registry map[string]service.IPlugin) {
 var Module = fx.Options(
 	fx.Invoke(RegisterRayHTTPPlugin),
 	fx.Invoke(RegisterSparkHTTPPlugin),
+	activitiesrayhttp.Module,
+	activitiessparkyhttp.Module,
 	http.Module,
 )

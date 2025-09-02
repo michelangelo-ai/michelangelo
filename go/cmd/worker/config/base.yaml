@@ -25,7 +25,7 @@ workflow-engine:
   provider: temporal
   workers:
     - domain: default
-      taskList: ericw
+      taskList: zhou-xian
   client:
     domain: uniflow
 
