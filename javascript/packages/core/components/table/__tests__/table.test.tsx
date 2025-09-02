@@ -18,6 +18,7 @@ import {
 import { TableBodyProps, TableRow } from '../components/table-body/types';
 import { Table } from '../table';
 
+import type { Accessor } from '#core/types/common/studio-types';
 import type { TablePaginationProps } from '../components/table-pagination/types';
 
 describe('Table', () => {
@@ -589,6 +590,43 @@ describe('Table', () => {
         expect(screen.getByLabelText('Engineering')).toBeInTheDocument();
         expect(screen.getByLabelText('Marketing')).toBeInTheDocument();
         expect(screen.getByLabelText('Sales')).toBeInTheDocument();
+      });
+
+      it('should support building filter options for columns with accessor function', async () => {
+        const user = userEvent.setup();
+
+        const data = [
+          { id: '1', name: 'Alice Johnson', department: 'Engineering', status: 'Active' },
+          { id: '2', name: 'Bob Smith', department: 'Marketing', status: 'Inactive' },
+          { id: '3', name: 'Carol Davis', department: 'Sales', status: 'Active' },
+        ];
+
+        const columns = [
+          { id: 'name', label: 'Name' },
+          {
+            id: 'department-column-id',
+            label: 'Department',
+            accessor: ((row: { department: string }) =>
+              `Dept: ${row.department}`) as unknown as Accessor<{ department: string }>,
+          },
+          { id: 'status', label: 'Status' },
+        ];
+
+        render(
+          <Table data={data} columns={columns} actionBarConfig={{ enableFilters: true }} />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        await user.click(screen.getByTestId('filter-option-Department'));
+
+        await waitFor(() => {
+          expect(screen.getAllByText('Dept: Engineering')).toHaveLength(2);
+        });
       });
     });
   });
