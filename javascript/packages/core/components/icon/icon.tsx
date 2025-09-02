@@ -9,7 +9,7 @@ import type { Props } from './types';
 
 export const Icon = memo<Props>(function Icon(props: Props) {
   const [, theme] = useStyletron();
-  const { color, name, icon, kind = IconKind.PRIMARY } = props;
+  const { color, name, icon, kind = IconKind.PRIMARY, size = theme.sizing.scale550 } = props;
   const { icons } = useIconProvider();
 
   const IconComponent = icon ?? (name ? icons[name] : null);
@@ -19,6 +19,7 @@ export const Icon = memo<Props>(function Icon(props: Props) {
   return (
     <IconComponent
       {...props}
+      size={size}
       color={color ?? theme.colors[`content${capitalizeFirstLetter(kind)}`]}
       style={{ minWidth: 'fit-content' }}
     />

@@ -53,7 +53,7 @@ export function TableFilterMenu<T extends TableData = TableData>(props: TableFil
         shape={SHAPE.pill}
         size={SIZE.compact}
         kind={isMenuOpen || columnFilters.length > 0 ? KIND.primary : KIND.secondary}
-        startEnhancer={<Icon name="plus" size={16} />}
+        startEnhancer={<Icon name="plus" />}
         overrides={{
           BaseButton: {
             style: {

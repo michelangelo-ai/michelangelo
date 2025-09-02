@@ -7,7 +7,7 @@ export function TableFilterOption({ label, onClick }: TableFilterOptionProps) {
   return (
     <FilterOptionItem onClick={onClick} data-testid={`filter-option-${label}`}>
       {label}
-      <Icon name="chevronRight" size={20} />
+      <Icon name="chevronRight" />
     </FilterOptionItem>
   );
 }

@@ -10,5 +10,5 @@ export function TaskStateIcon(props: { state: TaskState }) {
   const [, { colors, sizing }] = useStyletron();
   const iconProps = STATE_TO_ICON_MAP[state];
 
-  return <Icon name={iconProps.name} color={colors[iconProps.colorName]} size={sizing.scale750} />;
+  return <Icon name={iconProps.name} color={colors[iconProps.colorName]} size={sizing.scale700} />;
 }
