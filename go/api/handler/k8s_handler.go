@@ -7,16 +7,21 @@ import (
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// K8sHandlerImpl wraps existing k8sClient functionality with NO new logic
+// K8sHandlerImpl implements the K8sHandler interface by delegating to a controller-runtime client.
+// This provides a clean abstraction layer for Kubernetes operations while maintaining
+// full compatibility with the controller-runtime ecosystem.
 type K8sHandlerImpl struct {
 	client ctrlRTClient.Client
 }
 
+// NewK8sHandler creates a new K8sHandler implementation.
+// The provided client should be properly configured with the appropriate scheme
+// and authentication for the target Kubernetes cluster.
 func NewK8sHandler(client ctrlRTClient.Client) K8sHandler {
 	return &K8sHandlerImpl{client: client}
 }
 
-// CreateInK8s directly delegates to existing k8sClient.Create - NO new logic
+// CreateInK8s implements K8sHandler.CreateInK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) CreateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
 	return k.client.Create(ctx, obj, &ctrlRTClient.CreateOptions{
 		DryRun:       opts.DryRun,
@@ -25,12 +30,12 @@ func (k *K8sHandlerImpl) CreateInK8s(ctx context.Context, obj ctrlRTClient.Objec
 	})
 }
 
-// GetFromK8s directly delegates to existing k8sClient.Get - NO new logic
+// GetFromK8s implements K8sHandler.GetFromK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) GetFromK8s(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
 	return k.client.Get(ctx, ctrlRTClient.ObjectKey{Namespace: namespace, Name: name}, obj)
 }
 
-// UpdateInK8s directly delegates to existing k8sClient.Update - NO new logic
+// UpdateInK8s implements K8sHandler.UpdateInK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) UpdateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	return k.client.Update(ctx, obj, &ctrlRTClient.UpdateOptions{
 		DryRun:       opts.DryRun,
@@ -39,7 +44,7 @@ func (k *K8sHandlerImpl) UpdateInK8s(ctx context.Context, obj ctrlRTClient.Objec
 	})
 }
 
-// UpdateStatusInK8s directly delegates to existing k8sClient.Status().Update - NO new logic
+// UpdateStatusInK8s implements K8sHandler.UpdateStatusInK8s by delegating to the status writer.
 func (k *K8sHandlerImpl) UpdateStatusInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	return k.client.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
 		DryRun:       opts.DryRun,
@@ -48,7 +53,7 @@ func (k *K8sHandlerImpl) UpdateStatusInK8s(ctx context.Context, obj ctrlRTClient
 	})
 }
 
-// DeleteFromK8s directly delegates to existing k8sClient.Delete - NO new logic
+// DeleteFromK8s implements K8sHandler.DeleteFromK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) DeleteFromK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error {
 	return k.client.Delete(ctx, obj, &ctrlRTClient.DeleteOptions{
 		DryRun:             opts.DryRun,
@@ -59,7 +64,7 @@ func (k *K8sHandlerImpl) DeleteFromK8s(ctx context.Context, obj ctrlRTClient.Obj
 	})
 }
 
-// ListFromK8s directly delegates to existing k8sClient.List - NO new logic
+// ListFromK8s implements K8sHandler.ListFromK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) ListFromK8s(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error {
 	parsedListOptions, err := getCRTListOptions(namespace, opts)
 	if err != nil {
@@ -68,7 +73,7 @@ func (k *K8sHandlerImpl) ListFromK8s(ctx context.Context, namespace string, opts
 	return k.client.List(ctx, list, parsedListOptions)
 }
 
-// DeleteCollectionFromK8s directly delegates to existing k8sClient.DeleteAllOf - NO new logic
+// DeleteCollectionFromK8s implements K8sHandler.DeleteCollectionFromK8s by delegating to the controller-runtime client.
 func (k *K8sHandlerImpl) DeleteCollectionFromK8s(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error {
 	parsedListOptions, err := getCRTListOptions(namespace, listOpts)
 	if err != nil {
