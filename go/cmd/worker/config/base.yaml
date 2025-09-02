@@ -1,5 +1,5 @@
 worker:
-  address: localhost:14566
+  address: 127.0.0.1:14566
   maApiServiceName: ma-apiserver
 
 logging:

@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/worker:npuppala-per-task-status-tracking
+      image: ghcr.io/michelangelo-ai/worker:main
       volumeMounts:
         - name: worker-config-volume
           mountPath: /config

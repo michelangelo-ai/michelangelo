@@ -1,13 +1,12 @@
 controllermgr:
-  metricsBindAddress: ${METRICS_ADDRESS::8080}
-  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
+  metricsBindAddress: ${METRICS_ADDRESS::8082}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8083}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
   port: 9443
 
 workflowClient:
   service: temporal-frontend
-  # try michelangelo-worker:7233 next
   host: 127.0.0.1:7233
   transport: grpc
   domain: default

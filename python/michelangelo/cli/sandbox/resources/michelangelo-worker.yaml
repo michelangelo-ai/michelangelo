@@ -39,16 +39,16 @@ data:
       # host: cadence:7833
       # for temporal
       host: 127.0.0.1:7233
-        transport: grpc
-          # for cadence
-          # provider: cadence
-        # for temporal
-        provider: temporal
-        workers:
-          - domain: default
-            taskList: default
-        client:
-          domain: default
+      transport: grpc
+        # for cadence
+        # provider: cadence
+      # for temporal
+      provider: temporal
+      workers:
+        - domain: default
+          taskList: default
+      client:
+        domain: default
 
     minio:
       awsRegion: us-east-1
