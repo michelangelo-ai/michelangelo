@@ -17,13 +17,12 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
  * Route component that handles entity detail views.
  *
  * Maps URL parameters to specific entity detail pages and handles:
- * - Unknown phases/entities with appropriate error messages
  * - Entity not found scenarios
  * - Navigation back to entity list
  *
- * @param phases - Phase configuration override for testing
+ * @param phases - Phase configuration override for testing. Defaults to {@link PHASES}.
  */
-export function EntityDetailRoute({ phases = PHASES }: { phases: Record<string, PhaseConfig> }) {
+export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string, PhaseConfig> }) {
   const [, theme] = useStyletron();
   const { phase, entity, entityId, projectId } = useStudioParams('detail');
   const navigate = useNavigate();
