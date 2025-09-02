@@ -11,6 +11,7 @@ export type TableCell<_T extends TableData = TableData> = {
 export type TableRow<T extends TableData = TableData> = {
   id: string;
   cells: TableCell<T>[];
+  record: T;
 } & SelectableCapability &
   ExpandableCapability;
 

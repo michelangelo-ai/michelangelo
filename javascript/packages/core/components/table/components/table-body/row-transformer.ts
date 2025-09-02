@@ -13,6 +13,7 @@ export function transformRows<T extends TableData = TableData>(
       id: cell.id,
       content: flexRender(cell.column.columnDef.cell, cell.getContext()),
     })),
+    record: row.original,
     canSelect: row.getCanSelect(),
     isSelected: row.getIsSelected(),
     onToggleSelection: (selected: boolean) => row.toggleSelected(selected),
