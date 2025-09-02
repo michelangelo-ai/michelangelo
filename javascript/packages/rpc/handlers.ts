@@ -14,4 +14,7 @@ export const RPC_HANDLERS = {
   ListPipelineRun: SERVICES.PipelineRunService.listPipelineRun as ExtractUnaryRpc<
     typeof SERVICES.PipelineRunService.listPipelineRun
   >,
+  GetPipelineRun: SERVICES.PipelineRunService.getPipelineRun as ExtractUnaryRpc<
+    typeof SERVICES.PipelineRunService.getPipelineRun
+  >,
 } as const;

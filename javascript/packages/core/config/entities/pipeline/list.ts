@@ -7,7 +7,7 @@ export const PIPELINE_CELL_CONFIG: ColumnConfig[] = [
   {
     id: 'metadata.name',
     label: 'Name',
-    url: '/${studio.projectId}/pipelines/${data.metadata.name}',
+    // url: '/${studio.projectId}/${studio.phase}/pipelines/${data.metadata.name}',
     tooltip: {
       content: 'Click to filter by this pipeline name',
       action: 'filter',

@@ -4,6 +4,7 @@ import { MainViewContainer } from '#core/components/views/main-view-container';
 import { ProjectDetail } from '#core/components/views/project/project-detail';
 import { ProjectList } from '#core/components/views/project/project-list';
 import { Sandbox } from '#core/components/views/sandbox/sandbox';
+import { EntityDetailRoute } from './entity-detail-route';
 import { PhaseListRoute } from './phase-list-route';
 
 export function Router() {
@@ -30,6 +31,14 @@ export function Router() {
         element={
           <MainViewContainer hasBreadcrumb={false}>
             <ProjectDetail />
+          </MainViewContainer>
+        }
+      />
+      <Route
+        path=":projectId/:phase/:entity/:entityId/:entityTab?"
+        element={
+          <MainViewContainer hasBreadcrumb={false}>
+            <EntityDetailRoute />
           </MainViewContainer>
         }
       />

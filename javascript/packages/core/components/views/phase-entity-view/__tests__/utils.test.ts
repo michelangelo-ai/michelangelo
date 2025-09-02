@@ -51,9 +51,9 @@ describe('isListableEntity', () => {
         state: 'active',
         views: [
           {
-            // @ts-expect-error - detail is not a valid view type
             type: 'detail',
-            columns: [],
+            metadata: [],
+            pages: [],
           },
         ],
       },
@@ -82,9 +82,9 @@ describe('isListableEntity', () => {
             columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
           },
           {
-            // @ts-expect-error - detail is not a valid view type
             type: 'detail',
-            columns: [],
+            metadata: [],
+            pages: [],
           },
         ],
       },
@@ -96,9 +96,9 @@ describe('isListableEntity', () => {
         state: 'active',
         views: [
           {
-            // @ts-expect-error - detail is not a valid view type
             type: 'detail',
-            columns: [],
+            metadata: [],
+            pages: [],
           },
           {
             type: 'list',
