@@ -53,7 +53,7 @@ export function DetailViewHeader({ subtitle, title, onGoBack, children }: Detail
                   },
                 }}
               >
-                <Icon name="arrowLeft" />
+                <Icon name="arrowLeft" size={theme.sizing.scale700} />
               </Button>
             )}
             {/* TODO: #349 Integrate with TruncatedText component */}
