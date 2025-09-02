@@ -8,17 +8,17 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/golang/mock/gomock"
+	"github.com/michela
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	"github.com/michelangelo-ai/michelangelo/go/storage/storagemocks"
 	"github.com/golang/mock/gomock"
 )
 
 func TestAPIHandlerBuilder(t *testing.T) {
 	t.Run("NewAPIHandlerBuilder creates builder with defaults", func(t *testing.T) {
-		builder := NewAPIHandlerBuilder()
+
 		
 		assert.NotNil(t, builder)
 		assert.NotNil(t, builder.logger)
@@ -28,29 +28,29 @@ func TestAPIHandlerBuilder(t *testing.T) {
 
 	t.Run("WithK8sClient sets client", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().Build()
-		builder := NewAPIHandlerBuilder().WithK8sClient(fakeClient)
+
 		
 		assert.Equal(t, fakeClient, builder.k8sClient)
 	})
 
 	t.Run("WithZapLogger sets logger", func(t *testing.T) {
 		zapLogger := zap.NewNop()
-		builder := NewAPIHandlerBuilder().WithZapLogger(zapLogger)
+
 		
 		assert.NotNil(t, builder.logger)
 	})
 
 	t.Run("WithMetrics sets metrics scope", func(t *testing.T) {
 		scope := tally.NewTestScope("test", nil)
-		builder := NewAPIHandlerBuilder().WithMetrics(scope)
+
 		
 		assert.Equal(t, scope, builder.metrics)
 	})
 
 	t.Run("Build fails without k8s client", func(t *testing.T) {
-		builder := NewAPIHandlerBuilder()
+
 		
-		handler, err := builder.Build()
+
 		
 		assert.Nil(t, handler)
 		assert.Error(t, err)
@@ -59,9 +59,9 @@ func TestAPIHandlerBuilder(t *testing.T) {
 
 	t.Run("Build succeeds with minimal dependencies", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().Build()
-		builder := NewAPIHandlerBuilder().WithK8sClient(fakeClient)
+
 		
-		handler, err := builder.Build()
+
 		
 		assert.NoError(t, err)
 		assert.NotNil(t, handler)
@@ -69,13 +69,13 @@ func TestAPIHandlerBuilder(t *testing.T) {
 
 	t.Run("Build fails when metadata storage enabled but not provided", func(t *testing.T) {
 		fakeClient := fake.NewClientBuilder().Build()
-		config := storage.MetadataStorageConfig{EnableMetadataStorage: true}
+
 		
 		builder := NewAPIHandlerBuilder().
 			WithK8sClient(fakeClient).
-			WithMetadataStorage(nil, config)
+
 		
-		handler, err := builder.Build()
+
 		
 		assert.Nil(t, handler)
 		assert.Error(t, err)
@@ -124,7 +124,7 @@ func TestAPIHandlerBuilder(t *testing.T) {
 	})
 }
 
-func TestNewAPIServerHandler(t *testing.T) {
+func TestBuilderBasedAPIServerHandler(t *testing.T) {
 	t.Run("creates handler from params", func(t *testing.T) {
 		params := Params{
 			K8sRestConfig: &rest.Config{Host: "test"},
@@ -135,7 +135,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 		}
 
 		// This would normally fail due to invalid rest config, but we're testing the builder logic
-		handler, err := NewAPIServerHandler(params)
+
 		
 		// We expect an error here due to invalid rest config, but the builder logic should work
 		if err != nil {
@@ -160,7 +160,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 		}
 
 		// This would normally fail due to invalid rest config
-		_, err := NewAPIServerHandler(params)
+
 		
 		// We expect an error due to invalid rest config, not due to missing metadata storage
 		if err != nil {
@@ -170,7 +170,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 	})
 }
 
-func TestNewCtrlManagerHandler(t *testing.T) {
+func TestBuilderBasedCtrlManagerHandler(t *testing.T) {
 	t.Run("fails without manager", func(t *testing.T) {
 		params := Params{
 			Manager: nil,
@@ -186,12 +186,9 @@ func TestNewCtrlManagerHandler(t *testing.T) {
 	})
 
 	t.Run("creates handler with valid manager", func(t *testing.T) {
-		// Create a minimal fake manager with client
-		fakeClient := fake.NewClientBuilder().Build()
-		
 		// Create a mock manager that returns our fake client
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+
 		
 		// Since we can't easily mock ctrl.Manager, let's test the builder validation
 		params := Params{
@@ -210,9 +207,9 @@ func TestNewCtrlManagerHandler(t *testing.T) {
 
 func TestBuilderValidation(t *testing.T) {
 	t.Run("validate fails with no k8s client", func(t *testing.T) {
-		builder := &APIHandlerBuilder{}
+
 		
-		err := builder.validate()
+
 		
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "k8s client is required")
@@ -223,9 +220,9 @@ func TestBuilderValidation(t *testing.T) {
 		builder := &APIHandlerBuilder{
 			k8sClient:     fakeClient,
 			storageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: true},
-		}
+
 		
-		err := builder.validate()
+
 		
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "metadata storage is required")
@@ -236,15 +233,15 @@ func TestBuilderValidation(t *testing.T) {
 		defer ctrl.Finish()
 
 		fakeClient := fake.NewClientBuilder().Build()
-		mockStorage := storagemocks.NewMockMetadataStorage(ctrl)
+
 		
 		builder := &APIHandlerBuilder{
 			k8sClient:       fakeClient,
 			metadataStorage: mockStorage,
 			storageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
-		}
+
 		
-		err := builder.validate()
+
 		
 		assert.NoError(t, err)
 	})
@@ -252,22 +249,22 @@ func TestBuilderValidation(t *testing.T) {
 
 func TestBuilderPatternBenefits(t *testing.T) {
 	t.Run("builder enables optional dependencies", func(t *testing.T) {
-		fakeClient := fake.NewClientBuilder().Build()
+
 		
 		// Test minimal configuration
 		minimalHandler, err := NewAPIHandlerBuilder().
 			WithK8sClient(fakeClient).
-			Build()
+
 		
 		assert.NoError(t, err)
-		assert.NotNil(t, minimalHandler)
+
 		
 		// Test full configuration
 		ctrl := gomock.NewController(t)
-		defer ctrl.Finish()
+
 		
 		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
-		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
 		
 		fullHandler, err := NewAPIHandlerBuilder().
 			WithK8sClient(fakeClient).
@@ -275,24 +272,25 @@ func TestBuilderPatternBenefits(t *testing.T) {
 			WithBlobStorage(mockBlobStorage).
 			WithZapLogger(zap.NewNop()).
 			WithMetrics(tally.NewTestScope("test", nil)).
-			Build()
+
 		
 		assert.NoError(t, err)
 		assert.NotNil(t, fullHandler)
 	})
 
 	t.Run("builder provides clear configuration API", func(t *testing.T) {
-		fakeClient := fake.NewClientBuilder().Build()
+
 		
 		// Demonstrate clear, self-documenting configuration
-		builder := NewAPIHandlerBuilder().
-			WithK8sClient(fakeClient).                    // Required: Kubernetes client
-			WithZapLogger(zap.NewNop()).                  // Optional: Structured logging
-			WithMetrics(tally.NewTestScope("test", nil))  // Optional: Metrics collection
+			WithK8sClient(fakeClient).                   // Required: Kubernetes client
+			WithZapLogger(zap.NewNop()).                 // Optional: Structured logging
+			WithMetrics(tally.NewTestScope("test", nil)) // Optional: Metrics collection
+
 		
-		handler, err := builder.Build()
+
 		
 		assert.NoError(t, err)
 		assert.NotNil(t, handler)
 	})
+o
 }

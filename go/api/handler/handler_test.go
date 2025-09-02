@@ -305,19 +305,20 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 
 	mockMetadataStorage, mockBlobStorage := setupMocks(t)
 
-	factory := newFactory(Params{
-		Scheme: scheme.Scheme,
-		StorageConfig: storage.MetadataStorageConfig{
-			EnableMetadataStorage:      true,
-			DeletionDelay:              0,
-			EnableResourceVersionCache: false,
-		},
-		MetadataStorage: mockMetadataStorage,
-		BlobStorage:     mockBlobStorage,
-		Logger:          zap.Must(zap.NewDevelopment()),
-		Metrics:         tally.NoopScope,
-	})
-	handler, err := factory.GetAPIHandler(k8sClient)
+	// Use builder instead of removed factory
+	config := storage.MetadataStorageConfig{
+		EnableMetadataStorage:      true,
+		DeletionDelay:              0,
+		EnableResourceVersionCache: false,
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithMetadataStorage(mockMetadataStorage, config).
+		WithBlobStorage(mockBlobStorage).
+		WithZapLogger(zap.Must(zap.NewDevelopment())).
+		WithMetrics(tally.NoopScope)
+	handler, err := builder.Build()
 	assert.NoError(t, err)
 
 	// 1-1. Create a job that is not in either k8s/ETCD or metadata storage. The job will be created in K8s/ETCD.
