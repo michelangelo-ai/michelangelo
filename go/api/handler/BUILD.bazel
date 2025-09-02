@@ -3,8 +3,14 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "blob_handler.go",
+        "builder.go",
         "handler.go",
+        "interfaces.go",
+        "k8s_handler.go",
+        "metadata_handler.go",
         "module.go",
+        "validation_handler.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/api/handler",
     visibility = ["//visibility:public"],
@@ -38,7 +44,10 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["handler_test.go"],
+    srcs = [
+        "builder_test.go",
+        "handler_test.go",
+    ],
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",

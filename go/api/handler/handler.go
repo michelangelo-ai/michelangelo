@@ -50,45 +50,11 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 }
 
 func newAPIServerHandler(params Params) (api.Handler, error) {
-	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
-	if err != nil {
-		return nil, err
-	}
-	factory := newFactory(params)
-	return factory.GetAPIHandler(k8sClient)
+	return NewAPIServerHandler(params)
 }
 
 func newCtrlManagerHandler(params Params) (api.Handler, error) {
-	factory := newFactory(params)
-	return factory.GetAPIHandler(params.Manager.GetClient())
-}
-
-type factoryImpl struct {
-	StorageConfig storage.MetadataStorageConfig
-	StorageClient storage.MetadataStorage
-	BlobStorage   storage.BlobStorage
-	Logger        logr.Logger
-	Metrics       tally.Scope
-}
-
-func newFactory(params Params) Factory {
-	return &factoryImpl{
-		StorageConfig: params.StorageConfig,
-		StorageClient: params.MetadataStorage,
-		BlobStorage:   params.BlobStorage,
-		Logger:        zapr.NewLogger(params.Logger),
-		Metrics:       params.Metrics,
-	}
-}
-
-func (f *factoryImpl) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
-	if f.StorageConfig.EnableMetadataStorage && f.StorageClient == nil {
-		return nil, fmt.Errorf("unable to construct api handler. storage client is nil")
-	}
-
-	handler := apiHandler{k8sClient: client, metadataStorage: f.StorageClient, conf: f.StorageConfig,
-		blobStorage: f.BlobStorage, logger: f.Logger, metrics: f.Metrics}
-	return &handler, nil
+	return NewCtrlManagerHandler(params)
 }
 
 // apiHandler is an api.Handler that abstracts the API operations from the underlying systems (i.e. k8s/ETCD + MetadataStorage).
@@ -108,6 +74,12 @@ type apiHandler struct {
 	logger logr.Logger
 
 	metrics tally.Scope
+
+	// Focused handlers for better separation of concerns
+	k8sHandler        K8sHandler        `optional:"true"`
+	metadataHandler   MetadataHandler   `optional:"true"`
+	blobHandler       BlobHandler       `optional:"true"`
+	validationHandler ValidationHandler `optional:"true"`
 }
 
 // Create implements api.Handler.Create

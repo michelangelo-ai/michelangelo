@@ -17,7 +17,7 @@ var APIServerModule = fx.Options(
 
 // CtrlMgrModule provides the API Handler module for Michelangelo Controller Manager.
 var CtrlMgrModule = fx.Options(
-	fx.Provide(newCtrlManagerHandler, newFactory))
+	fx.Provide(newCtrlManagerHandler))
 
 // Params are the dependencies to build API handler library
 type Params struct {
