@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { useStyletron } from 'baseui';
 import { Block } from 'baseui/block';
 import { Tab, Tabs } from 'baseui/tabs';
 import { HeadingXXLarge } from 'baseui/typography';
 
 import { CellType } from '#core/components/cell/constants';
 import { TextEditor } from '#core/components/text-editor/text-editor';
+import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { TASK_STATE } from '#core/components/views/execution/constants';
 import { Execution } from '#core/components/views/execution/execution';
+import { MainViewContainer } from '#core/components/views/main-view-container';
 import { failurePipelineRun, successfulPipelineRun } from './fixtures/execution-data';
 
 import type { ExecutionDetailViewSchema } from '#core/components/views/execution/types';
@@ -139,7 +140,6 @@ const executionSchema: ExecutionDetailViewSchema = {
 };
 
 export function Sandbox() {
-  const [css] = useStyletron();
   const [activeKey, setActiveKey] = useState('0');
   const [jsonValue, setJsonValue] = useState(JSON.stringify(sampleJson, null, 2));
   const [readOnlyValue] = useState(
@@ -147,13 +147,7 @@ export function Sandbox() {
   );
 
   return (
-    <Block
-      className={css({
-        padding: '24px',
-        maxWidth: '1200px',
-        margin: '0 auto',
-      })}
-    >
+    <MainViewContainer hasBreadcrumb={false}>
       <HeadingXXLarge>Component Sandbox</HeadingXXLarge>
       <Block marginBottom="24px">This is a sandbox for testing WIP components and features.</Block>
 
@@ -193,37 +187,58 @@ export function Sandbox() {
 
         <Tab title="Execution - Success">
           <Block marginTop="24px">
-            <Block marginBottom="24px">
-              <Block marginBottom="12px">
-                <strong>Successful Pipeline Run:</strong>
-              </Block>
+            <DetailView
+              subtitle="Pipeline Run"
+              title="ml-training-job-2024-is-actually-long-really-long-pipeline-runml-training-job-2024-is-actually-long-really-long-pipeline-run"
+              onGoBack={() => console.log('Navigate back to list')}
+              headerContent={
+                <Block>
+                  <strong>Status:</strong> Success | <strong>Duration:</strong> 2m 45s |{' '}
+                  <strong>Started:</strong> 2024-01-15 14:30:00
+                </Block>
+              }
+            >
               <Execution schema={executionSchema} data={successfulPipelineRun} />
-            </Block>
+            </DetailView>
           </Block>
         </Tab>
 
         <Tab title="Execution - Failure">
           <Block marginTop="24px">
-            <Block marginBottom="24px">
-              <Block marginBottom="12px">
-                <strong>Failed Pipeline Run:</strong>
-              </Block>
+            <DetailView
+              subtitle="Pipeline Run"
+              title="model-validation-job-2024"
+              onGoBack={() => console.log('Navigate back to list')}
+              headerContent={
+                <Block>
+                  <strong>Status:</strong> Failed | <strong>Duration:</strong> 1m 20s |{' '}
+                  <strong>Started:</strong> 2024-01-15 15:45:00
+                </Block>
+              }
+            >
               <Execution schema={executionSchema} data={failurePipelineRun} />
-            </Block>
+            </DetailView>
           </Block>
         </Tab>
 
         <Tab title="Execution - Empty">
           <Block marginTop="24px">
-            <Block marginBottom="24px">
-              <Block marginBottom="12px">
-                <strong>Empty Execution:</strong>
-              </Block>
+            <DetailView
+              subtitle="Pipeline Run"
+              title="data-processing-job-2024"
+              onGoBack={() => console.log('Navigate back to list')}
+              headerContent={
+                <Block>
+                  <strong>Status:</strong> No Data | <strong>Duration:</strong> - |{' '}
+                  <strong>Started:</strong> -
+                </Block>
+              }
+            >
               <Execution schema={executionSchema} data={{}} />
-            </Block>
+            </DetailView>
           </Block>
         </Tab>
       </Tabs>
-    </Block>
+    </MainViewContainer>
   );
 }
