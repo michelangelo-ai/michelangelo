@@ -50,13 +50,17 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 }
 
 func newAPIServerHandler(params Params) (api.Handler, error) {
-	// Use the new builder pattern
-	return NewAPIServerHandler(params)
+	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
+	if err != nil {
+		return nil, err
+	}
+	factory := newFactory(params)
+	return factory.GetAPIHandler(k8sClient)
 }
 
 func newCtrlManagerHandler(params Params) (api.Handler, error) {
-	// Use the new builder pattern
-	return NewCtrlManagerHandler(params)
+	factory := newFactory(params)
+	return factory.GetAPIHandler(params.Manager.GetClient())
 }
 
 type factoryImpl struct {
@@ -67,21 +71,14 @@ type factoryImpl struct {
 	Metrics       tally.Scope
 }
 
-func newK8sOnlyFactory(params Params) Factory {
+func newFactory(params Params) Factory {
 	return &factoryImpl{
-		StorageConfig: storage.MetadataStorageConfig{
-			EnableMetadataStorage: false,
-		},
-		StorageClient: nil,
-		BlobStorage:   nil,
+		StorageConfig: params.StorageConfig,
+		StorageClient: params.MetadataStorage,
+		BlobStorage:   params.BlobStorage,
 		Logger:        zapr.NewLogger(params.Logger),
-		Metrics:       params.Metrics}
-}
-
-func newK8sAndMetadataStorageFactory(params Params) Factory {
-	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.MetadataStorage,
-		BlobStorage: params.BlobStorage, Logger: zapr.NewLogger(params.Logger),
-		Metrics: params.Metrics}
+		Metrics:       params.Metrics,
+	}
 }
 
 func (f *factoryImpl) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
@@ -132,17 +129,8 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	if storage.EnableMetadataStorage(&handler.conf) {
-		// Check if the object exists in MetadataStorage
-		tmpObj := obj
-		err = handler.metadataStorage.GetByName(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
-		if err == nil {
-			return status.Errorf(codes.AlreadyExists, "failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
-				objMeta.GetNamespace(), objMeta.GetName())
-		}
-
-		// Add ingester finalizer
-		ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
+	if metadataErr := handler.handleMetadataStorageForCreate(ctx, obj, objMeta); metadataErr != nil {
+		return metadataErr
 	}
 
 	setUpdateTimestamp(obj, true)
@@ -190,11 +178,7 @@ func (handler *apiHandler) Get(
 			return surfaceGrpcError(err, "get", namespace, name)
 		}
 
-		if handler.blobStorage.IsObjectInteresting(obj) {
-			if terrablobErr := handler.blobStorage.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
-				log.Error(terrablobErr, "Failed to merging with blob storage")
-			}
-		}
+		handler.handleBlobStorageForGet(ctx, obj, log)
 		log.Info("Find object in metadata storage")
 	}
 
@@ -635,4 +619,32 @@ func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMet
 	}
 
 	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
+}
+
+// handleMetadataStorageForCreate handles metadata storage logic during create operations
+func (handler *apiHandler) handleMetadataStorageForCreate(ctx context.Context, obj ctrlRTClient.Object, objMeta metav1.Object) error {
+	if !storage.EnableMetadataStorage(&handler.conf) {
+		return nil
+	}
+
+	// Check if the object exists in MetadataStorage
+	tmpObj := obj
+	err := handler.metadataStorage.GetByName(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
+	if err == nil {
+		return status.Errorf(codes.AlreadyExists, "failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
+			objMeta.GetNamespace(), objMeta.GetName())
+	}
+
+	// Add ingester finalizer
+	ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
+	return nil
+}
+
+// handleBlobStorageForGet handles blob storage logic during get operations
+func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) {
+	if handler.blobStorage.IsObjectInteresting(obj) {
+		if terrablobErr := handler.blobStorage.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
+			log.Error(terrablobErr, "Failed to merging with blob storage")
+		}
+	}
 }

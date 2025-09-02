@@ -305,7 +305,7 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 
 	mockMetadataStorage, mockBlobStorage := setupMocks(t)
 
-	factory := newK8sAndMetadataStorageFactory(Params{
+	factory := newFactory(Params{
 		Scheme: scheme.Scheme,
 		StorageConfig: storage.MetadataStorageConfig{
 			EnableMetadataStorage:      true,
