@@ -2,9 +2,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CellType } from '#core/components/cell/constants';
+import { TASK_STATE } from '#core/components/views/execution/constants';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
-import { TASK_STATE } from '#core/components/views/execution/constants';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskBody } from '../task-body';
 
@@ -73,7 +73,10 @@ describe('TaskBody', () => {
       },
     ];
 
-    render(<TaskBody task={leafTask} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskBody task={leafTask} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.getByText('Task Output')).toBeInTheDocument();
   });
@@ -95,7 +98,10 @@ describe('TaskBody', () => {
       },
     ];
 
-    render(<TaskBody task={taskWithBoth} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskBody task={taskWithBoth} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     // Should render subtask, not body schema
     expect(screen.getAllByText('Child Task')).toHaveLength(2);
@@ -119,7 +125,10 @@ describe('TaskBody', () => {
       },
     ];
 
-    render(<TaskBody task={taskWithTextarea} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskBody task={taskWithTextarea} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.getByText('Error Log')).toBeInTheDocument();
     expect(screen.getByText('Pipeline failed at step 3')).toBeInTheDocument();
@@ -158,7 +167,10 @@ describe('TaskBody', () => {
       },
     ];
 
-    render(<TaskBody task={taskWithMetadata} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskBody task={taskWithMetadata} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Task Metadata/ });
     await user.click(accordionButton);
@@ -181,7 +193,10 @@ describe('TaskBody', () => {
       } as unknown as TaskBodySchema,
     ];
 
-    render(<TaskBody task={taskWithUnknownSchema} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskBody task={taskWithUnknownSchema} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
   });

@@ -41,7 +41,10 @@ describe('TaskDetails', () => {
       },
     ];
 
-    render(<TaskDetails task={leafTaskWithBodySchema} bodySchema={bodySchema} />, buildWrapper([getRouterWrapper()]));
+    render(
+      <TaskDetails task={leafTaskWithBodySchema} bodySchema={bodySchema} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.getByText('Data Processing Task')).toBeInTheDocument();
 
