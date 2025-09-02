@@ -18,3 +18,9 @@ export const StyledSortableTableHeadCell = withStyle(
     ...$theme.typography.LabelSmall,
   })
 );
+
+// BaseWeb Button comes with its own padding to support good hoverable areas. When combined
+// with `StyledTableHeadCell`, this padding creates too tall of a header row.
+export const StyledTableConfigurationButtonHeadCell = withStyle(StyledTableHeadCell, {
+  padding: 0,
+});
