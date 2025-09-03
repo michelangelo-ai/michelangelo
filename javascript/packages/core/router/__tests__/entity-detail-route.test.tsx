@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
 import { CustomDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
+import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -20,6 +21,7 @@ describe('EntityDetailRoute', () => {
     name: 'Pipeline Runs',
     service: 'pipelineRun',
   });
+  const buildExecutionSchema = buildExecutionSchemaFactory();
   const buildPhase = buildPhaseConfigFactory();
 
   test('renders execution tab', async () => {
@@ -39,7 +41,13 @@ describe('EntityDetailRoute', () => {
                   },
                   { id: 'status.state', label: 'State', type: CellType.STATE },
                 ],
-                pages: [{ id: 'execution', label: 'Execution', type: 'execution' }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
               },
             ],
           }),
@@ -56,6 +64,18 @@ describe('EntityDetailRoute', () => {
         },
         status: {
           state: 'RUNNING',
+          steps: [
+            {
+              displayName: 'Data Preparation',
+              state: 'SUCCEEDED',
+              subSteps: [],
+            },
+            {
+              displayName: 'Model Training',
+              state: 'RUNNING',
+              subSteps: [],
+            },
+          ],
         },
       },
     };
@@ -80,9 +100,10 @@ describe('EntityDetailRoute', () => {
     expect(await screen.findByText('State')).toBeInTheDocument();
     expect(await screen.findByText('Running')).toBeInTheDocument();
 
-    // Verify tab functionality
+    // Verify minimal execution tab functionality
     expect(screen.getByText('Execution')).toBeInTheDocument();
-    expect(screen.getByText("Page type 'execution' not yet supported")).toBeInTheDocument();
+    await screen.findAllByText('Data Preparation');
+    await screen.findAllByText('Model Training');
   });
 
   test('renders custom detail pages and navigates between them', async () => {
@@ -160,7 +181,11 @@ describe('EntityDetailRoute', () => {
                 metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
                 pages: [
                   { id: 'unknown-type', label: 'Unknown Type', type: 'some-unknown-type' },
-                  { id: 'execution', label: 'Execution', type: 'execution' },
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
                 ],
               },
             ],
@@ -255,7 +280,13 @@ describe('EntityDetailRoute', () => {
               {
                 type: 'detail',
                 metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [{ id: 'execution', label: 'Execution', type: 'execution' }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
               },
             ],
           }),
@@ -299,7 +330,13 @@ describe('EntityDetailRoute', () => {
               {
                 type: 'detail',
                 metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
-                pages: [{ id: 'execution', label: 'Execution', type: 'execution' }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
               },
             ],
           }),
