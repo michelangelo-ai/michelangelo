@@ -2,9 +2,7 @@ apiVersion: michelangelo.api/v2
 kind: Pipeline
 metadata:
   namespace: "ma-dev-test"
-  name: "bert-cola-test-3"
-  annotations:
-    michelangelo/uniflow-image: docker.io/library/examples:latest
+  name: "bert-cola-test"
 spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:
