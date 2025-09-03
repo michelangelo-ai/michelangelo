@@ -63,6 +63,39 @@ describe('useLocalStorageTableState', () => {
       expect(parsedData['test-table'].globalFilter).toBe('test-filter');
     });
 
+    it('persists filter settings under filterSettingsId when provided', () => {
+      const { result } = renderHook(() =>
+        useLocalStorageTableState({
+          tableSettingsId: 'test-table',
+          filterSettingsId: 'test-table.project-123',
+        })
+      );
+
+      act(() => {
+        result.current.setGlobalFilter('project-filter');
+        result.current.setColumnFilters([{ id: 'status', value: ['Active'] }]);
+        result.current.setPagination({ pageIndex: 0, pageSize: 25 });
+      });
+
+      const storedData = localStorage.getItem(TABLE_LOCAL_STORAGE_KEY);
+      expect(storedData).toBeTruthy();
+
+      const parsedData = JSON.parse(storedData!) as
+        | Record<string, Partial<TableState>>
+        | Record<string, Record<string, Partial<TableState>>>;
+
+      // Filters stored under filterSettingsId
+      expect((parsedData['test-table']['project-123'] as Partial<TableState>).globalFilter).toBe(
+        'project-filter'
+      );
+      expect(
+        (parsedData['test-table']['project-123'] as Partial<TableState>).columnFilters
+      ).toEqual([{ id: 'status', value: ['Active'] }]);
+
+      // Global settings stored under tableSettingsId
+      expect((parsedData['test-table'] as TableState['pagination']).pageSize).toEqual(25);
+    });
+
     it('restores state from localStorage on initialization', () => {
       const existingState = {
         'test-table.globalFilter': 'restored-filter',
@@ -74,6 +107,28 @@ describe('useLocalStorageTableState', () => {
       );
 
       expect(result.current.globalFilter).toBe('restored-filter');
+    });
+
+    it('restores project-specific filter state when filterSettingsId is provided', () => {
+      const existingState = {
+        'test-table.project-123.globalFilter': 'project-restored-filter',
+        'test-table.project-123.columnFilters': [{ id: 'department', value: ['Sales'] }],
+        'test-table.columnVisibility': { status: false },
+        'test-table.pageSize': 15,
+      };
+      localStorage.setItem(TABLE_LOCAL_STORAGE_KEY, JSON.stringify(existingState));
+
+      const { result } = renderHook(() =>
+        useLocalStorageTableState({
+          tableSettingsId: 'test-table',
+          filterSettingsId: 'test-table.project-123',
+        })
+      );
+
+      expect(result.current.globalFilter).toBe('project-restored-filter');
+      expect(result.current.columnFilters).toEqual([{ id: 'department', value: ['Sales'] }]);
+      expect(result.current.columnVisibility).toEqual({ status: false });
+      expect(result.current.pagination.pageSize).toBe(15);
     });
 
     it('uses initial state when no persisted data exists', () => {
@@ -125,11 +180,81 @@ describe('useLocalStorageTableState', () => {
       expect(storedData['table-1'].globalFilter).toBe('filter-1');
       expect(storedData['table-2'].globalFilter).toBe('filter-2');
     });
+
+    it('allows different projects to have separate filter state for same table', () => {
+      const { result: project1 } = renderHook(() =>
+        useLocalStorageTableState({
+          tableSettingsId: 'user-table',
+          filterSettingsId: 'user-table.project-123',
+        })
+      );
+
+      const { result: project2 } = renderHook(() =>
+        useLocalStorageTableState({
+          tableSettingsId: 'user-table',
+          filterSettingsId: 'user-table.project-456',
+        })
+      );
+
+      act(() => {
+        project1.current.setGlobalFilter('project-123-filter');
+        project1.current.setColumnFilters([{ id: 'status', value: ['Active'] }]);
+        project1.current.setColumnVisibility({ name: false });
+
+        project2.current.setGlobalFilter('project-456-filter');
+        project2.current.setColumnFilters([{ id: 'status', value: ['Inactive'] }]);
+        project2.current.setColumnVisibility({ department: false });
+      });
+
+      const storedData = JSON.parse(localStorage.getItem(TABLE_LOCAL_STORAGE_KEY)!) as
+        | Record<string, Partial<TableState>>
+        | Record<string, Record<string, Partial<TableState>>>;
+
+      // Project 1 filters stored separately
+      expect((storedData['user-table']['project-123'] as Partial<TableState>).globalFilter).toBe(
+        'project-123-filter'
+      );
+      expect(
+        (storedData['user-table']['project-123'] as Partial<TableState>).columnFilters
+      ).toEqual([{ id: 'status', value: ['Active'] }]);
+
+      // Project 2 filters stored separately
+      expect((storedData['user-table']['project-456'] as Partial<TableState>).globalFilter).toBe(
+        'project-456-filter'
+      );
+      expect(
+        (storedData['user-table']['project-456'] as Partial<TableState>).columnFilters
+      ).toEqual([{ id: 'status', value: ['Inactive'] }]);
+
+      // Global settings should be shared (last write wins)
+      expect((storedData['user-table'] as Partial<TableState>).columnVisibility).toEqual({
+        department: false,
+      });
+    });
   });
 
   describe('integration with Table component', () => {
     function TableWithPersistence({ tableSettingsId }: { tableSettingsId: string }) {
       const tableState = useLocalStorageTableState({ tableSettingsId });
+
+      return (
+        <Table
+          data={testData}
+          columns={testColumns}
+          state={tableState}
+          actionBarConfig={{ enableSearch: true }}
+        />
+      );
+    }
+
+    function TableWithProjectFilters({
+      tableSettingsId,
+      filterSettingsId,
+    }: {
+      tableSettingsId: string;
+      filterSettingsId?: string;
+    }) {
+      const tableState = useLocalStorageTableState({ tableSettingsId, filterSettingsId });
 
       return (
         <Table
@@ -256,6 +381,50 @@ describe('useLocalStorageTableState', () => {
       >;
       expect(storedData[tableSettingsId1].globalFilter).toBe('Engineering');
       expect(storedData[tableSettingsId2]).toBeUndefined();
+    });
+
+    it('isolates filter state between projects while sharing global settings', async () => {
+      const user = userEvent.setup({
+        advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+      });
+
+      const { unmount: unmountProject1 } = render(
+        <TableWithProjectFilters
+          tableSettingsId="shared-table"
+          filterSettingsId="shared-table.project-1"
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      await user.type(screen.getByRole('searchbox'), 'Engineering');
+      vi.runAllTimers();
+
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')).toHaveLength(3); // 1 header + 2 Engineering rows
+      });
+
+      unmountProject1();
+
+      render(
+        <TableWithProjectFilters
+          tableSettingsId="shared-table"
+          filterSettingsId="shared-table.project-2"
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByRole('searchbox')).toHaveValue('');
+      expect(screen.getAllByRole('row')).toHaveLength(5);
+
+      const storedData = JSON.parse(localStorage.getItem(TABLE_LOCAL_STORAGE_KEY)!) as Record<
+        string,
+        Partial<TableState> | Record<string, Partial<TableState>>
+      >;
+
+      expect((storedData['shared-table']['project-1'] as Partial<TableState>).globalFilter).toBe(
+        'Engineering'
+      );
+      expect(storedData['shared-table']['project-2']).toBeUndefined();
     });
   });
 });

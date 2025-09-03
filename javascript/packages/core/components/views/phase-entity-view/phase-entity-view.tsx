@@ -66,7 +66,7 @@ export function PhaseEntityView({ phaseId, entities }: PhaseEntityViewProps) {
             <EntityTable
               service={entity.service}
               listViewConfig={currentEntityConfig.views[0]}
-              tableSettingsId={`${phaseId}-${entity.id}`}
+              tableSettingsId={`${phaseId}/${entity.id}`}
             />
           )}
         </Tab>

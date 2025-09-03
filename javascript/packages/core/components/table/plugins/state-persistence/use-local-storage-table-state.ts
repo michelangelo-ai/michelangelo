@@ -22,22 +22,35 @@ import type {
  * 2. **Initial state** from props (schema defaults, initial configuration)
  * 3. **Table defaults** from {@link TABLE_STATE_DEFAULTS}
  *
+ * **Persistence Strategy:**
+ * - **Global settings** (columnVisibility, columnOrder, sorting, pageSize): Persist across all projects using tableSettingsId
+ * - **Filter settings** (globalFilter, columnFilters): Persist using filterSettingsId if provided, otherwise tableSettingsId
+ *
  * Use this hook to provide a `state` prop to the Table component for persistent
  * user preferences across browser sessions.
  *
- * @param tableSettingsId - Unique identifier for this table's settings in localStorage
+ * @param tableSettingsId - Unique identifier for global table settings (cross-project)
+ * @param filterSettingsId - Optional unique identifier for filter settings (project-specific).
+ *   When omitted, filters persist globally (useful for app-wide tables like project lists).
  * @param initialState - Optional initial state to use when no persisted state exists
  *
  * @example
  * ```tsx
- * // Basic usage
+ * // App-wide table (filters and settings both global)
+ * const tableState = useLocalStorageTableState({
+ *   tableSettingsId: 'projects-table',
+ * });
+ *
+ * // Project-specific filters (recommended for project-scoped data)
  * const tableState = useLocalStorageTableState({
  *   tableSettingsId: 'user-dashboard-table',
+ *   filterSettingsId: `user-dashboard-table.project-${projectId}`,
  * });
  *
  * // With initial state (e.g., hidden columns from schema)
  * const tableState = useLocalStorageTableState({
  *   tableSettingsId: 'user-dashboard-table',
+ *   filterSettingsId: `user-dashboard-table.project-${projectId}`,
  *   initialState: {
  *     columnVisibility: { hiddenColumnId: false },
  *     sorting: [{ id: 'name', desc: false }],
@@ -46,23 +59,28 @@ import type {
  *
  * return <Table data={data} columns={columns} state={tableState} />;
  *
- * // State persisted as: 'ma-studio-table-settings.user-dashboard-table.globalFilter'
+ * // State persisted as: 'ma-studio-table-settings.user-dashboard-table.project-${projectId}.globalFilter'
  * ```
  */
 export function useLocalStorageTableState({
   tableSettingsId,
+  filterSettingsId,
   initialState,
 }: {
   tableSettingsId: string;
+  filterSettingsId?: string;
   initialState?: Partial<ControlledTableState>;
 }): ControlledTableState {
+  // Use filterSettingsId for filters when provided, otherwise fall back to tableSettingsId
+  const filterNamespace = filterSettingsId ?? tableSettingsId;
+
   const [globalFilter, setGlobalFilter] = usePersistedTableState<string>(
-    `${tableSettingsId}.globalFilter`,
+    `${filterNamespace}.globalFilter`,
     initialState?.globalFilter ?? TABLE_STATE_DEFAULTS.globalFilter
   );
 
   const [columnFilters, setColumnFilters] = usePersistedTableState<ColumnFilter[]>(
-    `${tableSettingsId}.columnFilters`,
+    `${filterNamespace}.columnFilters`,
     initialState?.columnFilters ?? TABLE_STATE_DEFAULTS.columnFilters
   );
 
