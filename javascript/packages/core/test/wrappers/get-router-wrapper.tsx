@@ -1,4 +1,4 @@
-import { MemoryRouter, Route, Routes } from 'react-router-dom-v5-compat';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom-v5-compat';
 
 import { WrapperComponentProps } from './types';
 
@@ -40,12 +40,37 @@ export function getRouterWrapper(options?: { location?: string }) {
     return (
       <MemoryRouter initialEntries={[location]}>
         <Routes>
-          <Route path=":projectId/:phase/:entity/:entityId/:entityTab?" element={children} />
-          <Route path=":projectId/:phase/:entity?" element={children} />
-          <Route path=":projectId" element={children} />
-          <Route path="*" element={children} />
+          {[
+            ':projectId/:phase/:entity/:entityId/:entityTab?',
+            ':projectId/:phase/:entity?',
+            ':projectId',
+            '*',
+          ].map((path) => (
+            <Route
+              key={path}
+              path={path}
+              element={
+                <>
+                  <ShowLocation />
+                  {children}
+                </>
+              }
+            />
+          ))}
         </Routes>
       </MemoryRouter>
     );
   };
+}
+
+function ShowLocation() {
+  const location = useLocation();
+  return (
+    <div>
+      <span>
+        Current pathname: {location.pathname} {location.search}
+      </span>
+      <span>Current search: {location.search}</span>
+    </div>
+  );
 }

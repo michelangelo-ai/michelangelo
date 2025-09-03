@@ -2,7 +2,7 @@ import { useStyletron } from 'baseui';
 
 import { DetailViewHeader } from './components/detail-view-header/detail-view-header';
 
-import type { DetailViewProps } from './types';
+import type { DetailViewProps } from './types/detail-view-component-types';
 
 export function DetailView({
   title,

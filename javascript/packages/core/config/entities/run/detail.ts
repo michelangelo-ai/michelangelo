@@ -7,6 +7,8 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
   metadata: SHARED_RUN_CELL_CONFIG,
   pages: [
     {
+      id: 'execution',
+      label: 'Execution',
       type: 'execution',
     },
   ],
