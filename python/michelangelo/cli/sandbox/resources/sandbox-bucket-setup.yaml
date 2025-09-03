@@ -1,19 +1,19 @@
 apiVersion: "batch/v1"
 kind: "Job"
 metadata:
-  name: "logs-bucket-creation"
+  name: "sandbox-bucket-setup"
 spec:
   template:
     spec:
       containers:
-        # Container to deploy the log viewer. To inspect logs, use the following command:
-        # `kubectl logs job.batch/logs-bucket-creation`
-        - name: "logs-bucket-creation"
+        # Container to set up sandbox S3 buckets. To inspect logs, use the following command:
+        # `kubectl logs job.batch/sandbox-bucket-setup`
+        - name: "bucket-setup"
           image: "amazon/aws-cli:latest"
           command:
             - "/bin/bash"
           args:
-            - "/scripts/logs-bucket-creation.sh"
+            - "/scripts/bucket-setup.sh"
           env:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
@@ -34,15 +34,16 @@ spec:
             secretName: "aws-credentials"
         - name: "scripts-volume"
           configMap:
-            name: "logs-bucket-creation"
+            name: "sandbox-bucket-setup"
 ---
 apiVersion: v1
 data:
-  logs-bucket-creation.sh: |-
+  bucket-setup.sh: |-
     #!/usr/bin/env bash
 
-    # Create a bucket and optionally it configure with public read access
-    # on a S3-compatible object store such as MinIO
+    # Sets up essential S3 buckets for the Michelangelo sandbox environment
+    # Creates both 'logs' and 'default' buckets with optional public read access
+    # on the MinIO S3-compatible object store
     #
     # Requirements:
     #
@@ -167,4 +168,4 @@ data:
     log "INFO" "All buckets created successfully: ${BUCKET_NAMES}"
 kind: ConfigMap
 metadata:
-  name: logs-bucket-creation
+  name: sandbox-bucket-setup
