@@ -17,8 +17,8 @@ spec:
           env:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
-            - name: "BUCKET_NAME"
-              value: "logs"
+            - name: "BUCKET_NAMES"
+              value: "logs,default"
             - name: "PUBLIC"
               value: "true"
           volumeMounts:
@@ -52,9 +52,9 @@ data:
     #   * Environment variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
     # * Environment variables:
     #   * AWS_ENDPOINT_URL: The S3-compatible object store endpoint URL
-    #   * BUCKET_NAME: The name of the bucket where the log viewer should be deployed
-    #     * NOTE: This script will make the bucket publicly readable.
-    #   * PUBLIC (Optional): If set to "true", configures bucket with public read policy
+    #   * BUCKET_NAMES: Comma-separated list of bucket names to be created
+    #     * NOTE: This script will make the buckets publicly readable if PUBLIC=true.
+    #   * PUBLIC (Optional): If set to "true", configures buckets with public read policy
     set -e
     set -o pipefail
     set -u
@@ -93,18 +93,22 @@ data:
 
     # Creates a bucket
     create_bucket() {
-        # Create log-viewer bucket if it doesn't already exist
-        log "INFO" "Creating ${BUCKET_S3_URI} bucket."
-        if ! aws s3api head-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$BUCKET_NAME" \
+        local -r bucket_name=$1
+        local -r bucket_s3_uri="s3://${bucket_name}"
+        # Create bucket if it doesn't already exist
+        log "INFO" "Creating ${bucket_s3_uri} bucket."
+        if ! aws s3api head-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$bucket_name" \
             2>/dev/null; then
-            aws s3api create-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$BUCKET_NAME"
+            aws s3api create-bucket --endpoint-url "$AWS_ENDPOINT_URL" --bucket "$bucket_name"
         fi
     }
 
     # Configures a bucket with public read access
     configure_bucket() {
+        local -r bucket_name=$1
+        local -r bucket_s3_uri="s3://${bucket_name}"
         # Define and apply the bucket policy for public read access
-        log "INFO" "Applying public read access policy to ${BUCKET_S3_URI}"
+        log "INFO" "Applying public read access policy to ${bucket_s3_uri}"
         local -r POLICY=$(
             cat <<EOP
     {
@@ -114,7 +118,7 @@ data:
                 "Effect": "Allow",
                 "Principal": "*",
                 "Action": "s3:GetObject",
-                "Resource": "arn:aws:s3:::${BUCKET_NAME}/*"
+                "Resource": "arn:aws:s3:::${bucket_name}/*"
             }
         ]
     }
@@ -122,9 +126,9 @@ data:
         )
         if ! aws s3api put-bucket-policy \
             --endpoint-url "$AWS_ENDPOINT_URL" \
-            --bucket "$BUCKET_NAME" \
+            --bucket "$bucket_name" \
             --policy "$POLICY"; then
-            log "ERROR" "Failed to set bucket policy for ${BUCKET_S3_URI}"
+            log "ERROR" "Failed to set bucket policy for ${bucket_s3_uri}"
             exit 1
         fi
     }
@@ -134,8 +138,8 @@ data:
         # Example: "http://minio:9000"
         "AWS_ENDPOINT_URL"
 
-        # Example: "logs"
-        "BUCKET_NAME"
+        # Example: "logs,default"
+        "BUCKET_NAMES"
     )
     for var in "${REQUIRED_ENV_VARS[@]}"; do
         if ! [[ -v "$var" ]]; then
@@ -144,15 +148,23 @@ data:
         fi
     done
 
-    readonly BUCKET_S3_URI="s3://${BUCKET_NAME}"
+    # Parse bucket names from comma-separated list
+    IFS=',' read -ra BUCKET_ARRAY <<< "$BUCKET_NAMES"
 
     wait_for_s3_availability
-    create_bucket
-    if [[ "${PUBLIC:-false}" = "true" ]]; then
-        configure_bucket
-    fi
 
-    log "INFO" "Bucket ${BUCKET_NAME} created and configured successfully."
+    # Create each bucket
+    for bucket_name in "${BUCKET_ARRAY[@]}"; do
+        # Trim whitespace
+        bucket_name=$(echo "$bucket_name" | xargs)
+        create_bucket "$bucket_name"
+        if [[ "${PUBLIC:-false}" = "true" ]]; then
+            configure_bucket "$bucket_name"
+        fi
+        log "INFO" "Bucket ${bucket_name} created and configured successfully."
+    done
+
+    log "INFO" "All buckets created successfully: ${BUCKET_NAMES}"
 kind: ConfigMap
 metadata:
   name: logs-bucket-creation

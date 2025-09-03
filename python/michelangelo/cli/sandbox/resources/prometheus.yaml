@@ -60,5 +60,5 @@ spec:
   - name: prometheus
     port: 9090
     targetPort: 9090
-    nodePort: 30012
+    nodePort: 30015
   type: NodePort
