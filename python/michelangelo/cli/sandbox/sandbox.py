@@ -128,7 +128,16 @@ def run(ns: argparse.Namespace):
 def _create(ns: argparse.Namespace):
     assert ns
     ports = _kube_ports + ([] if ns.workflow == "temporal" else _cadence_ports)
-    args = ["k3d", "cluster", "create", _michelangelo_sandbox_kube_cluster_name, "--servers", "1", "--agents", "1"]
+    args = [
+        "k3d",
+        "cluster",
+        "create",
+        _michelangelo_sandbox_kube_cluster_name,
+        "--servers",
+        "1",
+        "--agents",
+        "1",
+    ]
 
     for p in ports:
         args += ["-p", f"{p}@agent:0"]
@@ -179,13 +188,47 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     resources = [
         "boot.yaml",
         "mysql.yaml",
-        "minio.yaml",
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
         "logs-bucket-creation.yaml",
-        "grafana.yaml",
     ]
+    links = []
+
+    # Cadence
+
+    if ns.workflow == "cadence":
+        resources.append("cadence.yaml")
+        links.append(
+            (
+                "Cadence Web UI",
+                "http://localhost:8088/domains/default/workflows",
+                "",
+            )
+        )
+
+    # MinIO
+
+    resources.append("minio.yaml")
+    links.append(
+        (
+            "MinIO Console",
+            "http://localhost:9090",
+            "[Username: minioadmin; Password: minioadmin]",
+        )
+    )
+
+    # Grafana
+
+    resources.append("grafana.yaml")
+    links.append(
+        (
+            "Grafana Dashboard",
+            "http://localhost:3000",
+            "[Username: admin; Password: admin]",
+        )
+    )
+
     if "apiserver" not in ns.exclude:
         resources.append("michelangelo-apiserver.yaml")
     if "controllermgr" not in ns.exclude:
@@ -193,6 +236,13 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     if "ui" not in ns.exclude:
         resources.append("envoy.yaml")
         resources.append("michelangelo-ui.yaml")
+        links.append(
+            (
+                "Michelangelo UI",
+                "http://localhost:8090",
+                "",
+            )
+        )
 
     if "fluent-bit" in ns.include_experimental:
         # Provision a ServiceAccount for fluent-bit DaemonSet execution.
@@ -212,27 +262,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
-    _exec(
-        "kubectl",
-        "create",
-        "-k",
-        "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0",
-    )
-
-    _exec(
-        "kubectl",
-        "wait",
-        "--all",
-        "pods",
-        "--for=condition=ready",
-        "--selector=!job-name",
-        "--timeout=600s",
-    )
-    _exec(
-        "kubectl", "wait", "--all", "jobs", "--for=condition=complete", "--timeout=600s"
-    )
-
-    links = []
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
     )
@@ -244,29 +273,40 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         # helm repo list returns non-zero exit status when no repositories are configured
         helm_existing_repos = ""
 
+    if "ray" not in ns.exclude:
+        _create_kuberay_operator(helm_existing_repos)
+
+    if "spark" not in ns.exclude:
+        _create_spark_operator(helm_existing_repos)
+
+    _kube_wait()
+
     if ns.workflow == "temporal":
         _setup_temporal(links, helm_existing_repos)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-temporal-worker.yaml")
-    else:
-        _setup_cadence(links)
+    elif ns.workflow == "cadence":
+        _create_cadence_domain(links)
         if "worker" not in ns.exclude:
             _kube_create(_dir / "resources/michelangelo-worker.yaml")
-
-    _create_spark_operator(helm_existing_repos)
-
-    print("\nSandbox created successfully.")
-    print("\nGrafana Dashboard: http://localhost:3000")
-    print("  - Username: admin")
-    print("  - Password: admin")
-    print("  - Prometheus data source configured automatically")
-    print("  - CRD Metrics dashboard available")
+    else:
+        raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
     # Create the jobs cluster if requested
     if ns.create_jobs_cluster:
         _create_jobs_cluster(ns.jobs_cluster_name)
         _create_cluster_crd(ns.jobs_cluster_name)
         _create_cluster_secrets(ns.jobs_cluster_name)
+
+    _kube_wait()
+
+    print(
+        "\n🚀 Sandbox created successfully. To access the services, please use the following links:\n"
+    )
+    for title, url, comment in links:
+        print(f"  - {title}: {url} {comment}")
+
+    print()
 
 
 def _create_spark_operator(helm_existing_repos):
@@ -287,6 +327,35 @@ def _create_spark_operator(helm_existing_repos):
         "spark-operator/spark-operator",
         "--namespace",
         "spark-operator",
+        "--create-namespace",
+        "--wait",
+    )
+
+
+def _create_kuberay_operator(helm_existing_repos):
+    """
+    Create the KubeRay operator using Helm.
+    Reference: https://docs.ray.io/en/releases-2.49.1/cluster/kubernetes/getting-started/kuberay-operator-installation.html#method-1-helm-recommended
+    """
+    if "kuberay" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "kuberay",
+            "https://ray-project.github.io/kuberay-helm",
+        )
+        _exec("helm", "repo", "update")
+
+    _exec(
+        "helm",
+        "install",
+        "kuberay-operator",
+        "kuberay/kuberay-operator",
+        "--version",
+        "1.4.2",
+        "--namespace",
+        "ray-system",
         "--create-namespace",
         "--wait",
     )
@@ -363,17 +432,7 @@ def _setup_temporal(links, helm_existing_repos):
     links.append(("Temporal Web UI", "http://localhost:8080", ""))
 
 
-def _setup_cadence(links):
-    _kube_create(_dir / "resources" / "cadence.yaml")
-    _exec(
-        "kubectl",
-        "wait",
-        "--all",
-        "pods",
-        "--for=condition=ready",
-        "--selector=!job-name",
-        "--timeout=600s",
-    )
+def _create_cadence_domain(links):
     _kube_run(
         image="ubercadence/cli:v1.2.6",
         command=[
@@ -390,20 +449,19 @@ def _setup_cadence(links):
         },
         retry_attempts=3,
     )
-    links.append(
-        (
-            "Cadence Dashboard",
-            f"http://localhost:8088/domains/{_cadence_domain}/workflows",
-            "",
-        )
-    )
 
 
 def _create_demo_crs(_: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     # Check if cluster exists
     try:
-        _exec("k3d", "cluster", "get", _michelangelo_sandbox_kube_cluster_name, raise_error=True)
+        _exec(
+            "k3d",
+            "cluster",
+            "get",
+            _michelangelo_sandbox_kube_cluster_name,
+            raise_error=True,
+        )
     except subprocess.CalledProcessError:
         _err_exit(
             f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. Please run 'ma sandbox create' first."
@@ -460,6 +518,28 @@ def _stop(ns: argparse.Namespace):
 
 def _kube_create(path: Path):
     _exec("kubectl", "create", "-f", str(path))
+
+
+def _kube_wait(pods: bool = True, jobs: bool = True):
+    if pods:
+        _exec(
+            "kubectl",
+            "wait",
+            "--all",
+            "pods",
+            "--for=condition=ready",
+            "--selector=!job-name",
+            "--timeout=600s",
+        )
+    if jobs:
+        _exec(
+            "kubectl",
+            "wait",
+            "--all",
+            "jobs",
+            "--for=condition=complete",
+            "--timeout=600s",
+        )
 
 
 def _apply_jobs_rbac(cluster_name: str):
@@ -657,7 +737,14 @@ def _create_cluster_crd(cluster_name: str):
         crd_file.flush()
 
         # Apply the Cluster CRD to the sandbox cluster (explicitly specify context)
-        _exec("kubectl", "--context", f"k3d-{_michelangelo_sandbox_kube_cluster_name}", "apply", "-f", crd_file.name)
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            crd_file.name,
+        )
 
         print(f"\nCreated Cluster CRD '{cluster_name}' in the sandbox cluster")
         print(f"Cluster host: {host}")
@@ -707,18 +794,22 @@ def _create_cluster_secrets(cluster_name: str):
         )
 
     # Create a new token for the ray-manager service account in the jobs cluster
-    token_decoded = subprocess.check_output(
-        [
-            "kubectl",
-            "--context",
-            f"k3d-{cluster_name}",
-            "-n",
-            "default",
-            "create",
-            "token",
-            "ray-manager",
-        ]
-    ).decode().strip()
+    token_decoded = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{cluster_name}",
+                "-n",
+                "default",
+                "create",
+                "token",
+                "ray-manager",
+            ]
+        )
+        .decode()
+        .strip()
+    )
 
     # Create a secret for the user token
     token_secret = {
