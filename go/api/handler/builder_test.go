@@ -282,8 +282,8 @@ func TestBuilderPatternBenefits(t *testing.T) {
 
 		// Demonstrate clear, self-documenting configuration
 		builder := NewAPIHandlerBuilder().
-			WithK8sClient(fakeClient). // Required: Kubernetes client
-			WithZapLogger(zap.NewNop()). // Optional: Structured logging
+			WithK8sClient(fakeClient).                   // Required: Kubernetes client
+			WithZapLogger(zap.NewNop()).                 // Optional: Structured logging
 			WithMetrics(tally.NewTestScope("test", nil)) // Optional: Metrics collection
 
 		handler, err := builder.Build()

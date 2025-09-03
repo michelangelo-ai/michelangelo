@@ -38,7 +38,6 @@ func (m *MetadataHandlerImpl) GetFromMetadata(ctx context.Context, namespace, na
 	return m.storage.GetByName(ctx, namespace, name, obj)
 }
 
-
 // UpdateInMetadata implements MetadataHandler.UpdateInMetadata by delegating to the handleUpdate function.
 func (m *MetadataHandlerImpl) UpdateInMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
 	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobStorage)
@@ -88,7 +87,6 @@ type NullMetadataHandler struct{}
 func (n *NullMetadataHandler) GetFromMetadata(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
 	return apiErrors.NewNotFound(schema.GroupResource{}, name)
 }
-
 
 // UpdateInMetadata implements MetadataHandler.UpdateInMetadata as a no-op when metadata storage is disabled.
 func (n *NullMetadataHandler) UpdateInMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
