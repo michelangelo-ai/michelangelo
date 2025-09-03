@@ -814,12 +814,17 @@ def main(channel: Channel):
     result = func_action(**kwargs)
 
     # Convert to JSON and pretty print
+    # temporary disable json converting due to issue:
+    #   some missing proto message info causing error.
+    '''
     json_output = MessageToJson(
         result, 
         always_print_fields_with_no_presence=True, 
         preserving_proto_field_name=True
     )
     print(json_output)
+    '''
+    print(result)
 
 
 if __name__ == "__main__":
