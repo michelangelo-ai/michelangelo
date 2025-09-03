@@ -29,7 +29,10 @@ export function EntityTable({ service, listViewConfig, tableSettingsId }: Entity
     },
   });
 
-  const entityTableState = useLocalStorageTableState({ tableSettingsId });
+  const entityTableState = useLocalStorageTableState({
+    filterSettingsId: `${projectId}/${tableSettingsId}`,
+    tableSettingsId,
+  });
 
   return (
     <Table
