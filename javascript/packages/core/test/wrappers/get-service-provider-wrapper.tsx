@@ -5,18 +5,12 @@ import { ServiceProvider } from '#core/providers/service-provider/service-provid
 import { ServiceContextType } from '#core/providers/service-provider/types';
 import { WrapperComponentProps } from './types';
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: false,
-    },
-  },
-});
-
 /**
  * Creates a React wrapper for testing components that use service features.
  * This wrapper is essential for testing components that use service hooks
  * like useStudioQuery, useStudioMutation, etc.
+ *
+ * Each wrapper gets a fresh QueryClient instance to ensure test isolation.
  *
  * @param serviceProvider - The service provider to use for the service context
  * @returns A wrapper component that provides service context to its children
@@ -36,6 +30,15 @@ export function getServiceProviderWrapper(serviceProvider: Partial<ServiceContex
   const base = {
     request: mockRequest,
   };
+
+  // Create a fresh QueryClient for each test to ensure isolation
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+      },
+    },
+  });
 
   return function ServiceProviderWrapper({ children }: WrapperComponentProps) {
     return (
