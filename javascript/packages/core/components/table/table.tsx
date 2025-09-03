@@ -17,6 +17,7 @@ import { TableErrorState } from './components/table-error-state/table-error-stat
 import { TableHeader } from './components/table-header/table-header';
 import { TableNoResultsState } from './components/table-no-results-state/table-no-results-state';
 import { useColumnTransformer } from './hooks/use-column-transformer';
+import { usePageResetHandler } from './hooks/use-page-reset-handler';
 import { TableSelectionProvider } from './plugins/selection/table-selection-provider';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
@@ -63,17 +64,23 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     autoResetPageIndex: false,
   });
 
+  const transformedColumns = transformColumns(table.getAllLeafColumns());
+
+  const { isResetting } = usePageResetHandler({
+    gotoPage: table.setPageIndex,
+    pageCount: table.getPageCount(),
+    paginationState: table.getState().pagination,
+  });
+
   const viewState = getTableViewState({
     dataLength: props.data.length,
     error: props.error,
-    loading: props.loading,
+    loading: props.loading || isResetting,
     hasFiltersApplied:
       (table.getState().globalFilter as string)?.length > 0 ||
       (table.getState().columnFilters?.length ?? 0) > 0,
-    filteredLength: table.getFilteredRowModel().rows.length,
+    filteredLength: table.getRowModel().rows.length,
   });
-
-  const transformedColumns = transformColumns(table.getAllLeafColumns());
 
   // Create lightweight row objects for filter components that only need getValue()
   const preFilteredRows = props.unFilteredData.map((rowData) => ({
