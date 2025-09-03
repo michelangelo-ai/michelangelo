@@ -7,13 +7,19 @@ import (
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// K8sHandler provides an interface for Kubernetes API operations.
-// This interface abstracts the controller-runtime client for improved testability
-// and separation of concerns, following the adapter pattern commonly used in
-// Kubernetes operators like controller-runtime itself.
+// K8sHandler abstracts Kubernetes API operations for improved testability and separation of concerns.
 //
-// All methods delegate to the underlying Kubernetes client and maintain
-// the same semantics as the controller-runtime client.Client interface.
+// This interface follows the adapter pattern commonly used in Kubernetes operators
+// and maintains the same semantics as controller-runtime client.Client.
+// All operations support standard Kubernetes features like optimistic concurrency,
+// field/label selectors, and graceful deletion.
+//
+// Example usage:
+//
+//	handler := NewK8sHandler(client)
+//	if err := handler.CreateInK8s(ctx, obj, &metav1.CreateOptions{}); err != nil {
+//		return fmt.Errorf("failed to create object: %w", err)
+//	}
 type K8sHandler interface {
 	// CreateInK8s creates a new object in the Kubernetes cluster.
 	// Returns an error if the object already exists or creation fails.
@@ -44,13 +50,18 @@ type K8sHandler interface {
 	DeleteCollectionFromK8s(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error
 }
 
-// MetadataHandler provides an interface for metadata storage operations.
-// This interface abstracts the metadata storage layer to enable pluggable
-// storage backends while maintaining consistent error handling and semantics.
+// MetadataHandler abstracts metadata storage operations for pluggable storage backends.
 //
-// The metadata storage is used for persisting object metadata beyond the
-// Kubernetes API server lifecycle, enabling features like soft deletion
-// and extended retention policies.
+// This interface enables persisting object metadata beyond the Kubernetes API server
+// lifecycle, supporting features like soft deletion and extended retention policies.
+// The storage layer maintains consistency with Kubernetes API semantics.
+//
+// Example usage:
+//
+//	handler := NewMetadataHandler(storage, blobStorage, logger)
+//	if err := handler.UpdateInMetadata(ctx, obj); err != nil {
+//		return fmt.Errorf("failed to persist metadata: %w", err)
+//	}
 type MetadataHandler interface {
 	// GetFromMetadata retrieves an object from the metadata storage by namespace and name.
 	// This is typically used as a fallback when objects are not found in Kubernetes.
@@ -69,13 +80,20 @@ type MetadataHandler interface {
 	ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error
 }
 
-// BlobHandler provides an interface for blob storage operations.
-// This interface abstracts blob storage backends (like S3, GCS) for storing
-// large object data separately from metadata, following the pattern used by
-// systems like Kubernetes itself for storing large objects.
+// BlobHandler abstracts blob storage operations for large object data.
 //
-// The blob storage is used for objects that exceed size limits or require
-// specialized storage characteristics.
+// This interface supports storing large objects separately from metadata using
+// backends like S3 or GCS, following patterns used by Kubernetes for objects
+// that exceed etcd size limits or require specialized storage characteristics.
+//
+// Example usage:
+//
+//	handler := NewBlobHandler(storage)
+//	if handler.IsObjectInteresting(obj) {
+//		if err := handler.MergeWithExternalBlob(ctx, obj); err != nil {
+//			return fmt.Errorf("failed to merge blob data: %w", err)
+//		}
+//	}
 type BlobHandler interface {
 	// IsObjectInteresting determines if an object should be stored in blob storage.
 	// This typically checks object size, type, or annotations to make the decision.
@@ -90,13 +108,18 @@ type BlobHandler interface {
 	DeleteFromBlobStorage(ctx context.Context, obj ctrlRTClient.Object) error
 }
 
-// ValidationHandler provides an interface for object validation operations.
-// This interface centralizes validation logic and enables consistent
-// validation across different API operations, following the pattern used
-// by Kubernetes admission controllers.
+// ValidationHandler abstracts object validation operations for consistent validation logic.
 //
-// Validation is performed before persisting objects to ensure data
-// integrity and business rule compliance.
+// This interface centralizes validation across API operations, following patterns
+// used by Kubernetes admission controllers. Validation ensures data integrity
+// and business rule compliance before persisting objects.
+//
+// Example usage:
+//
+//	handler := NewValidationHandler()
+//	if err := handler.ValidateCreate(obj); err != nil {
+//		return fmt.Errorf("validation failed: %w", err)
+//	}
 type ValidationHandler interface {
 	// ValidateCreate validates an object before creation.
 	// This includes schema validation, business rules, and resource constraints.

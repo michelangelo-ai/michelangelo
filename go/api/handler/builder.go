@@ -13,8 +13,22 @@ import (
 )
 
 // APIHandlerBuilder builds API handlers using the builder pattern.
-// This replaces the factory pattern anti-pattern with a clean builder approach
-// inspired by Kubernetes REST client builder and Flyte's configuration patterns.
+//
+// This builder provides a fluent interface for configuring API handlers with
+// optional dependencies, replacing factory pattern anti-patterns with clean
+// composition. The design is inspired by Kubernetes REST client builders and
+// Flyte's configuration patterns.
+//
+// Example usage:
+//
+//	handler, err := NewAPIHandlerBuilder().
+//		WithK8sClient(client).
+//		WithMetadataStorage(storage, config).
+//		WithZapLogger(logger).
+//		Build()
+//	if err != nil {
+//		return fmt.Errorf("failed to build handler: %w", err)
+//	}
 type APIHandlerBuilder struct {
 	// Core dependencies
 	k8sClient       ctrlRTClient.Client
@@ -30,6 +44,8 @@ type APIHandlerBuilder struct {
 }
 
 // NewAPIHandlerBuilder creates a new API handler builder with sensible defaults.
+// The builder is configured with no-op logger and metrics scope by default,
+// requiring only a Kubernetes client to produce a functional handler.
 func NewAPIHandlerBuilder() *APIHandlerBuilder {
 	return &APIHandlerBuilder{
 		logger:  zapr.NewLogger(zap.NewNop()),
@@ -38,12 +54,14 @@ func NewAPIHandlerBuilder() *APIHandlerBuilder {
 }
 
 // WithK8sClient sets the Kubernetes client (required).
+// The client must be properly configured with the appropriate scheme and credentials.
 func (b *APIHandlerBuilder) WithK8sClient(client ctrlRTClient.Client) *APIHandlerBuilder {
 	b.k8sClient = client
 	return b
 }
 
 // WithMetadataStorage enables and configures metadata storage.
+// Both storage implementation and config must be provided when metadata storage is enabled.
 func (b *APIHandlerBuilder) WithMetadataStorage(storage storage.MetadataStorage, config storage.MetadataStorageConfig) *APIHandlerBuilder {
 	b.metadataStorage = storage
 	b.storageConfig = config
@@ -75,7 +93,8 @@ func (b *APIHandlerBuilder) WithMetrics(scope tally.Scope) *APIHandlerBuilder {
 }
 
 // Build creates the API handler with focused, composed handlers.
-// Returns an error if required dependencies are missing.
+// Returns an error if required dependencies are missing or invalid.
+// The returned handler is ready for use and thread-safe.
 func (b *APIHandlerBuilder) Build() (api.Handler, error) {
 	// Validate required dependencies
 	if err := b.validate(); err != nil {
@@ -119,9 +138,10 @@ func (b *APIHandlerBuilder) validate() error {
 	return nil
 }
 
-// Builder-based factory function replacements
+// Factory function replacements using builder pattern
 
-// NewAPIServerHandler replaces the legacy newAPIServerHandler function.
+// NewAPIServerHandler creates an API handler for the API server component.
+// This replaces the legacy newAPIServerHandler function with builder-based construction.
 func NewAPIServerHandler(params Params) (api.Handler, error) {
 	// Create K8s client
 	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
@@ -147,7 +167,8 @@ func NewAPIServerHandler(params Params) (api.Handler, error) {
 	return builder.Build()
 }
 
-// NewCtrlManagerHandler replaces the legacy newCtrlManagerHandler function.
+// NewCtrlManagerHandler creates an API handler for the controller manager component.
+// This replaces the legacy newCtrlManagerHandler function with builder-based construction.
 func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 	if params.Manager == nil {
 		return nil, fmt.Errorf("manager is required for controller manager handler")
