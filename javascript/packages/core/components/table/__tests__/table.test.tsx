@@ -1544,8 +1544,9 @@ describe('Table', () => {
       { id: 'department', label: 'Department' },
     ];
 
-    const TestActions = ({ row }: { row: TableRow }) => (
+    const TestActions = ({ row }: { row: TableRow<{ name: string }> }) => (
       <div>
+        <span>Actions for row {row.record.name}</span>
         <button>Edit row {row.id}</button>
         <button>Delete row {row.id}</button>
       </div>
@@ -1557,6 +1558,8 @@ describe('Table', () => {
         buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
 
+      expect(screen.getByText('Actions for row Alice Johnson')).toBeInTheDocument();
+      expect(screen.getByText('Actions for row Bob Smith')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Edit row 0' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete row 0' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Edit row 1' })).toBeInTheDocument();
