@@ -36,7 +36,6 @@ export function TableSearchInput({ value, onChange }: TableSearchInputProps) {
       size={SIZE.compact}
       overrides={{
         Root: { style: { width: '250px' } },
-        ClearIcon: { props: { size: 20 } },
       }}
       placeholder="Search..."
       startEnhancer={<Icon name="search" />}

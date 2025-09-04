@@ -30,6 +30,7 @@ export const ICONS = {
   circleX: createMuiIconAdapter(CancelIcon),
   circleCheck: createMuiIconAdapter(CheckCircle),
   circleCheckFilled: createMuiIconAdapter(CheckCircle),
+  deleteAlt: createMuiIconAdapter(CancelIcon),
   diamondEmpty: createMuiIconAdapter(CropSquareIcon),
   playerNext: createMuiIconAdapter(SkipNextIcon),
   plus: createMuiIconAdapter(AddIcon),
