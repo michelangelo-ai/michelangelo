@@ -6,6 +6,7 @@ import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
 import { Row } from '#core/components/row/row';
+import { DetailViewPageRenderer } from '#core/components/views/detail-view/components/detail-view-page-renderer/detail-view-page-renderer';
 import { DetailViewPages } from '#core/components/views/detail-view/components/detail-view-pages/detail-view-pages';
 import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
@@ -13,7 +14,6 @@ import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studi
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
-import type { CustomDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
 import type { PhaseConfig } from '#core/types/common/studio-types';
 
 /**
@@ -110,15 +110,13 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
         tabs={detailViewConfig!.pages.map((page) => ({
           id: page.id,
           label: page.label,
-          content:
-            page.type === 'custom' ? (
-              React.createElement((page as CustomDetailPageConfig).component, {
-                data,
-                isLoading,
-              })
-            ) : (
-              <div>Page type '{page.type}' not yet supported</div>
-            ),
+          content: (
+            <DetailViewPageRenderer
+              page={page}
+              data={data?.[entityConfig!.service] as object | undefined}
+              isLoading={isLoading}
+            />
+          ),
         }))}
         activeTabId={entityTab}
         onTabSelect={navigateToTab}
