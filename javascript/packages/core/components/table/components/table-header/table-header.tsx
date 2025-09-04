@@ -1,6 +1,7 @@
 import { useStyletron } from 'baseui';
 import { StyledTableHead, StyledTableHeadRow } from 'baseui/table-semantic';
 
+import { StyledActionCell } from '#core/components/table/styled-components';
 import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
 import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
 import { withStickySides } from '../with-sticky-sides/with-sticky-sides';
@@ -81,13 +82,13 @@ export const TableHeader = <T extends TableData = TableData>({
 
         {setColumnOrder && setColumnVisibility && (
           <StyledTableConfigurationButtonHeadCell role="columnheader">
-            <div className={css({ display: 'flex', justifyContent: 'center' })}>
+            <StyledActionCell>
               <TableColumnConfigurationButton
                 columns={columns}
                 setColumnOrder={setColumnOrder}
                 setColumnVisibility={setColumnVisibility}
               />
-            </div>
+            </StyledActionCell>
           </StyledTableConfigurationButtonHeadCell>
         )}
       </StickySidesTableHeadRow>

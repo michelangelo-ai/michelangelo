@@ -2,7 +2,11 @@ import React from 'react';
 import { useStyletron } from 'baseui';
 import { StyledTableBodyRow } from 'baseui/table-semantic';
 
-import { StyledTableBody, StyledTableBodyCell } from '#core/components/table/styled-components';
+import {
+  StyledActionCell,
+  StyledTableBody,
+  StyledTableBodyCell,
+} from '#core/components/table/styled-components';
 import { TableExpandIcon } from '../table-expand-icon/table-expand-icon';
 import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
 import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
@@ -72,7 +76,9 @@ export const TableBody = <T extends TableData = TableData>({
             ))}
 
             <StyledTableBodyCell>
-              {actions && React.createElement(actions, { row })}
+              <StyledActionCell>
+                {actions && React.createElement(actions, { row })}
+              </StyledActionCell>
             </StyledTableBodyCell>
           </StickySidesTableBodyRow>
 
