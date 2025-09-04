@@ -22,6 +22,9 @@ from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 
 _LOG = getLogger(__name__)
 
+# Constant for uniflow image annotation
+_UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
+
 # Constants for registration output files
 _UNIFLOW_TAR_PATH_FILENAME = "uniflow_tar_path.txt"
 _UNIFLOW_INPUT_FILENAME = "uniflow_input.txt"
@@ -231,7 +234,16 @@ def convert_crd_metadata_pipeline_create(
         uniflow_tar_path = ""
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
+
+    # At this time, we expect the uniflow image annotation to be present in the pipeline config file
+    annotations = deepcopy(yaml_dict.get("metadata", {}).get("annotations", {}))
+    if _UNIFLOW_IMAGE_ANNOTATION_KEY not in annotations:
+        error_message = f"expected {_UNIFLOW_IMAGE_ANNOTATION_KEY} annotation within pipeline config file"
+        _LOG.error(error_message)
+        raise KeyError(error_message)
+
     res["metadata"] = {
+        "annotations": annotations,
         "clusterName": "",
         "generateName": "",
         "generation": "0",
