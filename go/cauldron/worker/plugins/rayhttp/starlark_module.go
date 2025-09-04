@@ -83,7 +83,7 @@ func (r *module) createRayJob(thread *starlark.Thread, _ *starlark.Builtin, args
 			"apiVersion": "ml.chimera.kubebuilder.io/v1",
 			"kind":       "UniflowTask",
 			"metadata": map[string]interface{}{
-				"name": strings.Split(rayJob.Metadata.Name, "-")[len(strings.Split(rayJob.Metadata.Name, "-"))-1],
+				"name": strings.Replace(rayJob.Metadata.Name, "-", "_", -1),
 			},
 			"spec": map[string]interface{}{
 				"pipeline": pipeline,
