@@ -24,11 +24,12 @@ _michelangelo_sandbox_kube_cluster_name = "michelangelo-sandbox"
 _kube_ports = [
     "3306:30001",  # MySQL
     "9091:30007",  # MinIO
-    "9090:30008",  # MinIO
+    "9090:30008",  # MinIO Console
     "14566:30009",  # Michelangelo API Server
     "8081:30010",  # Envoy gRPC --> gRPC-web proxy
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
+    "9092:30015",  # Prometheus
 ]
 
 # Workflow engine ports
@@ -191,7 +192,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
-        "logs-bucket-creation.yaml",
+        "sandbox-bucket-setup.yaml",
     ]
     links = []
 
@@ -218,9 +219,17 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         )
     )
 
-    # Grafana
+    # Prometheus & Grafana
 
+    resources.append("prometheus.yaml")
     resources.append("grafana.yaml")
+    links.append(
+        (
+            "Prometheus",
+            "http://localhost:9092",
+            "",
+        )
+    )
     links.append(
         (
             "Grafana Dashboard",
