@@ -3,6 +3,8 @@ kind: Pipeline
 metadata:
   namespace: "ma-dev-test"
   name: "bert-cola-test"
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
 spec:
   type: "PIPELINE_TYPE_TRAIN"
   manifest:
