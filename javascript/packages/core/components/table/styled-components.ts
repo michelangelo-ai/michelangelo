@@ -1,4 +1,4 @@
-import { withStyle } from 'baseui';
+import { styled, withStyle } from 'baseui';
 import {
   StyledTableBody as BaseStyledTableBody,
   StyledTableBodyCell as BaseStyledTableBodyCell,
@@ -24,4 +24,9 @@ export const StyledTableBodyCell = withStyle<
     fontWeight: $columnNumber === firstDataColumnIndex ? 500 : 'normal',
     verticalAlign: 'middle',
   };
+});
+
+export const StyledActionCell = styled('div', {
+  display: 'flex',
+  justifyContent: 'center',
 });
