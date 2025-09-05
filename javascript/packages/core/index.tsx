@@ -24,7 +24,7 @@ type Props = {
 
 export function CoreApp({ dependencies }: Props) {
   return (
-    <ThemeProvider>
+    <ThemeProvider icons={dependencies.theme.icons}>
       <ServiceProvider {...dependencies.service}>
         <ErrorProvider {...dependencies.error}>
           <IconProvider icons={dependencies.theme.icons}>
