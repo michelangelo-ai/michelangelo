@@ -120,6 +120,10 @@ message PipelineRunSpec {
   // recipients, and conditions for when to send notifications.
   repeated Notification notifications = 11;
 
+  // Pipeline spec for pipeline dev run.
+  // When specified, the pipeline run controller will use the following pipeline spec to run the pipeline.
+  PipelineSpec pipeline_spec = 12;
+
   // Extension field for additional custom data
   google.protobuf.Any ext = 999;
 }
