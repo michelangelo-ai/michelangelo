@@ -45,6 +45,7 @@ export const TABLE_STATE_DEFAULTS: TableState = {
   columnOrder: [],
   columnVisibility: {},
   rowSelection: {},
+  rowSelectionEnabled: false,
 } as const;
 
 export const TABLE_LOCAL_STORAGE_KEY = 'ma-studio-table-settings';

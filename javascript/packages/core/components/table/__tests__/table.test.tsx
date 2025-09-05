@@ -16,6 +16,7 @@ import {
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
 import { TableBodyProps, TableRow } from '../components/table-body/types';
+import { useTableSelectionContext } from '../plugins/selection/table-selection-context';
 import { Table } from '../table';
 
 import type { Accessor } from '#core/types/common/studio-types';
@@ -1341,82 +1342,140 @@ describe('Table', () => {
 
     it('does not render selection checkboxes when selection is disabled', () => {
       render(
-        <Table data={testData} columns={testColumns} enableRowSelection={false} />,
+        <Table data={testData} columns={testColumns} state={{ rowSelectionEnabled: false }} />,
         buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
 
       expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     });
 
-    it('renders selection checkboxes when selection is enabled', () => {
-      render(
-        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
-        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
-      );
-
-      // Should have header checkbox + 3 row checkboxes
-      expect(screen.getAllByRole('checkbox')).toHaveLength(4);
-    });
-
-    it('selects individual rows when row checkbox is clicked', async () => {
+    it('selects individual rows when row checkbox is clicked after enabling selection', async () => {
       const user = userEvent.setup();
 
       render(
-        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
+        <Table data={testData} columns={testColumns} state={{ rowSelectionEnabled: true }} />,
         buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
 
-      const checkboxes = screen.getAllByRole('checkbox');
-      const firstRowCheckbox = checkboxes[1]; // Skip header checkbox
+      const checkboxes = await screen.findAllByRole('checkbox');
+      const firstRowCheckbox = checkboxes[1];
 
       expect(firstRowCheckbox).not.toBeChecked();
-
       await user.click(firstRowCheckbox);
-
       expect(firstRowCheckbox).toBeChecked();
     });
 
-    it('selects all rows when header checkbox is clicked', async () => {
+    it('selects all rows when header checkbox is clicked after enabling selection', async () => {
       const user = userEvent.setup();
 
       render(
-        <Table data={testData} columns={testColumns} enableRowSelection={true} />,
+        <Table data={testData} columns={testColumns} state={{ rowSelectionEnabled: true }} />,
         buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
 
-      const checkboxes = screen.getAllByRole('checkbox');
+      const checkboxes = await screen.findAllByRole('checkbox');
       const headerCheckbox = checkboxes[0];
 
       expect(headerCheckbox).not.toBeChecked();
-
       await user.click(headerCheckbox);
 
-      // All checkboxes should be checked
       checkboxes.forEach((checkbox) => {
         expect(checkbox).toBeChecked();
       });
     });
 
-    it('provides selection context for external components', () => {
-      const TestComponent = () => {
-        // This would be imported from the plugin
-        // const { selectedRows, selectionEnabled } = useTableSelectionContext();
-        return <div data-testid="selection-context">Selection context available</div>;
+    it('provides selection context for external components', async () => {
+      const user = userEvent.setup();
+
+      const SelectionToggle = () => {
+        const { selectionEnabled, setSelectionEnabled } = useTableSelectionContext();
+        return (
+          <div>
+            <span>Selection status: {selectionEnabled ? 'enabled' : 'disabled'}</span>
+            <button onClick={() => setSelectionEnabled(!selectionEnabled)}>Toggle Selection</button>
+          </div>
+        );
       };
 
       render(
         <Table
           data={testData}
           columns={testColumns}
-          enableRowSelection={true}
           actionBarConfig={{
-            trailing: <TestComponent />,
+            trailing: <SelectionToggle />,
           }}
         />,
         buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
       );
 
-      expect(screen.getByTestId('selection-context')).toBeInTheDocument();
+      expect(screen.getByText('Selection status: disabled')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Toggle Selection' }));
+      await screen.findByText('Selection status: enabled');
+    });
+
+    it('supports enabling selection when starting disabled', async () => {
+      const user = userEvent.setup();
+
+      const SelectionToggle = () => {
+        const { selectionEnabled, setSelectionEnabled } = useTableSelectionContext();
+        return (
+          <div>
+            <span>Selection status: {selectionEnabled ? 'enabled' : 'disabled'}</span>
+            <button onClick={() => setSelectionEnabled(true)}>Enable Selection</button>
+          </div>
+        );
+      };
+
+      render(
+        <Table
+          data={testData}
+          columns={testColumns}
+          state={{ rowSelectionEnabled: false }}
+          actionBarConfig={{
+            trailing: <SelectionToggle />,
+          }}
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByText('Selection status: disabled')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Enable Selection' }));
+
+      // Selection should now be enabled since setSelectionEnabled(true) was called
+      expect(screen.getByText('Selection status: enabled')).toBeInTheDocument();
+    });
+
+    it('supports controlled row selection state', async () => {
+      const user = userEvent.setup();
+      const controlledState = false;
+      const mockSetter = vi.fn();
+
+      const SelectionToggle = () => {
+        const { selectionEnabled, setSelectionEnabled } = useTableSelectionContext();
+        return (
+          <div>
+            <span>Selection status: {selectionEnabled ? 'enabled' : 'disabled'}</span>
+            <button onClick={() => setSelectionEnabled(true)}>Enable Selection</button>
+          </div>
+        );
+      };
+
+      render(
+        <Table
+          data={testData}
+          columns={testColumns}
+          state={{
+            rowSelectionEnabled: controlledState,
+            setRowSelectionEnabled: mockSetter,
+          }}
+          actionBarConfig={{ trailing: <SelectionToggle /> }}
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      expect(screen.getByText('Selection status: disabled')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Enable Selection' }));
+      expect(mockSetter).toHaveBeenCalledWith(true);
     });
   });
 

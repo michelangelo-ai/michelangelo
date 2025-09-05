@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   getCoreRowModel,
   getExpandedRowModel,
@@ -19,6 +20,7 @@ import { TableNoResultsState } from './components/table-no-results-state/table-n
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { usePageResetHandler } from './hooks/use-page-reset-handler';
 import { TableSelectionProvider } from './plugins/selection/table-selection-provider';
+import { useRowSelectionState } from './plugins/selection/use-row-selection-state';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
@@ -33,6 +35,11 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
   const [css, theme] = useStyletron();
 
   const { state, initialState } = composeTableState(props.state ?? {});
+  const { enableRowSelection, setRowSelectionEnabled } = useRowSelectionState({
+    state,
+    initialState,
+  });
+
   const { scrollRatio, tableRef, updateScrollRatio } = useScrollRatio(columns);
 
   const table = useReactTable<T>({
@@ -59,7 +66,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           getRowCanExpand: () => true,
         }
       : {}),
-    enableRowSelection: props.enableRowSelection,
+    enableRowSelection,
     globalFilterFn: 'includesString',
     autoResetPageIndex: false,
   });
@@ -96,7 +103,8 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       <TableSelectionProvider
         value={{
           selectedRows: table.getSelectedRowModel().flatRows.map((row) => row.original),
-          selectionEnabled: props.enableRowSelection,
+          selectionEnabled: enableRowSelection,
+          setSelectionEnabled: setRowSelectionEnabled,
           toggleAllRowsSelected: (selected: boolean) => table.toggleAllRowsSelected(selected),
           getIsAllRowsSelected: () => table.getIsAllRowsSelected(),
           getIsSomeRowsSelected: () => table.getIsSomeRowsSelected(),
@@ -139,7 +147,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
                 columns={transformedColumns}
                 setColumnOrder={table.setColumnOrder}
                 setColumnVisibility={table.setColumnVisibility}
-                enableRowSelection={props.enableRowSelection}
+                enableRowSelection={enableRowSelection}
                 isSelected={table.getIsAllRowsSelected()}
                 onToggleSelection={(selected: boolean) => table.toggleAllRowsSelected(selected)}
                 enableStickySides={props.enableStickySides}
@@ -150,7 +158,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             {viewState === 'ready' && (
               <props.body
                 rows={transformRows<T>(table.getRowModel().rows)}
-                enableRowSelection={props.enableRowSelection}
+                enableRowSelection={enableRowSelection}
                 enableStickySides={props.enableStickySides}
                 scrollRatio={scrollRatio}
                 subRow={props.subRow}
