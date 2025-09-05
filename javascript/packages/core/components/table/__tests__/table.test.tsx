@@ -1104,6 +1104,87 @@ describe('Table', () => {
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
       expect(screen.getByText('No data')).toBeInTheDocument();
     });
+
+    it('resets to first page when current page becomes invalid due to filtering', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table
+          data={buildLargeDataset(50)}
+          columns={testColumns}
+          pageSizes={[{ id: 10, label: '10' }]}
+          actionBarConfig={{ enableFilters: true }}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Verify we start on page 1 of 5
+      expect(
+        screen.getByRole('button', { name: 'next page. current page 1 of 5' })
+      ).toBeInTheDocument();
+
+      // Navigate to page 5 using the next button
+      const nextButton = screen.getByRole('button', { name: /next page/i });
+      await user.click(nextButton);
+      await user.click(nextButton);
+      await user.click(nextButton);
+      await user.click(nextButton);
+
+      await screen.findByRole('button', { name: 'next page. current page 5 of 5' });
+
+      // Apply column filter that drastically reduces results
+      await user.click(screen.getByRole('button', { name: 'Add filter' }));
+      await user.click(screen.getByTestId('filter-option-Column1'));
+      await user.click(screen.getByLabelText('row1-col1-data'));
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+      // Verify table page index is reset to 1 and data is displayed correctly
+      await screen.findByRole('button', { name: 'next page. current page 1 of 1' });
+      expect(screen.getByText('row1-col1-data')).toBeInTheDocument();
+      expect(screen.queryByText('row2-col1-data')).not.toBeInTheDocument();
+    });
+
+    it('does not reset page when current page remains valid after filtering', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table
+          data={buildLargeDataset(50)}
+          columns={testColumns}
+          pageSizes={[{ id: 5, label: '5' }]}
+          actionBarConfig={{ enableFilters: true }}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Navigate to page 2
+      const nextButton = screen.getByRole('button', { name: /next page/i });
+      await user.click(nextButton);
+      await screen.findByRole('button', { name: 'next page. current page 2 of 10' });
+
+      // Apply filter that still leaves 2 pages
+      await user.click(screen.getByRole('button', { name: 'Add filter' }));
+      await user.click(screen.getByTestId('filter-option-Column1'));
+      await user.click(screen.getByLabelText('row5-col1-data'));
+      await user.click(screen.getByLabelText('row10-col1-data'));
+      await user.click(screen.getByLabelText('row15-col1-data'));
+      await user.click(screen.getByLabelText('row20-col1-data'));
+      await user.click(screen.getByLabelText('row25-col1-data'));
+      await user.click(screen.getByLabelText('row30-col1-data'));
+      await user.click(screen.getByLabelText('row35-col1-data'));
+      await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+      // Should stay on page 2 since it's still valid (filtered results create 2 pages)
+      await screen.findByRole('button', { name: 'next page. current page 2 of 2' });
+    });
   });
 
   describe('sorting functionality', () => {
