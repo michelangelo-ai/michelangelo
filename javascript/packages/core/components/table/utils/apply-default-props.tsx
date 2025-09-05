@@ -8,7 +8,12 @@ import { normalizePageSize } from '../components/table-pagination/utils';
 
 import type { PageSizeOption } from '../components/table-pagination/types';
 import type { TableData } from '../types/data-types';
-import type { ControlledTableState, TableProps, TablePropsResolved } from '../types/table-types';
+import type {
+  ControlledTableState,
+  InputTableState,
+  TableProps,
+  TablePropsResolved,
+} from '../types/table-types';
 
 /**
  * Applies default properties to the given table properties.
@@ -56,7 +61,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
 }
 
 function resolveTableState(
-  userState: Partial<ControlledTableState> | undefined,
+  userState: InputTableState | undefined,
   disablePagination: boolean,
   pageSizes: PageSizeOption[]
 ): Partial<ControlledTableState> | undefined {
@@ -65,8 +70,8 @@ function resolveTableState(
     rowSelectionEnabled: userState?.rowSelectionEnabled ?? false,
   };
 
-  if (disablePagination || baseState?.setPagination) {
-    return baseState;
+  if (disablePagination) {
+    return baseState as Partial<ControlledTableState>;
   }
 
   const requestedPageSize = baseState?.pagination?.pageSize;

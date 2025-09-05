@@ -8,6 +8,7 @@ import type {
   ColumnOrderState,
   ColumnVisibilityState,
   ControlledTableState,
+  InputTableState,
   PaginationState,
   RowSelectionState,
   SortingState,
@@ -69,7 +70,7 @@ export function useLocalStorageTableState({
 }: {
   tableSettingsId: string;
   filterSettingsId?: string;
-  initialState?: Partial<ControlledTableState>;
+  initialState?: InputTableState;
 }): ControlledTableState {
   // Use filterSettingsId for filters when provided, otherwise fall back to tableSettingsId
   const filterNamespace = filterSettingsId ?? tableSettingsId;

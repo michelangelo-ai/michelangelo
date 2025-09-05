@@ -130,7 +130,7 @@ export interface TableRequiredFunctionalityProps {
    *
    * @default undefined
    */
-  state: Partial<ControlledTableState> | undefined;
+  state: InputTableState | undefined;
 
   /**
    * @description
@@ -296,3 +296,26 @@ export type ControlledTableState = TableState & {
   ) => void;
   setRowSelectionEnabled: (enabled: boolean) => void;
 };
+
+/**
+ * Table state that users can provide as input to control table behavior.
+ *
+ * Excludes `pageIndex` from pagination state to prevent users from being
+ * forced to manage navigation state when they only want to configure
+ * table behavior.
+ *
+ * @example
+ * ```tsx
+ * const tableState: InputTableState = {
+ *   pagination: { pageSize: 25 },
+ *   globalFilter: 'search term'
+ * };
+ *
+ * <Table data={data} columns={columns} state={tableState} />
+ * ```
+ */
+export type InputTableState = Partial<
+  Omit<ControlledTableState, 'pagination'> & {
+    pagination?: Partial<Omit<PaginationState, 'pageIndex'>>;
+  }
+>;

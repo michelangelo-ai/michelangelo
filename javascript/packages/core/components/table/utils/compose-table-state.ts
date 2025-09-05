@@ -1,4 +1,4 @@
-import type { ControlledTableState, TableState } from '../types/table-types';
+import type { ControlledTableState, InputTableState, TableState } from '../types/table-types';
 
 const STATE_NAME_TO_STATE_SETTER_NAME = {
   globalFilter: 'setGlobalFilter',
@@ -27,7 +27,7 @@ const STATE_NAME_TO_STATE_SETTER_NAME = {
  * @remarks
  * A property will be considered controlled if the input state object contains a setter.
  */
-export function composeTableState(combinedState: Partial<ControlledTableState>): {
+export function composeTableState(combinedState: InputTableState): {
   initialState: Partial<TableState>;
   state: Partial<ControlledTableState>;
 } {
