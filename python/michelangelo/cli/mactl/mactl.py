@@ -16,9 +16,8 @@ from google.protobuf.descriptor_pb2 import (
     FileDescriptorProto,
     MethodDescriptorProto,
 )
-from google.protobuf.json_format import MessageToJson
 from google.protobuf.descriptor_pool import DescriptorPool
-from google.protobuf.json_format import MessageToDict, MessageToJson, ParseDict
+from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
 from grpc import Channel, insecure_channel
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
@@ -778,7 +777,7 @@ def main(channel: Channel):
     """
     # Load config and set environment variables
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, 'r') as f:
+        with open(CONFIG_FILE, "r") as f:
             config = yaml_safe_load(f) or {}
         minio_config = config.get("minio", {})
         if not getenv("AWS_ACCESS_KEY_ID"):
@@ -816,14 +815,14 @@ def main(channel: Channel):
     # Convert to JSON and pretty print
     # temporary disable json converting due to issue:
     #   some missing proto message info causing error.
-    '''
+    """
     json_output = MessageToJson(
         result, 
         always_print_fields_with_no_presence=True, 
         preserving_proto_field_name=True
     )
     print(json_output)
-    '''
+    """
     print(result)
 
 

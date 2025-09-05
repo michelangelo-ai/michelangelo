@@ -286,27 +286,29 @@ def convert_crd_metadata_pipeline_create(
 
         # Create TypedStruct as an Any message with proper @type field
         from google.protobuf.json_format import MessageToDict
-        
+
         # Create the inner struct for workflow inputs
         inner_struct = Struct()
-        inner_struct.update({
-            "args": [],
-            "environ": input_dict.get("environ", {}),
-            "kwargs": input_dict.get("kwargs", []),
-        })
-        
+        inner_struct.update(
+            {
+                "args": [],
+                "environ": input_dict.get("environ", {}),
+                "kwargs": input_dict.get("kwargs", []),
+            }
+        )
+
         # Create TypedStruct
         typed_struct = TypedStruct()
         typed_struct.type_url = "type.googleapis.com/michelangelo.UniFlowConf"
         typed_struct.value.CopyFrom(inner_struct)
-        
+
         # Pack into Any message for proper @type handling
         any_message = Any()
         any_message.Pack(typed_struct)
-        
+
         # Convert to dict for JSON serialization - this will include @type
         content_dict = MessageToDict(any_message)
-        
+
         res["spec"]["manifest"]["content"] = content_dict
         _LOG.debug("Added content to spec manifest")
 
