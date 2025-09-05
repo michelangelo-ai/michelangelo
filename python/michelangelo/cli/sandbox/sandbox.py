@@ -814,6 +814,8 @@ def _create_cluster_secrets(cluster_name: str):
                 "create",
                 "token",
                 "ray-manager",
+                # Required to override kubectl's 1h default token TTL; set ~10y to prevent frequent sandbox expirations
+                "--duration=87600h",
             ]
         )
         .decode()
