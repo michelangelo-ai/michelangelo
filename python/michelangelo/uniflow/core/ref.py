@@ -26,7 +26,7 @@ def ref(value, io: IORegistry):
     # Handle None values from tasks without explicit return statements
     if value is None:
         return None
-    
+
     # If container type - recurse
     if isinstance(value, list):
         return [ref(v, io) for v in value]
@@ -60,7 +60,6 @@ def unref(value, io: IORegistry):
     # Handle None values explicitly
     if value is None:
         return None
-    
     # If Ref - read checkpoint: run IO.read and replace Ref with the actual value
     if isinstance(value, Ref):
         value_type = value.type

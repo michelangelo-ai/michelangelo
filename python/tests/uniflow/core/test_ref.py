@@ -103,20 +103,18 @@ class Test(TestCase):
         # Test that ref() returns None when passed None
         result = ref(None, io=default_io)
         self.assertIsNone(result)
-        
+
     def test_unref_none_handling(self):
         """Test that unref() properly handles None values without errors."""
         # Test that unref() returns None when passed None
         result = unref(None, io=default_io)
         self.assertIsNone(result)
-        
+
     def test_ref_unref_with_none_values_in_containers(self):
         """Test ref/unref with None values inside containers."""
         os.environ["UF_STORAGE_URL"] = "memory://~/storage"
-        
         # Test list with None values
         data_with_nones = [None, "test", None, {"key": "value"}, None]
-        
         # ref should preserve None values
         ref_result = ref(data_with_nones, io=default_io)
         self.assertIsInstance(ref_result, list)
@@ -126,7 +124,6 @@ class Test(TestCase):
         self.assertIsNone(ref_result[2])
         self.assertEqual(ref_result[3], {"key": "value"})
         self.assertIsNone(ref_result[4])
-        
         # unref should preserve None values
         unref_result = unref(ref_result, io=default_io)
         self.assertIsInstance(unref_result, list)
@@ -136,16 +133,13 @@ class Test(TestCase):
         self.assertIsNone(unref_result[2])
         self.assertEqual(unref_result[3], {"key": "value"})
         self.assertIsNone(unref_result[4])
-        
         # Test dict with None values
         dict_with_nones = {"a": None, "b": "test", "c": None}
-        
         ref_dict_result = ref(dict_with_nones, io=default_io)
         self.assertIsInstance(ref_dict_result, dict)
         self.assertIsNone(ref_dict_result["a"])
         self.assertEqual(ref_dict_result["b"], "test")
         self.assertIsNone(ref_dict_result["c"])
-        
         unref_dict_result = unref(ref_dict_result, io=default_io)
         self.assertIsInstance(unref_dict_result, dict)
         self.assertIsNone(unref_dict_result["a"])
