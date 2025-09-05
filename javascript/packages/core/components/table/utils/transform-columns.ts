@@ -1,9 +1,8 @@
 import { CellType } from '#core/components/cell/constants';
 
 import type { Column } from '@tanstack/react-table';
-import type { ColumnConfig } from '#core/components/table/types/column-types';
+import type { ColumnConfig, ColumnRenderState } from '#core/components/table/types/column-types';
 import type {
-  ColumnRenderState,
   FilteringCapability,
   SortingCapability,
   VisibilityCapability,
@@ -12,16 +11,23 @@ import type { TableData } from '#core/components/table/types/data-types';
 
 /**
  * Create a list of columns that can be used when rendering #core/components/table/*
+ * Returns full ColumnConfig with centralized defaults applied
  */
 export function transformColumns<T extends TableData = TableData>(
   columns: Column<T, unknown>[]
-): Array<ColumnRenderState<T> & FilteringCapability & SortingCapability & VisibilityCapability> {
+): Array<
+  Omit<ColumnConfig<T>, keyof ColumnRenderState<T>> &
+    ColumnRenderState<T> &
+    FilteringCapability &
+    SortingCapability &
+    VisibilityCapability
+> {
   return columns.map((column) => {
     const columnConfig = column.columnDef.meta as ColumnConfig<T>;
     const label = columnConfig.label ?? column.id;
 
     return {
-      id: column.id,
+      ...columnConfig,
       label,
       type: columnConfig.type ?? CellType.TEXT,
 

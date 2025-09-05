@@ -1,6 +1,15 @@
 import type { Row } from '@tanstack/react-table';
-import type { FilteringCapability } from '#core/components/table/types/column-types';
+import type { ColumnConfig, FilteringCapability } from '#core/components/table/types/column-types';
 import type { TableData } from '../../types/data-types';
+
+/**
+ * Represents a table row that can be filtered, providing both column value access
+ * and the original record data for display formatting.
+ */
+export type FilterableRow<TData = TableData> = {
+  getValue: (columnId: string) => unknown;
+  record: TData;
+};
 
 /**
  * Filter function type that matches TanStack Table's filterfn interface.
@@ -50,8 +59,8 @@ export enum FilterMode {
 /**
  * Column filter props for filter components.
  */
-export type ColumnFilterProps = {
-  columnId: string;
+export type ColumnFilterProps<TData = TableData> = {
+  column: ColumnConfig<TData>;
   close: () => void;
-  preFilteredRows: Array<{ getValue: (columnId: string) => unknown }>;
+  preFilteredRows: FilterableRow<TData>[];
 } & Omit<FilteringCapability, 'canFilter'>;

@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import type { FilterableRow } from '#core/components/table/components/filter/types';
 import type {
   ColumnConfig,
   ColumnRenderState,
@@ -13,7 +14,7 @@ export interface TableActionBarProps<T extends TableData = TableData> {
   columnFilters: ColumnFilter[];
   setColumnFilters: (filters: ColumnFilter[]) => void;
   columns: ColumnConfig<T>[];
-  preFilteredRows: Array<{ getValue: (columnId: string) => unknown }>;
+  preFilteredRows: FilterableRow<T>[];
   configuration: TableActionBarConfig;
   filterableColumns?: FilterableColumn<T>[];
 }
@@ -47,5 +48,9 @@ export interface TableActionBarConfig {
   trailing?: ReactNode;
 }
 
-export type FilterableColumn<TData extends TableData = TableData> = ColumnRenderState<TData> &
+export type FilterableColumn<TData extends TableData = TableData> = Omit<
+  ColumnConfig<TData>,
+  keyof ColumnRenderState<TData>
+> &
+  ColumnRenderState<TData> &
   Omit<FilteringCapability, 'canFilter'>;

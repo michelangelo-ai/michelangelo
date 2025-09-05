@@ -1,37 +1,37 @@
 import { CategoricalColumn } from 'baseui/data-table';
 
 import { safeStringify } from '#core/utils/string-utils';
+import { useFilterDisplayMapping } from './use-filter-display-mapping';
 
 import type { ColumnFilterProps } from '../types';
 
-export function CategoricalFilter({
-  columnId,
+export function CategoricalFilter<TData = unknown>({
+  column,
   close,
   getFilterValue,
   setFilterValue,
   preFilteredRows,
-}: ColumnFilterProps) {
+}: ColumnFilterProps<TData>) {
   // BaseUI requires these props but we don't use them in filter context
   const CategoricalFilterPanel = CategoricalColumn({
     title: '',
     mapDataToValue: () => '',
   }).renderFilter;
 
-  const uniqueValues = new Set<string>();
-  preFilteredRows.forEach((row) => {
-    const value = row.getValue(columnId);
-    if (value != null) {
-      uniqueValues.add(safeStringify(value));
-    }
+  const [filterValueToDisplayValue, displayValueToFilterValue] = useFilterDisplayMapping({
+    preFilteredRows,
+    column,
   });
-  const availableValues = Array.from(uniqueValues);
 
-  const currentSelection = (getFilterValue() as string[]) ?? [];
+  const availableDisplayValues = Object.keys(displayValueToFilterValue);
+  const currentDisplaySelection = ((getFilterValue() as unknown[]) ?? [])
+    .map((value) => filterValueToDisplayValue[safeStringify(value)])
+    .filter(Boolean);
 
-  // Sort values: selected items first, then alphabetical within each group
-  const sortedValues = availableValues.sort((a, b) => {
-    const isSelectedA = currentSelection.includes(a);
-    const isSelectedB = currentSelection.includes(b);
+  // Sort display values: selected items first, then alphabetical within each group
+  const sortedDisplayValues = availableDisplayValues.sort((a, b) => {
+    const isSelectedA = currentDisplaySelection.includes(a);
+    const isSelectedB = currentDisplaySelection.includes(b);
 
     if (isSelectedA === isSelectedB) {
       return a.localeCompare(b);
@@ -47,22 +47,26 @@ export function CategoricalFilter({
     exclude: boolean;
   }) => {
     // Apply exclude logic: invert selection if exclude is true
-    const filteredSelection = exclude
-      ? availableValues.filter((value) => !selection.has(value))
+    const selectedDisplayValues = exclude
+      ? availableDisplayValues.filter((displayValue) => !selection.has(displayValue))
       : Array.from(selection);
 
-    setFilterValue(filteredSelection.length > 0 ? filteredSelection : undefined);
+    const filterValues = selectedDisplayValues.map(
+      (displayValue) => displayValueToFilterValue[displayValue]
+    );
+
+    setFilterValue(filterValues.length > 0 ? filterValues : undefined);
     close();
   };
 
   return (
     <CategoricalFilterPanel
-      data={sortedValues}
+      data={sortedDisplayValues}
       setFilter={handleFilterChange}
       close={close}
       filterParams={{
         description: '',
-        selection: new Set(currentSelection),
+        selection: new Set(currentDisplaySelection),
         exclude: false,
       }}
     />

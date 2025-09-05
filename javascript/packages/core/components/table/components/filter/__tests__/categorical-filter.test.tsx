@@ -19,17 +19,23 @@ describe('CategoricalFilter', () => {
   const mockSetFilterValue = vi.fn();
   const mockGetFilterValue = vi.fn();
 
+  const mockColumn = {
+    id: 'department',
+    label: 'Department',
+    type: 'text',
+  };
+
   const defaultProps: ColumnFilterProps = {
-    columnId: 'department',
+    column: mockColumn,
     close: mockClose,
     getFilterValue: mockGetFilterValue,
     setFilterValue: mockSetFilterValue,
     preFilteredRows: [
-      { getValue: () => 'Engineering' },
-      { getValue: () => 'Marketing' },
-      { getValue: () => 'Engineering' },
-      { getValue: () => 'Sales' },
-      { getValue: () => 'Design' },
+      { getValue: () => 'Engineering', record: { department: 'Engineering' } },
+      { getValue: () => 'Marketing', record: { department: 'Marketing' } },
+      { getValue: () => 'Engineering', record: { department: 'Engineering' } },
+      { getValue: () => 'Sales', record: { department: 'Sales' } },
+      { getValue: () => 'Design', record: { department: 'Design' } },
     ],
   };
 
@@ -182,10 +188,10 @@ describe('CategoricalFilter', () => {
       const propsWithDuplicates: ColumnFilterProps = {
         ...defaultProps,
         preFilteredRows: [
-          { getValue: () => 'Engineering' },
-          { getValue: () => 'Engineering' },
-          { getValue: () => 'Marketing' },
-          { getValue: () => 'Engineering' },
+          { getValue: () => 'Engineering', record: { department: 'Engineering' } },
+          { getValue: () => 'Engineering', record: { department: 'Engineering' } },
+          { getValue: () => 'Marketing', record: { department: 'Marketing' } },
+          { getValue: () => 'Engineering', record: { department: 'Engineering' } },
         ],
       };
 
@@ -205,11 +211,11 @@ describe('CategoricalFilter', () => {
       const propsWithNulls: ColumnFilterProps = {
         ...defaultProps,
         preFilteredRows: [
-          { getValue: () => 'Engineering' },
-          { getValue: () => null },
-          { getValue: () => undefined },
-          { getValue: () => 'Marketing' },
-          { getValue: () => '' },
+          { getValue: () => 'Engineering', record: { department: 'Engineering' } },
+          { getValue: () => null, record: { department: null } },
+          { getValue: () => undefined, record: { department: undefined } },
+          { getValue: () => 'Marketing', record: { department: 'Marketing' } },
+          { getValue: () => '', record: { department: '' } },
         ],
       };
 
@@ -225,5 +231,53 @@ describe('CategoricalFilter', () => {
 
       expect(screen.getAllByRole('checkbox')).toHaveLength(BASE_UI_CHECKBOX_COUNT + 3);
     });
+  });
+
+  it('should show display text but filter with raw values when cellToString differs from raw data', async () => {
+    const user = userEvent.setup();
+
+    const stateColumn = {
+      id: 'status',
+      label: 'Status',
+      type: 'STATE',
+      stateTextMap: {
+        PIPELINE_STATE_BUILDING: 'Building',
+        PIPELINE_STATE_ERROR: 'Failed',
+        PIPELINE_STATE_SUCCESS: 'Complete',
+      },
+    };
+
+    const stateProps: ColumnFilterProps = {
+      column: stateColumn,
+      close: mockClose,
+      getFilterValue: mockGetFilterValue,
+      setFilterValue: mockSetFilterValue,
+      preFilteredRows: [
+        {
+          getValue: () => 'PIPELINE_STATE_BUILDING',
+          record: { status: 'PIPELINE_STATE_BUILDING' },
+        },
+        { getValue: () => 'PIPELINE_STATE_ERROR', record: { status: 'PIPELINE_STATE_ERROR' } },
+        { getValue: () => 'PIPELINE_STATE_SUCCESS', record: { status: 'PIPELINE_STATE_SUCCESS' } },
+      ],
+    };
+
+    render(
+      <CategoricalFilter {...stateProps} />,
+      buildWrapper([getBaseProviderWrapper(), getInterpolationProviderWrapper()])
+    );
+
+    // Should show display text in filter options
+    expect(screen.getByLabelText('Building')).toBeInTheDocument();
+    expect(screen.getByLabelText('Failed')).toBeInTheDocument();
+    expect(screen.getByLabelText('Complete')).toBeInTheDocument();
+
+    // Select display value and apply filter
+    await user.click(screen.getByLabelText('Building'));
+    await user.click(screen.getByRole('button', { name: 'Apply' }));
+
+    // Should filter with raw value, not display text
+    expect(mockSetFilterValue).toHaveBeenCalledWith(['PIPELINE_STATE_BUILDING']);
+    expect(mockClose).toHaveBeenCalled();
   });
 });
