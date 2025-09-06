@@ -177,7 +177,9 @@ class TaskFunction(Generic[P, R]):
 
         keywords.append(ast.keyword("cache_enabled", ast.Constant(self._cache_enabled)))
         keywords.append(ast.keyword("cache_version", ast.Constant(self._cache_version)))
-        keywords.append(ast.keyword("retry_attempts", ast.Constant(self._retry_attempts)))
+        keywords.append(
+            ast.keyword("retry_attempts", ast.Constant(self._retry_attempts))
+        )
 
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)
