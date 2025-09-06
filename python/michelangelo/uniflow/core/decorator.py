@@ -288,9 +288,6 @@ def _in_the_box(txt):
 
 
 def write_task_result(url: str, value):
-    # Handle None return values from tasks without explicit return statements
-    if value is None:
-        value = {}
     with fsspec.open(url, mode="wt") as f:
         json.dump(value, f, default=encoder.default)
 
