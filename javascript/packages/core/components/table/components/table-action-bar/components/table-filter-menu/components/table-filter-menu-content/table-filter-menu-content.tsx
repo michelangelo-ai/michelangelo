@@ -36,7 +36,7 @@ export function TableFilterMenuContent<T extends TableData = TableData>(
           <Icon name="arrowLeft" size={theme.sizing.scale650} />
         </Button>
         <FilterComponent
-          columnId={selectedColumn.id}
+          column={selectedColumn}
           close={onClose}
           getFilterValue={() => {
             const filter = columnFilters.find((f) => f.id === selectedColumn.id);
@@ -56,7 +56,7 @@ export function TableFilterMenuContent<T extends TableData = TableData>(
   }
 
   return (
-    <TableFilterOptionList
+    <TableFilterOptionList<T>
       filterableColumns={filterableColumns}
       setSelectedColumn={setSelectedColumn}
     />

@@ -43,7 +43,7 @@ export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TDa
       placement={PLACEMENT.bottomLeft}
       content={({ close }) => (
         <FilterComponent
-          columnId={column.id}
+          column={column}
           close={close}
           getFilterValue={column.getFilterValue}
           setFilterValue={column.setFilterValue}

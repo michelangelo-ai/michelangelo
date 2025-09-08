@@ -96,6 +96,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       if (!column) return undefined;
       return column.accessorFn(rowData);
     },
+    record: rowData as T,
   }));
 
   return (
@@ -110,7 +111,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           getIsSomeRowsSelected: () => table.getIsSomeRowsSelected(),
         }}
       >
-        <TableActionBar
+        <TableActionBar<T>
           globalFilter={table.getState().globalFilter as string}
           setGlobalFilter={table.setGlobalFilter}
           columnFilters={table.getState().columnFilters}

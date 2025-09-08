@@ -16,15 +16,21 @@ describe('DatetimeFilter', () => {
   const mockSetFilterValue = vi.fn();
   const mockGetFilterValue = vi.fn();
 
+  const mockColumn = {
+    id: 'createdAt',
+    label: 'Created At',
+    type: 'date',
+  };
+
   const defaultProps: ColumnFilterProps = {
-    columnId: 'createdAt',
+    column: mockColumn,
     close: mockClose,
     getFilterValue: mockGetFilterValue,
     setFilterValue: mockSetFilterValue,
     preFilteredRows: [
-      { getValue: () => 1672531200 }, // 2023-01-01 epoch seconds
-      { getValue: () => 1680307200 }, // 2023-04-01 epoch seconds
-      { getValue: () => 1687824000 }, // 2023-06-27 epoch seconds
+      { getValue: () => 1672531200, record: { createdAt: 1672531200 } }, // 2023-01-01 epoch seconds
+      { getValue: () => 1680307200, record: { createdAt: 1680307200 } }, // 2023-04-01 epoch seconds
+      { getValue: () => 1687824000, record: { createdAt: 1687824000 } }, // 2023-06-27 epoch seconds
     ],
   };
 

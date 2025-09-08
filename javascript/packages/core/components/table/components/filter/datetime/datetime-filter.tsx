@@ -6,7 +6,11 @@ import { convertStringParamsToDate } from './utils';
 
 import type { ColumnFilterProps } from '../types';
 
-export function DatetimeFilter({ close, getFilterValue, setFilterValue }: ColumnFilterProps) {
+export function DatetimeFilter<TData = unknown>({
+  close,
+  getFilterValue,
+  setFilterValue,
+}: ColumnFilterProps<TData>) {
   // BaseUI requires these props but we don't use them in filter context
   const DatetimeFilterPanel = DatetimeColumn({
     title: '',
