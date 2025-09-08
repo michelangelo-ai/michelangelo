@@ -2,6 +2,8 @@ package cadence
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"time"
@@ -14,8 +16,8 @@ import (
 	"go.uber.org/cadence/worker"
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 type contextKey int
@@ -91,8 +93,8 @@ type (
 		PipelineRunService v2pb.PipelineRunServiceYARPCClient
 	}
 
-	// PipelineRunTriggerRequest DTO for the PipelineRunTrigger workflow
-	PipelineRunTriggerRequest struct {
+	// CronTriggerRequest DTO for the CronTrigger workflow
+	CronTriggerRequest struct {
 		TriggerRun *v2pb.TriggerRun
 	}
 
@@ -102,8 +104,8 @@ type (
 	}
 )
 
-// PipelineRunTrigger Cadence workflow to create PipelineRuns with provided trigger run spec
-func (r *Service) PipelineRunTrigger(ctx workflow.Context, req PipelineRunTriggerRequest) (map[string]any, error) {
+// CronTrigger Cadence workflow to create PipelineRuns with provided trigger run spec
+func (r *Service) CronTrigger(ctx workflow.Context, req CronTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
 	tr := req.TriggerRun
 	log := workflow.GetLogger(ctx).With(
@@ -226,7 +228,7 @@ func (r *Service) concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error
 
 // GenerateBatchRunParams activity generates batch triggered run parameters in [][]Params
 func (r *Service) GenerateBatchRunParams(ctx context.Context, tr *v2pb.TriggerRun) ([][]Params, error) {
-	triggerType := triggerrun.GetTriggerType(tr)
+	triggerType := GetTriggerType(tr)
 	var (
 		params [][]Params
 		err    error
@@ -242,7 +244,7 @@ func (r *Service) GenerateBatchRunParams(ctx context.Context, tr *v2pb.TriggerRu
 
 // GenerateConcurrentRunParams activity generates concurrent triggered run parameters in []Params
 func (r *Service) GenerateConcurrentRunParams(ctx context.Context, tr *v2pb.TriggerRun) ([]Params, error) {
-	triggerType := triggerrun.GetTriggerType(tr)
+	triggerType := GetTriggerType(tr)
 	var (
 		params []Params
 		err    error
@@ -273,7 +275,7 @@ func generateConcurrentCronParams(triggerRun *v2pb.TriggerRun) ([]Params, error)
 func (r *Service) runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param Params, sensor bool) error {
 	log := workflow.GetLogger(ctx)
 	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
-	name := triggerrun.GeneratePipelineRunName(workflow.Now(ctx))
+	name := generatePipelineRunName(workflow.Now(ctx))
 	var (
 		createRequest v2pb.CreatePipelineRunRequest
 		err           error
@@ -465,7 +467,7 @@ func generatePipelineRunRequest(
 				pbStruct = generateUniflowPRInput(p)
 			} else {
 				parameters := map[string]interface{}{}
-				for k, v := range p.Params {
+				for k, v := range p.ParameterMap {
 					parameters[k] = v
 				}
 				pbStruct, err = utils.NewStruct(parameters)
@@ -572,16 +574,43 @@ func generateUniflowPRInput(dp *v2pb.PipelineExecutionParameters) *pbtypes.Struc
 	return pbStruct
 }
 
+// GetTriggerType returns the trigger type for a given triggerRun
+func GetTriggerType(tr *v2pb.TriggerRun) string {
+	if tr.Spec.Trigger.GetBatchRerun() != nil {
+		return TriggerTypeBatchRerun
+	}
+	if tr.Spec.StartTimestamp != nil && tr.Spec.EndTimestamp != nil {
+		return TriggerTypeBackfill
+	}
+	if tr.Spec.Trigger.GetIntervalSchedule() != nil {
+		return TriggerTypeInterval
+	}
+	if tr.Spec.Trigger.GetCronSchedule() != nil {
+		return TriggerTypeCron
+	}
+	return TriggerTypeUnknown
+}
+
+// GenerateRandomString generates a random hex string of specified length
+func generateRandomString(length int) string {
+	bytes := make([]byte, length/2)
+	if _, err := rand.Read(bytes); err != nil {
+		// Fallback to timestamp if random fails
+		return fmt.Sprintf("%d", time.Now().UnixNano())[:length]
+	}
+	return hex.EncodeToString(bytes)[:length]
+}
+
+// GeneratePipelineRunName generates a unique name for a pipeline run based on timestamp
+func generatePipelineRunName(t time.Time) string {
+	// Generate random string for uniqueness
+	randomStr := generateRandomString(8)
+	// Format: pipeline-run-YYYYMMDD-HHMMSS-RANDOM
+	return fmt.Sprintf("pipeline-run-%s-%s", t.Format("20060102-150405"), randomStr)
+}
+
 // Register - register Service's activities and workflows.
 func Register(service *Service, ns string, reg worker.Registry) {
-	reg.RegisterActivityWithOptions(service.GetPipelineRun, activity.RegisterOptions{
-		Name: fmt.Sprintf("%s.%s", ns, "GetPipelineRun"),
-	})
-
-	reg.RegisterActivityWithOptions(service.GetPipeline, activity.RegisterOptions{
-		Name: fmt.Sprintf("%s.%s", ns, "GetPipeline"),
-	})
-
 	reg.RegisterActivityWithOptions(service.CreatePipelineRun, activity.RegisterOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "CreatePipelineRun"),
 	})
@@ -594,15 +623,11 @@ func Register(service *Service, ns string, reg worker.Registry) {
 		Name: fmt.Sprintf("%s.%s", ns, "GenerateConcurrentRunParams"),
 	})
 
-	reg.RegisterWorkflowWithOptions(service.PipelineRunTrigger, workflow.RegisterOptions{
-		Name: fmt.Sprintf("%s.%s", ns, "PipelineRunTrigger"),
+	reg.RegisterActivityWithOptions(service.PipelineRunSensor, activity.RegisterOptions{
+		Name: fmt.Sprintf("%s.%s", ns, "PipelineRunSensor"),
 	})
 
-	reg.RegisterWorkflowWithOptions(service.BackfillTrigger, workflow.RegisterOptions{
-		Name: fmt.Sprintf("%s.%s", ns, "BackfillTrigger"),
-	})
-
-	reg.RegisterWorkflowWithOptions(service.BatchRerunTrigger, workflow.RegisterOptions{
-		Name: fmt.Sprintf("%s.%s", ns, "BatchRerunTrigger"),
+	reg.RegisterWorkflowWithOptions(service.CronTrigger, workflow.RegisterOptions{
+		Name: fmt.Sprintf("%s.%s", ns, "CronTrigger"),
 	})
 }

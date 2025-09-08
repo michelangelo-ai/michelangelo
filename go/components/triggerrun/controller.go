@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -173,13 +174,13 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
-	triggerType := GetTriggerType(tr)
+	triggerType := cadence.GetTriggerType(tr)
 	switch triggerType {
-	case TriggerTypeInterval:
+	case cadence.TriggerTypeInterval:
 		return r.IntervalTrigger
-	case TriggerTypeBackfill:
+	case cadence.TriggerTypeBackfill:
 		return r.BackfillTrigger
-	case TriggerTypeBatchRerun:
+	case cadence.TriggerTypeBatchRerun:
 		return r.BatchRerunTrigger
 	default:
 		return r.CronTrigger

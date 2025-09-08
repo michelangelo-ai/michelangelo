@@ -6,27 +6,13 @@ import (
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	cadence2 "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
+	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/fx"
 	"go.uber.org/zap"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
 var _cadenceWorkflowURLPath = "/domains/%s/prod17-phx/workflows?range=last-30-days&workflowId=%s"
-
-// CronTriggerParams are params for instantiating the Cron Trigger
-type CronTriggerParams struct {
-	fx.In
-	Log           logr.Logger
-	CadenceClient clientInterface.WorkflowClient
-}
-
-// CronTriggerResult are the output of NewCronTrigger
-type CronTriggerResult struct {
-	fx.Out
-	CronTrigger Runner `name:"cron-trigger"`
-}
 
 type cronTrigger struct {
 	Log           logr.Logger
@@ -34,12 +20,10 @@ type cronTrigger struct {
 }
 
 // NewCronTrigger returns a new cronTrigger
-func NewCronTrigger(params CronTriggerParams) CronTriggerResult {
-	return CronTriggerResult{
-		CronTrigger: &cronTrigger{
-			Log:           params.Log,
-			CadenceClient: params.CadenceClient,
-		},
+func NewCronTrigger(log logr.Logger, cadenceClient clientInterface.WorkflowClient) Runner {
+	return &cronTrigger{
+		Log:           log,
+		CadenceClient: cadenceClient,
 	}
 }
 
@@ -68,7 +52,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}
 	log.Info("starting scheduled workflow", zap.Any("option", opt))
 	exec, err := r.CadenceClient.StartWorkflow(
-		ctx, opt, "trigger.PipelineRunTrigger", cadence2.PipelineRunTriggerRequest{TriggerRun: triggerRun})
+		ctx, opt, "trigger.PipelineRunTrigger", cadence.CronTriggerRequest{TriggerRun: triggerRun})
 	if err != nil {
 		return v2pb.TriggerRunStatus{
 			ErrorMessage: err.Error(),

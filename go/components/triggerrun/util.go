@@ -2,18 +2,14 @@ package triggerrun
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/url"
-	"time"
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // CronTriggerContext is the struct to store cron trigger context while parsing from cadence cron trigger query result
@@ -22,14 +18,6 @@ type CronTriggerContext struct {
 	StartedAt     string                       `json:"StartedAt,omitempty"`
 	TriggeredRuns map[string]map[string]string `json:"TriggeredRuns,omitempty"`
 }
-
-const (
-	TriggerTypeCron       = "cron"
-	TriggerTypeBackfill   = "backfill"
-	TriggerTypeBatchRerun = "batch_rerun"
-	TriggerTypeInterval   = "interval"
-	TriggerTypeUnknown    = "unknown"
-)
 
 var (
 	// ErrTriggerNotFound is returned when the trigger is not found in the original pipeline
@@ -153,50 +141,4 @@ func getCadenceWorkflowURL(wid string) string {
 
 func isTerminateState(tr *v2pb.TriggerRun) bool {
 	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
-}
-
-func generatePipelineRunName(now time.Time) string {
-	uuid := types.UID(generateRandomString(8))
-	return fmt.Sprintf("run-%s-%s", now.Format("20060102-150405"), string(uuid)[0:8])
-}
-
-func generateRandomString(length int) string {
-	bytes := make([]byte, length/2)
-	rand.Read(bytes)
-	return hex.EncodeToString(bytes)
-}
-
-// GetTriggerType returns the trigger type for a given triggerRun
-func GetTriggerType(tr *v2pb.TriggerRun) string {
-	if tr.Spec.Trigger.GetBatchRerun() != nil {
-		return TriggerTypeBatchRerun
-	}
-	if tr.Spec.StartTimestamp != nil && tr.Spec.EndTimestamp != nil {
-		return TriggerTypeBackfill
-	}
-	if tr.Spec.Trigger.GetIntervalSchedule() != nil {
-		return TriggerTypeInterval
-	}
-	if tr.Spec.Trigger.GetCronSchedule() != nil {
-		return TriggerTypeCron
-	}
-	return TriggerTypeUnknown
-}
-
-// GenerateRandomString generates a random hex string of specified length
-func GenerateRandomString(length int) string {
-	bytes := make([]byte, length/2)
-	if _, err := rand.Read(bytes); err != nil {
-		// Fallback to timestamp if random fails
-		return fmt.Sprintf("%d", time.Now().UnixNano())[:length]
-	}
-	return hex.EncodeToString(bytes)[:length]
-}
-
-// GeneratePipelineRunName generates a unique name for a pipeline run based on timestamp
-func GeneratePipelineRunName(t time.Time) string {
-	// Generate random string for uniqueness
-	randomStr := GenerateRandomString(8)
-	// Format: pipeline-run-YYYYMMDD-HHMMSS-RANDOM
-	return fmt.Sprintf("pipeline-run-%s-%s", t.Format("20060102-150405"), randomStr)
 }
