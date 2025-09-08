@@ -1,21 +1,35 @@
 ---
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: michelangelo-worker
   labels:
     app: michelangelo-worker
 spec:
-  containers:
-    - name: app
-      image: ghcr.io/michelangelo-ai/worker:main
-      volumeMounts:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: michelangelo-worker
+  template:
+    metadata:
+      annotations:
+        iam.amazonaws.com/role: arn:aws:iam::095116963143:role/chimera/michelangelo_role
+      labels:
+        app: michelangelo-worker
+    spec:
+      containers:
+        - name: app
+          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:grab-poc
+          imagePullPolicy: Always
+          volumeMounts:
+            - name: worker-config-volume
+              mountPath: /config
+      volumes:
         - name: worker-config-volume
-          mountPath: /config
-  volumes:
-    - name: worker-config-volume
-      configMap:
-        name: michelangelo-worker-config
+          configMap:
+            name: michelangelo-worker-config
+      nodeSelector:
+        node.kubernetes.io/scaling-group: nodes
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -28,6 +42,12 @@ data:
     worker:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
+    
+    compute:
+      baseUrl: https://compute.cauldron.myteksi.net
+      workspace: cauldron-test
+      environment: dev
+      sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
 
     logging:
       level: info
@@ -35,22 +55,18 @@ data:
       encoding: console
 
     workflow-engine:
-      # for cadence
-        host: cadence:7833
       # for temporal
-      #  host: 127.0.0.1:7233
-        transport: grpc
-          # for cadence
-        provider: cadence
-        # for temporal
-      #  provider: temporal
-        workers:
-          - domain: default
-            taskList: default
-        client:
-          domain: default
+      host: temporal.stg-myteksi.com:7233
+      transport: grpc
+      # for temporal
+      provider: temporal
+      workers:
+        - domain: default
+          taskList: cauldron-test
+      client:
+        domain: uniflow
 
     minio:
       awsRegion: ap-southeast-1
       awsEndpointUrl: s3.amazonaws.com
-      
+      useIam: true
