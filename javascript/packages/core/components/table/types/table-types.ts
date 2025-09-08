@@ -154,15 +154,6 @@ export interface TableRequiredFunctionalityProps {
 
   /**
    * @description
-   * If true, enables row selection functionality with checkboxes in the first column.
-   * Selection state is ephemeral and resets on component unmount.
-   *
-   * @default false
-   */
-  enableRowSelection: boolean;
-
-  /**
-   * @description
    * If true, enables sticky column functionality for better horizontal scrolling experience.
    * First and last columns will remain visible during horizontal scroll.
    *
@@ -278,6 +269,8 @@ export type TableState = {
   columnVisibility: ColumnVisibilityState;
   /** Row selection state */
   rowSelection: RowSelectionState;
+  /** Row selection mode enabled state */
+  rowSelectionEnabled: boolean;
 };
 
 /**
@@ -301,4 +294,5 @@ export type ControlledTableState = TableState & {
   setRowSelection: (
     updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)
   ) => void;
+  setRowSelectionEnabled: (enabled: boolean) => void;
 };

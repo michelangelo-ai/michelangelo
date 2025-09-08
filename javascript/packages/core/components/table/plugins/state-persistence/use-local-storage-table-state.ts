@@ -107,6 +107,9 @@ export function useLocalStorageTableState({
   // pageIndex and rowSelection are not persisted (reset on reload)
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [rowSelectionEnabled, setRowSelectionEnabled] = useState<boolean>(
+    initialState?.rowSelectionEnabled ?? TABLE_STATE_DEFAULTS.rowSelectionEnabled
+  );
 
   return {
     globalFilter,
@@ -131,5 +134,7 @@ export function useLocalStorageTableState({
     setColumnVisibility,
     rowSelection,
     setRowSelection,
+    rowSelectionEnabled,
+    setRowSelectionEnabled,
   };
 }

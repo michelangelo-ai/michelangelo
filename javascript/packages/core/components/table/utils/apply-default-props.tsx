@@ -49,7 +49,6 @@ export function applyDefaultProps<T extends TableData = TableData>(
     pageSizes,
     state: resolveTableState(props.state, disablePagination, pageSizes),
     pagination: props.pagination ?? TablePagination,
-    enableRowSelection: props.enableRowSelection ?? false,
     enableStickySides: props.enableStickySides ?? false,
     body: props.body ?? TableBody,
     unFilteredData: props.unFilteredData ?? props.data,
@@ -61,18 +60,23 @@ function resolveTableState(
   disablePagination: boolean,
   pageSizes: PageSizeOption[]
 ): Partial<ControlledTableState> | undefined {
-  if (disablePagination || userState?.setPagination) {
-    return userState;
+  const baseState = {
+    ...userState,
+    rowSelectionEnabled: userState?.rowSelectionEnabled ?? false,
+  };
+
+  if (disablePagination || baseState?.setPagination) {
+    return baseState;
   }
 
-  const requestedPageSize = userState?.pagination?.pageSize;
+  const requestedPageSize = baseState?.pagination?.pageSize;
   const normalizedPageSize = normalizePageSize(requestedPageSize, pageSizes);
 
   return {
-    ...userState,
+    ...baseState,
     pagination: {
       pageIndex: 0,
-      ...userState?.pagination,
+      ...baseState?.pagination,
       pageSize: normalizedPageSize,
     },
   };
