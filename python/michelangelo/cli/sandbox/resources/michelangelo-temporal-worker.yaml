@@ -19,8 +19,15 @@ spec:
     spec:
       containers:
         - name: app
-          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:grab-poc
+          image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/worker:grab-poc-pretest
           imagePullPolicy: Always
+          resources:
+            requests:
+              cpu: "2"
+              memory: "3Gi"
+            limits:
+              cpu: "2"
+              memory: "3Gi"
           volumeMounts:
             - name: worker-config-volume
               mountPath: /config
@@ -42,11 +49,12 @@ data:
     worker:
       address: michelangelo-apiserver:14566
       maApiServiceName: ma-apiserver
-      http:
-        baseUrl: https://compute.cauldron.myteksi.net
-        workspace: cauldron-test
-        environment: dev
-        sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
+    
+    compute:
+      baseUrl: https://compute.cauldron.myteksi.net
+      workspace: cauldron-test
+      environment: dev
+      sparkDepsUrl: https://mjolnir.prod.data-engineering.myteksi.net
 
     logging:
       level: info
@@ -55,15 +63,15 @@ data:
 
     workflow-engine:
       # for temporal
-        host: temporal.stg-myteksi.com:7233
-        transport: grpc
-        # for temporal
-        provider: temporal
-        workers:
-          - domain: default
-            taskList: cauldron-test
-        client:
-          domain: uniflow
+      host: temporal.stg-myteksi.com:7233
+      transport: grpc
+      # for temporal
+      provider: temporal
+      workers:
+        - domain: default
+          taskList: cauldron-test
+      client:
+        domain: uniflow
 
     minio:
       awsRegion: ap-southeast-1
