@@ -143,7 +143,6 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--image",
-        required=True,
         help="Container image to use for running workflow tasks.",
     )
     p.add_argument(
@@ -177,7 +176,7 @@ def _remote_run(
     execution_timeout_seconds: int = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
     cron: Optional[str] = None,
     storage_url: str = "",
-    image: str = "",
+    image: Optional[str] = None,
     yes: bool = False,
     workflow: str = cadence,
 ):
@@ -196,7 +195,6 @@ def _remote_run(
         yes: Automatically answer yes to confirmation prompts.
     """
     assert storage_url
-    assert image
 
     environ = environ or {}
     args = args or ()
