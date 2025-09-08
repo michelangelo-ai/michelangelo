@@ -1,0 +1,26 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "module.go", 
+        "trigger.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/utils:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/types:go_default_library",
+        "@org_uber_go_cadence//activity:go_default_library",
+        "@org_uber_go_cadence//worker:go_default_library",
+        "@org_uber_go_cadence//workflow:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+

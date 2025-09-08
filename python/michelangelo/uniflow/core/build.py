@@ -393,7 +393,7 @@ class FunctionTransformer(ast.NodeTransformer):
             self.deps.add_py_function(node.id, v)
             return node
 
-        if issubclass(v, TaskConfig):
+        if inspect.isclass(v) and issubclass(v, TaskConfig):
             config_binding = v.get_config_binding()
             self.deps.add_star_attribute(
                 config_binding.export,

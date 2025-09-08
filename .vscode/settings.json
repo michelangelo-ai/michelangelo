@@ -51,4 +51,7 @@
   "go.vetOnSave": "off",
   // bazel
   "bazel.lsp.command": "bazel-lsp",
+  "cursorpyright.analysis.extraPaths": [
+    "./python"
+  ],
 }

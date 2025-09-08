@@ -18,6 +18,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -82,6 +83,7 @@ func options() fx.Option {
 		cadenceclient.Module,
 		pipeline.Module,
 		pipelinerun.Module,
+		triggerrun.Module,
 		controllermgr.Module,
 		deployment.Module,
 		fx.Invoke(func(logger *zap.Logger) {
@@ -96,6 +98,5 @@ func options() fx.Option {
 // and starts the application lifecycle. The application's lifecycle will continue to run until
 // an interrupt signal is received, at which point it will cleanly shut down all managed components.
 func main() {
-
 	fx.New(options()).Run()
 }

@@ -30,6 +30,7 @@ var Module = fx.Options(
 		NewRayJobServiceClient,
 		NewSparkJobServiceClient,
 		NewCachedOutputServiceClient,
+		NewPipelineRunServiceClient,
 		ProvidePluginRegistry,
 	),
 	workflowfx.Module,
