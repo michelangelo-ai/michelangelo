@@ -3,6 +3,7 @@ import {
   getCoreRowModel,
   getExpandedRowModel,
   getFilteredRowModel,
+  getGroupedRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
@@ -60,6 +61,12 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       ? { getSortedRowModel: getSortedRowModel() }
       : { enableSorting: false }),
     ...(!props.disablePagination ? { getPaginationRowModel: getPaginationRowModel() } : {}),
+    ...(initialState.grouping?.length || state.grouping?.length
+      ? {
+          getGroupedRowModel: getGroupedRowModel(),
+          getExpandedRowModel: getExpandedRowModel(),
+        }
+      : {}),
     ...(props.subRow
       ? {
           getExpandedRowModel: getExpandedRowModel(),
@@ -96,7 +103,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       if (!column) return undefined;
       return column.accessorFn(rowData);
     },
-    record: rowData as T,
+    record: rowData,
   }));
 
   return (

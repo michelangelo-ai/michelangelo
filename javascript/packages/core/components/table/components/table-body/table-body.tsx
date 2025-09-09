@@ -7,7 +7,6 @@ import {
   StyledTableBody,
   StyledTableBodyCell,
 } from '#core/components/table/styled-components';
-import { TableExpandIcon } from '../table-expand-icon/table-expand-icon';
 import { getSelectionColumnCellStyles } from '../table-selection-column/styled-components';
 import { TableSelectionColumn } from '../table-selection-column/table-selection-column';
 import { withStickySides } from '../with-sticky-sides/with-sticky-sides';
@@ -56,22 +55,7 @@ export const TableBody = <T extends TableData = TableData>({
                 $columnNumber={cellIndex}
                 $enableRowSelection={enableRowSelection}
               >
-                {row.canExpand && cellIndex === 0 ? (
-                  <div
-                    className={css({
-                      display: 'flex',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      gap: theme.sizing.scale100,
-                    })}
-                    onClick={row.onToggleExpanded}
-                  >
-                    <TableExpandIcon expanded={row.isExpanded} />
-                    {cell.content}
-                  </div>
-                ) : (
-                  cell.content
-                )}
+                {cell.content}
               </StyledTableBodyCell>
             ))}
 

@@ -36,7 +36,7 @@ export function ActiveFilterTag<TData = unknown>(props: ActiveFilterTagProps<TDa
     setShowTooltip(false);
   };
 
-  const FilterComponent = getColumnFilter(column.type);
+  const FilterComponent = getColumnFilter<TData>(column.type);
 
   return (
     <StatefulPopover

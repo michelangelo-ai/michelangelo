@@ -42,6 +42,7 @@ export const TABLE_STATE_DEFAULTS: TableState = {
     pageSize: DEFAULT_PAGE_SIZE,
   },
   sorting: [],
+  grouping: [],
   columnOrder: [],
   columnVisibility: {},
   rowSelection: {},

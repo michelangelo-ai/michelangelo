@@ -1,6 +1,8 @@
 import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
-import type { Cell } from '#core/components/cell/types';
+import type { AggregationFnOption } from '@tanstack/react-table';
+import type { ComponentType } from 'react';
+import type { Cell, CellRendererProps } from '#core/components/cell/types';
 import type { FilterMode } from '../components/filter/types';
 import type { TableData } from './data-types';
 
@@ -23,6 +25,49 @@ export type ColumnConfig<TData = TableData> = Cell<TData> & {
    * @default true
    */
   enableSorting?: boolean;
+
+  /**
+   * @description
+   * Enables grouping functionality for this column. When true, this column can be used
+   * as a grouping column and will show expand/collapse controls when grouped.
+   *
+   * @default false
+   */
+  enableGrouping?: boolean;
+
+  /**
+   * @description
+   * Defines how values should be aggregated when this column is grouped.
+   * Can be a string identifier for built-in aggregation functions or a custom function.
+   *
+   * Built-in aggregation functions include: 'count', 'sum', 'min', 'max', 'extent', 'mean', 'median', 'unique', 'uniqueCount'
+   *
+   * @example
+   * ```tsx
+   * // Built-in aggregation
+   * { aggregationFn: 'count' }
+   *
+   * // Custom aggregation
+   * {
+   *   aggregationFn: (columnId, leafRows) => {
+   *     return leafRows.reduce((sum, row) => sum + row.getValue(columnId), 0);
+   *   }
+   * }
+   * ```
+   *
+   * @see https://tanstack.com/table/latest/docs/api/features/grouping#aggregation-functions
+   * @default undefined
+   */
+  aggregationFn?: AggregationFnOption<TData>;
+
+  /**
+   * @description
+   * Custom cell renderer to use when this column's cells are aggregated in a grouped row.
+   * If not provided, the regular Cell renderer will be used.
+   *
+   * @default undefined
+   */
+  aggregatedCell?: ComponentType<CellRendererProps<TData, ColumnConfig<TData>>>;
 };
 
 /**

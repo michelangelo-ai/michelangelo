@@ -1,4 +1,6 @@
-import { flexRender } from '@tanstack/react-table';
+import React from 'react';
+
+import { TableCellContent } from './table-cell-content';
 
 import type { Row } from '@tanstack/react-table';
 import type { TableData } from '#core/components/table/types/data-types';
@@ -9,9 +11,13 @@ export function transformRows<T extends TableData = TableData>(
 ): TableRow<T>[] {
   return tanstackRows.map((row) => ({
     id: row.id,
-    cells: row.getVisibleCells().map((cell) => ({
+    cells: row.getVisibleCells().map((cell, columnIndex) => ({
       id: cell.id,
-      content: flexRender(cell.column.columnDef.cell, cell.getContext()),
+      content: React.createElement(TableCellContent<T>, {
+        cell,
+        row,
+        columnIndex,
+      }),
     })),
     record: row.original,
     canSelect: row.getCanSelect(),

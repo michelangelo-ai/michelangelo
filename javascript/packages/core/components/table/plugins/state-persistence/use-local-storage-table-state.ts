@@ -8,6 +8,7 @@ import type {
   ColumnOrderState,
   ColumnVisibilityState,
   ControlledTableState,
+  GroupingState,
   InputTableState,
   PaginationState,
   RowSelectionState,
@@ -105,11 +106,14 @@ export function useLocalStorageTableState({
     initialState?.columnVisibility ?? TABLE_STATE_DEFAULTS.columnVisibility
   );
 
-  // pageIndex and rowSelection are not persisted (reset on reload)
+  // Not persisted on reload
   const [pageIndex, setPageIndex] = useState<number>(0);
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [rowSelectionEnabled, setRowSelectionEnabled] = useState<boolean>(
     initialState?.rowSelectionEnabled ?? TABLE_STATE_DEFAULTS.rowSelectionEnabled
+  );
+  const [grouping, setGrouping] = useState<GroupingState>(
+    initialState?.grouping ?? TABLE_STATE_DEFAULTS.grouping
   );
 
   return {
@@ -137,5 +141,7 @@ export function useLocalStorageTableState({
     setRowSelection,
     rowSelectionEnabled,
     setRowSelectionEnabled,
+    grouping,
+    setGrouping,
   };
 }
