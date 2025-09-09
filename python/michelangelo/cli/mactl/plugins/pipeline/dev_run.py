@@ -31,6 +31,7 @@ from plugins.pipeline.run import (
 )
 
 _ENV_VARIABLE_KEY = "env"
+_UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
 
 _LOG = getLogger(__name__)
 
@@ -174,10 +175,24 @@ def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict) -> di
 
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})
     # embed environment variables into pipeline_run.spec.inputs
-    if yaml_dict.get(_ENV_VARIABLE_KEY):
+    environment_variables = yaml_dict.get(_ENV_VARIABLE_KEY, {})
+    if environment_variables:
         pipeline_run_spec["input"] = {
-            _ENV_VARIABLE_KEY: yaml_dict.get(_ENV_VARIABLE_KEY, {})
+            "environ": environment_variables,
         }
+
+    # embed uniflow image annotations into pipeline_run.metadata.annotations
+    uniflow_image_annotation_value = (
+        yaml_dict.get("metadata", {})
+        .get("annotations", {})
+        .get(_UNIFLOW_IMAGE_ANNOTATION_KEY, "")
+    )
+    if uniflow_image_annotation_value:
+        pipeline_run_metadata = pipeline_run_obj.setdefault("metadata", {})
+        pipeline_run_metadata["annotations"] = {
+            _UNIFLOW_IMAGE_ANNOTATION_KEY: uniflow_image_annotation_value,
+        }
+
     # embed pipeline_spec into pipeline_run.pipeline_run_spec
     pipeline_run_spec["pipeline_spec"] = pipeline_spec.get("spec", {})
 
