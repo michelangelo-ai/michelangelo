@@ -49,14 +49,6 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 	}
 }
 
-func newAPIServerHandler(params Params) (api.Handler, error) {
-	return NewAPIServerHandler(params)
-}
-
-func newCtrlManagerHandler(params Params) (api.Handler, error) {
-	return NewCtrlManagerHandler(params)
-}
-
 // apiHandler is an api.Handler that abstracts the API operations from the underlying systems (i.e. k8s/ETCD + MetadataStorage).
 type apiHandler struct {
 	// controller-runtime k8s client to access the k8s API server.
@@ -92,7 +84,11 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	}
 	log, headers := initLogger(ctx, handler.logger, "Create", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("Create", handler.metrics, log, start, kind, headers)
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateCreate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
@@ -164,7 +160,11 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	log, headers := initLogger(ctx, handler.logger, "Update", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("Update", handler.metrics, log, start, kind, headers)
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateUpdate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
@@ -204,7 +204,11 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 	log, headers := initLogger(ctx, handler.logger, "UpdateStatus", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("UpdateStatus", handler.metrics, log, start, kind, headers)
 
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateUpdate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
