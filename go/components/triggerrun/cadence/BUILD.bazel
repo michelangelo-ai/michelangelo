@@ -3,7 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "module.go", 
+        "module.go",
         "trigger.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence",
@@ -22,5 +22,3 @@ go_library(
         "@org_uber_go_zap//:go_default_library",
     ],
 )
-
-
