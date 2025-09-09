@@ -16,8 +16,8 @@ import (
 	"go.uber.org/cadence/worker"
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/types"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type contextKey int

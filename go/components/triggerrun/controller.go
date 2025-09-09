@@ -8,10 +8,10 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
