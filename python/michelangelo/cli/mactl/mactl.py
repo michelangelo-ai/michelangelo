@@ -95,6 +95,36 @@ def bind_signature(signature):
     return decorator
 
 
+def get_single_arg(arguments: dict, key: str) -> str:
+    """
+    Get a single argument from the arguments dictionary.
+
+    Args:
+        arguments: The arguments dictionary.
+        key: The key of the argument to get.
+
+    Returns:
+        The value of the single argument.
+
+    Raises:
+        ValueError: If the argument is not in the dictionary or is not a string or a list with one element.
+    """
+    if key not in arguments:
+        raise ValueError(f'argument "{key}" is required')
+    value = arguments[key]
+    if isinstance(value, str):
+        return value
+    elif isinstance(value, list):
+        if len(value) == 1:
+            return value[0]
+        else:
+            raise ValueError(f'exactly one "{key}" argument is required')
+    else:
+        raise ValueError(
+            f'Argument "{key}" must be a string or a list with one element'
+        )
+
+
 class CRD:
     """
     Representation of each CRD with its service methods
@@ -163,14 +193,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
-            if len(bound_args.arguments["namespace"]) != 1:
-                raise ValueError('exactly one "namespace" argument is required')
-            if len(bound_args.arguments["name"]) != 1:
-                raise ValueError('exactly one "name" argument is required')
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
+            _name = get_single_arg(bound_args.arguments, "name")
 
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"][0],
-                name=bound_args.arguments["name"][0],
+                namespace=_namespace,
+                name=_name,
             )
             _LOG.info(
                 "DELETE Request input (%r) ready: %r",
@@ -218,14 +246,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
-            if len(bound_args.arguments["name"]) != 1:
-                raise ValueError('exactly one "name" argument is required')
-            if len(bound_args.arguments["namespace"]) != 1:
-                raise ValueError('exactly one "namespace" argument is required')
+            _name = get_single_arg(bound_args.arguments, "name")
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
 
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"][0],
-                name=bound_args.arguments["name"][0],
+                namespace=_namespace,
+                name=_name,
             )
             _LOG.info(
                 "GET Request input (%r) ready: %r",
@@ -271,17 +297,13 @@ class CRD:
             _LOG.info("Start apply_func for %r", self.full_name)
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
+            _file = get_single_arg(bound_args.arguments, "file")
 
-            if len(bound_args.arguments["file"]) != 1:
-                raise ValueError('exactly one "file" argument is required')
-
-            _namespace, _name = get_crd_namespace_and_name_from_yaml(
-                bound_args.arguments["file"][0]
-            )
+            _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
             message_instance = _self.get(_namespace, _name)
             _LOG.info("Retrieved message instance: %r", message_instance)
             request_input = self.read_yaml_and_update_crd_request(
-                input_class, bound_args.arguments["file"], message_instance
+                input_class, _file, message_instance
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
@@ -321,13 +343,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
-            if len(bound_args.arguments["file"]) > 1:
-                raise ValueError('exactly one "file" argument is required')
+            _file = get_single_arg(bound_args.arguments, "file")
 
             request_input = read_yaml_to_crd_request(
                 input_class,
                 _self.name,
-                bound_args.arguments["file"][0],
+                _file,
                 _self.func_crd_metadata_converter,
             )
 
@@ -410,11 +431,10 @@ class CRD:
             bound_args.apply_defaults()
             _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-            if len(bound_args.arguments["namespace"]) > 1:
-                raise ValueError('exactly one "namespace" argument is required')
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
 
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"][0],
+                namespace=_namespace,
             )
             _LOG.info(
                 "LIST Request input (%r) ready: %r",

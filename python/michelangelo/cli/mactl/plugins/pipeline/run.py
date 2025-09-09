@@ -15,6 +15,7 @@ from mactl import (
     get_message_class_by_name,
     bind_signature,
     METADATA_STUB,
+    get_single_arg,
 )
 
 
@@ -59,14 +60,12 @@ def generate_run(crd: CRD, channel: Channel):
         _LOG.info("Bound arguments: %r", bound_args.arguments)
         _self: CRD = bound_args.arguments["self"]
 
-        if len(bound_args.arguments["namespace"]) != 1:
-            raise ValueError('exactly one "namespace" argument is required')
-        if len(bound_args.arguments["name"]) != 1:
-            raise ValueError('exactly one "name" argument is required')
+        _namespace = get_single_arg(bound_args.arguments, "namespace")
+        _name = get_single_arg(bound_args.arguments, "name")
 
         run_kwargs = {
-            "namespace": bound_args.arguments["namespace"][0],
-            "name": bound_args.arguments["name"][0],
+            "namespace": _namespace,
+            "name": _name,
         }
 
         pipeline_run_dict = _self.func_crd_metadata_converter(

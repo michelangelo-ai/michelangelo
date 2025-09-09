@@ -17,6 +17,7 @@ from mactl import (
     get_message_class_by_name,
     get_methods_from_service,
     yaml_to_dict,
+    get_single_arg,
 )
 
 from plugins.pipeline.create import (
@@ -59,8 +60,11 @@ def generate_dev_run(crd: CRD, channel: Channel):
     output_class = get_message_class_by_name(method_pool, method_run.output_type[1:])
 
     dev_run_func_signature = Signature(
-        [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-        + [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in ["file", "env"]]
+        [
+            Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
+            Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
+            Parameter("env", Parameter.POSITIONAL_OR_KEYWORD, default={}),
+        ]
     )
 
     @bind_signature(dev_run_func_signature)
@@ -69,13 +73,14 @@ def generate_dev_run(crd: CRD, channel: Channel):
         _LOG.info("Bound arguments: %r", bound_args.arguments)
         _self: CRD = bound_args.arguments["self"]
 
-        if len(bound_args.arguments["file"]) != 1:
-            raise ValueError('exactly one "file" argument is required')
+        _file = get_single_arg(bound_args.arguments, "file")
 
-        environment_variables = _process_env_variables(bound_args.arguments["env"])
+        environment_variables = _process_env_variables(
+            bound_args.arguments.get("env", [])
+        )
 
         # parse pipeline yaml file
-        yaml_path_string = bound_args.arguments["file"][0]
+        yaml_path_string = _file
         yaml_path = Path(yaml_path_string).resolve()
         yaml_dict = yaml_to_dict(yaml_path_string)
         yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
