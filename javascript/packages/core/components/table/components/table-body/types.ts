@@ -1,11 +1,14 @@
 import type { ReactNode } from 'react';
 import type { SelectableCapability } from '#core/components/table/types/column-types';
+import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
 import type { WithStickySidesProps } from '../with-sticky-sides/types';
 
-export type TableCell<_T extends TableData = TableData> = {
+export type TableCell<T extends TableData = TableData> = {
   id: string;
   content: ReactNode;
+  column: ColumnConfig<T>;
+  value: unknown;
 };
 
 export type TableRow<T extends TableData = TableData> = {
