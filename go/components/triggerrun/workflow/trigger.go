@@ -1,4 +1,4 @@
-package cadence
+package workflow
 
 import (
 	"context"
@@ -8,12 +8,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/worker"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/cadence/activity"
-	"go.uber.org/cadence/worker"
 	"go.uber.org/cadence/workflow"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -609,25 +609,25 @@ func generatePipelineRunName(t time.Time) string {
 	return fmt.Sprintf("pipeline-run-%s-%s", t.Format("20060102-150405"), randomStr)
 }
 
-// Register - register Service's activities and workflows.
-func Register(service *Service, ns string, reg worker.Registry) {
-	reg.RegisterActivityWithOptions(service.CreatePipelineRun, activity.RegisterOptions{
+// Register - register Service's activities and workflows with starlark worker.
+func Register(service *Service, ns string, reg worker.Worker) {
+	reg.RegisterActivityWithOptions(service.CreatePipelineRun, worker.RegisterActivityOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "CreatePipelineRun"),
 	})
 
-	reg.RegisterActivityWithOptions(service.GenerateBatchRunParams, activity.RegisterOptions{
+	reg.RegisterActivityWithOptions(service.GenerateBatchRunParams, worker.RegisterActivityOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "GenerateBatchRunParams"),
 	})
 
-	reg.RegisterActivityWithOptions(service.GenerateConcurrentRunParams, activity.RegisterOptions{
+	reg.RegisterActivityWithOptions(service.GenerateConcurrentRunParams, worker.RegisterActivityOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "GenerateConcurrentRunParams"),
 	})
 
-	reg.RegisterActivityWithOptions(service.PipelineRunSensor, activity.RegisterOptions{
+	reg.RegisterActivityWithOptions(service.PipelineRunSensor, worker.RegisterActivityOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "PipelineRunSensor"),
 	})
 
-	reg.RegisterWorkflowWithOptions(service.CronTrigger, workflow.RegisterOptions{
+	reg.RegisterWorkflowWithOptions(service.CronTrigger, worker.RegisterWorkflowOptions{
 		Name: fmt.Sprintf("%s.%s", ns, "CronTrigger"),
 	})
 }

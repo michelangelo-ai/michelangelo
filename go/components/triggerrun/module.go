@@ -6,27 +6,27 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 )
 
 // Module provides fx Options for triggerrun controller.
 var Module = fx.Options(
-	cadence.Module,
+	workflow.Module,
 	fx.Invoke(register),
 )
 
 func register(
 	mgr manager.Manager,
 	apiHandlerFactory apiHandler.Factory,
-	cadenceClient clientInterface.WorkflowClient,
+	workflowClient clientInterface.WorkflowClient,
 ) error {
 	cronTrigger := NewCronTrigger(
 		mgr.GetLogger().WithName("cron-trigger"),
-		cadenceClient,
+		workflowClient,
 	)
 	reconciler := NewReconciler(Params{
 		Logger:            mgr.GetLogger().WithName("triggerrun"),
-		CadenceClient:     cadenceClient,
+		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
 		// TODO: Add other trigger types as needed

@@ -2,7 +2,6 @@ package triggerrun
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"net/url"
 
@@ -19,24 +18,10 @@ type CronTriggerContext struct {
 	TriggeredRuns map[string]map[string]string `json:"TriggeredRuns,omitempty"`
 }
 
-var (
-	// ErrTriggerNotFound is returned when the trigger is not found in the original pipeline
-	ErrTriggerNotFound = errors.New("trigger not found in original pipeline")
-
-	// ErrNoCronSchedule is returned when no cron schedule is specified for trigger
-	ErrNoCronSchedule = errors.New("no cron schedule specified for trigger")
-
-	// ErrTriggerSpecNotFound is returned when the trigger spec is not found in the original pipeline
-	ErrTriggerSpecNotFound = errors.New("trigger spec not found in original pipeline")
-
-	// RetryLabel is used to store the number of retries for the trigger run status updates
-	RetryLabel = "triggerrun/num-retry"
-)
-
 // util function to kill workflow execution for cron trigger
-func killCadenceWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
-	wid := generateCadenceWorkflowID(triggerRun)
-	rid, err := getCadenceOpenRunID(ctx, wid, workflowClient)
+func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient)
 	if err != nil {
 		log.Error(err, "failed to get workflow execution info", zap.Any("triggerRun", triggerRun))
 		return triggerRun.Status, err
@@ -58,9 +43,9 @@ func killCadenceWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log l
 }
 
 // util function to get workflow execution status for cron trigger
-func getStatusCadenceWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
-	wid := generateCadenceWorkflowID(triggerRun)
-	rid, err := getCadenceOpenRunID(ctx, wid, workflowClient)
+func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient) (v2pb.TriggerRunStatus, error) {
+	wid := generateWorkflowID(triggerRun)
+	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient)
 	if err != nil {
 		log.Error(err, "failed to get workflow execution info", zap.Any("triggerRun", triggerRun))
 		return v2pb.TriggerRunStatus{
@@ -96,10 +81,10 @@ func getStatusCadenceWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, 
 	}
 }
 
-// util function to get cadence workflow open execution runID
+// util function to get workflow open execution runID
 // Since OSS interface doesn't support listing workflows, we'll use a fixed runID approach
 // In practice, this should be enhanced to properly track workflow executions
-func getCadenceOpenRunID(ctx context.Context, wid string, workflowClient clientInterface.WorkflowClient) (string, error) {
+func getWorkflowOpenRunID(ctx context.Context, wid string, workflowClient clientInterface.WorkflowClient) (string, error) {
 	// For now, we'll try to get execution info with empty runID
 	// This is a limitation of the current OSS interface
 	// TODO: Implement proper workflow tracking or enhance the interface
@@ -119,22 +104,29 @@ func getCadenceOpenRunID(ctx context.Context, wid string, workflowClient clientI
 	return "", nil
 }
 
-// util function to generate cadence workflow ID
-func generateCadenceWorkflowID(tr *v2pb.TriggerRun) string {
+// util function to generate workflow ID
+func generateWorkflowID(tr *v2pb.TriggerRun) string {
 	return tr.Namespace + "." + tr.Name
 }
 
-// util function to get cadence workflow URL
-func getCadenceWorkflowURL(wid string) string {
-	// OSS Cadence Web UI configuration
-	// Based on sandbox configuration: Cadence Web UI runs on port 8088
-	domain := "default" // From OSS config: domain: default
-	urlPath := fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
-
-	// For local development (sandbox): localhost:8088
-	// For K8s deployment: http://cadence-web:8088 or http://localhost:8088 (via port-forward)
+// util function to get workflow URL based on provider
+func getWorkflowURL(wid string, provider string) string {
+	domain := "default" // Default domain for both Cadence and Temporal
+	urlPath := ""
+	switch provider {
+	case "temporal":
+		// Temporal Web UI configuration
+		// For local development: localhost:8080
+		urlPath = fmt.Sprintf("/namespaces/%s/workflows/%s", domain, wid)
+	case "cadence":
+		// Cadence Web UI configuration
+		// For local development: localhost:8088
+		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
+	default:
+		// Default to Cadence format
+		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
+	}
 	logURL := "http://localhost:8088"
-
 	path, _ := url.PathUnescape(urlPath)
 	return logURL + path
 }

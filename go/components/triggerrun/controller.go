@@ -11,7 +11,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
+	workflow "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -33,7 +33,7 @@ type Params struct {
 	fx.In
 
 	Logger            logr.Logger
-	CadenceClient     clientInterface.WorkflowClient
+	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
 
 	CronTrigger       Runner `name:"cron-trigger"`
@@ -174,13 +174,13 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
-	triggerType := cadence.GetTriggerType(tr)
+	triggerType := workflow.GetTriggerType(tr)
 	switch triggerType {
-	case cadence.TriggerTypeInterval:
+	case workflow.TriggerTypeInterval:
 		return r.IntervalTrigger
-	case cadence.TriggerTypeBackfill:
+	case workflow.TriggerTypeBackfill:
 		return r.BackfillTrigger
-	case cadence.TriggerTypeBatchRerun:
+	case workflow.TriggerTypeBatchRerun:
 		return r.BatchRerunTrigger
 	default:
 		return r.CronTrigger

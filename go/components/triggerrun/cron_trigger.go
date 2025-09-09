@@ -6,24 +6,22 @@ import (
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	cadence "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/cadence"
+	workflow "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
-var _cadenceWorkflowURLPath = "/domains/%s/prod17-phx/workflows?range=last-30-days&workflowId=%s"
-
 type cronTrigger struct {
-	Log           logr.Logger
-	CadenceClient clientInterface.WorkflowClient
+	Log            logr.Logger
+	WorkflowClient clientInterface.WorkflowClient
 }
 
 // NewCronTrigger returns a new cronTrigger
-func NewCronTrigger(log logr.Logger, cadenceClient clientInterface.WorkflowClient) Runner {
+func NewCronTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient) Runner {
 	return &cronTrigger{
-		Log:           log,
-		CadenceClient: cadenceClient,
+		Log:            log,
+		WorkflowClient: workflowClient,
 	}
 }
 
@@ -33,14 +31,14 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	wid := generateCadenceWorkflowID(triggerRun)
+	wid := generateWorkflowID(triggerRun)
 	opt := clientInterface.StartWorkflowOptions{
 		ID:                              wid,
 		TaskList:                        "trigger_run",
 		ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year, practically no timeout
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 	}
-	rid, err := getCadenceOpenRunID(ctx, wid, r.CadenceClient)
+	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient)
 	if err != nil {
 		// log the error and continue
 		log.Error(err, "failed to get open workflow execution")
@@ -51,19 +49,19 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 	}
 	log.Info("starting scheduled workflow", zap.Any("option", opt))
-	exec, err := r.CadenceClient.StartWorkflow(
-		ctx, opt, "trigger.PipelineRunTrigger", cadence.CronTriggerRequest{TriggerRun: triggerRun})
+	exec, err := r.WorkflowClient.StartWorkflow(
+		ctx, opt, "trigger.PipelineRunTrigger", workflow.CronTriggerRequest{TriggerRun: triggerRun})
 	if err != nil {
 		return v2pb.TriggerRunStatus{
 			ErrorMessage: err.Error(),
 			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
 		}, err
 	}
-	r.Log.Info("scheduled cadence workflow enabled",
+	r.Log.Info("scheduled workflow enabled",
 		zap.Any("execution_id", exec.ID), zap.Any("run_id", exec.RunID))
 	return v2pb.TriggerRunStatus{
 		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
-		LogUrl: getCadenceWorkflowURL(wid),
+		LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
 	}, nil
 }
 
@@ -73,7 +71,7 @@ func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	return killCadenceWorkflow(ctx, triggerRun, log, r.CadenceClient)
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
 }
 
 // GetStatus - TODO: implement GetStatus to get more information of a running triggerrun
@@ -84,5 +82,5 @@ func (r *cronTrigger) GetStatus(
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	return getStatusCadenceWorkflow(ctx, triggerRun, log, r.CadenceClient)
+	return getWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient)
 }
