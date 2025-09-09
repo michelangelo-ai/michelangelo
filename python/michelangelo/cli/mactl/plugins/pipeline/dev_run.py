@@ -174,7 +174,10 @@ def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict) -> di
 
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})
     # embed environment variables into pipeline_run.spec.inputs
-    pipeline_run_spec["input"] = yaml_dict.get(_ENV_VARIABLE_KEY, {})
+    if yaml_dict.get(_ENV_VARIABLE_KEY):
+        pipeline_run_spec["input"] = {
+            _ENV_VARIABLE_KEY: yaml_dict.get(_ENV_VARIABLE_KEY, {})
+        }
     # embed pipeline_spec into pipeline_run.pipeline_run_spec
     pipeline_run_spec["pipeline_spec"] = pipeline_spec.get("spec", {})
 
