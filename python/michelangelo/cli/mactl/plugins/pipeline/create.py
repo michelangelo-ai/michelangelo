@@ -185,6 +185,49 @@ def convert_crd_metadata_pipeline_create(
     # Get relative path of config file from repo root
     config_file_relative_path = str(yaml_path.relative_to(repo_root))
 
+    workflow_inputs, uniflow_tar_path, workflow_function_name = (
+        handle_workflow_inputs_retrieval(
+            repo_root, config_file_relative_path, project, pipeline
+        )
+    )
+
+    res = {}
+
+    res["metadata"] = {
+        "annotations": yaml_dict["metadata"].get("annotations", {}),
+        "clusterName": "",
+        "generateName": "",
+        "generation": "0",
+        "name": pipeline,
+        "namespace": project,
+        "resourceVersion": "0",
+        "uid": str(uuid4()),
+    }
+
+    return populate_pipeline_spec_with_workflow_inputs(
+        res,
+        yaml_dict,
+        workflow_inputs,
+        repo,
+        yaml_path,
+        repo_root,
+        config_file_relative_path,
+        uniflow_tar_path,
+        workflow_function_name,
+    )
+
+
+def handle_workflow_inputs_retrieval(
+    repo_root: Path, config_file_relative_path: str, project: str, pipeline: str
+) -> tuple[dict, str, str]:
+    """
+    Handle workflow inputs retrieval from subprocess registration.
+    """
+
+    workflow_inputs = None
+    uniflow_tar_path = ""
+    workflow_function_name = ""
+
     # Run pipeline registration to get uniflow artifacts
     try:
         workflow_inputs, uniflow_tar_path, workflow_function_name = (
@@ -218,29 +261,30 @@ def convert_crd_metadata_pipeline_create(
             _LOG.warning(
                 "Registration failed, continuing without uniflow artifacts: %s", e
             )
-            workflow_inputs = None
-            uniflow_tar_path = ""
-            workflow_function_name = ""
     except Exception as e:
         _LOG.error("Unexpected error during registration: %s", e)
         # For unexpected errors, also use graceful degradation
         _LOG.warning(
             "Unexpected registration failure, continuing without uniflow artifacts"
         )
-        workflow_inputs = None
-        uniflow_tar_path = ""
+    return workflow_inputs, uniflow_tar_path, workflow_function_name
 
-    res = {"spec": deepcopy(yaml_dict["spec"])}
-    res["metadata"] = {
-        "annotations": yaml_dict["metadata"].get("annotations", {}),
-        "clusterName": "",
-        "generateName": "",
-        "generation": "0",
-        "name": pipeline,
-        "namespace": project,
-        "resourceVersion": "0",
-        "uid": str(uuid4()),
-    }
+
+def populate_pipeline_spec_with_workflow_inputs(
+    res: dict,
+    yaml_dict: dict,
+    workflow_inputs: dict,
+    repo: Repo,
+    yaml_path: Path,
+    repo_root: Path,
+    config_file_relative_path: str,
+    uniflow_tar_path: str,
+    workflow_function_name: str,
+) -> dict:
+    """
+    Populate pipeline spec with workflow inputs.
+    """
+    res["spec"] = deepcopy(yaml_dict["spec"])
     res["spec"]["commit"] = {
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,

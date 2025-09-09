@@ -7,6 +7,7 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Union
 from uuid import uuid4
+from collections import defaultdict
 import logging
 import re
 import sys
@@ -74,6 +75,13 @@ def snake_to_camel(name: str) -> str:
     return "".join(word.capitalize() for word in name.split("_"))
 
 
+def kebab_to_snake(name: str) -> str:
+    """
+    Converts kebab-case to snake_case (e.g., 'dev-run' -> 'dev_run').
+    """
+    return name.replace("-", "_")
+
+
 def bind_signature(signature):
     def decorator(func):
         def wrapper(*args, **kwargs):
@@ -85,6 +93,36 @@ def bind_signature(signature):
         return wrapper
 
     return decorator
+
+
+def get_single_arg(arguments: dict, key: str) -> str:
+    """
+    Get a single argument from the arguments dictionary.
+
+    Args:
+        arguments: The arguments dictionary.
+        key: The key of the argument to get.
+
+    Returns:
+        The value of the single argument.
+
+    Raises:
+        ValueError: If the argument is not in the dictionary or is not a string or a list with one element.
+    """
+    if key not in arguments:
+        raise ValueError(f'argument "{key}" is required')
+    value = arguments[key]
+    if isinstance(value, str):
+        return value
+    elif isinstance(value, list):
+        if len(value) == 1:
+            return value[0]
+        else:
+            raise ValueError(f'exactly one "{key}" argument is required')
+    else:
+        raise ValueError(
+            f'Argument "{key}" must be a string or a list with one element'
+        )
 
 
 class CRD:
@@ -155,9 +193,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
+            _name = get_single_arg(bound_args.arguments, "name")
+
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"],
-                name=bound_args.arguments["name"],
+                namespace=_namespace,
+                name=_name,
             )
             _LOG.info(
                 "DELETE Request input (%r) ready: %r",
@@ -205,9 +246,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
+            _name = get_single_arg(bound_args.arguments, "name")
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
+
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"],
-                name=bound_args.arguments["name"],
+                namespace=_namespace,
+                name=_name,
             )
             _LOG.info(
                 "GET Request input (%r) ready: %r",
@@ -253,14 +297,13 @@ class CRD:
             _LOG.info("Start apply_func for %r", self.full_name)
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
+            _file = get_single_arg(bound_args.arguments, "file")
 
-            _namespace, _name = get_crd_namespace_and_name_from_yaml(
-                bound_args.arguments["file"]
-            )
+            _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
             message_instance = _self.get(_namespace, _name)
             _LOG.info("Retrieved message instance: %r", message_instance)
             request_input = self.read_yaml_and_update_crd_request(
-                input_class, bound_args.arguments["file"], message_instance
+                input_class, _file, message_instance
             )
 
             method_fullname = f"/{_self.full_name}/{method_name}"
@@ -300,10 +343,12 @@ class CRD:
             _LOG.info("Bound arguments: %r", bound_args.arguments)
             _self: CRD = bound_args.arguments["self"]
 
+            _file = get_single_arg(bound_args.arguments, "file")
+
             request_input = read_yaml_to_crd_request(
                 input_class,
                 _self.name,
-                bound_args.arguments["file"],
+                _file,
                 _self.func_crd_metadata_converter,
             )
 
@@ -331,6 +376,14 @@ class CRD:
         This is a placeholder that plugins will override.
         """
         _LOG.info("Generate RUN method for %r / %r", self.name, self.full_name)
+        pass
+
+    def generate_dev_run(self, channel: Channel):
+        """
+        Generate dev run function - delegated to plugins.
+        This is a placeholder that plugins will override.
+        """
+        _LOG.info("Generate DEV RUN method for %r / %r", self.name, self.full_name)
         pass
 
     def generate_list(self, channel: Channel):
@@ -378,8 +431,10 @@ class CRD:
             bound_args.apply_defaults()
             _LOG.info("Bound arguments: %r", bound_args.arguments)
 
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
+
             request_input = input_class(
-                namespace=bound_args.arguments["namespace"],
+                namespace=_namespace,
             )
             _LOG.info(
                 "LIST Request input (%r) ready: %r",
@@ -731,37 +786,46 @@ def get_service_descriptors(channel, service_name) -> list[FileDescriptorProto]:
             yield fd
 
 
-def parse_args() -> tuple[list[str], dict[str, str]]:
+def parse_args() -> tuple[list[str], dict[str, list[str]]]:
     """
     Parse command line arguments.
     Returns a tuple of (args, kwargs).
     """
     args = []
-    kwargs = {}
+    kwargs = defaultdict(list)
     for arg in sys.argv[1:]:
         if "=" in arg:
             key, value = arg.split("=", 1)
             key = key.lstrip("-")
-            kwargs[key] = value
+            kwargs[key].append(value)
         else:
             args.append(arg)
     _LOG.info("Parsed arguments: %r  /  %r", args, kwargs)
     return args, kwargs
 
 
-def handle_args() -> tuple[str, str, dict[str, str]]:
+def handle_args() -> tuple[str, str, dict[str, list[str]]]:
     args, kwargs = parse_args()
 
     user_command_action = args[0]
-    assert user_command_action in ["get", "create", "apply", "delete", "list", "run"]
+    assert user_command_action in [
+        "get",
+        "create",
+        "apply",
+        "delete",
+        "list",
+        "run",
+        "dev-run",
+    ]
 
-    if user_command_action not in ["apply", "create", "run"]:
+    if user_command_action not in ["apply", "create", "dev-run"]:
         user_command_crd = args[1]
-    elif user_command_action == "run":
-        user_command_crd = args[1]  # e.g., "pipeline" from "run pipeline"
     else:
-        _LOG.info("Action is 'apply', read user_command_crd from yaml")
-        user_command_crd = camel_to_snake(get_crd_name_from_yaml(kwargs["file"]))
+        _LOG.info("read user_command_crd from yaml")
+        assert len(kwargs["file"]) == 1, "exactly one yaml file is required"
+        user_command_crd = camel_to_snake(get_crd_name_from_yaml(kwargs["file"][0]))
+
+    user_command_action = kebab_to_snake(user_command_action)
 
     _LOG.info(
         "User command CRD: %r / User command action: %r",
