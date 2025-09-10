@@ -1691,6 +1691,8 @@ describe('Table', () => {
     }) => (
       <div>
         <span>Actions for row {row.record.name}</span>
+        <span>Cell count: {row.cells.length}</span>
+        <span>First column: {row.cells[0]?.column.label}</span>
         <button>Edit row {row.id}</button>
         <button>Delete row {row.id}</button>
       </div>
@@ -1704,6 +1706,8 @@ describe('Table', () => {
 
       expect(screen.getByText('Actions for row Alice Johnson')).toBeInTheDocument();
       expect(screen.getByText('Actions for row Bob Smith')).toBeInTheDocument();
+      expect(screen.getAllByText('Cell count: 2')).toHaveLength(2);
+      expect(screen.getAllByText('First column: Name')).toHaveLength(2);
       expect(screen.getByRole('button', { name: 'Edit row 0' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete row 0' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Edit row 1' })).toBeInTheDocument();

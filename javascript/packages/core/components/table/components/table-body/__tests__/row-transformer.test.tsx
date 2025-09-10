@@ -16,9 +16,20 @@ describe('transformRows', () => {
       {
         id: 'row-1',
         cells: [
-          { id: 'row-1-cell-0', content: expect.any(Object) as React.ReactElement },
-          { id: 'row-1-cell-1', content: expect.any(Object) as React.ReactElement },
+          {
+            id: 'row-1-cell-0',
+            content: expect.any(Object) as React.ReactElement,
+            column: { id: 'column-0', label: 'Column 1', type: 'string' },
+            value: 'John',
+          },
+          {
+            id: 'row-1-cell-1',
+            content: expect.any(Object) as React.ReactElement,
+            column: { id: 'column-1', label: 'Column 2', type: 'string' },
+            value: '30',
+          },
         ],
+        record: { id: 'row-1' },
         canSelect: true,
         isSelected: false,
         onToggleSelection: expect.any(Function) as (selected: boolean) => void,
@@ -29,9 +40,20 @@ describe('transformRows', () => {
       {
         id: 'row-2',
         cells: [
-          { id: 'row-2-cell-0', content: expect.any(Object) as React.ReactElement },
-          { id: 'row-2-cell-1', content: expect.any(Object) as React.ReactElement },
+          {
+            id: 'row-2-cell-0',
+            content: expect.any(Object) as React.ReactElement,
+            column: { id: 'column-0', label: 'Column 1', type: 'string' },
+            value: 'Jane',
+          },
+          {
+            id: 'row-2-cell-1',
+            content: expect.any(Object) as React.ReactElement,
+            column: { id: 'column-1', label: 'Column 2', type: 'string' },
+            value: '25',
+          },
         ],
+        record: { id: 'row-2' },
         canSelect: true,
         isSelected: false,
         onToggleSelection: expect.any(Function) as (selected: boolean) => void,

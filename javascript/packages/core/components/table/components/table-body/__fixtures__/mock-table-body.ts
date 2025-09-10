@@ -13,6 +13,7 @@ export const getTanstackRowFixture = (overrides?: {
 
   return {
     id,
+    original: { id },
     getVisibleCells: vi.fn(
       () =>
         cellContents.map((content, index) => ({
@@ -20,12 +21,18 @@ export const getTanstackRowFixture = (overrides?: {
           column: {
             columnDef: {
               cell: content,
+              meta: {
+                id: `column-${index}`,
+                label: `Column ${index + 1}`,
+                type: 'string',
+              },
             },
           },
           getContext: vi.fn(() => ({})),
           getIsGrouped: vi.fn(() => false),
           getIsAggregated: vi.fn(() => false),
           getIsPlaceholder: vi.fn(() => false),
+          getValue: vi.fn(() => content),
         })) as unknown as Cell<TableData, unknown>[]
     ),
     getCanSelect: vi.fn(() => true),
@@ -34,6 +41,6 @@ export const getTanstackRowFixture = (overrides?: {
     getCanExpand: vi.fn(() => true),
     getIsExpanded: vi.fn(() => false),
     getToggleExpandedHandler: vi.fn(() => vi.fn()),
-    onToggleExpanded: vi.fn(),
+    toggleExpanded: vi.fn(),
   } as unknown as Row<TableData>;
 };
