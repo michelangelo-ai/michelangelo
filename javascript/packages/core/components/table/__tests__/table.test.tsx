@@ -629,6 +629,64 @@ describe('Table', () => {
           expect(screen.getAllByText('Dept: Engineering')).toHaveLength(2);
         });
       });
+
+      it('should use first item from multi-cell column for filter options', async () => {
+        const user = userEvent.setup();
+
+        const data = [
+          {
+            id: '1',
+            pipelineName: 'my-ml-pipeline',
+            revisionId: 'draft-12345',
+            description: 'ML training pipeline',
+          },
+          {
+            id: '2',
+            pipelineName: 'data-processing',
+            revisionId: 'rev-67890',
+            description: 'Data preprocessing pipeline',
+          },
+        ];
+
+        const multiCellColumn = {
+          id: 'pipeline-info',
+          label: 'Pipeline',
+          items: [
+            { id: 'pipelineName', accessor: 'pipelineName' },
+            { id: 'revisionId', accessor: 'revisionId' },
+            { id: 'description', accessor: 'description' },
+          ],
+        };
+
+        const columns = [multiCellColumn];
+
+        render(
+          <Table data={data} columns={columns} actionBarConfig={{ enableFilters: true }} />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        // Checking table content as baseline for filter options
+        expect(screen.getByText('my-ml-pipeline')).toBeInTheDocument();
+        expect(screen.getByText('data-processing')).toBeInTheDocument();
+        expect(screen.getByText('draft-12345')).toBeInTheDocument();
+        expect(screen.getByText('rev-67890')).toBeInTheDocument();
+        expect(screen.getByText('ML training pipeline')).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+        await user.click(screen.getByTestId('filter-option-Pipeline'));
+        await waitFor(() => {
+          expect(screen.getAllByText('my-ml-pipeline')).toHaveLength(2);
+          expect(screen.getAllByText('data-processing')).toHaveLength(2);
+        });
+
+        expect(screen.getAllByText('draft-12345')).toHaveLength(1);
+        expect(screen.getAllByText('rev-67890')).toHaveLength(1);
+        expect(screen.getAllByText('ML training pipeline')).toHaveLength(1);
+      });
     });
   });
 

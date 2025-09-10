@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 
 import { useCellToString } from '#core/components/cell/use-cell-to-string';
 import { safeStringify } from '#core/utils/string-utils';
+import { getCellValueForColumn } from './get-cell-value-for-column';
 
 import type { FilterableRow } from '#core/components/table/components/filter/types';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
@@ -20,7 +21,7 @@ export function useFilterDisplayMapping<TData>({
     const filterToDisplay: Record<string, string> = {};
 
     preFilteredRows.forEach((row) => {
-      const rawValue = row.getValue(column.id);
+      const rawValue = getCellValueForColumn(column, row, column.id);
       if (rawValue == null) return;
 
       const displayValue = cellToString({ value: rawValue, record: row.record as object, column });
