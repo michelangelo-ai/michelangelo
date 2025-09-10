@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -76,8 +77,8 @@ type MetadataHandler interface {
 	DeleteFromMetadata(ctx context.Context, obj ctrlRTClient.Object) error
 
 	// ListFromMetadata retrieves objects from metadata storage matching the given criteria.
-	// Supports the same filtering options as the Kubernetes API.
-	ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error
+	// Supports the same filtering options as the Kubernetes API, with optional extended options.
+	ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error
 }
 
 // BlobHandler abstracts blob storage operations for large object data.

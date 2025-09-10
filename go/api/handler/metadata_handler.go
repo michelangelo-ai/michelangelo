@@ -6,6 +6,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -53,13 +54,13 @@ func (m *MetadataHandlerImpl) DeleteFromMetadata(ctx context.Context, obj ctrlRT
 }
 
 // ListFromMetadata implements MetadataHandler.ListFromMetadata by delegating to the storage backend.
-func (m *MetadataHandlerImpl) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error {
+func (m *MetadataHandlerImpl) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	listResponse := &storage.ListResponse{}
 	typeMeta, err := getObjectTypeMetaFromList(list)
 	if err != nil {
 		return err
 	}
-	err = m.storage.List(ctx, typeMeta, namespace, opts, nil, listResponse)
+	err = m.storage.List(ctx, typeMeta, namespace, opts, listOptionsExt, listResponse)
 	if err != nil {
 		return err
 	}
@@ -100,6 +101,6 @@ func (n *NullMetadataHandler) DeleteFromMetadata(ctx context.Context, obj ctrlRT
 
 // ListFromMetadata implements MetadataHandler.ListFromMetadata by returning a NotFound error.
 // This maintains API consistency when metadata storage is disabled.
-func (n *NullMetadataHandler) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error {
+func (n *NullMetadataHandler) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	return apiErrors.NewNotFound(schema.GroupResource{}, "")
 }

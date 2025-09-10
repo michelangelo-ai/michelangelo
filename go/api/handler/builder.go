@@ -109,12 +109,9 @@ func (b *APIHandlerBuilder) Build() (api.Handler, error) {
 
 	// Create the main handler using existing apiHandler but with focused dependencies
 	handler := &apiHandler{
-		k8sClient:       b.k8sClient,
-		metadataStorage: b.metadataStorage,
-		conf:            b.storageConfig,
-		blobStorage:     b.blobStorage,
-		logger:          b.logger,
-		metrics:         b.metrics,
+		conf:    b.storageConfig,
+		logger:  b.logger,
+		metrics: b.metrics,
 		// Inject focused handlers to reduce coupling
 		k8sHandler:        k8sHandler,
 		metadataHandler:   metadataHandler,
