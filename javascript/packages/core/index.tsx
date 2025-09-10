@@ -136,3 +136,9 @@ export { InterpolationProvider } from '#core/providers/interpolation-provider/in
 export { RepeatedLayoutProvider } from '#core/providers/repeated-layout-provider/repeated-layout-provider';
 export { useRepeatedLayoutContext } from '#core/providers/repeated-layout-provider/use-repeated-layout-context';
 export type { RepeatedLayoutState } from '#core/providers/repeated-layout-provider/types';
+
+// Table
+export { Table } from '#core/components/table/table';
+export { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
+export { useTableSelectionContext } from '#core/components/table/plugins/selection/table-selection-context';
+export type { TableProps } from '#core/components/table/types/table-types';
