@@ -94,6 +94,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
       (table.getState().globalFilter as string)?.length > 0 ||
       (table.getState().columnFilters?.length ?? 0) > 0,
     filteredLength: table.getRowModel().rows.length,
+    columnsLength: columns.length,
   });
 
   // Create lightweight row objects for filter components that only need getValue()
@@ -139,7 +140,9 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
 
             {viewState === 'error' && <TableErrorState error={props.error!} />}
 
-            {viewState === 'empty' && <TableEmptyState emptyState={props.emptyState} />}
+            {(viewState === 'empty' || viewState === 'no-columns') && (
+              <TableEmptyState emptyState={props.emptyState} />
+            )}
 
             {viewState === 'filtered-empty' && (
               <TableNoResultsState
@@ -150,7 +153,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
               />
             )}
 
-            {viewState !== 'error' && (
+            {viewState !== 'error' && viewState !== 'no-columns' && (
               <TableHeader<T>
                 columns={transformedColumns}
                 setColumnOrder={table.setColumnOrder}
