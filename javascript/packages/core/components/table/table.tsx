@@ -9,7 +9,6 @@ import {
   useReactTable,
 } from '@tanstack/react-table';
 import { useStyletron } from 'baseui';
-import { StyledTable } from 'baseui/table-semantic';
 
 import { useScrollRatio } from '#core/hooks/use-scroll';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
@@ -22,6 +21,7 @@ import { useColumnTransformer } from './hooks/use-column-transformer';
 import { usePageResetHandler } from './hooks/use-page-reset-handler';
 import { TableSelectionProvider } from './plugins/selection/table-selection-provider';
 import { useRowSelectionState } from './plugins/selection/use-row-selection-state';
+import { StyledTable } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';

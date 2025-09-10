@@ -1,9 +1,14 @@
 import { styled, withStyle } from 'baseui';
 import {
+  StyledTable as BaseStyledTable,
   StyledTableBody as BaseStyledTableBody,
   StyledTableBodyCell as BaseStyledTableBodyCell,
   StyledTableBodyRow as BaseStyledTableBodyRow,
 } from 'baseui/table-semantic';
+
+export const StyledTable = withStyle(BaseStyledTable, {
+  width: 'max-content',
+});
 
 export const StyledTableBody = withStyle(BaseStyledTableBody, ({ $theme }) => ({
   backgroundColor: $theme.colors.tableHeadBackgroundColor,
