@@ -22,7 +22,7 @@ export function TableStateWrapper({ children }: PropsWithChildren) {
     <StyledTableBody>
       <StyledTableBodyRow>
         <StyledTableBodyCell colSpan={100}>
-          <div className={css({ padding: theme.sizing.scale600, width: '100%' })}>{children}</div>
+          <div className={css({ padding: theme.sizing.scale600 })}>{children}</div>
         </StyledTableBodyCell>
       </StyledTableBodyRow>
     </StyledTableBody>

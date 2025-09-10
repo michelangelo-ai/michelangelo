@@ -7,11 +7,13 @@ export function getTableViewState(input: {
   error: ApplicationError | undefined;
   hasFiltersApplied: boolean;
   filteredLength: number;
+  columnsLength: number;
 }): TableViewState {
-  const { loading, dataLength, error, hasFiltersApplied, filteredLength } = input;
+  const { loading, dataLength, error, hasFiltersApplied, filteredLength, columnsLength } = input;
 
   if (loading) return 'loading';
   if (error) return 'error';
+  if (columnsLength === 0) return 'no-columns';
   if (dataLength === 0) return 'empty';
   if (hasFiltersApplied && filteredLength === 0) return 'filtered-empty';
   return 'ready';

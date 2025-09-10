@@ -1652,8 +1652,13 @@ describe('Table', () => {
         ])
       );
 
-      const configButton = screen.getByTitle('Configure columns');
-      expect(configButton).toBeInTheDocument();
+      // Should show empty state when no columns are present
+      const emptyState = screen.getByText('No data');
+      expect(emptyState).toBeInTheDocument();
+
+      // Should not show configure columns button when no columns exist
+      const configButton = screen.queryByTitle('Configure columns');
+      expect(configButton).not.toBeInTheDocument();
     });
   });
 
