@@ -30,7 +30,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
 ): {
   id: string;
   header?: string;
-  accessorFn: AccessorFn<T>;
+  accessorFn: AccessorFn;
   meta: ColumnConfig<T>;
   cell: (props: CellContext<T, unknown>) => ReactNode;
   filterFn?: TableFilterFn<T, unknown[]>;
@@ -44,7 +44,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
       return {
         id: column.id,
         meta: column,
-        accessorFn: normalizeColumnAccessor(column),
+        accessorFn: normalizeColumnAccessor<T>(column),
         header: column.label,
         cell: (props: CellContext<T, unknown>) => (
           <TableCell
