@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
@@ -1684,7 +1684,11 @@ describe('Table', () => {
       { id: 'department', label: 'Department' },
     ];
 
-    const TestActions = ({ row }: { row: TableRow<{ name: string }> }) => (
+    const TestActions = ({
+      row,
+    }: {
+      row: TableRow<{ id: string; name: string; department: string }>;
+    }) => (
       <div>
         <span>Actions for row {row.record.name}</span>
         <button>Edit row {row.id}</button>
@@ -1749,6 +1753,183 @@ describe('Table', () => {
           return element?.textContent === 'Custom: Bob Smith';
         })
       ).toBeInTheDocument();
+    });
+  });
+
+  describe('grouping integration', () => {
+    const groupedTestData = [
+      { id: '1', name: 'Alice Johnson', department: 'Engineering', count: 5 },
+      { id: '2', name: 'Bob Smith', department: 'Engineering', count: 3 },
+      { id: '3', name: 'Carol Davis', department: 'Marketing', count: 8 },
+      { id: '4', name: 'David Wilson', department: 'Marketing', count: 2 },
+    ];
+
+    const groupedTestColumns = [
+      {
+        id: 'department',
+        label: 'Department',
+        enableGrouping: true,
+      },
+      { id: 'name', label: 'Name' },
+      {
+        id: 'count',
+        label: 'Count',
+        aggregationFn: 'sum' as const,
+        aggregatedCell: ({ value }: { value: unknown }) => <span>Total: {String(value)}</span>,
+      },
+    ];
+
+    const mockIcons = {
+      chevronRight: (props: { title: string }) => <div title={props.title}>Chevron Right</div>,
+      chevronDown: (props: { title: string }) => <div title={props.title}>Chevron Down</div>,
+    };
+
+    it('renders grouped rows with expand controls and aggregated cells when grouping is enabled', () => {
+      render(
+        <Table
+          data={groupedTestData}
+          columns={groupedTestColumns}
+          state={{ grouping: ['department'] }}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+        ])
+      );
+
+      expectTableRows({ dataRows: 2 });
+
+      // Should render department group headers with aggregated values
+      const engineeringRow = screen.getByRole('row', { name: /Engineering.*Total: 8/ });
+      const marketingRow = screen.getByRole('row', { name: /Marketing.*Total: 10/ });
+      expect(engineeringRow).toBeInTheDocument();
+      expect(marketingRow).toBeInTheDocument();
+
+      // Should have expand controls for each grouped row
+      expect(within(engineeringRow).getByTitle('Expand')).toBeInTheDocument();
+      expect(within(marketingRow).getByTitle('Expand')).toBeInTheDocument();
+    });
+
+    it('expands grouped rows to show individual records', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table
+          data={groupedTestData}
+          columns={groupedTestColumns}
+          state={{ grouping: ['department'] }}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+        ])
+      );
+
+      expectTableRows({ dataRows: 2 });
+      expect(screen.queryByRole('row', { name: /Alice Johnson/ })).not.toBeInTheDocument();
+
+      // Expand Engineering group
+      const engineeringRow = screen.getByRole('row', { name: /Engineering/ });
+      const engineeringExpandButton = within(engineeringRow).getByTitle('Expand');
+      await user.click(engineeringExpandButton);
+
+      await waitFor(() => {
+        expectTableRows({ dataRows: 4 });
+      });
+
+      expect(screen.getByRole('row', { name: /Alice Johnson/ })).toBeInTheDocument();
+      expect(screen.getByRole('row', { name: /Bob Smith/ })).toBeInTheDocument();
+
+      // Engineering row should now have collapse button
+      const updatedEngineeringRow = screen.getByRole('row', { name: /Engineering/ });
+      expect(within(updatedEngineeringRow).getByTitle('Collapse')).toBeInTheDocument();
+
+      // Marketing row should still have expand button
+      const marketingRow = screen.getByRole('row', { name: /Marketing/ });
+      expect(within(marketingRow).getByTitle('Expand')).toBeInTheDocument();
+    });
+
+    it('handles custom aggregation functions', () => {
+      const customColumns = [
+        {
+          id: 'department',
+          label: 'Department',
+          enableGrouping: true,
+        },
+        { id: 'name', label: 'Name' },
+        {
+          id: 'count',
+          label: 'Average Count',
+          aggregationFn: (columnId: string, leafRows: unknown[]) => {
+            const sum = leafRows.reduce<number>(
+              (acc: number, row: { getValue: (columnId: string) => number }) =>
+                acc + row.getValue(columnId),
+              0
+            );
+            const avg = sum / leafRows.length;
+            return Math.round(avg * 100) / 100; // Round to 2 decimal places
+          },
+          aggregatedCell: ({ value }: { value: unknown }) => <span>Avg: {String(value)}</span>,
+        },
+      ];
+
+      render(
+        <Table
+          data={groupedTestData}
+          columns={customColumns}
+          state={{ grouping: ['department'] }}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Should render averaged values in grouped rows
+      expect(screen.getByRole('row', { name: /Engineering — Avg: 4/ })).toBeInTheDocument(); // Engineering: (5 + 3) / 2 = 4
+      expect(screen.getByRole('row', { name: /Marketing — Avg: 5/ })).toBeInTheDocument(); // Marketing: (8 + 2) / 2 = 5
+    });
+
+    it('falls back to regular cell when no aggregatedCell is provided', () => {
+      const fallbackColumns = [
+        {
+          id: 'department',
+          label: 'Department',
+          enableGrouping: true,
+        },
+        {
+          id: 'count',
+          label: 'Count',
+          aggregationFn: 'sum' as const,
+          // No aggregatedCell provided - should fallback to regular TableCell
+        },
+      ];
+
+      render(
+        <Table
+          data={groupedTestData}
+          columns={fallbackColumns}
+          state={{ grouping: ['department'] }}
+          disablePagination={true}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      // Should render aggregated values using fallback TableCell in grouped rows
+      expect(screen.getByRole('row', { name: /Engineering 8/ })).toBeInTheDocument(); // Engineering: 5 + 3
+      expect(screen.getByRole('row', { name: /Marketing 10/ })).toBeInTheDocument(); // Marketing: 8 + 2
     });
   });
 

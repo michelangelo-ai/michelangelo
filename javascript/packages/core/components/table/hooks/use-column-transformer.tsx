@@ -26,7 +26,7 @@ import type { TableData } from '../types/data-types';
  * ```
  */
 export function useColumnTransformer<T extends TableData = TableData>(
-  columns: ColumnConfig[]
+  columns: ColumnConfig<T>[]
 ): {
   id: string;
   header?: string;
@@ -55,8 +55,26 @@ export function useColumnTransformer<T extends TableData = TableData>(
             setColumnFilterValue={props.column.setFilterValue}
           />
         ),
+        aggregatedCell: (props: CellContext<T, unknown>) =>
+          column.aggregatedCell ? (
+            <column.aggregatedCell
+              column={props.column.columnDef.meta as ColumnConfig<T>}
+              record={props.row.original as object}
+              value={props.getValue() as T}
+            />
+          ) : (
+            <TableCell
+              column={props.column.columnDef.meta as ColumnConfig}
+              record={props.row.original as object}
+              value={props.getValue()}
+              columnFilterValue={props.column.getFilterValue()}
+              setColumnFilterValue={props.column.setFilterValue}
+            />
+          ),
         filterFn: filterHook.buildTableFilterFn(),
         enableSorting: column.enableSorting ?? true,
+        enableGrouping: column.enableGrouping ?? false,
+        aggregationFn: column.aggregationFn,
         sortUndefined: 'last',
       };
     });

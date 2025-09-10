@@ -36,7 +36,7 @@ export interface TableRequiredUserProps<T extends TableData = TableData> {
  * Required props for `Table` and its sub-components to render. Users
  * may omit these props, in which case a default value will be provided.
  */
-export interface TableRequiredFunctionalityProps {
+export interface TableRequiredFunctionalityProps<T extends TableData = TableData> {
   /**
    * @description Configure landing card when the table has no data
    *
@@ -167,7 +167,7 @@ export interface TableRequiredFunctionalityProps {
    *
    * @default TableBody
    */
-  body: React.ComponentType<TableBodyProps<TableData>>;
+  body: React.ComponentType<TableBodyProps<T>>;
 
   /**
    * @description
@@ -177,10 +177,10 @@ export interface TableRequiredFunctionalityProps {
    *
    * @default props.data
    */
-  unFilteredData: Array<TableData>;
+  unFilteredData: Array<T>;
 }
 
-interface TableOptionalProps {
+interface TableOptionalProps<T extends TableData = TableData> {
   /**
    * @description
    * Component to render sub-rows for expandable row functionality.
@@ -189,7 +189,7 @@ interface TableOptionalProps {
    *
    * @default undefined
    */
-  subRow?: React.ComponentType<{ row: TableRow<TableData> }>;
+  subRow?: React.ComponentType<{ row: TableRow<T> }>;
 
   /**
    * @description
@@ -199,7 +199,7 @@ interface TableOptionalProps {
    *
    * @default undefined
    */
-  actions?: React.ComponentType<{ row: TableRow<TableData> }>;
+  actions?: React.ComponentType<{ row: TableRow<T> }>;
 }
 
 /**
@@ -208,16 +208,16 @@ interface TableOptionalProps {
  */
 export interface TableProps<T extends TableData = TableData>
   extends TableRequiredUserProps<T>,
-    Partial<TableRequiredFunctionalityProps>,
-    TableOptionalProps {}
+    Partial<TableRequiredFunctionalityProps<T>>,
+    TableOptionalProps<T> {}
 /**
  * Resolved props with all defaults applied.
  * Child components can rely on these props being defined.
  */
 export interface TablePropsResolved<T extends TableData = TableData>
   extends TableRequiredUserProps<T>,
-    TableRequiredFunctionalityProps,
-    TableOptionalProps {}
+    TableRequiredFunctionalityProps<T>,
+    TableOptionalProps<T> {}
 
 /**
  * Represents the possible view states of a table component.
@@ -251,6 +251,8 @@ export type ColumnVisibilityState = Record<string, boolean>;
 
 export type RowSelectionState = Record<string, boolean>;
 
+export type GroupingState = string[];
+
 /**
  * Table state containing aspects of table behavior.
  */
@@ -271,6 +273,8 @@ export type TableState = {
   rowSelection: RowSelectionState;
   /** Row selection mode enabled state */
   rowSelectionEnabled: boolean;
+  /** Grouping state - array of column IDs to group by */
+  grouping: GroupingState;
 };
 
 /**
@@ -295,6 +299,7 @@ export type ControlledTableState = TableState & {
     updater: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)
   ) => void;
   setRowSelectionEnabled: (enabled: boolean) => void;
+  setGrouping: (updater: GroupingState | ((old: GroupingState) => GroupingState)) => void;
 };
 
 /**
