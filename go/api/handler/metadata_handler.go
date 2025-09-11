@@ -104,3 +104,37 @@ func (n *NullMetadataHandler) DeleteFromMetadata(ctx context.Context, obj ctrlRT
 func (n *NullMetadataHandler) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	return apiErrors.NewNotFound(schema.GroupResource{}, "")
 }
+
+// handleUpdate is a helper function for updating objects in metadata storage.
+// This function handles the actual update operation by delegating to the storage layer.
+func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
+	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
+	// TODO: update the object in blob storage
+	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
+}
+
+// handleDelete is a helper function for deleting objects from metadata storage and blob storage.
+// 1. Gets the object currently stored in metadataStorage, to retrieve the annotations
+// 2. Deletes the object in metadataStorage
+// 3. Deletes the object in blob storage
+func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
+	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
+	if handler.IsObjectInteresting(object) {
+		// TODO: if blob annotations are already available, this Get is not needed
+		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)
+		if err := metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
+			return err
+		}
+
+		if getErr == nil {
+			// Failed to delete in blob storage is not a critical failure, as orphan blobs can be deleted by garbage
+			// collector. So, do not return error.
+			err := handler.DeleteFromBlobStorage(ctx, object)
+			log.Error(err, "Failed to delete object in blob storage", "uid", object.GetUID())
+		}
+
+		return nil
+	}
+
+	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
+}

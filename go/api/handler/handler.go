@@ -43,11 +43,11 @@ func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 		conf: storage.MetadataStorageConfig{
 			EnableMetadataStorage: false,
 		},
-		logger:           zapr.NewLogger(zap.NewNop()),
-		metrics:          tally.NoopScope,
-		k8sHandler:       NewK8sHandler(k8sClient),
-		metadataHandler:  NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
-		blobHandler:      NewBlobHandler(nil),
+		logger:            zapr.NewLogger(zap.NewNop()),
+		metrics:           tally.NoopScope,
+		k8sHandler:        NewK8sHandler(k8sClient),
+		metadataHandler:   NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
+		blobHandler:       NewBlobHandler(nil),
 		validationHandler: NewValidationHandler(),
 	}
 }
@@ -301,12 +301,7 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 		log.Info("ListOptionsExt is ignored when metadata storage is not enabled", "listOptionsExt", listOptionsExt)
 	}
 
-	parsedListOptions, err := getCRTListOptions(namespace, opts)
-	if err != nil {
-		return err
-	}
-
-	err = handler.k8sHandler.ListFromK8s(ctx, namespace, opts, list)
+	err := handler.k8sHandler.ListFromK8s(ctx, namespace, opts, list)
 	return surfaceGrpcError(err, "list", namespace, "")
 }
 
@@ -326,12 +321,7 @@ func (handler *apiHandler) DeleteCollection(
 	defer emitAPIMetrics("DeleteCollection", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) == false {
-		parsedListOptions, err := getCRTListOptions(namespace, listOpts)
-		if err != nil {
-			return err
-		}
-
-		err = handler.k8sHandler.DeleteCollectionFromK8s(ctx, objType, namespace, deleteOpts, listOpts)
+		err := handler.k8sHandler.DeleteCollectionFromK8s(ctx, objType, namespace, deleteOpts, listOpts)
 		return surfaceGrpcError(err, "delete collection", namespace, "")
 	}
 
