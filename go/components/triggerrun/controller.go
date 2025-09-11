@@ -11,7 +11,6 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	workflow "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -174,13 +173,13 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
-	triggerType := workflow.GetTriggerType(tr)
+	triggerType := GetTriggerType(tr)
 	switch triggerType {
-	case workflow.TriggerTypeInterval:
+	case TriggerTypeInterval:
 		return r.IntervalTrigger
-	case workflow.TriggerTypeBackfill:
+	case TriggerTypeBackfill:
 		return r.BackfillTrigger
-	case workflow.TriggerTypeBatchRerun:
+	case TriggerTypeBatchRerun:
 		return r.BatchRerunTrigger
 	default:
 		return r.CronTrigger

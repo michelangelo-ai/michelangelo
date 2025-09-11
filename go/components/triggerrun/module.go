@@ -6,12 +6,10 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 )
 
 // Module provides fx Options for triggerrun controller.
 var Module = fx.Options(
-	workflow.Module,
 	fx.Invoke(register),
 )
 

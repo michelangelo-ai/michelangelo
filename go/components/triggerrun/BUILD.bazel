@@ -16,7 +16,6 @@ go_library(
         "//go/api/handler:go_default_library",
         "//go/api/utils:go_default_library",
         "//go/base/workflowclient/interface:go_default_library",
-        "//go/components/triggerrun/workflow:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",

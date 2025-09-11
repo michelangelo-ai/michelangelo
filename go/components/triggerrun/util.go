@@ -11,11 +11,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// CronTriggerContext is the struct to store cron trigger context while parsing from cadence cron trigger query result
-type CronTriggerContext struct {
-	DS            string                       `json:"DS,omitempty"`
-	StartedAt     string                       `json:"StartedAt,omitempty"`
-	TriggeredRuns map[string]map[string]string `json:"TriggeredRuns,omitempty"`
+// TriggerType constants for different trigger types
+const (
+	TriggerTypeCron       = "cron"
+	TriggerTypeBackfill   = "backfill"
+	TriggerTypeBatchRerun = "batch_rerun"
+	TriggerTypeInterval   = "interval"
+	TriggerTypeUnknown    = "unknown"
+)
+
+// CreateTriggerRequest DTO for the CreateTrigger workflow
+type CreateTriggerRequest struct {
+	TriggerRun *v2pb.TriggerRun
 }
 
 // util function to kill workflow execution for cron trigger
@@ -133,4 +140,27 @@ func getWorkflowURL(wid string, provider string) string {
 
 func isTerminateState(tr *v2pb.TriggerRun) bool {
 	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
+}
+
+// GetTriggerType returns the trigger type for a given triggerRun
+func GetTriggerType(tr *v2pb.TriggerRun) string {
+	if tr == nil || tr.Spec.Trigger == nil {
+		return TriggerTypeUnknown
+	}
+
+	trigger := tr.Spec.Trigger
+	if trigger.GetCronSchedule() != nil {
+		return TriggerTypeCron
+	}
+	if trigger.GetIntervalSchedule() != nil {
+		return TriggerTypeInterval
+	}
+	if trigger.GetBatchRerun() != nil {
+		return TriggerTypeBatchRerun
+	}
+	if tr.Spec.StartTimestamp != nil && tr.Spec.EndTimestamp != nil {
+		return TriggerTypeBackfill
+	}
+
+	return TriggerTypeUnknown
 }

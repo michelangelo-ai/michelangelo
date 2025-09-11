@@ -6,7 +6,6 @@ import (
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	workflow "github.com/michelangelo-ai/michelangelo/go/components/triggerrun/workflow"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -50,7 +49,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}
 	log.Info("starting scheduled workflow", zap.Any("option", opt))
 	exec, err := r.WorkflowClient.StartWorkflow(
-		ctx, opt, "trigger.PipelineRunTrigger", workflow.CronTriggerRequest{TriggerRun: triggerRun})
+		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: triggerRun})
 	if err != nil {
 		return v2pb.TriggerRunStatus{
 			ErrorMessage: err.Error(),
