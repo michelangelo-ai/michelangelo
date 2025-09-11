@@ -25,6 +25,7 @@ import { StyledTable } from './styled-components';
 import { applyDefaultProps } from './utils/apply-default-props';
 import { composeTableState } from './utils/compose-table-state';
 import { getTableViewState } from './utils/get-table-view-state';
+import { globalFilterFn } from './utils/global-filter-fn';
 import { transformColumns } from './utils/transform-columns';
 
 import type { TableData } from './types/data-types';
@@ -74,7 +75,11 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
         }
       : {}),
     enableRowSelection,
-    globalFilterFn: 'includesString',
+    // Tanstack/table filters searchable columns for global filter based on the
+    // typeof accessed data. In combination with our custom globalFilterFn, we
+    // can safely assume all columns are searchable.
+    getColumnCanGlobalFilter: () => true,
+    globalFilterFn: globalFilterFn<T>,
     autoResetPageIndex: false,
   });
 
