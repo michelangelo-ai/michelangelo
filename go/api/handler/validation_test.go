@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -59,7 +58,12 @@ func TestValidationHandlerIntegration(t *testing.T) {
 				}
 			},
 			setupMock: func(mock *MockValidationHandler) {
-				mock.On("ValidateCreate", mock.Anything).Return(nil)
+				// Mock expects the specific object that will be created in the test
+				mockObj := &MockObject{
+					ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+					TypeMeta:   metav1.TypeMeta{Kind: "MockObject"},
+				}
+				mock.On("ValidateCreate", mockObj).Return(nil)
 			},
 			expectedError: false,
 		},
@@ -72,7 +76,12 @@ func TestValidationHandlerIntegration(t *testing.T) {
 				}
 			},
 			setupMock: func(mock *MockValidationHandler) {
-				mock.On("ValidateCreate", mock.Anything).Return(errors.New("validation failed"))
+				// Mock expects the specific object that will be created in the test
+				mockObj := &MockObject{
+					ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+					TypeMeta:   metav1.TypeMeta{Kind: "MockObject"},
+				}
+				mock.On("ValidateCreate", mockObj).Return(errors.New("validation failed"))
 			},
 			expectedError: true,
 			errorMessage:  "validation failed",
