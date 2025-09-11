@@ -178,16 +178,19 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             )}
           </StyledTable>
         </div>
-        {!props.disablePagination && viewState === 'ready' && (
-          <props.pagination
-            gotoPage={table.setPageIndex}
-            pageCount={table.getPageCount()}
-            setPageSize={table.setPageSize}
-            state={table.getState().pagination}
-            pageSizes={props.pageSizes}
-            fetchPlugin={props.fetchPlugin}
-          />
-        )}
+        {!props.disablePagination &&
+          viewState === 'ready' &&
+          table.getPreFilteredRowModel().rows.length >
+            Math.min(...props.pageSizes.map((size) => size.id)) && (
+            <props.pagination
+              gotoPage={table.setPageIndex}
+              pageCount={table.getPageCount()}
+              setPageSize={table.setPageSize}
+              state={table.getState().pagination}
+              pageSizes={props.pageSizes}
+              fetchPlugin={props.fetchPlugin}
+            />
+          )}
       </TableSelectionProvider>
     </div>
   );
