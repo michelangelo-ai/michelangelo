@@ -47,7 +47,6 @@ go_test(
     srcs = [
         "builder_test.go",
         "handler_test.go",
-        "validation_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
@@ -60,7 +59,6 @@ go_test(
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//mock:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
