@@ -116,7 +116,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
     <div className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale400 })}>
       <TableSelectionProvider
         value={{
-          selectedRows: table.getSelectedRowModel().flatRows.map((row) => row.original),
+          selectedRows: transformRows<T>(table.getSelectedRowModel().flatRows),
           selectionEnabled: enableRowSelection,
           setSelectionEnabled: setRowSelectionEnabled,
           toggleAllRowsSelected: (selected: boolean) => table.toggleAllRowsSelected(selected),
