@@ -187,12 +187,13 @@ func (a *SourcePipelineActor) applyEnvironmentOverrides(pipeline *v2.Pipeline, d
 
 	// Apply dev input overrides - convert all values to strings for environment variables
 	for key, value := range devInput.Fields {
-		if stringVal := value.GetStringValue(); stringVal != "" {
-			baseEnv[key] = stringVal
-		} else if numberVal := value.GetNumberValue(); value.GetKind() != nil {
-			baseEnv[key] = fmt.Sprintf("%g", numberVal) // Convert number to string
-		} else if boolVal := value.GetBoolValue(); value.GetKind() != nil {
-			baseEnv[key] = fmt.Sprintf("%t", boolVal) // Convert boolean to string
+		switch value.GetKind().(type) {
+		case *pbtypes.Value_StringValue:
+			baseEnv[key] = value.GetStringValue()
+		case *pbtypes.Value_NumberValue:
+			baseEnv[key] = fmt.Sprintf("%g", value.GetNumberValue())
+		case *pbtypes.Value_BoolValue:
+			baseEnv[key] = fmt.Sprintf("%t", value.GetBoolValue())
 		}
 	}
 
