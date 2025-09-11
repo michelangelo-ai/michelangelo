@@ -14,5 +14,9 @@ export function TableSelectionProvider<T extends TableData = TableData>({
   children,
   value,
 }: TableSelectionProviderProps<T>) {
-  return <TableSelectionContext.Provider value={value}>{children}</TableSelectionContext.Provider>;
+  return (
+    <TableSelectionContext.Provider value={value as TableSelectionContextType}>
+      {children}
+    </TableSelectionContext.Provider>
+  );
 }

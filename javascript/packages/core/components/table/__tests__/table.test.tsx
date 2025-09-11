@@ -1548,10 +1548,15 @@ describe('Table', () => {
       const user = userEvent.setup();
 
       const SelectionToggle = () => {
-        const { selectionEnabled, setSelectionEnabled } = useTableSelectionContext();
+        const { selectionEnabled, setSelectionEnabled, selectedRows } = useTableSelectionContext();
         return (
           <div>
-            <span>Selection status: {selectionEnabled ? 'enabled' : 'disabled'}</span>
+            <span>
+              Selection status:{' '}
+              {selectionEnabled
+                ? `First row record name: ${(selectedRows[0] as TableRow<(typeof testData)[0]>)?.record?.name}`
+                : 'disabled'}
+            </span>
             <button onClick={() => setSelectionEnabled(!selectionEnabled)}>Toggle Selection</button>
           </div>
         );
@@ -1570,7 +1575,9 @@ describe('Table', () => {
 
       expect(screen.getByText('Selection status: disabled')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: 'Toggle Selection' }));
-      await screen.findByText('Selection status: enabled');
+      const checkboxes = await screen.findAllByRole('checkbox');
+      await user.click(checkboxes[1]);
+      await screen.findByText('Selection status: First row record name: Alice Johnson');
     });
 
     it('supports enabling selection when starting disabled', async () => {
