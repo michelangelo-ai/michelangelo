@@ -232,15 +232,41 @@ describe('Table', () => {
 
   describe('search functionality integration', () => {
     const testData = [
-      { id: '1', name: 'Apple Product', category: 'Electronics' },
-      { id: '2', name: 'Banana Split', category: 'Food' },
-      { id: '3', name: 'Orange Juice', category: 'Beverage' },
-      { id: '4', name: 'Apple Pie', category: 'Food' },
+      {
+        id: '1',
+        name: 'Apple Product',
+        category: 'Electronics',
+        metadata: { brand: 'Apple', warranty: '2-years' },
+        tags: ['smartphone', 'tech'],
+      },
+      {
+        id: '2',
+        name: 'Banana Split',
+        category: 'Food',
+        metadata: { calories: '300', allergens: 'dairy' },
+        tags: ['dessert', 'ice-cream'],
+      },
+      {
+        id: '3',
+        name: 'Orange Juice',
+        category: 'Beverage',
+        metadata: { vitamin: 'C', organic: 'true' },
+        tags: ['fresh', 'citrus'],
+      },
+      {
+        id: '4',
+        name: 'Apple Pie',
+        category: 'Food',
+        metadata: { calories: '450', allergens: 'gluten' },
+        tags: ['dessert', 'baked'],
+      },
     ];
 
     const testColumns = [
       { id: 'name', label: 'Name' },
       { id: 'category', label: 'Category' },
+      { id: 'metadata', label: 'Metadata' },
+      { id: 'tags', label: 'Tags' },
     ];
 
     beforeEach(() => {
@@ -276,7 +302,7 @@ describe('Table', () => {
         await user.type(screen.getByRole('searchbox'), 'Apple');
         vi.runAllTimers();
         await waitFor(() => {
-          expect(screen.getAllByRole('row')).toHaveLength(3); // 1 header + 2 rows
+          expectTableRows({ dataRows: 2 });
         });
 
         expect(screen.queryByRole('cell', { name: 'Banana Split' })).not.toBeInTheDocument();
@@ -362,6 +388,40 @@ describe('Table', () => {
         await waitFor(() => {
           expect(screen.getAllByRole('row')).toHaveLength(5); // 1 header + 4 rows
         });
+      });
+
+      it('searches within map values in complex data', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'calories');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expectTableRows({ dataRows: 2 });
+        });
+
+        expect(screen.getByRole('cell', { name: 'Banana Split' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Apple Pie' })).toBeInTheDocument();
+        expect(screen.queryByRole('cell', { name: 'Apple Product' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('cell', { name: 'Orange Juice' })).not.toBeInTheDocument();
+      });
+
+      it('searches within array values in complex data', async () => {
+        const user = userEvent.setup({
+          advanceTimers: vi.advanceTimersByTime.bind(vi) as (ms: number) => void,
+        });
+
+        await user.type(screen.getByRole('searchbox'), 'dessert');
+        vi.runAllTimers();
+        await waitFor(() => {
+          expectTableRows({ dataRows: 2 });
+        });
+
+        expect(screen.getByRole('cell', { name: 'Banana Split' })).toBeInTheDocument();
+        expect(screen.getByRole('cell', { name: 'Apple Pie' })).toBeInTheDocument();
+        expect(screen.queryByRole('cell', { name: 'Apple Product' })).not.toBeInTheDocument();
+        expect(screen.queryByRole('cell', { name: 'Orange Juice' })).not.toBeInTheDocument();
       });
     });
 
