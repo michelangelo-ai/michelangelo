@@ -1114,7 +1114,7 @@ describe('Table', () => {
       });
     });
 
-    it('shows pagination state for single page with custom pagination', () => {
+    it('hides pagination state for single page with custom pagination', () => {
       const singlePageData = buildLargeDataset(15);
 
       const CustomPagination = (props: TablePaginationProps) => (
@@ -1145,8 +1145,9 @@ describe('Table', () => {
         ])
       );
 
-      expect(screen.getByText('Page 1 of 1')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+      expect(screen.queryByText('Page 1 of 1')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
+      expectTableRows({ dataRows: 15 });
     });
 
     it('hides pagination for empty data', () => {
@@ -1162,6 +1163,47 @@ describe('Table', () => {
       expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
       expect(screen.getByText('No data')).toBeInTheDocument();
+    });
+
+    it('hides pagination for less data than minimum page size', () => {
+      render(
+        <Table
+          data={buildTableData(5, 3)}
+          columns={testColumns}
+          pageSizes={[{ id: 10, label: '10' }]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+      expectTableRows({ dataRows: 5 });
+    });
+
+    it('hides pagination for equal data to minimum page size', () => {
+      render(
+        <Table
+          data={buildTableData(5, 3)}
+          columns={testColumns}
+          pageSizes={[
+            { id: 10, label: '10' },
+            { id: 5, label: '5' },
+          ]}
+        />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      expect(screen.queryByText('Page 1 of')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /next/i })).not.toBeInTheDocument();
+      expectTableRows({ dataRows: 5 });
     });
 
     it('resets to first page when current page becomes invalid due to filtering', async () => {
