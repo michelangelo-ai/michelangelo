@@ -47,6 +47,7 @@ go_test(
     srcs = [
         "builder_test.go",
         "handler_test.go",
+        "validation_test.go",
     ],
     embed = [":go_default_library"],
     deps = [
