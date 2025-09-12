@@ -37,14 +37,15 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year, practically no timeout
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
 	}
-	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient)
+	domain := r.WorkflowClient.GetDomain()
+	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
 	if err != nil {
 		// log the error and continue
 		log.Error(err, "failed to get open workflow execution")
 	}
-	if rid != "" {
+	if rid != nil && *rid != "" {
 		log.Info("scheduled workflow already running",
-			zap.String("workflowId", wid), zap.String("runId", rid))
+			zap.String("workflowId", wid), zap.String("runId", *rid))
 		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 	}
 	log.Info("starting scheduled workflow", zap.Any("option", opt))
@@ -70,7 +71,8 @@ func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient)
+	domain := r.WorkflowClient.GetDomain()
+	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
 
 // GetStatus - TODO: implement GetStatus to get more information of a running triggerrun
@@ -81,5 +83,6 @@ func (r *cronTrigger) GetStatus(
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-	return getWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient)
+	domain := r.WorkflowClient.GetDomain()
+	return getWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
 }

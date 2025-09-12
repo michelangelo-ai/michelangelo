@@ -33,6 +33,7 @@ func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOu
 		TemporalClient: &TemporalClient{
 			Client:   client,
 			Provider: "temporal",
+			Domain:   config.Domain,
 		},
 	}, nil
 }

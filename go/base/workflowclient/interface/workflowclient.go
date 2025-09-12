@@ -27,11 +27,36 @@ const (
 
 type WorkflowExecutionInfo struct {
 	Status WorkflowExecutionStatus
+	Execution *WorkflowExecution
+	ExecutionTime time.Time
 }
 
 type WorkflowExecution struct {
 	ID    string
 	RunID string
+}
+
+type ExecutionFilter struct {
+	WorkflowID string
+	RunID      string
+}
+
+type StartTimeFilter struct {
+	EarliestTime *int64
+	LatestTime   *int64
+}
+
+type ListOpenWorkflowExecutionsRequest struct {
+	Domain          string
+	MaximumPageSize *int32
+	NextPageToken   []byte
+	StartTimeFilter *StartTimeFilter
+	ExecutionFilter *ExecutionFilter
+}
+
+type ListOpenWorkflowExecutionsResponse struct {
+	Executions    []WorkflowExecutionInfo
+	NextPageToken []byte
 }
 
 type WorkflowClient interface {
@@ -45,4 +70,8 @@ type WorkflowClient interface {
 	QueryWorkflow(ctx context.Context, workflowID string, runID string, queryHandlerKey string, queryResult any) error
 	// GetProvider gets the provider of the client
 	GetProvider() string
+	// GetDomain gets the domain of the client
+	GetDomain() string
+	// ListOpenWorkflow lists the open workflows with the given request
+	ListOpenWorkflow(ctx context.Context, request ListOpenWorkflowExecutionsRequest) (*ListOpenWorkflowExecutionsResponse, error)
 }
