@@ -59,8 +59,12 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 		logger.Info("Pipeline status updated", zap.Any("PipelineStatusState", pipeline.Status.State.String()))
 		err := r.UpdateStatus(ctx, pipeline, &metav1.UpdateOptions{})
 		if err != nil {
-			logger.Error("Failed to update pipeline status", zap.Error(err))
-			return result, err
+			logger.Error("Failed to update pipeline status",
+				zap.Error(err),
+				zap.String("operation", "update_status"),
+				zap.String("namespace", req.Namespace),
+				zap.String("name", req.Name))
+			return result, fmt.Errorf("update pipeline status for %s/%s: %w", req.Namespace, req.Name, err)
 		}
 	}
 

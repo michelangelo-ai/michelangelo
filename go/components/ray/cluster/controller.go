@@ -95,15 +95,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		rayCluster.Status.PodErrors = append(rayCluster.Status.PodErrors, podError)
 	}
 	if err != nil {
-		// Log and handle the errors during cluster status retrieval
-		logger.Error(err, "error for getting ray cluster")
+		// Handle cluster status retrieval errors
 		if utils.IsNotFoundError(err) && !shouldBeTerminated {
 			logger.Info("creating new ray cluster")
 			err = r.createCluster(ctx, logger, &rayCluster)
 			if err != nil {
-				logger.Error(err, "failed to create cluster")
+				logger.Error(err, "failed to create ray cluster",
+					"operation", "create_cluster",
+					"namespace", req.Namespace,
+					"name", req.Name)
 				res.RequeueAfter = requeueAfter
 				rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_FAILED
+				return res, fmt.Errorf("create ray cluster %q: %w", req.NamespacedName, err)
 			}
 			rayCluster.Status.State = v2pb.RAY_CLUSTER_STATE_PROVISIONING
 		} else if utils.IsNotFoundError(err) && shouldBeTerminated {
@@ -148,8 +151,11 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if !reflect.DeepEqual(originalRayCluster, rayCluster) {
 		err = r.Status().Update(ctx, &rayCluster)
 		if err != nil {
-			logger.Error(err, "failed to update status")
-			return res, nil
+			logger.Error(err, "failed to update ray cluster status",
+				"operation", "update_status",
+				"namespace", req.Namespace,
+				"name", req.Name)
+			return res, fmt.Errorf("update ray cluster status for %q: %w", req.NamespacedName, err)
 		}
 	}
 
@@ -186,11 +192,14 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 	}
 	// Create the RayCluster resource in the Kubernetes cluster
 	createdRayCluster, err := r.RayClusters(cluster.Namespace).Create(ctx, rayV1Cluster, metav1.CreateOptions{})
-	log.Info("ray cluster created", "namespace", createdRayCluster.Namespace, "name", createdRayCluster.Name)
 	if err != nil {
-		log.Error(err, "Failed to submit RayCluster")
-		return err
+		log.Error(err, "failed to create ray cluster",
+			"operation", "create_cluster",
+			"namespace", cluster.Namespace,
+			"name", cluster.Name)
+		return fmt.Errorf("create ray cluster %s/%s: %w", cluster.Namespace, cluster.Name, err)
 	}
+	log.Info("ray cluster created", "namespace", createdRayCluster.Namespace, "name", createdRayCluster.Name)
 	// Update the cluster's head node information
 	cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
 		// TODO: use createdRayCluster.Status.Head.PodName after upgrading to a newer version
@@ -205,12 +214,14 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, name
 	// Fetch the RayCluster resource by name and namespace
 	rayV1Cluster, err := r.RayClusters(namespace).Get(ctx, name, metav1.GetOptions{})
 	if err != nil {
-		log.Error(err, "Failed to get RayCluster status", "namespace", namespace, "name", name)
-		return nil, nil, err
+		log.Error(err, "failed to get ray cluster status",
+			"operation", "get_status",
+			"namespace", namespace,
+			"name", name)
+		return nil, nil, fmt.Errorf("get ray cluster %s/%s status: %w", namespace, name, err)
 	}
 	// Check for empty resource to handle errors gracefully
 	if rayV1Cluster != nil && rayV1Cluster.Name == "" {
-		log.Error(err, "Failed to get RayCluster status", "namespace", namespace, "name", name)
 		return nil, nil, apiErrors.NewNotFound(v1.Resource("rayclusters"), name)
 	}
 	return &rayV1Cluster.Status, &rayV1Cluster.Status.Reason, nil
@@ -221,8 +232,11 @@ func (r *Reconciler) deleteCluster(ctx context.Context, log logr.Logger, namespa
 	// Delete the RayCluster resource and handle errors
 	err := r.RayClusters(namespace).Delete(ctx, name, metav1.DeleteOptions{})
 	if err != nil {
-		log.Error(err, "Failed to delete RayCluster: ", "namespace", namespace, "name", name)
-		return err
+		log.Error(err, "failed to delete ray cluster",
+			"operation", "delete_cluster",
+			"namespace", namespace,
+			"name", name)
+		return fmt.Errorf("delete ray cluster %s/%s: %w", namespace, name, err)
 	}
 	return nil
 }

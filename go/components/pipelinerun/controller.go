@@ -38,16 +38,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
 	logger.Info("Reconciling pipeline run starts")
 	if err := r.Get(ctx, req.Namespace, req.Name, &metav1.GetOptions{}, pipelineRun); err != nil {
-		logger.Error("Failed to get pipeline run", zap.Error(err))
-		return ctrl.Result{}, fmt.Errorf("failed to get pipeline run: %w", err)
+		return ctrl.Result{}, fmt.Errorf("get pipeline run %q: %w", req.NamespacedName, err)
 	}
 	originalPipelineRun := pipelineRun.DeepCopy()
 	conditionResult, err := r.engine.Run(ctx, r.plugin, pipelineRun)
 	result := conditionResult.Result
 	var returnErr error
 	if err != nil {
-		logger.Error("Failed to run engine", zap.Error(err))
-		returnErr = fmt.Errorf("Failed to run engine: %w", err)
+		returnErr = fmt.Errorf("run engine for pipeline run %q: %w", req.NamespacedName, err)
 	} else {
 		if !conditionResult.IsTerminal {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
@@ -58,15 +56,20 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	if err = r.updatePipelineRunStatus(ctx, pipelineRun, originalPipelineRun); err != nil {
-		logger.Error("Failed to update pipeline run status", zap.Error(err))
-		returnErr = fmt.Errorf("Failed to update pipeline run status: %w %w", err, returnErr)
+		if returnErr != nil {
+			logger.Error("Failed to update pipeline run status", zap.Error(err))
+			return result, fmt.Errorf("update pipeline run status for %q: %w (previous error: %v)", req.NamespacedName, err, returnErr)
+		}
+		returnErr = fmt.Errorf("update pipeline run status for %q: %w", req.NamespacedName, err)
 	}
 	return result, returnErr
 }
 
 func (r *Reconciler) updatePipelineRunStatus(ctx context.Context, pipelineRun *v2pb.PipelineRun, originalPipelineRun *v2pb.PipelineRun) error {
 	if !reflect.DeepEqual(pipelineRun.Status, originalPipelineRun.Status) {
-		return r.UpdateStatus(ctx, pipelineRun, &metav1.UpdateOptions{})
+		if err := r.UpdateStatus(ctx, pipelineRun, &metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("update status for pipeline run %q: %w", pipelineRun.Name, err)
+		}
 	}
 	return nil
 }
