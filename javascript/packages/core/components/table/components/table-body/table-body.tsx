@@ -49,15 +49,17 @@ export const TableBody = <T extends TableData = TableData>({
               </StyledTableBodyCell>
             )}
 
-            {row.cells.map((cell, cellIndex) => (
-              <StyledTableBodyCell
-                key={cell.id}
-                $columnNumber={cellIndex}
-                $enableRowSelection={enableRowSelection}
-              >
-                {cell.content}
-              </StyledTableBodyCell>
-            ))}
+            {row.cells
+              .filter((cell) => cell.isVisible)
+              .map((cell, cellIndex) => (
+                <StyledTableBodyCell
+                  key={cell.id}
+                  $columnNumber={cellIndex}
+                  $enableRowSelection={enableRowSelection}
+                >
+                  {cell.content}
+                </StyledTableBodyCell>
+              ))}
 
             <StyledTableBodyCell>
               <StyledActionCell>
@@ -68,7 +70,11 @@ export const TableBody = <T extends TableData = TableData>({
 
           {subRow && row.isExpanded && (
             <StyledTableBodyRow>
-              <StyledTableBodyCell colSpan={row.cells.length + (enableRowSelection ? 2 : 1)}>
+              <StyledTableBodyCell
+                colSpan={
+                  row.cells.filter((cell) => cell.isVisible).length + (enableRowSelection ? 2 : 1)
+                }
+              >
                 {React.createElement(subRow, { row })}
               </StyledTableBodyCell>
             </StyledTableBodyRow>

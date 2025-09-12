@@ -1885,6 +1885,55 @@ describe('Table', () => {
       expect(screen.getByRole('button', { name: 'Edit row 1' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Delete row 1' })).toBeInTheDocument();
     });
+
+    it('provides access to all cells including hidden ones for row actions', () => {
+      const testDataWithSecret = [
+        { id: '1', name: 'Alice Johnson', secret: 'confidential', department: 'Engineering' },
+        { id: '2', name: 'Bob Smith', secret: 'classified', department: 'Marketing' },
+      ];
+
+      const testColumnsWithSecret = [
+        { id: 'name', label: 'Name' },
+        { id: 'secret', label: 'Secret' },
+        { id: 'department', label: 'Department' },
+      ];
+
+      const ActionsWithAllCells = ({
+        row,
+      }: {
+        row: TableRow<{ id: string; name: string; secret: string; department: string }>;
+      }) => (
+        <div>
+          <span>Actions for row {row.record.name}</span>
+          <span>Total cells: {row.cells.length}</span>
+          <span>Visible cells: {row.cells.filter((cell) => cell.isVisible).length}</span>
+          <span>
+            Secret: {String(row.cells.find((cell) => cell.column.id === 'secret')?.value)}
+          </span>
+        </div>
+      );
+
+      render(
+        <Table
+          data={testDataWithSecret}
+          columns={testColumnsWithSecret}
+          actions={ActionsWithAllCells}
+          state={{ columnVisibility: { secret: false } }}
+        />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+
+      // Verify hidden column doesn't appear in table display
+      expect(screen.queryByRole('columnheader', { name: 'Secret' })).not.toBeInTheDocument();
+      expect(screen.queryByText('confidential')).not.toBeInTheDocument();
+      expect(screen.queryByText('classified')).not.toBeInTheDocument();
+
+      // Verify actions component has access to all cells including hidden
+      expect(screen.getAllByText('Total cells: 3')).toHaveLength(2);
+      expect(screen.getAllByText('Visible cells: 2')).toHaveLength(2);
+      expect(screen.getByText('Secret: confidential')).toBeInTheDocument();
+      expect(screen.getByText('Secret: classified')).toBeInTheDocument();
+    });
   });
 
   describe('custom body override integration', () => {

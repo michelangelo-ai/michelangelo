@@ -69,7 +69,7 @@ export const getTanstackRowFixture = (overrides?: {
   return {
     id,
     original: { id },
-    getVisibleCells: vi.fn(
+    getAllCells: vi.fn(
       () =>
         cellContents.map((content, index) => ({
           id: `${id}-cell-${index}`,
@@ -82,6 +82,7 @@ export const getTanstackRowFixture = (overrides?: {
                 type: 'string',
               },
             },
+            getIsVisible: vi.fn(() => true),
           },
           getContext: vi.fn(() => ({})),
           getIsGrouped: vi.fn(() => false),
