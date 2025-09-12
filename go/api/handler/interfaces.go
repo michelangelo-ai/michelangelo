@@ -18,37 +18,37 @@ import (
 // Example usage:
 //
 //	handler := NewK8sHandler(client)
-//	if err := handler.CreateInK8s(ctx, obj, &metav1.CreateOptions{}); err != nil {
+//	if err := handler.Create(ctx, obj, &metav1.CreateOptions{}); err != nil {
 //		return fmt.Errorf("failed to create object: %w", err)
 //	}
 type K8sHandler interface {
-	// CreateInK8s creates a new object in the Kubernetes cluster.
+	// Create creates a new object in the Kubernetes cluster.
 	// Returns an error if the object already exists or creation fails.
-	CreateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error
+	Create(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error
 
-	// GetFromK8s retrieves an object from the Kubernetes cluster by namespace and name.
+	// Get retrieves an object from the Kubernetes cluster by namespace and name.
 	// Returns NotFound error if the object doesn't exist.
-	GetFromK8s(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error
+	Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error
 
-	// UpdateInK8s updates an existing object in the Kubernetes cluster.
+	// Update updates an existing object in the Kubernetes cluster.
 	// Uses optimistic concurrency control based on resourceVersion.
-	UpdateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error
+	Update(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error
 
-	// UpdateStatusInK8s updates only the status subresource of an object.
+	// UpdateStatus updates only the status subresource of an object.
 	// This is separated from spec updates to avoid conflicts in controllers.
-	UpdateStatusInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error
+	UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error
 
-	// DeleteFromK8s removes an object from the Kubernetes cluster.
+	// Delete removes an object from the Kubernetes cluster.
 	// Supports graceful deletion with configurable grace periods.
-	DeleteFromK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error
+	Delete(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error
 
-	// ListFromK8s retrieves a list of objects matching the given criteria.
+	// List retrieves a list of objects matching the given criteria.
 	// Supports field and label selectors, pagination, and namespace scoping.
-	ListFromK8s(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error
+	List(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error
 
-	// DeleteCollectionFromK8s removes multiple objects matching the given criteria.
+	// DeleteCollection removes multiple objects matching the given criteria.
 	// Combines listing and deletion operations with proper error handling.
-	DeleteCollectionFromK8s(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error
+	DeleteCollection(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error
 }
 
 // MetadataHandler abstracts metadata storage operations for pluggable storage backends.
@@ -60,25 +60,25 @@ type K8sHandler interface {
 // Example usage:
 //
 //	handler := NewMetadataHandler(storage, blobStorage, logger)
-//	if err := handler.UpdateInMetadata(ctx, obj); err != nil {
+//	if err := handler.Update(ctx, obj); err != nil {
 //		return fmt.Errorf("failed to persist metadata: %w", err)
 //	}
 type MetadataHandler interface {
-	// GetFromMetadata retrieves an object from the metadata storage by namespace and name.
+	// Get retrieves an object from the metadata storage by namespace and name.
 	// This is typically used as a fallback when objects are not found in Kubernetes.
-	GetFromMetadata(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error
+	Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error
 
-	// UpdateInMetadata persists or updates an object in the metadata storage.
+	// Update persists or updates an object in the metadata storage.
 	// This operation is idempotent and handles both creation and updates.
-	UpdateInMetadata(ctx context.Context, obj ctrlRTClient.Object) error
+	Update(ctx context.Context, obj ctrlRTClient.Object) error
 
-	// DeleteFromMetadata removes an object from the metadata storage.
+	// Delete removes an object from the metadata storage.
 	// This may also trigger cleanup of associated blob storage if configured.
-	DeleteFromMetadata(ctx context.Context, obj ctrlRTClient.Object) error
+	Delete(ctx context.Context, obj ctrlRTClient.Object) error
 
-	// ListFromMetadata retrieves objects from metadata storage matching the given criteria.
+	// List retrieves objects from metadata storage matching the given criteria.
 	// Supports the same filtering options as the Kubernetes API, with optional extended options.
-	ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error
+	List(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error
 }
 
 // BlobHandler abstracts blob storage operations for large object data.

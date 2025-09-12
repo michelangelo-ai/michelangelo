@@ -34,18 +34,18 @@ func NewMetadataHandler(storage storage.MetadataStorage, blobStorage storage.Blo
 	return &MetadataHandlerImpl{storage: storage, blobStorage: blobStorage, logger: logger}
 }
 
-// GetFromMetadata implements MetadataHandler.GetFromMetadata by delegating to the storage backend.
-func (m *MetadataHandlerImpl) GetFromMetadata(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
+// Get implements MetadataHandler.Get by delegating to the storage backend.
+func (m *MetadataHandlerImpl) Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
 	return m.storage.GetByName(ctx, namespace, name, obj)
 }
 
-// UpdateInMetadata implements MetadataHandler.UpdateInMetadata by delegating to the handleUpdate function.
-func (m *MetadataHandlerImpl) UpdateInMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
+// Update implements MetadataHandler.Update by delegating to the handleUpdate function.
+func (m *MetadataHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object) error {
 	return handleUpdate(ctx, obj, m.storage, true, nil, m.blobStorage)
 }
 
-// DeleteFromMetadata implements MetadataHandler.DeleteFromMetadata by delegating to the handleDelete function.
-func (m *MetadataHandlerImpl) DeleteFromMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
+// Delete implements MetadataHandler.Delete by delegating to the handleDelete function.
+func (m *MetadataHandlerImpl) Delete(ctx context.Context, obj ctrlRTClient.Object) error {
 	typeMeta, err := getObjectTypeMeta(obj)
 	if err != nil {
 		return err
@@ -53,8 +53,8 @@ func (m *MetadataHandlerImpl) DeleteFromMetadata(ctx context.Context, obj ctrlRT
 	return handleDelete(ctx, m.logger, typeMeta, obj, m.storage, m.blobStorage)
 }
 
-// ListFromMetadata implements MetadataHandler.ListFromMetadata by delegating to the storage backend.
-func (m *MetadataHandlerImpl) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
+// List implements MetadataHandler.List by delegating to the storage backend.
+func (m *MetadataHandlerImpl) List(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	listResponse := &storage.ListResponse{}
 	typeMeta, err := getObjectTypeMetaFromList(list)
 	if err != nil {
@@ -83,25 +83,25 @@ func getObjectTypeMetaFromList(list ctrlRTClient.ObjectList) (*metav1.TypeMeta, 
 // continues to function while gracefully handling the absence of metadata storage.
 type NullMetadataHandler struct{}
 
-// GetFromMetadata implements MetadataHandler.GetFromMetadata by returning a NotFound error.
+// Get implements MetadataHandler.Get by returning a NotFound error.
 // This maintains API consistency when metadata storage is disabled.
-func (n *NullMetadataHandler) GetFromMetadata(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
+func (n *NullMetadataHandler) Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
 	return apiErrors.NewNotFound(schema.GroupResource{}, name)
 }
 
-// UpdateInMetadata implements MetadataHandler.UpdateInMetadata as a no-op when metadata storage is disabled.
-func (n *NullMetadataHandler) UpdateInMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
+// Update implements MetadataHandler.Update as a no-op when metadata storage is disabled.
+func (n *NullMetadataHandler) Update(ctx context.Context, obj ctrlRTClient.Object) error {
 	return nil
 }
 
-// DeleteFromMetadata implements MetadataHandler.DeleteFromMetadata as a no-op when metadata storage is disabled.
-func (n *NullMetadataHandler) DeleteFromMetadata(ctx context.Context, obj ctrlRTClient.Object) error {
+// Delete implements MetadataHandler.Delete as a no-op when metadata storage is disabled.
+func (n *NullMetadataHandler) Delete(ctx context.Context, obj ctrlRTClient.Object) error {
 	return nil
 }
 
-// ListFromMetadata implements MetadataHandler.ListFromMetadata by returning a NotFound error.
+// List implements MetadataHandler.List by returning a NotFound error.
 // This maintains API consistency when metadata storage is disabled.
-func (n *NullMetadataHandler) ListFromMetadata(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
+func (n *NullMetadataHandler) List(ctx context.Context, namespace string, opts *metav1.ListOptions, listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
 	return apiErrors.NewNotFound(schema.GroupResource{}, "")
 }
 

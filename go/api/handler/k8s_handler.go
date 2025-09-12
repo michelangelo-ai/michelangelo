@@ -21,8 +21,8 @@ func NewK8sHandler(client ctrlRTClient.Client) K8sHandler {
 	return &K8sHandlerImpl{client: client}
 }
 
-// CreateInK8s implements K8sHandler.CreateInK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) CreateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
+// Create implements K8sHandler.Create by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) Create(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.CreateOptions) error {
 	return k.client.Create(ctx, obj, &ctrlRTClient.CreateOptions{
 		DryRun:       opts.DryRun,
 		FieldManager: opts.FieldManager,
@@ -30,13 +30,13 @@ func (k *K8sHandlerImpl) CreateInK8s(ctx context.Context, obj ctrlRTClient.Objec
 	})
 }
 
-// GetFromK8s implements K8sHandler.GetFromK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) GetFromK8s(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
+// Get implements K8sHandler.Get by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) Get(ctx context.Context, namespace, name string, obj ctrlRTClient.Object) error {
 	return k.client.Get(ctx, ctrlRTClient.ObjectKey{Namespace: namespace, Name: name}, obj)
 }
 
-// UpdateInK8s implements K8sHandler.UpdateInK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) UpdateInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
+// Update implements K8sHandler.Update by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	return k.client.Update(ctx, obj, &ctrlRTClient.UpdateOptions{
 		DryRun:       opts.DryRun,
 		FieldManager: opts.FieldManager,
@@ -44,8 +44,8 @@ func (k *K8sHandlerImpl) UpdateInK8s(ctx context.Context, obj ctrlRTClient.Objec
 	})
 }
 
-// UpdateStatusInK8s implements K8sHandler.UpdateStatusInK8s by delegating to the status writer.
-func (k *K8sHandlerImpl) UpdateStatusInK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
+// UpdateStatus implements K8sHandler.UpdateStatus by delegating to the status writer.
+func (k *K8sHandlerImpl) UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
 	return k.client.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
 		DryRun:       opts.DryRun,
 		FieldManager: opts.FieldManager,
@@ -53,8 +53,8 @@ func (k *K8sHandlerImpl) UpdateStatusInK8s(ctx context.Context, obj ctrlRTClient
 	})
 }
 
-// DeleteFromK8s implements K8sHandler.DeleteFromK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) DeleteFromK8s(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error {
+// Delete implements K8sHandler.Delete by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) Delete(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.DeleteOptions) error {
 	return k.client.Delete(ctx, obj, &ctrlRTClient.DeleteOptions{
 		DryRun:             opts.DryRun,
 		Preconditions:      opts.Preconditions,
@@ -64,8 +64,8 @@ func (k *K8sHandlerImpl) DeleteFromK8s(ctx context.Context, obj ctrlRTClient.Obj
 	})
 }
 
-// ListFromK8s implements K8sHandler.ListFromK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) ListFromK8s(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error {
+// List implements K8sHandler.List by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) List(ctx context.Context, namespace string, opts *metav1.ListOptions, list ctrlRTClient.ObjectList) error {
 	parsedListOptions, err := getCRTListOptions(namespace, opts)
 	if err != nil {
 		return err
@@ -73,8 +73,8 @@ func (k *K8sHandlerImpl) ListFromK8s(ctx context.Context, namespace string, opts
 	return k.client.List(ctx, list, parsedListOptions)
 }
 
-// DeleteCollectionFromK8s implements K8sHandler.DeleteCollectionFromK8s by delegating to the controller-runtime client.
-func (k *K8sHandlerImpl) DeleteCollectionFromK8s(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error {
+// DeleteCollection implements K8sHandler.DeleteCollection by delegating to the controller-runtime client.
+func (k *K8sHandlerImpl) DeleteCollection(ctx context.Context, objType ctrlRTClient.Object, namespace string, deleteOpts *metav1.DeleteOptions, listOpts *metav1.ListOptions) error {
 	parsedListOptions, err := getCRTListOptions(namespace, listOpts)
 	if err != nil {
 		return err

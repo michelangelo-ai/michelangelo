@@ -98,7 +98,7 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	setUpdateTimestamp(obj, true)
 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
-	err = handler.k8sHandler.CreateInK8s(ctx, obj, opts)
+	err = handler.k8sHandler.Create(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
 }
@@ -116,7 +116,7 @@ func (handler *apiHandler) Get(
 	defer emitAPIMetrics("Get", handler.metrics, log, start, kind, headers)
 
 	// Get from K8s/ETCD
-	err := handler.k8sHandler.GetFromK8s(ctx, namespace, name, obj)
+	err := handler.k8sHandler.Get(ctx, namespace, name, obj)
 	if err == nil {
 		// If an object is immutable and is being deleted in ETCD, it means the object is within the grace period and is
 		// pending deleted, so we should proceed to the section below to get from the metadata storage.
@@ -132,7 +132,7 @@ func (handler *apiHandler) Get(
 
 	// If the object does not exist in K8s/ETCD, get from metadata storage.
 	if storage.EnableMetadataStorage(&handler.conf) {
-		if err = handler.metadataHandler.GetFromMetadata(ctx, namespace, name, obj); err != nil {
+		if err = handler.metadataHandler.Get(ctx, namespace, name, obj); err != nil {
 			return surfaceGrpcError(err, "get", namespace, name)
 		}
 
@@ -169,11 +169,11 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
 	}
 
-	err = handler.k8sHandler.UpdateInK8s(ctx, obj, opts)
+	err = handler.k8sHandler.Update(ctx, obj, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
-		err = handler.metadataHandler.UpdateInMetadata(ctx, tmpObj)
+		err = handler.metadataHandler.Update(ctx, tmpObj)
 		if err != nil {
 			return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
 		}
@@ -205,7 +205,7 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 
 	setUpdateTimestamp(obj, false)
 
-	err := handler.k8sHandler.UpdateStatusInK8s(ctx, obj, opts)
+	err := handler.k8sHandler.UpdateStatus(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }
@@ -229,7 +229,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 
 	// Delete the object in K8s/ETCD
 	if storage.EnableMetadataStorage(&handler.conf) == false {
-		err = handler.k8sHandler.DeleteFromK8s(ctx, obj, opts)
+		err = handler.k8sHandler.Delete(ctx, obj, opts)
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
 
@@ -238,7 +238,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
 	}
-	err = handler.k8sHandler.GetFromK8s(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
+	err = handler.k8sHandler.Get(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
 	if err == nil {
 		// Object exists in K8s/ETCD
 		if utils.IsImmutable(tmpObj) {
@@ -269,7 +269,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		}
 		annotation[api.DeletingAnnotation] = "true"
 
-		err = handler.k8sHandler.UpdateInK8s(ctx, tmpObj, &metav1.UpdateOptions{})
+		err = handler.k8sHandler.Update(ctx, tmpObj, &metav1.UpdateOptions{})
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
 
@@ -296,12 +296,12 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 	defer emitAPIMetrics("List", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) {
-		return handler.metadataHandler.ListFromMetadata(ctx, namespace, opts, listOptionsExt, list)
+		return handler.metadataHandler.List(ctx, namespace, opts, listOptionsExt, list)
 	} else if listOptionsExt != nil && !listOptionsExt.Equal(&apipb.ListOptionsExt{}) {
 		log.Info("ListOptionsExt is ignored when metadata storage is not enabled", "listOptionsExt", listOptionsExt)
 	}
 
-	err := handler.k8sHandler.ListFromK8s(ctx, namespace, opts, list)
+	err := handler.k8sHandler.List(ctx, namespace, opts, list)
 	return surfaceGrpcError(err, "list", namespace, "")
 }
 
@@ -321,7 +321,7 @@ func (handler *apiHandler) DeleteCollection(
 	defer emitAPIMetrics("DeleteCollection", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) == false {
-		err := handler.k8sHandler.DeleteCollectionFromK8s(ctx, objType, namespace, deleteOpts, listOpts)
+		err := handler.k8sHandler.DeleteCollection(ctx, objType, namespace, deleteOpts, listOpts)
 		return surfaceGrpcError(err, "delete collection", namespace, "")
 	}
 
@@ -344,7 +344,7 @@ func (handler *apiHandler) DeleteCollection(
 	if !ok {
 		return status.Errorf(codes.Internal, "new object does not implement the controller-runtime client.ObjectList interface")
 	}
-	err = handler.metadataHandler.ListFromMetadata(ctx, namespace, listOpts, nil, listObj)
+	err = handler.metadataHandler.List(ctx, namespace, listOpts, nil, listObj)
 	if err != nil {
 		return err
 	}
@@ -370,7 +370,7 @@ func isDeletedImmutableObject(obj ctrlRTClient.Object) bool {
 }
 
 func deleteObjectFromMetadataStorage(ctx context.Context, obj ctrlRTClient.Object, handler *apiHandler) error {
-	err := handler.metadataHandler.DeleteFromMetadata(ctx, obj)
+	err := handler.metadataHandler.Delete(ctx, obj)
 	if err != nil {
 		return surfaceGrpcError(err, "delete", obj.GetNamespace(), obj.GetName())
 	}
@@ -433,7 +433,7 @@ func (handler *apiHandler) hasSpecChange(ctx context.Context, objForUpdate ctrlR
 	// look for the object in k8s/ETCD. If the object is not found in ETCD, the update must be on either labels or
 	// annotations, so there's no change in spec.
 	apiServerObj := reflect.New(reflect.TypeOf(objForUpdate).Elem()).Interface().(ctrlRTClient.Object)
-	err := handler.k8sHandler.GetFromK8s(ctx, objForUpdate.GetNamespace(), objForUpdate.GetName(), apiServerObj)
+	err := handler.k8sHandler.Get(ctx, objForUpdate.GetNamespace(), objForUpdate.GetName(), apiServerObj)
 	if err == nil {
 		isEqual, err := isSpecEqual(apiServerObj, objForUpdate)
 		if err != nil {
@@ -507,7 +507,7 @@ func (handler *apiHandler) handleMetadataStorageForCreate(ctx context.Context, o
 
 	// Check if the object exists in MetadataStorage
 	tmpObj := obj
-	err := handler.metadataHandler.GetFromMetadata(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
+	err := handler.metadataHandler.Get(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
 	if err == nil {
 		return status.Errorf(codes.AlreadyExists, "failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
 			objMeta.GetNamespace(), objMeta.GetName())
