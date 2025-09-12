@@ -20,6 +20,13 @@ workflow-engine:
   workers:
     - domain: default
       taskList: default
+      activityOptions:
+        # Optional activity configuration
+        # scheduleToStartTimeout: "30s"
+        # startToCloseTimeout: "5m"
+        # heartbeatTimeout: "10s"
+        # waitForCancellation: false
+        # disableEagerExecution: false
   client:
     domain: default
 

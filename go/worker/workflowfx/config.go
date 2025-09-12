@@ -8,12 +8,17 @@ const (
 
 // Config is the configuration for the module. YAML looks like this:
 //
-//	cadence:
+//	workflow-engine:
 //	  host: 127.0.0.1:7833
 //	  transport: grpc
+//	  provider: cadence
 //	  workers:
 //	    - domain: default
 //	      taskList: default
+//	      activityOptions:
+//	        scheduleToStartTimeout: "30s"
+//	        startToCloseTimeout: "5m"
+//	        heartbeatTimeout: "10s"
 //	  client:
 //	    domain: default
 type Config struct {
@@ -25,8 +30,9 @@ type Config struct {
 }
 
 type WorkerConfig struct {
-	Domain   string `yaml:"domain"`
-	TaskList string `yaml:"taskList"`
+	Domain          string                 `yaml:"domain"`
+	TaskList        string                 `yaml:"taskList"`
+	ActivityOptions map[string]interface{} `yaml:"activityOptions,omitempty"`
 }
 
 type ClientConfig struct {
