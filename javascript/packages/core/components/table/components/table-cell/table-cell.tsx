@@ -1,13 +1,10 @@
 import { useStyletron } from 'baseui';
 
-import { CellTooltipContentRenderer } from '#core/components/cell/components/tooltip/cell-tooltip-content-renderer';
-import { CellTooltipWrapper } from '#core/components/cell/components/tooltip/cell-tooltip-wrapper';
-import { TooltipHOCProps } from '#core/components/cell/components/tooltip/types';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { resolveColumnForRow } from '../../utils/column-resolution-utils';
+import { columnTooltipHOC } from './column-tooltip-hoc';
 import { getResponsiveColumnWidth } from './get-responsive-column-width';
-import { isFilterAlreadyApplied } from './utils';
 
 import type { TableCellProps } from './types';
 
@@ -19,41 +16,13 @@ export const TableCell = (props: TableCellProps) => {
 
   const getCellRenderer = useGetCellRenderer();
   const ColumnRenderer = getCellRenderer({ column, record, value });
+  const Component = column.tooltip
+    ? columnTooltipHOC(ColumnRenderer, columnFilterValue, setColumnFilterValue)
+    : ColumnRenderer;
 
-  const renderedCell = (
+  return (
     <div className={css({ ...getResponsiveColumnWidth(theme), overflow: 'hidden' })}>
-      <ColumnRenderer column={column} record={record} value={value} CellComponent={TableCell} />
+      <Component column={column} record={record} value={value} CellComponent={TableCell} />
     </div>
   );
-
-  if (column.tooltip) {
-    const { action } = column.tooltip;
-
-    if (action === 'filter' && isFilterAlreadyApplied(columnFilterValue, value)) {
-      return renderedCell;
-    }
-
-    const actionHandler = () => {
-      if (action === 'filter' && setColumnFilterValue) {
-        setColumnFilterValue([value]);
-      }
-    };
-
-    return (
-      <CellTooltipWrapper
-        actionHandler={actionHandler}
-        content={
-          <CellTooltipContentRenderer
-            column={column as TooltipHOCProps<unknown>['column']}
-            record={record}
-            value={value}
-          />
-        }
-      >
-        {renderedCell}
-      </CellTooltipWrapper>
-    );
-  }
-
-  return renderedCell;
 };
