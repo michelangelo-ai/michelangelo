@@ -20,6 +20,8 @@ workflow-engine:
   workers:
     - domain: default
       taskList: default
+    - domain: default
+      taskList: trigger_run
   client:
     domain: default
 
