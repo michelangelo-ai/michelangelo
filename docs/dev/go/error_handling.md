@@ -162,11 +162,68 @@ return fmt.Errorf("failed to process email %q", email)  // PII
 - **Resource operations**: Kubernetes API calls, file I/O, network operations
 - **Critical paths**: Where error loss would impact system reliability
 
+**Consistent Log-and-Return Pattern** (REQUIRED for PR reviews):
+```go
+// ✅ REQUIRED Pattern - Use this exact structure
+if err := operation(ctx, resource); err != nil {
+    logger.Error("failed to [operation]", 
+        [zap.Error(err) OR err], // Use zap.Error(err) for zap, just err for logr
+        "[logger_type]", "[operation_name]",
+        "namespace", resource.Namespace,
+        "name", resource.Name)
+    return result, fmt.Errorf("[operation] [resource_type] %s/%s: %w", 
+        resource.Namespace, resource.Name, err)
+}
+```
+
+**Standard Pattern Example:**
+```go
+if err := r.createResource(ctx, resource); err != nil {
+    logger.Error(err, "failed to create resource", 
+        "operation", "create_resource",
+        "namespace", req.Namespace,
+        "name", req.Name)
+    return res, fmt.Errorf("create resource %q: %w", req.NamespacedName, err)
+}
+```
+
 **Implementation Guidelines:**
 - Include correlation IDs (request IDs, user IDs, resource identifiers)
 - Use structured logging with relevant context
 - Classify errors: validation (don't log) vs system errors (always log)
 - Choose appropriate log levels (ERROR for actionable issues)
+- **ALWAYS follow the exact log-and-return pattern above for consistency**
+
+## PR Review Checklist
+*Use this checklist to ensure consistency across all controllers and services*
+
+### ✅ **Required Pattern for Controllers/Services:**
+**Every error in controllers MUST follow this exact pattern:**
+
+1. **Log the error** with structured fields:
+   - Error message starting with "failed to [operation]"
+   - `"operation"` field with operation name
+   - `"namespace"` and `"name"` fields for resource identification
+   - Use `zap.Error(err)` for zap logger OR just `err` for logr
+
+2. **Return wrapped error** with context:
+   - Use `fmt.Errorf` with `%w` verb
+   - Include operation and resource identification
+   - Format: `"[operation] [resource_type] %s/%s: %w"`
+
+3. **Resource identification** in both log and error:
+   - Use `req.Namespace` and `req.Name` for request context
+   - Use `resource.Namespace` and `resource.Name` for resource context
+
+### ❌ **PR Review Red Flags:**
+- Error returned without logging in controllers
+- Logged error without returning
+- Missing operation context in logs
+- Missing namespace/name in structured logging
+- Inconsistent error message format
+- Using different patterns across similar operations
+
+**Enforce this pattern in ALL future PRs for operational consistency!**
 
 ```go
 // ✅ Good - log at boundary (Kubernetes/controller-runtime pattern)
