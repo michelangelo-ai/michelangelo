@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { buildColumnFactory } from '#core/components/table/__fixtures__/column-factory';
+import { buildTableRowFactory } from '#core/components/table/__fixtures__/row-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
@@ -11,8 +12,11 @@ import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { TableCell } from '../table-cell';
 
 import type { ColumnConfig } from '../../../types/column-types';
+import type { ColumnTooltipContentRendererProps } from '../types';
 
 describe('TableCell', () => {
+  const buildRow = buildTableRowFactory<unknown>({ id: 'row-1', record: { name: 'John Doe' } });
+
   it('should render basic text cell', () => {
     const column: ColumnConfig = {
       id: 'name',
@@ -21,7 +25,7 @@ describe('TableCell', () => {
     };
 
     render(
-      <TableCell column={column} record={{ name: 'John Doe' }} value="John Doe" />,
+      <TableCell column={column} record={{ name: 'John Doe' }} value="John Doe" row={buildRow()} />,
       buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
     );
 
@@ -39,7 +43,7 @@ describe('TableCell', () => {
     const record = { name: 'Jane Smith' };
 
     render(
-      <TableCell column={column} record={record} value="Jane Smith" />,
+      <TableCell column={column} record={record} value="Jane Smith" row={buildRow({ record })} />,
       buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
     );
 
@@ -58,6 +62,7 @@ describe('TableCell', () => {
       value: 'test-value',
       columnFilterValue: undefined,
       setColumnFilterValue: mockSetColumnFilterValue,
+      row: buildRow({ record: { id: 1, name: 'Test Record' } }),
     };
 
     beforeEach(() => {
@@ -177,6 +182,56 @@ describe('TableCell', () => {
 
       expect(screen.getByText('test-value')).toBeInTheDocument();
       expect(screen.queryByTestId('tooltip-hover-container')).not.toBeInTheDocument();
+    });
+
+    it('renders custom tooltip content with access to row cells', async () => {
+      const user = userEvent.setup();
+      const CustomTooltipContent = (props: ColumnTooltipContentRendererProps<unknown>) => (
+        <div>
+          <div>Row contains {props.row?.cells?.length ?? 0} cells</div>
+          <div>Cell IDs: {props.row?.cells?.map((cell) => cell.id).join(', ') ?? ''}</div>
+        </div>
+      );
+
+      const column = buildColumn({
+        id: 'custom-tooltip-column',
+        tooltip: {
+          content: CustomTooltipContent,
+          action: 'filter',
+        },
+      });
+
+      const mockRow = buildRow({
+        id: 'test-row',
+        cells: [
+          {
+            id: 'cell-1',
+            content: <div>Content 1</div>,
+            column: { id: 'col-1', label: 'Col 1' },
+            value: 'value1',
+          },
+          {
+            id: 'cell-2',
+            content: <div>Content 2</div>,
+            column: { id: 'col-2', label: 'Col 2' },
+            value: 'value2',
+          },
+        ],
+        record: defaultProps.record,
+      });
+
+      render(
+        <TableCell {...defaultProps} column={column} row={mockRow} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      await user.hover(screen.getByText('test-value'));
+      await screen.findByText('Row contains 2 cells');
+      await screen.findByText('Cell IDs: cell-1, cell-2');
     });
   });
 });

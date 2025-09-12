@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react';
 
-import { getTanstackRowFixture } from '../__fixtures__/mock-table-body';
+import { getTanstackRowFixture } from '#core/components/table/__fixtures__/row-factory';
 import { transformRows } from '../row-transformer';
 
 describe('transformRows', () => {

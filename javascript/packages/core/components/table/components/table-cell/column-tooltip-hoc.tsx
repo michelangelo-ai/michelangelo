@@ -1,13 +1,14 @@
-import { CellTooltipContentRenderer } from '#core/components/cell/components/tooltip/cell-tooltip-content-renderer';
 import { CellTooltipWrapper } from '#core/components/cell/components/tooltip/cell-tooltip-wrapper';
+import { ColumnTooltipContentRenderer } from './column-tooltip-content-renderer';
 import { isFilterAlreadyApplied } from './utils';
 
 import type { TooltipHOCProps } from '#core/components/cell/components/tooltip/types';
 import type { CellRenderer } from '#core/components/cell/types';
+import type { TableRow } from '#core/components/table/components/table-body/types';
 import type { TableCellProps } from './types';
 
 /**
- * Creates a tooltip HOC that provides filter actions to custom tooltip content
+ * Creates a tooltip HOC that provides row context and filter actions to custom tooltip content
  *
  * @remarks
  * **Filter behavior:**
@@ -26,10 +27,27 @@ import type { TableCellProps } from './types';
  *     action: 'filter'
  *   }
  * };
+
+ * // Custom tooltip accessing row data
+ * const column = {
+ *   id: 'name',
+ *   label: 'Name',
+ *   tooltip: {
+ *     content: ({ row, value }) => (
+ *       <div>
+ *         <div>Current: {value}</div>
+ *         <div>Row has {row.cells.length} columns</div>
+ *         <div>Other data: {row.cells.map(c => c.value).join(', ')}</div>
+ *       </div>
+ *     ),
+ *     action: 'custom'
+ *   }
+ * }
  * ```
  */
 export function columnTooltipHOC<T = unknown>(
   Component: CellRenderer<T>,
+  row: TableRow<T>,
   columnFilterValue?: TableCellProps['columnFilterValue'],
   setColumnFilterValue?: TableCellProps['setColumnFilterValue']
 ): CellRenderer<T> {
@@ -51,7 +69,7 @@ export function columnTooltipHOC<T = unknown>(
     return (
       <CellTooltipWrapper
         actionHandler={actionHandler}
-        content={<CellTooltipContentRenderer {...props} />}
+        content={<ColumnTooltipContentRenderer<T> {...props} row={row} />}
       >
         <Component {...props} />
       </CellTooltipWrapper>
