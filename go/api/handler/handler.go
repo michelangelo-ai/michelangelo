@@ -40,81 +40,32 @@ const (
 // NewFakeAPIHandler creates an API handler with the provided k8s client.  This is used for unit test only.
 func NewFakeAPIHandler(k8sClient ctrlRTClient.Client) api.Handler {
 	return &apiHandler{
-		k8sClient: k8sClient,
 		conf: storage.MetadataStorageConfig{
 			EnableMetadataStorage: false,
 		},
-		logger:  zapr.NewLogger(zap.NewNop()),
-		metrics: tally.NoopScope,
+		logger:            zapr.NewLogger(zap.NewNop()),
+		metrics:           tally.NoopScope,
+		k8sHandler:        NewK8sHandler(k8sClient),
+		metadataHandler:   NewMetadataHandler(nil, nil, zapr.NewLogger(zap.NewNop())),
+		blobHandler:       NewBlobHandler(nil),
+		validationHandler: NewValidationHandler(),
 	}
-}
-
-func newAPIServerHandler(params Params) (api.Handler, error) {
-	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
-	if err != nil {
-		return nil, err
-	}
-	factory := newK8sAndMetadataStorageFactory(params)
-	return factory.GetAPIHandler(k8sClient)
-}
-
-func newCtrlManagerHandler(params Params) (api.Handler, error) {
-	factory := newK8sAndMetadataStorageFactory(params)
-	return factory.GetAPIHandler(params.Manager.GetClient())
-}
-
-type factoryImpl struct {
-	StorageConfig storage.MetadataStorageConfig
-	StorageClient storage.MetadataStorage
-	BlobStorage   storage.BlobStorage
-	Logger        logr.Logger
-	Metrics       tally.Scope
-}
-
-func newK8sOnlyFactory(params Params) Factory {
-	return &factoryImpl{
-		StorageConfig: storage.MetadataStorageConfig{
-			EnableMetadataStorage: false,
-		},
-		StorageClient: nil,
-		BlobStorage:   nil,
-		Logger:        zapr.NewLogger(params.Logger),
-		Metrics:       params.Metrics}
-}
-
-func newK8sAndMetadataStorageFactory(params Params) Factory {
-	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.MetadataStorage,
-		BlobStorage: params.BlobStorage, Logger: zapr.NewLogger(params.Logger),
-		Metrics: params.Metrics}
-}
-
-func (f *factoryImpl) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
-	if f.StorageConfig.EnableMetadataStorage && f.StorageClient == nil {
-		return nil, fmt.Errorf("unable to construct api handler. storage client is nil")
-	}
-
-	handler := apiHandler{k8sClient: client, metadataStorage: f.StorageClient, conf: f.StorageConfig,
-		blobStorage: f.BlobStorage, logger: f.Logger, metrics: f.Metrics}
-	return &handler, nil
 }
 
 // apiHandler is an api.Handler that abstracts the API operations from the underlying systems (i.e. k8s/ETCD + MetadataStorage).
 type apiHandler struct {
-	// controller-runtime k8s client to access the k8s API server.
-	k8sClient ctrlRTClient.Client
-
-	// metadata storage client
-	metadataStorage storage.MetadataStorage
-
 	// storage library configuration
 	conf storage.MetadataStorageConfig
-
-	// handler for blob storage
-	blobStorage storage.BlobStorage
 
 	logger logr.Logger
 
 	metrics tally.Scope
+
+	// Focused handlers for better separation of concerns
+	k8sHandler        K8sHandler        `optional:"true"`
+	metadataHandler   MetadataHandler   `optional:"true"`
+	blobHandler       BlobHandler       `optional:"true"`
+	validationHandler ValidationHandler `optional:"true"`
 }
 
 // Create implements api.Handler.Create
@@ -127,7 +78,11 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 	}
 	log, headers := initLogger(ctx, handler.logger, "Create", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("Create", handler.metrics, log, start, kind, headers)
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateCreate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
@@ -136,27 +91,14 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
-	if storage.EnableMetadataStorage(&handler.conf) {
-		// Check if the object exists in MetadataStorage
-		tmpObj := obj
-		err = handler.metadataStorage.GetByName(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
-		if err == nil {
-			return status.Errorf(codes.AlreadyExists, "failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
-				objMeta.GetNamespace(), objMeta.GetName())
-		}
-
-		// Add ingester finalizer
-		ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
+	if metadataErr := handler.handleMetadataStorageForCreate(ctx, obj, objMeta); metadataErr != nil {
+		return metadataErr
 	}
 
 	setUpdateTimestamp(obj, true)
 
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
-	err = handler.k8sClient.Create(ctx, obj, &ctrlRTClient.CreateOptions{
-		DryRun:       opts.DryRun,
-		FieldManager: opts.FieldManager,
-		Raw:          opts,
-	})
+	err = handler.k8sHandler.Create(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "create", objMeta.GetNamespace(), objMeta.GetName())
 }
@@ -174,7 +116,7 @@ func (handler *apiHandler) Get(
 	defer emitAPIMetrics("Get", handler.metrics, log, start, kind, headers)
 
 	// Get from K8s/ETCD
-	err := handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: namespace, Name: name}, obj)
+	err := handler.k8sHandler.Get(ctx, namespace, name, obj)
 	if err == nil {
 		// If an object is immutable and is being deleted in ETCD, it means the object is within the grace period and is
 		// pending deleted, so we should proceed to the section below to get from the metadata storage.
@@ -190,15 +132,11 @@ func (handler *apiHandler) Get(
 
 	// If the object does not exist in K8s/ETCD, get from metadata storage.
 	if storage.EnableMetadataStorage(&handler.conf) {
-		if err = handler.metadataStorage.GetByName(ctx, namespace, name, obj); err != nil {
+		if err = handler.metadataHandler.Get(ctx, namespace, name, obj); err != nil {
 			return surfaceGrpcError(err, "get", namespace, name)
 		}
 
-		if handler.blobStorage.IsObjectInteresting(obj) {
-			if terrablobErr := handler.blobStorage.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
-				log.Error(terrablobErr, "Failed to merging with blob storage")
-			}
-		}
+		handler.handleBlobStorageForGet(ctx, obj, log)
 		log.Info("Find object in metadata storage")
 	}
 
@@ -212,7 +150,11 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 	kind := obj.GetObjectKind().GroupVersionKind().Kind
 	log, headers := initLogger(ctx, handler.logger, "Update", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("Update", handler.metrics, log, start, kind, headers)
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateUpdate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
@@ -227,15 +169,11 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
 	}
 
-	err = handler.k8sClient.Update(ctx, obj, &ctrlRTClient.UpdateOptions{
-		DryRun:       opts.DryRun,
-		FieldManager: opts.FieldManager,
-		Raw:          opts,
-	})
+	err = handler.k8sHandler.Update(ctx, obj, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
-		err = handleUpdate(ctx, tmpObj, handler.metadataStorage, true, nil, handler.blobStorage)
+		err = handler.metadataHandler.Update(ctx, tmpObj)
 		if err != nil {
 			return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
 		}
@@ -252,7 +190,11 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 	log, headers := initLogger(ctx, handler.logger, "UpdateStatus", obj.GetNamespace(), obj.GetName(), kind)
 	defer emitAPIMetrics("UpdateStatus", handler.metrics, log, start, kind, headers)
 
-	if err := api.Validate(obj); err != nil {
+	if handler.validationHandler != nil {
+		if err := handler.validationHandler.ValidateUpdate(obj); err != nil {
+			return err
+		}
+	} else if err := api.Validate(obj); err != nil {
 		return err
 	}
 
@@ -263,12 +205,7 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 
 	setUpdateTimestamp(obj, false)
 
-	err := handler.k8sClient.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
-		DryRun:       opts.DryRun,
-		FieldManager: opts.FieldManager,
-		Raw:          opts,
-	},
-	)
+	err := handler.k8sHandler.UpdateStatus(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }
@@ -292,13 +229,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 
 	// Delete the object in K8s/ETCD
 	if storage.EnableMetadataStorage(&handler.conf) == false {
-		err = handler.k8sClient.Delete(ctx, obj, &ctrlRTClient.DeleteOptions{
-			DryRun:             opts.DryRun,
-			Preconditions:      opts.Preconditions,
-			PropagationPolicy:  opts.PropagationPolicy,
-			GracePeriodSeconds: opts.GracePeriodSeconds,
-			Raw:                opts,
-		})
+		err = handler.k8sHandler.Delete(ctx, obj, opts)
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
 
@@ -307,7 +238,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	if !ok {
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
 	}
-	err = handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: objMeta.GetNamespace(), Name: objMeta.GetName()}, tmpObj)
+	err = handler.k8sHandler.Get(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
 	if err == nil {
 		// Object exists in K8s/ETCD
 		if utils.IsImmutable(tmpObj) {
@@ -322,7 +253,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 			//    later.
 			if tmpObj.GetDeletionTimestamp() != nil {
 				log.Info("Deleting an immutable object with deletion timestamp != nil - deleting from metadata storage")
-				return deleteObjectFromMetadataStorage(ctx, log, tmpObj, handler)
+				return deleteObjectFromMetadataStorage(ctx, tmpObj, handler)
 			}
 
 			log.Info("Deleting an immutable object w/o deletion timestamp")
@@ -338,14 +269,14 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		}
 		annotation[api.DeletingAnnotation] = "true"
 
-		err = handler.k8sClient.Update(ctx, tmpObj, &ctrlRTClient.UpdateOptions{})
+		err = handler.k8sHandler.Update(ctx, tmpObj, &metav1.UpdateOptions{})
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
 
 	// If the object does not exist in K8s/ETCD, delete it in metadata storage.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
 		log.Info("Object does not exist in ETCD - deleting from metadata storage")
-		return deleteObjectFromMetadataStorage(ctx, log, obj, handler)
+		return deleteObjectFromMetadataStorage(ctx, obj, handler)
 	}
 	return err
 }
@@ -365,33 +296,13 @@ func (handler *apiHandler) List(ctx context.Context, namespace string, opts *met
 	defer emitAPIMetrics("List", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) {
-		return handler.metadataStorageList(ctx, namespace, opts, listOptionsExt, list)
+		return handler.metadataHandler.List(ctx, namespace, opts, listOptionsExt, list)
 	} else if listOptionsExt != nil && !listOptionsExt.Equal(&apipb.ListOptionsExt{}) {
 		log.Info("ListOptionsExt is ignored when metadata storage is not enabled", "listOptionsExt", listOptionsExt)
 	}
 
-	parsedListOptions, err := getCRTListOptions(namespace, opts)
-	if err != nil {
-		return err
-	}
-
-	err = handler.k8sClient.List(ctx, list, parsedListOptions)
+	err := handler.k8sHandler.List(ctx, namespace, opts, list)
 	return surfaceGrpcError(err, "list", namespace, "")
-}
-
-func (handler *apiHandler) metadataStorageList(ctx context.Context, namespace string, opts *metav1.ListOptions,
-	listOptionsExt *apipb.ListOptionsExt, list ctrlRTClient.ObjectList) error {
-	listResponse := &storage.ListResponse{}
-	typeMeta, err := utils.GetObjectTypeMetaFromList(list, scheme.Scheme)
-	if err != nil {
-		return err
-	}
-	err = handler.metadataStorage.List(ctx, typeMeta, namespace, opts, listOptionsExt, listResponse)
-	if err != nil {
-		return err
-	}
-	list.SetContinue(listResponse.Continue)
-	return meta.SetList(list, listResponse.Items)
 }
 
 // DeleteCollection implements api.Handler.DeleteCollection
@@ -410,21 +321,7 @@ func (handler *apiHandler) DeleteCollection(
 	defer emitAPIMetrics("DeleteCollection", handler.metrics, log, start, kind, headers)
 
 	if storage.EnableMetadataStorage(&handler.conf) == false {
-		parsedListOptions, err := getCRTListOptions(namespace, listOpts)
-		if err != nil {
-			return err
-		}
-
-		err = handler.k8sClient.DeleteAllOf(ctx, objType, &ctrlRTClient.DeleteAllOfOptions{
-			ListOptions: *parsedListOptions,
-			DeleteOptions: ctrlRTClient.DeleteOptions{
-				GracePeriodSeconds: deleteOpts.GracePeriodSeconds,
-				Preconditions:      deleteOpts.Preconditions,
-				PropagationPolicy:  deleteOpts.PropagationPolicy,
-				Raw:                deleteOpts,
-				DryRun:             deleteOpts.DryRun,
-			},
-		})
+		err := handler.k8sHandler.DeleteCollection(ctx, objType, namespace, deleteOpts, listOpts)
 		return surfaceGrpcError(err, "delete collection", namespace, "")
 	}
 
@@ -447,7 +344,7 @@ func (handler *apiHandler) DeleteCollection(
 	if !ok {
 		return status.Errorf(codes.Internal, "new object does not implement the controller-runtime client.ObjectList interface")
 	}
-	err = handler.metadataStorageList(ctx, namespace, listOpts, nil, listObj)
+	err = handler.metadataHandler.List(ctx, namespace, listOpts, nil, listObj)
 	if err != nil {
 		return err
 	}
@@ -472,12 +369,8 @@ func isDeletedImmutableObject(obj ctrlRTClient.Object) bool {
 	return utils.IsImmutable(obj) && obj.GetDeletionTimestamp() != nil
 }
 
-func deleteObjectFromMetadataStorage(ctx context.Context, log logr.Logger, obj ctrlRTClient.Object, handler *apiHandler) error {
-	typeMeta, err := utils.GetObjectTypeMetafromObject(obj, scheme.Scheme)
-	if err != nil {
-		return fmt.Errorf("cannot get object type meta %v", err)
-	}
-	err = handleDelete(ctx, log, typeMeta, obj, handler.metadataStorage, handler.blobStorage)
+func deleteObjectFromMetadataStorage(ctx context.Context, obj ctrlRTClient.Object, handler *apiHandler) error {
+	err := handler.metadataHandler.Delete(ctx, obj)
 	if err != nil {
 		return surfaceGrpcError(err, "delete", obj.GetNamespace(), obj.GetName())
 	}
@@ -540,9 +433,7 @@ func (handler *apiHandler) hasSpecChange(ctx context.Context, objForUpdate ctrlR
 	// look for the object in k8s/ETCD. If the object is not found in ETCD, the update must be on either labels or
 	// annotations, so there's no change in spec.
 	apiServerObj := reflect.New(reflect.TypeOf(objForUpdate).Elem()).Interface().(ctrlRTClient.Object)
-	err := handler.k8sClient.Get(ctx, ctrlRTClient.ObjectKey{Namespace: objForUpdate.GetNamespace(),
-		Name: objForUpdate.GetName()},
-		apiServerObj)
+	err := handler.k8sHandler.Get(ctx, objForUpdate.GetNamespace(), objForUpdate.GetName(), apiServerObj)
 	if err == nil {
 		isEqual, err := isSpecEqual(apiServerObj, objForUpdate)
 		if err != nil {
@@ -608,35 +499,30 @@ func getSpec(object any) (any, error) {
 	return rv.MethodByName(_getSpecMethodName).Call([]reflect.Value{})[0].Interface(), nil
 }
 
-// handleUpdate updates the object in metadataStorage and blobStorage.
-func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
-	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
-	// TODO: update the object in blob storage
-	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
-}
-
-// HandleDelete deletes the object in metadata storage and blob storage.
-// 1. Gets the object currently stored in metadataStorage, to retrieve the annotations
-// 2. Deletes the object in metadataStorage
-// 3. Deletes the object in blob storage
-func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
-	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
-	if handler.IsObjectInteresting(object) {
-		// TODO: if blob annotations are already available, this Get is not needed
-		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)
-		if err := metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
-			return err
-		}
-
-		if getErr == nil {
-			// Failed to delete in blob storage is not a critical failure, as orphan blobs can be deleted by garbage
-			// collector. So, do not return error.
-			err := handler.DeleteFromBlobStorage(ctx, object)
-			log.Error(err, "Failed to delete object in blob storage", "uid", object.GetUID())
-		}
-
+// handleMetadataStorageForCreate handles metadata storage logic during create operations
+func (handler *apiHandler) handleMetadataStorageForCreate(ctx context.Context, obj ctrlRTClient.Object, objMeta metav1.Object) error {
+	if !storage.EnableMetadataStorage(&handler.conf) {
 		return nil
 	}
 
-	return metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName())
+	// Check if the object exists in MetadataStorage
+	tmpObj := obj
+	err := handler.metadataHandler.Get(ctx, objMeta.GetNamespace(), objMeta.GetName(), tmpObj)
+	if err == nil {
+		return status.Errorf(codes.AlreadyExists, "failed to create API object. An object of the same name already exists. namespace:%v, name: %v",
+			objMeta.GetNamespace(), objMeta.GetName())
+	}
+
+	// Add ingester finalizer
+	ctrlRTUtil.AddFinalizer(objMeta.(ctrlRTClient.Object), api.IngesterFinalizer)
+	return nil
+}
+
+// handleBlobStorageForGet handles blob storage logic during get operations
+func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrlRTClient.Object, log logr.Logger) {
+	if handler.blobHandler.IsObjectInteresting(obj) {
+		if terrablobErr := handler.blobHandler.MergeWithExternalBlob(ctx, obj); terrablobErr != nil {
+			log.Error(terrablobErr, "Failed to merging with blob storage")
+		}
+	}
 }
