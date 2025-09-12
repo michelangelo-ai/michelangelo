@@ -2,6 +2,7 @@ import { CellContext } from '@tanstack/react-table';
 import { renderHook, screen } from '@testing-library/react';
 import { render } from '@testing-library/react';
 
+import { getTanstackRowFixture } from '#core/components/table/__fixtures__/row-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { useColumnTransformer } from '../use-column-transformer';
@@ -153,9 +154,10 @@ describe('useColumnTransformer', () => {
         getFilterValue: () => 'John Doe',
         setFilterValue: vi.fn(),
       },
-      row: {
-        original: { name: 'John Doe' },
-      },
+      row: getTanstackRowFixture({
+        id: 'John Doe',
+        cellContents: ['John Doe'],
+      }),
       getValue: () => 'John Doe',
     } as unknown as CellContext<unknown, unknown>;
 

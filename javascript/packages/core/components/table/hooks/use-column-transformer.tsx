@@ -2,6 +2,7 @@ import { ReactNode, useMemo } from 'react';
 import { CellContext } from '@tanstack/react-table';
 
 import { useFilterFactory } from '../components/filter/use-filter-factory';
+import { transformRows } from '../components/table-body/row-transformer';
 import { TableCell } from '../components/table-cell/table-cell';
 import { normalizeColumnAccessor } from '../utils/normalize-column-accessor';
 
@@ -47,10 +48,11 @@ export function useColumnTransformer<T extends TableData = TableData>(
         accessorFn: normalizeColumnAccessor<T>(column),
         header: column.label,
         cell: (props: CellContext<T, unknown>) => (
-          <TableCell
+          <TableCell<T>
             column={props.column.columnDef.meta as ColumnConfig}
+            row={transformRows<T>([props.row])[0]}
             record={props.row.original as object}
-            value={props.getValue()}
+            value={props.getValue<T>()}
             columnFilterValue={props.column.getFilterValue()}
             setColumnFilterValue={props.column.setFilterValue}
           />
@@ -60,13 +62,14 @@ export function useColumnTransformer<T extends TableData = TableData>(
             <column.aggregatedCell
               column={props.column.columnDef.meta as ColumnConfig<T>}
               record={props.row.original as object}
-              value={props.getValue() as T}
+              value={props.getValue<T>()}
             />
           ) : (
-            <TableCell
+            <TableCell<T>
               column={props.column.columnDef.meta as ColumnConfig}
+              row={transformRows<T>([props.row])[0]}
               record={props.row.original as object}
-              value={props.getValue()}
+              value={props.getValue() as T}
               columnFilterValue={props.column.getFilterValue()}
               setColumnFilterValue={props.column.setFilterValue}
             />

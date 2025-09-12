@@ -8,16 +8,16 @@ import { getResponsiveColumnWidth } from './get-responsive-column-width';
 
 import type { TableCellProps } from './types';
 
-export const TableCell = (props: TableCellProps) => {
+export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
   const [css, theme] = useStyletron();
-  const { record, value, columnFilterValue, setColumnFilterValue } = props;
+  const { row, record, value, columnFilterValue, setColumnFilterValue } = props;
   const resolver = useInterpolationResolver();
   const column = resolver(resolveColumnForRow(props.column, record), { row: record });
 
   const getCellRenderer = useGetCellRenderer();
   const ColumnRenderer = getCellRenderer({ column, record, value });
   const Component = column.tooltip
-    ? columnTooltipHOC(ColumnRenderer, columnFilterValue, setColumnFilterValue)
+    ? columnTooltipHOC<T>(ColumnRenderer, row, columnFilterValue, setColumnFilterValue)
     : ColumnRenderer;
 
   return (
