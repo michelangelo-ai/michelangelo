@@ -169,6 +169,15 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		}
 	}
 
+	// Apply DevRun environment overrides if present
+	if pipelineRun.Spec.Input != nil {
+		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
+			if environOverrides := environField.GetStructValue(); environOverrides != nil {
+				applyDevRunEnvironmentOverrides(envs, environOverrides)
+			}
+		}
+	}
+
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
 	envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
@@ -215,4 +224,23 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
+}
+
+// applyDevRunEnvironmentOverrides applies DevRun environment variable overrides to the base environment
+func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *pbtypes.Struct) {
+	if devInput == nil || len(devInput.Fields) == 0 {
+		return // No overrides to apply
+	}
+
+	// Apply dev input overrides - convert all values to strings for environment variables
+	for key, value := range devInput.Fields {
+		switch value.GetKind().(type) {
+		case *pbtypes.Value_StringValue:
+			baseEnv[key] = value.GetStringValue()
+		case *pbtypes.Value_NumberValue:
+			baseEnv[key] = fmt.Sprintf("%g", value.GetNumberValue())
+		case *pbtypes.Value_BoolValue:
+			baseEnv[key] = fmt.Sprintf("%t", value.GetBoolValue())
+		}
+	}
 }

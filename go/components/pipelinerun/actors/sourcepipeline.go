@@ -1,13 +1,9 @@
 package actors
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 
-	"github.com/gogo/protobuf/jsonpb"
-	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -137,17 +133,8 @@ func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.Pipeline
 		}
 	}
 
-	// Apply environment variable overrides
-	var environOverrides *pbtypes.Struct
-	if input := pipelineRunSpec.GetInput(); input != nil {
-		if environField := input.Fields["environ"]; environField != nil {
-			environOverrides = environField.GetStructValue()
-		}
-	}
-	err := a.applyEnvironmentOverrides(pipeline, environOverrides)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply environment overrides: %w", err)
-	}
+	// Note: Environment variable overrides for DevRuns are applied in ExecuteWorkflow actor
+	// during workflow input preparation, preserving the original pipeline manifest
 
 	return pipeline, nil
 }
@@ -163,106 +150,3 @@ func (a *SourcePipelineActor) validateDevRunSpec(pipelineSpec *v2.PipelineSpec) 
 	return nil
 }
 
-// applyEnvironmentOverrides merges dev input environment variables with base pipeline config
-func (a *SourcePipelineActor) applyEnvironmentOverrides(pipeline *v2.Pipeline, devInput *pbtypes.Struct) error {
-	logger := a.logger.With(zap.String("applyEnvironmentOverrides", fmt.Sprintf("applyEnvironmentOverrides logs")))
-	if devInput == nil || len(devInput.Fields) == 0 {
-		logger.Info("no env overrides for dev run")
-		return nil // No overrides to apply
-	}
-
-	// Deserialize existing manifest content
-	baseConfig, err := a.decodePipelineManifestContent(pipeline.Spec)
-	if err != nil {
-		return fmt.Errorf("failed to decode base manifest: %w", err)
-	}
-
-	// Extract base environment
-	baseEnv := make(map[string]interface{})
-	if envVal, exists := baseConfig["environ"]; exists {
-		if envMap, ok := envVal.(map[string]interface{}); ok {
-			baseEnv = envMap
-		}
-	}
-
-	// Apply dev input overrides - convert all values to strings for environment variables
-	for key, value := range devInput.Fields {
-		switch value.GetKind().(type) {
-		case *pbtypes.Value_StringValue:
-			baseEnv[key] = value.GetStringValue()
-		case *pbtypes.Value_NumberValue:
-			baseEnv[key] = fmt.Sprintf("%g", value.GetNumberValue())
-		case *pbtypes.Value_BoolValue:
-			baseEnv[key] = fmt.Sprintf("%t", value.GetBoolValue())
-		}
-	}
-
-	// Update manifest content with merged environment
-	baseConfig["environ"] = baseEnv
-
-	// Re-encode manifest content
-	updatedContent, err := a.encodePipelineManifestContent(baseConfig)
-	if err != nil {
-		return fmt.Errorf("failed to encode updated manifest: %w", err)
-	}
-
-	pipeline.Spec.Manifest.Content = updatedContent
-	return nil
-}
-
-// decodePipelineManifestContent decodes pipeline manifest content from protobuf Any to map
-func (a *SourcePipelineActor) decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]interface{}, error) {
-	if pipelineSpec.Manifest.Content == nil {
-		return map[string]interface{}{}, nil
-	}
-
-	pbStruct := &apipb.TypedStruct{}
-	err := pbtypes.UnmarshalAny(pipelineSpec.Manifest.Content, pbStruct)
-	if err != nil || pbStruct.Value == nil {
-		return nil, fmt.Errorf("failed to unmarshal pipeline manifest content to typed struct: %v", err)
-	}
-
-	marshaler := &jsonpb.Marshaler{}
-	pipelineConfigStr, err := marshaler.MarshalToString(pbStruct.Value)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal typed struct to JSON: %v", err)
-	}
-
-	pipelineConfig := make(map[string]interface{})
-	err = json.Unmarshal([]byte(pipelineConfigStr), &pipelineConfig)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal pipeline manifest content to map: %v", err)
-	}
-
-	return pipelineConfig, nil
-}
-
-// encodePipelineManifestContent encodes map back to protobuf Any for pipeline manifest content
-func (a *SourcePipelineActor) encodePipelineManifestContent(config map[string]interface{}) (*pbtypes.Any, error) {
-	// Convert map to JSON
-	configJSON, err := json.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal config to JSON: %v", err)
-	}
-
-	// Convert JSON to protobuf Struct
-	pbStruct := &pbtypes.Struct{}
-	unmarshaler := &jsonpb.Unmarshaler{}
-	err = unmarshaler.Unmarshal(bytes.NewReader(configJSON), pbStruct)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal JSON to protobuf Struct: %v", err)
-	}
-
-	// Wrap in TypedStruct
-	typedStruct := &apipb.TypedStruct{
-		Value: pbStruct,
-	}
-
-	// Marshal to Any
-	anyContent, err := pbtypes.MarshalAny(typedStruct)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal TypedStruct to Any: %v", err)
-	}
-
-	return anyContent, nil
-}

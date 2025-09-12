@@ -186,12 +186,11 @@ func setUpSourcePipelineActor(t *testing.T, initialObjects []runtime.Object) *So
 
 func TestSourcePipelineActor_DevRun(t *testing.T) {
 	testCases := []struct {
-		name                         string
-		pipelineRun                  v2.PipelineRun
-		expectedCondition           *apipb.Condition
-		expectedSourcePipelineName  string
-		expectedEnvironmentVars     map[string]string
-		errMsg                      string
+		name                        string
+		pipelineRun                 v2.PipelineRun
+		expectedCondition          *apipb.Condition
+		expectedSourcePipelineName string
+		errMsg                     string
 	}{
 		{
 			name: "dev run with inline pipeline_spec",
@@ -233,9 +232,6 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 				Status: apipb.CONDITION_STATUS_TRUE,
 			},
 			expectedSourcePipelineName: "devrun-test-devrun",
-			expectedEnvironmentVars: map[string]string{
-				"BASE_VAR": "base_value",
-			},
 		},
 		{
 			name: "dev run with environment variable overrides",
@@ -310,13 +306,6 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 				Status: apipb.CONDITION_STATUS_TRUE,
 			},
 			expectedSourcePipelineName: "devrun-test-devrun-env",
-			expectedEnvironmentVars: map[string]string{
-				"BASE_VAR":   "base_value",
-				"foo":        "bar",        // Overridden
-				"lorem":      "ipsum",      // New
-				"number_var": "42",        // Converted to string
-				"bool_var":   "true",      // Converted to string
-			},
 		},
 		{
 			name: "dev run with invalid pipeline_spec - missing manifest",
@@ -400,12 +389,6 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 				require.NotNil(t, testCase.pipelineRun.Status.SourcePipeline.Pipeline)
 				require.Equal(t, testCase.expectedSourcePipelineName, testCase.pipelineRun.Status.SourcePipeline.Pipeline.Name)
 				require.Equal(t, "test-namespace", testCase.pipelineRun.Status.SourcePipeline.Pipeline.Namespace)
-				
-				// Verify environment variables if specified
-				if testCase.expectedEnvironmentVars != nil {
-					actualEnvVars := extractEnvironmentFromPipeline(t, testCase.pipelineRun.Status.SourcePipeline.Pipeline)
-					require.Equal(t, testCase.expectedEnvironmentVars, actualEnvVars)
-				}
 				
 				// Verify annotations were copied for dev runs
 				if testCase.pipelineRun.Annotations != nil {
