@@ -52,6 +52,7 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 		TaskQueue:                options.TaskList,
 		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
 		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
+		CronSchedule:             options.CronSchedule,
 	}
 	// This is a workaround for Grab Temporal demo
 	_args := make([]any, len(args))

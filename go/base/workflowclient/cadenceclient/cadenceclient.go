@@ -51,6 +51,7 @@ func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterfa
 		ExecutionStartToCloseTimeout:    options.ExecutionStartToCloseTimeout,
 		DecisionTaskStartToCloseTimeout: options.DecisionTaskStartToCloseTimeout,
 		WorkflowIDReusePolicy:           cadenceClient.WorkflowIDReusePolicyAllowDuplicate,
+		CronSchedule:                    options.CronSchedule,
 	}
 	cadenceWorkflowExecution, err := c.Client.StartWorkflow(ctx, cadenceOptions, workflowName, args...)
 	if err != nil {

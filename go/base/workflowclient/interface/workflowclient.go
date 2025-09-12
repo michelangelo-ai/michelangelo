@@ -10,6 +10,7 @@ type StartWorkflowOptions struct {
 	TaskList                        string
 	ExecutionStartToCloseTimeout    time.Duration
 	DecisionTaskStartToCloseTimeout time.Duration
+	CronSchedule                    string
 }
 
 type WorkflowExecutionStatus int32

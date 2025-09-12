@@ -36,6 +36,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 		TaskList:                        "trigger_run",
 		ExecutionStartToCloseTimeout:    time.Hour * 24 * 365, // 1 year, practically no timeout
 		DecisionTaskStartToCloseTimeout: 30 * time.Second,
+		CronSchedule:                    triggerRun.Spec.Trigger.GetCronSchedule().GetCron(),
 	}
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)

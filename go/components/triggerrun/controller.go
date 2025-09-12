@@ -23,8 +23,6 @@ import (
 const (
 	// this is the concurrency reconcile loops for trigger run, it can be tuned if needed.
 	_maximumConcurrentReconciles = 10
-	_noCronScheduleErrorMessage  = "no cron schedule found, please check the trigger in pipeline spec to make sure it has cron schedule"
-	_triggerNotFoundErrorMessage = "source trigger name or trigger spec not found in current pipeline revision, please manually create a new trigger run"
 )
 
 // Params are the params for instantiating the reconciler.
