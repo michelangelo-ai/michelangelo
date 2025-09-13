@@ -57,10 +57,10 @@ func (g *gateway) createDynamoInfrastructure(ctx context.Context, logger logr.Lo
 func (g *gateway) getDynamoInfrastructureStatus(ctx context.Context, logger logr.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
 	logger.Info("Getting Dynamo infrastructure status", "server", request.InferenceServer)
 
-	// Check DynamoGraphDeployment status
+	// Check DynamoGraphDeployment status (real AI Dynamo CRD)
 	gvr := schema.GroupVersionResource{
-		Group:    "dynamo.ai",
-		Version:  "v1",
+		Group:    "nvidia.com",
+		Version:  "v1alpha1",
 		Resource: "dynamographdeployments",
 	}
 
@@ -102,8 +102,8 @@ func (g *gateway) deleteDynamoInfrastructure(ctx context.Context, logger logr.Lo
 
 	// Delete DynamoGraphDeployment
 	gvr := schema.GroupVersionResource{
-		Group:    "dynamo.ai",
-		Version:  "v1",
+		Group:    "nvidia.com",
+		Version:  "v1alpha1",
 		Resource: "dynamographdeployments",
 	}
 
@@ -328,60 +328,55 @@ func (g *gateway) createDynamoGraphDeployment(ctx context.Context, logger logr.L
 		gpuCount = 1 // Default to 1 GPU
 	}
 
-	// Create DynamoGraphDeployment CRD
+	// Create DynamoGraphDeployment CRD (real AI Dynamo format)
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
-			"apiVersion": "dynamo.ai/v1",
+			"apiVersion": "nvidia.com/v1alpha1",
 			"kind":       "DynamoGraphDeployment",
 			"metadata": map[string]interface{}{
 				"name":      request.InferenceServer.Name,
 				"namespace": request.Namespace,
 			},
 			"spec": map[string]interface{}{
-				"Common": map[string]interface{}{
-					"model":              modelName,
-					"block-size":         64,
-					"max-model-len":      16384,
-					"kv-transfer-config": `{"kv_connector":"DynamoNixlConnector"}`,
-				},
-				"Frontend": map[string]interface{}{
-					"served_model_name": modelName,
-					"endpoint":          "dynamo.Processor.chat/completions",
-					"port":              8000,
-					"ServiceArgs": map[string]interface{}{
-						"workers": 1,
-						"resources": map[string]interface{}{
-							"cpu":    request.Resources.CPU,
-							"memory": request.Resources.Memory,
+				"services": map[string]interface{}{
+					"Frontend": map[string]interface{}{
+						"dynamoNamespace": request.InferenceServer.Name,
+						"componentType":   "frontend",
+						"replicas":        1,
+						"extraPodSpec": map[string]interface{}{
+							"mainContainer": map[string]interface{}{
+								"image": "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.4.1",
+							},
 						},
 					},
-				},
-				"VllmWorker": map[string]interface{}{
-					"enforce-eager":          true,
-					"max-num-batched-tokens": 16384,
-					"enable-prefix-caching":  true,
-					"ServiceArgs": map[string]interface{}{
-						"workers": 1,
+					"VllmDecodeWorker": map[string]interface{}{
+						"dynamoNamespace": request.InferenceServer.Name,
+						"componentType":   "worker",
+						"replicas":        1,
 						"resources": map[string]interface{}{
-							"gpu":    fmt.Sprintf("%d", gpuCount),
-							"cpu":    request.Resources.CPU,
-							"memory": request.Resources.Memory,
+							"limits": map[string]interface{}{
+								"gpu": fmt.Sprintf("%d", gpuCount),
+							},
+						},
+						"extraPodSpec": map[string]interface{}{
+							"mainContainer": map[string]interface{}{
+								"image":      "nvcr.io/nvidia/ai-dynamo/vllm-runtime:0.4.1",
+								"workingDir": "/workspace/components/backends/vllm",
+								"command":    []string{"/bin/sh", "-c"},
+								"args": []string{
+									fmt.Sprintf("python3 -m dynamo.vllm --model %s", modelName),
+								},
+							},
 						},
 					},
-				},
-				"nats": map[string]interface{}{
-					"url": "nats://dynamo-platform-nats:4222",
-				},
-				"etcd": map[string]interface{}{
-					"url": "dynamo-platform-etcd:2379",
 				},
 			},
 		},
 	}
 
 	gvr := schema.GroupVersionResource{
-		Group:    "dynamo.ai",
-		Version:  "v1",
+		Group:    "nvidia.com",
+		Version:  "v1alpha1",
 		Resource: "dynamographdeployments",
 	}
 
@@ -483,8 +478,8 @@ func (g *gateway) checkDynamoModelStatus(ctx context.Context, logger logr.Logger
 
 	// Check if the DynamoGraphDeployment is ready
 	gvr := schema.GroupVersionResource{
-		Group:    "dynamo.ai",
-		Version:  "v1",
+		Group:    "nvidia.com",
+		Version:  "v1alpha1",
 		Resource: "dynamographdeployments",
 	}
 
