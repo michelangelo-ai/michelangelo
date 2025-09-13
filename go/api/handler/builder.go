@@ -239,7 +239,7 @@ func (f *builderFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handler,
 		WithMetrics(f.metrics)
 
 	// Configure metadata storage if enabled
-	if f.storageConfig.EnableMetadataStorage && f.metadataStorage != nil {
+	if f.storageConfig.EnableMetadataStorage {
 		builder = builder.WithMetadataStorage(f.metadataStorage, f.storageConfig)
 	}
 
