@@ -188,3 +188,47 @@ func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 
 	return builder.Build()
 }
+
+// newK8sOnlyFactory creates an API handler with only K8s operations enabled.
+// This function maintains compatibility with the old factory pattern while using the builder internally.
+func newK8sOnlyFactory(params Params) (api.Handler, error) {
+	// Create K8s client
+	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create k8s client: %w", err)
+	}
+
+	// Build handler with K8s only (no metadata storage)
+	return NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithZapLogger(params.Logger).
+		WithMetrics(params.Metrics).
+		Build()
+}
+
+// newK8sAndMetadataStorageFactory creates an API handler with both K8s and metadata storage enabled.
+// This function maintains compatibility with the old factory pattern while using the builder internally.
+func newK8sAndMetadataStorageFactory(params Params) (api.Handler, error) {
+	// Create K8s client
+	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create k8s client: %w", err)
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithZapLogger(params.Logger).
+		WithMetrics(params.Metrics)
+
+	// Configure metadata storage if enabled
+	if params.StorageConfig.EnableMetadataStorage && params.MetadataStorage != nil {
+		builder = builder.WithMetadataStorage(params.MetadataStorage, params.StorageConfig)
+	}
+
+	// Configure blob storage if provided
+	if params.BlobStorage != nil {
+		builder = builder.WithBlobStorage(params.BlobStorage)
+	}
+
+	return builder.Build()
+}
