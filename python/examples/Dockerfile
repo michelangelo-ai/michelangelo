@@ -85,7 +85,8 @@ RUN ARCH=$(dpkg --print-architecture) && \
     echo "Architecture: $ARCH" && \
     export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH} && \
     echo "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH}" >> /etc/environment
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-$(dpkg --print-architecture)
+RUN echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-$(dpkg --print-architecture)" >> /etc/environment
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory

@@ -164,6 +164,23 @@ func NewAPIServerHandler(params Params) (api.Handler, error) {
 	return builder.Build()
 }
 
+func NewK8sOnlyFactory(params Params) Factory {
+	return &factoryImpl{
+		StorageConfig: storage.MetadataStorageConfig{
+			EnableMetadataStorage: false,
+		},
+		StorageClient: nil,
+		BlobStorage:   nil,
+		Logger:        zapr.NewLogger(params.Logger),
+		Metrics:       params.Metrics}
+}
+
+func NewK8sAndMetadataStorageFactory(params Params) Factory {
+	return &factoryImpl{StorageConfig: params.StorageConfig, StorageClient: params.MetadataStorage,
+		BlobStorage: params.BlobStorage, Logger: zapr.NewLogger(params.Logger),
+		Metrics: params.Metrics}
+}
+
 // NewCtrlManagerHandler creates an API handler for the controller manager component.
 // This replaces the legacy newCtrlManagerHandler function with builder-based construction.
 func NewCtrlManagerHandler(params Params) (api.Handler, error) {
