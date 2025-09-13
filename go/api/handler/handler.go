@@ -28,11 +28,6 @@ import (
 	ctrlRTUtil "sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
-// Factory is the interface of the factory function that creates an instance of api.Handler
-type Factory interface {
-	GetAPIHandler(ctrlRTClient.Client) (api.Handler, error)
-}
-
 const (
 	_apiActionLatencyMetric = "apiActionLatency"
 )
