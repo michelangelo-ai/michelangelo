@@ -1,5 +1,6 @@
 import { useStyletron } from 'baseui';
 
+import { useCellStyles } from '#core/components/cell/hooks';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { resolveColumnForRow } from '../../utils/column-resolution-utils';
@@ -13,6 +14,7 @@ export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
   const { row, record, value, columnFilterValue, setColumnFilterValue } = props;
   const resolver = useInterpolationResolver();
   const column = resolver(resolveColumnForRow(props.column, record), { row: record });
+  const style = useCellStyles({ record, style: column.style });
 
   const getCellRenderer = useGetCellRenderer();
   const ColumnRenderer = getCellRenderer({ column, record, value });
@@ -21,7 +23,7 @@ export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
     : ColumnRenderer;
 
   return (
-    <div className={css({ ...getResponsiveColumnWidth(theme), overflow: 'hidden' })}>
+    <div className={css({ ...getResponsiveColumnWidth(theme), overflow: 'hidden', ...style })}>
       <Component column={column} record={record} value={value} CellComponent={TableCell} />
     </div>
   );
