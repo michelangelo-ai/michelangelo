@@ -87,16 +87,15 @@ def pusher(model_uri: str, deployed_model_name: str):
         traced_model.save(traced_model_path)
 
         # Save config.pbtxt
-        model_folder = deployed_model_name
         config_path = os.path.join(local_model_dir, "config.pbtxt")
         with open(config_path, "w") as config_file:
-            config_file.write(CONFIG_PBTXT.format(model_name=model_folder).strip())
+            config_file.write(CONFIG_PBTXT.format(model_name=deployed_model_name).strip())
 
         # Define deployment bucket and paths
         deploy_bucket = "deploy-models"
 
-        # the first bert_cola is project name, the second one is the model name matched to the config.pbtxt
-        base_s3_path = f"s3://{deploy_bucket}/{deployed_model_name}/{model_folder}"
+        # Standard Triton model repository structure: deploy-models/model_name/
+        base_s3_path = f"s3://{deploy_bucket}/{deployed_model_name}"
 
         # Upload files to S3 using fsspec
         for local_file, s3_suffix in [

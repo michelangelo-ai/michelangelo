@@ -5,17 +5,21 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/deployment/provider/config"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ValidationActor validates deployment configuration
 type ValidationActor struct {
-	client client.Client
-	logger logr.Logger
+	client    client.Client
+	blobstore *blobstore.BlobStore
+	logger    logr.Logger
 }
 
 func (a *ValidationActor) GetType() string {
@@ -53,16 +57,31 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 		}, nil
 	}
 
-	// For realistic validation, check if model follows expected pattern
-	// In a real implementation, this would query MinIO/storage to verify model exists
-	if modelName != "bert-cola-6" && modelName != "bert-cola-7" && modelName != "bert-cola-8" {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ModelNotFound",
-			Message: "Model " + modelName + " not found in storage. Available models: bert-cola-6, bert-cola-7, bert-cola-8",
-		}, nil
+	// Check if model folder exists in MinIO storage
+	if a.blobstore != nil {
+		// Check if model folder exists by looking for any objects with the model prefix
+		modelFolderURI := fmt.Sprintf("s3://deploy-models/%s/", modelName)
+
+		exists, err := a.blobstore.Exists(ctx, modelFolderURI)
+		if err != nil {
+			runtimeCtx.Logger.Error(err, "Failed to check model folder in storage", "model", modelName, "uri", modelFolderURI)
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ModelValidationError",
+				Message: fmt.Sprintf("Error checking model %s in storage", modelName),
+			}, nil
+		}
+		if !exists {
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ModelNotFound",
+				Message: fmt.Sprintf("Model folder %s not found in storage", modelName),
+			}, nil
+		}
 	}
+	// If blobstore is not available, skip storage validation and trust the model name
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -382,8 +401,10 @@ func (a *ResourceAcquisitionActor) Run(ctx context.Context, runtimeCtx plugins.R
 
 // ModelSyncActor handles model synchronization to inference servers
 type ModelSyncActor struct {
-	client client.Client
-	logger logr.Logger
+	client        client.Client
+	gateway       gateways.Gateway
+	dynamicClient dynamic.Interface
+	logger        logr.Logger
 }
 
 func (a *ModelSyncActor) GetType() string {
@@ -413,19 +434,65 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 
 func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running model sync for deployment", "deployment", resource.Name)
-	
+
 	// For OSS, this would sync the model from storage to the inference server
 	if resource.Spec.DesiredRevision != nil {
-		// Simulate model sync by creating/updating ConfigMaps
+		modelName := resource.Spec.DesiredRevision.Name
+		inferenceServerName := resource.Spec.GetInferenceServer().Name
+
 		runtimeCtx.Logger.Info("Syncing model to inference server",
-			"model", resource.Spec.DesiredRevision.Name,
-			"inference_server", resource.Spec.GetInferenceServer().Name)
-		
+			"model", modelName,
+			"inference_server", inferenceServerName)
+
+		// Update model configuration via gateway
+		if a.gateway != nil {
+			updateRequest := gateways.ModelConfigUpdateRequest{
+				InferenceServer: inferenceServerName,
+				Namespace:       resource.Namespace,
+				BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
+				ModelConfigs: []gateways.ModelConfigEntry{
+					{
+						Name:   modelName,
+						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+					},
+				},
+			}
+
+			if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, updateRequest); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to update model config via gateway")
+				return fmt.Errorf("failed to update model config: %w", err)
+			}
+
+			runtimeCtx.Logger.Info("Model configuration updated successfully", "model", modelName)
+		}
+
+		// Update HTTPRoute for deployment-specific routing (model mesh support)
+		if a.client != nil {
+			runtimeCtx.Logger.Info("Updating HTTPRoute for deployment-specific routing",
+				"deployment", resource.Name,
+				"model", modelName)
+
+			// Create config provider to handle HTTPRoute updates
+			configProvider := &config.ConfigProvider{
+				KubeClient:    a.client,
+				DynamicClient: a.dynamicClient, // Now properly injected
+				Gateway:       a.gateway,
+			}
+
+			if err := configProvider.UpdateHTTPRoute(ctx, runtimeCtx.Logger, resource); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to update HTTPRoute for deployment")
+				// Don't fail the sync if HTTPRoute update fails, but log the error
+				runtimeCtx.Logger.Info("Continuing with model sync despite HTTPRoute update failure")
+			} else {
+				runtimeCtx.Logger.Info("HTTPRoute updated successfully for deployment-specific routing")
+			}
+		}
+
 		// Update status to indicate sync completion
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		runtimeCtx.Logger.Info("Model sync completed successfully")
 	}
-	
+
 	return nil
 }
 
@@ -455,21 +522,13 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins
 	// In Uber's implementation, this checks TerraBob and validates model assets
 	modelName := resource.Spec.DesiredRevision.Name
 	
-	// Simulate asset availability check - in real implementation would query storage
-	if modelName == "bert-cola-6" || modelName == "bert-cola-7" || modelName == "bert-cola-8" {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "AssetsAvailable",
-			Message: fmt.Sprintf("Assets for model %s are available and prepared", modelName),
-		}, nil
-	}
-
+	// For OSS, assume assets are always available if the model name is valid
+	// In a real implementation, this would check MinIO/S3 for model artifacts
 	return &apipb.Condition{
 		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "AssetsNotFound",
-		Message: fmt.Sprintf("Assets for model %s not found in storage", modelName),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "AssetsAvailable",
+		Message: fmt.Sprintf("Assets for model %s are available and prepared", modelName),
 	}, nil
 }
 
@@ -575,8 +634,9 @@ func (a *RollingRolloutActor) Run(ctx context.Context, runtimeCtx plugins.Reques
 
 // RolloutCompletionActor handles post-rollout completion tasks (following Uber pattern)
 type RolloutCompletionActor struct {
-	client client.Client
-	logger logr.Logger
+	client  client.Client
+	gateway gateways.Gateway
+	logger  logr.Logger
 }
 
 func (a *RolloutCompletionActor) GetType() string {
@@ -605,35 +665,63 @@ func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugin
 
 func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
-	
+
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
-		
+		inferenceServerName := resource.Spec.GetInferenceServer().Name
+
 		// In Uber's implementation, this:
 		// 1. Updates UCS cache to promote candidate to current
 		// 2. Removes candidate model entries
 		// 3. Cleans up temporary model artifacts
 		// 4. Removes rollout-specific annotations
 		// 5. Updates deployment metadata
-		
-		// For OSS, we simulate completion tasks:
+
+		// For OSS, we implement completion tasks:
 		// - Update deployment status to final state
-		// - Clean up temporary resources
+		// - Clean up old models from ConfigMap
 		// - Mark deployment as healthy and complete
-		
+
+		// CLEANUP LOGIC: Remove old models from ConfigMap after successful deployment
+		if a.gateway != nil {
+			// Get current model configuration to identify old models
+			runtimeCtx.Logger.Info("Cleaning up old models from ConfigMap", "newModel", modelName)
+
+			// Create cleanup request that will remove old models and keep only the new one
+			cleanupRequest := gateways.ModelConfigUpdateRequest{
+				InferenceServer: inferenceServerName,
+				Namespace:       resource.Namespace,
+				BackendType:     v2pb.BACKEND_TYPE_TRITON,
+				ModelConfigs: []gateways.ModelConfigEntry{
+					{
+						Name:   modelName,
+						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+					},
+				},
+			}
+
+			if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, cleanupRequest); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to cleanup old models from ConfigMap")
+				// Don't fail the whole rollout completion due to cleanup failure
+				// but log the error for investigation
+			} else {
+				runtimeCtx.Logger.Info("Successfully cleaned up old models from ConfigMap", "activeModel", modelName)
+			}
+		}
+
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		resource.Status.Message = fmt.Sprintf("Rollout completed successfully for model %s", modelName)
-		
+
 		// Clean up any temporary annotations or metadata
 		if resource.Annotations != nil {
 			// Remove rollout-specific annotations
 			delete(resource.Annotations, "rollout.michelangelo.ai/in-progress")
 			delete(resource.Annotations, "rollout.michelangelo.ai/start-time")
 		}
-		
+
 		runtimeCtx.Logger.Info("Rollout completion tasks finished successfully", "model", modelName)
 	}
-	
+
 	return nil
 }

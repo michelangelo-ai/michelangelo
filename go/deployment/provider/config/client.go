@@ -7,7 +7,6 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -37,9 +36,6 @@ func (c *ConfigProvider) UpdateModelConfig(ctx context.Context, log logr.Logger,
 
 	// Extract model path from deployment spec or use default pattern
 	modelPath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
-	if deployment.Spec.DesiredRevision.ModelPath != "" {
-		modelPath = deployment.Spec.DesiredRevision.ModelPath
-	}
 
 	// Update model configuration via gateway
 	request := gateways.ModelConfigMapRequest{
@@ -208,11 +204,13 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 		rules = newRules
 	}
 
-	// Update the HTTPRoute
-	if err = unstructured.SetNestedField(httpRoute.Object, rules, "spec", "rules"); err != nil {
-		log.Error(err, "Failed to update rules in HTTPRoute")
-		return err
+	// Update the HTTPRoute by setting the rules directly without deep copy
+	// This avoids the deep copy issue with complex nested structures
+	if httpRoute.Object["spec"] == nil {
+		httpRoute.Object["spec"] = make(map[string]interface{})
 	}
+	spec := httpRoute.Object["spec"].(map[string]interface{})
+	spec["rules"] = rules
 
 	gvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",

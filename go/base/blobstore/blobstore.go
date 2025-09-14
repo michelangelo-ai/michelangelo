@@ -13,6 +13,9 @@ type BlobStoreClient interface {
 	// Get retrieves the content of a blob from the blob store.
 	// The blobURI is expected to be in the format "scheme://host(optional)/path".
 	Get(ctx context.Context, blobURI string) ([]byte, error)
+	// Exists checks if a prefix/folder exists in the blob store.
+	// The blobURI is expected to be in the format "scheme://host(optional)/path".
+	Exists(ctx context.Context, blobURI string) (bool, error)
 	// Scheme returns the scheme of the blob store client. For example, "s3" or "gs".
 	Scheme() string
 }
@@ -36,6 +39,19 @@ func (b *BlobStore) Get(ctx context.Context, blobURI string) ([]byte, error) {
 		return nil, fmt.Errorf("failed to get client: %w", err)
 	}
 	return client.Get(ctx, blobURI)
+}
+
+// Exists checks if a prefix/folder exists in the blob store.
+func (b *BlobStore) Exists(ctx context.Context, blobURI string) (bool, error) {
+	parsedURL, err := url.Parse(blobURI)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse url: %w", err)
+	}
+	client, err := b.GetClient(parsedURL.Scheme)
+	if err != nil {
+		return false, fmt.Errorf("failed to get client: %w", err)
+	}
+	return client.Exists(ctx, blobURI)
 }
 
 func (b *BlobStore) GetClient(scheme string) (BlobStoreClient, error) {
