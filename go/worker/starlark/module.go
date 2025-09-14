@@ -33,6 +33,11 @@ func RegisterSparkPlugin(registry map[string]service.IPlugin) {
 	registry[spark.Plugin.ID()] = spark.Plugin
 }
 
+// RegisterSparkPlugin adds the spark plugin to the plugin registry.
+func RegisterDeploymentPlugin(registry map[string]service.IPlugin) {
+	registry[deployment.Plugin.ID()] = deployment.Plugin
+}
+
 // CreateStarlarkService creates the starlark service with all registered plugins.
 func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker.Worker, backend service.BackendType) error {
 	if len(workers) == 0 {
@@ -45,7 +50,7 @@ func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker
 	}
 	for _, w := range workers {
 		workerService.RegisterWithOptions(w, worker.RegisterWorkflowOptions{
-			Name: "starlark",
+			Name: "starlark-workflow",
 		})
 	}
 
@@ -58,4 +63,5 @@ var Module = fx.Options(
 	fx.Invoke(RegisterRayPlugin),
 	fx.Invoke(RegisterSparkPlugin),
 	fx.Invoke(CreateStarlarkService),
+	fx.Invoke(RegisterDeploymentPlugin),
 )

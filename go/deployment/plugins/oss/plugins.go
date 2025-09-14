@@ -2,10 +2,12 @@ package oss
 
 import (
 	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -13,36 +15,50 @@ import (
 
 // RolloutPlugin handles rollout operations
 type RolloutPlugin struct {
-	client  client.Client
-	gateway gateways.Gateway
-	logger  logr.Logger
+	client        client.Client
+	gateway       gateways.Gateway
+	blobstore     *blobstore.BlobStore
+	dynamicClient dynamic.Interface
+	logger        logr.Logger
 }
 
-func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) plugins.ConditionsPlugin {
+func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, logger logr.Logger) plugins.ConditionsPlugin {
 	return &RolloutPlugin{
-		client:  client,
-		gateway: gateway,
-		logger:  logger,
+		client:        client,
+		gateway:       gateway,
+		blobstore:     blobstore,
+		dynamicClient: nil, // Not provided in legacy constructor
+		logger:        logger,
+	}
+}
+
+func NewRolloutPluginWithDynamicClient(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, dynamicClient dynamic.Interface, logger logr.Logger) plugins.ConditionsPlugin {
+	return &RolloutPlugin{
+		client:        client,
+		gateway:       gateway,
+		blobstore:     blobstore,
+		dynamicClient: dynamicClient,
+		logger:        logger,
 	}
 }
 
 func (p *RolloutPlugin) GetActors() []plugins.ConditionActor {
 	// Pre-placement actors (following Uber pattern)
 	prePlacementActors := []plugins.ConditionActor{
-		&ValidationActor{client: p.client, logger: p.logger},
+		&ValidationActor{client: p.client, blobstore: p.blobstore, logger: p.logger},
 		&AssetPreparationActor{client: p.client, gateway: p.gateway, logger: p.logger},
 		&ResourceAcquisitionActor{client: p.client, logger: p.logger},
 	}
 	
 	// Placement strategy actors (OSS rolling strategy)
 	placementActors := []plugins.ConditionActor{
-		&ModelSyncActor{client: p.client, logger: p.logger},
+		&ModelSyncActor{client: p.client, gateway: p.gateway, dynamicClient: p.dynamicClient, logger: p.logger},
 		&RollingRolloutActor{client: p.client, gateway: p.gateway, logger: p.logger},
 	}
 	
 	// Post-placement actors
 	postPlacementActors := []plugins.ConditionActor{
-		&RolloutCompletionActor{client: p.client, logger: p.logger},
+		&RolloutCompletionActor{client: p.client, gateway: p.gateway, logger: p.logger},
 	}
 	
 	// Combine all actors in sequence

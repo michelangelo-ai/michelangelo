@@ -20,7 +20,7 @@ def train_workflow():
         validation_data,
         test_data,
     )
-    deployed_model_name = "bert-cola-29"
+    deployed_model_name = "bert-cola-32"
     model_name = pusher(model_uri, deployed_model_name)
     deploy(namespace="default", name="bert-cola-deployment", model_name=model_name)
     print("result:", train_result)
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
-    ctx.environ["MA_API_SERVER"] = "10.43.213.61:14566"
+    ctx.environ["MA_API_SERVER"] = "host.docker.internal:14567"
     ctx.environ["MLFLOW_TRACKING_URI"] = (
         "mysql+pymysql://root:root@mysql:3306/mlflow_db"
     )

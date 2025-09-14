@@ -53,6 +53,36 @@ func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
 	return data, nil
 }
 
+// Exists checks if a prefix/folder exists in the storage by listing objects with the prefix.
+func (a *minioClient) Exists(ctx context.Context, blobURI string) (bool, error) {
+	// Split the path into bucket and prefix.
+	parsedURL, err := url.Parse(blobURI)
+	if err != nil {
+		return false, fmt.Errorf("failed to parse url: %w", err)
+	}
+	if parsedURL.Scheme != a.scheme {
+		return false, fmt.Errorf("scheme %s is not supported by minio client", parsedURL.Scheme)
+	}
+	bucket := parsedURL.Host
+	prefix := parsedURL.Path[1:]
+
+	// List objects with the prefix to check if any exist
+	for object := range a.s3Client.ListObjects(ctx, bucket, minio.ListObjectsOptions{
+		Prefix:    prefix,
+		Recursive: false,
+		MaxKeys:   1, // We only need to know if at least one object exists
+	}) {
+		if object.Err != nil {
+			return false, fmt.Errorf("failed to list objects: %w", object.Err)
+		}
+		// If we get any object, the prefix exists
+		return true, nil
+	}
+
+	// No objects found with this prefix
+	return false, nil
+}
+
 // Scheme returns the scheme identifier used by this client.
 func (a *minioClient) Scheme() string {
 	return a.scheme

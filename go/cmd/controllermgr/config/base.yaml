@@ -7,7 +7,7 @@ controllermgr:
 
 workflowClient:
   service: cadence-frontend
-  host: michelangelo-worker:7833
+  host: localhost:7833
   transport: grpc
   domain: default
     

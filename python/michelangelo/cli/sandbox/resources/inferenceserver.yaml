@@ -1,12 +1,13 @@
 apiVersion: michelangelo.api/v2
 kind: InferenceServer
 metadata:
-  name: bert-cola-inference-server
+  name: inference-server-bert-cola
   namespace: default
   labels:
     app: inference-server
 spec:
   tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
   ownerSpec:
     tier: 1
   initSpec:

@@ -4,10 +4,10 @@ metadata:
   name: bert-cola-deployment
   namespace: default
   labels:
-    app: bert-cola-23
+    app: bert-cola-29
 spec:
   desiredRevision:
-    name: bert-cola-23
+    name: bert-cola-32
     namespace: default
   inferenceServer:
     name: inference-server-bert-cola
