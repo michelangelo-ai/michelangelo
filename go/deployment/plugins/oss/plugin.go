@@ -4,10 +4,12 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -18,25 +20,39 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin is the OSS plugin implementation
 type Plugin struct {
-	client  client.Client
-	gateway gateways.Gateway
-	logger  logr.Logger
+	client        client.Client
+	gateway       gateways.Gateway
+	blobstore     *blobstore.BlobStore
+	dynamicClient dynamic.Interface
+	logger        logr.Logger
 }
 
 // NewPlugin creates a new instance of OSS plugin
-func NewPlugin(client client.Client, gateway gateways.Gateway, logger logr.Logger) *Plugin {
+func NewPlugin(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, logger logr.Logger) *Plugin {
 	return &Plugin{
-		client:  client,
-		gateway: gateway,
-		logger:  logger,
+		client:        client,
+		gateway:       gateway,
+		blobstore:     blobstore,
+		dynamicClient: nil, // Not provided in legacy constructor
+		logger:        logger,
+	}
+}
+
+// NewPluginWithDynamicClient creates a new instance of OSS plugin with dynamic client support
+func NewPluginWithDynamicClient(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, dynamicClient dynamic.Interface, logger logr.Logger) *Plugin {
+	return &Plugin{
+		client:        client,
+		gateway:       gateway,
+		blobstore:     blobstore,
+		dynamicClient: dynamicClient,
+		logger:        logger,
 	}
 }
 
 // GetRolloutPlugin returns the rollout plugin
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (plugins.ConditionsPlugin, error) {
-	// For now, use the simple implementation from plugins.go
-	// TODO: Replace with structured rollout plugin once imports are fixed
-	return NewRolloutPlugin(p.client, p.gateway, p.logger), nil
+	// Pass dynamic client to rollout plugin for HTTPRoute updates
+	return NewRolloutPluginWithDynamicClient(p.client, p.gateway, p.blobstore, p.dynamicClient, p.logger), nil
 }
 
 // GetRollbackPlugin returns the rollback plugin

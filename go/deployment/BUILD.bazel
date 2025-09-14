@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/api/utils:go_default_library",
+        "//go/base/blobstore:go_default_library",
         "//go/deployment/plugins:go_default_library",
         "//go/deployment/plugins/oss:go_default_library",
         "//go/shared/gateways:go_default_library",
@@ -25,5 +26,6 @@ go_library(
         "@org_uber_go_fx//:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
+        "@io_k8s_client_go//dynamic:go_default_library",
     ],
 )

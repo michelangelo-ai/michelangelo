@@ -1,0 +1,20 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "client.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/provider/config",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/shared/gateways:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
+        "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+    ],
+)
