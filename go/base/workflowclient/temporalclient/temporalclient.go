@@ -26,14 +26,16 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
 		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
 	}
+	// This is a workaround for Grab Temporal demo
 	_args := make([]any, len(args))
 	for i, a := range args {
 		if i == 0 {
-			arg0, ok := a.([]byte)
+			arg0, ok := a.([]uint8)
 			if !ok {
-				return nil, fmt.Errorf("unexpected argument type, expected slice of bytes, actual: %T", arg0)
+				_args[i] = a
+			} else {
+				_args[i] = base64.StdEncoding.EncodeToString(arg0)
 			}
-			_args[i] = base64.StdEncoding.EncodeToString(arg0)
 		} else {
 			_args[i] = a
 		}
