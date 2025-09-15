@@ -172,8 +172,8 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	// Apply DevRun environment overrides if present
 	if pipelineRun.Spec.Input != nil {
 		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
-			if environOverrides := environField.GetStructValue(); environOverrides != nil {
-				applyDevRunEnvironmentOverrides(envs, environOverrides)
+			if err := applyDevRunEnvironmentOverrides(envs, environField.GetStructValue()); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to apply DevRun environment overrides: %w", err)
 			}
 		}
 	}
@@ -227,20 +227,21 @@ func (a *ExecuteWorkflowActor) GetType() string {
 }
 
 // applyDevRunEnvironmentOverrides applies DevRun environment variable overrides to the base environment
-func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *pbtypes.Struct) {
-	if devInput == nil || len(devInput.Fields) == 0 {
-		return // No overrides to apply
+func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *pbtypes.Struct) error {
+	if devInput == nil {
+		return nil // No overrides to apply
 	}
 
-	// Apply dev input overrides - convert all values to strings for environment variables
+	// Apply dev input overrides (only accept string values for environment variables)
 	for key, value := range devInput.Fields {
 		switch value.GetKind().(type) {
 		case *pbtypes.Value_StringValue:
 			baseEnv[key] = value.GetStringValue()
-		case *pbtypes.Value_NumberValue:
-			baseEnv[key] = fmt.Sprintf("%g", value.GetNumberValue())
-		case *pbtypes.Value_BoolValue:
-			baseEnv[key] = fmt.Sprintf("%t", value.GetBoolValue())
+		default:
+			// Environment variables must be strings only
+			return fmt.Errorf("environment variable '%s' must be a string, got %T", key, value.GetKind())
 		}
 	}
+
+	return nil
 }

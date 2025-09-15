@@ -110,11 +110,6 @@ func (a *SourcePipelineActor) GetType() string {
 func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.PipelineRunSpec, pipelineRun *v2.PipelineRun) (*v2.Pipeline, error) {
 	pipelineSpec := pipelineRunSpec.GetPipelineSpec()
 
-	// Validate required fields
-	if err := a.validateDevRunSpec(pipelineSpec); err != nil {
-		return nil, fmt.Errorf("dev run spec validation failed: %w", err)
-	}
-
 	// Create pipeline CR with metadata from pipeline run
 	pipeline := &v2.Pipeline{
 		ObjectMeta: metav1.ObjectMeta{
@@ -127,10 +122,8 @@ func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.Pipeline
 
 	// Copy annotations from pipeline run metadata (set by CLI during dev run creation)
 	// For dev runs, annotations like image-id are stored in the PipelineRun metadata
-	if pipelineRun.Annotations != nil {
-		for k, v := range pipelineRun.Annotations {
-			pipeline.ObjectMeta.Annotations[k] = v
-		}
+	for k, v := range pipelineRun.Annotations {
+		pipeline.ObjectMeta.Annotations[k] = v
 	}
 
 	// Note: Environment variable overrides for DevRuns are applied in ExecuteWorkflow actor
@@ -138,15 +131,3 @@ func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.Pipeline
 
 	return pipeline, nil
 }
-
-// validateDevRunSpec validates required fields for dev run pipeline specs
-func (a *SourcePipelineActor) validateDevRunSpec(pipelineSpec *v2.PipelineSpec) error {
-	if pipelineSpec.Manifest == nil {
-		return fmt.Errorf("pipeline_spec.manifest is required for dev runs")
-	}
-	if pipelineSpec.Manifest.UniflowTar == "" {
-		return fmt.Errorf("pipeline_spec.manifest.uniflow_tar is required for dev runs")
-	}
-	return nil
-}
-
