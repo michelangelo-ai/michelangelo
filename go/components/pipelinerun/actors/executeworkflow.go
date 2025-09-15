@@ -117,6 +117,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to get workflow inputs: %v", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
+	// after tarContent is passed to Temporal client, convert tarball bytes to string?
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tar content: %v", err)

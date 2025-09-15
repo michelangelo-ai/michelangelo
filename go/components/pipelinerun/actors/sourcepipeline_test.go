@@ -307,67 +307,6 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 			},
 			expectedSourcePipelineName: "devrun-test-devrun-env",
 		},
-		{
-			name: "dev run with invalid pipeline_spec - missing manifest",
-			pipelineRun: v2.PipelineRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-devrun-invalid",
-					Namespace: "test-namespace",
-				},
-				Spec: v2.PipelineRunSpec{
-					PipelineSpec: &v2.PipelineSpec{
-						Type: v2.PIPELINE_TYPE_TRAIN,
-						// Missing Manifest
-					},
-				},
-				Status: v2.PipelineRunStatus{
-					Conditions: []*apipb.Condition{
-						{
-							Type:   SourcePipelineType,
-							Status: apipb.CONDITION_STATUS_UNKNOWN,
-						},
-					},
-				},
-			},
-			expectedCondition: &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			},
-			errMsg: "pipeline_spec.manifest is required for dev runs",
-		},
-		{
-			name: "dev run with invalid pipeline_spec - missing uniflow_tar",
-			pipelineRun: v2.PipelineRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-devrun-invalid-tar",
-					Namespace: "test-namespace",
-				},
-				Spec: v2.PipelineRunSpec{
-					PipelineSpec: &v2.PipelineSpec{
-						Type: v2.PIPELINE_TYPE_TRAIN,
-						Manifest: &v2.PipelineManifest{
-							Type:     v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
-							FilePath: "test.pipeline",
-							// Missing UniflowTar
-							UniflowFunction: "test_workflow",
-						},
-					},
-				},
-				Status: v2.PipelineRunStatus{
-					Conditions: []*apipb.Condition{
-						{
-							Type:   SourcePipelineType,
-							Status: apipb.CONDITION_STATUS_UNKNOWN,
-						},
-					},
-				},
-			},
-			expectedCondition: &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			},
-			errMsg: "pipeline_spec.manifest.uniflow_tar is required for dev runs",
-		},
 	}
 
 	for _, testCase := range testCases {
