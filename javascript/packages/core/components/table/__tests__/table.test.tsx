@@ -230,6 +230,25 @@ describe('Table', () => {
     });
   });
 
+  describe('with custom header component', () => {
+    const CustomHeader = () => <div>Custom Header</div>;
+
+    beforeEach(() => {
+      render(
+        <Table data={buildTableData(3, 4)} columns={buildTableColumns(4)} header={CustomHeader} />,
+        buildWrapper([getInterpolationProviderWrapper(), getRouterWrapper()])
+      );
+    });
+
+    it('renders the custom header component', () => {
+      expect(screen.getByText('Custom Header')).toBeInTheDocument();
+    });
+
+    it('does not render any column headers', () => {
+      expect(screen.queryByRole('columnheader')).not.toBeInTheDocument();
+    });
+  });
+
   describe('search functionality integration', () => {
     const testData = [
       {

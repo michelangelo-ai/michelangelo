@@ -15,7 +15,6 @@ import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
 import { TableErrorState } from './components/table-error-state/table-error-state';
-import { TableHeader } from './components/table-header/table-header';
 import { TableNoResultsState } from './components/table-no-results-state/table-no-results-state';
 import { useColumnTransformer } from './hooks/use-column-transformer';
 import { usePageResetHandler } from './hooks/use-page-reset-handler';
@@ -159,7 +158,7 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
             )}
 
             {viewState !== 'error' && viewState !== 'no-columns' && (
-              <TableHeader<T>
+              <props.header
                 columns={transformedColumns}
                 setColumnOrder={table.setColumnOrder}
                 setColumnVisibility={table.setColumnVisibility}
