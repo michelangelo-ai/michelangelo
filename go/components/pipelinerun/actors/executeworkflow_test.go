@@ -167,6 +167,8 @@ func TestExecuteWorkflowActor(t *testing.T) {
 				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecutionInfo{
 					Status: clientInterfaces.WorkflowExecutionStatusRunning,
 				}, nil)
+				// Mock the QueryWorkflow call for task progress
+				workflowClient.EXPECT().QueryWorkflow(gomock.Any(), "456", "123", "task_progress", gomock.Any()).Return(nil)
 			},
 			expectedCondition: &apipb.Condition{
 				Type:   ExecuteWorkflowType,
@@ -216,6 +218,8 @@ func TestExecuteWorkflowActor(t *testing.T) {
 				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecutionInfo{
 					Status: clientInterfaces.WorkflowExecutionStatusCompleted,
 				}, nil)
+				// Mock the QueryWorkflow call for task progress
+				workflowClient.EXPECT().QueryWorkflow(gomock.Any(), "456", "123", "task_progress", gomock.Any()).Return(nil)
 			},
 			expectedCondition: &apipb.Condition{
 				Type:   ExecuteWorkflowType,
