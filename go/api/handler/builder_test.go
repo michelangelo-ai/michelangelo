@@ -385,9 +385,9 @@ func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
 
 		factory := &builderFactory{
-			logger:      zapr.NewLogger(zap.NewNop()),
-			metrics:     tally.NewTestScope("test", nil),
-			blobStorage: mockBlobStorage,
+			logger:        zapr.NewLogger(zap.NewNop()),
+			metrics:       tally.NewTestScope("test", nil),
+			blobStorage:   mockBlobStorage,
 			storageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
 		}
 

@@ -189,7 +189,6 @@ func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 	return builder.Build()
 }
 
-
 // newK8sAndMetadataStorageFactory creates an API handler with both K8s and metadata storage enabled.
 // This function maintains compatibility with the old factory pattern while using the builder internally.
 func newK8sAndMetadataStorageFactory(params Params) (api.Handler, error) {
