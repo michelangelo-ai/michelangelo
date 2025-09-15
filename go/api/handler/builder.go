@@ -188,3 +188,76 @@ func NewCtrlManagerHandler(params Params) (api.Handler, error) {
 
 	return builder.Build()
 }
+
+// newK8sAndMetadataStorageFactory creates an API handler with both K8s and metadata storage enabled.
+// This function maintains compatibility with the old factory pattern while using the builder internally.
+func newK8sAndMetadataStorageFactory(params Params) (api.Handler, error) {
+	// Create K8s client
+	k8sClient, err := ctrlRTClient.New(params.K8sRestConfig, ctrlRTClient.Options{Scheme: params.Scheme})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create k8s client: %w", err)
+	}
+
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(k8sClient).
+		WithZapLogger(params.Logger).
+		WithMetrics(params.Metrics)
+
+	// Configure metadata storage if enabled
+	if params.StorageConfig.EnableMetadataStorage && params.MetadataStorage != nil {
+		builder = builder.WithMetadataStorage(params.MetadataStorage, params.StorageConfig)
+	}
+
+	// Configure blob storage if provided
+	if params.BlobStorage != nil {
+		builder = builder.WithBlobStorage(params.BlobStorage)
+	}
+
+	return builder.Build()
+}
+
+// Factory interface that controllers can use to create handlers with different K8s clients
+type Factory interface {
+	GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error)
+}
+
+// apiHandlerFactory implements Factory using the builder pattern internally
+type apiHandlerFactory struct {
+	logger          logr.Logger
+	metrics         tally.Scope
+	metadataStorage storage.MetadataStorage
+	blobStorage     storage.BlobStorage
+	storageConfig   storage.MetadataStorageConfig
+}
+
+// GetAPIHandler creates an API handler using the provided K8s client
+func (f *apiHandlerFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
+	builder := NewAPIHandlerBuilder().
+		WithK8sClient(client).
+		WithLogger(f.logger).
+		WithMetrics(f.metrics)
+
+	// Configure metadata storage if enabled
+	if f.storageConfig.EnableMetadataStorage {
+		builder = builder.WithMetadataStorage(f.metadataStorage, f.storageConfig)
+	}
+
+	// Configure blob storage if provided
+	if f.blobStorage != nil {
+		builder = builder.WithBlobStorage(f.blobStorage)
+	}
+
+	return builder.Build()
+}
+
+// NewAPIHandlerFactory creates a factory that controllers can use to build handlers
+// This provides the same interface as the old factory pattern but uses the builder internally
+func NewAPIHandlerFactory(params Params) Factory {
+	return &apiHandlerFactory{
+		logger:          zapr.NewLogger(params.Logger),
+		metrics:         params.Metrics,
+		metadataStorage: params.MetadataStorage,
+		blobStorage:     params.BlobStorage,
+		storageConfig:   params.StorageConfig,
+	}
+}

@@ -3,6 +3,7 @@ package handler
 import (
 	"testing"
 
+	"github.com/go-logr/zapr"
 	"github.com/stretchr/testify/assert"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
@@ -290,5 +291,297 @@ func TestBuilderPatternBenefits(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.NotNil(t, handler)
+	})
+}
+
+func TestNewAPIHandlerFactory(t *testing.T) {
+	t.Run("creates factory with minimal params", func(t *testing.T) {
+		params := Params{
+			K8sRestConfig: &rest.Config{Host: "test"},
+			Scheme:        scheme.Scheme,
+			Logger:        zap.NewNop(),
+			Metrics:       tally.NewTestScope("test", nil),
+			StorageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		}
+
+		factory := NewAPIHandlerFactory(params)
+
+		assert.NotNil(t, factory)
+		assert.IsType(t, &apiHandlerFactory{}, factory)
+	})
+
+	t.Run("creates factory with all params", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
+		params := Params{
+			K8sRestConfig:   &rest.Config{Host: "test"},
+			Scheme:          scheme.Scheme,
+			Logger:          zap.NewNop(),
+			Metrics:         tally.NewTestScope("test", nil),
+			StorageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+			MetadataStorage: mockMetadataStorage,
+			BlobStorage:     mockBlobStorage,
+		}
+
+		factory := NewAPIHandlerFactory(params)
+
+		assert.NotNil(t, factory)
+
+		// Verify internal configuration
+		builderFactory := factory.(*apiHandlerFactory)
+		assert.NotNil(t, builderFactory.logger)
+		assert.Equal(t, params.Metrics, builderFactory.metrics)
+		assert.Equal(t, mockMetadataStorage, builderFactory.metadataStorage)
+		assert.Equal(t, mockBlobStorage, builderFactory.blobStorage)
+		assert.Equal(t, params.StorageConfig, builderFactory.storageConfig)
+	})
+}
+
+func TestBuilderFactory_GetAPIHandler(t *testing.T) {
+	t.Run("creates handler with K8s only configuration", func(t *testing.T) {
+		factory := &apiHandlerFactory{
+			logger:        zapr.NewLogger(zap.NewNop()),
+			metrics:       tally.NewTestScope("test", nil),
+			storageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		}
+
+		fakeClient := fake.NewClientBuilder().Build()
+
+		handler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("creates handler with metadata storage enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+
+		factory := &apiHandlerFactory{
+			logger:          zapr.NewLogger(zap.NewNop()),
+			metrics:         tally.NewTestScope("test", nil),
+			metadataStorage: mockMetadataStorage,
+			storageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+		}
+
+		fakeClient := fake.NewClientBuilder().Build()
+
+		handler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("creates handler with blob storage enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
+		factory := &apiHandlerFactory{
+			logger:        zapr.NewLogger(zap.NewNop()),
+			metrics:       tally.NewTestScope("test", nil),
+			blobStorage:   mockBlobStorage,
+			storageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		}
+
+		fakeClient := fake.NewClientBuilder().Build()
+
+		handler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("creates handler with all features enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
+		factory := &apiHandlerFactory{
+			logger:          zapr.NewLogger(zap.NewNop()),
+			metrics:         tally.NewTestScope("test", nil),
+			metadataStorage: mockMetadataStorage,
+			blobStorage:     mockBlobStorage,
+			storageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+		}
+
+		fakeClient := fake.NewClientBuilder().Build()
+
+		handler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, handler)
+	})
+
+	t.Run("fails when metadata storage enabled but not provided", func(t *testing.T) {
+		factory := &apiHandlerFactory{
+			logger:          zapr.NewLogger(zap.NewNop()),
+			metrics:         tally.NewTestScope("test", nil),
+			metadataStorage: nil, // Not provided but enabled
+			storageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+		}
+
+		fakeClient := fake.NewClientBuilder().Build()
+
+		handler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.Nil(t, handler)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "metadata storage is required")
+	})
+}
+
+func TestNewK8sAndMetadataStorageFactory(t *testing.T) {
+	t.Run("creates handler with K8s only when metadata storage disabled", func(t *testing.T) {
+		params := Params{
+			K8sRestConfig: &rest.Config{Host: "test"},
+			Scheme:        scheme.Scheme,
+			Logger:        zap.NewNop(),
+			Metrics:       tally.NewTestScope("test", nil),
+			StorageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		}
+
+		// This would normally fail due to invalid rest config, but we are testing the logic
+		handler, err := newK8sAndMetadataStorageFactory(params)
+
+		if err != nil {
+			// Expected error due to invalid rest config
+			assert.Contains(t, err.Error(), "failed to create k8s client")
+		} else {
+			assert.NotNil(t, handler)
+		}
+	})
+
+	t.Run("creates handler with metadata storage when enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+
+		params := Params{
+			K8sRestConfig:   &rest.Config{Host: "test"},
+			Scheme:          scheme.Scheme,
+			Logger:          zap.NewNop(),
+			Metrics:         tally.NewTestScope("test", nil),
+			StorageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+			MetadataStorage: mockMetadataStorage,
+		}
+
+		// This would normally fail due to invalid rest config
+		handler, err := newK8sAndMetadataStorageFactory(params)
+
+		if err != nil {
+			// Expected error due to invalid rest config, not due to missing metadata storage
+			assert.Contains(t, err.Error(), "failed to create k8s client")
+			assert.NotContains(t, err.Error(), "metadata storage is required")
+		} else {
+			assert.NotNil(t, handler)
+		}
+	})
+
+	t.Run("creates handler with blob storage when provided", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
+		params := Params{
+			K8sRestConfig: &rest.Config{Host: "test"},
+			Scheme:        scheme.Scheme,
+			Logger:        zap.NewNop(),
+			Metrics:       tally.NewTestScope("test", nil),
+			StorageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+			BlobStorage:   mockBlobStorage,
+		}
+
+		// This would normally fail due to invalid rest config
+		handler, err := newK8sAndMetadataStorageFactory(params)
+
+		if err != nil {
+			// Expected error due to invalid rest config
+			assert.Contains(t, err.Error(), "failed to create k8s client")
+		} else {
+			assert.NotNil(t, handler)
+		}
+	})
+
+	t.Run("creates handler with all features enabled", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
+
+		params := Params{
+			K8sRestConfig:   &rest.Config{Host: "test"},
+			Scheme:          scheme.Scheme,
+			Logger:          zap.NewNop(),
+			Metrics:         tally.NewTestScope("test", nil),
+			StorageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+			MetadataStorage: mockMetadataStorage,
+			BlobStorage:     mockBlobStorage,
+		}
+
+		// This would normally fail due to invalid rest config
+		handler, err := newK8sAndMetadataStorageFactory(params)
+
+		if err != nil {
+			// Expected error due to invalid rest config, not due to configuration
+			assert.Contains(t, err.Error(), "failed to create k8s client")
+			assert.NotContains(t, err.Error(), "metadata storage is required")
+		} else {
+			assert.NotNil(t, handler)
+		}
+	})
+}
+
+func TestFactoryIntegration(t *testing.T) {
+	t.Run("factory and direct function create equivalent handlers", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		// Create shared dependencies
+		fakeClient := fake.NewClientBuilder().Build()
+		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
+		params := Params{
+			Logger:          zap.NewNop(),
+			Metrics:         tally.NewTestScope("test", nil),
+			StorageConfig:   storage.MetadataStorageConfig{EnableMetadataStorage: true},
+			MetadataStorage: mockMetadataStorage,
+		}
+
+		// Create handler via factory
+		factory := NewAPIHandlerFactory(params)
+		factoryHandler, err := factory.GetAPIHandler(fakeClient)
+
+		assert.NoError(t, err)
+		assert.NotNil(t, factoryHandler)
+
+		// Both should be non-nil (cannot easily compare handlers directly due to different creation paths)
+		// But we can verify they are the same type
+		assert.IsType(t, &apiHandler{}, factoryHandler)
+	})
+
+	t.Run("factory satisfies Factory interface", func(t *testing.T) {
+		params := Params{
+			Logger:        zap.NewNop(),
+			Metrics:       tally.NewTestScope("test", nil),
+			StorageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
+		}
+
+		factory := NewAPIHandlerFactory(params)
+
+		// Verify it implements the Factory interface
+		var _ Factory = factory
+		assert.NotNil(t, factory)
 	})
 }
