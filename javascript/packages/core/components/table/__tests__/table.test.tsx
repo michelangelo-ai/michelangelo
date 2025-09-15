@@ -1419,6 +1419,34 @@ describe('Table', () => {
       });
     });
 
+    it('support sorting numeric columns', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <Table data={sortableTestData} columns={sortableColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      const ageHeader = screen.getByRole('columnheader', { name: /age/i });
+
+      // First click: ascending
+      await user.click(ageHeader);
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('30');
+      });
+
+      // Second click: descending
+      await user.click(ageHeader);
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('20');
+      });
+    });
+
     it('does not sort when enableSorting is false for column', async () => {
       const user = userEvent.setup();
 
@@ -1485,6 +1513,48 @@ describe('Table', () => {
       expect(screen.getAllByRole('row')[1]).toHaveTextContent('Alice');
       expect(screen.getAllByRole('row')[2]).toHaveTextContent('Bob');
       expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+    });
+
+    it('uses custom sorting function when provided', async () => {
+      const user = userEvent.setup();
+
+      // Custom sort function that sorts by string length instead of alphabetically
+      const customSortingFn = (rowA: unknown, rowB: unknown, columnId: string) => {
+        const aValue = (rowA as { getValue: (id: string) => string }).getValue(columnId);
+        const bValue = (rowB as { getValue: (id: string) => string }).getValue(columnId);
+        console.log('aValue', aValue);
+        console.log('bValue', bValue);
+        return aValue.length - bValue.length;
+      };
+
+      const customSortColumns = [
+        {
+          id: 'name',
+          label: 'Name',
+          accessor: 'name',
+          enableSorting: true,
+          sortingFn: customSortingFn,
+        },
+        { id: 'age', label: 'Age', accessor: 'age', enableSorting: true },
+        { id: 'status', label: 'Status', accessor: 'status', enableSorting: false },
+      ];
+
+      render(
+        <Table data={sortableTestData} columns={customSortColumns} disablePagination={true} />,
+        buildWrapper([
+          getBaseProviderWrapper(),
+          getIconProviderWrapper({ icons: mockIcons }),
+          getInterpolationProviderWrapper(),
+          getRouterWrapper(),
+        ])
+      );
+
+      await user.click(screen.getByRole('columnheader', { name: /name/i }));
+      await waitFor(() => {
+        expect(screen.getAllByRole('row')[1]).toHaveTextContent('Bob');
+        expect(screen.getAllByRole('row')[2]).toHaveTextContent('Alice');
+        expect(screen.getAllByRole('row')[3]).toHaveTextContent('Charlie');
+      });
     });
   });
 
