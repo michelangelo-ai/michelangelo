@@ -2,6 +2,7 @@ package temporalclient
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
@@ -25,7 +26,19 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
 		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
 	}
-	workflowExecution, err := c.Client.ExecuteWorkflow(ctx, startWorkflowOptions, workflowName, args...)
+	_args := make([]any, len(args))
+	for i, a := range args {
+		if i == 0 {
+			arg0, ok := a.([]byte)
+			if !ok {
+				return nil, fmt.Errorf("unexpected argument type, expected slice of bytes, actual: %T", arg0)
+			}
+			_args[i] = base64.StdEncoding.EncodeToString(arg0)
+		} else {
+			_args[i] = a
+		}
+	}
+	workflowExecution, err := c.Client.ExecuteWorkflow(ctx, startWorkflowOptions, workflowName, _args...)
 	if err != nil {
 		return nil, err
 	}
