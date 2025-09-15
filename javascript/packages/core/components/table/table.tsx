@@ -11,6 +11,7 @@ import {
 import { useStyletron } from 'baseui';
 
 import { useScrollRatio } from '#core/hooks/use-scroll';
+import { FilterMode } from './components/filter/types';
 import { TableActionBar } from './components/table-action-bar/table-action-bar';
 import { transformRows } from './components/table-body/row-transformer';
 import { TableEmptyState } from './components/table-empty-state/table-empty-state';
@@ -129,10 +130,11 @@ export function Table<T extends TableData = TableData>(inputProps: TableProps<T>
           setGlobalFilter={table.setGlobalFilter}
           columnFilters={table.getState().columnFilters}
           setColumnFilters={table.setColumnFilters}
-          columns={columns}
           preFilteredRows={preFilteredRows}
           configuration={props.actionBarConfig}
-          filterableColumns={transformedColumns.filter((column) => column.canFilter)}
+          filterableColumns={transformedColumns.filter(
+            (column) => column.canFilter && column.filterMode !== FilterMode.NONE
+          )}
         />
 
         <div

@@ -13,7 +13,6 @@ export interface TableActionBarProps<T extends TableData = TableData> {
   setGlobalFilter: (value: string) => void;
   columnFilters: ColumnFilter[];
   setColumnFilters: (filters: ColumnFilter[]) => void;
-  columns: ColumnConfig<T>[];
   preFilteredRows: FilterableRow<T>[];
   configuration: TableActionBarConfig;
   filterableColumns?: FilterableColumn<T>[];

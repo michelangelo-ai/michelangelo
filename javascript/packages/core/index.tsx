@@ -142,3 +142,4 @@ export { Table } from '#core/components/table/table';
 export { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
 export { useTableSelectionContext } from '#core/components/table/plugins/selection/table-selection-context';
 export type { TableProps } from '#core/components/table/types/table-types';
+export { FilterMode } from '#core/components/table/components/filter/types';

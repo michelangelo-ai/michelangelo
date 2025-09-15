@@ -1,6 +1,7 @@
 import { ReactNode, useMemo } from 'react';
 import { CellContext } from '@tanstack/react-table';
 
+import { FilterMode } from '../components/filter/types';
 import { useFilterFactory } from '../components/filter/use-filter-factory';
 import { transformRows } from '../components/table-body/row-transformer';
 import { TableCell } from '../components/table-cell/table-cell';
@@ -75,6 +76,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
             />
           ),
         filterFn: filterHook.buildTableFilterFn(),
+        enableColumnFilters: column.filterMode !== FilterMode.NONE,
         enableSorting: column.enableSorting ?? true,
         enableGrouping: column.enableGrouping ?? false,
         aggregationFn: column.aggregationFn,
