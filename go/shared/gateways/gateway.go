@@ -141,6 +141,7 @@ type ProxyConfigRequest struct {
 	InferenceServer string
 	Namespace       string
 	ModelName       string
+	DeploymentName  string
 	BackendType     v2pb.BackendType
 	Routes          []RouteConfig
 }
