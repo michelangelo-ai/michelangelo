@@ -186,8 +186,8 @@ func setUpSourcePipelineActor(t *testing.T, initialObjects []runtime.Object) *So
 
 func TestSourcePipelineActor_DevRun(t *testing.T) {
 	testCases := []struct {
-		name                        string
-		pipelineRun                 v2.PipelineRun
+		name                       string
+		pipelineRun                v2.PipelineRun
 		expectedCondition          *apipb.Condition
 		expectedSourcePipelineName string
 		errMsg                     string
@@ -206,11 +206,11 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 					PipelineSpec: &v2.PipelineSpec{
 						Type: v2.PIPELINE_TYPE_TRAIN,
 						Manifest: &v2.PipelineManifest{
-							Type:           v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
-							FilePath:       "test.pipeline",
-							UniflowTar:     "s3://bucket/test.tar.gz",
+							Type:            v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
+							FilePath:        "test.pipeline",
+							UniflowTar:      "s3://bucket/test.tar.gz",
 							UniflowFunction: "test_workflow",
-							Content:        createTestManifestContent(t, map[string]interface{}{
+							Content: createTestManifestContent(t, map[string]interface{}{
 								"environ": map[string]interface{}{
 									"BASE_VAR": "base_value",
 								},
@@ -279,11 +279,11 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 					PipelineSpec: &v2.PipelineSpec{
 						Type: v2.PIPELINE_TYPE_TRAIN,
 						Manifest: &v2.PipelineManifest{
-							Type:           v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
-							FilePath:       "test.pipeline",
-							UniflowTar:     "s3://bucket/test.tar.gz",
+							Type:            v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
+							FilePath:        "test.pipeline",
+							UniflowTar:      "s3://bucket/test.tar.gz",
 							UniflowFunction: "test_workflow",
-							Content:        createTestManifestContent(t, map[string]interface{}{
+							Content: createTestManifestContent(t, map[string]interface{}{
 								"environ": map[string]interface{}{
 									"BASE_VAR": "base_value",
 									"foo":      "original_value", // Should be overridden
@@ -346,8 +346,8 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 					PipelineSpec: &v2.PipelineSpec{
 						Type: v2.PIPELINE_TYPE_TRAIN,
 						Manifest: &v2.PipelineManifest{
-							Type:           v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
-							FilePath:       "test.pipeline",
+							Type:     v2.PIPELINE_MANIFEST_TYPE_UNIFLOW,
+							FilePath: "test.pipeline",
 							// Missing UniflowTar
 							UniflowFunction: "test_workflow",
 						},
@@ -375,7 +375,7 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 			actor := setUpSourcePipelineActor(t, []runtime.Object{})
 			previousCondition := conditionUtils.GetCondition(SourcePipelineType, testCase.pipelineRun.Status.Conditions)
 			condition, err := actor.Run(context.Background(), &testCase.pipelineRun, previousCondition)
-			
+
 			if testCase.errMsg != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), testCase.errMsg)
@@ -383,13 +383,13 @@ func TestSourcePipelineActor_DevRun(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, testCase.expectedCondition, condition)
-				
+
 				// Verify source pipeline was created
 				require.NotNil(t, testCase.pipelineRun.Status.SourcePipeline)
 				require.NotNil(t, testCase.pipelineRun.Status.SourcePipeline.Pipeline)
 				require.Equal(t, testCase.expectedSourcePipelineName, testCase.pipelineRun.Status.SourcePipeline.Pipeline.Name)
 				require.Equal(t, "test-namespace", testCase.pipelineRun.Status.SourcePipeline.Pipeline.Namespace)
-				
+
 				// Verify annotations were copied for dev runs
 				if testCase.pipelineRun.Annotations != nil {
 					for k, v := range testCase.pipelineRun.Annotations {
