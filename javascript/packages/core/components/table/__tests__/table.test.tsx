@@ -15,6 +15,7 @@ import {
   expectTableHeaders,
   expectTableRows,
 } from '../__fixtures__/table-test-helpers';
+import { FilterMode } from '../components/filter/types';
 import { TableBodyProps, TableRow } from '../components/table-body/types';
 import { useTableSelectionContext } from '../plugins/selection/table-selection-context';
 import { Table } from '../table';
@@ -765,6 +766,69 @@ describe('Table', () => {
         expect(screen.getAllByText('draft-12345')).toHaveLength(1);
         expect(screen.getAllByText('rev-67890')).toHaveLength(1);
         expect(screen.getAllByText('ML training pipeline')).toHaveLength(1);
+      });
+    });
+
+    describe('FilterMode exclusion behavior', () => {
+      it('excludes FilterMode.NONE columns from filter menu while keeping them in table', async () => {
+        const user = userEvent.setup();
+        const mixedModeColumns = [
+          { id: 'name', label: 'Name', filterMode: FilterMode.CLIENT },
+          { id: 'notes', label: 'Notes', filterMode: FilterMode.NONE },
+          { id: 'department', label: 'Department', filterMode: FilterMode.SERVER },
+        ];
+
+        render(
+          <Table
+            data={testData}
+            columns={mixedModeColumns}
+            actionBarConfig={{ enableFilters: true }}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        // Notes column should be visible in table but not filterable
+        expect(screen.getByRole('columnheader', { name: 'Notes' })).toBeInTheDocument();
+
+        await user.click(screen.getByRole('button', { name: 'Add filter' }));
+
+        // Should show CLIENT and SERVER mode columns
+        expect(screen.getByTestId('filter-option-Name')).toBeInTheDocument();
+        expect(screen.getByTestId('filter-option-Department')).toBeInTheDocument();
+
+        // Should NOT show NONE mode column
+        expect(screen.queryByTestId('filter-option-Notes')).not.toBeInTheDocument();
+      });
+
+      it('hides filter menu entirely when all columns have FilterMode.NONE', () => {
+        const nonFilterableColumns = [
+          { id: 'name', label: 'Name', filterMode: FilterMode.NONE },
+          { id: 'department', label: 'Department', filterMode: FilterMode.NONE },
+        ];
+
+        render(
+          <Table
+            data={testData}
+            columns={nonFilterableColumns}
+            actionBarConfig={{ enableFilters: true }}
+          />,
+          buildWrapper([
+            getBaseProviderWrapper(),
+            getInterpolationProviderWrapper(),
+            getRouterWrapper(),
+          ])
+        );
+
+        // Filter menu should not render when no columns are filterable
+        expect(screen.queryByRole('button', { name: 'Add filter' })).not.toBeInTheDocument();
+
+        // But table structure should remain intact
+        expect(screen.getByRole('columnheader', { name: 'Name' })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: 'Department' })).toBeInTheDocument();
       });
     });
   });
