@@ -3,6 +3,7 @@ import { EmptyState } from '../components/table-empty-state/types';
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableActionBarConfig } from '../components/table-action-bar/types';
 import type { TableBodyProps, TableRow } from '../components/table-body/types';
+import type { TableHeaderProps } from '../components/table-header/types';
 import type { PageSizeOption, TablePaginationProps } from '../components/table-pagination/types';
 import type { ColumnConfig } from './column-types';
 import type { TableData } from './data-types';
@@ -168,6 +169,14 @@ export interface TableRequiredFunctionalityProps<T extends TableData = TableData
    * @default TableBody
    */
   body: React.ComponentType<TableBodyProps<T>>;
+
+  /**
+   * @description
+   * Table header component to render the table headers.
+   *
+   * @default TableHeader
+   */
+  header: React.ComponentType<TableHeaderProps<T>>;
 
   /**
    * @description
