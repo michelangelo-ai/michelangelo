@@ -1,5 +1,5 @@
 import { ReactNode, useMemo } from 'react';
-import { CellContext } from '@tanstack/react-table';
+import { CellContext, SortingFnOption } from '@tanstack/react-table';
 
 import { FilterMode } from '../components/filter/types';
 import { useFilterFactory } from '../components/filter/use-filter-factory';
@@ -36,6 +36,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
   meta: ColumnConfig<T>;
   cell: (props: CellContext<T, unknown>) => ReactNode;
   filterFn?: TableFilterFn<T, unknown[]>;
+  sortingFn?: SortingFnOption<T>;
 }[] {
   const createFilter = useFilterFactory<T>();
 
@@ -80,6 +81,7 @@ export function useColumnTransformer<T extends TableData = TableData>(
         enableSorting: column.enableSorting ?? true,
         enableGrouping: column.enableGrouping ?? false,
         aggregationFn: column.aggregationFn,
+        sortingFn: column.sortingFn ?? 'auto',
         sortUndefined: 'last',
       };
     });

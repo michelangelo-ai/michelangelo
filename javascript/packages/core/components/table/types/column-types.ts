@@ -1,6 +1,6 @@
 import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
-import type { AggregationFnOption } from '@tanstack/react-table';
+import type { AggregationFnOption, SortingFnOption } from '@tanstack/react-table';
 import type { ComponentType } from 'react';
 import type { Cell, CellRendererProps } from '#core/components/cell/types';
 import type { FilterMode } from '../components/filter/types';
@@ -68,6 +68,14 @@ export type ColumnConfig<TData = TableData> = Cell<TData> & {
    * @default undefined
    */
   aggregatedCell?: ComponentType<CellRendererProps<TData, ColumnConfig<TData>>>;
+
+  /**
+   * @description Custom sorting function to be applied to this column
+   *
+   * @default undefined
+   * @see https://tanstack.com/table/latest/docs/api/features/sorting#sorting-functions
+   */
+  sortingFn?: SortingFnOption<TData>;
 };
 
 /**
