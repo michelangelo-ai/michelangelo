@@ -9,6 +9,7 @@ export type TableCell<T extends TableData = TableData> = {
   content: ReactNode;
   column: ColumnConfig<T>;
   value: unknown;
+  isVisible: boolean;
 };
 
 export type TableRow<T extends TableData = TableData> = {

@@ -12,7 +12,7 @@ export function transformRows<T extends TableData = TableData>(
 ): TableRow<T>[] {
   return tanstackRows.map((row) => ({
     id: row.id,
-    cells: row.getVisibleCells().map((cell, columnIndex) => ({
+    cells: row.getAllCells().map((cell, columnIndex) => ({
       id: cell.id,
       content: React.createElement(TableCellContent<T>, {
         cell,
@@ -21,6 +21,7 @@ export function transformRows<T extends TableData = TableData>(
       }),
       column: cell.column.columnDef.meta! as ColumnConfig<T>,
       value: cell.getValue(),
+      isVisible: cell.column.getIsVisible(),
     })),
     record: row.original,
     canSelect: row.getCanSelect(),
