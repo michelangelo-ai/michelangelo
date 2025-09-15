@@ -10,19 +10,22 @@ import (
 const (
 	// ControllerName is the name of the inference server controller
 	ControllerName = "inference-server-controller"
-	
+
 	// Team responsible for this controller
 	Team = "ml-serving"
-	
+
+	// Finalizer to ensure proper cleanup
+	FinalizerName = "inferenceservers.michelangelo.api/finalizer"
+
 	// Timeout for reconciliation operations
 	ReconcilerTimeout = 1 * time.Minute
-	
+
 	// Timeout for condition engine operations
 	EngineTimeout = 50 * time.Second
-	
+
 	// Requeue period for active reconciliation
 	ActiveRequeueAfter = 1 * time.Minute
-	
+
 	// Requeue period for steady state
 	SteadyStateRequeueAfter = 10 * time.Minute
 )

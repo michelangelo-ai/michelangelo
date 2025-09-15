@@ -72,17 +72,30 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	// Update deployment resource if changed
 	if !reflect.DeepEqual(originalDeployment, &deployment) {
+		// Save the current status before update
+		currentStatus := deployment.Status
+
 		if err := r.Update(ctx, &deployment); err != nil {
 			logger.Error(err, "Failed to update deployment resource")
 			return result, err
 		}
 
-		// Update status
-		deployment.Status = originalDeployment.Status
+		// Restore and update status with the current (modified) status
+		deployment.Status = currentStatus
 		if err := r.Status().Update(ctx, &deployment); err != nil {
 			logger.Error(err, "Failed to update deployment status")
 			return result, err
 		}
+
+		logger.Info("Successfully updated deployment and status",
+			"stage", deployment.Status.Stage,
+			"state", deployment.Status.State,
+			"currentRevision", func() string {
+				if deployment.Status.CurrentRevision != nil {
+					return deployment.Status.CurrentRevision.Name
+				}
+				return ""
+			}())
 	}
 
 	return result, nil

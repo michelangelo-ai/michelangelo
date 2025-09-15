@@ -103,7 +103,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		Version:  "v1",
 		Resource: "httproutes",
 	}
-	httpRouteName := fmt.Sprintf("%s-http-route", request.InferenceServer)
+	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer)
 	if err := g.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
 		logger.Info("Failed to delete HTTPRoute (may not exist)", "name", httpRouteName, "error", err)
 	} else {
@@ -498,12 +498,20 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 		Resource: "httproutes",
 	}
 
-	httpRouteName := fmt.Sprintf("%s-http-route", request.InferenceServer.Name)
+	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer.Name)
 
 	// Check if HTTPRoute already exists
-	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	existingHTTPRoute, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err == nil {
-		logger.Info("HTTPRoute already exists, skipping creation", "name", httpRouteName)
+		logger.Info("HTTPRoute already exists, checking if update needed", "name", httpRouteName)
+
+		// Check if the existing HTTPRoute has the correct configuration
+		if needsHTTPRouteUpdate(existingHTTPRoute, request) {
+			logger.Info("HTTPRoute configuration outdated, updating", "name", httpRouteName)
+			return g.updateHTTPRoute(ctx, logger, existingHTTPRoute, request, gvr)
+		}
+
+		logger.Info("HTTPRoute configuration is up-to-date, skipping", "name", httpRouteName)
 		return nil
 	}
 
@@ -529,72 +537,12 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 				},
 				"rules": []map[string]interface{}{
 					{
-						// Health check endpoint
+						// Production endpoint for deployment controller
 						"matches": []map[string]interface{}{
 							{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s-endpoint/%s/v2/health", request.InferenceServer.Name, request.InferenceServer.Name),
-								},
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/v2/health",
-									},
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
-								"weight": 100,
-							},
-						},
-					},
-					{
-						// Model endpoints
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s-endpoint/%s/v2/models", request.InferenceServer.Name, request.InferenceServer.Name),
-								},
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/v2/models",
-									},
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
-								"weight": 100,
-							},
-						},
-					},
-					{
-						// General endpoint with URL rewrite
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type": "PathPrefix",
-									"value": fmt.Sprintf("/%s-endpoint/%s/",
-										request.InferenceServer.Name,
-										request.InferenceServer.Name),
+									"value": fmt.Sprintf("/%s/production", request.InferenceServer.Name),
 								},
 							},
 						},
@@ -615,12 +563,93 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 								"port": 80,
 								"weight": 100,
 							},
-							// Example: Traffic splitting capability (commented for now)
-							// {
-							//     "name": fmt.Sprintf("%s-canary-service", request.InferenceServer.Name),
-							//     "port": 80,
-							//     "weight": 10,
-							// },
+						},
+					},
+					{
+						// Staging endpoint for deployment controller
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s/staging", request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+						},
+					},
+					{
+						// Generic health check endpoint
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s/health", request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/health/ready",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+						},
+					},
+					{
+						// Generic repository management endpoint
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s/repository", request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/repository",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
 						},
 					},
 				},
@@ -846,4 +875,204 @@ func buildResourceRequirements(resources ResourceSpec) corev1.ResourceRequiremen
 func parseQuantity(value string) resource.Quantity {
 	qty, _ := resource.ParseQuantity(value)
 	return qty
+}
+
+// needsHTTPRouteUpdate checks if an existing HTTPRoute needs to be updated
+func needsHTTPRouteUpdate(existingHTTPRoute *unstructured.Unstructured, request InfrastructureRequest) bool {
+	// Extract the existing rules
+	rules, found, err := unstructured.NestedSlice(existingHTTPRoute.Object, "spec", "rules")
+	if err != nil || !found || len(rules) == 0 {
+		return true // Update if we can't parse rules
+	}
+
+	// Check health endpoint rule (first rule)
+	if len(rules) > 0 {
+		firstRule, ok := rules[0].(map[string]interface{})
+		if !ok {
+			return true
+		}
+
+		// Check if health endpoint has correct rewrite
+		filters, found, _ := unstructured.NestedSlice(firstRule, "filters")
+		if !found || len(filters) == 0 {
+			return true
+		}
+
+		for _, filter := range filters {
+			filterMap, ok := filter.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
+				urlRewrite, found, _ := unstructured.NestedMap(filterMap, "urlRewrite")
+				if !found {
+					return true
+				}
+
+				pathMap, found, _ := unstructured.NestedMap(urlRewrite, "path")
+				if !found {
+					return true
+				}
+
+				replacePrefixMatch, ok := pathMap["replacePrefixMatch"]
+				if !ok {
+					return true
+				}
+
+				// This is the key check - does it have the correct path?
+				if replacePrefixMatch != "/v2/health/ready" {
+					return true // Needs update
+				}
+			}
+		}
+	}
+
+	return false // Configuration is up-to-date
+}
+
+// updateHTTPRoute updates an existing HTTPRoute with the correct configuration
+func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, existingHTTPRoute *unstructured.Unstructured, request InfrastructureRequest, gvr schema.GroupVersionResource) error {
+	// Update the spec with the correct configuration
+	updatedSpec := map[string]interface{}{
+		"parentRefs": []map[string]interface{}{
+			{
+				"name":      "ma-gateway",
+				"namespace": "default",
+			},
+		},
+		"rules": []map[string]interface{}{
+			{
+				// Production endpoint for deployment controller
+				"matches": []map[string]interface{}{
+					{
+						"path": map[string]interface{}{
+							"type":  "PathPrefix",
+							"value": fmt.Sprintf("/%s/production", request.InferenceServer.Name),
+						},
+					},
+				},
+				"filters": []map[string]interface{}{
+					{
+						"type": "URLRewrite",
+						"urlRewrite": map[string]interface{}{
+							"path": map[string]interface{}{
+								"type":               "ReplacePrefixMatch",
+								"replacePrefixMatch": "/",
+							},
+						},
+					},
+				},
+				"backendRefs": []map[string]interface{}{
+					{
+						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+						"port":   80,
+						"weight": 100,
+					},
+				},
+			},
+			{
+				// Staging endpoint for deployment controller
+				"matches": []map[string]interface{}{
+					{
+						"path": map[string]interface{}{
+							"type":  "PathPrefix",
+							"value": fmt.Sprintf("/%s/staging", request.InferenceServer.Name),
+						},
+					},
+				},
+				"filters": []map[string]interface{}{
+					{
+						"type": "URLRewrite",
+						"urlRewrite": map[string]interface{}{
+							"path": map[string]interface{}{
+								"type":               "ReplacePrefixMatch",
+								"replacePrefixMatch": "/",
+							},
+						},
+					},
+				},
+				"backendRefs": []map[string]interface{}{
+					{
+						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+						"port":   80,
+						"weight": 100,
+					},
+				},
+			},
+			{
+				// Generic health check endpoint
+				"matches": []map[string]interface{}{
+					{
+						"path": map[string]interface{}{
+							"type":  "PathPrefix",
+							"value": fmt.Sprintf("/%s/health", request.InferenceServer.Name),
+						},
+					},
+				},
+				"filters": []map[string]interface{}{
+					{
+						"type": "URLRewrite",
+						"urlRewrite": map[string]interface{}{
+							"path": map[string]interface{}{
+								"type":               "ReplacePrefixMatch",
+								"replacePrefixMatch": "/v2/health/ready",
+							},
+						},
+					},
+				},
+				"backendRefs": []map[string]interface{}{
+					{
+						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+						"port":   80,
+						"weight": 100,
+					},
+				},
+			},
+			{
+				// Generic repository management endpoint
+				"matches": []map[string]interface{}{
+					{
+						"path": map[string]interface{}{
+							"type":  "PathPrefix",
+							"value": fmt.Sprintf("/%s/repository", request.InferenceServer.Name),
+						},
+					},
+				},
+				"filters": []map[string]interface{}{
+					{
+						"type": "URLRewrite",
+						"urlRewrite": map[string]interface{}{
+							"path": map[string]interface{}{
+								"type":               "ReplacePrefixMatch",
+								"replacePrefixMatch": "/v2/repository",
+							},
+						},
+					},
+				},
+				"backendRefs": []map[string]interface{}{
+					{
+						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+						"port":   80,
+						"weight": 100,
+					},
+				},
+			},
+		},
+	}
+
+	// Update the spec in the existing HTTPRoute
+	if err := unstructured.SetNestedField(existingHTTPRoute.Object, updatedSpec, "spec"); err != nil {
+		return fmt.Errorf("failed to update HTTPRoute spec: %w", err)
+	}
+
+	// Update the HTTPRoute
+	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Update(ctx, existingHTTPRoute, metav1.UpdateOptions{})
+	if err != nil {
+		logger.Error(err, "Failed to update HTTPRoute")
+		return err
+	}
+
+	logger.Info("HTTPRoute updated successfully", "name", existingHTTPRoute.GetName())
+	return nil
 }

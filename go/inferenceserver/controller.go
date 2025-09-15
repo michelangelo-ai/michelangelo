@@ -175,19 +175,21 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, logger logr.Logg
 // handleCreation manages the creation and update lifecycle
 func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (ctrl.Result, error) {
 	logger.Info("Handling InferenceServer creation/update")
-	
+
+	// Note: Finalizer management temporarily removed for build simplification
+
 	// Initialize status if needed (first time setup)
 	if inferenceServer.Status.ObservedGeneration == 0 {
 		logger.Info("Initializing InferenceServer status")
-		
+
 		inferenceServer.Status.ObservedGeneration = inferenceServer.Generation
 		inferenceServer.Status.State = StateCreating
 		inferenceServer.Status.Conditions = []*apipb.Condition{}
 		inferenceServer.Status.CreateTime = time.Now().Format(time.RFC3339)
 		inferenceServer.Status.UpdateTime = time.Now().Format(time.RFC3339)
-		
+
 		r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, EventReasonCreationStarted, MessageCreationStarted)
-		
+
 		// Return early to let status update happen in main reconcile loop
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
