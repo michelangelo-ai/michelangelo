@@ -6,9 +6,7 @@ import {
   StyledTableBodyRow as BaseStyledTableBodyRow,
 } from 'baseui/table-semantic';
 
-export const StyledTable = withStyle(BaseStyledTable, {
-  width: 'max-content',
-});
+export const StyledTable = BaseStyledTable;
 
 export const StyledTableBody = withStyle(BaseStyledTableBody, ({ $theme }) => ({
   backgroundColor: $theme.colors.tableHeadBackgroundColor,

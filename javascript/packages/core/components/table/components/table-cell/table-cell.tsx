@@ -23,7 +23,7 @@ export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
     : ColumnRenderer;
 
   return (
-    <div className={css({ ...getResponsiveColumnWidth(theme), overflow: 'hidden', ...style })}>
+    <div className={css({ ...getResponsiveColumnWidth(theme), ...style })}>
       <Component column={column} record={record} value={value} CellComponent={TableCell} />
     </div>
   );
