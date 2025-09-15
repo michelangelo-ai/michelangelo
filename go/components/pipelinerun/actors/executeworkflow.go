@@ -117,6 +117,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to get workflow inputs: %v", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
+	// after tarContent is passed to Temporal client, convert tarball bytes to string?
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get tar content: %v", err)
@@ -169,6 +170,15 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		}
 	}
 
+	// Apply DevRun environment overrides if present
+	if pipelineRun.Spec.Input != nil {
+		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
+			if err := applyDevRunEnvironmentOverrides(envs, environField.GetStructValue()); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to apply DevRun environment overrides: %w", err)
+			}
+		}
+	}
+
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
 	envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
@@ -215,4 +225,24 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
+}
+
+// applyDevRunEnvironmentOverrides applies DevRun environment variable overrides to the base environment
+func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *pbtypes.Struct) error {
+	if devInput == nil {
+		return nil // No overrides to apply
+	}
+
+	// Apply dev input overrides (only accept string values for environment variables)
+	for key, value := range devInput.Fields {
+		switch value.GetKind().(type) {
+		case *pbtypes.Value_StringValue:
+			baseEnv[key] = value.GetStringValue()
+		default:
+			// Environment variables must be strings only
+			return fmt.Errorf("environment variable '%s' must be a string, got %T", key, value.GetKind())
+		}
+	}
+
+	return nil
 }

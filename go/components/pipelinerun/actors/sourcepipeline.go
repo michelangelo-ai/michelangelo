@@ -48,30 +48,48 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 	}
 
 	pipelineRunSpec := pipelineRun.GetSpec()
-	if pipelineRunSpec.GetPipeline() == nil {
-		logger.Info("pipeline run has no pipeline resource ID, setting to false")
-		return &apipb.Condition{
-			Type:   SourcePipelineType,
-			Status: apipb.CONDITION_STATUS_FALSE,
-		}, fmt.Errorf("pipeline resource ID is nil")
-	}
 
-	pipelineResourceID := pipelineRunSpec.GetPipeline()
+	// Check if this is a DevRun (pipeline_spec field is populated)
 	pipeline := &v2.Pipeline{}
-	err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
-	if err != nil {
-		logger.Error("failed to get pipeline", zap.Error(err))
-		return &apipb.Condition{
-			Type:   SourcePipelineType,
-			Status: apipb.CONDITION_STATUS_FALSE,
-		}, fmt.Errorf("failed to get pipeline: %w", err)
-	}
+	if pipelineRunSpec.GetPipelineSpec() != nil {
+		logger.Info("dev run detected, creating pipeline from inline pipeline_spec")
 
-	pipeline.ObjectMeta = metav1.ObjectMeta{
-		Name:        pipeline.Name,
-		Namespace:   pipeline.Namespace,
-		Labels:      pipeline.Labels,
-		Annotations: pipeline.Annotations,
+		// Create pipeline from inline spec
+		devPipeline, err := a.createPipelineFromSpec(pipelineRunSpec, pipelineRun)
+		if err != nil {
+			logger.Error("failed to create pipeline from spec", zap.Error(err))
+			return &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("failed to create pipeline from spec: %w", err)
+		}
+		pipeline = devPipeline
+	} else {
+		// Regular pipeline run - fetch from Kubernetes using pipeline reference
+		if pipelineRunSpec.GetPipeline() == nil {
+			logger.Info("pipeline run has no pipeline resource ID, setting to false")
+			return &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("pipeline resource ID is nil")
+		}
+
+		pipelineResourceID := pipelineRunSpec.GetPipeline()
+		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
+		if err != nil {
+			logger.Error("failed to get pipeline", zap.Error(err))
+			return &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("failed to get pipeline: %w", err)
+		}
+
+		pipeline.ObjectMeta = metav1.ObjectMeta{
+			Name:        pipeline.Name,
+			Namespace:   pipeline.Namespace,
+			Labels:      pipeline.Labels,
+			Annotations: pipeline.Annotations,
+		}
 	}
 	pipelineRun.Status.SourcePipeline = &v2.SourcePipeline{
 		Pipeline: pipeline,
@@ -86,4 +104,30 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 
 func (a *SourcePipelineActor) GetType() string {
 	return SourcePipelineType
+}
+
+// createPipelineFromSpec creates a Pipeline CR from inline PipelineSpec for dev runs
+func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.PipelineRunSpec, pipelineRun *v2.PipelineRun) (*v2.Pipeline, error) {
+	pipelineSpec := pipelineRunSpec.GetPipelineSpec()
+
+	// Create pipeline CR with metadata from pipeline run
+	pipeline := &v2.Pipeline{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        fmt.Sprintf("devrun-%s", pipelineRun.Name),
+			Namespace:   pipelineRun.Namespace,
+			Annotations: make(map[string]string),
+		},
+		Spec: *pipelineSpec, // Use inline spec directly
+	}
+
+	// Copy annotations from pipeline run metadata (set by CLI during dev run creation)
+	// For dev runs, annotations like image-id are stored in the PipelineRun metadata
+	for k, v := range pipelineRun.Annotations {
+		pipeline.ObjectMeta.Annotations[k] = v
+	}
+
+	// Note: Environment variable overrides for DevRuns are applied in ExecuteWorkflow actor
+	// during workflow input preparation, preserving the original pipeline manifest
+
+	return pipeline, nil
 }
