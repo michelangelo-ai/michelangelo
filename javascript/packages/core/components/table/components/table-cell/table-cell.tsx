@@ -1,6 +1,8 @@
 import { useStyletron } from 'baseui';
 
+import { CellEnhancer } from '#core/components/cell/components/cell-enhancer';
 import { useCellStyles } from '#core/components/cell/hooks';
+import { CellContainer } from '#core/components/cell/styled-components';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { resolveColumnForRow } from '../../utils/column-resolution-utils';
@@ -23,8 +25,11 @@ export const TableCell = <T = unknown,>(props: TableCellProps<T>) => {
     : ColumnRenderer;
 
   return (
-    <div className={css({ ...getResponsiveColumnWidth(theme), ...style })}>
-      <Component column={column} record={record} value={value} CellComponent={TableCell} />
-    </div>
+    <CellContainer>
+      <div className={css({ ...getResponsiveColumnWidth(theme), ...style })}>
+        <Component column={column} record={record} value={value} CellComponent={TableCell} />
+      </div>
+      <CellEnhancer endEnhancer={column.endEnhancer} />
+    </CellContainer>
   );
 };

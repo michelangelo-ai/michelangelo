@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import { userEvent } from '@testing-library/user-event';
 
 import { CellType } from '#core/components/cell/constants';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
@@ -68,5 +69,32 @@ describe('DefaultCellRenderer', () => {
     );
 
     expect(container).not.toBeEmptyDOMElement();
+  });
+
+  it('should render endEnhancer when provided', async () => {
+    const user = userEvent.setup();
+
+    render(
+      <DefaultCellRenderer
+        column={{
+          id: 'test',
+          type: CellType.TEXT,
+          endEnhancer: {
+            content: 'Enhancement tooltip content',
+            type: 'tooltip',
+          },
+        }}
+        record={{}}
+        value="test value"
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper({ icons: { circleI: () => <div>circleI</div> } }),
+      ])
+    );
+
+    expect(screen.getByText('test value')).toBeInTheDocument();
+    await user.hover(screen.getByText('circleI'));
+    await screen.findByText('Enhancement tooltip content');
   });
 });

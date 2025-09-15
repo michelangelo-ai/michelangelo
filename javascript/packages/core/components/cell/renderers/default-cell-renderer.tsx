@@ -1,7 +1,9 @@
 import { useStyletron } from 'baseui';
 
+import { CellEnhancer } from '#core/components/cell/components/cell-enhancer';
 import { cellTooltipHOC } from '#core/components/cell/components/tooltip/cell-tooltip-hoc';
 import { useCellStyles } from '#core/components/cell/hooks';
+import { CellContainer } from '#core/components/cell/styled-components';
 import { useGetCellRenderer } from '#core/components/cell/use-get-cell-renderer';
 
 import type { Cell, CellRendererProps } from '#core/components/cell/types';
@@ -18,8 +20,11 @@ export function DefaultCellRenderer(props: CellRendererProps<unknown, Cell>) {
     : ColumnRendererComponent;
 
   return (
-    <div className={css(style)}>
-      <Component {...props} CellComponent={DefaultCellRenderer} />
-    </div>
+    <CellContainer>
+      <div className={css(style)}>
+        <Component {...props} CellComponent={DefaultCellRenderer} />
+      </div>
+      <CellEnhancer endEnhancer={column.endEnhancer} />
+    </CellContainer>
   );
 }
