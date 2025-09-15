@@ -283,8 +283,8 @@ func TestBuilderPatternBenefits(t *testing.T) {
 
 		// Demonstrate clear, self-documenting configuration
 		builder := NewAPIHandlerBuilder().
-			WithK8sClient(fakeClient).                   // Required: Kubernetes client
-			WithZapLogger(zap.NewNop()).                 // Optional: Structured logging
+			WithK8sClient(fakeClient). // Required: Kubernetes client
+			WithZapLogger(zap.NewNop()). // Optional: Structured logging
 			WithMetrics(tally.NewTestScope("test", nil)) // Optional: Metrics collection
 
 		handler, err := builder.Build()
@@ -307,7 +307,7 @@ func TestNewAPIHandlerFactory(t *testing.T) {
 		factory := NewAPIHandlerFactory(params)
 
 		assert.NotNil(t, factory)
-		assert.IsType(t, &builderFactory{}, factory)
+		assert.IsType(t, &apiHandlerFactory{}, factory)
 	})
 
 	t.Run("creates factory with all params", func(t *testing.T) {
@@ -332,7 +332,7 @@ func TestNewAPIHandlerFactory(t *testing.T) {
 		assert.NotNil(t, factory)
 
 		// Verify internal configuration
-		builderFactory := factory.(*builderFactory)
+		builderFactory := factory.(*apiHandlerFactory)
 		assert.NotNil(t, builderFactory.logger)
 		assert.Equal(t, params.Metrics, builderFactory.metrics)
 		assert.Equal(t, mockMetadataStorage, builderFactory.metadataStorage)
@@ -343,7 +343,7 @@ func TestNewAPIHandlerFactory(t *testing.T) {
 
 func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 	t.Run("creates handler with K8s only configuration", func(t *testing.T) {
-		factory := &builderFactory{
+		factory := &apiHandlerFactory{
 			logger:        zapr.NewLogger(zap.NewNop()),
 			metrics:       tally.NewTestScope("test", nil),
 			storageConfig: storage.MetadataStorageConfig{EnableMetadataStorage: false},
@@ -363,7 +363,7 @@ func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 
 		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
 
-		factory := &builderFactory{
+		factory := &apiHandlerFactory{
 			logger:          zapr.NewLogger(zap.NewNop()),
 			metrics:         tally.NewTestScope("test", nil),
 			metadataStorage: mockMetadataStorage,
@@ -384,7 +384,7 @@ func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 
 		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
 
-		factory := &builderFactory{
+		factory := &apiHandlerFactory{
 			logger:        zapr.NewLogger(zap.NewNop()),
 			metrics:       tally.NewTestScope("test", nil),
 			blobStorage:   mockBlobStorage,
@@ -406,7 +406,7 @@ func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 		mockMetadataStorage := storagemocks.NewMockMetadataStorage(ctrl)
 		mockBlobStorage := storagemocks.NewMockBlobStorage(ctrl)
 
-		factory := &builderFactory{
+		factory := &apiHandlerFactory{
 			logger:          zapr.NewLogger(zap.NewNop()),
 			metrics:         tally.NewTestScope("test", nil),
 			metadataStorage: mockMetadataStorage,
@@ -423,7 +423,7 @@ func TestBuilderFactory_GetAPIHandler(t *testing.T) {
 	})
 
 	t.Run("fails when metadata storage enabled but not provided", func(t *testing.T) {
-		factory := &builderFactory{
+		factory := &apiHandlerFactory{
 			logger:          zapr.NewLogger(zap.NewNop()),
 			metrics:         tally.NewTestScope("test", nil),
 			metadataStorage: nil, // Not provided but enabled

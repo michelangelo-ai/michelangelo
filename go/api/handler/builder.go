@@ -221,8 +221,8 @@ type Factory interface {
 	GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error)
 }
 
-// builderFactory implements Factory using the builder pattern internally
-type builderFactory struct {
+// apiHandlerFactory implements Factory using the builder pattern internally
+type apiHandlerFactory struct {
 	logger          logr.Logger
 	metrics         tally.Scope
 	metadataStorage storage.MetadataStorage
@@ -231,7 +231,7 @@ type builderFactory struct {
 }
 
 // GetAPIHandler creates an API handler using the provided K8s client
-func (f *builderFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
+func (f *apiHandlerFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handler, error) {
 	builder := NewAPIHandlerBuilder().
 		WithK8sClient(client).
 		WithLogger(f.logger).
@@ -253,7 +253,7 @@ func (f *builderFactory) GetAPIHandler(client ctrlRTClient.Client) (api.Handler,
 // NewAPIHandlerFactory creates a factory that controllers can use to build handlers
 // This provides the same interface as the old factory pattern but uses the builder internally
 func NewAPIHandlerFactory(params Params) Factory {
-	return &builderFactory{
+	return &apiHandlerFactory{
 		logger:          zapr.NewLogger(params.Logger),
 		metrics:         params.Metrics,
 		metadataStorage: params.MetadataStorage,
