@@ -1,10 +1,10 @@
 package temporalclient
 
 import (
+	"github.com/cadence-workflow/starlark-worker/temporal"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	workflowfx "github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
-	"github.com/cadence-workflow/starlark-worker/temporal"
 	temporalClient "go.temporal.io/sdk/client"
 	"go.uber.org/fx"
 )
