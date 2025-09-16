@@ -53,6 +53,38 @@ describe('TableCell', () => {
     );
   });
 
+  it('should render endEnhancer when provided', async () => {
+    const user = userEvent.setup();
+    const column: ColumnConfig = {
+      id: 'name',
+      label: 'Name',
+      type: 'text',
+      endEnhancer: {
+        content: 'Cell enhancement tooltip content',
+        type: 'tooltip',
+      },
+    };
+
+    render(
+      <TableCell
+        record={{ id: 1, name: 'Test Record' }}
+        value={'test-value'}
+        column={column}
+        row={buildRow()}
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getInterpolationProviderWrapper(),
+        getRouterWrapper(),
+        getIconProviderWrapper({ icons: { circleI: () => <div>circleI</div> } }),
+      ])
+    );
+
+    expect(screen.getByText('test-value')).toBeInTheDocument();
+    await user.hover(screen.getByText('circleI'));
+    await screen.findByText('Cell enhancement tooltip content');
+  });
+
   describe('tooltip functionality', () => {
     const mockSetColumnFilterValue = vi.fn();
     const buildColumn = buildColumnFactory();
