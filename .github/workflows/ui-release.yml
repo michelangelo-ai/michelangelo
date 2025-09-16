@@ -22,20 +22,6 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check if package.json version changed
-        id: check
-        run: |
-          if git diff HEAD~1 HEAD --name-only | grep -q "javascript/app/package.json"; then
-            # Get the current version
-            VERSION=$(jq -r '.version' javascript/app/package.json)
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "changed=true" >> $GITHUB_OUTPUT
-            echo "📦 Package.json version changed to: $VERSION"
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-            echo "📦 Package.json version unchanged, skipping build"
-          fi
-
   build-ui-image:
     needs: check-version-change
     if: needs.check-version-change.outputs.version-changed == 'true' || github.event_name == 'workflow_dispatch'
