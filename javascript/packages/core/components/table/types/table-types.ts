@@ -158,7 +158,7 @@ export interface TableRequiredFunctionalityProps<T extends TableData = TableData
    * If true, enables sticky column functionality for better horizontal scrolling experience.
    * First and last columns will remain visible during horizontal scroll.
    *
-   * @default false
+   * @default true
    */
   enableStickySides: boolean;
 

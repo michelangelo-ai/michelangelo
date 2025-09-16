@@ -26,7 +26,7 @@ export const TableBody = <T extends TableData = TableData>({
 }: TableBodyProps<T>) => {
   const [css, theme] = useStyletron();
 
-  const lastColumnIndex = rows[0].cells.length + 1;
+  const lastVisibleColumnIndex = rows[0].cells.filter((cell) => cell.isVisible).length + 1;
 
   return (
     <StyledTableBody>
@@ -35,7 +35,7 @@ export const TableBody = <T extends TableData = TableData>({
           <StickySidesTableBodyRow
             enableStickySides={enableStickySides}
             enableRowSelection={enableRowSelection}
-            lastColumnIndex={lastColumnIndex}
+            lastColumnIndex={lastVisibleColumnIndex}
             scrollRatio={scrollRatio}
             role="row"
           >

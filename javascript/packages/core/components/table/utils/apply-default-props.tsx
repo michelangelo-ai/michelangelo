@@ -55,7 +55,7 @@ export function applyDefaultProps<T extends TableData = TableData>(
     pageSizes,
     state: resolveTableState(props.state, disablePagination, pageSizes),
     pagination: props.pagination ?? TablePagination,
-    enableStickySides: props.enableStickySides ?? false,
+    enableStickySides: props.enableStickySides ?? true,
     body: props.body ?? TableBody,
     header: props.header ?? TableHeader,
     unFilteredData: props.unFilteredData ?? props.data,
