@@ -19,6 +19,8 @@ package michelangelo.api.v2;
 
 option go_package = "v2";
 
+import "google/protobuf/struct.proto";
+
 // PipelineExecutionParameters used to trigger multiple pipeline runs with different parameters from one pipeline definition
 // PipelineExecutionParameters defines a set of key-value parameters for customizing pipeline execution.
 // Each parameter set can be used to trigger a pipeline run with different configuration values.
@@ -31,4 +33,21 @@ option go_package = "v2";
 message PipelineExecutionParameters {
   // pipeline execution parameters stored in string key-value map
   map<string, string> parameter_map = 1;
+
+  // dynamic parameters for canvas flex pipeline
+  // canvas flex pipeline workflow configurations
+  google.protobuf.Struct workflow_config = 2;
+
+  // canvas flex pipeline task input configurations
+  map<string, google.protobuf.Struct> task_configs = 3;
+
+  // dynamic parameters for uniflow pipeline
+  // uniflow pipeline environment variables
+  map<string, string> environ = 4;
+
+  // uniflow pipeline arguments
+  repeated google.protobuf.Struct args = 5;
+
+  // uniflow pipeline key-word arguments
+  google.protobuf.Struct kw_args = 6;
 }
