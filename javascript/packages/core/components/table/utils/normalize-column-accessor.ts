@@ -42,6 +42,6 @@ export function normalizeColumnAccessor<T extends TableData = TableData>(
         .join(MULTI_COLUMN_DATA_JOIN_STRING);
     }
 
-    return getObjectValue<T>(row, resolvedColumn.accessor ?? resolvedColumn.id);
+    return getObjectValue<unknown>(row, resolvedColumn.accessor ?? resolvedColumn.id);
   };
 }

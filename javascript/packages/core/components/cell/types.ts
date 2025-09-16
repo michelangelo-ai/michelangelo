@@ -34,7 +34,7 @@ export interface SharedCell<T = unknown> {
    * @example 'spec.content.metadata.name'
    * @example (row) => `Revision ${row?.spec?.revisionId}`,
    */
-  accessor?: Accessor<T>;
+  accessor?: Accessor<unknown>;
 
   /**
    * @description Label to be displayed in the table header
