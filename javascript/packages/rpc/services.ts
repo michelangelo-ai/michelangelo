@@ -20,7 +20,7 @@ const callerInterceptor: Interceptor = (next) => async (req) => {
 // This transport is used to connect to the Envoy proxy that proxies gRPC web requests
 // to gRPC services.
 const transport = createGrpcWebTransport({
-  baseUrl: 'http://localhost:8081',
+  baseUrl: 'http://envoy:8081',
   interceptors: [callerInterceptor],
   useBinaryFormat: true,
 });
