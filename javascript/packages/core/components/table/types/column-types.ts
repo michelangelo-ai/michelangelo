@@ -1,8 +1,11 @@
 import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
+import { TableRow } from '../components/table-body/types';
+
 import type { AggregationFnOption, SortingFnOption } from '@tanstack/react-table';
-import type { ComponentType } from 'react';
-import type { Cell, CellRendererProps } from '#core/components/cell/types';
+import type { ComponentType, ReactNode } from 'react';
+import type { Cell, CellRendererProps, CellTooltip } from '#core/components/cell/types';
+import type { DistributiveOmit } from '#core/types/utility-types';
 import type { FilterMode } from '../components/filter/types';
 import type { TableData } from './data-types';
 
@@ -11,7 +14,7 @@ declare module '@tanstack/react-table' {
   interface ColumnMeta<TData extends TableData, TValue> extends ColumnConfig<TData> {}
 }
 
-export type ColumnConfig<TData = TableData> = Cell<TData> & {
+export type ColumnConfig<TData = TableData> = DistributiveOmit<Cell<TData>, 'tooltip'> & {
   /**
    * @description
    * Configures the filtering mode for the column. If using `FilterMode.SERVER`, ensure
@@ -76,6 +79,14 @@ export type ColumnConfig<TData = TableData> = Cell<TData> & {
    * @see https://tanstack.com/table/latest/docs/api/features/sorting#sorting-functions
    */
   sortingFn?: SortingFnOption<TData>;
+
+  /**
+   * @description
+   * Custom tooltip to be displayed when this column's cells are hovered.
+   *
+   * @default undefined
+   */
+  tooltip?: ColumnTooltip<TData>;
 };
 
 /**
@@ -143,4 +154,19 @@ export type SelectableCapability = {
   canSelect: boolean;
   isSelected: boolean;
   onToggleSelection: (selected: boolean) => void;
+};
+
+export type ColumnTooltip<TData extends TableData = TableData> = Omit<CellTooltip, 'content'> & {
+  /**
+   * @description
+   * The content to be displayed in the tooltip.
+   *
+   * @remarks
+   * If a function is provided, it will be called with the cell renderer props and the row data.
+   */
+  content:
+    | string
+    | ((
+        params: CellRendererProps<TData, ColumnConfig<TData>> & { row: TableRow<TData> }
+      ) => ReactNode);
 };
