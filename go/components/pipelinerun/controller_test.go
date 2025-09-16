@@ -276,6 +276,7 @@ func TestReconcile(t *testing.T) {
 					&clientInterfaces.WorkflowExecutionInfo{
 						Status: clientInterfaces.WorkflowExecutionStatusCompleted,
 					}, nil)
+				mockWorkflowClient.EXPECT().QueryWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", "task_progress", gomock.Any()).Return(nil)
 			},
 			expectedConditions: []*apipb.Condition{
 				{
