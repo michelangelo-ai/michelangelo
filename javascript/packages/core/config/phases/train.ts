@@ -1,5 +1,6 @@
 import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
 import { RUN_ENTITY_CONFIG } from '#core/config/entities/run/run';
+import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
 import { PhaseConfig } from '#core/types/common/studio-types';
 
 export const TRAIN_PHASE: PhaseConfig = {
@@ -12,6 +13,7 @@ export const TRAIN_PHASE: PhaseConfig = {
   entities: [
     PIPELINE_ENTITY_CONFIG,
     RUN_ENTITY_CONFIG,
+    TRIGGER_ENTITY_CONFIG,
     {
       id: 'models',
       name: 'trained models',
