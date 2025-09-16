@@ -31,15 +31,15 @@ const (
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
 type TaskProgress struct {
-	TaskPath       string `json:"task_path"`
-	TaskName       string `json:"task_name"`
-	TaskLog        string `json:"task_log"`
-	TaskMessage    string `json:"task_message"`
-	TaskState      string `json:"task_state"`
-	StartTime      string `json:"start_time"`
-	EndTime        string `json:"end_time"`
-	Output         string `json:"output"`
-	RetryAttemptID string `json:"retry_attempt_id"`
+	TaskPath       string `json:"task_path"`        // full hierarchical path of the task within the workflow execution tree
+	TaskName       string `json:"task_name"`        // name of task
+	TaskLog        string `json:"task_log"`         // URL or reference to the task's execution logs
+	TaskMessage    string `json:"task_message"`     // contains status messages, error details, or other information from task execution
+	TaskState      string `json:"task_state"`       // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
+	StartTime      string `json:"start_time"`       // timestamp when the task execution began
+	EndTime        string `json:"end_time"`         // timestamp when the task execution completed
+	Output         string `json:"output"`           // contains the serialized output data produced by the task upon completion
+	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
 }
 
 type ExecuteWorkflowActor struct {
@@ -114,7 +114,8 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	// Query and update task-level status for all workflow states
 	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if queryErr != nil {
-		logger.Warn("Failed to query task progress", zap.Error(queryErr))
+		logger.Error("Failed to query task progress", zap.Error(queryErr))
+		return nil, queryErr
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
 	}
