@@ -3,7 +3,7 @@ name: Dev Release
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ yangfan-test ]
 #  pull_request:
 #    branches: [ main ]
 
@@ -16,7 +16,7 @@ jobs:
     strategy:
       # max-parallel: 1
       matrix:
-        service: [controllermgr, worker, apiserver]
+        service: [ apiserver]
 
     permissions:
       contents: read
