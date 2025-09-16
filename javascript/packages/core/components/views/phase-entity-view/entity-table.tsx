@@ -37,7 +37,6 @@ export function EntityTable({ service, listViewConfig, tableSettingsId }: Entity
   return (
     <Table
       data={data?.[`${service}List`]?.items ?? []}
-      enableStickySides={true}
       error={error ?? undefined}
       columns={listViewConfig.columns}
       loading={isLoading}
