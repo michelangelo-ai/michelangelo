@@ -47,8 +47,8 @@ func (r *activities) CreatePipelineRun(ctx context.Context, request *v2pb.Create
 
 	response, err := r.pipelineRunService.CreatePipelineRun(ctx, request)
 	if err != nil || response == nil || response.PipelineRun == nil {
-		logger.Error("activity-error", zap.Any("error", err))
-		return nil, workflow.NewCustomError(ctx, "CreatePipelineRunFailed", err.Error())
+		logger.Error("activity-error", zap.Error(err))
+		return nil, workflow.NewCustomError(ctx, "CreatePipelineRun", err.Error())
 	}
 
 	logger.Info("activity-success", zap.String("pipeline_run_name", response.PipelineRun.Name))
@@ -78,7 +78,7 @@ func (r *activities) GenerateBatchRunParams(ctx context.Context, triggerRun *v2p
 	batches, err := generator.GenerateBatchParams(triggerRun)
 	if err != nil {
 		logger.Error("activity-error", zap.Error(err))
-		return nil, workflow.NewCustomError(ctx, "GenerateBatchParamsFailed", err.Error())
+		return nil, workflow.NewCustomError(ctx, "GenerateBatchParams", err.Error())
 	}
 
 	logger.Info("activity-success", zap.Int("batch_count", len(batches)), zap.String("trigger_type", triggerType))
@@ -108,7 +108,7 @@ func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun
 	params, err := generator.GenerateConcurrentParams(triggerRun)
 	if err != nil {
 		logger.Error("activity-error", zap.Error(err))
-		return nil, workflow.NewCustomError(ctx, "GenerateConcurrentParamsFailed", err.Error())
+		return nil, workflow.NewCustomError(ctx, "GenerateConcurrentParams", err.Error())
 	}
 
 	logger.Info("activity-success", zap.Int("param_count", len(params)), zap.String("trigger_type", triggerType))
@@ -144,7 +144,7 @@ func (r *activities) PipelineRunSensor(ctx context.Context, pipelineRun *v2pb.Pi
 	response, err := r.pipelineRunService.GetPipelineRun(ctx, getRequest)
 	if err != nil {
 		logger.Error("activity-error", zap.Error(err))
-		return nil, workflow.NewCustomError(ctx, "GetPipelineRunFailed", err.Error())
+		return nil, workflow.NewCustomError(ctx, "GetPipelineRun", err.Error())
 	}
 
 	if response == nil || response.PipelineRun == nil {

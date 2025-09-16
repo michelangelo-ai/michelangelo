@@ -283,6 +283,8 @@ func generatePipelineRunRequest(
 	}
 	annotations := map[string]string{
 		"michelangelo.uber.com/pipelinerun.engine": "condition",
+		"michelangelo/UpdateTimestamp":             fmt.Sprintf("%d", ts.Unix()),
+		"michelangelo/SpecUpdateTimestamp":         fmt.Sprintf("%d", ts.Unix()),
 	}
 	var pbStruct *pbtypes.Struct
 	paramsMap := triggerRun.Spec.Trigger.ParametersMap

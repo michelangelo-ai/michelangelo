@@ -9,8 +9,8 @@ import (
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
-	temporalClient "go.temporal.io/sdk/client"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
+	temporalClient "go.temporal.io/sdk/client"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -173,7 +173,7 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 				RunID: exec.Execution.GetRunId(),
 			},
 			ExecutionTime: exec.StartTime.AsTime(),
-			Status: mapTemporalStatusToInterface(exec.Status),
+			Status:        mapTemporalStatusToInterface(exec.Status),
 		})
 	}
 
@@ -181,4 +181,8 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 		Executions:    executionsInfo,
 		NextPageToken: response.NextPageToken,
 	}, nil
+}
+
+func (c *TemporalClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason)
 }

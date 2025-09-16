@@ -283,3 +283,44 @@ func TestGetProvider(t *testing.T) {
 	provider := client.GetProvider()
 	require.Equal(t, "temporal", provider)
 }
+
+func TestTerminateWorkflow(t *testing.T) {
+	ctx := context.Background()
+	workflowID := "test-workflow-id"
+	runID := "test-run-id"
+	reason := "test termination reason"
+
+	t.Run("success", func(t *testing.T) {
+		mockClient := &temporalMocks.Client{}
+		client := &TemporalClient{
+			Client:   mockClient,
+			Provider: "temporal",
+			Domain:   "test-domain",
+		}
+
+		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason).Return(nil)
+
+		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
+
+		require.NoError(t, err)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		mockClient := &temporalMocks.Client{}
+		client := &TemporalClient{
+			Client:   mockClient,
+			Provider: "temporal",
+			Domain:   "test-domain",
+		}
+
+		expectedErr := fmt.Errorf("terminate failed")
+		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason).Return(expectedErr)
+
+		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
+
+		require.Error(t, err)
+		require.Equal(t, expectedErr, err)
+		mockClient.AssertExpectations(t)
+	})
+}

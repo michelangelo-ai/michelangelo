@@ -13,7 +13,6 @@ import (
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/fx"
-	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -109,12 +108,20 @@ StateMachine:
 		}
 		status, err := runner.Run(ctx, triggerRun)
 		if err != nil {
-			log.Error(err, "failed to start scheduled cadence workflow")
+			log.Error(err, "failed to start scheduled cadence workflow",
+				"operation", "start_workflow",
+				"namespace", triggerRun.Namespace,
+				"name", triggerRun.Name)
 			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
 			triggerRun.Status.ErrorMessage = status.ErrorMessage
 			break StateMachine
 		}
-		log.Info("cadence scheduled workflow started", zap.Any("status", status))
+		log.Info("cadence scheduled workflow started",
+			"operation", "workflow_started",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"state", status.State,
+			"execution_workflow_id", status.ExecutionWorkflowId)
 		triggerRun.Status.State = status.State
 		triggerRun.Status.LogUrl = status.LogUrl
 		triggerRun.Status.ExecutionWorkflowId = status.ExecutionWorkflowId

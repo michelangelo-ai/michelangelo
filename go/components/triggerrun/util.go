@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"net/url"
 	"time"
+
 	"github.com/cenkalti/backoff"
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
 )
 
 // TriggerType constants for different trigger types
@@ -32,21 +32,31 @@ func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Log
 	wid := generateWorkflowID(triggerRun)
 	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient, domain)
 	if err != nil {
-		log.Error(err, "failed to get workflow execution info", zap.Any("triggerRun", triggerRun))
-		return triggerRun.Status, err
+		log.Error(err, "failed to get workflow execution info",
+			"operation", "get_workflow_runid",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid)
+		return triggerRun.Status, fmt.Errorf("get workflow execution info for trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
 	}
 	if rid == nil || *rid == "" {
 		log.Info("no open execution, scheduled run already killed")
 		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
 		return triggerRun.Status, nil
 	}
-	err = workflowClient.CancelWorkflow(ctx, wid, *rid, "trigger killed")
+	err = workflowClient.TerminateWorkflow(ctx, wid, *rid, "trigger killed")
 	if err != nil {
-		log.Error(err, "failed to cancel scheduled workflow",
-			zap.String("workflowId", wid), zap.String("runId", *rid))
-		return triggerRun.Status, err
+		log.Error(err, "failed to terminate scheduled workflow",
+			"operation", "terminate_workflow",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid,
+			"runId", *rid)
+		return triggerRun.Status, fmt.Errorf("terminate workflow for trigger %s/%s: %w",
+			triggerRun.Namespace, triggerRun.Name, err)
 	}
-	log.Info("scheduled workflow cancelled")
+	log.Info("scheduled workflow terminated")
 	triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
 	return triggerRun.Status, nil
 }
@@ -56,15 +66,20 @@ func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log log
 	wid := generateWorkflowID(triggerRun)
 	execInfo, err := getWorkflowOpenExecution(ctx, wid, workflowClient, domain)
 	if err != nil {
-		log.Error(err, "failed to list open workflow for scheduled run", zap.Any("triggerRun", triggerRun))
+		log.Error(err, "failed to list open workflow for scheduled run",
+			"operation", "list_open_workflow",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid)
 		return v2pb.TriggerRunStatus{
-			State:        triggerRun.Status.State,
-			ErrorMessage: "failed to list open workflow: " + err.Error(),
-		}, err
+				State:        triggerRun.Status.State,
+				ErrorMessage: "failed to list open workflow: " + err.Error(),
+			}, fmt.Errorf("list open workflow for trigger %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
 	}
 	if execInfo != nil && !execInfo.ExecutionTime.IsZero() {
 		execTs := execInfo.ExecutionTime
-		log.Info("current scheduled execution time", zap.Any("execution_ts", execTs))
+		log.Info("current scheduled execution time", "execution_ts", execTs)
 	}
 	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 }

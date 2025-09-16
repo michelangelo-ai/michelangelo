@@ -285,3 +285,44 @@ func TestGetProvider(t *testing.T) {
 	}
 	assert.Equal(t, "cadence", client.GetProvider())
 }
+
+func TestTerminateWorkflow(t *testing.T) {
+	ctx := context.Background()
+	workflowID := "test-workflow-id"
+	runID := "test-run-id"
+	reason := "test termination reason"
+
+	t.Run("success", func(t *testing.T) {
+		mockClient := &cadencemocks.Client{}
+		client := &CadenceClient{
+			Client:   mockClient,
+			Provider: "cadence",
+			Domain:   "test-domain",
+		}
+
+		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason, []byte(nil)).Return(nil)
+
+		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
+
+		assert.NoError(t, err)
+		mockClient.AssertExpectations(t)
+	})
+
+	t.Run("error", func(t *testing.T) {
+		mockClient := &cadencemocks.Client{}
+		client := &CadenceClient{
+			Client:   mockClient,
+			Provider: "cadence",
+			Domain:   "test-domain",
+		}
+
+		expectedErr := fmt.Errorf("terminate failed")
+		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason, []byte(nil)).Return(expectedErr)
+
+		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
+
+		assert.Error(t, err)
+		assert.Equal(t, expectedErr, err)
+		mockClient.AssertExpectations(t)
+	})
+}

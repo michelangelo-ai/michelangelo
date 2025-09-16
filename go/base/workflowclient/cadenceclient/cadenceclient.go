@@ -156,7 +156,7 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 				RunID: exec.Execution.GetRunId(),
 			},
 			ExecutionTime: time.Unix(0, *exec.ExecutionTime),
-			Status: mapCadenceStatusToInterface(exec.CloseStatus),
+			Status:        mapCadenceStatusToInterface(exec.CloseStatus),
 		})
 	}
 
@@ -164,4 +164,8 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 		Executions:    executionsInfo,
 		NextPageToken: response.NextPageToken,
 	}, nil
+}
+
+func (c *CadenceClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason, nil)
 }

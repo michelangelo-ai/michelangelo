@@ -75,4 +75,6 @@ type WorkflowClient interface {
 	GetDomain() string
 	// ListOpenWorkflow lists the open workflows with the given request
 	ListOpenWorkflow(ctx context.Context, request ListOpenWorkflowExecutionsRequest) (*ListOpenWorkflowExecutionsResponse, error)
+	// TerminateWorkflow terminates a workflow
+	TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error
 }

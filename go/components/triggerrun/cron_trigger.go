@@ -2,12 +2,12 @@ package triggerrun
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
@@ -42,24 +42,47 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
 	if err != nil {
 		// log the error and continue
-		log.Error(err, "failed to get open workflow execution")
+		log.Error(err, "failed to get open workflow execution",
+			"operation", "get_workflow_runid",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid)
 	}
 	if rid != nil && *rid != "" {
 		log.Info("scheduled workflow already running",
-			zap.String("workflowId", wid), zap.String("runId", *rid))
+			"operation", "run_cron_trigger",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid,
+			"runId", *rid)
 		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 	}
-	log.Info("starting scheduled workflow", zap.Any("option", opt))
+	log.Info("starting scheduled workflow",
+		"operation", "start_workflow",
+		"namespace", triggerRun.Namespace,
+		"name", triggerRun.Name,
+		"workflowId", opt.ID,
+		"taskList", opt.TaskList)
 	exec, err := r.WorkflowClient.StartWorkflow(
 		ctx, opt, "trigger.CronTrigger", CreateTriggerRequest{TriggerRun: triggerRun})
 	if err != nil {
+		log.Error(err, "failed to start scheduled workflow",
+			"operation", "start_workflow",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", opt.ID)
 		return v2pb.TriggerRunStatus{
-			ErrorMessage: err.Error(),
-			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
-		}, err
+				ErrorMessage: err.Error(),
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			}, fmt.Errorf("start workflow for trigger %s/%s: %w",
+				triggerRun.Namespace, triggerRun.Name, err)
 	}
 	r.Log.Info("scheduled workflow enabled",
-		zap.Any("execution_id", exec.ID), zap.Any("run_id", exec.RunID))
+		"operation", "workflow_started",
+		"namespace", triggerRun.Namespace,
+		"name", triggerRun.Name,
+		"execution_id", exec.ID,
+		"run_id", exec.RunID)
 	return v2pb.TriggerRunStatus{
 		State:  v2pb.TRIGGER_RUN_STATE_RUNNING,
 		LogUrl: getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
