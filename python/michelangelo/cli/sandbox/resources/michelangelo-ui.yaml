@@ -18,9 +18,6 @@ spec:
       - name: ui
         image: ghcr.io/michelangelo-ai/ui:main
         imagePullPolicy: Always
-        env:
-        - name: VITE_API_BASE_URL
-          value: "http://envoy:8081"
         ports:
         - containerPort: 80
         resources:
