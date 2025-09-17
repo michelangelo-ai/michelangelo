@@ -9,8 +9,6 @@ describe('adaptTableConfigToTableProps', () => {
       { id: 'name', label: 'Name' },
       { id: 'status', label: 'Status' },
     ],
-    emptyState: undefined,
-    pageSizes: undefined,
   });
 
   const mockRuntimeProps = {
@@ -20,7 +18,12 @@ describe('adaptTableConfigToTableProps', () => {
   };
 
   it('should handle minimal TableConfig with only columns', () => {
-    const minimalConfig = buildTableConfig();
+    const minimalConfig = {
+      columns: [
+        { id: 'name', label: 'Name' },
+        { id: 'status', label: 'Status' },
+      ],
+    };
     const result = adaptTableConfigToTableProps(minimalConfig, mockRuntimeProps);
 
     expect(result).toEqual({
@@ -74,7 +77,7 @@ describe('adaptTableConfigToTableProps', () => {
     expect(result.loading).toBe(false);
   });
 
-  it('should correctly map disable flags to actionBar enables', () => {
+  describe('should correctly map disable flags to actionBar enables', () => {
     const testCases = [
       {
         description: 'both disabled',
@@ -132,7 +135,7 @@ describe('adaptTableConfigToTableProps', () => {
       disableSearch: _disableSearch,
       disableFilters: _disableFilters,
       ...expectedProps
-    } = config;
+    } = { ...config, ...mockRuntimeProps };
 
     expect(passedThroughProps).toEqual(expectedProps);
   });

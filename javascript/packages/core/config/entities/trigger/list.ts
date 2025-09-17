@@ -1,7 +1,6 @@
 import { CellType } from '#core/components/cell/constants';
 import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './shared';
 
-import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
 
 export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
