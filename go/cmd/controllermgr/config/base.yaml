@@ -13,7 +13,7 @@ workflowClient:
   taskList: default # TODO: MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
     
 k8s:
-  qps: 300
+  qps: 600
   burst: 600
 metadataStorage:
   enableMetadataStorage: false

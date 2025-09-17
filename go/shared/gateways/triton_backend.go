@@ -48,9 +48,19 @@ func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Lo
 		return nil, fmt.Errorf("failed to create Service: %w", err)
 	}
 
+	// Create empty ConfigMap for model configuration
+	if err := g.CreateModelConfigMap(ctx, logger, ModelConfigMapRequest{
+		InferenceServer: request.InferenceServer.Name,
+		Namespace:       request.Namespace,
+		BackendType:     request.BackendType,
+		ModelConfigs:    []ModelConfigEntry{}, // Empty initially
+	}); err != nil {
+		return nil, fmt.Errorf("failed to create ConfigMap: %w", err)
+	}
+
 	return &InfrastructureResponse{
 		State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
-		Message: "Triton infrastructure creation initiated (ConfigMap handled separately)",
+		Message: "Triton infrastructure creation initiated with empty ConfigMap",
 		Endpoints: []string{
 			fmt.Sprintf("/%s-endpoint/%s", request.InferenceServer.Name, request.InferenceServer.Name),
 		},
@@ -69,9 +79,25 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", request.InferenceServer), Namespace: request.Namespace}
 
 	if err := g.kubeClient.Get(ctx, deploymentKey, deployment); err != nil {
+		// When deployment doesn't exist, return CREATING state to trigger infrastructure creation
 		return &InfrastructureStatus{
-			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
-			Message: fmt.Sprintf("Deployment not found: %v", err),
+			State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
+			Message: fmt.Sprintf("Deployment not found, needs creation: %v", err),
+			Ready:   false,
+		}, nil
+	}
+
+	// Check if ConfigMap exists - if not, infrastructure is incomplete
+	configMapName := fmt.Sprintf("%s-model-config", request.InferenceServer)
+	configMap := &corev1.ConfigMap{}
+	configMapKey := client.ObjectKey{Name: configMapName, Namespace: request.Namespace}
+
+	if err := g.kubeClient.Get(ctx, configMapKey, configMap); err != nil {
+		// ConfigMap doesn't exist, infrastructure is incomplete
+		logger.Info("ConfigMap not found, infrastructure incomplete", "configMap", configMapName)
+		return &InfrastructureStatus{
+			State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
+			Message: fmt.Sprintf("ConfigMap %s not found, infrastructure incomplete", configMapName),
 			Ready:   false,
 		}, nil
 	}
@@ -145,7 +171,12 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		logger.Error(err, "Failed to delete service")
 	}
 
-	// Note: ConfigMap deletion is handled by the ConfigMap provider, not the backend
+	// Delete ConfigMap using the gateway's ConfigMap deletion method
+	if err := g.DeleteModelConfigMap(ctx, logger, request.InferenceServer, request.Namespace); err != nil {
+		logger.Error(err, "Failed to delete ConfigMap")
+	} else {
+		logger.Info("ConfigMap deleted successfully", "name", fmt.Sprintf("%s-model-config", request.InferenceServer))
+	}
 
 	return nil
 }
@@ -276,22 +307,37 @@ done
 echo "Triton server is ready"
 
 while true; do
-  echo "Starting model sync cycle"
-  cp /config/model-list.json /tmp/model-list.json
-  
-  # Get current models from config
-  DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null || echo "")
-  
+  echo "Starting UCS-style model sync cycle"
+
+  # SIMPLIFIED PATTERN: Only read from shared model-config ConfigMap
+  # Read inference server model config (the only source of truth)
+  cp /config/model-list.json /tmp/model-list.json 2>/dev/null || echo "[]" > /tmp/model-list.json
+
+  # Get models from shared inference server config
+  DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
+
+  echo "Active models from shared ConfigMap: $DESIRED_MODELS"
+
   # Get currently loaded models from Triton
   LOADED_MODELS=$(get_loaded_models)
   
-  # Sync models from S3
-  jq -c '.[]' /tmp/model-list.json | while read model; do
-    name=$(echo "$model" | jq -r '.name')
-    s3_path=$(echo "$model" | jq -r '.s3_path')
-    echo "Syncing model $name from $s3_path to /mnt/models/$name/"
-    mkdir -p "/mnt/models/$name"
-    aws s3 sync "$s3_path" "/mnt/models/$name/" --delete --exact-timestamps --endpoint-url "$ENDPOINT"
+  # SYNC PATTERN: Sync models based on DESIRED_MODELS from shared ConfigMap
+  for desired_model in $DESIRED_MODELS; do
+    if [ ! -z "$desired_model" ]; then
+      # Look up S3 path from inference server config for this model
+      s3_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
+      if [ "$s3_path" = "null" ] || [ -z "$s3_path" ]; then
+        s3_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
+      fi
+
+      if [ ! -d "/mnt/models/$desired_model" ] || [ -z "$(ls -A /mnt/models/$desired_model)" ]; then
+        echo "SYNC: Syncing active model $desired_model from $s3_path to /mnt/models/$desired_model/"
+        mkdir -p "/mnt/models/$desired_model"
+        aws s3 sync "$s3_path" "/mnt/models/$desired_model/" --exact-timestamps --endpoint-url "$ENDPOINT"
+      else
+        echo "SYNC: Model $desired_model already synced locally, skipping download"
+      fi
+    fi
   done
   
   # Unload models that are no longer in config
@@ -302,11 +348,17 @@ while true; do
     fi
   done
   
-  # Load models from config
+  # Load models from config ONLY if they're not already loaded
   for desired_model in $DESIRED_MODELS; do
     if [ ! -z "$desired_model" ]; then
-      echo "Loading model $desired_model"
-      load_model "$desired_model"
+      # Get fresh list of loaded models before checking each model
+      CURRENT_LOADED_MODELS=$(get_loaded_models)
+      if ! echo "$CURRENT_LOADED_MODELS" | grep -q "^$desired_model$"; then
+        echo "Model $desired_model not loaded, loading now"
+        load_model "$desired_model"
+      else
+        echo "Model $desired_model already loaded, skipping"
+      fi
     fi
   done
   
@@ -537,12 +589,12 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 				},
 				"rules": []map[string]interface{}{
 					{
-						// Production endpoint for deployment controller
+						// Baseline inference server endpoint - routes to whatever model is loaded in Triton
 						"matches": []map[string]interface{}{
 							{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/production", request.InferenceServer.Name),
+									"value": fmt.Sprintf("/%s", request.InferenceServer.Name),
 								},
 							},
 						},
@@ -553,93 +605,6 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",
 										"replacePrefixMatch": "/",
-									},
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
-								"weight": 100,
-							},
-						},
-					},
-					{
-						// Staging endpoint for deployment controller
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/staging", request.InferenceServer.Name),
-								},
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
-									},
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
-								"weight": 100,
-							},
-						},
-					},
-					{
-						// Generic health check endpoint
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/health", request.InferenceServer.Name),
-								},
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/v2/health/ready",
-									},
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
-								"weight": 100,
-							},
-						},
-					},
-					{
-						// Generic repository management endpoint
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/repository", request.InferenceServer.Name),
-								},
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/v2/repository",
 									},
 								},
 							},
@@ -673,8 +638,10 @@ func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, reque
 	logger.Info("Loading Triton model explicitly", "model", request.ModelName, "server", request.InferenceServer)
 
 	// Call Triton /v2/repository/models/{model}/load endpoint
-	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
-	loadURL := fmt.Sprintf("%s/v2/repository/models/%s/load", serviceURL, request.ModelName)
+	// Use localhost when running outside cluster (via bazel run)
+	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
+	serviceURL := "http://localhost:8888"
+	loadURL := fmt.Sprintf("%s/%s/v2/repository/models/%s/load", serviceURL, request.InferenceServer, request.ModelName)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -713,9 +680,18 @@ func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, reque
 func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error) {
 	logger.Info("Checking Triton model status", "model", request.ModelName, "server", request.InferenceServer)
 
-	// Call Triton /v2/models/{model}/ready endpoint
-	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
-	readyURL := fmt.Sprintf("%s/v2/models/%s/ready", serviceURL, request.ModelName)
+	// Call Triton /v2/models/{model}/ready endpoint with deployment-specific routing
+	// Use localhost when running outside cluster (via bazel run)
+	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
+	serviceURL := "http://localhost:8888"
+
+	// Include deployment name in URL path for deployment-specific routing
+	var readyURL string
+	if request.DeploymentName != "" {
+		readyURL = fmt.Sprintf("%s/%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.DeploymentName, request.ModelName)
+	} else {
+		readyURL = fmt.Sprintf("%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.ModelName)
+	}
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -761,8 +737,10 @@ func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, 
 	}
 
 	// Check if model exists in repository
-	serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:8000", request.InferenceServer, request.Namespace)
-	modelURL := fmt.Sprintf("%s/v2/models/%s", serviceURL, request.ModelName)
+	// Use localhost when running outside cluster (via bazel run)
+	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
+	serviceURL := "http://localhost:8888"
+	modelURL := fmt.Sprintf("%s/%s/v2/models/%s", serviceURL, request.InferenceServer, request.ModelName)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	req, err := http.NewRequestWithContext(ctx, "GET", modelURL, nil)
@@ -800,32 +778,49 @@ func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, 
 }
 
 func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serverName string) (bool, error) {
-	logger.Info("Checking Triton health", "server", serverName)
+	logger.Info("Checking Triton health via Kubernetes pod status", "server", serverName)
 
-	// Call Triton /v2/health/ready endpoint
-	serviceURL := fmt.Sprintf("http://%s-inference-service.default.svc.cluster.local:8000", serverName)
-	healthURL := fmt.Sprintf("%s/v2/health/ready", serviceURL)
+	// Following Uber's approach: Check Kubernetes resource status instead of HTTP endpoints
+	// Get the Triton deployment status from Kubernetes
+	deploymentName := fmt.Sprintf("triton-%s", serverName)
+	namespace := "default" // TODO: Make configurable
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", healthURL, nil)
+	deployment := &appsv1.Deployment{}
+	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
 	if err != nil {
-		return false, fmt.Errorf("failed to create health request: %w", err)
+		logger.Info("Failed to get Triton deployment", "deployment", deploymentName, "error", err.Error())
+		return false, fmt.Errorf("failed to get deployment %s: %w", deploymentName, err)
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("failed to call Triton health endpoint: %w", err)
-	}
-	defer resp.Body.Close()
+	// Check deployment conditions following Uber's pattern
+	for _, condition := range deployment.Status.Conditions {
+		if condition.Type == appsv1.DeploymentAvailable {
+			if condition.Status == corev1.ConditionTrue {
+				logger.Info("Triton deployment is available", "server", serverName)
 
-	// Triton is healthy if status is 200
-	healthy := resp.StatusCode == http.StatusOK
-	logger.Info("Triton health status", "server", serverName, "healthy", healthy, "statusCode", resp.StatusCode)
-	return healthy, nil
+				// Also check if pods are ready (additional safety check)
+				if deployment.Status.ReadyReplicas > 0 && deployment.Status.ReadyReplicas == deployment.Status.Replicas {
+					logger.Info("Triton pods are ready", "server", serverName, "readyReplicas", deployment.Status.ReadyReplicas)
+					return true, nil
+				} else {
+					logger.Info("Triton deployment available but pods not ready",
+						"server", serverName,
+						"readyReplicas", deployment.Status.ReadyReplicas,
+						"totalReplicas", deployment.Status.Replicas)
+					return false, fmt.Errorf("pods not ready: %d/%d", deployment.Status.ReadyReplicas, deployment.Status.Replicas)
+				}
+			} else {
+				logger.Info("Triton deployment not available",
+					"server", serverName,
+					"reason", condition.Reason,
+					"message", condition.Message)
+				return false, fmt.Errorf("deployment not available: %s", condition.Message)
+			}
+		}
+	}
+
+	logger.Info("Triton deployment status unclear", "server", serverName)
+	return false, fmt.Errorf("deployment status unclear")
 }
 
 // Helper functions
@@ -933,146 +928,81 @@ func needsHTTPRouteUpdate(existingHTTPRoute *unstructured.Unstructured, request 
 
 // updateHTTPRoute updates an existing HTTPRoute with the correct configuration
 func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, existingHTTPRoute *unstructured.Unstructured, request InfrastructureRequest, gvr schema.GroupVersionResource) error {
-	// Update the spec with the correct configuration
-	updatedSpec := map[string]interface{}{
-		"parentRefs": []map[string]interface{}{
-			{
-				"name":      "ma-gateway",
-				"namespace": "default",
-			},
-		},
-		"rules": []map[string]interface{}{
-			{
-				// Production endpoint for deployment controller
-				"matches": []map[string]interface{}{
-					{
-						"path": map[string]interface{}{
-							"type":  "PathPrefix",
-							"value": fmt.Sprintf("/%s/production", request.InferenceServer.Name),
-						},
-					},
-				},
-				"filters": []map[string]interface{}{
-					{
-						"type": "URLRewrite",
-						"urlRewrite": map[string]interface{}{
-							"path": map[string]interface{}{
-								"type":               "ReplacePrefixMatch",
-								"replacePrefixMatch": "/",
-							},
-						},
-					},
-				},
-				"backendRefs": []map[string]interface{}{
-					{
-						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-						"port":   80,
-						"weight": 100,
-					},
-				},
-			},
-			{
-				// Staging endpoint for deployment controller
-				"matches": []map[string]interface{}{
-					{
-						"path": map[string]interface{}{
-							"type":  "PathPrefix",
-							"value": fmt.Sprintf("/%s/staging", request.InferenceServer.Name),
-						},
-					},
-				},
-				"filters": []map[string]interface{}{
-					{
-						"type": "URLRewrite",
-						"urlRewrite": map[string]interface{}{
-							"path": map[string]interface{}{
-								"type":               "ReplacePrefixMatch",
-								"replacePrefixMatch": "/",
-							},
-						},
-					},
-				},
-				"backendRefs": []map[string]interface{}{
-					{
-						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-						"port":   80,
-						"weight": 100,
-					},
-				},
-			},
-			{
-				// Generic health check endpoint
-				"matches": []map[string]interface{}{
-					{
-						"path": map[string]interface{}{
-							"type":  "PathPrefix",
-							"value": fmt.Sprintf("/%s/health", request.InferenceServer.Name),
-						},
-					},
-				},
-				"filters": []map[string]interface{}{
-					{
-						"type": "URLRewrite",
-						"urlRewrite": map[string]interface{}{
-							"path": map[string]interface{}{
-								"type":               "ReplacePrefixMatch",
-								"replacePrefixMatch": "/v2/health/ready",
-							},
-						},
-					},
-				},
-				"backendRefs": []map[string]interface{}{
-					{
-						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-						"port":   80,
-						"weight": 100,
-					},
-				},
-			},
-			{
-				// Generic repository management endpoint
-				"matches": []map[string]interface{}{
-					{
-						"path": map[string]interface{}{
-							"type":  "PathPrefix",
-							"value": fmt.Sprintf("/%s/repository", request.InferenceServer.Name),
-						},
-					},
-				},
-				"filters": []map[string]interface{}{
-					{
-						"type": "URLRewrite",
-						"urlRewrite": map[string]interface{}{
-							"path": map[string]interface{}{
-								"type":               "ReplacePrefixMatch",
-								"replacePrefixMatch": "/v2/repository",
-							},
-						},
-					},
-				},
-				"backendRefs": []map[string]interface{}{
-					{
-						"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-						"port":   80,
-						"weight": 100,
-					},
-				},
-			},
-		},
-	}
+	// Delete the existing HTTPRoute and create a new one to avoid deep copy issues
+	logger.Info("Deleting existing HTTPRoute to recreate with correct configuration", "name", existingHTTPRoute.GetName())
 
-	// Update the spec in the existing HTTPRoute
-	if err := unstructured.SetNestedField(existingHTTPRoute.Object, updatedSpec, "spec"); err != nil {
-		return fmt.Errorf("failed to update HTTPRoute spec: %w", err)
-	}
-
-	// Update the HTTPRoute
-	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Update(ctx, existingHTTPRoute, metav1.UpdateOptions{})
-	if err != nil {
-		logger.Error(err, "Failed to update HTTPRoute")
+	if err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Delete(ctx, existingHTTPRoute.GetName(), metav1.DeleteOptions{}); err != nil {
+		logger.Error(err, "Failed to delete existing HTTPRoute")
 		return err
 	}
 
-	logger.Info("HTTPRoute updated successfully", "name", existingHTTPRoute.GetName())
+	// Wait a moment for deletion to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Create new HTTPRoute with baseline configuration
+	logger.Info("Creating new HTTPRoute with baseline configuration", "name", existingHTTPRoute.GetName())
+
+	hr := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "gateway.networking.k8s.io/v1",
+			"kind":       "HTTPRoute",
+			"metadata": map[string]interface{}{
+				"name":      existingHTTPRoute.GetName(),
+				"namespace": request.Namespace,
+				"labels": map[string]string{
+					"app":                        "inference-server",
+					"inference-server":           request.InferenceServer.Name,
+					"michelangelo.ai/managed-by": "controller",
+				},
+			},
+			"spec": map[string]interface{}{
+				"parentRefs": []map[string]interface{}{
+					{
+						"name":      "ma-gateway",
+						"namespace": "default",
+					},
+				},
+				"rules": []map[string]interface{}{
+					{
+						// Baseline inference server endpoint - routes to whatever model is loaded in Triton
+						"matches": []map[string]interface{}{
+							{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": fmt.Sprintf("/%s", request.InferenceServer.Name),
+								},
+							},
+						},
+						"filters": []map[string]interface{}{
+							{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/",
+									},
+								},
+							},
+						},
+						"backendRefs": []map[string]interface{}{
+							{
+								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port": 80,
+								"weight": 100,
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, hr, metav1.CreateOptions{})
+	if err != nil {
+		logger.Error(err, "Failed to create new HTTPRoute")
+		return err
+	}
+
+	logger.Info("HTTPRoute recreated successfully", "name", existingHTTPRoute.GetName())
 	return nil
 }

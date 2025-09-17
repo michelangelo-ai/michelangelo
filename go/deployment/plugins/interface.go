@@ -33,6 +33,9 @@ type Plugin interface {
 	// PopulateMessage is used to populate the deployment status message with the error message when the
 	// deployment is rolled back or fails to roll out.
 	PopulateMessage(ctx context.Context, runtimeContext RequestContext, modelDeployment *v2pb.Deployment)
+
+	// HandleCleanup handles cleanup when a deployment is being deleted, including ConfigMaps and other resources
+	HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error
 }
 
 // ConditionsPlugin is the simplified OSS version of the conditions plugin interface
