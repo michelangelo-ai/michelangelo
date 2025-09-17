@@ -60,7 +60,7 @@ export enum Phase {
   AgentMonitor = 'agent-monitor',
 }
 
-export interface PhaseEntityConfig {
+export interface PhaseEntityConfig<T extends object = object> {
   /**
    * Name of the entity as it appears within MA Studio. Should be plural, lower case
    * version of the name.
@@ -100,7 +100,7 @@ export interface PhaseEntityConfig {
   /** State controlling whether this entity is interactive */
   state: PhaseEntityState;
   /** List of view configurations for this entity */
-  views: ViewConfig[];
+  views: ViewConfig<T>[];
 }
 
 /**

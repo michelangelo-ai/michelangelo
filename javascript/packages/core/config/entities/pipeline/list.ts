@@ -3,7 +3,7 @@ import { CellType } from '#core/components/cell/constants';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
 
-export const PIPELINE_CELL_CONFIG: ColumnConfig[] = [
+export const PIPELINE_CELL_CONFIG: ColumnConfig<object>[] = [
   {
     id: 'metadata.name',
     label: 'Name',
@@ -63,7 +63,7 @@ export const PIPELINE_CELL_CONFIG: ColumnConfig[] = [
   },
 ];
 
-export const PIPELINE_LIST_CONFIG: ListViewConfig = {
+export const PIPELINE_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
   columns: PIPELINE_CELL_CONFIG,
 };

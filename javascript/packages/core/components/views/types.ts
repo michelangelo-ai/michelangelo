@@ -8,11 +8,11 @@ export type MainViewContainerProps = {
   hasBreadcrumb?: boolean;
 };
 
-export type ViewConfig = ListViewConfig | DetailViewConfig;
+export type ViewConfig<T extends object = object> = ListViewConfig<T> | DetailViewConfig<T>;
 
-export interface ListViewConfig {
+export interface ListViewConfig<T extends object = object> {
   type: 'list';
-  columns: ColumnConfig[];
+  columns: ColumnConfig<T>[];
 }
 
 export interface DetailViewConfig<T extends object = object> {

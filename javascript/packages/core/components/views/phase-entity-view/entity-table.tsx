@@ -19,10 +19,14 @@ import type { EntityTableProps } from './types';
  * />
  * ```
  */
-export function EntityTable({ service, listViewConfig, tableSettingsId }: EntityTableProps) {
+export function EntityTable<T extends object = object>({
+  service,
+  listViewConfig,
+  tableSettingsId,
+}: EntityTableProps<T>) {
   const { projectId } = useStudioParams('base');
 
-  const { data, isLoading, error } = useStudioQuery<Record<`${string}List`, { items: unknown[] }>>({
+  const { data, isLoading, error } = useStudioQuery<Record<`${string}List`, { items: T[] }>>({
     queryName: `List${capitalizeFirstLetter(service)}`,
     serviceOptions: {
       namespace: projectId,
