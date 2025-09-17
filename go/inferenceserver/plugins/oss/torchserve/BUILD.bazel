@@ -1,7 +1,7 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "torchserve",
+    name = "go_default_library",
     srcs = [
         "actors.go",
         "plugin.go",
@@ -13,7 +13,6 @@ go_library(
         "//go/shared/gateways:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/client",
         "@com_github_go_logr_logr//:go_default_library",
     ],
 )

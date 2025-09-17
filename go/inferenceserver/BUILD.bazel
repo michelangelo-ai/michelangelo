@@ -13,7 +13,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/inferenceserver/plugins:go_default_library",
-        "//go/inferenceserver/plugins/oss:oss",
+        "//go/inferenceserver/plugins/oss:go_default_library",
         "//go/shared/gateways:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

@@ -46,7 +46,7 @@ output [
         worker_instances=1,
         breakpoint=False,
     ),
-    cache_enabled=False,
+    cache_enabled=True,
 )
 def pusher(model_uri: str, deployed_model_name: str):
     model = mlflow.pytorch.load_model(model_uri, map_location="cpu")

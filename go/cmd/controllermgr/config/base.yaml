@@ -11,7 +11,7 @@ workflowClient:
   domain: default
 
 k8s:
-  qps: 300
+  qps: 600
   burst: 600
 metadataStorage:
   enableMetadataStorage: false

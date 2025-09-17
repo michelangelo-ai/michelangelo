@@ -82,7 +82,7 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 	}
 
 	// Create new HTTPRoute if it doesn't exist
-	logger.Info("Creating new HTTPRoute", "name", httpRouteName)
+	logger.Info("Creating new HTTPRoute with baseline routing", "name", httpRouteName)
 
 	// Extract environment from namespace or use default
 	environment := g.extractEnvironment(request.Namespace)
@@ -95,9 +95,9 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 				"name":      httpRouteName,
 				"namespace": request.Namespace,
 				"labels": map[string]interface{}{
-					"app":                         "inference-server",
-					"inference-server":            request.InferenceServer,
-					"environment":                 environment,
+					"app":                        "inference-server",
+					"inference-server":           request.InferenceServer,
+					"environment":                environment,
 					"michelangelo.ai/managed-by": "controller",
 				},
 			},
@@ -112,41 +112,12 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 				},
 				"rules": []map[string]interface{}{
 					{
+						// Baseline inference server endpoint - routes to whatever model is loaded in Triton
 						"matches": []map[string]interface{}{
 							{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/production", request.InferenceServer),
-								},
-							},
-						},
-						"backendRefs": []map[string]interface{}{
-							{
-								"group":  "",
-								"kind":   "Service",
-								"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer),
-								"port":   80,
-								"weight": 100,
-							},
-						},
-						"filters": []map[string]interface{}{
-							{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
-									},
-								},
-							},
-						},
-					},
-					{
-						"matches": []map[string]interface{}{
-							{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/staging", request.InferenceServer),
+									"value": fmt.Sprintf("/%s", request.InferenceServer),
 								},
 							},
 						},
@@ -179,13 +150,170 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 	return g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, httpRoute, metav1.CreateOptions{})
 }
 
+// addDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
+func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
+	gvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer)
+	httpRoute, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get HTTPRoute: %w", err)
+	}
+
+	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
+	if err != nil || !found {
+		return fmt.Errorf("rules not found in HTTPRoute")
+	}
+
+	// Create deployment-specific route path: /<inference-server-name>/<deployment-name>
+	deploymentPath := fmt.Sprintf("/%s/%s", request.InferenceServer, request.DeploymentName)
+
+	// Check if deployment-specific route already exists
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if g.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPath) {
+			logger.Info("Deployment-specific route already exists, updating",
+				"deploymentPath", deploymentPath, "modelName", request.ModelName)
+
+			// Update existing route to point to new model
+			return g.updateExistingDeploymentRoute(ctx, logger, httpRoute, request, deploymentPath)
+		}
+	}
+
+	// Add new deployment-specific route
+	logger.Info("Adding new deployment-specific route",
+		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+
+	newRule := map[string]interface{}{
+		"matches": []map[string]interface{}{
+			{
+				"path": map[string]interface{}{
+					"type":  "PathPrefix",
+					"value": deploymentPath,
+				},
+			},
+		},
+		"backendRefs": []map[string]interface{}{
+			{
+				"group":  "",
+				"kind":   "Service",
+				"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer),
+				"port":   80,
+				"weight": 100,
+			},
+		},
+		"filters": []map[string]interface{}{
+			{
+				"type": "URLRewrite",
+				"urlRewrite": map[string]interface{}{
+					"path": map[string]interface{}{
+						"type":               "ReplacePrefixMatch",
+						"replacePrefixMatch": fmt.Sprintf("/v2/models/%s", request.ModelName),
+					},
+				},
+			},
+		},
+	}
+
+	// Prepend the new rule to ensure it matches before the baseline route
+	updatedRules := make([]interface{}, 0, len(rules)+1)
+	updatedRules = append(updatedRules, newRule)
+	for _, rule := range rules {
+		updatedRules = append(updatedRules, rule)
+	}
+
+	// Update the HTTPRoute using SetNestedField to avoid deep copy issues
+	err = unstructured.SetNestedField(httpRoute.Object, updatedRules, "spec", "rules")
+	if err != nil {
+		return fmt.Errorf("failed to set rules in HTTPRoute spec: %w", err)
+	}
+
+	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update HTTPRoute: %w", err)
+	}
+
+	logger.Info("Deployment-specific route added successfully",
+		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+	return nil
+}
+
+// updateExistingDeploymentRoute updates an existing deployment-specific route
+func (g *gateway) updateExistingDeploymentRoute(ctx context.Context, logger logr.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest, deploymentPath string) error {
+	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
+	if err != nil || !found {
+		return fmt.Errorf("rules not found in HTTPRoute")
+	}
+
+	for _, rule := range rules {
+		ruleMap, ok := rule.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if g.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPath) {
+			// Update URLRewrite filter to route to new model
+			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
+			if found {
+				for _, filter := range filters {
+					filterMap, ok := filter.(map[string]interface{})
+					if !ok {
+						continue
+					}
+
+					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
+						newPath := fmt.Sprintf("/v2/models/%s", request.ModelName)
+						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
+							return fmt.Errorf("failed to set URLRewrite replacePrefixMatch: %w", err)
+						}
+						break
+					}
+				}
+
+				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
+					return fmt.Errorf("failed to update filters in HTTPRoute rule: %w", err)
+				}
+			}
+			break
+		}
+	}
+
+	// Update the HTTPRoute
+	if err = unstructured.SetNestedSlice(httpRoute.Object, rules, "spec", "rules"); err != nil {
+		return fmt.Errorf("failed to update rules in HTTPRoute: %w", err)
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update HTTPRoute: %w", err)
+	}
+
+	logger.Info("Deployment-specific route updated successfully",
+		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+	return nil
+}
+
 func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger logr.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		return fmt.Errorf("rules not found in HTTPRoute")
 	}
 
-	deploymentPrefix := fmt.Sprintf("/%s/production", request.InferenceServer)
+	deploymentPrefix := fmt.Sprintf("/%s/%s/production", request.InferenceServer, request.DeploymentName)
 	updated := false
 
 	// Look for existing production route
@@ -243,7 +371,7 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 	}
 
 	// Update the HTTPRoute
-	if err = unstructured.SetNestedField(httpRoute.Object, rules, "spec", "rules"); err != nil {
+	if err = unstructured.SetNestedSlice(httpRoute.Object, rules, "spec", "rules"); err != nil {
 		logger.Error(err, "Failed to update rules in HTTPRoute")
 		return err
 	}
@@ -388,7 +516,7 @@ func (g *gateway) isHTTPRouteAlreadyConfiguredForModel(httpRoute *unstructured.U
 		return false
 	}
 
-	deploymentPrefix := fmt.Sprintf("/%s/production", request.InferenceServer)
+	deploymentPrefix := fmt.Sprintf("/%s/%s/production", request.InferenceServer, request.DeploymentName)
 	expectedRewrite := fmt.Sprintf("/v2/models/%s", request.ModelName)
 
 	for _, rule := range rules {

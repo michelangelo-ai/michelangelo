@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
@@ -65,21 +66,20 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 
 		exists, err := a.blobstore.Exists(ctx, modelFolderURI)
 		if err != nil {
-			runtimeCtx.Logger.Error(err, "Failed to check model folder in storage", "model", modelName, "uri", modelFolderURI)
-			return &apipb.Condition{
-				Type:    a.GetType(),
-				Status:  apipb.CONDITION_STATUS_FALSE,
-				Reason:  "ModelValidationError",
-				Message: fmt.Sprintf("Error checking model %s in storage", modelName),
-			}, nil
-		}
-		if !exists {
-			return &apipb.Condition{
-				Type:    a.GetType(),
-				Status:  apipb.CONDITION_STATUS_FALSE,
-				Reason:  "ModelNotFound",
-				Message: fmt.Sprintf("Model folder %s not found in storage", modelName),
-			}, nil
+			// Following Uber's pattern: Log storage check failure but don't fail validation
+			// This allows for runtime validation during model sync instead of strict pre-validation
+			runtimeCtx.Logger.Info("Storage validation failed, proceeding with runtime validation",
+				"model", modelName, "uri", modelFolderURI, "error", err.Error())
+			// Skip storage validation and proceed - model will be validated during sync
+		} else {
+			if !exists {
+				return &apipb.Condition{
+					Type:    a.GetType(),
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "ModelNotFound",
+					Message: fmt.Sprintf("Model folder %s not found in storage", modelName),
+				}, nil
+			}
 		}
 	}
 	// If blobstore is not available, skip storage validation and trust the model name
@@ -400,12 +400,13 @@ func (a *ResourceAcquisitionActor) Run(ctx context.Context, runtimeCtx plugins.R
 	return nil
 }
 
-// ModelSyncActor handles model synchronization to inference servers
+// ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
 type ModelSyncActor struct {
-	client        client.Client
-	gateway       gateways.Gateway
-	dynamicClient dynamic.Interface
-	logger        logr.Logger
+	client           client.Client
+	gateway          gateways.Gateway
+	dynamicClient    dynamic.Interface
+	configMapProvider *gateways.ConfigMapProvider
+	logger           logr.Logger
 }
 
 func (a *ModelSyncActor) GetType() string {
@@ -425,12 +426,25 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 			modelStatusRequest := gateways.ModelStatusRequest{
 				ModelName:       modelName,
 				InferenceServer: inferenceServerName,
+				DeploymentName:  resource.Name, // Include deployment name for deployment-specific routing
 				Namespace:       resource.Namespace,
 				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			}
 
-			modelReady, err := a.gateway.CheckModelStatus(ctx, runtimeCtx.Logger, modelStatusRequest)
+			// Implement retry logic with configurable timeout for health checks
+			modelReady, err := a.checkModelStatusWithTimeout(ctx, runtimeCtx.Logger, modelStatusRequest)
 			if err != nil {
+				// Check if this is a timeout error vs other errors
+				if err.Error() == "health check timeout exceeded" {
+					runtimeCtx.Logger.Info("Model health check timed out after 10 minutes", "model", modelName)
+					return &apipb.Condition{
+						Type:    a.GetType(),
+						Status:  apipb.CONDITION_STATUS_FALSE,
+						Reason:  "ModelHealthCheckTimeout",
+						Message: fmt.Sprintf("Model %s health check timed out after 10 minutes", modelName),
+					}, nil
+				}
+
 				runtimeCtx.Logger.Error(err, "Failed to check model status in Triton", "model", modelName)
 				return &apipb.Condition{
 					Type:    a.GetType(),
@@ -449,7 +463,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 					Message: fmt.Sprintf("Model %s successfully loaded and ready in Triton", modelName),
 				}, nil
 			} else {
-				runtimeCtx.Logger.Info("New model is not yet ready in Triton", "model", modelName)
+				runtimeCtx.Logger.Info("New model is not yet ready in Triton, continuing to wait", "model", modelName)
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
@@ -480,53 +494,68 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 			"model", modelName,
 			"inference_server", inferenceServerName)
 
-		// ZERO-DOWNTIME DEPLOYMENT: Add new model alongside existing models
-		// The model-sync sidecar will load the new model while keeping existing ones running
-		// RolloutCompletionActor will clean up old models after traffic switch
-		if a.gateway != nil {
-			// Get current models from ConfigMap to preserve them during deployment
-			currentModels, err := a.getCurrentModelsFromConfigMap(ctx, runtimeCtx.Logger, inferenceServerName, resource.Namespace)
-			if err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to get current models from ConfigMap")
-				// Continue with just the new model if we can't read existing ones
-				currentModels = []gateways.ModelConfigEntry{}
+		// UCS CACHE PATTERN: Replicate Uber's exact UCS cache update pattern from rolling/actor.go:76
+		// Original Uber code: err = a.ucsCache.UpdateDeployment(*deployment, constraints, nil, common.RoleTypeCandidate)
+		if a.configMapProvider != nil {
+			// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
+			// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
+			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, resource.Namespace, resource.Name, modelName, "candidate"); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to update deployment via ConfigMapProvider (UCS cache pattern)")
+				return fmt.Errorf("failed to update deployment: %w", err)
 			}
 
-			// Check if new model already exists to avoid duplicates
-			modelExists := false
-			for _, model := range currentModels {
-				if model.Name == modelName {
-					modelExists = true
-					break
+			runtimeCtx.Logger.Info("UCS cache pattern update completed successfully",
+				"deployment", resource.Name,
+				"candidateModel", modelName,
+				"roleType", "candidate")
+		} else {
+			// Fallback to old gateway-based approach if ConfigMapProvider not available
+			runtimeCtx.Logger.Info("ConfigMapProvider not available, falling back to gateway approach")
+			if a.gateway != nil {
+				// Get current models from ConfigMap to preserve them during deployment
+				currentModels, err := a.getCurrentModelsFromConfigMap(ctx, runtimeCtx.Logger, inferenceServerName, resource.Namespace)
+				if err != nil {
+					runtimeCtx.Logger.Error(err, "Failed to get current models from ConfigMap")
+					// Continue with just the new model if we can't read existing ones
+					currentModels = []gateways.ModelConfigEntry{}
 				}
-			}
 
-			// Add the new model if it doesn't already exist
-			if !modelExists {
-				currentModels = append(currentModels, gateways.ModelConfigEntry{
-					Name:   modelName,
-					S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
-				})
-				runtimeCtx.Logger.Info("Adding new model for zero-downtime deployment",
-					"newModel", modelName, "totalModels", len(currentModels))
-			} else {
-				runtimeCtx.Logger.Info("Model already exists in ConfigMap", "model", modelName)
-			}
+				// Check if new model already exists to avoid duplicates
+				modelExists := false
+				for _, model := range currentModels {
+					if model.Name == modelName {
+						modelExists = true
+						break
+					}
+				}
 
-			updateRequest := gateways.ModelConfigUpdateRequest{
-				InferenceServer: inferenceServerName,
-				Namespace:       resource.Namespace,
-				BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
-				ModelConfigs:    currentModels,
-			}
+				// Add the new model if it doesn't already exist
+				if !modelExists {
+					currentModels = append(currentModels, gateways.ModelConfigEntry{
+						Name:   modelName,
+						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+					})
+					runtimeCtx.Logger.Info("Adding new model for zero-downtime deployment",
+						"newModel", modelName, "totalModels", len(currentModels))
+				} else {
+					runtimeCtx.Logger.Info("Model already exists in ConfigMap", "model", modelName)
+				}
 
-			if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, updateRequest); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to update model config via gateway")
-				return fmt.Errorf("failed to update model config: %w", err)
-			}
+				updateRequest := gateways.ModelConfigUpdateRequest{
+					InferenceServer: inferenceServerName,
+					Namespace:       resource.Namespace,
+					BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
+					ModelConfigs:    currentModels,
+				}
 
-			runtimeCtx.Logger.Info("Model configuration updated successfully for zero-downtime deployment",
-				"model", modelName, "totalModels", len(currentModels))
+				if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, updateRequest); err != nil {
+					runtimeCtx.Logger.Error(err, "Failed to update model config via gateway")
+					return fmt.Errorf("failed to update model config: %w", err)
+				}
+
+				runtimeCtx.Logger.Info("Model configuration updated successfully for zero-downtime deployment",
+					"model", modelName, "totalModels", len(currentModels))
+			}
 		}
 
 		// DO NOT update HTTPRoute or CurrentRevision yet!
@@ -676,9 +705,10 @@ func (a *RollingRolloutActor) Run(ctx context.Context, runtimeCtx plugins.Reques
 
 // RolloutCompletionActor handles post-rollout completion tasks (following Uber pattern)
 type RolloutCompletionActor struct {
-	client  client.Client
-	gateway gateways.Gateway
-	logger  logr.Logger
+	client           client.Client
+	gateway          gateways.Gateway
+	configMapProvider *gateways.ConfigMapProvider
+	logger           logr.Logger
 }
 
 func (a *RolloutCompletionActor) GetType() string {
@@ -713,65 +743,73 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		// ZERO-DOWNTIME TRAFFIC SWITCH: Now that ModelSyncActor has confirmed the new model
-		// is loaded and ready in Triton, we can safely switch traffic by updating the HTTPRoute
-		runtimeCtx.Logger.Info("Switching traffic to new model after health check confirmation", "newModel", modelName)
+		// is loaded and ready in Triton, we can safely switch traffic by adding deployment-specific routing
+		runtimeCtx.Logger.Info("Adding deployment-specific route after health check confirmation", "newModel", modelName)
 
-		// Configure proxy routing for deployment-specific routing (model mesh support)
+		// Add deployment-specific route for the new routing architecture
 		if a.gateway != nil {
-			// Configure proxy to point to the new model (deployment-specific endpoint)
+			// Add deployment-specific route: /<inference-server-name>/<deployment-name> -> /v2/models/<model-name>
 			proxyConfigRequest := gateways.ProxyConfigRequest{
 				InferenceServer: inferenceServerName,
 				Namespace:       resource.Namespace,
 				ModelName:       modelName,
 				DeploymentName:  resource.Name,
 				BackendType:     v2pb.BACKEND_TYPE_TRITON,
-				Routes: []gateways.RouteConfig{
-					{
-						Path:        fmt.Sprintf("/inference-server-%s-endpoint/%s", inferenceServerName, resource.Name),
-						Destination: fmt.Sprintf("%s-inference-service.%s.svc.cluster.local", inferenceServerName, resource.Namespace),
-						Rewrite:     "/v2/models/" + modelName,
-						Weight:      100,
-					},
-				},
 			}
 
-			if err := a.gateway.ConfigureProxy(ctx, runtimeCtx.Logger, proxyConfigRequest); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to configure proxy for traffic switching")
-				return fmt.Errorf("failed to configure proxy: %w", err)
+			if err := a.gateway.AddDeploymentSpecificRoute(ctx, runtimeCtx.Logger, proxyConfigRequest); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to add deployment-specific route")
+				return fmt.Errorf("failed to add deployment-specific route: %w", err)
 			}
 
-			runtimeCtx.Logger.Info("Proxy routing updated successfully for zero-downtime traffic switch",
-				"newModel", modelName, "deployment", resource.Name)
+			runtimeCtx.Logger.Info("Deployment-specific route added successfully for zero-downtime traffic switch",
+				"newModel", modelName, "deployment", resource.Name,
+				"route", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
 		}
 
 		// NOW we can safely update CurrentRevision since traffic has been switched
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		runtimeCtx.Logger.Info("CurrentRevision updated after successful traffic switch", "model", modelName)
 
-		// CLEANUP LOGIC: Remove old models from ConfigMap after successful deployment
-		if a.gateway != nil {
-			// Get current model configuration to identify old models
-			runtimeCtx.Logger.Info("Cleaning up old models from ConfigMap", "newModel", modelName)
+		// DEPLOYMENT-LEVEL CLEANUP: Promote candidate to current and trigger safe cleanup
+		if a.configMapProvider != nil {
+			// Promote candidate model to current (this automatically triggers cleanup of unused models)
+			runtimeCtx.Logger.Info("Promoting candidate model to current and cleaning up unused models", "newModel", modelName)
 
-			// Create cleanup request that will remove old models and keep only the new one
-			cleanupRequest := gateways.ModelConfigUpdateRequest{
-				InferenceServer: inferenceServerName,
-				Namespace:       resource.Namespace,
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
-				ModelConfigs: []gateways.ModelConfigEntry{
-					{
-						Name:   modelName,
-						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
-					},
-				},
-			}
-
-			if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, cleanupRequest); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to cleanup old models from ConfigMap")
+			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, resource.Namespace, resource.Name, modelName, "current"); err != nil {
+				runtimeCtx.Logger.Error(err, "Failed to promote model to current via ConfigMapProvider")
 				// Don't fail the whole rollout completion due to cleanup failure
 				// but log the error for investigation
 			} else {
-				runtimeCtx.Logger.Info("Successfully cleaned up old models from ConfigMap", "activeModel", modelName)
+				runtimeCtx.Logger.Info("Successfully promoted candidate to current and cleaned up unused models", "currentModel", modelName)
+			}
+		} else {
+			// Fallback to old gateway-based approach if ConfigMapProvider not available
+			runtimeCtx.Logger.Info("ConfigMapProvider not available, falling back to gateway cleanup")
+			if a.gateway != nil {
+				// Get current model configuration to identify old models
+				runtimeCtx.Logger.Info("Cleaning up old models from ConfigMap", "newModel", modelName)
+
+				// Create cleanup request that will remove old models and keep only the new one
+				cleanupRequest := gateways.ModelConfigUpdateRequest{
+					InferenceServer: inferenceServerName,
+					Namespace:       resource.Namespace,
+					BackendType:     v2pb.BACKEND_TYPE_TRITON,
+					ModelConfigs: []gateways.ModelConfigEntry{
+						{
+							Name:   modelName,
+							S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+						},
+					},
+				}
+
+				if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, cleanupRequest); err != nil {
+					runtimeCtx.Logger.Error(err, "Failed to cleanup old models from ConfigMap")
+					// Don't fail the whole rollout completion due to cleanup failure
+					// but log the error for investigation
+				} else {
+					runtimeCtx.Logger.Info("Successfully cleaned up old models from ConfigMap", "activeModel", modelName)
+				}
 			}
 		}
 
@@ -793,6 +831,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 }
 
 // getCurrentModelsFromConfigMap retrieves current models from the inference server ConfigMap
+// Following the correct pattern from PR #188: Get -> Parse with proper error handling
 func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) ([]gateways.ModelConfigEntry, error) {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
@@ -809,20 +848,84 @@ func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logg
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
 	}
 
-	// Parse the model-list.json from ConfigMap
+	// Parse the model-list.json from ConfigMap - following PR #188 pattern
 	modelListJSON, exists := configMap.Data["model-list.json"]
 	if !exists || modelListJSON == "" {
 		logger.Info("model-list.json not found or empty in ConfigMap", "configMap", configMapName)
 		return []gateways.ModelConfigEntry{}, nil
 	}
 
-	// Parse JSON to get current models
+	// Parse JSON to get current models with proper error handling
 	var currentModels []gateways.ModelConfigEntry
 	if err := json.Unmarshal([]byte(modelListJSON), &currentModels); err != nil {
 		logger.Error(err, "Failed to parse model-list.json from ConfigMap", "configMap", configMapName)
+		// Return empty list on parse failure rather than nil to allow recovery
 		return []gateways.ModelConfigEntry{}, nil
 	}
 
 	logger.Info("Retrieved current models from ConfigMap", "configMap", configMapName, "modelCount", len(currentModels))
 	return currentModels, nil
+}
+
+// checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
+func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger logr.Logger, modelStatusRequest gateways.ModelStatusRequest) (bool, error) {
+	const (
+		modelHealthCheckTimeout  = 10 * time.Minute // Configurable timeout for model health checks
+		modelHealthCheckInterval = 30 * time.Second // Interval between health check retries
+	)
+
+	logger.Info("Starting model health check with timeout",
+		"model", modelStatusRequest.ModelName,
+		"timeout", modelHealthCheckTimeout,
+		"retryInterval", modelHealthCheckInterval)
+
+	// Create a context with timeout for the entire health check process
+	timeoutCtx, cancel := context.WithTimeout(ctx, modelHealthCheckTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(modelHealthCheckInterval)
+	defer ticker.Stop()
+
+	// Try immediately first
+	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelStatusRequest)
+	if err == nil && modelReady {
+		logger.Info("Model health check succeeded immediately", "model", modelStatusRequest.ModelName)
+		return true, nil
+	}
+
+	if err != nil {
+		logger.Info("Initial model health check failed, will retry",
+			"model", modelStatusRequest.ModelName,
+			"error", err.Error())
+	} else {
+		logger.Info("Model not ready, will retry", "model", modelStatusRequest.ModelName)
+	}
+
+	// Start retry loop
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			logger.Info("Model health check timed out",
+				"model", modelStatusRequest.ModelName,
+				"timeout", modelHealthCheckTimeout)
+			return false, fmt.Errorf("health check timeout exceeded")
+
+		case <-ticker.C:
+			logger.Info("Retrying model health check", "model", modelStatusRequest.ModelName)
+
+			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelStatusRequest)
+			if err == nil && modelReady {
+				logger.Info("Model health check succeeded after retry", "model", modelStatusRequest.ModelName)
+				return true, nil
+			}
+
+			if err != nil {
+				logger.Info("Model health check retry failed, continuing to wait",
+					"model", modelStatusRequest.ModelName,
+					"error", err.Error())
+			} else {
+				logger.Info("Model still not ready, continuing to wait", "model", modelStatusRequest.ModelName)
+			}
+		}
+	}
 }
