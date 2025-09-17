@@ -1,8 +1,11 @@
 import type { ExecutionDetailViewSchema } from '#core/components/views/execution/types';
+import type { TableConfig } from '#core/components/views/types';
+import type { QueryConfig } from '#core/types/query-types';
 
 export type DetailPageConfig<T extends object = object> =
   | BaseDetailPageConfig
   | ExecutionDetailPageConfig<T>
+  | TableDetailPageConfig<T>
   | CustomDetailPageConfig<T>;
 
 interface BaseDetailPageConfig {
@@ -20,6 +23,15 @@ export interface ExecutionDetailPageConfig<T extends object = object>
   extends BaseDetailPageConfig,
     ExecutionDetailViewSchema<T> {
   type: 'execution';
+}
+
+export interface TableDetailPageConfig<T extends object = object> extends BaseDetailPageConfig {
+  type: 'table';
+
+  /** Query configuration for fetching data to display in the table */
+  queryConfig: QueryConfig;
+
+  tableConfig: TableConfig<T>;
 }
 
 export interface CustomDetailPageConfig<T extends object = object> extends BaseDetailPageConfig {
