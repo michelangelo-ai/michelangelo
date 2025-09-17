@@ -4,6 +4,7 @@ import { createGrpcWebTransport } from '@connectrpc/connect-web';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
+import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
 
 // This interceptor is used to set the headers for the RPC request to
 // be compatible with the Michelangelo API yarpc server.
@@ -29,4 +30,5 @@ export const SERVICES = {
   ProjectService: createClient(ProjectService, transport),
   PipelineService: createClient(PipelineService, transport),
   PipelineRunService: createClient(PipelineRunService, transport),
+  TriggerRunService: createClient(TriggerRunService, transport),
 } as const;
