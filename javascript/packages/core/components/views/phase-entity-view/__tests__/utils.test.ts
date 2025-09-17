@@ -1,11 +1,16 @@
 import { describe, expect, test } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
+import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { isListableEntity } from '../utils';
 
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 
 describe('isListableEntity', () => {
+  const buildTableConfig = buildTableConfigFactory({
+    columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+  });
+
   const testCases: Array<{
     name: string;
     entity: Pick<PhaseEntityConfig, 'state' | 'views'>;
@@ -18,7 +23,7 @@ describe('isListableEntity', () => {
         views: [
           {
             type: 'list',
-            columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+            tableConfig: buildTableConfig(),
           },
         ],
       },
@@ -31,7 +36,7 @@ describe('isListableEntity', () => {
         views: [
           {
             type: 'list',
-            columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+            tableConfig: buildTableConfig(),
           },
         ],
       },
@@ -66,7 +71,7 @@ describe('isListableEntity', () => {
         views: [
           {
             type: 'list',
-            columns: [],
+            tableConfig: buildTableConfig({ columns: [] }),
           },
         ],
       },
@@ -79,7 +84,7 @@ describe('isListableEntity', () => {
         views: [
           {
             type: 'list',
-            columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+            tableConfig: buildTableConfig(),
           },
           {
             type: 'detail',
@@ -102,7 +107,7 @@ describe('isListableEntity', () => {
           },
           {
             type: 'list',
-            columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+            tableConfig: buildTableConfig(),
           },
         ],
       },
