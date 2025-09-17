@@ -12,12 +12,6 @@ go_library(
     deps = [
         "//go/base/blobstore:go_default_library",
         "//go/deployment/plugins:go_default_library",
-        "//go/deployment/plugins/oss/common:go_default_library",
-        "//go/deployment/plugins/oss/rollout:go_default_library",
-        "//go/deployment/plugins/oss/cleanup:go_default_library",
-        "//go/deployment/plugins/oss/rollback:go_default_library",
-        "//go/deployment/plugins/oss/steadystate:go_default_library",
-        "//go/deployment/provider/config:go_default_library",
         "//go/shared/gateways:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

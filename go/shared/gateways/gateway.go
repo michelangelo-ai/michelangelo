@@ -7,6 +7,10 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -22,6 +26,7 @@ type Gateway interface {
 	// Proxy/Routing Management
 	ConfigureProxy(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error
 	GetProxyStatus(ctx context.Context, logger logr.Logger, request ProxyStatusRequest) (*ProxyStatus, error)
+	AddDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error
 
 	// Model Management
 	LoadModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error
@@ -38,6 +43,10 @@ type Gateway interface {
 	CreateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
 	UpdateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
 	DeleteModelConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) error
+	DeleteConfigMap(ctx context.Context, logger logr.Logger, configMapName, namespace string) error
+
+	// HTTPRoute Management
+	DeleteHTTPRoute(ctx context.Context, logger logr.Logger, httpRouteName, namespace string) error
 }
 
 // ModelLoadRequest contains information needed to load a model
@@ -56,6 +65,7 @@ type ModelStatusRequest struct {
 	ModelName       string
 	ModelVersion    string
 	InferenceServer string
+	DeploymentName  string // Added for deployment-specific routing
 	Namespace       string
 	BackendType     v2pb.BackendType
 }
@@ -443,6 +453,68 @@ func (g *gateway) ConfigureProxy(ctx context.Context, logger logr.Logger, reques
 // GetProxyStatus checks the status of Istio VirtualService configuration
 func (g *gateway) GetProxyStatus(ctx context.Context, logger logr.Logger, request ProxyStatusRequest) (*ProxyStatus, error) {
 	logger.Info("Getting proxy status", "server", request.InferenceServer)
-	
+
 	return g.getIstioProxyStatus(ctx, logger, request)
+}
+
+// AddDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
+func (g *gateway) AddDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
+	logger.Info("Adding deployment-specific route", "server", request.InferenceServer, "deployment", request.DeploymentName, "model", request.ModelName)
+
+	return g.addDeploymentSpecificRoute(ctx, logger, request)
+}
+
+// DeleteConfigMap deletes a ConfigMap by name and namespace
+func (g *gateway) DeleteConfigMap(ctx context.Context, logger logr.Logger, configMapName, namespace string) error {
+	logger.Info("Deleting ConfigMap", "configMap", configMapName, "namespace", namespace)
+
+	if g.configMapProvider == nil {
+		return fmt.Errorf("ConfigMapProvider not available")
+	}
+
+	// Use direct Kubernetes client to delete ConfigMap
+	configMap := &corev1.ConfigMap{}
+	configMap.Name = configMapName
+	configMap.Namespace = namespace
+
+	if err := g.kubeClient.Delete(ctx, configMap); err != nil {
+		// Ignore not found errors as the ConfigMap may already be deleted
+		if client.IgnoreNotFound(err) != nil {
+			return fmt.Errorf("failed to delete ConfigMap %s in namespace %s: %w", configMapName, namespace, err)
+		}
+		logger.Info("ConfigMap not found, already deleted", "configMap", configMapName)
+	} else {
+		logger.Info("ConfigMap deleted successfully", "configMap", configMapName, "namespace", namespace)
+	}
+
+	return nil
+}
+
+// DeleteHTTPRoute deletes an HTTPRoute by name and namespace
+func (g *gateway) DeleteHTTPRoute(ctx context.Context, logger logr.Logger, httpRouteName, namespace string) error {
+	logger.Info("Deleting HTTPRoute", "httpRoute", httpRouteName, "namespace", namespace)
+
+	if g.dynamicClient == nil {
+		return fmt.Errorf("dynamicClient not available")
+	}
+
+	// Use the Gateway API HTTPRoute GroupVersionResource
+	gvr := schema.GroupVersionResource{
+		Group:    "gateway.networking.k8s.io",
+		Version:  "v1",
+		Resource: "httproutes",
+	}
+
+	if err := g.dynamicClient.Resource(gvr).Namespace(namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
+		// Ignore not found errors as the HTTPRoute may already be deleted
+		if errors.IsNotFound(err) {
+			logger.Info("HTTPRoute not found, already deleted", "httpRoute", httpRouteName)
+		} else {
+			return fmt.Errorf("failed to delete HTTPRoute %s in namespace %s: %w", httpRouteName, namespace, err)
+		}
+	} else {
+		logger.Info("HTTPRoute deleted successfully", "httpRoute", httpRouteName, "namespace", namespace)
+	}
+
+	return nil
 }

@@ -77,14 +77,14 @@ func (a *ResourceCreationActor) GetType() string {
 
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton infrastructure condition")
-	
+
 	// Check if infrastructure exists
 	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
 	})
-	
+
 	if err != nil {
 		return apipb.Condition{
 			Type:    a.GetType(),
@@ -93,17 +93,22 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger
 			Message: "Failed to check infrastructure status",
 		}, nil
 	}
-	
+
 	status := apipb.CONDITION_STATUS_FALSE
 	reason := "InfrastructureCreating"
 	message := "Infrastructure is being created"
-	
+
 	if statusResp.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "InfrastructureReady"
 		message = "Infrastructure is ready"
+	} else if statusResp.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
+		// Infrastructure doesn't exist or is incomplete, needs to be created
+		status = apipb.CONDITION_STATUS_FALSE
+		reason = "InfrastructureNotFound"
+		message = "Infrastructure needs to be created"
 	}
-	
+
 	return apipb.Condition{
 		Type:    a.GetType(),
 		Status:  status,
@@ -320,23 +325,50 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resourc
 }
 
 func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
-	logger.Info("Running Triton infrastructure cleanup")
-	
+	logger.Info("Running Triton infrastructure cleanup with ConfigMap and HTTPRoute cleanup")
+
+	// STEP 1: Delete ConfigMaps first (following UCS cleanup pattern)
+	logger.Info("Cleaning up ConfigMaps for inference server", "inferenceServer", resource.Name)
+
+	// Clean up model-config ConfigMap
+	modelConfigMapName := fmt.Sprintf("%s-model-config", resource.Name)
+	if err := a.gateway.DeleteConfigMap(ctx, logger, modelConfigMapName, resource.Namespace); err != nil {
+		logger.Error(err, "Failed to delete model ConfigMap", "configMap", modelConfigMapName)
+		// Don't fail the whole cleanup for ConfigMap errors, but log them
+	} else {
+		logger.Info("Successfully deleted model ConfigMap", "configMap", modelConfigMapName)
+	}
+
+	// Note: No longer using deployment-registry ConfigMap, using only shared model-config ConfigMap
+
+	// STEP 2: Delete HTTPRoute for the inference server
+	logger.Info("Cleaning up HTTPRoute for inference server", "inferenceServer", resource.Name)
+	httpRouteName := fmt.Sprintf("%s-httproute", resource.Name)
+	if err := a.gateway.DeleteHTTPRoute(ctx, logger, httpRouteName, resource.Namespace); err != nil {
+		logger.Error(err, "Failed to delete HTTPRoute", "httpRoute", httpRouteName)
+		// Don't fail the whole cleanup for HTTPRoute errors, but log them
+	} else {
+		logger.Info("Successfully deleted HTTPRoute", "httpRoute", httpRouteName)
+	}
+
+	// STEP 3: Delete infrastructure (Kubernetes resources like Deployment, Service, etc.)
+	logger.Info("Cleaning up Kubernetes infrastructure", "inferenceServer", resource.Name)
 	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.InfrastructureDeleteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
 	})
-	
+
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
-		condition.Reason = "CleanupFailed"
+		condition.Reason = "InfrastructureCleanupFailed"
 		condition.Message = fmt.Sprintf("Failed to cleanup infrastructure: %v", err)
 		return err
 	}
-	
+
 	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "CleanupInitiated"
-	condition.Message = "Infrastructure cleanup initiated successfully"
+	condition.Message = "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully"
+	logger.Info("Triton infrastructure cleanup completed successfully", "inferenceServer", resource.Name)
 	return nil
 }

@@ -25,6 +25,8 @@ const (
 	_deploymentCleanedUpFinalizer = "deployments.michelangelo.ai/finalizer"
 	_deploymentKey                = "deployment"
 	_maximumConcurrentReconciles  = 5
+	_modelHealthCheckTimeout      = 10 * time.Minute // Configurable timeout for model health checks
+	_modelHealthCheckInterval     = 30 * time.Second // Interval between health check retries
 )
 
 // Reconciler handles deployment orchestration through plugin pattern
@@ -34,7 +36,6 @@ type Reconciler struct {
 	Recorder record.EventRecorder
 	Plugin   plugins.Plugin
 }
-
 
 // Reconcile handles deployment reconciliation using basic OSS approach
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
@@ -120,18 +121,31 @@ func (r *Reconciler) reconcile(ctx context.Context, logger logr.Logger, deployme
 	if !deployment.ObjectMeta.DeletionTimestamp.IsZero() {
 		logger.Info("Processing deployment deletion")
 		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-		
+
 		err := r.handleCleanup(ctx, logger, deployment)
 		if err != nil {
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED
 			deployment.Status.Message = fmt.Sprintf("Cleanup failed: %v", err)
 			return defaultResult, err
 		}
-		
+
 		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
 		deployment.Status.Message = "Cleanup completed successfully"
 		controllerutil.RemoveFinalizer(deployment, _deploymentCleanedUpFinalizer)
 		return ctrl.Result{}, nil
+	}
+
+	// Handle rollback for failed deployments
+	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED && r.shouldTriggerRollback(deployment) {
+		logger.Info("Triggering automatic rollback for failed deployment")
+		err := r.handleRollback(ctx, logger, deployment)
+		if err != nil {
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED
+			deployment.Status.Message = fmt.Sprintf("Rollback failed: %v", err)
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
+			return defaultResult, err
+		}
+		return defaultResult, nil
 	}
 
 	// Handle new rollout
@@ -139,20 +153,27 @@ func (r *Reconciler) reconcile(ctx context.Context, logger logr.Logger, deployme
 		logger.Info("detected new rollout")
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
 		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
-		
-		err := r.handleRollout(ctx, logger, deployment)
+
+		rolloutComplete, err := r.handleRollout(ctx, logger, deployment)
 		if err != nil {
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED
 			deployment.Status.Message = fmt.Sprintf("Rollout failed: %v", err)
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 			return defaultResult, err
 		}
-		
-		// Move to completion
-		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-		deployment.Status.CurrentRevision = deployment.Status.CandidateRevision
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		deployment.Status.Message = "Rollout completed successfully"
+
+		// Only mark as complete if rollout actually finished successfully
+		if rolloutComplete {
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+			deployment.Status.CurrentRevision = deployment.Status.CandidateRevision
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+			deployment.Status.Message = "Rollout completed successfully"
+		} else {
+			// Rollout is in progress (actors blocked/waiting)
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
+			deployment.Status.Message = "Rollout in progress - waiting for health checks"
+		}
 	}
 
 	return defaultResult, nil
@@ -163,44 +184,67 @@ func (r *Reconciler) shouldTriggerNewRollout(deployment *v2pb.Deployment) bool {
 	if deployment.Spec.DesiredRevision == nil {
 		return false
 	}
-	
+
 	// New deployment
 	if deployment.Status.CurrentRevision == nil {
 		return true
 	}
-	
+
 	// Desired revision changed
 	return deployment.Spec.DesiredRevision.Name != deployment.Status.CurrentRevision.Name
 }
 
+// shouldTriggerRollback determines if a rollback should be triggered for failed deployments
+func (r *Reconciler) shouldTriggerRollback(deployment *v2pb.Deployment) bool {
+	// Only rollback if we have a previous revision to rollback to
+	if deployment.Status.CurrentRevision == nil {
+		return false
+	}
+
+	// Only rollback if the deployment is in a failed state
+	if deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
+		return false
+	}
+
+	// Don't rollback if we're already in a rollback state
+	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED {
+		return false
+	}
+
+	return true
+}
+
 // handleRollout handles the rollout process using enhanced plugin system
-func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
-	logger.Info("Processing deployment rollout with enhanced plugin system", 
+// Returns (rolloutComplete, error) where rolloutComplete indicates if all actors finished successfully
+func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) (bool, error) {
+	logger.Info("Processing deployment rollout with enhanced plugin system",
 		"desiredRevision", deployment.Spec.DesiredRevision.Name,
 		"inferenceServer", deployment.Spec.GetInferenceServer().Name)
-	
+
 	// Use enhanced plugin system for rollout
 	if r.Plugin == nil {
-		return fmt.Errorf("plugin not initialized")
+		return false, fmt.Errorf("plugin not initialized")
 	}
-	
+
 	// Get rollout plugin from the main plugin
 	rolloutPlugin, err := r.Plugin.GetRolloutPlugin(ctx, deployment)
 	if err != nil {
-		return fmt.Errorf("failed to get rollout plugin: %w", err)
+		return false, fmt.Errorf("failed to get rollout plugin: %w", err)
 	}
-	
+
 	// Get actors from rollout plugin
 	actors := rolloutPlugin.GetActors()
 	logger.Info("Running enhanced rollout with actors", "actorCount", len(actors))
-	
+
 	// Execute all actors in sequence following Uber pattern
 	runtimeCtx := plugins.RequestContext{Logger: logger}
 	for _, actor := range actors {
 		actorType := actor.GetType()
 		logger.Info("Executing actor", "actorType", actorType)
-		
-		// Retrieve condition  
+
+		// Retrieve condition
 		var existingCondition *apipb.Condition
 		for _, condition := range deployment.Status.Conditions {
 			if condition.Type == actorType {
@@ -208,39 +252,39 @@ func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, depl
 				break
 			}
 		}
-		
+
 		if existingCondition == nil {
 			existingCondition = &apipb.Condition{
 				Type:   actorType,
 				Status: apipb.CONDITION_STATUS_UNKNOWN,
 			}
 		}
-		
+
 		// Retrieve current state
 		updatedCondition, err := actor.Retrieve(ctx, runtimeCtx, deployment, existingCondition)
 		if err != nil {
 			logger.Error(err, "Actor retrieve failed", "actorType", actorType)
-			return fmt.Errorf("actor %s retrieve failed: %w", actorType, err)
+			return false, fmt.Errorf("actor %s retrieve failed: %w", actorType, err)
 		}
-		
+
 		// If condition is not TRUE, run the actor
 		if updatedCondition.Status != apipb.CONDITION_STATUS_TRUE {
 			logger.Info("Running actor", "actorType", actorType, "reason", updatedCondition.Reason)
-			
+
 			err = actor.Run(ctx, runtimeCtx, deployment, updatedCondition)
 			if err != nil {
 				logger.Error(err, "Actor run failed", "actorType", actorType)
-				return fmt.Errorf("actor %s run failed: %w", actorType, err)
+				return false, fmt.Errorf("actor %s run failed: %w", actorType, err)
 			}
-			
+
 			// Re-retrieve after running
 			updatedCondition, err = actor.Retrieve(ctx, runtimeCtx, deployment, updatedCondition)
 			if err != nil {
 				logger.Error(err, "Actor re-retrieve failed", "actorType", actorType)
-				return fmt.Errorf("actor %s re-retrieve failed: %w", actorType, err)
+				return false, fmt.Errorf("actor %s re-retrieve failed: %w", actorType, err)
 			}
 		}
-		
+
 		// Update condition in deployment status
 		found := false
 		for i, condition := range deployment.Status.Conditions {
@@ -250,26 +294,150 @@ func (r *Reconciler) handleRollout(ctx context.Context, logger logr.Logger, depl
 				break
 			}
 		}
-		
+
 		if !found {
 			deployment.Status.Conditions = append(deployment.Status.Conditions, updatedCondition)
 		}
-		
+
 		logger.Info("Actor completed", "actorType", actorType, "status", updatedCondition.Status, "message", updatedCondition.Message)
+
+		// Stop execution if this actor failed - do not proceed to next actors
+		if updatedCondition.Status != apipb.CONDITION_STATUS_TRUE {
+			logger.Info("Actor not ready, stopping rollout execution", "actorType", actorType, "status", updatedCondition.Status)
+			return false, nil // Controller will requeue and retry later
+		}
 	}
-	
+
 	logger.Info("Enhanced rollout plugin execution completed")
+	return true, nil
+}
+
+// handleRollback handles the rollback process using Uber's plugin system pattern
+func (r *Reconciler) handleRollback(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
+	logger.Info("Processing deployment rollback using plugin system",
+		"currentRevision", func() string {
+			if deployment.Status.CurrentRevision != nil {
+				return deployment.Status.CurrentRevision.Name
+			}
+			return "none"
+		}(),
+		"candidateRevision", func() string {
+			if deployment.Status.CandidateRevision != nil {
+				return deployment.Status.CandidateRevision.Name
+			}
+			return "none"
+		}())
+
+	// Use plugin system for rollback
+	if r.Plugin == nil {
+		return fmt.Errorf("plugin not initialized")
+	}
+
+	// Get rollback plugin from the main plugin
+	rollbackPlugin := r.Plugin.GetRollbackPlugin()
+	if rollbackPlugin == nil {
+		return fmt.Errorf("rollback plugin not available")
+	}
+
+	// Get actors from rollback plugin
+	actors := rollbackPlugin.GetActors()
+	logger.Info("Running rollback with actors", "actorCount", len(actors))
+
+	// Execute all rollback actors in sequence following Uber pattern
+	runtimeCtx := plugins.RequestContext{Logger: logger}
+	for _, actor := range actors {
+		actorType := actor.GetType()
+		logger.Info("Executing rollback actor", "actorType", actorType)
+
+		// Retrieve condition
+		var existingCondition *apipb.Condition
+		for _, condition := range deployment.Status.Conditions {
+			if condition.Type == actorType {
+				existingCondition = condition
+				break
+			}
+		}
+
+		if existingCondition == nil {
+			existingCondition = &apipb.Condition{
+				Type:   actorType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			}
+		}
+
+		// Retrieve current state
+		updatedCondition, err := actor.Retrieve(ctx, runtimeCtx, deployment, existingCondition)
+		if err != nil {
+			logger.Error(err, "Rollback actor retrieve failed", "actorType", actorType)
+			return fmt.Errorf("rollback actor %s retrieve failed: %w", actorType, err)
+		}
+
+		// If condition is not TRUE, run the actor
+		if updatedCondition.Status != apipb.CONDITION_STATUS_TRUE {
+			logger.Info("Running rollback actor", "actorType", actorType, "reason", updatedCondition.Reason)
+
+			err = actor.Run(ctx, runtimeCtx, deployment, updatedCondition)
+			if err != nil {
+				logger.Error(err, "Rollback actor run failed", "actorType", actorType)
+				deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED
+				deployment.Status.Message = fmt.Sprintf("Rollback actor %s failed: %v", actorType, err)
+				return fmt.Errorf("rollback actor %s run failed: %w", actorType, err)
+			}
+
+			// Re-retrieve after running
+			updatedCondition, err = actor.Retrieve(ctx, runtimeCtx, deployment, updatedCondition)
+			if err != nil {
+				logger.Error(err, "Rollback actor re-retrieve failed", "actorType", actorType)
+				return fmt.Errorf("rollback actor %s re-retrieve failed: %w", actorType, err)
+			}
+		}
+
+		// Update condition in deployment status
+		found := false
+		for i, condition := range deployment.Status.Conditions {
+			if condition.Type == actorType {
+				deployment.Status.Conditions[i] = updatedCondition
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			deployment.Status.Conditions = append(deployment.Status.Conditions, updatedCondition)
+		}
+
+		logger.Info("Rollback actor completed", "actorType", actorType, "status", updatedCondition.Status, "message", updatedCondition.Message)
+
+		// Stop execution if this actor failed
+		if updatedCondition.Status != apipb.CONDITION_STATUS_TRUE {
+			logger.Info("Rollback actor not ready, will retry", "actorType", actorType, "status", updatedCondition.Status)
+			return fmt.Errorf("rollback actor %s not ready: %s", actorType, updatedCondition.Message)
+		}
+	}
+
+	// All rollback actors completed successfully
+	deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
+	deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+	deployment.Status.Message = "Rollback completed successfully"
+
+	logger.Info("Rollback plugin execution completed successfully")
 	return nil
 }
 
 // handleCleanup handles the cleanup process for OSS deployments
 func (r *Reconciler) handleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
 	logger.Info("Processing deployment cleanup")
-	
-	// For OSS, cleanup would involve:
-	// 1. Remove ConfigMaps
-	// 2. Clean up any deployment-specific resources
-	
+
+	// Use the plugin system to handle cleanup
+	if r.Plugin != nil {
+		logger.Info("Delegating cleanup to deployment plugin")
+		err := r.Plugin.HandleCleanup(ctx, logger, deployment)
+		if err != nil {
+			logger.Error(err, "Plugin cleanup failed")
+			return err
+		}
+	}
+
 	logger.Info("Cleanup completed for OSS deployment")
 	return nil
 }

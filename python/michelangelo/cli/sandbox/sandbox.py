@@ -493,18 +493,74 @@ def _create_demo_crs(_: argparse.Namespace):
         project_yaml = yaml.safe_load(f)
     namespace = project_yaml.get("metadata", {}).get("namespace", "default")
 
-    _exec("kubectl", "create", "namespace", namespace)
+    try:
+        _exec("kubectl", "create", "namespace", namespace)
+    except subprocess.CalledProcessError:
+        # Namespace might already exist, continue
+        pass
 
-    # Create project first. Project CRD is essentially the "parent" of other CRDs. Under
+    print("🚀 Setting up Michelangelo AI Deployment Demo...")
+
+    # 1. Create Gateway API setup first (required for HTTPRoute)
+    gateway_setup_path = demo_dir / "gateway-api-setup.yaml"
+    if gateway_setup_path.exists():
+        print("  ✅ Setting up Gateway API and Istio Gateway...")
+        _kube_create(gateway_setup_path)
+
+    # 2. Create secrets and configmaps for model storage
+    print("  ✅ Creating storage configuration...")
+    _kube_create(_dir / "resources" / "demo-secrets-configmaps.yaml")
+
+    # 3. Create project first. Project CRD is essentially the "parent" of other CRDs. Under
     # normal circumstances, users must create a project before creating other CRDs.
     _kube_create(project_yaml_path)
 
-    # Create all other YAML files in the demo directory
+    # 4. Create inference server
+    inference_server_path = demo_dir / "inferenceserver.yaml"
+    if inference_server_path.exists():
+        print("  ✅ Creating Triton Inference Server...")
+        _kube_create(inference_server_path)
+
+    # 5. Wait for inference server to be ready
+    print("  ⏳ Waiting for inference server to be ready...")
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "-l",
+        "app=inference-server",
+        "--timeout=300s",
+    )
+
+    # 6. Create deployment (this will trigger model deployment workflow)
+    deployment_path = demo_dir / "deployment.yaml"
+    if deployment_path.exists():
+        print("  ✅ Creating model deployment...")
+        _kube_create(deployment_path)
+
+    # 7. Create all other YAML files in the demo directory (training pipelines, etc.)
     for yaml_file in demo_dir.glob("*.yaml"):
-        if yaml_file.name != "project.yaml":
+        if yaml_file.name not in ["project.yaml", "gateway-api-setup.yaml", "inferenceserver.yaml", "deployment.yaml"]:
             _kube_create(yaml_file)
 
-    print(f"\nDemo CRs created in namespace {namespace}.")
+    print(f"\n🎉 Demo deployment created successfully in namespace {namespace}!")
+    print("\n📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • MinIO storage configuration")
+    print("  • Triton Inference Server")
+    print("  • BERT model deployment with HTTPRoute")
+    print("  • Training pipelines and project resources")
+
+    print(f"\n🌐 Production endpoint (model-agnostic):")
+    print(f"  http://localhost:8080/inference-server-bert-cola-endpoint/bert-cola-deployment")
+    print(f"\n💡 This endpoint will always serve the current model version without URL changes!")
+
+    print(f"\n🔧 Useful commands:")
+    print(f"  kubectl get deployments.michelangelo.api")
+    print(f"  kubectl get httproute")
+    print(f"  kubectl get pods -l app=inference-server")
+    print(f"  kubectl port-forward svc/ma-gateway-istio 8080:80  # (if not already running)")
 
 
 def _delete(ns: argparse.Namespace):

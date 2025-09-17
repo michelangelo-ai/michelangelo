@@ -3,6 +3,7 @@ package inferenceserver
 import (
 	"context"
 	"fmt"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"reflect"
 	"time"
 
@@ -14,11 +15,16 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"github.com/michelangelo-ai/michelangelo/go/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+)
+
+const (
+	_inferenceServerCleanedUpFinalizer = "inferenceservers.michelangelo.api/finalizer"
 )
 
 // Reconciler reconciles InferenceServer objects
@@ -38,14 +44,14 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		"inferenceserver", req.NamespacedName,
 		"reconcileTime", time.Now().Format(time.RFC3339),
 	)
-	
+
 	// Set timeout for reconciliation - following production pattern
 	reconcileCtx, cancel := context.WithTimeout(ctx, ReconcilerTimeout)
 	defer cancel()
-	
+
 	// Use internal reconcile method with proper error handling
 	result, err := r.reconcile(reconcileCtx, req.NamespacedName, logger)
-	
+
 	// Production pattern: never return errors, use events instead
 	if err != nil {
 		logger.Error(err, "Reconciliation failed")
@@ -57,74 +63,99 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		// Return success to avoid exponential backoff
 		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 	}
-	
+
 	return result, nil
 }
 
-// reconcile is the internal reconciliation logic
+// reconcile is the internal reconciliation logic following Uber production pattern
 func (r *Reconciler) reconcile(ctx context.Context, namespacedName client.ObjectKey, logger logr.Logger) (ctrl.Result, error) {
 	// Fetch the InferenceServer instance
 	var inferenceServer v2pb.InferenceServer
 	if err := r.Get(ctx, namespacedName, &inferenceServer); err != nil {
 		if errors.IsNotFound(err) {
-			logger.Info("InferenceServer resource not found, ignoring")
+			// Clean up orphaned resources following Uber pattern
+			logger.Info("InferenceServer resource not found, cleaning up any orphaned resources")
+			orphanedServer := v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      namespacedName.Name,
+					Namespace: namespacedName.Namespace,
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType: v2pb.BACKEND_TYPE_TRITON,
+				},
+			}
+			_, cleanupErr := r.handleDeletion(ctx, logger, &orphanedServer)
+			if cleanupErr != nil {
+				logger.Error(cleanupErr, "Failed to clean up orphaned resources")
+			}
 			return ctrl.Result{}, nil
 		}
-		return ctrl.Result{}, fmt.Errorf("failed to get InferenceServer: %w", err)
+		return ctrl.Result{}, err
 	}
 
-	// Production pattern: deep copy for change detection
-	originalServer := inferenceServer.DeepCopy()
-	
-	// Enhanced structured logging
-	logger = logger.WithValues(
-		"name", inferenceServer.Name,
-		"namespace", inferenceServer.Namespace,
-		"generation", inferenceServer.Generation,
-		"observedGeneration", inferenceServer.Status.ObservedGeneration,
-		"state", inferenceServer.Status.State,
-		"backendType", inferenceServer.Spec.BackendType,
-	)
+	// Deep copy for change detection (Uber production pattern)
+	originalInferenceServer := inferenceServer.DeepCopy()
 
-	logger.Info("Reconciling InferenceServer")
-
-	// Handle deletion or creation based on timestamp
-	var result ctrl.Result
-	var err error
-	
-	if !inferenceServer.GetDeletionTimestamp().IsZero() {
-		result, err = r.handleDeletion(ctx, logger, &inferenceServer)
-	} else {
-		result, err = r.handleCreation(ctx, logger, &inferenceServer)
-	}
-	
+	// Update external details first (like Uber's plugin.UpdateDetails)
+	err := r.updateExternalDetails(ctx, logger, &inferenceServer)
 	if err != nil {
-		return result, err
+		logger.Error(err, "Failed to update external details, proceeding with reconciliation")
 	}
 
-	// Update external details via gateway AFTER creation attempts (similar to production plugin.UpdateDetails)
-	if err := r.updateExternalDetails(ctx, logger, &inferenceServer); err != nil {
-		logger.Error(err, "Failed to update external details (non-fatal)")
-		// Don't fail reconciliation for status check errors
-	}
-
-	// Production pattern: optimistic updates - only update if changed
-	if !reflect.DeepEqual(originalServer.Status, inferenceServer.Status) {
-		logger.Info("Status changed, updating",
-			"oldState", originalServer.Status.State,
-			"newState", inferenceServer.Status.State)
-		
-		// Update timestamp
-		inferenceServer.Status.UpdateTime = time.Now().Format(time.RFC3339)
-		
-		if err := r.Status().Update(ctx, &inferenceServer); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update status: %w", err)
+	// Determine plugin based on deletion state
+	var plugin plugins.Plugin
+	if !inferenceServer.GetDeletionTimestamp().IsZero() {
+		backendPlugin, pluginErr := r.Plugins.GetPlugin(inferenceServer.Spec.BackendType)
+		if pluginErr != nil {
+			logger.Error(pluginErr, "Failed to get backend plugin")
+			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 		}
+		plugin = backendPlugin.GetDeletionPlugin(&inferenceServer)
 	} else {
-		logger.V(1).Info("No status changes detected, skipping update")
+		backendPlugin, pluginErr := r.Plugins.GetPlugin(inferenceServer.Spec.BackendType)
+		if pluginErr != nil {
+			logger.Error(pluginErr, "Failed to get backend plugin")
+			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
+		}
+		plugin = backendPlugin.GetCreationPlugin()
 	}
 
-	return result, nil
+	// Run the plugin engine (like Uber's engine.Run)
+	engine := plugins.NewEngine()
+	conditionResult, err := engine.Run(ctx, logger, plugin, &inferenceServer)
+	if err != nil {
+		logger.Error(err, "Plugin processing failed")
+		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil // Never return errors, use events instead (Uber pattern)
+	}
+
+	// Parse state from conditions (like Uber's plugin.ParseState)
+	state := parseStateFromConditions(&inferenceServer)
+	inferenceServer.Status.State = state
+
+	// Only update if there are changes (Uber production pattern)
+	if !reflect.DeepEqual(originalInferenceServer, &inferenceServer) {
+		logger.Info("Updating inference server state",
+			"oldState", originalInferenceServer.Status.State,
+			"newState", inferenceServer.Status.State)
+
+		// Update observed generation and timestamp
+		inferenceServer.Status.ObservedGeneration = inferenceServer.Generation
+		inferenceServer.Status.UpdateTime = time.Now().Format(time.RFC3339)
+
+		if err := r.Status().Update(ctx, &inferenceServer); err != nil {
+			logger.Error(err, "Failed to update status")
+			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil // Never return errors (Uber pattern)
+		}
+	}
+
+	// Convert condition result to appropriate requeue strategy
+	if conditionResult != nil && conditionResult.Status == apipb.CONDITION_STATUS_FALSE {
+		// Continue active monitoring if there are failing conditions
+		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
+	}
+
+	// Use steady state requeue if everything is healthy
+	return ctrl.Result{RequeueAfter: SteadyStateRequeueAfter}, nil
 }
 
 // updateExternalDetails fetches current state from infrastructure (like production plugin.UpdateDetails)
@@ -133,12 +164,12 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, logger logr.Logg
 	if !inferenceServer.GetDeletionTimestamp().IsZero() {
 		return nil
 	}
-	
+
 	// Skip if we haven't attempted creation yet (still in initial CREATING state)
 	if inferenceServer.Status.ObservedGeneration == 0 || inferenceServer.Status.State == StateCreating {
 		return nil
 	}
-	
+
 	// Get current status from gateway
 	statusResp, err := r.Gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
 		InferenceServer: inferenceServer.Name,
@@ -150,25 +181,25 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, logger logr.Logg
 		logger.V(1).Info("Failed to get infrastructure status", "error", err)
 		return nil
 	}
-	
+
 	// Update status based on external state
 	if statusResp.State != inferenceServer.Status.State {
 		logger.Info("External state change detected",
 			"currentState", inferenceServer.Status.State,
 			"externalState", statusResp.State)
-		
+
 		inferenceServer.Status.State = statusResp.State
 		inferenceServer.Status.ProviderMetadata = statusResp.Message
-		
+
 		// Record state transition events
 		switch statusResp.State {
 		case StateServing:
-			r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, EventReasonCreationCompleted, MessageCreationCompleted)
+			r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
 		case StateFailed:
-			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonCreationFailed, MessageCreationFailed)
+			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, "CreationFailed", "InferenceServer creation failed")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -176,7 +207,16 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, logger logr.Logg
 func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (ctrl.Result, error) {
 	logger.Info("Handling InferenceServer creation/update")
 
-	// Note: Finalizer management temporarily removed for build simplification
+	// Add finalizer if not present (required for proper cleanup)
+	if !controllerutil.ContainsFinalizer(inferenceServer, _inferenceServerCleanedUpFinalizer) {
+		logger.Info("Adding finalizer for proper deletion handling")
+		controllerutil.AddFinalizer(inferenceServer, _inferenceServerCleanedUpFinalizer)
+		if err := r.Update(ctx, inferenceServer); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to add finalizer: %w", err)
+		}
+		// Return early to let the finalizer update happen
+		return ctrl.Result{RequeueAfter: time.Second}, nil
+	}
 
 	// Initialize status if needed (first time setup)
 	if inferenceServer.Status.ObservedGeneration == 0 {
@@ -188,18 +228,18 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 		inferenceServer.Status.CreateTime = time.Now().Format(time.RFC3339)
 		inferenceServer.Status.UpdateTime = time.Now().Format(time.RFC3339)
 
-		r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, EventReasonCreationStarted, MessageCreationStarted)
+		r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, "CreationStarted", "InferenceServer creation started")
 
 		// Return early to let status update happen in main reconcile loop
 		return ctrl.Result{RequeueAfter: time.Second}, nil
 	}
-	
+
 	// Check if generation has changed (spec update)
 	if inferenceServer.Status.ObservedGeneration < inferenceServer.Generation {
 		logger.Info("Spec generation changed, updating",
 			"oldGeneration", inferenceServer.Status.ObservedGeneration,
 			"newGeneration", inferenceServer.Generation)
-		
+
 		inferenceServer.Status.ObservedGeneration = inferenceServer.Generation
 		// Don't change state here, let the infrastructure update handle it
 	}
@@ -207,31 +247,31 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 	// Only create infrastructure if we're in creating state
 	if inferenceServer.Status.State == StateCreating {
 		logger.Info("Creating infrastructure using plugin system")
-		
+
 		// Get the appropriate plugin for this backend type
 		plugin, err := r.Plugins.GetPlugin(inferenceServer.Spec.BackendType)
 		if err != nil {
 			logger.Error(err, "Failed to get plugin for backend type", "backendType", inferenceServer.Spec.BackendType)
-			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonCreationFailed, fmt.Sprintf("No plugin available: %v", err))
-			
+			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, "CreationFailed", fmt.Sprintf("No plugin available: %v", err))
+
 			inferenceServer.Status.State = StateFailed
 			inferenceServer.Status.ProviderMetadata = fmt.Sprintf("Plugin not found: %v", err)
-			
+
 			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 		}
-		
+
 		// Execute creation plugin
 		creationPlugin := plugin.GetCreationPlugin()
 		engine := plugins.NewEngine()
-		
+
 		_, err = engine.Run(ctx, logger, creationPlugin, inferenceServer)
 		if err != nil {
 			logger.Error(err, "Failed to execute creation actors")
-			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonCreationFailed, fmt.Sprintf("%s: %v", MessageCreationFailed, err))
-			
+			r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, "CreationFailed", fmt.Sprintf("InferenceServer creation failed: %v", err))
+
 			inferenceServer.Status.State = StateFailed
 			inferenceServer.Status.ProviderMetadata = fmt.Sprintf("Creation failed: %v", err)
-			
+
 			return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 		}
 	}
@@ -241,7 +281,7 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 		// Check if proxy is already configured
 		if inferenceServer.Status.ProviderMetadata != "proxy-configured" {
 			logger.Info("Configuring proxy for serving server")
-			
+
 			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
@@ -277,17 +317,6 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger logr.Logger, inf
 // handleDeletion manages the deletion lifecycle
 func (r *Reconciler) handleDeletion(ctx context.Context, logger logr.Logger, inferenceServer *v2pb.InferenceServer) (ctrl.Result, error) {
 	logger.Info("Handling InferenceServer deletion")
-	
-	// Set state to deleting if not already
-	if inferenceServer.Status.State != StateDeleting && inferenceServer.Status.State != StateDeleted {
-		inferenceServer.Status.State = StateDeleting
-		if err := r.Status().Update(ctx, inferenceServer); err != nil {
-			logger.Error(err, "Failed to update status for deletion")
-			return ctrl.Result{}, err
-		}
-		
-		r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, EventReasonDeletionStarted, MessageDeletionStarted)
-	}
 
 	// Delete infrastructure using plugin system
 	plugin, err := r.Plugins.GetPlugin(inferenceServer.Spec.BackendType)
@@ -298,43 +327,63 @@ func (r *Reconciler) handleDeletion(ctx context.Context, logger logr.Logger, inf
 		inferenceServer.Status.State = StateDeleted
 		return ctrl.Result{}, nil
 	}
-	
+
 	// Execute deletion actors
 	deletionPlugin := plugin.GetDeletionPlugin(inferenceServer)
 	engine := plugins.NewEngine()
-	
+
 	_, err = engine.Run(ctx, logger, deletionPlugin, inferenceServer)
 	if err != nil {
 		logger.Error(err, "Failed to execute deletion actors")
-		r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, EventReasonDeletionFailed, fmt.Sprintf("%s: %v", MessageDeletionFailed, err))
+		r.Recorder.Event(inferenceServer, corev1.EventTypeWarning, "DeletionFailed", fmt.Sprintf("InferenceServer deletion failed: %v", err))
 		// Production pattern: don't return error, continue with requeue
 		return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
 	}
 
-	// Check if deletion is complete by getting status
-	statusResp, statusErr := r.Gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
-		InferenceServer: inferenceServer.Name,
-		Namespace:       inferenceServer.Namespace,
-		BackendType:     inferenceServer.Spec.BackendType,
-	})
-	
-	// If infrastructure no longer exists, consider deletion complete
-	if statusErr != nil || statusResp.State == StateDeleted {
-		logger.Info("Deletion completed")
-		r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, EventReasonDeletionCompleted, MessageDeletionCompleted)
-		
-		inferenceServer.Status.State = StateDeleted
-		inferenceServer.Status.ProviderMetadata = "Infrastructure deletion completed"
-		
-		// Deletion complete, let Kubernetes clean up
-		return ctrl.Result{}, nil
-	}
-
-	// Continue deletion process
-	logger.V(1).Info("Deletion in progress, requeuing")
-	return ctrl.Result{RequeueAfter: ActiveRequeueAfter}, nil
+	return ctrl.Result{}, nil
 }
 
+// parseStateFromConditions parses the overall state from individual conditions
+// This follows Uber's pattern of deriving resource state from condition status
+func parseStateFromConditions(inferenceServer *v2pb.InferenceServer) v2pb.InferenceServerState {
+	if !inferenceServer.GetDeletionTimestamp().IsZero() {
+		// Resource is being deleted
+		return StateDeleting
+	}
+
+	if len(inferenceServer.Status.Conditions) == 0 {
+		// No conditions yet, starting creation
+		return StateCreating
+	}
+
+	// Check if all conditions are healthy
+	allHealthy := true
+	hasFailure := false
+
+	for _, condition := range inferenceServer.Status.Conditions {
+		if condition == nil {
+			continue
+		}
+		switch condition.Status {
+		case apipb.CONDITION_STATUS_FALSE:
+			hasFailure = true
+			allHealthy = false
+		case apipb.CONDITION_STATUS_UNKNOWN:
+			allHealthy = false
+		}
+	}
+
+	if hasFailure {
+		return StateFailed
+	}
+
+	if allHealthy {
+		return StateServing
+	}
+
+	// Still in progress
+	return StateCreating
+}
 
 // SetupWithManager sets up the controller with the Manager
 // Following production pattern: lower concurrency for stability

@@ -2,9 +2,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "client.go",
-    ],
+    srcs = ["client.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/deployment/provider/config",
     visibility = ["//visibility:public"],
     deps = [

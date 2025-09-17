@@ -2,6 +2,7 @@ package gateways
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -393,24 +394,46 @@ func (g *gateway) updateTorchServeModelConfig(ctx context.Context, logger logr.L
 		return fmt.Errorf("failed to get TorchServe ConfigMap: %w", err)
 	}
 
-	// Update model list
-	modelList := "["
-	for i, model := range request.ModelConfigs {
-		if i > 0 {
-			modelList += ","
-		}
-		modelList += fmt.Sprintf(`
-  {
-    "name": "%s",
-    "s3_path": "%s"
-  }`, model.Name, model.S3Path)
+	// Initialize data map if needed
+	if configMap.Data == nil {
+		configMap.Data = make(map[string]string)
 	}
-	modelList += "\n]"
 
-	// Update ConfigMap
-	configMap.Data["model-list.json"] = modelList
+	// Parse existing model list if it exists - following PR #188 pattern
+	var existingModelList []ModelConfigEntry
+	if data, exists := configMap.Data["model-list.json"]; exists && data != "" {
+		if parseErr := json.Unmarshal([]byte(data), &existingModelList); parseErr != nil {
+			logger.Error(parseErr, "Failed to parse existing TorchServe model list, starting fresh")
+			existingModelList = []ModelConfigEntry{}
+		}
+	}
 
-	return g.kubeClient.Update(ctx, configMap)
+	// Build updated model list based on request - this allows for atomic replacement or append operations
+	var updatedModelList []ModelConfigEntry
+	if len(request.ModelConfigs) > 0 {
+		// Use the provided model configs (could be replacement or append)
+		updatedModelList = request.ModelConfigs
+	} else {
+		// Keep existing models if no new configs provided
+		updatedModelList = existingModelList
+	}
+
+	// Marshal the updated model list with proper formatting
+	modelListJSON, err := json.MarshalIndent(updatedModelList, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal TorchServe model configs: %w", err)
+	}
+
+	// Update the ConfigMap data
+	configMap.Data["model-list.json"] = string(modelListJSON)
+
+	// Apply the atomic update operation
+	if err := g.kubeClient.Update(ctx, configMap); err != nil {
+		return fmt.Errorf("failed to update TorchServe ConfigMap: %w", err)
+	}
+
+	logger.Info("TorchServe model ConfigMap updated successfully", "configMap", configMapKey.Name, "modelCount", len(updatedModelList))
+	return nil
 }
 
 func (g *gateway) getTorchServeModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {

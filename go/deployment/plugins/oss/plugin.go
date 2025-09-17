@@ -137,3 +137,35 @@ func (p *Plugin) PopulateMessage(ctx context.Context, runtimeContext plugins.Req
 		deployment.Status.Message = "Deployment processed by OSS plugin"
 	}
 }
+
+// HandleCleanup handles cleanup when a deployment is being deleted, including ConfigMaps and other resources
+func (p *Plugin) HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
+	logger.Info("OSS Plugin: Starting cleanup for deployment", "deployment", deployment.Name)
+
+	// Use the rollout plugin for ConfigMap cleanup since it has the ConfigMapProvider
+	rolloutPlugin, err := p.GetRolloutPlugin(ctx, deployment)
+	if err != nil {
+		logger.Error(err, "Failed to get rollout plugin for cleanup")
+		return err
+	}
+
+	// Cast to RolloutPlugin to access HandleCleanup method
+	if ossRolloutPlugin, ok := rolloutPlugin.(*RolloutPlugin); ok {
+		if err := ossRolloutPlugin.HandleCleanup(ctx, logger, deployment); err != nil {
+			logger.Error(err, "Rollout plugin cleanup failed")
+			return err
+		}
+	}
+
+	// Additional cleanup can be done with other plugins if needed
+	cleanupPlugin := p.GetCleanupPlugin()
+	if ossCleanupPlugin, ok := cleanupPlugin.(*CleanupPlugin); ok {
+		if err := ossCleanupPlugin.HandleCleanup(ctx, logger, deployment); err != nil {
+			logger.Error(err, "Cleanup plugin cleanup failed")
+			return err
+		}
+	}
+
+	logger.Info("OSS Plugin: Cleanup completed successfully", "deployment", deployment.Name)
+	return nil
+}

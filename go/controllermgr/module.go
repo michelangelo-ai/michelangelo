@@ -13,6 +13,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
@@ -33,8 +34,9 @@ var (
 type (
 	params struct {
 		fx.In
-		Config Config          // Configuration parameters for the controller manager.
-		Scheme *runtime.Scheme // Kubernetes runtime scheme used by the manager.
+		Config     Config          // Configuration parameters for the controller manager.
+		Scheme     *runtime.Scheme // Kubernetes runtime scheme used by the manager.
+		RestConfig *rest.Config    // Kubernetes REST configuration with rate limiting from config.
 	}
 
 	result struct {
@@ -57,12 +59,8 @@ type (
 //	error: Error if the manager creation fails.
 func create(p params) (result, error) {
 
-	restConf, err := ctrl.GetConfig()
-	if err != nil {
-		return result{}, err
-	}
-
-	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
+	// Use the injected RestConfig which includes rate limiting settings from config
+	mgr, err := ctrl.NewManager(p.RestConfig, ctrl.Options{
 		Scheme:                 p.Scheme,
 		MetricsBindAddress:     p.Config.MetricsBindAddress,
 		Port:                   p.Config.Port,
