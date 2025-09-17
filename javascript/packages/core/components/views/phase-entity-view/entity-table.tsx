@@ -1,5 +1,6 @@
 import { useLocalStorageTableState } from '#core/components/table/plugins/state-persistence/use-local-storage-table-state';
 import { Table } from '#core/components/table/table';
+import { adaptTableConfigToTableProps } from '#core/components/views/utils/table-view-adapter';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
@@ -14,14 +15,14 @@ import type { EntityTableProps } from './types';
  * // Renders pipelines table with query 'ListPipeline' and data from 'pipelineList.items'
  * <EntityTable
  *   service="pipeline"
- *   listViewConfig={{ type: 'list', columns: PIPELINE_COLUMNS }}
+ *   tableConfig={{ columns: PIPELINE_COLUMNS, disableSearch: true }}
  *   tableSettingsId="train-pipelines"
  * />
  * ```
  */
 export function EntityTable<T extends object = object>({
   service,
-  listViewConfig,
+  tableConfig,
   tableSettingsId,
 }: EntityTableProps<T>) {
   const { projectId } = useStudioParams('base');
@@ -38,17 +39,11 @@ export function EntityTable<T extends object = object>({
     tableSettingsId,
   });
 
-  return (
-    <Table
-      data={data?.[`${service}List`]?.items ?? []}
-      error={error ?? undefined}
-      columns={listViewConfig.columns}
-      loading={isLoading}
-      pageSizes={[
-        { id: 1, label: '1' },
-        { id: 2, label: '2' },
-      ]}
-      state={entityTableState}
-    />
-  );
+  const tableProps = adaptTableConfigToTableProps<T>(tableConfig, {
+    data: data?.[`${service}List`]?.items ?? [],
+    loading: isLoading,
+    error: error ?? undefined,
+  });
+
+  return <Table {...tableProps} state={entityTableState} />;
 }
