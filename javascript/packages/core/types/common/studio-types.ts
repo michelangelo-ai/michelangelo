@@ -1,4 +1,5 @@
 import type { ViewConfig } from '#core/components/views/types';
+import type { QueryConfig } from '#core/types/query-types';
 
 /**
  * Represents the different phases in the Michelangelo Studio workflow.
@@ -96,7 +97,7 @@ export interface PhaseEntityConfig<T extends object = object> {
    * For PipelineRunService, root protobuf field name is pipelineRun. This field
    * should be pipelineRun. Query will be ListPipelineRun.
    */
-  service: string;
+  service: QueryConfig['service'];
   /** State controlling whether this entity is interactive */
   state: PhaseEntityState;
   /** List of view configurations for this entity */
