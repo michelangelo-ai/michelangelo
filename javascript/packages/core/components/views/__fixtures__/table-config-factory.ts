@@ -7,7 +7,6 @@ import type { TableConfig } from '../types';
 
 /**
  * Factory for creating TableConfig test fixtures.
- * Provides comprehensive configuration for testing with sensible defaults.
  *
  * @param base - Partial object shared across all test fixtures for a test suite
  * @returns Function that generates a complete table config using overrides.
@@ -22,11 +21,6 @@ import type { TableConfig } from '../types';
  * const searchDisabledConfig = buildConfig({
  *   disableSearch: true,
  *   emptyState: { title: 'Custom Empty State' }
- * });
- *
- * // Minimal config
- * const minimalConfig = buildConfig({
- *   columns: [{ id: 'name', label: 'Name' }]
  * });
  * ```
  */
