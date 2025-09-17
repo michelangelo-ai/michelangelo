@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
+import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
@@ -18,6 +19,9 @@ import type { PhaseConfig } from '#core/types/common/studio-types';
 describe('PhaseListRoute', () => {
   const buildEntity = buildEntityConfigFactory();
   const buildPhase = buildPhaseConfigFactory();
+  const buildTableConfig = buildTableConfigFactory({
+    columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+  });
 
   const testPhaseEntityConfig: Record<string, PhaseConfig> = {
     train: buildPhase({
@@ -43,7 +47,7 @@ describe('PhaseListRoute', () => {
           views: [
             {
               type: 'list',
-              columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+              tableConfig: buildTableConfig(),
             },
           ],
         }),
@@ -61,7 +65,7 @@ describe('PhaseListRoute', () => {
           views: [
             {
               type: 'list',
-              columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+              tableConfig: buildTableConfig(),
             },
           ],
         }),
@@ -117,7 +121,7 @@ describe('PhaseListRoute', () => {
             views: [
               {
                 type: 'list',
-                columns: [{ id: 'name', label: 'Name', type: CellType.TEXT }],
+                tableConfig: buildTableConfig(),
               },
             ],
           }),
@@ -304,7 +308,7 @@ describe('PhaseListRoute', () => {
             views: [
               {
                 type: 'list',
-                columns: [{ id: 'metadata.name', label: 'Name', type: CellType.TEXT }],
+                tableConfig: buildTableConfig(),
               },
             ],
           }),

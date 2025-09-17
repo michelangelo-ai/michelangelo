@@ -68,7 +68,7 @@ export function PhaseEntityView<T extends object = object>({
           {String(index) === activeKey && (
             <EntityTable<T>
               service={entity.service}
-              listViewConfig={currentEntityConfig.views[0]}
+              tableConfig={currentEntityConfig.views[0].tableConfig}
               tableSettingsId={`${phaseId}/${entity.id}`}
             />
           )}
