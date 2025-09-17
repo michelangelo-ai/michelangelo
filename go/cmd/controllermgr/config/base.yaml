@@ -6,12 +6,8 @@ controllermgr:
   port: 9443
 
 workflowClient:
-  # for cadence
-  # service: cadence-frontend
-  # host: localhost:7833
-  # for temporal
-  service: temporal-frontend
-  host: localhost:7233
+  service: cadence-frontend
+  host: localhost:7833
   transport: grpc
   domain: default
     
