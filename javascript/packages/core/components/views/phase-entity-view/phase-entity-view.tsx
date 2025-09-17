@@ -17,7 +17,10 @@ import type { PhaseEntityViewProps } from './types';
  * Expects to receive only active entities with list views. Auto-redirects to first
  * entity if no entity in URL to prevent empty states.
  */
-export function PhaseEntityView({ phaseId, entities }: PhaseEntityViewProps) {
+export function PhaseEntityView<T extends object = object>({
+  phaseId,
+  entities,
+}: PhaseEntityViewProps<T>) {
   const [, theme] = useStyletron();
   const navigate = useNavigate();
   const { projectId, entity: currentEntity } = useStudioParams('list');
@@ -63,7 +66,7 @@ export function PhaseEntityView({ phaseId, entities }: PhaseEntityViewProps) {
       {entities.map((entity, index) => (
         <Tab key={String(index)} title={entity.name}>
           {String(index) === activeKey && (
-            <EntityTable
+            <EntityTable<T>
               service={entity.service}
               listViewConfig={currentEntityConfig.views[0]}
               tableSettingsId={`${phaseId}/${entity.id}`}

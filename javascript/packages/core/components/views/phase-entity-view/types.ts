@@ -1,20 +1,20 @@
 import type { ListViewConfig, ViewConfig } from '#core/components/views/types';
 import type { PhaseEntityConfig } from '#core/types/common/studio-types';
 
-export type ListableEntity = PhaseEntityConfig & {
+export type ListableEntity<T extends object = object> = PhaseEntityConfig<T> & {
   state: 'active';
-  views: ViewConfig[] & { 0: ListViewConfig };
+  views: ViewConfig<T>[] & { 0: ListViewConfig<T> };
 };
 
-export interface PhaseEntityViewProps {
+export interface PhaseEntityViewProps<T extends object = object> {
   phaseId: string;
-  entities: ListableEntity[];
+  entities: ListableEntity<T>[];
 }
 
-export interface EntityTableProps {
+export interface EntityTableProps<T extends object = object> {
   /** Service name used to construct RPC query (e.g., 'pipeline' → 'ListPipeline') */
   service: string;
-  listViewConfig: ListViewConfig;
+  listViewConfig: ListViewConfig<T>;
   /** Unique ID for table state persistence */
   tableSettingsId: string;
 }

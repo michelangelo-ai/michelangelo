@@ -4,7 +4,7 @@ import { TRIGGER_PIPELINE_CELL_CONFIG, TRIGGER_STATE_CELL_CONFIG } from './share
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { ListViewConfig } from '#core/components/views/types';
 
-export const TRIGGER_LIST_CONFIG: ListViewConfig = {
+export const TRIGGER_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
   columns: [
     {
@@ -16,5 +16,5 @@ export const TRIGGER_LIST_CONFIG: ListViewConfig = {
     { id: 'spec.actor.name', label: 'Started by', type: CellType.TEXT },
     TRIGGER_PIPELINE_CELL_CONFIG,
     TRIGGER_STATE_CELL_CONFIG,
-  ] as ColumnConfig[],
+  ] as ColumnConfig<object>[],
 };
