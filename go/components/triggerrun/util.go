@@ -80,6 +80,20 @@ func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log log
 	if execInfo != nil && !execInfo.ExecutionTime.IsZero() {
 		execTs := execInfo.ExecutionTime
 		log.Info("current scheduled execution time", "execution_ts", execTs)
+		status := execInfo.Status
+		if status == clientInterface.WorkflowExecutionStatusFailed || status == clientInterface.WorkflowExecutionStatusTimedOut ||
+			status == clientInterface.WorkflowExecutionStatusCanceled || status == clientInterface.WorkflowExecutionStatusTerminated {
+			err := fmt.Errorf("workflow is terminated with state: %v", status)
+			log.Error(err, "workflow is terminated",
+				"operation", "get_workflow_status",
+				"namespace", triggerRun.Namespace,
+				"name", triggerRun.Name,
+				"workflowId", wid)
+			return v2pb.TriggerRunStatus{
+				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+				ErrorMessage: err.Error(),
+			}, err
+		}
 	}
 	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 }

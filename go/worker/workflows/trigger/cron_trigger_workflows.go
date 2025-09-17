@@ -23,7 +23,7 @@ import (
 var Workflows = (*workflows)(nil)
 
 type (
-	// workflows struct encapsulates the trigger cadence workflow
+	// workflows struct encapsulates the trigger workflow
 	workflows struct{}
 
 	// Object alias for map[string]interface{}
@@ -36,10 +36,10 @@ const (
 )
 
 var (
-	// _defaultWaitSeconds is the default wait seconds for the trigger cadence workflow
+	// _defaultWaitSeconds is the default wait seconds for the trigger workflow
 	_defaultWaitSeconds = 600
 
-	// _defaultParameterID is the default parameter id for the trigger cadence workflow
+	// _defaultParameterID is the default parameter id for the trigger workflow
 	_defaultParameterID = "default"
 
 	// TriggerredByLabel stores the name of the TriggerRun which triggered the pipeline_run
@@ -61,7 +61,7 @@ var (
 	// PipelineManifestTypeLabel is to indicate the manifest type of this pipeline
 	PipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
 
-	// _activityOptionsDefault is the default activity options for the trigger cadence workflow
+	// _activityOptionsDefault is the default activity options for the trigger workflow
 	_activityOptionsDefault = workflow.ActivityOptions{
 		ScheduleToStartTimeout: time.Second * 30,
 		StartToCloseTimeout:    time.Second * 30,
@@ -83,7 +83,7 @@ var (
 		"no-retry",
 	}
 
-	// SensorRetryPolicyDefault is the default retry policy for the cadence sensor activity
+	// SensorRetryPolicyDefault is the default retry policy for the sensor activity
 	SensorRetryPolicyDefault = workflow.RetryPolicy{
 		InitialInterval:          20 * time.Second,
 		BackoffCoefficient:       1,
@@ -92,7 +92,7 @@ var (
 	}
 )
 
-// CronTrigger Cadence workflow with provided trigger run spec
+// CronTrigger workflow with provided trigger run spec
 func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrunUtil.CreateTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
 	tr := req.TriggerRun
@@ -114,7 +114,7 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrunUtil.CreateT
 		log.Error("setQueryHandler for triggerContext failed", zap.Error(err))
 		return nil, err
 	}
-	log.Info("starting cadence cron trigger", zap.Any("request", req))
+	log.Info("starting cron trigger workflow", zap.Any("request", req))
 
 	// Use shared package functions
 	var err error
@@ -368,7 +368,7 @@ func generateUniflowPRInput(dp *v2pb.PipelineExecutionParameters) *pbtypes.Struc
 		}
 		pbStruct.Fields["args"] = utils.NewListValue(&pbtypes.ListValue{Values: argList})
 
-		// Load KwArgs to the pipeline run input - order kw_args for deterministic behavior, so cadence workflow runs are idempotent
+		// Load KwArgs to the pipeline run input - order kw_args for deterministic behavior, so workflow runs are idempotent
 		keys := make([]string, 0)
 		kwargList := make([]*pbtypes.Value, 0)
 		if dp.KwArgs != nil && dp.KwArgs.Fields != nil {

@@ -136,16 +136,24 @@ func (c *TemporalClient) GetDomain() string {
 
 func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInterface.ListOpenWorkflowExecutionsRequest) (*clientInterface.ListOpenWorkflowExecutionsResponse, error) {
 	temporalRequest := &workflowserviceV1.ListOpenWorkflowExecutionsRequest{
-		Namespace:       request.Domain,
-		MaximumPageSize: *request.MaximumPageSize,
-		NextPageToken:   request.NextPageToken,
+		Namespace:     request.Domain,
+		NextPageToken: request.NextPageToken,
+	}
+	
+	// Only set MaximumPageSize if provided, let Temporal use its default otherwise
+	if request.MaximumPageSize != nil {
+		temporalRequest.MaximumPageSize = *request.MaximumPageSize
 	}
 
 	// Set start time filter if provided
 	if request.StartTimeFilter != nil {
+		// Convert nanoseconds to time.Time for Temporal's timestamppb
+		earliestTime := time.Unix(0, *request.StartTimeFilter.EarliestTime)
+		latestTime := time.Unix(0, *request.StartTimeFilter.LatestTime)
+		
 		temporalRequest.StartTimeFilter = &filterV1.StartTimeFilter{
-			EarliestTime: timestamppb.New(time.Unix(*request.StartTimeFilter.EarliestTime, 0)),
-			LatestTime:   timestamppb.New(time.Unix(*request.StartTimeFilter.LatestTime, 0)),
+			EarliestTime: timestamppb.New(earliestTime),
+			LatestTime:   timestamppb.New(latestTime),
 		}
 	}
 

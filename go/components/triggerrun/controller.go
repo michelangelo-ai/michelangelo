@@ -108,7 +108,7 @@ StateMachine:
 		}
 		status, err := runner.Run(ctx, triggerRun)
 		if err != nil {
-			log.Error(err, "failed to start scheduled cadence workflow",
+			log.Error(err, "failed to start scheduled workflow",
 				"operation", "start_workflow",
 				"namespace", triggerRun.Namespace,
 				"name", triggerRun.Name)
@@ -116,7 +116,7 @@ StateMachine:
 			triggerRun.Status.ErrorMessage = status.ErrorMessage
 			break StateMachine
 		}
-		log.Info("cadence scheduled workflow started",
+		log.Info("scheduled workflow started",
 			"operation", "workflow_started",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
@@ -131,7 +131,7 @@ StateMachine:
 		if triggerRun.Spec.Kill {
 			status, err := runner.Kill(ctx, triggerRun)
 			if err != nil {
-				log.Error(err, "failed to kill scheduled cadence workflow")
+				log.Error(err, "failed to kill scheduled workflow")
 				triggerRun.Status.ErrorMessage = err.Error()
 				triggerRun.Status.State = status.State
 				break StateMachine

@@ -6,7 +6,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// Runner interface to be implemented for different triggering engines, initial phase only Cadence is supported
+// Runner interface to be implemented for different triggering engines
 // Each method return a PipelineRunStatus, which contains execution state and metadata, e.g. workflow id, url, etc.
 type Runner interface {
 	// Run start a trigger run
