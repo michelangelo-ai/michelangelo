@@ -78,3 +78,13 @@ func NewCachedOutputServiceClient(p ClientParams) v2pb.CachedOutputServiceYARPCC
 func NewPipelineRunServiceClient(p ClientParams) v2pb.PipelineRunServiceYARPCClient {
 	return v2pb.NewPipelineRunServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
 }
+
+// NewModelServiceClient creates a ModelService YARPC client.
+func NewModelServiceClient(p ClientParams) v2pb.ModelServiceYARPCClient {
+	return v2pb.NewModelServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
+}
+
+// NewDeploymentServiceClient creates a DeploymentService YARPC client.
+func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClient {
+	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
+}

@@ -5,11 +5,13 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/worker"
+	"go.uber.org/fx"
+
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/storage"
-	"go.uber.org/fx"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/uapi"
 )
 
 // RegisterStoragePlugin adds the storage plugin to the plugin registry.
@@ -30,6 +32,11 @@ func RegisterRayPlugin(registry map[string]service.IPlugin) {
 // RegisterSparkPlugin adds the spark plugin to the plugin registry.
 func RegisterSparkPlugin(registry map[string]service.IPlugin) {
 	registry[spark.Plugin.ID()] = spark.Plugin
+}
+
+// RegisterUAPIPlugin adds the uapi plugin to the plugin registry.
+func RegisterUAPIPlugin(registry map[string]service.IPlugin) {
+	registry[uapi.Plugin.ID()] = uapi.Plugin
 }
 
 // CreateStarlarkService creates the starlark service with all registered plugins.
@@ -54,5 +61,6 @@ var Module = fx.Options(
 	fx.Invoke(RegisterCachedOutputPlugin),
 	fx.Invoke(RegisterRayPlugin),
 	fx.Invoke(RegisterSparkPlugin),
+	fx.Invoke(RegisterUAPIPlugin),
 	fx.Invoke(CreateStarlarkService),
 )
