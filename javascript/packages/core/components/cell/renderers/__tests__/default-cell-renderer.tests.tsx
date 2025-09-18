@@ -5,6 +5,7 @@ import { CellType } from '#core/components/cell/constants';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getBaseProviderWrapper } from '#core/test/wrappers/get-base-provider-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { DefaultCellRenderer } from '../default-cell-renderer';
 
 describe('DefaultCellRenderer', () => {
@@ -15,7 +16,7 @@ describe('DefaultCellRenderer', () => {
         record={{}}
         value="test value"
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('test value')).toBeInTheDocument();
@@ -29,7 +30,7 @@ describe('DefaultCellRenderer', () => {
         record={{}}
         value="test value"
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
 
     const cell = screen.getByText('test value');
@@ -43,7 +44,7 @@ describe('DefaultCellRenderer', () => {
         record={{}}
         value={true}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Is Active')).toBeInTheDocument();
@@ -56,7 +57,7 @@ describe('DefaultCellRenderer', () => {
         record={{}}
         value={undefined}
       />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(container).not.toBeEmptyDOMElement();
@@ -65,7 +66,7 @@ describe('DefaultCellRenderer', () => {
   it('should handle null values', () => {
     const { container } = render(
       <DefaultCellRenderer column={{ id: 'test', type: CellType.TEXT }} record={{}} value={null} />,
-      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(container).not.toBeEmptyDOMElement();
@@ -90,11 +91,41 @@ describe('DefaultCellRenderer', () => {
       buildWrapper([
         getBaseProviderWrapper(),
         getIconProviderWrapper({ icons: { circleI: () => <div>circleI</div> } }),
+        getRouterWrapper(),
       ])
     );
 
     expect(screen.getByText('test value')).toBeInTheDocument();
     await user.hover(screen.getByText('circleI'));
     await screen.findByText('Enhancement tooltip content');
+  });
+
+  it('should resolve interpolations in column config', () => {
+    render(
+      <DefaultCellRenderer
+        column={{
+          id: 'test',
+          type: CellType.TEXT,
+          url: 'https://${row.name}.com',
+          endEnhancer: {
+            content: 'Enhancement tooltip content',
+            type: 'tooltip',
+          },
+        }}
+        record={{ name: 'John Doe' }}
+        value="test value"
+      />,
+      buildWrapper([
+        getBaseProviderWrapper(),
+        getIconProviderWrapper({ icons: { circleI: () => <div>circleI</div> } }),
+        getRouterWrapper(),
+      ])
+    );
+
+    expect(screen.getByText('test value')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'test value' })).toHaveAttribute(
+      'href',
+      'https://John Doe.com'
+    );
   });
 });

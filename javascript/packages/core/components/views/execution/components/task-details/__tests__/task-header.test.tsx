@@ -3,6 +3,7 @@ import { ArrowUp, Check, Delete } from 'baseui/icon';
 
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { TASK_STATE } from '../../../constants';
 import { createTask } from '../__fixtures__/task-details-fixtures';
 import { TaskHeader } from '../task-header';
@@ -25,6 +26,7 @@ describe('TaskHeader', () => {
             arrowCircular: ArrowUp,
           },
         }),
+        getRouterWrapper(),
       ])
     );
 
@@ -43,7 +45,7 @@ describe('TaskHeader', () => {
       },
     });
 
-    render(<TaskHeader task={task} metadata={mockMetadata} />);
+    render(<TaskHeader task={task} metadata={mockMetadata} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Task with Metadata')).toBeInTheDocument();
     expect(screen.getByText('Status')).toBeInTheDocument();
@@ -102,7 +104,7 @@ describe('TaskHeader', () => {
       record: { displayName: 'Incomplete Task' }, // Missing status, duration, startTime
     });
 
-    render(<TaskHeader task={task} metadata={mockMetadata} />);
+    render(<TaskHeader task={task} metadata={mockMetadata} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Incomplete Task')).toBeInTheDocument();
 

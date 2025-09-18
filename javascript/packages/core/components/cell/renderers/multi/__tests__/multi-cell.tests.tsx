@@ -1,6 +1,8 @@
 import { render, screen } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { MultiCell } from '../multi-cell';
 
 describe('MultiCell', () => {
@@ -24,7 +26,7 @@ describe('MultiCell', () => {
         record={mockRecord}
         value={undefined}
       />,
-      { wrapper: getIconProviderWrapper() }
+      buildWrapper([getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('—')).toBeInTheDocument();
@@ -40,7 +42,7 @@ describe('MultiCell', () => {
         record={mockRecord}
         value={undefined}
       />,
-      { wrapper: getIconProviderWrapper() }
+      buildWrapper([getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Test Pipeline')).toBeInTheDocument();
@@ -58,7 +60,7 @@ describe('MultiCell', () => {
         record={mockRecord}
         value={undefined}
       />,
-      { wrapper: getIconProviderWrapper() }
+      buildWrapper([getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getAllByTitle('Check').length).toBeGreaterThan(0);
@@ -74,7 +76,7 @@ describe('MultiCell', () => {
         record={mockRecord}
         value={undefined}
       />,
-      { wrapper: getIconProviderWrapper() }
+      buildWrapper([getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('Test Description')).toBeInTheDocument();
@@ -91,7 +93,7 @@ describe('MultiCell', () => {
         record={mockRecord}
         value={undefined}
       />,
-      { wrapper: getIconProviderWrapper() }
+      buildWrapper([getIconProviderWrapper(), getRouterWrapper()])
     );
 
     expect(screen.getByText('—')).toBeInTheDocument();

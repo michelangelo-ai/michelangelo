@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { RowItem } from '../row-item';
 
 import type { CellRenderer } from '#core/components/cell/types';
@@ -17,7 +19,7 @@ describe('RowItem', () => {
   };
 
   it('renders with DefaultCellRenderer when no CellComponent is provided', () => {
-    render(<RowItem item={mockItem} record={mockRecord} />);
+    render(<RowItem item={mockItem} record={mockRecord} />, buildWrapper([getRouterWrapper()]));
 
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('John Doe')).toBeInTheDocument();
@@ -28,7 +30,10 @@ describe('RowItem', () => {
       <span data-testid="custom-cell">Custom: {value}</span>
     );
 
-    render(<RowItem item={mockItem} record={mockRecord} CellComponent={CustomCellRenderer} />);
+    render(
+      <RowItem item={mockItem} record={mockRecord} CellComponent={CustomCellRenderer} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.getByText('Name')).toBeInTheDocument();
     expect(screen.getByText('Custom: John Doe')).toBeInTheDocument();
@@ -47,7 +52,10 @@ describe('RowItem', () => {
       },
     };
 
-    render(<RowItem item={itemWithAccessor} record={recordWithNestedData} />);
+    render(
+      <RowItem item={itemWithAccessor} record={recordWithNestedData} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     expect(screen.getByText('Jane Smith')).toBeInTheDocument();
   });

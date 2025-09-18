@@ -1,5 +1,7 @@
 import { render, screen } from '@testing-library/react';
 
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { Row } from '../row';
 
 describe('Row', () => {
@@ -16,13 +18,13 @@ describe('Row', () => {
   };
 
   it('renders skeleton loaders when loading is true', () => {
-    render(<Row items={mockItems} loading={true} />);
+    render(<Row items={mockItems} loading={true} />, buildWrapper([getRouterWrapper()]));
     const skeletons = screen.getAllByTestId('loading');
     expect(skeletons).toHaveLength(mockItems.length);
   });
 
   it('filters out empty items when hideEmpty is true', () => {
-    render(<Row items={mockItems} record={mockRecord} />);
+    render(<Row items={mockItems} record={mockRecord} />, buildWrapper([getRouterWrapper()]));
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.queryByText('Email')).not.toBeInTheDocument();
@@ -30,7 +32,10 @@ describe('Row', () => {
 
   it('renders all items when hideEmpty is false', () => {
     const itemsWithoutHideEmpty = mockItems.map((item) => ({ ...item, hideEmpty: false }));
-    render(<Row items={itemsWithoutHideEmpty} record={mockRecord} />);
+    render(
+      <Row items={itemsWithoutHideEmpty} record={mockRecord} />,
+      buildWrapper([getRouterWrapper()])
+    );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
     expect(screen.getByText('30')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
@@ -49,7 +54,7 @@ describe('Row', () => {
       },
     };
 
-    render(<Row items={mockItems} overrides={overrides} />);
+    render(<Row items={mockItems} overrides={overrides} />, buildWrapper([getRouterWrapper()]));
     expect(screen.getByTestId('custom-container')).toBeInTheDocument();
   });
 
@@ -61,7 +66,10 @@ describe('Row', () => {
       },
     };
 
-    render(<Row items={itemsWithAccessor} record={nestedRecord} />);
+    render(
+      <Row items={itemsWithAccessor} record={nestedRecord} />,
+      buildWrapper([getRouterWrapper()])
+    );
     expect(screen.getByText('John Doe')).toBeInTheDocument();
   });
 });

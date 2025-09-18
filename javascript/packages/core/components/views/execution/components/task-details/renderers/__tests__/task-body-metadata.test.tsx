@@ -2,6 +2,8 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { CellType } from '#core/components/cell/constants';
+import { buildWrapper } from '#core/test/wrappers/build-wrapper';
+import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { TaskBodyMetadata } from '../task-body-metadata';
 
 describe('TaskBodyMetadata', () => {
@@ -34,7 +36,10 @@ describe('TaskBodyMetadata', () => {
       startTime: '2025-01-01T08:00:00Z',
     };
 
-    render(<TaskBodyMetadata label="Task Metadata" value={mockData} cells={mockCells} />);
+    render(
+      <TaskBodyMetadata label="Task Metadata" value={mockData} cells={mockCells} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Task Metadata/ });
     expect(accordionButton).toBeInTheDocument();
@@ -48,7 +53,10 @@ describe('TaskBodyMetadata', () => {
   it('should handle undefined value gracefully', async () => {
     const user = userEvent.setup();
 
-    render(<TaskBodyMetadata label="Empty Metadata" value={undefined} cells={mockCells} />);
+    render(
+      <TaskBodyMetadata label="Empty Metadata" value={undefined} cells={mockCells} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Empty Metadata/ });
     await user.click(accordionButton);
@@ -60,7 +68,10 @@ describe('TaskBodyMetadata', () => {
     const user = userEvent.setup();
     const mockData = { status: 'Success' };
 
-    render(<TaskBodyMetadata label="No Cells" value={mockData} cells={[]} />);
+    render(
+      <TaskBodyMetadata label="No Cells" value={mockData} cells={[]} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /No Cells/ });
     expect(accordionButton).toBeInTheDocument();
@@ -74,7 +85,10 @@ describe('TaskBodyMetadata', () => {
       status: 'Running',
     };
 
-    render(<TaskBodyMetadata label="Partial Metadata" value={partialData} cells={mockCells} />);
+    render(
+      <TaskBodyMetadata label="Partial Metadata" value={partialData} cells={mockCells} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /Partial Metadata/ });
     await user.click(accordionButton);
@@ -104,7 +118,10 @@ describe('TaskBodyMetadata', () => {
 
     const stateData = { state: 'SUCCESS' };
 
-    render(<TaskBodyMetadata label="State Metadata" value={stateData} cells={cellsWithStates} />);
+    render(
+      <TaskBodyMetadata label="State Metadata" value={stateData} cells={cellsWithStates} />,
+      buildWrapper([getRouterWrapper()])
+    );
 
     const accordionButton = screen.getByRole('button', { name: /State Metadata/ });
     await user.click(accordionButton);
