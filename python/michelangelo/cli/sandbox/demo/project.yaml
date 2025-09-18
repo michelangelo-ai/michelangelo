@@ -1,14 +1,14 @@
 apiVersion: michelangelo.api/v2
 kind: Project
 metadata:
-  name: ma-dev-test
-  namespace: ma-dev-test
+  name: svc-aip-chimeratest
+  namespace: svc-aip-chimeratest
 spec:
-  description: My ML Project
+  description: Chimeratest project
   owner:
-    owningTeam: "michelangelo"
+    owningTeam: "cauldron"
     owners:
-      - craig.marker
+      - zhou.xian
   tier: 4
-  gitRepo: https://github.com/uber/michelangelo
-  rootDir: python/michelangelo/cli/sandbox/crds
+  gitRepo: https://gitlab.myteksi.net/cauldron/chimera-mlpipelines/chimera-mlpipeline-sandbox/-/tree/master/pipelines/uniflow-geo-ray-eta-transformer
+  rootDir: pipelines/uniflow-geo-ray-eta-transformer
