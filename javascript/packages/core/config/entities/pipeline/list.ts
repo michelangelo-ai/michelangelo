@@ -65,5 +65,7 @@ export const PIPELINE_CELL_CONFIG: ColumnConfig<object>[] = [
 
 export const PIPELINE_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
-  columns: PIPELINE_CELL_CONFIG,
+  tableConfig: {
+    columns: PIPELINE_CELL_CONFIG,
+  },
 };

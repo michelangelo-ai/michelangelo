@@ -32,10 +32,12 @@ export const buildEntityConfigFactory = (base: DeepPartial<PhaseEntityConfig> = 
       views: [
         {
           type: 'list',
-          columns: [
-            { id: 'metadata.name', label: 'Name', type: CellType.TEXT },
-            { id: 'status', label: 'Status', type: CellType.TEXT },
-          ],
+          tableConfig: {
+            columns: [
+              { id: 'metadata.name', label: 'Name', type: CellType.TEXT },
+              { id: 'status', label: 'Status', type: CellType.TEXT },
+            ],
+          },
         },
       ],
     };

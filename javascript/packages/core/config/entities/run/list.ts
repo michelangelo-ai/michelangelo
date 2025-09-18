@@ -14,5 +14,7 @@ export const PIPELINE_RUN_CELL_CONFIG: ColumnConfig<object>[] = [
 
 export const RUN_LIST_CONFIG: ListViewConfig<object> = {
   type: 'list',
-  columns: PIPELINE_RUN_CELL_CONFIG,
+  tableConfig: {
+    columns: PIPELINE_RUN_CELL_CONFIG,
+  },
 };
