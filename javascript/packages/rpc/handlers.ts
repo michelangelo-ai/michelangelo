@@ -1,26 +1,41 @@
-import { SERVICES } from './services';
+import { getServices } from './services';
 import { ExtractUnaryRpc } from './types';
 
-export const RPC_HANDLERS = {
-  ListProject: SERVICES.ProjectService.listProject as ExtractUnaryRpc<
-    typeof SERVICES.ProjectService.listProject
-  >,
-  GetProject: SERVICES.ProjectService.getProject as ExtractUnaryRpc<
-    typeof SERVICES.ProjectService.getProject
-  >,
-  ListPipeline: SERVICES.PipelineService.listPipeline as ExtractUnaryRpc<
-    typeof SERVICES.PipelineService.listPipeline
-  >,
-  ListPipelineRun: SERVICES.PipelineRunService.listPipelineRun as ExtractUnaryRpc<
-    typeof SERVICES.PipelineRunService.listPipelineRun
-  >,
-  GetPipelineRun: SERVICES.PipelineRunService.getPipelineRun as ExtractUnaryRpc<
-    typeof SERVICES.PipelineRunService.getPipelineRun
-  >,
-  ListTriggerRun: SERVICES.TriggerRunService.listTriggerRun as ExtractUnaryRpc<
-    typeof SERVICES.TriggerRunService.listTriggerRun
-  >,
-  GetTriggerRun: SERVICES.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
-    typeof SERVICES.TriggerRunService.getTriggerRun
-  >,
-} as const;
+let handlersPromise: Promise<Awaited<ReturnType<typeof createHandlers>>> | null = null;
+
+async function createHandlers() {
+  const services = await getServices();
+
+  return {
+    ListProject: services.ProjectService.listProject as ExtractUnaryRpc<
+      typeof services.ProjectService.listProject
+    >,
+    GetProject: services.ProjectService.getProject as ExtractUnaryRpc<
+      typeof services.ProjectService.getProject
+    >,
+    ListPipeline: services.PipelineService.listPipeline as ExtractUnaryRpc<
+      typeof services.PipelineService.listPipeline
+    >,
+    ListPipelineRun: services.PipelineRunService.listPipelineRun as ExtractUnaryRpc<
+      typeof services.PipelineRunService.listPipelineRun
+    >,
+    GetPipelineRun: services.PipelineRunService.getPipelineRun as ExtractUnaryRpc<
+      typeof services.PipelineRunService.getPipelineRun
+    >,
+    ListTriggerRun: services.TriggerRunService.listTriggerRun as ExtractUnaryRpc<
+      typeof services.TriggerRunService.listTriggerRun
+    >,
+    GetTriggerRun: services.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
+      typeof services.TriggerRunService.getTriggerRun
+    >,
+  } as const;
+}
+
+/** Gets the RPC handlers, initializing them with runtime configuration on first call. */
+export async function getRpcHandlers() {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+  if (!handlersPromise) {
+    handlersPromise = createHandlers();
+  }
+  return handlersPromise;
+}

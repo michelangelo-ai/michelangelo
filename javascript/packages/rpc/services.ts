@@ -5,6 +5,7 @@ import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_p
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
+import { getApiConfig } from './runtime-config';
 
 // This interceptor is used to set the headers for the RPC request to
 // be compatible with the Michelangelo API yarpc server.
@@ -18,17 +19,41 @@ const callerInterceptor: Interceptor = (next) => async (req) => {
   return await next(req);
 };
 
-// This transport is used to connect to the Envoy proxy that proxies gRPC web requests
-// to gRPC services.
-const transport = createGrpcWebTransport({
-  baseUrl: 'http://localhost:8081',
-  interceptors: [callerInterceptor],
-  useBinaryFormat: true,
-});
+type Services = {
+  ProjectService: ReturnType<typeof createClient<typeof ProjectService>>;
+  PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
+  PipelineRunService: ReturnType<typeof createClient<typeof PipelineRunService>>;
+  TriggerRunService: ReturnType<typeof createClient<typeof TriggerRunService>>;
+};
 
-export const SERVICES = {
-  ProjectService: createClient(ProjectService, transport),
-  PipelineService: createClient(PipelineService, transport),
-  PipelineRunService: createClient(PipelineRunService, transport),
-  TriggerRunService: createClient(TriggerRunService, transport),
-} as const;
+let servicesPromise: Promise<Services> | null = null;
+
+async function createServices(): Promise<Services> {
+  const baseUrl = await getApiConfig();
+
+  // This transport is used to connect to the Envoy proxy that proxies gRPC web requests
+  // to gRPC services.
+  const transport = createGrpcWebTransport({
+    baseUrl,
+    interceptors: [callerInterceptor],
+    useBinaryFormat: true,
+  });
+
+  return {
+    ProjectService: createClient(ProjectService, transport),
+    PipelineService: createClient(PipelineService, transport),
+    PipelineRunService: createClient(PipelineRunService, transport),
+    TriggerRunService: createClient(TriggerRunService, transport),
+  } as const;
+}
+
+/**
+ * Gets the RPC services, initializing them with runtime configuration on first call.
+ */
+export async function getServices(): Promise<Services> {
+  // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing
+  if (!servicesPromise) {
+    servicesPromise = createServices();
+  }
+  return servicesPromise;
+}
