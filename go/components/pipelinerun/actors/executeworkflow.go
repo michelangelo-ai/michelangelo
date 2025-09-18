@@ -60,6 +60,12 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		}, nil
 	}
 
+	if previousCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
+		// the previous condition is terminal, so we don't need to run the actor again
+		logger.Info("pipeline run has a terminal condition, skipping")
+		return previousCondition, nil
+	}
+
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 
 	if pipelineRun.Status.WorkflowRunId == "" || pipelineRun.Status.WorkflowId == "" {
