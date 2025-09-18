@@ -3,12 +3,19 @@ import userEvent from '@testing-library/user-event';
 import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
-import { CustomDetailPageConfig } from '#core/components/views/detail-view/types/detail-view-schema-types';
+import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
+import {
+  CustomDetailPageConfig,
+  TableDetailPageConfig,
+} from '#core/components/views/detail-view/types/detail-view-schema-types';
 import { buildExecutionSchemaFactory } from '#core/components/views/execution/__fixtures__/execution-schema-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
-import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
+import {
+  createQueryMockRouter,
+  getServiceProviderWrapper,
+} from '#core/test/wrappers/get-service-provider-wrapper';
 import {
   buildEntityConfigFactory,
   buildPhaseConfigFactory,
@@ -22,6 +29,7 @@ describe('EntityDetailRoute', () => {
     service: 'pipelineRun',
   });
   const buildExecutionSchema = buildExecutionSchemaFactory();
+  const buildTableConfig = buildTableConfigFactory();
   const buildPhase = buildPhaseConfigFactory();
 
   test('renders execution tab', async () => {
@@ -359,5 +367,242 @@ describe('EntityDetailRoute', () => {
 
     await screen.findByText('Entity not found');
     expect(screen.getByRole('button', { name: /Back to list/i })).toBeInTheDocument();
+  });
+
+  test('handles error when entity not found', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'execution',
+                    label: 'Execution',
+                    ...buildExecutionSchema(),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockRejectedValue(new Error('Entity not found'));
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/train/runs/run-123',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByText('Entity not found');
+    expect(screen.getByRole('button', { name: /Back to list/i })).toBeInTheDocument();
+  });
+
+  test('table does not fetch data when query is disabled', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'runs-table',
+                    label: 'Related Runs',
+                    type: 'table',
+                    queryConfig: {
+                      service: 'pipelineRun',
+                      serviceOptions: {},
+                      clientOptions: { enabled: false },
+                    },
+                    tableConfig: buildTableConfig({
+                      columns: [{ id: 'name', label: 'Run Name', type: CellType.TEXT }],
+                    }),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockEntityData = {
+      pipelineRun: {
+        metadata: {
+          creationTimestamp: {
+            seconds: 1640995200,
+          },
+        },
+        status: {
+          state: 'SUCCESS',
+        },
+      },
+    };
+
+    const mockRequest = createQueryMockRouter({
+      GetPipelineRun: mockEntityData,
+      ListPipelineRun: { pipelineRunList: { items: [{ name: 'Should Not Appear' }] } },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/train/runs/run-123',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    // Verify detail view loads
+    await screen.findByText('Success');
+    expect(screen.getByText('Related Runs')).toBeInTheDocument();
+
+    // Verify table query was never called due to enabled: false
+    expect(mockRequest).not.toHaveBeenCalledWith('ListPipelineRun', expect.anything());
+    expect(screen.queryByText('Should Not Appear')).not.toBeInTheDocument();
+  });
+
+  test('table respects custom service options from config', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'filtered-runs',
+                    label: 'Filtered Runs',
+                    type: 'table',
+                    queryConfig: {
+                      service: 'pipelineRun',
+                      serviceOptions: {
+                        filter: 'status=SUCCESS',
+                        limit: 10,
+                      },
+                    },
+                    tableConfig: buildTableConfig({
+                      columns: [{ id: 'name', label: 'Run Name', type: CellType.TEXT }],
+                    }),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockEntityData = {
+      pipelineRun: {
+        metadata: { creationTimestamp: { seconds: 1640995200 } },
+        status: { state: 'SUCCESS' },
+      },
+    };
+
+    const mockRequest = createQueryMockRouter({
+      GetPipelineRun: mockEntityData,
+      'ListPipelineRun:{"filter":"status=SUCCESS","limit":10,"namespace":"myproject"}': {
+        pipelineRunList: { items: [{ name: 'Filtered Success Run' }] },
+      },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/train/runs/run-123',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByRole('row', { name: /Filtered Success Run/ });
+  });
+
+  test('handles table tab request failure gracefully', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [{ id: 'status.state', label: 'State', type: CellType.STATE }],
+                pages: [
+                  {
+                    id: 'runs-table',
+                    label: 'Related Runs',
+                    type: 'table',
+                    queryConfig: {
+                      service: 'pipelineRun',
+                      endpoint: 'list',
+                      serviceOptions: {},
+                    },
+                    tableConfig: buildTableConfig({
+                      columns: [{ id: 'name', label: 'Run Name', type: CellType.TEXT }],
+                    }),
+                  } as TableDetailPageConfig,
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockEntityData = {
+      pipelineRun: {
+        metadata: {
+          creationTimestamp: {
+            seconds: 1640995200,
+          },
+        },
+        status: {
+          state: 'SUCCESS',
+        },
+      },
+    };
+
+    const mockRequest = createQueryMockRouter({
+      GetPipelineRun: mockEntityData,
+      ListPipelineRun: new Error('Table API Error'),
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/train/runs/run-123',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    await screen.findByText('Unable to fetch data for the table');
   });
 });
