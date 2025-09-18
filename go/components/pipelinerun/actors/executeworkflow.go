@@ -135,6 +135,8 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		// Propagate appropriate states to substeps based on their current state
+		a.propagateKilledStateToSubsteps(executeWorkflowStep)
 	}
 	return newCondition, nil
 }
@@ -254,6 +256,37 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
+}
+
+// propagateKilledStateToSubsteps updates substep states when the parent workflow is terminated or canceled
+// - PENDING substeps become INVALID (never started execution)
+// - RUNNING substeps become KILLED (were actively executing when terminated)
+// - Terminal states (SUCCEEDED, FAILED, KILLED, SKIPPED) remain unchanged
+func (a *ExecuteWorkflowActor) propagateKilledStateToSubsteps(executeWorkflowStep *v2.PipelineRunStepInfo) {
+	if executeWorkflowStep.SubSteps == nil {
+		return
+	}
+
+	for _, substep := range executeWorkflowStep.SubSteps {
+		switch substep.State {
+		case v2.PIPELINE_RUN_STEP_STATE_PENDING:
+			substep.State = v2.PIPELINE_RUN_STEP_STATE_INVALID
+			substep.Message = "Workflow terminated before step could start"
+			// Set end time if not already set
+			if substep.EndTime == nil {
+				substep.EndTime = pbtypes.TimestampNow()
+			}
+		case v2.PIPELINE_RUN_STEP_STATE_RUNNING:
+			substep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+			substep.Message = "Killed due to workflow termination"
+			// Set end time if not already set
+			if substep.EndTime == nil {
+				substep.EndTime = pbtypes.TimestampNow()
+			}
+		default:
+			// No change needed for terminal states
+		}
+	}
 }
 
 // applyDevRunEnvironmentOverrides applies DevRun environment variable overrides to the base environment
