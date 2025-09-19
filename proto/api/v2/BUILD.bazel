@@ -16,6 +16,7 @@ proto_library(
         "cluster.proto",
         "cluster_svc.proto",
         "deployment.proto",
+        "deployment_svc.proto",
         "git.proto",
         "groupversion_info.proto",
         "job.proto",

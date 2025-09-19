@@ -6,6 +6,7 @@ go_library(
         "constants.go",
         "controller.go",
         "metrics.go",
+        "module.go",
         "util.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment",
@@ -16,6 +17,7 @@ go_library(
         "//go/api/utils:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/base/env:go_default_library",
         "//go/components/deployment/common:go_default_library",
         "//go/components/deployment/plugins:go_default_library",
         "//go/components/deployment/types:go_default_library",
@@ -29,16 +31,16 @@ go_library(
         "@io_k8s_sigs_controller_runtime//pkg/builder:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/controller:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/predicate:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "controller_test.go",
-    ],
+    srcs = ["controller_test.go"],
     embed = [":go_default_library"],
     deps = [
         "//go/api:go_default_library",
@@ -55,6 +57,5 @@ go_test(
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client/fake:go_default_library",
-        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
     ],
 )
