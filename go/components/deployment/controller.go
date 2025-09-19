@@ -25,18 +25,18 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"go.uber.org/zap"
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
-	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
-	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/revision"
+	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -68,12 +68,12 @@ const (
 type Reconciler struct {
 	api.Handler
 	// TODO: refactor so these are not exported
-	Log             logr.Logger
-	Recorder        record.EventRecorder
-	Registrar       pluginmanager.Registrar[plugins.Plugin]
-	Engine          conditionInterfaces.Engine[*types.Deployment]
-	RevisionManager revision.Manager
-	Scope           interface{}
+	Log               logr.Logger
+	Recorder          record.EventRecorder
+	Registrar         pluginmanager.Registrar[plugins.Plugin]
+	Engine            conditionInterfaces.Engine[*types.Deployment]
+	RevisionManager   revision.Manager
+	Scope             interface{}
 	apiHandlerFactory apiHandler.Factory
 }
 
