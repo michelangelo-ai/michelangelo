@@ -5,7 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/conditions"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 )
 
 // Plugin is the interface that all Deployment plugins must implement. The deployment controller will
@@ -19,19 +19,19 @@ type Plugin interface {
 	// this indicates a problem with the rollout. Else, the rollout should proceed as usual.
 	HealthCheckGate(ctx context.Context, observability ObservabilityContext, modelDeployment *types.Deployment) (bool, error)
 
-	GetRolloutPlugin(ctx context.Context, resource *types.Deployment) (conditions.Plugin[*types.Deployment], error)
-	GetRollbackPlugin() conditions.Plugin[*types.Deployment]
-	GetCleanupPlugin() conditions.Plugin[*types.Deployment]
-	GetSteadyStatePlugin() conditions.Plugin[*types.Deployment]
+	GetRolloutPlugin(ctx context.Context, resource *types.Deployment) (conditionInterfaces.Plugin[*types.Deployment], error)
+	GetRollbackPlugin() conditionInterfaces.Plugin[*types.Deployment]
+	GetCleanupPlugin() conditionInterfaces.Plugin[*types.Deployment]
+	GetSteadyStatePlugin() conditionInterfaces.Plugin[*types.Deployment]
 	ParseStage(resource *types.Deployment) types.DeploymentStage
 
 	// PopulateDeploymentLogs is used to populate the deployment logs with the necessary error logs when
 	// the deployment reaches a terminal state.
-	PopulateDeploymentLogs(ctx context.Context, runtimeContext conditions.RequestContext, modelDeployment *types.Deployment)
+	PopulateDeploymentLogs(ctx context.Context, modelDeployment *types.Deployment)
 
 	// PopulateMessage is used to populate the deployment status message with the error message when the
 	// deployment is rolled back or fails to roll out.
-	PopulateMessage(ctx context.Context, runtimeContext conditions.RequestContext, modelDeployment *types.Deployment)
+	PopulateMessage(ctx context.Context, modelDeployment *types.Deployment)
 }
 
 // ObservabilityContext is a wrapper for logging and metric collection containing the

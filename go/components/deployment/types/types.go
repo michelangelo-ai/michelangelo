@@ -2,6 +2,7 @@
 package types
 
 import (
+	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -66,14 +67,8 @@ const (
 	DEPLOYMENT_STAGE_CLEAN_UP_FAILED        DeploymentStage = "CLEAN_UP_FAILED"
 )
 
-// ConditionStatus enum for condition status
-type ConditionStatus string
-
-const (
-	CONDITION_STATUS_UNKNOWN ConditionStatus = "UNKNOWN"
-	CONDITION_STATUS_TRUE    ConditionStatus = "TRUE"
-	CONDITION_STATUS_FALSE   ConditionStatus = "FALSE"
-)
+// Use protobuf ConditionStatus instead of local definition
+// ConditionStatus values: api.CONDITION_STATUS_UNKNOWN, api.CONDITION_STATUS_TRUE, api.CONDITION_STATUS_FALSE
 
 // ModelRevision represents a model revision
 type ModelRevision struct {
@@ -117,14 +112,8 @@ type DeploymentSpec struct {
 	InferenceServer   *InferenceServerSpec `json:"inferenceServer,omitempty"`
 }
 
-// Condition represents a deployment condition
-type Condition struct {
-	Type                   string          `json:"type,omitempty"`
-	Status                 ConditionStatus `json:"status,omitempty"`
-	Reason                 string          `json:"reason,omitempty"`
-	Message                string          `json:"message,omitempty"`
-	LastUpdatedTimestamp   int64           `json:"lastUpdatedTimestamp,omitempty"`
-}
+// Use the protobuf Condition type instead of local definition
+// type Condition = api.Condition
 
 // DeploymentStatus defines the observed state of Deployment
 type DeploymentStatus struct {
@@ -132,8 +121,8 @@ type DeploymentStatus struct {
 	Message             string           `json:"message,omitempty"`
 	CurrentRevision     *ModelRevision   `json:"currentRevision,omitempty"`
 	CandidateRevision   *ModelRevision   `json:"candidateRevision,omitempty"`
-	Conditions          []*Condition     `json:"conditions,omitempty"`
-	ConditionsSnapshot  []*Condition     `json:"conditionsSnapshot,omitempty"`
+	Conditions          []*api.Condition     `json:"conditions,omitempty"`
+	ConditionsSnapshot  []*api.Condition     `json:"conditionsSnapshot,omitempty"`
 	ProviderStatus      string           `json:"providerStatus,omitempty"`
 }
 
@@ -201,7 +190,7 @@ func (d *DeploymentStatus) GetCurrentRevision() *ModelRevision {
 }
 
 // GetConditions returns the conditions
-func (d *DeploymentStatus) GetConditions() []*Condition {
+func (d *DeploymentStatus) GetConditions() []*api.Condition {
 	return d.Conditions
 }
 
@@ -306,10 +295,10 @@ func (d *DeploymentStatus) DeepCopyInto(out *DeploymentStatus) {
 	}
 	// Copy conditions slices
 	if d.Conditions != nil {
-		out.Conditions = make([]*Condition, len(d.Conditions))
+		out.Conditions = make([]*api.Condition, len(d.Conditions))
 		for i, condition := range d.Conditions {
 			if condition != nil {
-				out.Conditions[i] = &Condition{
+				out.Conditions[i] = &api.Condition{
 					Type:                 condition.Type,
 					Status:               condition.Status,
 					Reason:               condition.Reason,
@@ -320,10 +309,10 @@ func (d *DeploymentStatus) DeepCopyInto(out *DeploymentStatus) {
 		}
 	}
 	if d.ConditionsSnapshot != nil {
-		out.ConditionsSnapshot = make([]*Condition, len(d.ConditionsSnapshot))
+		out.ConditionsSnapshot = make([]*api.Condition, len(d.ConditionsSnapshot))
 		for i, condition := range d.ConditionsSnapshot {
 			if condition != nil {
-				out.ConditionsSnapshot[i] = &Condition{
+				out.ConditionsSnapshot[i] = &api.Condition{
 					Type:                 condition.Type,
 					Status:               condition.Status,
 					Reason:               condition.Reason,

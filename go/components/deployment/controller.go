@@ -25,13 +25,16 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"github.com/michelangelo-ai/michelangelo/go/api"
+	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/conditions"
+	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/revision"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +71,7 @@ type Reconciler struct {
 	Log             logr.Logger
 	Recorder        record.EventRecorder
 	Registrar       pluginmanager.Registrar[plugins.Plugin]
-	Engine          conditions.Engine[*types.Deployment]
+	Engine          conditionInterfaces.Engine[*types.Deployment]
 	RevisionManager revision.Manager
 	Scope           interface{}
 	apiHandlerFactory apiHandler.Factory
@@ -79,7 +82,7 @@ func NewReconciler(apiHandlerFactory apiHandler.Factory) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
 		Registrar:         pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard()),
-		Engine:            conditions.NewNoOpEngine[*types.Deployment](),
+		Engine:            defaultengine.NewDefaultEngine[*types.Deployment](zap.NewNop()),
 		RevisionManager:   revision.NewNoOpManager(),
 		Scope:             NewNoOpScope(),
 	}
@@ -228,7 +231,6 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	// Inject the provider status as a log tag after processing has occurred.
 	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
 	stage := plugin.ParseStage(deployment)
-	runtimeContext := conditions.NewRequestContext(log, r.Recorder)
 
 	// Check if we've reached max attempts. If it is, we should change the deployment status stage
 	if result.IsTerminal {
@@ -242,7 +244,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		if shouldRequeue {
 			result.Result = defaultResult
 		}
-		plugin.PopulateDeploymentLogs(ctx, runtimeContext, deployment)
+		plugin.PopulateDeploymentLogs(ctx, deployment)
 	}
 
 	log = log.WithValues(_originalStageKey, originalStage).WithValues(_newStageKey, stage)
@@ -266,7 +268,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			}
 			deployment.Status.Conditions = nil
 			if deployment.Status.Stage == types.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == types.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
-				plugin.PopulateMessage(ctx, runtimeContext, deployment)
+				plugin.PopulateMessage(ctx, deployment)
 			}
 		}
 		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
@@ -308,9 +310,9 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	return result.Result, err
 }
 
-func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics *ControllerMetrics, plugin plugins.Plugin, deployment *types.Deployment, originalDeployment *types.Deployment) (conditions.Result, error) {
+func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics *ControllerMetrics, plugin plugins.Plugin, deployment *types.Deployment, originalDeployment *types.Deployment) (conditionInterfaces.Result, error) {
 	// This is just the default result.
-	result := conditions.Result{
+	result := conditionInterfaces.Result{
 		Result: ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: _defaultRequeuePeriod,
@@ -318,9 +320,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	}
 
 	var err error
-	var conditionPlugin conditions.Plugin[*types.Deployment]
-
-	runtimeContext := conditions.NewRequestContext(log, r.Recorder)
+	var conditionPlugin conditionInterfaces.Plugin[*types.Deployment]
 	if common.ShouldCleanup(*deployment) {
 		if !common.IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
@@ -329,7 +329,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		}
 
 		conditionPlugin = plugin.GetCleanupPlugin()
-		result, err = r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
 		if err != nil {
 			log.Error(err, "Cleanup plugin processing failed with error")
 			return result, err
@@ -360,7 +360,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 
 			conditionPlugin = plugin.GetRollbackPlugin()
-			result, err = r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollback plugin processing failed with error")
 				return result, err
@@ -371,7 +371,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				log.Info("failed to retrieve rollout plugin")
 				return result, err
 			}
-			result, err = r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollout plugin processing failed with error")
 				return result, err
@@ -398,7 +398,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				log.Info("failed to retrieve rollout plugin")
 				return result, err
 			}
-			result, err = r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
 			if err != nil {
 				log.Error(err, "Rollout plugin processing failed with error")
 				return result, err
@@ -408,7 +408,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
-		result, err = r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
 		if err != nil {
 			log.Error(err, "Steady state plugin processing failed with error")
 			return result, err
@@ -478,7 +478,7 @@ func (r *Reconciler) handleStageTransition(
 	// Only log conditional message when the deployment stage is terminal, and only log the first actor that is not
 	// true. Otherwise, the message will have too many entries and be impossible to read.
 	for _, condition := range deployment.Status.GetConditions() {
-		if condition.Status != types.CONDITION_STATUS_TRUE {
+		if condition.Status != protoapi.CONDITION_STATUS_TRUE {
 			messages = append(messages, fmt.Sprintf("Actor: %s, Message: %s, Reason: %s, UpdatedTimestamp: %d", condition.Type, condition.Message, condition.Reason, condition.LastUpdatedTimestamp))
 			continue
 		}
