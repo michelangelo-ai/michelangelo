@@ -55,8 +55,8 @@ func (e *DefaultEngine[T]) Run(ctx context.Context, plugin conditionInterfaces.P
 		// If the condition is true, we are satisfied but NOT terminal to allow deployment progression.
 		return conditionInterfaces.Result{
 			Result: ctrl.Result{
-				Requeue:      false,
-				RequeueAfter: 0,
+				Requeue:      true,
+				RequeueAfter: time.Duration(defaultInactiveRequeuePeriodInSeconds) * time.Second,
 			},
 			AreSatisfied: true,
 			IsTerminal:   false, // Allow deployment to continue to next stage

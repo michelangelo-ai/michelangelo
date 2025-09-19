@@ -3,12 +3,12 @@ package revision
 import (
 	"context"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Manager handles revision operations
 type Manager interface {
-	UpsertRevision(ctx context.Context, deployment *types.Deployment) error
+	UpsertRevision(ctx context.Context, deployment *v2pb.Deployment) error
 	DeleteAllRevisions(ctx context.Context, namespace, name, resourceType string) error
 }
 
@@ -21,7 +21,7 @@ func NewNoOpManager() Manager {
 }
 
 // UpsertRevision does nothing and returns success
-func (m *NoOpManager) UpsertRevision(ctx context.Context, deployment *types.Deployment) error {
+func (m *NoOpManager) UpsertRevision(ctx context.Context, deployment *v2pb.Deployment) error {
 	return nil
 }
 

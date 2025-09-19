@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Registrar manages plugin registration and retrieval
 type Registrar[T any] interface {
 	RegisterPlugin(targetType, subType string, plugin T) error
-	GetPlugin(targetType, subType string, deployment *types.Deployment) (T, error)
+	GetPlugin(targetType, subType string, deployment *v2pb.Deployment) (T, error)
 }
 
 // SimpleRegistrar is a simple implementation of Registrar
@@ -36,7 +36,7 @@ func (r *SimpleRegistrar[T]) RegisterPlugin(targetType, subType string, plugin T
 }
 
 // GetPlugin retrieves a plugin for a target type and subtype
-func (r *SimpleRegistrar[T]) GetPlugin(targetType, subType string, deployment *types.Deployment) (T, error) {
+func (r *SimpleRegistrar[T]) GetPlugin(targetType, subType string, deployment *v2pb.Deployment) (T, error) {
 	key := fmt.Sprintf("%s:%s", targetType, subType)
 	plugin, exists := r.plugins[key]
 	if !exists {

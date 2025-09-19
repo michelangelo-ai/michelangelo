@@ -6,7 +6,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/components/deployment/types:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
     ],
 )

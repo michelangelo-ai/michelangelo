@@ -136,6 +136,8 @@ func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, pr
 		// Move to next stage and return success
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION
 		resource.Status.Message = "Placement completed (no-op)"
+		// Set candidate revision from desired revision
+		resource.Status.CandidateRevision = resource.Spec.DesiredRevision
 		return &api.Condition{
 			Type:                 "DeploymentProgressing",
 			Status:               api.CONDITION_STATUS_TRUE,
