@@ -23,6 +23,7 @@ _sym_db = _symbol_database.Default()
 
 
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import generated_pb2 as k8s_dot_io_dot_apimachinery_dot_pkg_dot_apis_dot_meta_dot_v1_dot_generated__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
 from michelangelo.gen.api import conditions_pb2 as michelangelo_dot_api_dot_conditions__pb2
 from michelangelo.gen.api.v2 import job_pb2 as michelangelo_dot_api_dot_v2_dot_job__pb2
@@ -30,7 +31,7 @@ from michelangelo.gen.api.v2 import pod_pb2 as michelangelo_dot_api_dot_v2_dot_p
 from michelangelo.gen.api.v2 import user_pb2 as michelangelo_dot_api_dot_v2_dot_user__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#michelangelo/api/v2/spark_job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a\x1dmichelangelo/api/v2/job.proto\x1a\x1dmichelangelo/api/v2/pod.proto\x1a\x1emichelangelo/api/v2/user.proto\"<\n\nDriverSpec\x12.\n\x03pod\x18\x01 \x01(\x0b\x32\x1c.michelangelo.api.v2.PodSpecR\x03pod\"\\\n\x0c\x45xecutorSpec\x12.\n\x03pod\x18\x01 \x01(\x0b\x32\x1c.michelangelo.api.v2.PodSpecR\x03pod\x12\x1c\n\tinstances\x18\x02 \x01(\x05R\tinstances\"\xdc\x05\n\x0cSparkJobSpec\x12\x31\n\x04user\x18\x01 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x04user\x12\x39\n\x08\x61\x66\x66inity\x18\x02 \x01(\x0b\x32\x1d.michelangelo.api.v2.AffinityR\x08\x61\x66\x66inity\x12\x37\n\x06\x64river\x18\x03 \x01(\x0b\x32\x1f.michelangelo.api.v2.DriverSpecR\x06\x64river\x12=\n\x08\x65xecutor\x18\x04 \x01(\x0b\x32!.michelangelo.api.v2.ExecutorSpecR\x08\x65xecutor\x12O\n\nspark_conf\x18\x05 \x03(\x0b\x32\x30.michelangelo.api.v2.SparkJobSpec.SparkConfEntryR\tsparkConf\x12\x1d\n\nmain_class\x18\x06 \x01(\tR\tmainClass\x12\x32\n\x15main_application_file\x18\x07 \x01(\tR\x13mainApplicationFile\x12\x1b\n\tmain_args\x18\t \x03(\tR\x08mainArgs\x12\x35\n\x04\x64\x65ps\x18\n \x01(\x0b\x32!.michelangelo.api.v2.DependenciesR\x04\x64\x65ps\x12\x46\n\x0btermination\x18\x0b \x01(\x0b\x32$.michelangelo.api.v2.TerminationSpecR\x0btermination\x12\x43\n\nscheduling\x18\x0c \x01(\x0b\x32#.michelangelo.api.v2.SchedulingSpecR\nscheduling\x12#\n\rspark_version\x18\r \x01(\tR\x0csparkVersion\x1a<\n\x0eSparkConfEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\"S\n\x0c\x44\x65pendencies\x12\x12\n\x04jars\x18\x01 \x03(\tR\x04jars\x12\x14\n\x05\x66iles\x18\x02 \x03(\tR\x05\x66iles\x12\x19\n\x08py_files\x18\x03 \x03(\tR\x07pyFiles\"\xfe\x02\n\x0eSparkJobStatus\x12O\n\nconditions\x18\x01 \x03(\x0b\x32/.k8s.io.apimachinery.pkg.apis.meta.v1.ConditionR\nconditions\x12\x43\n\nassignment\x18\x03 \x01(\x0b\x32#.michelangelo.api.v2.AssignmentInfoR\nassignment\x12L\n\x0fscheduling_info\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.SchedulingInfoR\x0eschedulingInfo\x12H\n\x11status_conditions\x18\x06 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\x10statusConditions\x12\x17\n\x07job_url\x18\x07 \x01(\tR\x06jobUrl\x12%\n\x0e\x61pplication_id\x18\x08 \x01(\tR\rapplicationId\"\x9e\x02\n\x08SparkJob\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x35\n\x04spec\x18\x03 \x01(\x0b\x32!.michelangelo.api.v2.SparkJobSpecR\x04spec\x12;\n\x06status\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.SparkJobStatusR\x06status:\x03\x82\x42\x00\"\xe1\x01\n\x0cSparkJobList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x33\n\x05items\x18\x03 \x03(\x0b\x32\x1d.michelangelo.api.v2.SparkJobR\x05items:\x03\xfa\x41\x00\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#michelangelo/api/v2/spark_job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x19google/protobuf/any.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a\x1dmichelangelo/api/v2/job.proto\x1a\x1dmichelangelo/api/v2/pod.proto\x1a\x1emichelangelo/api/v2/user.proto\"e\n\nDriverSpec\x12.\n\x03pod\x18\x01 \x01(\x0b\x32\x1c.michelangelo.api.v2.PodSpecR\x03pod\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x85\x01\n\x0c\x45xecutorSpec\x12.\n\x03pod\x18\x01 \x01(\x0b\x32\x1c.michelangelo.api.v2.PodSpecR\x03pod\x12\x1c\n\tinstances\x18\x02 \x01(\x05R\tinstances\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x85\x06\n\x0cSparkJobSpec\x12\x31\n\x04user\x18\x01 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x04user\x12\x39\n\x08\x61\x66\x66inity\x18\x02 \x01(\x0b\x32\x1d.michelangelo.api.v2.AffinityR\x08\x61\x66\x66inity\x12\x37\n\x06\x64river\x18\x03 \x01(\x0b\x32\x1f.michelangelo.api.v2.DriverSpecR\x06\x64river\x12=\n\x08\x65xecutor\x18\x04 \x01(\x0b\x32!.michelangelo.api.v2.ExecutorSpecR\x08\x65xecutor\x12O\n\nspark_conf\x18\x05 \x03(\x0b\x32\x30.michelangelo.api.v2.SparkJobSpec.SparkConfEntryR\tsparkConf\x12\x1d\n\nmain_class\x18\x06 \x01(\tR\tmainClass\x12\x32\n\x15main_application_file\x18\x07 \x01(\tR\x13mainApplicationFile\x12\x1b\n\tmain_args\x18\t \x03(\tR\x08mainArgs\x12\x35\n\x04\x64\x65ps\x18\n \x01(\x0b\x32!.michelangelo.api.v2.DependenciesR\x04\x64\x65ps\x12\x46\n\x0btermination\x18\x0b \x01(\x0b\x32$.michelangelo.api.v2.TerminationSpecR\x0btermination\x12\x43\n\nscheduling\x18\x0c \x01(\x0b\x32#.michelangelo.api.v2.SchedulingSpecR\nscheduling\x12#\n\rspark_version\x18\r \x01(\tR\x0csparkVersion\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\x1a<\n\x0eSparkConfEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\"S\n\x0c\x44\x65pendencies\x12\x12\n\x04jars\x18\x01 \x03(\tR\x04jars\x12\x14\n\x05\x66iles\x18\x02 \x03(\tR\x05\x66iles\x12\x19\n\x08py_files\x18\x03 \x03(\tR\x07pyFiles\"\xa7\x03\n\x0eSparkJobStatus\x12O\n\nconditions\x18\x01 \x03(\x0b\x32/.k8s.io.apimachinery.pkg.apis.meta.v1.ConditionR\nconditions\x12\x43\n\nassignment\x18\x03 \x01(\x0b\x32#.michelangelo.api.v2.AssignmentInfoR\nassignment\x12L\n\x0fscheduling_info\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.SchedulingInfoR\x0eschedulingInfo\x12H\n\x11status_conditions\x18\x06 \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\x10statusConditions\x12\x17\n\x07job_url\x18\x07 \x01(\tR\x06jobUrl\x12%\n\x0e\x61pplication_id\x18\x08 \x01(\tR\rapplicationId\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x9e\x02\n\x08SparkJob\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x35\n\x04spec\x18\x03 \x01(\x0b\x32!.michelangelo.api.v2.SparkJobSpecR\x04spec\x12;\n\x06status\x18\x04 \x01(\x0b\x32#.michelangelo.api.v2.SparkJobStatusR\x06status:\x03\x82\x42\x00\"\xe1\x01\n\x0cSparkJobList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x33\n\x05items\x18\x03 \x03(\x0b\x32\x1d.michelangelo.api.v2.SparkJobR\x05items:\x03\xfa\x41\x00\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -44,20 +45,20 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_SPARKJOB']._serialized_options = b'\202B\000'
   _globals['_SPARKJOBLIST']._loaded_options = None
   _globals['_SPARKJOBLIST']._serialized_options = b'\372A\000'
-  _globals['_DRIVERSPEC']._serialized_start=275
-  _globals['_DRIVERSPEC']._serialized_end=335
-  _globals['_EXECUTORSPEC']._serialized_start=337
-  _globals['_EXECUTORSPEC']._serialized_end=429
-  _globals['_SPARKJOBSPEC']._serialized_start=432
-  _globals['_SPARKJOBSPEC']._serialized_end=1164
-  _globals['_SPARKJOBSPEC_SPARKCONFENTRY']._serialized_start=1104
-  _globals['_SPARKJOBSPEC_SPARKCONFENTRY']._serialized_end=1164
-  _globals['_DEPENDENCIES']._serialized_start=1166
-  _globals['_DEPENDENCIES']._serialized_end=1249
-  _globals['_SPARKJOBSTATUS']._serialized_start=1252
-  _globals['_SPARKJOBSTATUS']._serialized_end=1634
-  _globals['_SPARKJOB']._serialized_start=1637
-  _globals['_SPARKJOB']._serialized_end=1923
-  _globals['_SPARKJOBLIST']._serialized_start=1926
-  _globals['_SPARKJOBLIST']._serialized_end=2151
+  _globals['_DRIVERSPEC']._serialized_start=302
+  _globals['_DRIVERSPEC']._serialized_end=403
+  _globals['_EXECUTORSPEC']._serialized_start=406
+  _globals['_EXECUTORSPEC']._serialized_end=539
+  _globals['_SPARKJOBSPEC']._serialized_start=542
+  _globals['_SPARKJOBSPEC']._serialized_end=1315
+  _globals['_SPARKJOBSPEC_SPARKCONFENTRY']._serialized_start=1255
+  _globals['_SPARKJOBSPEC_SPARKCONFENTRY']._serialized_end=1315
+  _globals['_DEPENDENCIES']._serialized_start=1317
+  _globals['_DEPENDENCIES']._serialized_end=1400
+  _globals['_SPARKJOBSTATUS']._serialized_start=1403
+  _globals['_SPARKJOBSTATUS']._serialized_end=1826
+  _globals['_SPARKJOB']._serialized_start=1829
+  _globals['_SPARKJOB']._serialized_end=2115
+  _globals['_SPARKJOBLIST']._serialized_start=2118
+  _globals['_SPARKJOBLIST']._serialized_end=2343
 # @@protoc_insertion_point(module_scope)

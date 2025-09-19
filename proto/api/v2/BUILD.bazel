@@ -15,6 +15,7 @@ proto_library(
         "cached_output_svc.proto",
         "cluster.proto",
         "cluster_svc.proto",
+        "deployment.proto",
         "git.proto",
         "groupversion_info.proto",
         "job.proto",
