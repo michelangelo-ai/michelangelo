@@ -5,7 +5,7 @@ import (
 	"time"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 )
 
@@ -18,48 +18,48 @@ func NewNoOpPlugin() Plugin {
 }
 
 // GetState always returns success state
-func (p *NoOpPlugin) GetState(ctx context.Context, observability ObservabilityContext, modelDeployment *types.Deployment) (types.DeploymentStatus, error) {
+func (p *NoOpPlugin) GetState(ctx context.Context, observability ObservabilityContext, modelDeployment *v2pb.Deployment) (*v2pb.DeploymentStatus, error) {
 	// Return the current status unchanged
-	return modelDeployment.Status, nil
+	return &modelDeployment.Status, nil
 }
 
 // HealthCheckGate always returns healthy
-func (p *NoOpPlugin) HealthCheckGate(ctx context.Context, observability ObservabilityContext, modelDeployment *types.Deployment) (bool, error) {
+func (p *NoOpPlugin) HealthCheckGate(ctx context.Context, observability ObservabilityContext, modelDeployment *v2pb.Deployment) (bool, error) {
 	return true, nil
 }
 
 // GetRolloutPlugin returns a completing conditions plugin
-func (p *NoOpPlugin) GetRolloutPlugin(ctx context.Context, resource *types.Deployment) (conditionInterfaces.Plugin[*types.Deployment], error) {
+func (p *NoOpPlugin) GetRolloutPlugin(ctx context.Context, resource *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	return &CompletingConditionsPlugin{}, nil
 }
 
 // GetRollbackPlugin returns a no-op conditions plugin
-func (p *NoOpPlugin) GetRollbackPlugin() conditionInterfaces.Plugin[*types.Deployment] {
+func (p *NoOpPlugin) GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &NoOpConditionsPlugin{}
 }
 
 // GetCleanupPlugin returns a no-op conditions plugin
-func (p *NoOpPlugin) GetCleanupPlugin() conditionInterfaces.Plugin[*types.Deployment] {
+func (p *NoOpPlugin) GetCleanupPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &NoOpConditionsPlugin{}
 }
 
 // GetSteadyStatePlugin returns a no-op conditions plugin
-func (p *NoOpPlugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*types.Deployment] {
+func (p *NoOpPlugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &NoOpConditionsPlugin{}
 }
 
 // ParseStage returns the current stage
-func (p *NoOpPlugin) ParseStage(resource *types.Deployment) types.DeploymentStage {
+func (p *NoOpPlugin) ParseStage(resource *v2pb.Deployment) v2pb.DeploymentStage {
 	return resource.Status.Stage
 }
 
 // PopulateDeploymentLogs does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, modelDeployment *types.Deployment) {
+func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, modelDeployment *v2pb.Deployment) {
 	// No-op
 }
 
 // PopulateMessage does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateMessage(ctx context.Context, modelDeployment *types.Deployment) {
+func (p *NoOpPlugin) PopulateMessage(ctx context.Context, modelDeployment *v2pb.Deployment) {
 	// No-op
 }
 
@@ -67,19 +67,19 @@ func (p *NoOpPlugin) PopulateMessage(ctx context.Context, modelDeployment *types
 type CompletingConditionsPlugin struct{}
 
 // GetActors returns a single actor that completes deployments
-func (p *CompletingConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*types.Deployment] {
-	return []conditionInterfaces.ConditionActor[*types.Deployment]{
+func (p *CompletingConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
+	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CompletingActor{},
 	}
 }
 
 // GetConditions returns the conditions from the deployment status
-func (p *CompletingConditionsPlugin) GetConditions(resource *types.Deployment) []*api.Condition {
+func (p *CompletingConditionsPlugin) GetConditions(resource *v2pb.Deployment) []*api.Condition {
 	return resource.Status.Conditions
 }
 
 // PutCondition sets a condition in the deployment status
-func (p *CompletingConditionsPlugin) PutCondition(resource *types.Deployment, condition *api.Condition) {
+func (p *CompletingConditionsPlugin) PutCondition(resource *v2pb.Deployment, condition *api.Condition) {
 	// Update or add the condition
 	for i, existing := range resource.Status.Conditions {
 		if existing.Type == condition.Type {
@@ -95,19 +95,19 @@ func (p *CompletingConditionsPlugin) PutCondition(resource *types.Deployment, co
 type NoOpConditionsPlugin struct{}
 
 // GetActors returns a single no-op actor
-func (p *NoOpConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*types.Deployment] {
-	return []conditionInterfaces.ConditionActor[*types.Deployment]{
+func (p *NoOpConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
+	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&NoOpActor{},
 	}
 }
 
 // GetConditions returns the conditions from the deployment status
-func (p *NoOpConditionsPlugin) GetConditions(resource *types.Deployment) []*api.Condition {
+func (p *NoOpConditionsPlugin) GetConditions(resource *v2pb.Deployment) []*api.Condition {
 	return resource.Status.Conditions
 }
 
 // PutCondition sets a condition in the deployment status
-func (p *NoOpConditionsPlugin) PutCondition(resource *types.Deployment, condition *api.Condition) {
+func (p *NoOpConditionsPlugin) PutCondition(resource *v2pb.Deployment, condition *api.Condition) {
 	// No-op for the no-op plugin
 }
 
@@ -115,50 +115,65 @@ func (p *NoOpConditionsPlugin) PutCondition(resource *types.Deployment, conditio
 type CompletingActor struct{}
 
 // Run moves the deployment to the next stage or completion
-func (a *CompletingActor) Run(ctx context.Context, resource *types.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
+func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
 	now := time.Now().UnixMilli()
 
-	// Move through the stages to completion
+	// For no-op implementation, move through stages quickly and always return success
 	switch resource.Status.Stage {
-	case types.DEPLOYMENT_STAGE_VALIDATION:
-		resource.Status.Stage = types.DEPLOYMENT_STAGE_PLACEMENT
-		resource.Status.Message = "Validation completed"
+	case v2pb.DEPLOYMENT_STAGE_VALIDATION:
+		// Move to next stage and return success
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
+		resource.Status.Message = "Validation completed (no-op)"
 		return &api.Condition{
 			Type:                 "DeploymentProgressing",
-			Status:               api.CONDITION_STATUS_UNKNOWN, // Continue processing
+			Status:               api.CONDITION_STATUS_TRUE,
 			Reason:               "ValidationComplete",
 			Message:              "Validation stage completed successfully",
 			LastUpdatedTimestamp: now,
 		}, nil
-	case types.DEPLOYMENT_STAGE_PLACEMENT:
-		resource.Status.Stage = types.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION
-		resource.Status.Message = "Placement completed"
+
+	case v2pb.DEPLOYMENT_STAGE_PLACEMENT:
+		// Move to next stage and return success
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION
+		resource.Status.Message = "Placement completed (no-op)"
 		return &api.Condition{
 			Type:                 "DeploymentProgressing",
-			Status:               api.CONDITION_STATUS_UNKNOWN, // Continue processing
+			Status:               api.CONDITION_STATUS_TRUE,
 			Reason:               "PlacementComplete",
 			Message:              "Placement stage completed successfully",
 			LastUpdatedTimestamp: now,
 		}, nil
-	case types.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION:
-		resource.Status.Stage = types.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-		resource.Status.Message = "Deployment completed successfully (simplified version)"
+
+	case v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION:
+		// Move to final stage and return success
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+		resource.Status.Message = "Deployment completed successfully (no-op)"
 		resource.Status.CurrentRevision = resource.Status.CandidateRevision
 		return &api.Condition{
 			Type:                 "DeploymentProgressing",
-			Status:               api.CONDITION_STATUS_TRUE, // Terminal - success
+			Status:               api.CONDITION_STATUS_TRUE,
 			Reason:               "RolloutComplete",
 			Message:              "Deployment completed successfully",
 			LastUpdatedTimestamp: now,
 		}, nil
+
+	case v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE:
+		// Already complete, just return success
+		return &api.Condition{
+			Type:                 "DeploymentProgressing",
+			Status:               api.CONDITION_STATUS_TRUE,
+			Reason:               "AlreadyComplete",
+			Message:              "Deployment is already complete",
+			LastUpdatedTimestamp: now,
+		}, nil
 	}
 
-	// Default: mark as progressing but unknown
+	// For any other stage, just return success to avoid retries
 	return &api.Condition{
 		Type:                 "DeploymentProgressing",
-		Status:               api.CONDITION_STATUS_UNKNOWN,
-		Reason:               "Processing",
-		Message:              "Deployment is processing",
+		Status:               api.CONDITION_STATUS_TRUE,
+		Reason:               "NoOpComplete",
+		Message:              "No-op processing completed for stage: " + resource.Status.Stage.String(),
 		LastUpdatedTimestamp: now,
 	}, nil
 }
@@ -172,7 +187,7 @@ func (a *CompletingActor) GetType() string {
 type NoOpActor struct{}
 
 // Run always returns a successful condition
-func (a *NoOpActor) Run(ctx context.Context, resource *types.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
+func (a *NoOpActor) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
 	now := time.Now().UnixMilli()
 	return &api.Condition{
 		Type:                 "NoOp",

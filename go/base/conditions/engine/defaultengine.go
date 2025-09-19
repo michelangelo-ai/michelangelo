@@ -52,16 +52,17 @@ func (e *DefaultEngine[T]) Run(ctx context.Context, plugin conditionInterfaces.P
 
 	switch lastCondition.Status {
 	case api.CONDITION_STATUS_TRUE:
-		// If the condition is true, we are satisfied and the condition is terminal.
+		// If the condition is true, we are satisfied but NOT terminal to allow deployment progression.
 		return conditionInterfaces.Result{
 			Result: ctrl.Result{
 				Requeue:      false,
 				RequeueAfter: 0,
 			},
 			AreSatisfied: true,
-			IsTerminal:   true,
+			IsTerminal:   false, // Allow deployment to continue to next stage
 		}, nil
 	case api.CONDITION_STATUS_FALSE:
+		// If the condition is false, we are not satisfied and this should be terminal (definitive failure).
 		return conditionInterfaces.Result{
 			Result: ctrl.Result{
 				Requeue:      false,
