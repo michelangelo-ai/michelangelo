@@ -10,6 +10,7 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -17,7 +18,6 @@ import (
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"github.com/opentracing/opentracing-go/log"
 	"go.uber.org/zap"
 )
 
@@ -52,13 +52,15 @@ type ExecuteWorkflowActor struct {
 	logger         *zap.Logger
 	workflowClient clientInterfaces.WorkflowClient
 	blobStore      *blobstore.BlobStore
+	apiHandler     api.Handler
 }
 
-func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore) *ExecuteWorkflowActor {
+func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),
 		workflowClient: workflowClient,
 		blobStore:      blobStore,
+		apiHandler:     apiHandler,
 	}
 }
 
@@ -313,7 +315,7 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	// Loop continues as long as resumePipelineRunID is not nil
 	for resumePipelineRunID != nil {
 		resumePipelineRun := &v2.PipelineRun{}
-		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.APIServerHandler, resumePipelineRun)
+		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.apiHandler, resumePipelineRun)
 		if err != nil {
 			logger.Error("failed to get resume pipeline run", zap.Error(err))
 			return fmt.Errorf("failed to get resume pipeline run: %v", err)
