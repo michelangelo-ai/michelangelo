@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "vite build && tsc --emitDeclarationOnly && tsc-alias -p tsconfig.json",
-    "test": "vitest"
+    "test": "cd ../../ && yarn test:core"
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.2.5",
