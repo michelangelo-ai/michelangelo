@@ -4,8 +4,8 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
 )
 
 // Plugin is the interface that all Deployment plugins must implement. The deployment controller will

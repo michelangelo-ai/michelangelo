@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/types"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 )
 

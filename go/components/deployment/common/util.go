@@ -90,11 +90,11 @@ func InSteadyState(deployment types.Deployment) bool {
 func IsTerminalStage(stage types.DeploymentStage) bool {
 	switch stage {
 	case types.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-		 types.DEPLOYMENT_STAGE_ROLLOUT_FAILED,
-		 types.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE,
-		 types.DEPLOYMENT_STAGE_ROLLBACK_FAILED,
-		 types.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
-		 types.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:
+		types.DEPLOYMENT_STAGE_ROLLOUT_FAILED,
+		types.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE,
+		types.DEPLOYMENT_STAGE_ROLLBACK_FAILED,
+		types.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
+		types.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:
 		return true
 	default:
 		return false

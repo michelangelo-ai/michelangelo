@@ -42,7 +42,7 @@ func addKnownTypes(scheme *runtime.Scheme) error {
 type TargetType string
 
 const (
-	TARGET_TYPE_INVALID         TargetType = "INVALID"
+	TARGET_TYPE_INVALID          TargetType = "INVALID"
 	TARGET_TYPE_INFERENCE_SERVER TargetType = "INFERENCE_SERVER"
 	TARGET_TYPE_OFFLINE          TargetType = "OFFLINE"
 	TARGET_TYPE_MOBILE           TargetType = "MOBILE"
@@ -53,18 +53,18 @@ const (
 type DeploymentStage string
 
 const (
-	DEPLOYMENT_STAGE_INVALID                DeploymentStage = "INVALID"
-	DEPLOYMENT_STAGE_VALIDATION             DeploymentStage = "VALIDATION"
-	DEPLOYMENT_STAGE_RESOURCE_ACQUISITION   DeploymentStage = "RESOURCE_ACQUISITION"
-	DEPLOYMENT_STAGE_PLACEMENT              DeploymentStage = "PLACEMENT"
-	DEPLOYMENT_STAGE_ROLLOUT_COMPLETE       DeploymentStage = "ROLLOUT_COMPLETE"
-	DEPLOYMENT_STAGE_ROLLOUT_FAILED         DeploymentStage = "ROLLOUT_FAILED"
-	DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS   DeploymentStage = "ROLLBACK_IN_PROGRESS"
-	DEPLOYMENT_STAGE_ROLLBACK_COMPLETE      DeploymentStage = "ROLLBACK_COMPLETE"
-	DEPLOYMENT_STAGE_ROLLBACK_FAILED        DeploymentStage = "ROLLBACK_FAILED"
-	DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS   DeploymentStage = "CLEAN_UP_IN_PROGRESS"
-	DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE      DeploymentStage = "CLEAN_UP_COMPLETE"
-	DEPLOYMENT_STAGE_CLEAN_UP_FAILED        DeploymentStage = "CLEAN_UP_FAILED"
+	DEPLOYMENT_STAGE_INVALID              DeploymentStage = "INVALID"
+	DEPLOYMENT_STAGE_VALIDATION           DeploymentStage = "VALIDATION"
+	DEPLOYMENT_STAGE_RESOURCE_ACQUISITION DeploymentStage = "RESOURCE_ACQUISITION"
+	DEPLOYMENT_STAGE_PLACEMENT            DeploymentStage = "PLACEMENT"
+	DEPLOYMENT_STAGE_ROLLOUT_COMPLETE     DeploymentStage = "ROLLOUT_COMPLETE"
+	DEPLOYMENT_STAGE_ROLLOUT_FAILED       DeploymentStage = "ROLLOUT_FAILED"
+	DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS DeploymentStage = "ROLLBACK_IN_PROGRESS"
+	DEPLOYMENT_STAGE_ROLLBACK_COMPLETE    DeploymentStage = "ROLLBACK_COMPLETE"
+	DEPLOYMENT_STAGE_ROLLBACK_FAILED      DeploymentStage = "ROLLBACK_FAILED"
+	DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS DeploymentStage = "CLEAN_UP_IN_PROGRESS"
+	DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE    DeploymentStage = "CLEAN_UP_COMPLETE"
+	DEPLOYMENT_STAGE_CLEAN_UP_FAILED      DeploymentStage = "CLEAN_UP_FAILED"
 )
 
 // Use protobuf ConditionStatus instead of local definition
@@ -105,11 +105,11 @@ type InferenceServerSpec struct {
 
 // DeploymentSpec defines the desired state of Deployment
 type DeploymentSpec struct {
-	DesiredRevision   *ModelRevision      `json:"desiredRevision,omitempty"`
-	Definition        *TargetDefinition   `json:"definition,omitempty"`
-	DeletionSpec      *DeletionSpec       `json:"deletionSpec,omitempty"`
-	Strategy          *DeploymentStrategy `json:"strategy,omitempty"`
-	InferenceServer   *InferenceServerSpec `json:"inferenceServer,omitempty"`
+	DesiredRevision *ModelRevision       `json:"desiredRevision,omitempty"`
+	Definition      *TargetDefinition    `json:"definition,omitempty"`
+	DeletionSpec    *DeletionSpec        `json:"deletionSpec,omitempty"`
+	Strategy        *DeploymentStrategy  `json:"strategy,omitempty"`
+	InferenceServer *InferenceServerSpec `json:"inferenceServer,omitempty"`
 }
 
 // Use the protobuf Condition type instead of local definition
@@ -117,18 +117,18 @@ type DeploymentSpec struct {
 
 // DeploymentStatus defines the observed state of Deployment
 type DeploymentStatus struct {
-	Stage               DeploymentStage  `json:"stage,omitempty"`
-	Message             string           `json:"message,omitempty"`
-	CurrentRevision     *ModelRevision   `json:"currentRevision,omitempty"`
-	CandidateRevision   *ModelRevision   `json:"candidateRevision,omitempty"`
-	Conditions          []*api.Condition     `json:"conditions,omitempty"`
-	ConditionsSnapshot  []*api.Condition     `json:"conditionsSnapshot,omitempty"`
-	ProviderStatus      string           `json:"providerStatus,omitempty"`
+	Stage              DeploymentStage  `json:"stage,omitempty"`
+	Message            string           `json:"message,omitempty"`
+	CurrentRevision    *ModelRevision   `json:"currentRevision,omitempty"`
+	CandidateRevision  *ModelRevision   `json:"candidateRevision,omitempty"`
+	Conditions         []*api.Condition `json:"conditions,omitempty"`
+	ConditionsSnapshot []*api.Condition `json:"conditionsSnapshot,omitempty"`
+	ProviderStatus     string           `json:"providerStatus,omitempty"`
 }
 
 // Deployment is the Schema for the deployments API
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
 type Deployment struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -138,7 +138,7 @@ type Deployment struct {
 }
 
 // DeploymentList contains a list of Deployment
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 type DeploymentList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -151,7 +151,7 @@ type DeploymentEventSpec struct {
 }
 
 // DeploymentEvent represents an event in deployment history
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 type DeploymentEvent struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
