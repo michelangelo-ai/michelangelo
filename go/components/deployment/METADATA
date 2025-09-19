@@ -1,0 +1,24 @@
+schema:
+  version: 1
+---
+reviewers:
+  groups:
+    - michelangelo
+    - michelangelo-serving!
+  users:
+    - pos
+    - liurui
+owner:
+  # https://uown.uberinternal.com/assets/f1fbd7ee-0be0-4421-a03f-d14beee6acd6
+  assetUuid: f1fbd7ee-0be0-4421-a03f-d14beee6acd6
+  # Owner information updated from uOwn by assetUuid value.
+  # "managerEmail" retrieved from "Accountable" role on uOwn.
+  name: michelangelo-inference
+  managerEmail: rusht@uber.com
+code-quality:
+  coverage:
+    modified: 85
+    incremental: true
+    excludes:
+      # exclude ucscache local as it is a test folder
+      - "plugins/uber/ucscache/local/**"

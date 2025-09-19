@@ -1,0 +1,420 @@
+// This file defines the Deployment related messages in Michelangelo API.
+
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "v2";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/conditions.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/user.proto";
+
+// Enum type of target types.
+enum TargetType {
+  // TARGET_TYPE_INVALID is the default target type and is invalid.
+  TARGET_TYPE_INVALID = 0;
+
+  // TARGET_TYPE_INFERENCE_SERVER targets correspond to models deployed for online serving on an inference server.
+  TARGET_TYPE_INFERENCE_SERVER = 1;
+
+  // TARGET_TYPE_OFFLINE targets correspond to offline/batch workloads that do not have a realtime component.
+  TARGET_TYPE_OFFLINE = 2;
+
+  // TARGET_TYPE_MOBILE targets are used for models hosted on mobile devices.
+  TARGET_TYPE_MOBILE = 3;
+
+  // TARGET_TYPE_SELF_HOSTED targets correspond to external targets that are already pre-deployed. The primary
+  // reason to have this type of deployment is for deployment discoverability.
+  TARGET_TYPE_SELF_HOSTED = 4;
+}
+
+// Definition for deployment targets.
+message TargetDefinition {
+  TargetType type = 1;
+  string sub_type = 2;
+}
+
+// Enum level of the device integrity
+enum DeviceIntegrityLevel {
+  // DEVICE_INTEGRITY_LEVEL_INVALID is the default level and is invalid.
+  DEVICE_INTEGRITY_LEVEL_INVALID = 0;
+
+  // DEVICE_INTEGRITY_LEVEL_STRONG device is trusted.
+  DEVICE_INTEGRITY_LEVEL_STRONG = 1;
+
+  // DEVICE_INTEGRITY_LEVEL_STANDARD device may be jailbreaked.
+  DEVICE_INTEGRITY_LEVEL_STANDARD = 2;
+}
+
+// Spec for mobile
+message MobileSpec {
+  DeviceIntegrityLevel level = 1;
+}
+
+enum ShadowMetricType {
+  SHADOW_METRIC_TYPE_INVALID = 0;
+  SHADOW_METRIC_TYPE_PREDICTION_SCORE_DRIFT_METRIC = 1;
+}
+
+enum ShadowMetricThresholdCondition {
+  SHADOW_METRIC_THRESHOLD_CONDITION_INVALID = 0;
+  SHADOW_METRIC_THRESHOLD_CONDITION_GREATER_THAN = 1; // >
+  SHADOW_METRIC_THRESHOLD_CONDITION_LESS_THAN = 2;    // <
+  SHADOW_METRIC_THRESHOLD_CONDITION_GREATER_THAN_OR_EQUAL = 3; // >=
+  SHADOW_METRIC_THRESHOLD_CONDITION_LESS_THAN_OR_EQUAL = 4;    // <=
+}
+
+message ShadowMetricDecisionThreshold {
+  string column_name = 1;
+  double threshold_value = 2;
+  ShadowMetricThresholdCondition threshold_condition = 3;
+}
+
+message ShadowComparisonMetric {
+  ShadowMetricType metric_type = 1;
+  repeated ShadowMetricDecisionThreshold decisions = 2;
+}
+
+message ShadowSpec {
+  // shadow traffic percentage from 1 as 1% to 100 as 100%
+  double traffic_percentage = 1 [(michelangelo.api.validation) = {min: "0", max: "100"}];
+  // shadow duration in days/hours/minutes
+  google.protobuf.Duration duration = 2;
+  // metrics to compare shadow vs primary prediction
+  repeated ShadowComparisonMetric metrics = 3;
+  // enable or disable shadow deployment
+  bool enabled = 4;
+  // enable or disable shadow dryrun
+  bool dryrun = 5;
+}
+
+// Defines the Spec of a Deployment
+message DeploymentSpec {
+  // The specific model revision to be deployed to this deployment. If set to nil,
+  // and neither the current nor candidate revisions are empty, then the cleanup action
+  // will be triggered.
+  michelangelo.api.ResourceIdentifier desired_revision = 1 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // The target of the model deployment, such as a predictor service
+  // for online model serving, batch prediction job for offline model
+  // service or model serving as an library or at edge devices.
+  // The target predictor service of this deployment
+  oneof target {
+    option (michelangelo.api.required) = true;
+    michelangelo.api.ResourceIdentifier inference_server = 2 [
+      (michelangelo.api.resource_reference) = {
+        type: "michelangelo.uber.com/InferenceServer"
+      }
+    ];
+
+    MobileSpec mobile_spec = 10;
+  }
+
+  // Optional label selector for deployment targets such as `Environment` or
+  // `Partition` of the predictor service. Only predictor service
+  // instances that are selected by this will be the ones affected by
+  // this deployment.
+  k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelector selector = 3;
+
+  // Spec that sets the deletion of the Deployment.
+  DeletionSpec deletion_spec = 4;
+
+  // The deployment strategy to use to replace existing model version with new ones.
+  DeploymentStrategy strategy = 5;
+
+  // The definition for the target, includes a type and subtype.
+  TargetDefinition definition = 6;
+
+  michelangelo.api.ResourceIdentifier model_family = 7 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/ModelFamily"
+    }
+  ];
+
+  // Information about the most recent user to update the deployment
+  // The deployment's owner is the user who update the deployment, not the really owner, we use owner to keep the consistency
+  UserInfo owner = 8;
+
+  reserved 9;
+  reserved "self_host_reference";
+
+  // The shadow metadata for the deployment.
+  ShadowSpec shadow_spec = 11;
+
+  // Maps link names to their URLs, related to the deployment.
+  map<string, string> resource_links = 12;
+}
+
+// The spec for zonal updates. For zonal updates, we require implementations that
+// keep track of a list of location based zones. Each zone will be rolled out sequentially.
+// When we detect that a zone has properly been rolled out, we will wait the provided
+// rollout period until we successfully rollout to all zones. At this point, we will
+// wait another rollout period before reaching a successful deployment state.
+message ZonalUpdate {
+  // The amount of time after successfully rolling out in a zone before moving to a new one.
+  double rollout_period_in_seconds = 1;
+}
+
+// For blast update, we immediately rollout the models to all hosts across zones.
+message BlastUpdate {
+  // If we should check for alerts and rollback during deployment. For a new deployment this is potentially
+  // useful. However for updating an existing deployment, this may be be desired.
+  bool with_rollback_trigger = 1;
+  // The Jira ticket link reqquired to justifying an emergency deployment.
+  string jira_link = 2;
+}
+
+// This is the placeholder for true red black rollout.
+message RedBlackUpdate {
+  bool zonal_parallel = 1;
+}
+
+// For rolling update, we gradually take hosts out of the pool, have them load the new model, then
+// add them back to the pool once the new model is loaded. This process goes on until all hosts have loaded
+// the new model. This is useful when due to resource constraints the host cannot load multiple models at the same time.
+message RollingUpdate {
+  // The speed of the rollout depends on the percentage of hosts being targeted in each increment.
+  int32 increment_percentage = 1;
+}
+
+// SubZonalUpdate defines a rollout strategy where model updates are applied
+// incrementally to subsets of hosts within each zone.
+//
+// This strategy is useful when deploying to large zones and finer-grained
+// rollout control is needed (e.g., starting with 10% of hosts, then ramping up).
+message SubZonalUpdate {
+  // The percentage of hosts to update in each rollout step.
+  // For example, an increment of 10 will roll out to 10% of hosts at a time.
+  // Must be a value between 10 and 40.
+  int32 increment = 1 [(michelangelo.api.validation) = {min: "10", max: "40"}];
+
+  // Optional soak time (in seconds) to wait between rollout increments.
+  // This pause allows the system to stabilize and enables alerting or rollback
+  // before progressing to the next increment.
+  double rollout_period_in_seconds = 2;
+}
+
+// DisaggregatedUpdate defines a deployment strategy for targeting multiple
+// environments or label groups using distinct sub-strategies.
+//
+// Each step in the rollout specifies a label selector and a strategy to apply
+// to matching targets. This enables environment-aware or resource-specific
+// rollouts, such as deploying to GPU and CPU environments with different pacing.
+message DisaggregatedUpdate {
+  // A list of strategy steps, each targeting a different subset of hosts.
+  repeated DisaggregatedUpdateStep steps = 1;
+}
+
+// DisaggregatedUpdateStep defines a rollout step targeting a specific
+// environment with its own strategy.
+message DisaggregatedUpdateStep {
+  // Name of the target environment (e.g., "production", "production-gpu").
+  string environment = 1;
+
+  // Rollout strategy for the environment. Only one may be set.
+  oneof strategy {
+    ZonalUpdate zonal = 2;
+    SubZonalUpdate sub_zonal = 3;
+    BlastUpdate blast = 4;
+  }
+}
+
+// The strategy to rollout a new model version in all instances of
+// this deployment.
+message DeploymentStrategy {
+
+  // Strategy to roll out a model across all predictor service
+  // instances.
+  oneof rollout_strategy {
+    option (michelangelo.api.required) = true;
+    // Only one version of the model will be loaded into memory per instance
+    // of the target. The system will sequentially load models per zone.
+    ZonalUpdate zonal = 1;
+
+    // All hosts will load the models simultaneously.
+    BlastUpdate blast = 2;
+
+    // Red black strategy placeholder.
+    RedBlackUpdate red_black = 3;
+
+    // Rolling update hosts to replace existing model with new model.
+    RollingUpdate rolling = 4;
+
+    // Disaggregated strategy is used to deploy the model to multiple environments.
+    DisaggregatedUpdate disaggregated = 5;
+  }
+}
+
+// Define the stage that the deployment controller is going through for
+// a given deployment resource. The implementation of the state machine for
+// each stage is dependent on the target.
+enum DeploymentStage {
+  DEPLOYMENT_STAGE_INVALID = 0;
+
+  // In this stage, the controller will validate the model. For
+  // PredictorServices, the controller will select a particular instance
+  // with which to deploy the model and ensure that it can successfully
+  // make a prediction.
+  DEPLOYMENT_STAGE_VALIDATION = 1;
+
+  // The deployment is in the placement stage. For Predictor Services, the
+  // model sharding is defined, and the physical asset is distributed to
+  // the deployment target. It is at this stage that the DeploymentStrategy
+  // is applicable. Note that the model health is also modified in this stage
+  // as monitoring is needed to ensure proper rollout.
+  DEPLOYMENT_STAGE_PLACEMENT = 2;
+
+  // The final steady-state stage for the deployment. In this stage, the
+  // controller will monitor the deployment target and ensure that the
+  // deployment exists in all instances of the deployment target.
+  DEPLOYMENT_STAGE_RESOURCE_ACQUISITION = 3;
+
+  // The stage when a rollout has successfully been completed.
+  DEPLOYMENT_STAGE_ROLLOUT_COMPLETE = 4;
+
+  // The stage when a rollout has failed.
+  DEPLOYMENT_STAGE_ROLLOUT_FAILED = 5;
+
+  // The stage during a rollout when the rollback gates have been triggered.
+  DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS = 6;
+
+  // The stage is rolled back.
+  DEPLOYMENT_STAGE_ROLLBACK_COMPLETE = 7;
+
+  // The stage roll back failed.
+  DEPLOYMENT_STAGE_ROLLBACK_FAILED = 8;
+
+  // The deployment is in the process of getting cleaned up.
+  DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS = 9;
+
+  // The deployment is cleaned up.
+  DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE = 10;
+
+  // The deployment clean up failed.
+  DEPLOYMENT_STAGE_CLEAN_UP_FAILED = 11;
+}
+
+// Define the State of a deployment
+enum DeploymentState {
+  // The deployment is invalid.
+  DEPLOYMENT_STATE_INVALID = 0;
+
+  // A deployment is initializing if it has never reached a steady state stage.
+  DEPLOYMENT_STATE_INITIALIZING = 1;
+
+  // A deployment is healthy if there is a ModelRevision running
+  // on the target instances. For the PredictorService service target
+  // this means that a ModelRevision exists for every PredictorService
+  // instance.
+  DEPLOYMENT_STATE_HEALTHY = 2;
+
+  // A deployment is healthy if some target instances are not running
+  // a valid ModelRevision. For the PredictorService service target
+  // this means that a ModelRevision does not exist for every
+  // PredictorService instance.
+  DEPLOYMENT_STATE_UNHEALTHY = 3;
+
+  // A deployment is empty if DeploymentStatus.current_revision is nil as a result of
+  // a cleanup action being taken.
+  DEPLOYMENT_STATE_EMPTY = 4;
+}
+
+// Defines the status of a Deployment and details related
+message DeploymentStatus {
+  // Store the deployment state.
+  DeploymentState state = 1;
+
+  // Store messages pertaining to the current state.
+  string message = 2;
+
+  // The current stage in the state machine for the latest Deployment revision.
+  DeploymentStage stage = 3;
+
+  // The specific model revision to be deployed to this deployment.
+  michelangelo.api.ResourceIdentifier candidate_revision = 4 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // The latest revision to be successfully deployed.
+  michelangelo.api.ResourceIdentifier current_revision = 5 [
+    (michelangelo.api.resource_reference) = {
+      type: "michelangelo.uber.com/Revision"
+    }
+  ];
+
+  // provider_status is a property bag that allows the storage of plugin specific
+  // information that is not user facing. This can be used to keep track of state
+  // that does not have any pre-defined schema. Note that when using
+  // provider_status, do not cause catastrophic failure if this property doesn't
+  // exist. The provider implementation must be able to move to completion in the
+  // event that this property bag is lost.
+  map<string, google.protobuf.Any> provider_status = 6;
+
+  // Conditions that are relevant for the deployment resource
+  repeated Condition conditions = 7;
+
+  // Snapshot of the conditions during a deployment rollout failure
+  repeated Condition conditions_snapshot = 8;
+}
+
+// DeletionSpec for deleting a resource. This acts a soft-delete.
+message DeletionSpec {
+  // Whether or not to delete this resource. Defaults to false.
+  bool deleted = 1;
+}
+
+
+// Defines a Deployment for ML models
+message Deployment {
+  option (michelangelo.api.resource) = {};
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "status.current_revision",
+    key: "current_revision",
+  };
+  option (michelangelo.api.index) = {
+    path: "status.state",
+    key: "state",
+  };
+  // Index for the timestamp when a deployment is marked for deletion.
+  option (michelangelo.api.index) = {
+    path: "metadata.deletionTimestamp",
+    key: "deletion_requested_timestamp",
+  };
+
+  option (michelangelo.api.index) = {
+    path: "spec.definition.type",
+    key: "target_definition_type",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired state of the Deployment.
+  DeploymentSpec spec = 3;
+
+  // Most recently observed status of the Deployment.
+  DeploymentStatus status = 4;
+}
+
+// A list of Deployment objects.
+message DeploymentList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Deployment
+  repeated Deployment items = 3;
+}

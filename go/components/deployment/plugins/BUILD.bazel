@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "interface.go",
+        "noop.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/deployment/types:go_default_library",
+        "//go/components/deployment/utils/conditions:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+    ],
+)

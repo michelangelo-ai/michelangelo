@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
@@ -82,6 +83,7 @@ func options() fx.Option {
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
+		deployment.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
