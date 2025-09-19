@@ -3,26 +3,35 @@
 # - Accepts gRPC-Web requests from localhost (UI)
 # - Forwards to michelangelo-apiserver (gRPC backend) on port 14566
 
-apiVersion: v1
-kind: Pod
+apiVersion: apps/v1
+kind: Deployment
 metadata:
   name: envoy
   labels:
     app: envoy
 spec:
-  containers:
-    - name: envoy
-      image: envoyproxy/envoy:v1.29-latest
-      args: ["-c", "/etc/envoy/envoy.yaml"]
-      ports:
-        - containerPort: 8081
-      volumeMounts:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: envoy
+  template:
+    metadata:
+      labels:
+        app: envoy
+    spec:
+      containers:
+        - name: envoy
+          image: envoyproxy/envoy:v1.29-latest
+          args: ["-c", "/etc/envoy/envoy.yaml"]
+          ports:
+            - containerPort: 8081
+          volumeMounts:
+            - name: config
+              mountPath: /etc/envoy
+      volumes:
         - name: config
-          mountPath: /etc/envoy
-  volumes:
-    - name: config
-      configMap:
-        name: envoy-config
+          configMap:
+            name: envoy-config
 ---
 apiVersion: v1
 kind: Service
@@ -73,8 +82,8 @@ data:
                                 max_grpc_timeout: 0s
                           cors:
                             allow_origin_string_match:
-                              - exact: "http://localhost:5173"
-                              - exact: "http://localhost:8090"
+                              - prefix: "http://"
+                              - prefix: "https://"
                             allow_methods: "GET, POST, OPTIONS"
                             allow_headers: "content-type,context-ttl-ms,grpc-timeout,rpc-caller,rpc-encoding,rpc-service,x-grpc-web,x-user-agent"
                             max_age: "1728000"

@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: ui
-        image: ghcr.io/michelangelo-ai/ui:main
+        image: 095116963143.dkr.ecr.ap-southeast-1.amazonaws.com/michelangelo-ai/ui:main-amd64
         imagePullPolicy: Always
         ports:
         - containerPort: 80
