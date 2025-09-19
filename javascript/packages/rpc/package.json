@@ -4,7 +4,8 @@
   "type": "module",
   "version": "0.0.0",
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "test": "cd ../../ && yarn test:rpc"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.1",

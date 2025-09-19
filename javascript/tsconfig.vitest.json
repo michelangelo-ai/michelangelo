@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "include": ["vitest.config.ts"],
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "noEmit": true,
+    "moduleResolution": "bundler"
+  }
+}

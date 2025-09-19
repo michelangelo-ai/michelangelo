@@ -65,6 +65,23 @@ export default [
     ],
   },
 
+  // Root-level vitest config
+  {
+    files: ['vitest.config.ts'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      parser: tseslint.parser,
+      parserOptions: {
+        project: new URL('./tsconfig.vitest.json', import.meta.url).pathname,
+        tsconfigRootDir: new URL('.', import.meta.url).pathname,
+      },
+      globals: globals.node,
+    },
+    plugins: sharedPlugins,
+    rules: sharedRules,
+  },
+
   {
     files: ['app/vite.config.ts'],
     languageOptions: {
@@ -151,7 +168,10 @@ export default [
 
   // Interpolation module - Allow unsafe operations for dynamic data handling
   {
-    files: ['packages/core/interpolation/**/*.{ts,tsx}', 'packages/core/providers/interpolation-provider/**/*.{ts,tsx}'],
+    files: [
+      'packages/core/interpolation/**/*.{ts,tsx}',
+      'packages/core/providers/interpolation-provider/**/*.{ts,tsx}',
+    ],
     rules: {
       '@typescript-eslint/no-unsafe-assignment': 'off',
       '@typescript-eslint/no-unsafe-member-access': 'off',
