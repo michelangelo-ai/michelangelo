@@ -231,8 +231,9 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
 	stage := plugin.ParseStage(deployment)
 
-	// Check if we've reached max attempts. If it is, we should change the deployment status stage
-	if result.IsTerminal {
+	// Check if we've reached max attempts OR if condition is satisfied but terminal.
+	// For successful terminal conditions, we should continue processing to allow stage progression.
+	if result.IsTerminal && !result.AreSatisfied {
 		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
 			"until the resource is updated again. If in cleanup, we will no longer reconcile."
 		log.Info(message)
@@ -244,6 +245,12 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			result.Result = defaultResult
 		}
 		plugin.PopulateDeploymentLogs(ctx, deployment)
+	} else if result.IsTerminal && result.AreSatisfied {
+		// Successful terminal condition - allow progression by ensuring requeue
+		result.Result = ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: _defaultRequeuePeriod,
+		}
 	}
 
 	log = log.WithValues(_originalStageKey, originalStage).WithValues(_newStageKey, stage)
