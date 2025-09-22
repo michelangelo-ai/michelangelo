@@ -31,6 +31,10 @@ FROM nginx:alpine
 # Copy built app to nginx
 COPY --from=builder /workspace/javascript/app/dist /usr/share/nginx/html
 
+# Copy environment substitution script
+COPY --from=builder /workspace/javascript/env.sh /docker-entrypoint.d/env.sh
+RUN chmod +x /docker-entrypoint.d/env.sh
+
 # Create nginx config for React Router
 RUN echo 'server { \
     listen 80; \

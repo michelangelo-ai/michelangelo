@@ -1,0 +1,34 @@
+apiVersion: michelangelo.api/v2
+kind: TriggerRun
+metadata:
+  name: batch-rerun-trigger
+  namespace: ma-dev-test
+  labels:
+    trigger-type: batch-rerun
+    pipeline: training-pipeline
+spec:
+  pipeline:
+    name: training-pipeline
+    namespace: ma-dev-test
+  revision:
+    name: training-pipeline-rev-1
+    namespace: ma-dev-test
+  trigger:
+    batchRerun:
+      pipelineRuns:
+        - name: failed-run-1
+          namespace: ma-dev-test
+        - name: failed-run-2
+          namespace: ma-dev-test
+        - name: failed-run-3
+          namespace: ma-dev-test
+      resumeFrom: ["feature_extraction", "data_validation"]
+      resumeUpTo: ["model_training"]
+    batchPolicy:
+      batchSize: 2
+      wait: "600s"
+    maxConcurrency: 2
+  actor:
+    name: "craig.marker"
+  autoFlip: false
+  sourceTriggerName: "batch_retry"

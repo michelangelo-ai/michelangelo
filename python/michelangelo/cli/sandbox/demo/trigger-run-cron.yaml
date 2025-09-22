@@ -1,0 +1,26 @@
+apiVersion: michelangelo.api/v2
+kind: TriggerRun
+metadata:
+  name: daily-training-trigger
+  namespace: ma-dev-test
+  labels:
+    trigger-type: cron
+    pipeline: training-pipeline
+spec:
+  pipeline:
+    name: training-pipeline
+    namespace: ma-dev-test
+  revision:
+    name: training-pipeline-rev-1
+    namespace: ma-dev-test
+  trigger:
+    cronSchedule:
+      cron: "0 2 * * *"
+    batchPolicy:
+      batchSize: 5
+      wait: "300s"
+    maxConcurrency: 3
+  actor:
+    name: "craig.marker"
+  autoFlip: true
+  sourceTriggerName: "daily_training"
