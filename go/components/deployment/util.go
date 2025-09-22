@@ -3,8 +3,8 @@ package deployment
 import (
 	"context"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/revision"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // UpsertDeploymentRevision upserts a deployment revision (simplified no-op version)

@@ -5,8 +5,8 @@ import (
 	"time"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // NoOpPlugin is a plugin that always succeeds and does nothing
