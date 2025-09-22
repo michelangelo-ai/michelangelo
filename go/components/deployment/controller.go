@@ -46,7 +46,7 @@ import (
 )
 
 const (
-	_defaultRequeuePeriod  = 20 * time.Minute
+	_defaultRequeuePeriod  = 10 * time.Second
 	_reconciliationTimeout = 60 * time.Second
 
 	_deploymentCleanedUpFinalizer = "deployments.michelangelo.uber.com/finalizer"
