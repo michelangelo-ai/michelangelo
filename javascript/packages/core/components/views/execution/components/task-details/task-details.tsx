@@ -28,7 +28,7 @@ export function TaskDetails<TTaskRecord extends object = object>(
         title={<TaskHeader task={task} metadata={metadata} />}
         initialState={{ expanded: task.focused }}
       >
-        <TaskBody task={task} bodySchema={bodySchema} overrides={overrides} />
+        <TaskBody task={task} bodySchema={bodySchema} metadata={metadata} overrides={overrides} />
       </TaskPanel>
     );
   }

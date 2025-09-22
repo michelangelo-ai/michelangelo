@@ -17,6 +17,7 @@ export type TaskHeaderProps<TTaskRecord extends object = object> = {
 
 export type TaskBodyProps<TTaskRecord extends object = object> = {
   task: Task<TTaskRecord>;
+  metadata?: Cell[];
   bodySchema?: TaskBodySchema[];
   overrides?: ExecutionOverrides<TTaskRecord>;
 };

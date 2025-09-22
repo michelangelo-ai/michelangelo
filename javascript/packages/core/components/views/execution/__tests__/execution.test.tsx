@@ -155,6 +155,14 @@ describe('Execution view', () => {
             state: 'PIPELINE_RUN_STEP_STATE_FAILED',
             duration: '5m 30s',
             startTime: '2025-01-01T08:00:00Z',
+            subSteps: [
+              buildStep({
+                displayName: 'Subtask 1',
+                state: 'PIPELINE_RUN_STEP_STATE_SUCCEEDED',
+                duration: '1m 30s',
+                startTime: '2025-01-01T08:00:00Z',
+              }),
+            ],
           }),
         ],
       },
@@ -168,9 +176,16 @@ describe('Execution view', () => {
     // Should render task name in both sections (Overview + Details)
     expect(screen.getAllByText('Build Task')).toHaveLength(2);
 
+    // Should render parent task metadata
     expect(screen.getByText('Failed')).toBeInTheDocument();
     expect(screen.getByText('5m 30s')).toBeInTheDocument();
-    expect(screen.getByText('Started')).toBeInTheDocument();
+
+    // Should render subtask metadata
+    expect(screen.getByText('Success')).toBeInTheDocument();
+    expect(screen.getByText('1m 30s')).toBeInTheDocument();
+
+    // Shown for both parent and subtask
+    expect(screen.getAllByText('Started')).toHaveLength(2);
   });
 
   it('should handle empty execution data gracefully', () => {
