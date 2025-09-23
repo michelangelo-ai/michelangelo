@@ -8,6 +8,8 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	blobstoreMock "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
@@ -19,6 +21,8 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestExecuteWorkflowActor(t *testing.T) {
@@ -397,7 +401,12 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
 			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
 			testCase.mockFunc(workflowClient, blobStoreClient)
-			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient)
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandler := apiHandler.NewFakeAPIHandler(k8sClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandler)
 			previousCondition := conditionUtils.GetCondition(pipelinerunutils.ExecuteWorkflowStepName, testCase.pipelineRun.Status.Conditions)
 			condition, err := actor.Run(context.Background(), testCase.pipelineRun, previousCondition)
 			if testCase.errMsg != "" {
@@ -536,9 +545,14 @@ func TestProcessJobTermination(t *testing.T) {
 			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
 
 			testCase.mockFunc(workflowClient)
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandler := apiHandler.NewFakeAPIHandler(k8sClient)
 
-			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient)
-			err, _ := actor.processJobTermination(context.Background(), testCase.pipelineRun)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandler)
+			err, _ = actor.processJobTermination(context.Background(), testCase.pipelineRun)
 
 			if testCase.expectError {
 				require.Error(t, err)
@@ -552,7 +566,7 @@ func TestProcessJobTermination(t *testing.T) {
 	}
 }
 
-func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) *ExecuteWorkflowActor {
+func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient, apiHandler api.Handler) *ExecuteWorkflowActor {
 	logger := zaptest.NewLogger(t)
 	blobStore := blobstore.BlobStore{
 		Logger: logger,
@@ -560,5 +574,5 @@ func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.
 			"mock": blobStoreClient,
 		},
 	}
-	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore)
+	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler)
 }
