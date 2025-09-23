@@ -766,4 +766,3 @@ func revisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 func desiredRevisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 	return revisionEqual(a, b)
 }
-
