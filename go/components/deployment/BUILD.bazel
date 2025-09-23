@@ -18,7 +18,6 @@ go_library(
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/env:go_default_library",
-        "//go/components/deployment/common:go_default_library",
         "//go/components/deployment/plugins:go_default_library",
         "//go/components/deployment/plugins/noop:go_default_library",
         "//go/components/deployment/utils/pluginmanager:go_default_library",

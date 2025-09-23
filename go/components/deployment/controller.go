@@ -30,7 +30,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager"
@@ -303,7 +302,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	sw.Stop()
 	deployment.Status = *status
 
-	if common.IsCleanupCompleteStage(deployment.Status.Stage) {
+	if IsCleanupCompleteStage(deployment.Status.Stage) {
 		// If the resource is in cleanup completion stage, then it is eligible for deletion.
 		// Since we do not expect this resource to be reconciled (until new user action), the finalizer will not be
 		// added again. If there is a new user action, then it is reasonable to avoid deletion. Conversely, if the
@@ -342,8 +341,8 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
 	// This requires updating the Engine interface to match Uber's 4-parameter signature
 	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
-	if common.ShouldCleanup(*deployment) {
-		if !common.IsCleanupStage(deployment.Status.Stage) {
+	if ShouldCleanup(*deployment) {
+		if !IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
 			metrics.cleanupMetrics.initiatedCount.Inc(1)
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
@@ -355,7 +354,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			log.Error(err, "Cleanup plugin processing failed with error")
 			return result, err
 		}
-	} else if common.RolloutInProgress(*deployment) {
+	} else if RolloutInProgress(*deployment) {
 		sw := metrics.healthCheckGateMetrics.duration.Start()
 		metrics.healthCheckGateMetrics.count.Inc(1)
 		observability := r.getObservability(log, deployment.Namespace)
@@ -367,10 +366,10 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		}
 		sw.Stop()
 
-		desiredModelChanged := common.ShouldRollback(*deployment)
-		rollbackAlertsEnabled := common.RollbackAlertsEnabled(*deployment)
+		desiredModelChanged := ShouldRollback(*deployment)
+		rollbackAlertsEnabled := RollbackAlertsEnabled(*deployment)
 		if (!isHealthy || desiredModelChanged) && rollbackAlertsEnabled {
-			if !common.IsRollbackStage(deployment.GetStatus().Stage) {
+			if !IsRollbackStage(deployment.GetStatus().Stage) {
 				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", isHealthy, desiredModelChanged)
 				log.Info("detected that a rollback should occur")
 				metrics.rollbackMetrics.initiatedCount.Inc(1)
@@ -398,7 +397,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				return result, err
 			}
 		}
-	} else if common.TriggerNewRollout(*deployment) {
+	} else if TriggerNewRollout(*deployment) {
 		log.Info("detected new rollout")
 		metrics.rolloutMetrics.initiatedCount.Inc(1)
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
@@ -406,12 +405,15 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		//cleanup rollback reason from previous deployment (if any)
 		delete(deployment.Annotations, _deploymentRollbackReason)
 
-		if common.IsEmergencyRollout(*deployment) {
-			event := buildEmergencyRolloutEvent(ctx, deployment)
-			r.auditLogEmitter.Emit(ctx, event)
+		if IsEmergencyRollout(*deployment) {
+			// Log emergency rollout for audit purposes
+			log.Info("Emergency rollout detected",
+				"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
+				"jira_link", deployment.Spec.Strategy.GetBlast().GetJiraLink(),
+				"with_rollback_alerts", deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger())
 		}
 
-		if !common.ShouldSkipRollout(*deployment) {
+		if !ShouldSkipRollout(*deployment) {
 			r.incrementRolloutCount(deployment, log)
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
 			conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
@@ -425,7 +427,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 				return result, err
 			}
 		}
-	} else if common.InSteadyState(*deployment) {
+	} else if InSteadyState(*deployment) {
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
@@ -450,7 +452,7 @@ func (r *Reconciler) handleStageTransition(
 	err error) bool {
 
 	var messages []string
-	if !common.IsTerminalStage(deployment.Status.Stage) {
+	if !IsTerminalStage(deployment.Status.Stage) {
 		if deployment.Status.Message != "" {
 			messages = append(messages, deployment.Status.Message)
 		}
@@ -597,11 +599,11 @@ func getTerminalStage(deployment v2pb.Deployment) (v2pb.DeploymentStage, bool) {
 	// Furthermore, the rollout will not continue because we've reached a terminal stage.
 	//
 	// During cleanup, we will terminate because at this point the status is no longer relevant.
-	if common.IsCleanupStage(deployment.Status.Stage) {
+	if IsCleanupStage(deployment.Status.Stage) {
 		return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED, false
-	} else if common.IsRollbackStage(deployment.Status.Stage) {
+	} else if IsRollbackStage(deployment.Status.Stage) {
 		return v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED, true
-	} else if common.RolloutInProgress(deployment) {
+	} else if RolloutInProgress(deployment) {
 		return v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED, true
 	}
 
@@ -627,24 +629,141 @@ func createDeploymentEventName(deploymentName string) string {
 	return fmt.Sprintf("%s-%s", deploymentName, time.Now().Format(_timeFormat))
 }
 
-// buildEmergencyRolloutEvent creates an audit log event for emergency rollout tracking
-func buildEmergencyRolloutEvent(ctx context.Context, deployment *v2pb.Deployment) *logging.AuditLogEvent {
-	requestNamespace := deployment.Namespace
-	entityType := "deployment"
-	entityName := deployment.Name
-	procedure := "reconcile"
-
-	requestStr := "{'jira_link':" +
-		deployment.Spec.Strategy.GetBlast().GetJiraLink() +
-		", with_rollback_alerts: " +
-		strconv.FormatBool(deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger()) +
-		"}"
-
-	return &logging.AuditLogEvent{
-		Namespace:  requestNamespace,
-		EntityType: entityType,
-		EntityName: entityName,
-		Procedure:  procedure,
-		Request:    requestStr,
-	}
+// Deployment utility functions - moved from common package
+var _terminalStages = map[v2pb.DeploymentStage]bool{
+	v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE:  true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE: true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE: true,
+	v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED:    true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:   true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
 }
+
+var _rollbackStages = map[v2pb.DeploymentStage]bool{
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS: true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE:    true,
+	v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:      true,
+}
+
+var _cleanUpStages = map[v2pb.DeploymentStage]bool{
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS: true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE:    true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:      true,
+}
+
+var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE: true,
+	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
+}
+
+// TriggerNewRollout determines if a new rollout should be triggered
+func TriggerNewRollout(deployment v2pb.Deployment) bool {
+	desiredRevision := deployment.Spec.DesiredRevision
+	return !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision) &&
+		(IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage))
+}
+
+// ShouldRollback determines if a rollback should occur
+func ShouldRollback(deployment v2pb.Deployment) bool {
+	desiredRevision := deployment.Spec.DesiredRevision
+	candidateRevision := deployment.Status.CandidateRevision
+	return desiredRevision != nil &&
+		!desiredRevisionEqual(desiredRevision, candidateRevision) &&
+		!IsTerminalStage(deployment.Status.Stage) &&
+		!isInitializationStage(deployment.Status.Stage)
+}
+
+// RolloutInProgress checks if a rollout is in progress
+func RolloutInProgress(deployment v2pb.Deployment) bool {
+	currentRevision := deployment.Status.CurrentRevision
+	candidateRevision := deployment.Status.CandidateRevision
+	return !revisionEqual(currentRevision, candidateRevision) &&
+		!IsTerminalStage(deployment.Status.Stage) &&
+		!isInitializationStage(deployment.Status.Stage)
+}
+
+// InSteadyState checks if deployment needs to go through steady state plugin
+func InSteadyState(deployment v2pb.Deployment) bool {
+	return deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
+}
+
+// ShouldCleanup determines if cleanup should occur
+func ShouldCleanup(deployment v2pb.Deployment) bool {
+	currentRevision := deployment.Status.GetCurrentRevision()
+	candidateRevision := deployment.Status.GetCandidateRevision()
+	markedForDeletion := !deployment.ObjectMeta.DeletionTimestamp.IsZero()
+	return markedForDeletion ||
+		deployment.Spec.GetDeletionSpec().GetDeleted() ||
+		(deployment.Spec.DesiredRevision == nil &&
+			(currentRevision != nil || candidateRevision != nil))
+}
+
+// IsTerminalStage checks if the given stage is terminal
+func IsTerminalStage(stage v2pb.DeploymentStage) bool {
+	_, ok := _terminalStages[stage]
+	return ok
+}
+
+// IsRollbackStage checks if deployment is in rollback stage
+func IsRollbackStage(stage v2pb.DeploymentStage) bool {
+	_, ok := _rollbackStages[stage]
+	return ok
+}
+
+// IsCleanupStage checks if deployment is in clean up stage
+func IsCleanupStage(stage v2pb.DeploymentStage) bool {
+	_, ok := _cleanUpStages[stage]
+	return ok
+}
+
+// IsCleanupCompleteStage checks if deployment is in complete stage
+func IsCleanupCompleteStage(stage v2pb.DeploymentStage) bool {
+	_, ok := _cleanUpCompleteStages[stage]
+	return ok
+}
+
+func isInitializationStage(stage v2pb.DeploymentStage) bool {
+	return stage == v2pb.DEPLOYMENT_STAGE_INVALID
+}
+
+// ShouldSkipRollout checks if current revision is already equal to candidate revision
+func ShouldSkipRollout(deployment v2pb.Deployment) bool {
+	candidateRevision := deployment.Status.GetCandidateRevision()
+	currentRevision := deployment.Status.GetCurrentRevision()
+	return candidateRevision != nil && revisionEqual(candidateRevision, currentRevision)
+}
+
+// IsEmergencyRollout checks if the deployment strategy is of blast type
+func IsEmergencyRollout(deployment v2pb.Deployment) bool {
+	if strategy := deployment.Spec.GetStrategy(); strategy != nil {
+		isEmergency := strategy.GetBlast()
+		return isEmergency != nil
+	}
+	return false
+}
+
+// RollbackAlertsEnabled checks if the deployment has the rollback alerts enabled
+func RollbackAlertsEnabled(deployment v2pb.Deployment) bool {
+	if IsEmergencyRollout(deployment) {
+		withRollbackAlerts := deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger()
+		return withRollbackAlerts
+	}
+	return true
+}
+
+// Helper functions for revision equality since protobuf doesn't have Equal method
+func revisionEqual(a, b *protoapi.ResourceIdentifier) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name && a.Namespace == b.Namespace
+}
+
+func desiredRevisionEqual(a, b *protoapi.ResourceIdentifier) bool {
+	return revisionEqual(a, b)
+}
+
