@@ -1,11 +1,11 @@
 package temporalclient
 
 import (
+	"github.com/cadence-workflow/starlark-worker/temporal"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	workflowfx "github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	temporalClient "go.temporal.io/sdk/client"
-	temporalConverter "go.temporal.io/sdk/converter"
 	"go.uber.org/fx"
 )
 
@@ -24,7 +24,7 @@ func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOu
 	client, err := defaultTemporalClientFactory.NewTemporalClient(temporalClient.Options{
 		HostPort:      config.Host,
 		Namespace:     config.Domain,
-		DataConverter: temporalConverter.GetDefaultDataConverter(),
+		DataConverter: temporal.DataConverter{}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
 	})
 	if err != nil {
 		return TemporalClientOut{}, err

@@ -29,6 +29,19 @@ const (
 	WorkflowArgsKey            = "args"
 )
 
+// TaskProgress is the struct for the task progress queried from Cadence Workflow
+type TaskProgress struct {
+	TaskPath       string `json:"task_path"`        // full hierarchical path of the task within the workflow execution tree
+	TaskName       string `json:"task_name"`        // name of task
+	TaskLog        string `json:"task_log"`         // URL or reference to the task's execution logs
+	TaskMessage    string `json:"task_message"`     // contains status messages, error details, or other information from task execution
+	TaskState      string `json:"task_state"`       // represents the current execution state (e.g., "running", "succeeded", "failed", "pending")
+	StartTime      string `json:"start_time"`       // timestamp when the task execution began
+	EndTime        string `json:"end_time"`         // timestamp when the task execution completed
+	Output         string `json:"output"`           // contains the serialized output data produced by the task upon completion
+	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
+}
+
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -97,6 +110,16 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		Type:   ExecuteWorkflowType,
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
 	}
+
+	// Query and update task-level status for all workflow states
+	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
+	if queryErr != nil {
+		logger.Error("Failed to query task progress", zap.Error(queryErr))
+		return nil, queryErr
+	} else if len(taskSteps) > 0 {
+		executeWorkflowStep.SubSteps = taskSteps
+	}
+
 	switch workflowExecution.Status {
 	case clientInterfaces.WorkflowExecutionStatusRunning:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
@@ -112,6 +135,8 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		// Propagate appropriate states to substeps based on their current state
+		a.propagateKilledStateToSubsteps(executeWorkflowStep)
 	}
 	return newCondition, nil
 }
@@ -233,6 +258,37 @@ func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }
 
+// propagateKilledStateToSubsteps updates substep states when the parent workflow is terminated or canceled
+// - PENDING substeps become INVALID (never started execution)
+// - RUNNING substeps become KILLED (were actively executing when terminated)
+// - Terminal states (SUCCEEDED, FAILED, KILLED, SKIPPED) remain unchanged
+func (a *ExecuteWorkflowActor) propagateKilledStateToSubsteps(executeWorkflowStep *v2.PipelineRunStepInfo) {
+	if executeWorkflowStep.SubSteps == nil {
+		return
+	}
+
+	for _, substep := range executeWorkflowStep.SubSteps {
+		switch substep.State {
+		case v2.PIPELINE_RUN_STEP_STATE_PENDING:
+			substep.State = v2.PIPELINE_RUN_STEP_STATE_INVALID
+			substep.Message = "Workflow terminated before step could start"
+			// Set end time if not already set
+			if substep.EndTime == nil {
+				substep.EndTime = pbtypes.TimestampNow()
+			}
+		case v2.PIPELINE_RUN_STEP_STATE_RUNNING:
+			substep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+			substep.Message = "Killed due to workflow termination"
+			// Set end time if not already set
+			if substep.EndTime == nil {
+				substep.EndTime = pbtypes.TimestampNow()
+			}
+		default:
+			// No change needed for terminal states
+		}
+	}
+}
+
 // applyDevRunEnvironmentOverrides applies DevRun environment variable overrides to the base environment
 func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *pbtypes.Struct) error {
 	if devInput == nil {
@@ -251,4 +307,169 @@ func applyDevRunEnvironmentOverrides(baseEnv map[string]interface{}, devInput *p
 	}
 
 	return nil
+}
+
+// constructPipelineRunStepInfo queries the workflow for task progress and constructs PipelineRunStepInfo for each task
+func (a *ExecuteWorkflowActor) constructPipelineRunStepInfo(ctx context.Context, pipelineRun *v2.PipelineRun) ([]*v2.PipelineRunStepInfo, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+	workflowID := pipelineRun.Status.WorkflowId
+	runID := pipelineRun.Status.WorkflowRunId
+
+	// Query workflow for task progress
+	var workflowProgressStr []string
+	err := a.workflowClient.QueryWorkflow(ctx, workflowID, runID, pipelinerunutils.UniflowTaskProgressQueryHandlerKey, &workflowProgressStr)
+	if err != nil {
+		return []*v2.PipelineRunStepInfo{}, err
+	}
+
+	logger.Info("Get Uniflow Progress", zap.Strings("progress", workflowProgressStr))
+
+	// Construct PipelineRunStepInfo for each task
+	orderedStepInfo := []*v2.PipelineRunStepInfo{}
+	stepMap := make(map[string]*v2.PipelineRunStepInfo)
+	stepOrder := []string{}
+
+	for _, progress := range workflowProgressStr {
+		var taskProgress TaskProgress
+		err := json.Unmarshal([]byte(progress), &taskProgress)
+		if err != nil {
+			logger.Error("Cannot parse progress string", zap.Error(err), zap.String("progress", progress))
+			continue
+		}
+
+		taskName := taskProgress.TaskName
+		if taskName == "" {
+			logger.Error("taskName does not exist", zap.String("progress", progress))
+			continue
+		}
+
+		if _, existingTask := stepMap[taskName]; !existingTask {
+			stepOrder = append(stepOrder, taskName)
+			stepMap[taskName] = getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+			continue
+		}
+
+		// Merge the task progress into the existing step info
+		oldStepInfo := stepMap[taskName]
+		newStepInfo := getStepInfoFromTaskProgress(&taskProgress, pipelineRun.Namespace)
+		stepMap[taskName] = mergePipelineRunStepInfo(oldStepInfo, newStepInfo)
+	}
+
+	for _, stepName := range stepOrder {
+		orderedStepInfo = append(orderedStepInfo, stepMap[stepName])
+	}
+
+	logger.Info("Ordered Step Info", zap.Any("orderedStepInfo", orderedStepInfo))
+	return orderedStepInfo, nil
+}
+
+func mergePipelineRunStepInfo(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+	mergedStepInfo := proto.Clone(newStepInfo).(*v2.PipelineRunStepInfo)
+
+	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
+	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
+
+	// newStepInfo.AttemptIds is a list containing the latest attempt id, example: ["5"]
+	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
+
+	// Our goal is:
+	// If the latest attempt ID ALREADY exists in the old step info, update the driver URL
+	// If the latest attempt ID DOES NOT exist in the old step info, append the new attempt ID and driver URL
+
+	if attemptIDAlreadyExists(oldStepInfo, newStepInfo) {
+		mergedStepInfo.AttemptIds = oldStepInfo.AttemptIds
+		mergedStepInfo.Resources = oldStepInfo.Resources
+		if len(mergedStepInfo.Resources) > 0 && len(newStepInfo.Resources) > 0 {
+			mergedStepInfo.Resources[len(mergedStepInfo.Resources)-1] = newStepInfo.Resources[0]
+		}
+	} else { // If the new attempt ID does not exist in the old step info, append the new driver URL to the old step info
+		mergedStepInfo.Resources = append(oldStepInfo.Resources, newStepInfo.Resources...)
+		mergedStepInfo.AttemptIds = append(oldStepInfo.AttemptIds, newStepInfo.AttemptIds...)
+	}
+
+	return mergedStepInfo
+}
+
+func attemptIDAlreadyExists(oldStepInfo *v2.PipelineRunStepInfo, newStepInfo *v2.PipelineRunStepInfo) bool {
+	// oldStepInfo.AttemptIds is a list of attempt IDs, example: ["0", "1", ...]
+	// StepInfo.Resources is a list of driver URLs, example: [<Attempt0-DriverURL>, <Attempt1-DriverURL>, ...]
+
+	// newStepInfo.AttemptIds is a list containing the latest attempt id, example: ["5"]
+	// newStepInfo.Resources is a list containing the latest driver URL, example: [<Attempt5-DriverURL>]
+
+	// This function checks if the new attempt ID already exists, and is the last item in the old step info
+
+	if len(newStepInfo.AttemptIds) > 0 {
+		if len(oldStepInfo.AttemptIds) > 0 && newStepInfo.AttemptIds[0] == oldStepInfo.AttemptIds[len(oldStepInfo.AttemptIds)-1] {
+			return true
+		}
+	}
+	return false
+}
+
+func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *v2.PipelineRunStepInfo {
+	stepInfo := &v2.PipelineRunStepInfo{}
+	stepInfo.Name = taskProgress.TaskPath
+	stepInfo.DisplayName = taskProgress.TaskName
+	stepInfo.LogUrl = taskProgress.TaskLog
+
+	if taskProgress.StartTime != "" {
+		// parse utc time str 2024-06-10 17:53:20 to time.Time
+		startTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.StartTime)
+		if err == nil {
+			stepInfo.StartTime = &pbtypes.Timestamp{Seconds: startTime.Unix()}
+		}
+	}
+
+	if taskProgress.EndTime != "" {
+		// parse utc time str 2024-06-10 17:53:20 to time.Time
+		endTime, err := time.Parse("2006-01-02 15:04:05", taskProgress.EndTime)
+		if err == nil {
+			stepInfo.EndTime = &pbtypes.Timestamp{Seconds: endTime.Unix()}
+		}
+	}
+
+	if taskProgress.Output != "" {
+		stepInfo.StepCachedOutputs = &v2.PipelineRunStepCachedOutputs{
+			IntermediateVars: []*apipb.ResourceIdentifier{
+				{
+					Namespace: namespace,
+					Name:      taskProgress.Output,
+				},
+			},
+		}
+	}
+
+	switch taskProgress.TaskState {
+	case pipelinerunutils.UniflowTaskStateRunning:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
+	case pipelinerunutils.UniflowTaskStateSucceeded:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED
+	case pipelinerunutils.UniflowTaskStateFailed:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+		stepInfo.Message = taskProgress.TaskMessage
+	case pipelinerunutils.UniflowTaskStateKilled:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+		stepInfo.Message = taskProgress.TaskMessage
+	case pipelinerunutils.UniflowTaskStateSkipped:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SKIPPED
+	default:
+		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_PENDING
+	}
+
+	if taskProgress.RetryAttemptID != "" {
+		stepInfo.Resources = []*v2.PipelineRunResource{
+			&v2.PipelineRunResource{
+				Resource: &v2.PipelineRunResource_ExternalResource{
+					ExternalResource: &v2.ExternalResource{
+						Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),
+						Url:  taskProgress.TaskLog,
+					},
+				},
+			},
+		}
+		stepInfo.AttemptIds = []string{taskProgress.RetryAttemptID}
+	}
+
+	return stepInfo
 }
