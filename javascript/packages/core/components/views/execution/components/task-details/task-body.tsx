@@ -16,7 +16,7 @@ import type { TaskBodyProps } from './types';
 
 export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskRecord>) {
   const [css, theme] = useStyletron();
-  const { task, bodySchema, overrides } = props;
+  const { task, bodySchema, overrides, metadata } = props;
   const { subTasks } = task;
   const resolver = useInterpolationResolver();
 
@@ -32,7 +32,13 @@ export function TaskBody<TTaskRecord extends object>(props: TaskBodyProps<TTaskR
           />
         </Box>
         {subTasks.map((task, index) => (
-          <TaskDetails key={index} task={task} bodySchema={bodySchema} overrides={overrides} />
+          <TaskDetails
+            key={index}
+            task={task}
+            bodySchema={bodySchema}
+            overrides={overrides}
+            metadata={metadata}
+          />
         ))}
       </TaskContentStack>
     );
