@@ -1,11 +1,11 @@
 import { Message } from '@bufbuild/protobuf';
 
-import { RPC_HANDLERS } from './handlers';
+import { getRpcHandlers } from './handlers';
 
 /**
- * @see {@link RPC_HANDLERS}
+ * @see {@link getRpcHandlers}
  */
-export type RpcHandlerType = typeof RPC_HANDLERS;
+export type RpcHandlerType = Awaited<ReturnType<typeof getRpcHandlers>>;
 
 /**
  * @description

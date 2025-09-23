@@ -1,9 +1,9 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./app/tsconfig.app.json" },
-    { "path": "./app/tsconfig.node.json" },
-    { "path": "./packages/core" },
-    { "path": "./packages/rpc" }
-  ]
+  "extends": "./tsconfig.base.json",
+  "include": ["vitest.config.ts"],
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "noEmit": true,
+    "moduleResolution": "bundler"
+  }
 }

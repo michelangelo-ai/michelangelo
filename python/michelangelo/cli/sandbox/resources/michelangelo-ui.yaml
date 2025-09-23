@@ -1,3 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: public-config
+data:
+  config.json: |
+    {
+      "apiBaseUrl": "http://localhost:8081"
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,6 +30,10 @@ spec:
         imagePullPolicy: Always
         ports:
         - containerPort: 80
+        volumeMounts:
+        - name: public-config
+          mountPath: /usr/share/nginx/html/config.json
+          subPath: config.json
         resources:
           requests:
             memory: "128Mi"
@@ -27,6 +41,10 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "200m"
+      volumes:
+      - name: public-config
+        configMap:
+          name: public-config
 ---
 apiVersion: v1
 kind: Service

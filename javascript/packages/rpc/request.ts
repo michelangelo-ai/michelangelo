@@ -1,4 +1,4 @@
-import { RPC_HANDLERS } from './handlers';
+import { getRpcHandlers } from './handlers';
 import { OmitTypeName, RpcHandlerType } from './types';
 
 /**
@@ -15,9 +15,10 @@ import { OmitTypeName, RpcHandlerType } from './types';
  * // response is of type ListProjectResponse
  * ```
  */
-export function request<RpcId extends keyof RpcHandlerType>(
+export async function request<RpcId extends keyof RpcHandlerType>(
   rpcId: RpcId,
   args: OmitTypeName<Parameters<RpcHandlerType[RpcId]>[0]>
-): ReturnType<RpcHandlerType[RpcId]> {
-  return RPC_HANDLERS[rpcId](args) as ReturnType<RpcHandlerType[RpcId]>;
+): Promise<Awaited<ReturnType<RpcHandlerType[RpcId]>>> {
+  const handlers = await getRpcHandlers();
+  return (await handlers[rpcId](args)) as Awaited<ReturnType<RpcHandlerType[RpcId]>>;
 }
