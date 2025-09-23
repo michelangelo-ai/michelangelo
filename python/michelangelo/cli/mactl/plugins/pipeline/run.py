@@ -165,6 +165,15 @@ def generate_pipeline_run_object(
             "actor": {
                 "name": "mactl-user",
             },
+            "resume": {
+                "forceResume": False,
+                "pipelineRun": {
+                    "name": "run-1758563494-16f56820",
+                    "namespace": "ma-dev-test",
+                },
+                "resumeFrom": [],
+                "resumeUpTo": [],
+            },
         },
     }
 
