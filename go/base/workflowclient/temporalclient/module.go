@@ -24,7 +24,7 @@ func NewTemporalClient(config baseconfig.WorkflowClientConfig) (TemporalClientOu
 	client, err := defaultTemporalClientFactory.NewTemporalClient(temporalClient.Options{
 		HostPort:      config.Host,
 		Namespace:     config.Domain,
-		DataConverter: temporal.DataConverter{},
+		DataConverter: temporal.DataConverter{}, // using temporal.DataConverter{} from the starlark-worker package since it supports starlark types
 	})
 	if err != nil {
 		return TemporalClientOut{}, err
