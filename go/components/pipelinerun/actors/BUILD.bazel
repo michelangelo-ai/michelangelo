@@ -35,6 +35,7 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
+        "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/blobstore_mocks:go_default_library",
