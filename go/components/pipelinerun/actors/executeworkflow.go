@@ -206,8 +206,11 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 	if err != nil {
 		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 	}
+	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add task cache env: %v", err)
+	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	// after tarContent is passed to Temporal client, convert tarball bytes to string?
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
@@ -304,8 +307,10 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	envs[_cacheEnabledVarName] = "false"
 	envs[_cacheVersionVarName] = pipelineRun.Name
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
+		logger.Info("resume spec equal nil")
 		return nil
 	}
+	logger.Info("resume spec found")
 
 	// if resume from a previous run, enable cache
 	envs[_cacheEnabledVarName] = "true"
@@ -336,6 +341,8 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	if resumeFromTasks != nil && len(resumeFromTasks) > 0 {
 		for _, resumeFromTask := range resumeFromTasks {
 			envs[fmt.Sprintf("%s_%s", _cacheEnabledVarName, resumeFromTask)] = "false"
+			logger.Info("resume from task", zap.Any("resumeFromTask", resumeFromTask))
+			logger.Info("envs[", zap.Any("]", envs[resumeFromTask]))
 		}
 	}
 	return nil
