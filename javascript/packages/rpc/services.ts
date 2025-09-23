@@ -5,7 +5,7 @@ import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_p
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
 import { TriggerRunService } from './gen/michelangelo/api/v2/trigger_run_svc_pb';
-import { getApiConfig } from './runtime-config';
+import { getRuntimeConfig } from './runtime-config';
 
 // This interceptor is used to set the headers for the RPC request to
 // be compatible with the Michelangelo API yarpc server.
@@ -29,12 +29,12 @@ type Services = {
 let servicesPromise: Promise<Services> | null = null;
 
 async function createServices(): Promise<Services> {
-  const baseUrl = await getApiConfig();
+  const { apiBaseUrl } = await getRuntimeConfig();
 
   // This transport is used to connect to the Envoy proxy that proxies gRPC web requests
   // to gRPC services.
   const transport = createGrpcWebTransport({
-    baseUrl,
+    baseUrl: apiBaseUrl,
     interceptors: [callerInterceptor],
     useBinaryFormat: true,
   });

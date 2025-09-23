@@ -3,7 +3,7 @@ interface RuntimeConfig {
 }
 
 // Fetches runtime configuration from /config.json.
-export async function getApiConfig(): Promise<string> {
+export async function getRuntimeConfig(): Promise<RuntimeConfig> {
   let response: Response;
   try {
     response = await fetch('/config.json');
@@ -38,7 +38,7 @@ export async function getApiConfig(): Promise<string> {
     throw createConfigError('Check that config.json contains apiBaseUrl field.');
   }
 
-  return config.apiBaseUrl;
+  return config;
 }
 
 function createConfigError(reason: string, options?: ErrorOptions): Error {

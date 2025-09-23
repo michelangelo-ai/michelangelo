@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getApiConfig } from '../runtime-config';
+import { getRuntimeConfig } from '../runtime-config';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -27,16 +27,16 @@ describe('getApiConfig', () => {
       json: () => Promise.resolve({ apiBaseUrl: 'http://production-envoy:8081' }),
     } as Response);
 
-    const result = await getApiConfig();
+    const result = await getRuntimeConfig();
 
-    expect(result).toBe('http://production-envoy:8081');
+    expect(result.apiBaseUrl).toBe('http://production-envoy:8081');
     expect(mockFetch).toHaveBeenCalledWith('/config.json');
   });
 
   it('should throw error when fetch fails with network error', async () => {
     mockFetch.mockRejectedValueOnce(new Error('Network error'));
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check that config.json is properly mounted.'
     );
   });
@@ -47,7 +47,7 @@ describe('getApiConfig', () => {
       status: 404,
     } as Response);
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check that config.json is properly mounted.'
     );
   });
@@ -58,7 +58,7 @@ describe('getApiConfig', () => {
       status: 500,
     } as Response);
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check that config.json is properly mounted.'
     );
   });
@@ -69,7 +69,7 @@ describe('getApiConfig', () => {
       json: () => Promise.reject(new SyntaxError('Unexpected token')),
     } as Response);
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check that config.json contains valid JSON.'
     );
   });
@@ -80,7 +80,7 @@ describe('getApiConfig', () => {
       json: () => Promise.resolve({ someOtherField: 'value' }),
     } as Response);
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check that config.json contains apiBaseUrl field.'
     );
   });
@@ -88,7 +88,7 @@ describe('getApiConfig', () => {
   it('should throw specific error for network connectivity issues', async () => {
     mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-    await expect(getApiConfig()).rejects.toThrow(
+    await expect(getRuntimeConfig()).rejects.toThrow(
       'Failed to load runtime configuration. Check network connectivity.'
     );
   });
