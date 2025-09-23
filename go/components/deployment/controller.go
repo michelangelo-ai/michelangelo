@@ -30,11 +30,15 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/revision"
+	"github.com/michelangelo-ai/michelangelo/go/logging"
 	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -57,10 +61,11 @@ const (
 
 	// this is the concurrency reconcile loops for deployment, it can be tuned if needed.
 	_maximumConcurrentReconciles = 10
-	_timeFormat                  = "20060102-121314"
 
 	_alertFiredMessage          = "Alert fired"
 	_desiredModelChangedMessage = "Desired model changed"
+
+	_timeFormat = "20060102-121314"
 )
 
 // Reconciler reconciles a Deployment object
@@ -72,18 +77,28 @@ type Reconciler struct {
 	Registrar         pluginmanager.Registrar[plugins.Plugin]
 	Engine            conditionInterfaces.Engine[*v2pb.Deployment]
 	RevisionManager   revision.Manager
-	Scope             interface{}
+	Scope             tally.Scope
 	apiHandlerFactory apiHandler.Factory
+	auditLogEmitter   logging.AuditLog
 }
 
 // NewReconciler returns a new model deployment reconciler.
 func NewReconciler(apiHandlerFactory apiHandler.Factory) *Reconciler {
+	registrar := pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard())
+
+	// Register plugins following Uber pattern - each plugin registers itself
+	if err := noop.RegisterNoOpPlugins(registrar); err != nil {
+		// In production, this would be handled properly, but for testing we continue
+		logr.Discard().Error(err, "failed to register noop plugins")
+	}
+
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
-		Registrar:         pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard()),
+		Registrar:         registrar,
 		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](zap.NewNop()),
 		RevisionManager:   revision.NewNoOpManager(),
-		Scope:             NewNoOpScope(),
+		Scope:             tally.NoopScope,
+		auditLogEmitter:   &logging.DummyAuditLog{},
 	}
 }
 
@@ -97,12 +112,6 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 	r.Handler = handler
-
-	// Register the default no-op plugin
-	noOpPlugin := plugins.NewNoOpPlugin()
-	r.Registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin)
-	r.Registrar.RegisterPlugin(v2pb.TARGET_TYPE_OFFLINE.String(), "", noOpPlugin)
-	r.Registrar.RegisterPlugin(v2pb.TARGET_TYPE_MOBILE.String(), "", noOpPlugin)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
@@ -294,7 +303,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	sw.Stop()
 	deployment.Status = *status
 
-	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE {
+	if common.IsCleanupCompleteStage(deployment.Status.Stage) {
 		// If the resource is in cleanup completion stage, then it is eligible for deletion.
 		// Since we do not expect this resource to be reconciled (until new user action), the finalizer will not be
 		// added again. If there is a new user action, then it is reasonable to avoid deletion. Conversely, if the
@@ -328,12 +337,13 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	var err error
 	var conditionPlugin conditionInterfaces.Plugin[*v2pb.Deployment]
 
-	// Simplified logic for no-op implementation
-	// Check if deployment should be cleaned up (marked for deletion)
-	shouldCleanup := !deployment.GetDeletionTimestamp().IsZero()
-
-	if shouldCleanup {
-		if deployment.Status.Stage != v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS {
+	// TODO: Add runtime context to match Uber internal pattern exactly
+	// The Uber internal code uses: runtimeContext := conditions.NewRequestContext(log, r.Recorder)
+	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
+	// This requires updating the Engine interface to match Uber's 4-parameter signature
+	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
+	if common.ShouldCleanup(*deployment) {
+		if !common.IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
 			metrics.cleanupMetrics.initiatedCount.Inc(1)
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
@@ -345,12 +355,11 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			log.Error(err, "Cleanup plugin processing failed with error")
 			return result, err
 		}
-	} else {
-		// Simplified rollout logic - just process through the stages
+	} else if common.RolloutInProgress(*deployment) {
 		sw := metrics.healthCheckGateMetrics.duration.Start()
 		metrics.healthCheckGateMetrics.count.Inc(1)
 		observability := r.getObservability(log, deployment.Namespace)
-		_, healthGateError := plugin.HealthCheckGate(ctx, observability, deployment)
+		isHealthy, healthGateError := plugin.HealthCheckGate(ctx, observability, deployment)
 		if healthGateError != nil {
 			metrics.healthCheckGateMetrics.errorCount.Inc(1)
 			log.Error(healthGateError, "failed to get the health check ")
@@ -358,59 +367,65 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		}
 		sw.Stop()
 
-		// In no-op implementation, we never rollback - just continue with rollout
-		conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
-		if err != nil {
-			log.Info("failed to retrieve rollout plugin")
-			return result, err
-		}
-		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
-		if err != nil {
-			log.Error(err, "Rollout plugin processing failed with error")
-			return result, err
-		}
-	}
+		desiredModelChanged := common.ShouldRollback(*deployment)
+		rollbackAlertsEnabled := common.RollbackAlertsEnabled(*deployment)
+		if (!isHealthy || desiredModelChanged) && rollbackAlertsEnabled {
+			if !common.IsRollbackStage(deployment.GetStatus().Stage) {
+				deployment.Status.Message = fmt.Sprintf("Detected that a rollback should occur due to alert firing=[%v], or due to the desired model changing=[%v]", isHealthy, desiredModelChanged)
+				log.Info("detected that a rollback should occur")
+				metrics.rollbackMetrics.initiatedCount.Inc(1)
+				// This should rollback check only checks if the current model being rolled out doesn't match the target
+				// model. In these cases, we need to stop the rollout.
+				deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+				r.updateRollbackReason(deployment, isHealthy)
+			}
 
-	// Check if we should trigger a new rollout (simplified logic)
-	shouldTriggerNewRollout := deployment.Spec.DesiredRevision != nil &&
-		(deployment.Status.CandidateRevision == nil ||
-			deployment.Spec.DesiredRevision.Name != deployment.Status.CandidateRevision.Name)
-
-	if shouldTriggerNewRollout && deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_INVALID {
+			conditionPlugin = plugin.GetRollbackPlugin()
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			if err != nil {
+				log.Error(err, "Rollback plugin processing failed with error")
+				return result, err
+			}
+		} else {
+			conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
+			if err != nil {
+				log.Info("failed to retrieve rollout plugin")
+				return result, err
+			}
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			if err != nil {
+				log.Error(err, "Rollout plugin processing failed with error")
+				return result, err
+			}
+		}
+	} else if common.TriggerNewRollout(*deployment) {
 		log.Info("detected new rollout")
 		metrics.rolloutMetrics.initiatedCount.Inc(1)
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
 
 		//cleanup rollback reason from previous deployment (if any)
-		if deployment.Annotations != nil {
-			delete(deployment.Annotations, _deploymentRollbackReason)
+		delete(deployment.Annotations, _deploymentRollbackReason)
+
+		if common.IsEmergencyRollout(*deployment) {
+			event := buildEmergencyRolloutEvent(ctx, deployment)
+			r.auditLogEmitter.Emit(ctx, event)
 		}
 
-		// Check for emergency rollout (simplified - blast strategy not available in protobuf)
-		if deployment.Spec.Strategy != nil {
-			log.Info("Strategy detected in deployment")
+		if !common.ShouldSkipRollout(*deployment) {
+			r.incrementRolloutCount(deployment, log)
+			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+			conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
+			if err != nil {
+				log.Info("failed to retrieve rollout plugin")
+				return result, err
+			}
+			result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
+			if err != nil {
+				log.Error(err, "Rollout plugin processing failed with error")
+				return result, err
+			}
 		}
-
-		// Start the rollout
-		r.incrementRolloutCount(deployment, log)
-		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
-		conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
-		if err != nil {
-			log.Info("failed to retrieve rollout plugin")
-			return result, err
-		}
-		result, err = r.Engine.Run(ctx, conditionPlugin, deployment)
-		if err != nil {
-			log.Error(err, "Rollout plugin processing failed with error")
-			return result, err
-		}
-	}
-
-	// Check if deployment is in steady state (simplified)
-	isInSteadyState := deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
-
-	if isInSteadyState {
+	} else if common.InSteadyState(*deployment) {
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
@@ -435,16 +450,7 @@ func (r *Reconciler) handleStageTransition(
 	err error) bool {
 
 	var messages []string
-
-	// Check if stage is terminal (simplified)
-	isTerminal := deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED
-
-	if !isTerminal {
+	if !common.IsTerminalStage(deployment.Status.Stage) {
 		if deployment.Status.Message != "" {
 			messages = append(messages, deployment.Status.Message)
 		}
@@ -465,7 +471,14 @@ func (r *Reconciler) handleStageTransition(
 		metrics.rolloutMetrics.completedCount.Inc(1)
 		// Graduate the candidate revision.
 		deployment.Status.CurrentRevision = deployment.Status.CandidateRevision
-		// In simplified version, we skip creating deployment events
+		metrics.createDeploymentEventMetrics.count.Inc(1)
+		createDeploymentEventErr := r.createDeploymentEvent(ctx, deployment)
+		if createDeploymentEventErr != nil {
+			metrics.createDeploymentEventMetrics.errorCount.Inc(1)
+			errMsg := "Failed to create DeploymentEvent object during ROLLOUT_COMPLETE"
+			log.Error(createDeploymentEventErr, errMsg)
+			messages = append(messages, errMsg)
+		}
 		break
 	case v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED:
 		metrics.rolloutMetrics.failedCount.Inc(1)
@@ -473,6 +486,18 @@ func (r *Reconciler) handleStageTransition(
 		break
 	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE:
 		metrics.cleanupMetrics.completedCount.Inc(1)
+
+		// create DeploymentEvent before clearing CurrentRevision below since it's required to determine if the
+		// Deployment is for an LLM
+		metrics.createDeploymentEventMetrics.count.Inc(1)
+		createDeploymentEventErr := r.createDeploymentEvent(ctx, deployment)
+		if createDeploymentEventErr != nil {
+			metrics.createDeploymentEventMetrics.errorCount.Inc(1)
+			errMsg := "Failed to create DeploymentEvent object during CLEAN_UP_COMPLETE"
+			log.Error(createDeploymentEventErr, errMsg)
+			messages = append(messages, errMsg)
+		}
+
 		// Clear candidate and current revisions.
 		deployment.Status.CurrentRevision = nil
 		deployment.Status.CandidateRevision = nil
@@ -514,8 +539,12 @@ func (r *Reconciler) handleStageTransition(
 }
 
 func (r *Reconciler) getPlugin(deployment v2pb.Deployment) (plugins.Plugin, error) {
-	// Simplified: Return the no-op plugin for all targets
-	return r.Registrar.GetPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", nil)
+	if deployment.Spec.Definition == nil {
+		return r.Registrar.GetPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", &deployment)
+	}
+
+	definition := deployment.Spec.Definition
+	return r.Registrar.GetPlugin(definition.Type.String(), definition.SubType, &deployment)
 }
 
 func (r *Reconciler) incrementRolloutCount(deployment *v2pb.Deployment, log logr.Logger) {
@@ -550,9 +579,12 @@ func (r *Reconciler) updateRollbackReason(deployment *v2pb.Deployment, isHealthy
 }
 
 func (r *Reconciler) getObservability(log logr.Logger, namespace string) plugins.ObservabilityContext {
+	tags := map[string]string{
+		_namespaceTag: namespace,
+	}
 	return plugins.ObservabilityContext{
 		Logger: log,
-		Scope:  r.Scope,
+		Scope:  r.Scope.Tagged(tags),
 	}
 }
 
@@ -565,12 +597,54 @@ func getTerminalStage(deployment v2pb.Deployment) (v2pb.DeploymentStage, bool) {
 	// Furthermore, the rollout will not continue because we've reached a terminal stage.
 	//
 	// During cleanup, we will terminate because at this point the status is no longer relevant.
-	if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS {
+	if common.IsCleanupStage(deployment.Status.Stage) {
 		return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED, false
-	} else if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS {
+	} else if common.IsRollbackStage(deployment.Status.Stage) {
 		return v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED, true
+	} else if common.RolloutInProgress(deployment) {
+		return v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED, true
 	}
 
-	// Simplified: assume rollout in progress if not in terminal state
-	return v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED, true
+	return deployment.Status.Stage, false
+}
+
+// createDeploymentEvent creates a deployment event for tracking deployment state transitions
+// In simplified version, this is a no-op to maintain structure compatibility with Uber internal code
+func (r *Reconciler) createDeploymentEvent(ctx context.Context, deployment *v2pb.Deployment) error {
+	// TODO: In full implementation, this would:
+	// 1. Marshal the deployment object to protobuf.Any
+	// 2. Create a DeploymentEvent resource with the marshaled deployment content
+	// 3. Save it to the cluster for audit/tracking purposes
+	// For now, this is a no-op but maintains the same function signature as Uber internal
+	r.Log.V(1).Info("createDeploymentEvent called (no-op in simplified version)",
+		"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
+		"stage", deployment.Status.Stage)
+	return nil
+}
+
+// createDeploymentEventName generates a name for deployment events following Uber internal pattern
+func createDeploymentEventName(deploymentName string) string {
+	return fmt.Sprintf("%s-%s", deploymentName, time.Now().Format(_timeFormat))
+}
+
+// buildEmergencyRolloutEvent creates an audit log event for emergency rollout tracking
+func buildEmergencyRolloutEvent(ctx context.Context, deployment *v2pb.Deployment) *logging.AuditLogEvent {
+	requestNamespace := deployment.Namespace
+	entityType := "deployment"
+	entityName := deployment.Name
+	procedure := "reconcile"
+
+	requestStr := "{'jira_link':" +
+		deployment.Spec.Strategy.GetBlast().GetJiraLink() +
+		", with_rollback_alerts: " +
+		strconv.FormatBool(deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger()) +
+		"}"
+
+	return &logging.AuditLogEvent{
+		Namespace:  requestNamespace,
+		EntityType: entityType,
+		EntityName: entityName,
+		Procedure:  procedure,
+		Request:    requestStr,
+	}
 }
