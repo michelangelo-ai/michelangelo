@@ -315,17 +315,19 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	// if resume from a previous run, enable cache
 	envs[_cacheEnabledVarName] = "true"
 	resumePipelineRunID := pipelineRun.Spec.Resume.PipelineRun
+	logger.Info("resume pipeline run id: ", zap.Any("resumePipelineRunID", resumePipelineRunID))
 	taskCacheVersion := map[string]string{}
 
 	// Loop continues as long as resumePipelineRunID is not nil
 	for resumePipelineRunID != nil {
 		resumePipelineRun := &v2.PipelineRun{}
 		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.apiHandler, resumePipelineRun)
+		logger.Info("resumed pipeline fetched: ", zap.Any("resumePipelineRun", resumePipelineRun))
 		if err != nil {
 			logger.Error("failed to get resume pipeline run", zap.Error(err))
 			return fmt.Errorf("failed to get resume pipeline run: %v", err)
 		}
-		getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
+		a.getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
 		if resumePipelineRun.Spec.Resume == nil || resumePipelineRun.Spec.Resume.PipelineRun == nil {
 			break
 		}
@@ -348,12 +350,14 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	return nil
 }
 
-func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
+func (a *ExecuteWorkflowActor) getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("")))
 	executeWorkflowStep := getStepInfoByName(pipelinerunutils.ExecuteWorkflowStepName, resumePipelineRun.Status.Steps)
 	for _, subStepInfo := range executeWorkflowStep.SubSteps {
 		if subStepInfo.StepCachedOutputs != nil && subStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED {
 			if _, ok := taskCacheVersion[subStepInfo.DisplayName]; !ok {
 				taskCacheVersion[subStepInfo.DisplayName] = resumePipelineRun.Name
+				logger.Info("-- taskCacheVersion: ", zap.Any("taskCacheVersion", taskCacheVersion))
 			}
 		}
 	}

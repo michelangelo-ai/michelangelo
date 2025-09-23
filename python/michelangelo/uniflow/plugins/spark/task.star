@@ -45,14 +45,15 @@ def spark_task(
                     end_time_seconds = time.time()
                     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
                     report_progress(
-                        task_name = task_name,
                         task_path = task_path,
+                        task_name = task_name,
+                        task_log = "",
+                        task_message = "Spark Task skipped due to Cache Hit",
                         task_state = TASK_STATE_SKIPPED,
                         start_time = start_time_formated_str,
-                        task_message = "Spark Task skipped due to Cache Hit",
-                        task_log = "",
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
+                        retry_attempt_id = "",
                     )
                     result = io_read_json(cached_result_json_url)
                     print("spark | cached", "result:", result)
@@ -186,13 +187,13 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
             driver_log_url = terminated_job.get("status", {}).get("jobUrl", "")
 
         report_progress(
-            task_name = task_name,
             task_path = task_path,
+            task_name = task_name,
+            task_log = driver_log_url,
+            task_message = "Spark job succeeded",
             task_state = TASK_STATE_SUCCEEDED,
             start_time = start_time_formated_str,
-            task_log = driver_log_url,
             end_time = end_time_formated_str,
-            task_message = "Spark job succeeded",
             output = created_cached_output.get("metadata", {}).get("name", ""),
             retry_attempt_id = retry_attempt_id,
         )
@@ -228,12 +229,14 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
 
     # report task as pending
     report_progress(
-        task_name = task_name,
         task_path = task_path,
+        task_name = task_name,
+        task_log = driver_log_url,
+        task_message = "Spark job has been submitted",
         task_state = TASK_STATE_PENDING,
         start_time = start_time_formated_str,
-        task_message = "Spark job has been submitted",
-        task_log = driver_log_url,
+        end_time = "",
+        output = "",
         retry_attempt_id = retry_attempt_id,
     )
 
