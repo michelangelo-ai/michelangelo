@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/stretchr/testify/assert"
@@ -286,43 +287,120 @@ func TestGetProvider(t *testing.T) {
 	assert.Equal(t, "cadence", client.GetProvider())
 }
 
+func TestGetDomain(t *testing.T) {
+	client := &CadenceClient{
+		Client:   &cadencemocks.Client{},
+		Provider: "cadence",
+		Domain:   "default",
+	}
+	assert.Equal(t, "default", client.GetDomain())
+}
+
 func TestTerminateWorkflow(t *testing.T) {
-	ctx := context.Background()
-	workflowID := "test-workflow-id"
-	runID := "test-run-id"
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
 	reason := "test termination reason"
 
-	t.Run("success", func(t *testing.T) {
-		mockClient := &cadencemocks.Client{}
-		client := &CadenceClient{
-			Client:   mockClient,
-			Provider: "cadence",
-			Domain:   "test-domain",
-		}
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *cadencemocks.Client)
+		errMsg   string
+	}{
+		{
+			name: "TerminateWorkflow Succeeded",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, reason, mock.Anything).Return(nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "TerminateWorkflow Failed",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, reason, mock.Anything).Return(fmt.Errorf("test error"))
+			},
+			errMsg: "test error",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+			}
+			err := client.TerminateWorkflow(context.Background(), workflowID, runID, reason)
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
 
-		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason, []byte(nil)).Return(nil)
-
-		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
-
-		assert.NoError(t, err)
-		mockClient.AssertExpectations(t)
-	})
-
-	t.Run("error", func(t *testing.T) {
-		mockClient := &cadencemocks.Client{}
-		client := &CadenceClient{
-			Client:   mockClient,
-			Provider: "cadence",
-			Domain:   "test-domain",
-		}
-
-		expectedErr := fmt.Errorf("terminate failed")
-		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason, []byte(nil)).Return(expectedErr)
-
-		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
-
-		assert.Error(t, err)
-		assert.Equal(t, expectedErr, err)
-		mockClient.AssertExpectations(t)
-	})
+func TestListOpenWorkflow(t *testing.T) {
+	request := clientInterface.ListOpenWorkflowExecutionsRequest{
+		Domain:        "default",
+		NextPageToken: []byte("testPageToken"),
+		ExecutionFilter: &clientInterface.ExecutionFilter{
+			WorkflowID: "testWorkflowID",
+			RunID:      "testRunID",
+		},
+	}
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
+	executionTime := time.Now().UnixNano()
+	expectedResponse := &shared.ListOpenWorkflowExecutionsResponse{
+		Executions: []*shared.WorkflowExecutionInfo{
+			{
+				Execution: &shared.WorkflowExecution{
+					WorkflowId: &workflowID,
+					RunId:      &runID,
+				},
+				ExecutionTime: &executionTime,
+			},
+		},
+		NextPageToken: []byte("nextToken"),
+	}
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *cadencemocks.Client)
+		errMsg   string
+	}{
+		{
+			name: "ListOpenWorkflow Succeeded",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("ListOpenWorkflow", mock.Anything, mock.Anything).Return(expectedResponse, nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "ListOpenWorkflow Failed",
+			mockFunc: func(mockClient *cadencemocks.Client) {
+				mockClient.On("ListOpenWorkflow", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("test error"))
+			},
+			errMsg: "test error",
+		},
+	}
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := &cadencemocks.Client{}
+			testCase.mockFunc(mockClient)
+			client := &CadenceClient{
+				Client: mockClient,
+			}
+			response, err := client.ListOpenWorkflow(context.Background(), request)
+			if testCase.errMsg != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, response)
+				assert.Equal(t, 1, len(response.Executions))
+				assert.Equal(t, "testWorkflowID", response.Executions[0].Execution.ID)
+				assert.Equal(t, "testRunID", response.Executions[0].Execution.RunID)
+			}
+		})
+	}
 }

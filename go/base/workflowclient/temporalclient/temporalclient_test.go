@@ -284,43 +284,111 @@ func TestGetProvider(t *testing.T) {
 	require.Equal(t, "temporal", provider)
 }
 
+func TestGetDomain(t *testing.T) {
+	mockClient := temporalMocks.NewClient(t)
+	client := &TemporalClient{
+		Client:   mockClient,
+		Provider: "temporal",
+		Domain:   "default",
+	}
+	domain := client.GetDomain()
+	require.Equal(t, "default", domain)
+}
+
+func TestListOpenWorkflow(t *testing.T) {
+	request := clientInterface.ListOpenWorkflowExecutionsRequest{
+		Domain:        "default",
+		NextPageToken: []byte("testPageToken"),
+		ExecutionFilter: &clientInterface.ExecutionFilter{
+			WorkflowID: "testWorkflowID",
+			RunID:      "testRunID",
+		},
+	}
+
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *temporalMocks.Client)
+		errMsg   string
+	}{
+		{
+			name: "ListOpenWorkflow Succeeded",
+			mockFunc: func(mockClient *temporalMocks.Client) {
+				mockResponse := &workflowserviceV1.ListOpenWorkflowExecutionsResponse{
+					Executions:    []*workflowV1.WorkflowExecutionInfo{},
+					NextPageToken: []byte("nextToken"),
+				}
+				mockClient.On("ListOpenWorkflow", mock.Anything, mock.Anything).Return(mockResponse, nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "ListOpenWorkflow Failed",
+			mockFunc: func(mockClient *temporalMocks.Client) {
+				mockClient.On("ListOpenWorkflow", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("test error"))
+			},
+			errMsg: "test error",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			testCase.mockFunc(mockClient)
+			client := &TemporalClient{
+				Client: mockClient,
+			}
+			response, err := client.ListOpenWorkflow(context.Background(), request)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, response)
+			}
+		})
+	}
+}
+
 func TestTerminateWorkflow(t *testing.T) {
-	ctx := context.Background()
-	workflowID := "test-workflow-id"
-	runID := "test-run-id"
+	workflowID := "testWorkflowID"
+	runID := "testRunID"
 	reason := "test termination reason"
 
-	t.Run("success", func(t *testing.T) {
-		mockClient := &temporalMocks.Client{}
-		client := &TemporalClient{
-			Client:   mockClient,
-			Provider: "temporal",
-			Domain:   "test-domain",
-		}
+	testCases := []struct {
+		name     string
+		mockFunc func(mockClient *temporalMocks.Client)
+		errMsg   string
+	}{
+		{
+			name: "TerminateWorkflow Succeeded",
+			mockFunc: func(mockClient *temporalMocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, reason).Return(nil)
+			},
+			errMsg: "",
+		},
+		{
+			name: "TerminateWorkflow Failed",
+			mockFunc: func(mockClient *temporalMocks.Client) {
+				mockClient.On("TerminateWorkflow", mock.Anything, workflowID, runID, reason).Return(fmt.Errorf("test error"))
+			},
+			errMsg: "test error",
+		},
+	}
 
-		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason).Return(nil)
-
-		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
-
-		require.NoError(t, err)
-		mockClient.AssertExpectations(t)
-	})
-
-	t.Run("error", func(t *testing.T) {
-		mockClient := &temporalMocks.Client{}
-		client := &TemporalClient{
-			Client:   mockClient,
-			Provider: "temporal",
-			Domain:   "test-domain",
-		}
-
-		expectedErr := fmt.Errorf("terminate failed")
-		mockClient.On("TerminateWorkflow", ctx, workflowID, runID, reason).Return(expectedErr)
-
-		err := client.TerminateWorkflow(ctx, workflowID, runID, reason)
-
-		require.Error(t, err)
-		require.Equal(t, expectedErr, err)
-		mockClient.AssertExpectations(t)
-	})
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			testCase.mockFunc(mockClient)
+			client := &TemporalClient{
+				Client: mockClient,
+			}
+			err := client.TerminateWorkflow(context.Background(), workflowID, runID, reason)
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
