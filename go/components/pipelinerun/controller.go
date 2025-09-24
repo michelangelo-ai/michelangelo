@@ -45,7 +45,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	result := conditionResult.Result
 	var returnErr error
 	if err != nil {
-		logger.Error("Failed to run engine", 
+		logger.Error("Failed to run engine",
 			zap.Error(err),
 			zap.String("operation", "run_engine"),
 			zap.String("namespace", req.Namespace),
@@ -65,7 +65,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			logger.Error("Failed to update pipeline run status", zap.Error(err))
 			return result, fmt.Errorf("update pipeline run status for %q: %w (previous error: %v)", req.NamespacedName, err, returnErr)
 		}
-		logger.Error("Failed to update pipeline run status", 
+		logger.Error("Failed to update pipeline run status",
 			zap.Error(err),
 			zap.String("operation", "update_status"),
 			zap.String("namespace", req.Namespace),
