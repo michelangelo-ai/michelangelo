@@ -18,6 +18,7 @@ go_library(
         "//go/components/pipelinerun:go_default_library",
         "//go/components/ray:go_default_library",
         "//go/components/spark:go_default_library",
+        "//go/components/triggerrun:go_default_library",
         "//go/controllermgr:go_default_library",
         "//go/kubeproto/metrics:go_default_library",
         "//proto/api/v2:go_default_library",
