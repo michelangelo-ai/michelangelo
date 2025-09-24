@@ -307,27 +307,23 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	envs[_cacheEnabledVarName] = "false"
 	envs[_cacheVersionVarName] = pipelineRun.Name
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
-		logger.Info("resume spec equal nil")
 		return nil
 	}
-	logger.Info("resume spec found")
 
 	// if resume from a previous run, enable cache
 	envs[_cacheEnabledVarName] = "true"
 	resumePipelineRunID := pipelineRun.Spec.Resume.PipelineRun
-	logger.Info("resume pipeline run id: ", zap.Any("resumePipelineRunID", resumePipelineRunID))
 	taskCacheVersion := map[string]string{}
 
 	// Loop continues as long as resumePipelineRunID is not nil
 	for resumePipelineRunID != nil {
 		resumePipelineRun := &v2.PipelineRun{}
 		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.apiHandler, resumePipelineRun)
-		logger.Info("resumed pipeline fetched: ", zap.Any("resumePipelineRun", resumePipelineRun))
 		if err != nil {
 			logger.Error("failed to get resume pipeline run", zap.Error(err))
 			return fmt.Errorf("failed to get resume pipeline run: %v", err)
 		}
-		a.getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
+		getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
 		if resumePipelineRun.Spec.Resume == nil || resumePipelineRun.Spec.Resume.PipelineRun == nil {
 			break
 		}
@@ -343,21 +339,17 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	if resumeFromTasks != nil && len(resumeFromTasks) > 0 {
 		for _, resumeFromTask := range resumeFromTasks {
 			envs[fmt.Sprintf("%s_%s", _cacheEnabledVarName, resumeFromTask)] = "false"
-			logger.Info("resume from task", zap.Any("resumeFromTask", resumeFromTask))
-			logger.Info("envs[", zap.Any("]", envs[resumeFromTask]))
 		}
 	}
 	return nil
 }
 
-func (a *ExecuteWorkflowActor) getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
-	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("")))
+func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
 	executeWorkflowStep := getStepInfoByName(pipelinerunutils.ExecuteWorkflowStepName, resumePipelineRun.Status.Steps)
 	for _, subStepInfo := range executeWorkflowStep.SubSteps {
 		if subStepInfo.StepCachedOutputs != nil && subStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED {
 			if _, ok := taskCacheVersion[subStepInfo.DisplayName]; !ok {
 				taskCacheVersion[subStepInfo.DisplayName] = resumePipelineRun.Name
-				logger.Info("-- taskCacheVersion: ", zap.Any("taskCacheVersion", taskCacheVersion))
 			}
 		}
 	}
