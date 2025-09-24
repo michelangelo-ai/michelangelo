@@ -4,7 +4,6 @@ go_library(
     name = "go_default_library",
     srcs = [
         "interface.go",
-        "noop.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins",
     visibility = ["//visibility:public"],
