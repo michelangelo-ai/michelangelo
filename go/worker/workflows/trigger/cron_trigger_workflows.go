@@ -7,12 +7,12 @@ import (
 	"sort"
 	"time"
 
+	"github.com/cadence-workflow/starlark-worker/workflow"
 	pbtypes "github.com/gogo/protobuf/types"
 	triggerrunUtil "github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
-	"github.com/cadence-workflow/starlark-worker/workflow"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
