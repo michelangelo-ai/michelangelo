@@ -6,8 +6,8 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop",
     visibility = ["//go/components/deployment:__subpackages__"],
     deps = [
+        "//go/base/pluginmanager:go_default_library",
         "//go/components/deployment/plugins:go_default_library",
-        "//go/components/deployment/utils/pluginmanager:go_default_library",
         "//proto/api/v2:go_default_library",
     ],
 )

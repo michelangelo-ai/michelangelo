@@ -1,8 +1,8 @@
 package noop
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/pluginmanager"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 

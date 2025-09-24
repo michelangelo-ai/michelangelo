@@ -3,7 +3,7 @@ package deployment
 import (
 	"context"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/utils/revision"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
