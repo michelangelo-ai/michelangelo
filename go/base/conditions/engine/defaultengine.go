@@ -62,14 +62,26 @@ func (e *DefaultEngine[T]) Run(ctx context.Context, plugin conditionInterfaces.P
 			IsTerminal:   true,
 		}, nil
 	case api.CONDITION_STATUS_FALSE:
-		return conditionInterfaces.Result{
-			Result: ctrl.Result{
-				Requeue:      false,
-				RequeueAfter: 0,
-			},
-			AreSatisfied: false,
-			IsTerminal:   true,
-		}, nil
+		if lastCondition.Reason == "Killed" {
+			return conditionInterfaces.Result{
+				Result: ctrl.Result{
+					Requeue:      false,
+					RequeueAfter: 0,
+				},
+				AreSatisfied: false,
+				IsTerminal:   true,
+				IsKilled:     true,
+			}, nil
+		} else {
+			return conditionInterfaces.Result{
+				Result: ctrl.Result{
+					Requeue:      false,
+					RequeueAfter: 0,
+				},
+				AreSatisfied: false,
+				IsTerminal:   true,
+			}, nil
+		}
 	}
 	return defaultResult, nil
 }

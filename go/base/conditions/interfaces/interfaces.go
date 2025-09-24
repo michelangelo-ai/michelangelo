@@ -49,4 +49,7 @@ type Result struct {
 
 	// IsTerminal is returned if the maximum number of configured retries are exhausted.
 	IsTerminal bool
+
+	// IsKilled is returned if execute workflow process has been killed
+	IsKilled bool
 }

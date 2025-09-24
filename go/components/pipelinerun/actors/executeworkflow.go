@@ -137,6 +137,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		newCondition.Reason = "Killed"
 		// Propagate appropriate states to substeps based on their current state
 		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, "Killed due to workflow termination")
 	}
@@ -454,6 +455,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	case pipelinerunutils.UniflowTaskStateKilled:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		stepInfo.Message = taskProgress.TaskMessage
+		// add isKilled = true for condition result
 	case pipelinerunutils.UniflowTaskStateSkipped:
 		stepInfo.State = v2.PIPELINE_RUN_STEP_STATE_SKIPPED
 	default:

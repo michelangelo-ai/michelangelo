@@ -49,7 +49,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		logger.Error("Failed to run engine", zap.Error(err))
 		returnErr = fmt.Errorf("Failed to run engine: %w", err)
 	} else {
-		if !conditionResult.IsTerminal {
+		if conditionResult.IsKilled {
+			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+		} else if !conditionResult.IsTerminal {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 		} else if conditionResult.AreSatisfied {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
