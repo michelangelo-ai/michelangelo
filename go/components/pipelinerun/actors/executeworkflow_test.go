@@ -21,6 +21,7 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
@@ -31,6 +32,97 @@ func TestExecuteWorkflowActor(t *testing.T) {
 	pipelineManifestContet := &pbtypes.Any{
 		Value:   contentStr,
 		TypeUrl: "type.googleapis.com/michelangelo.api.TypedStruct",
+	}
+
+	// Create previous successful pipeline runs with cached outputs for resume tests
+	previousPipelineRun1 := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-pipeline-run-1",
+			Namespace: "default",
+		},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:        pipelinerunutils.ExecuteWorkflowStepName,
+					DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+					State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        "task1",
+							DisplayName: "task1",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-1",
+									},
+								},
+							},
+						},
+						{
+							Name:        "task2",
+							DisplayName: "task2",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-2",
+									},
+								},
+							},
+						},
+						{
+							Name:        "task3",
+							DisplayName: "task3",
+							State:       v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create intermediate pipeline run for chained resume test
+	previousPipelineRun2 := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-pipeline-run-2",
+			Namespace: "default",
+		},
+		Spec: v2.PipelineRunSpec{
+			Resume: &v2.Resume{
+				PipelineRun: &apipb.ResourceIdentifier{
+					Namespace: "default",
+					Name:      "test-pipeline-run-1",
+				},
+				ResumeFrom: []string{"task3"},
+			},
+		},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:        pipelinerunutils.ExecuteWorkflowStepName,
+					DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+					State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        "task3",
+							DisplayName: "task3",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-3",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 	testCases := []struct {
 		name                        string
@@ -394,6 +486,174 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			expectedWorkflowID:    "test-workflow-id",
 			errMsg:                "",
 		},
+		{
+			name: "Resume from previous pipeline run - single resume chain",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run-2",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Resume: &v2.Resume{
+						PipelineRun: &apipb.ResourceIdentifier{
+							Namespace: "default",
+							Name:      "test-pipeline-run-1",
+						},
+						ResumeFrom: []string{"task2", "task3"},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContet,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							EndTime:     pbtypes.TimestampNow(),
+							StartTime:   pbtypes.TimestampNow(),
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ImageBuildType,
+							Status: apipb.CONDITION_STATUS_TRUE,
+						},
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
+					ID:    "456",
+					RunID: "123",
+				}, nil)
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+				StartTime:   pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "123",
+			expectedWorkflowID:    "456",
+			errMsg:                "",
+		},
+		{
+			name: "Resume from previous pipeline run - chained resume",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run-3",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Resume: &v2.Resume{
+						PipelineRun: &apipb.ResourceIdentifier{
+							Namespace: "default",
+							Name:      "test-pipeline-run-2",
+						},
+						ResumeFrom: []string{"task3"},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContet,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							EndTime:     pbtypes.TimestampNow(),
+							StartTime:   pbtypes.TimestampNow(),
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ImageBuildType,
+							Status: apipb.CONDITION_STATUS_TRUE,
+						},
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
+					ID:    "789",
+					RunID: "321",
+				}, nil)
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+				StartTime:   pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "321",
+			expectedWorkflowID:    "789",
+			errMsg:                "",
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -404,9 +664,9 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			scheme := runtime.NewScheme()
 			err := v2.AddToScheme(scheme)
 			require.NoError(t, err)
-			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
-			apiHandler := apiHandler.NewFakeAPIHandler(k8sClient)
-			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandler)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
 			previousCondition := conditionUtils.GetCondition(pipelinerunutils.ExecuteWorkflowStepName, testCase.pipelineRun.Status.Conditions)
 			condition, err := actor.Run(context.Background(), testCase.pipelineRun, previousCondition)
 			if testCase.errMsg != "" {
@@ -575,4 +835,443 @@ func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.
 		},
 	}
 	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler)
+}
+
+func TestResumeFromPipelineRun(t *testing.T) {
+	encodedContent := "Cix0eXBlLmdvb2dsZWFwaXMuY29tL21pY2hlbGFuZ2Vsby5VbmlGbG93Q29uZhLlBQqwAgoMZmVhdHVyZV9wcmVwEp8CKpwCChEKBHNlZWQSCREAAAAAAADwPwptCg5oaXZlX3RhYmxlX3VybBJbGlloZGZzOi8vL3VzZXIvaGl2ZS93YXJlaG91c2UvbWljaGVsYW5nZWxvLmRiL2RsX2V4YW1wbGVfZGF0YXNldHNfYm9zdG9uX2hvdXNpbmdfZnA2NF9sYWJlbAp+Cg9mZWF0dXJlX2NvbHVtbnMSazJpCgUaA2FnZQoDGgFiCgYaBGNoYXMKBhoEY3JpbQoFGgNkaXMKBxoFaW5kdXMKBxoFbHN0YXQKBRoDbm94CgkaB3B0cmF0aW8KBRoDcmFkCgQaAnJtCgUaA3RheAoEGgJ6bgoGGgRtZWR2ChgKC3RyYWluX3JhdGlvEgkRmpmZmZmZ6T8KVQoRd29ya2Zsb3dfZnVuY3Rpb24SQBo+dWJlci5haS5taWNoZWxhbmdlbG8uZXhwZXJpbWVudGFsLm1hZi53b3JrZmxvdy5UcmFpblNpbXBsaWZpZWQKvwEKBXRyYWluErUBKrIBCq8BCgp4Z2JfcGFyYW1zEqABKp0BChkKCW9iamVjdGl2ZRIMGgpyZWc6bGluZWFyChkKDG5fZXN0aW1hdG9ycxIJEQAAAAAAACRAChYKCW1heF9kZXB0aBIJEQAAAAAAABRAChoKDWxlYXJuaW5nX3JhdGUSCRGamZmZmZm5PwodChBjb2xzYW1wbGVfYnl0cmVlEgkRMzMzMzMz0z8KEgoFYWxwaGESCREAAAAAAAAkQAqWAQoKcHJlcHJvY2VzcxKHASqEAQqBAQoSY2FzdF9mbG9hdF9jb2x1bW5zEmsyaQoFGgNhZ2UKAxoBYgoGGgRjaGFzCgYaBGNyaW0KBRoDZGlzCgcaBWluZHVzCgcaBWxzdGF0CgUaA25veAoJGgdwdHJhdGlvCgUaA3JhZAoEGgJybQoFGgN0YXgKBBoCem4KBhoEbWVkdg=="
+	contentStr, _ := base64.StdEncoding.DecodeString(encodedContent)
+	pipelineManifestContent := &pbtypes.Any{
+		Value:   contentStr,
+		TypeUrl: "type.googleapis.com/michelangelo.api.TypedStruct",
+	}
+
+	// Create previous successful pipeline runs with cached outputs
+	previousPipelineRun1 := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-pipeline-run-1",
+			Namespace: "default",
+		},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:        pipelinerunutils.ExecuteWorkflowStepName,
+					DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+					State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        "task1",
+							DisplayName: "task1",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-1",
+									},
+								},
+							},
+						},
+						{
+							Name:        "task2",
+							DisplayName: "task2",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-2",
+									},
+								},
+							},
+						},
+						{
+							Name:        "task3",
+							DisplayName: "task3",
+							State:       v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create intermediate pipeline run for chained resume test
+	previousPipelineRun2 := &v2.PipelineRun{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "test-pipeline-run-2",
+			Namespace: "default",
+		},
+		Spec: v2.PipelineRunSpec{
+			Resume: &v2.Resume{
+				PipelineRun: &apipb.ResourceIdentifier{
+					Namespace: "default",
+					Name:      "test-pipeline-run-1",
+				},
+				ResumeFrom: []string{"task3"},
+			},
+		},
+		Status: v2.PipelineRunStatus{
+			Steps: []*v2.PipelineRunStepInfo{
+				{
+					Name:        pipelinerunutils.ExecuteWorkflowStepName,
+					DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+					State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+					SubSteps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        "task3",
+							DisplayName: "task3",
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							StepCachedOutputs: &v2.PipelineRunStepCachedOutputs{
+								IntermediateVars: []*apipb.ResourceIdentifier{
+									{
+										Namespace: "default",
+										Name:      "cached-output-3",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name                       string
+		pipelineRun                *v2.PipelineRun
+		mockSetup                  func(*testing.T, *workflowclientMock.MockWorkflowClient, *blobstoreMock.MockBlobStoreClient)
+		expectedCacheEnabled       bool
+		expectedCacheVersionVars   map[string]string
+		expectedResumeFromDisabled []string
+	}{
+		{
+			name: "Resume from single pipeline run",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run-2",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Resume: &v2.Resume{
+						PipelineRun: &apipb.ResourceIdentifier{
+							Namespace: "default",
+							Name:      "test-pipeline-run-1",
+						},
+						ResumeFrom: []string{"task3"},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContent,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockSetup: func(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+
+				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
+
+				// Capture the environment variables passed to StartWorkflow
+				var capturedEnvs map[string]interface{}
+				workflowClient.EXPECT().StartWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					capturedEnvs = envs
+
+					// Verify cache is enabled
+					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
+					require.Equal(t, "test-pipeline-run-2", capturedEnvs["CACHE_VERSION"])
+
+					// Verify cache versions are set for successful tasks
+					require.Equal(t, "test-pipeline-run-1", capturedEnvs["CACHE_VERSION_GET_task1"])
+					require.Equal(t, "test-pipeline-run-1", capturedEnvs["CACHE_VERSION_GET_task2"])
+
+					// Verify cache is disabled for resume from task
+					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED_task3"])
+
+					return &clientInterfaces.WorkflowExecution{
+						ID:    "456",
+						RunID: "123",
+					}, nil
+				})
+			},
+			expectedCacheEnabled: true,
+			expectedCacheVersionVars: map[string]string{
+				"CACHE_VERSION_GET_task1": "test-pipeline-run-1",
+				"CACHE_VERSION_GET_task2": "test-pipeline-run-1",
+			},
+			expectedResumeFromDisabled: []string{"task3"},
+		},
+		{
+			name: "Resume from chained pipeline run",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run-3",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Resume: &v2.Resume{
+						PipelineRun: &apipb.ResourceIdentifier{
+							Namespace: "default",
+							Name:      "test-pipeline-run-2",
+						},
+						ResumeFrom: []string{"task3"},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContent,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockSetup: func(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
+
+				// Capture the environment variables passed to StartWorkflow
+				var capturedEnvs map[string]interface{}
+				workflowClient.EXPECT().StartWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					capturedEnvs = envs
+
+					// Verify cache is enabled
+					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
+					require.Equal(t, "test-pipeline-run-3", capturedEnvs["CACHE_VERSION"])
+
+					// Verify cache versions are set for successful tasks from the chain
+					// task1 and task2 should come from test-pipeline-run-1
+					require.Equal(t, "test-pipeline-run-1", capturedEnvs["CACHE_VERSION_GET_task1"])
+					require.Equal(t, "test-pipeline-run-1", capturedEnvs["CACHE_VERSION_GET_task2"])
+					// task3 should come from test-pipeline-run-2
+					require.Equal(t, "test-pipeline-run-2", capturedEnvs["CACHE_VERSION_GET_task3"])
+
+					// Verify cache is disabled for resume from task
+					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED_task3"])
+
+					return &clientInterfaces.WorkflowExecution{
+						ID:    "789",
+						RunID: "321",
+					}, nil
+				})
+			},
+			expectedCacheEnabled: true,
+			expectedCacheVersionVars: map[string]string{
+				"CACHE_VERSION_GET_task1": "test-pipeline-run-1",
+				"CACHE_VERSION_GET_task2": "test-pipeline-run-1",
+				"CACHE_VERSION_GET_task3": "test-pipeline-run-2",
+			},
+			expectedResumeFromDisabled: []string{"task3"},
+		},
+		{
+			name: "Resume from pipeline run - no resume spec",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run-no-resume",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					// No Resume spec
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContent,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockSetup: func(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
+
+				// Capture the environment variables passed to StartWorkflow
+				var capturedEnvs map[string]interface{}
+				workflowClient.EXPECT().StartWorkflow(
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+					gomock.Any(),
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					capturedEnvs = envs
+
+					// Verify cache is disabled
+					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
+					require.Equal(t, "test-pipeline-run-no-resume", capturedEnvs["CACHE_VERSION"])
+
+					return &clientInterfaces.WorkflowExecution{
+						ID:    "789",
+						RunID: "321",
+					}, nil
+				})
+			},
+			expectedCacheEnabled:       false,
+			expectedCacheVersionVars:   map[string]string{},
+			expectedResumeFromDisabled: []string{},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2).
+				Build()
+
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			testCase.mockSetup(t, workflowClient, blobStoreClient)
+
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+
+			// Set up the workflow step as pending with unknown condition
+			previousCondition := &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			}
+
+			condition, err := actor.Run(context.Background(), testCase.pipelineRun, previousCondition)
+			require.NoError(t, err)
+			require.NotNil(t, condition)
+			require.Equal(t, ExecuteWorkflowType, condition.Type)
+			require.Equal(t, apipb.CONDITION_STATUS_UNKNOWN, condition.Status)
+
+			// Verify the pipeline run state was updated
+			executeWorkflowStep := pipelinerunutils.GetStep(testCase.pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+			require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeWorkflowStep.State)
+			require.NotEmpty(t, testCase.pipelineRun.Status.WorkflowId)
+			require.NotEmpty(t, testCase.pipelineRun.Status.WorkflowRunId)
+		})
+	}
 }
