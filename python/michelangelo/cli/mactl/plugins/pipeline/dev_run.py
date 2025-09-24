@@ -65,6 +65,7 @@ def generate_dev_run(crd: CRD, channel: Channel):
             Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
             Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
             Parameter("env", Parameter.POSITIONAL_OR_KEYWORD, default={}),
+            Parameter("resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None),
         ]
     )
 
@@ -76,6 +77,13 @@ def generate_dev_run(crd: CRD, channel: Channel):
 
         _file = get_single_arg(bound_args.arguments, "file")
 
+        # Handle optional resume_from parameter
+        _resume_from_raw = bound_args.arguments.get("resume_from")
+        if _resume_from_raw:
+            _resume_from = get_single_arg(bound_args.arguments, "resume_from")
+        else:
+            _resume_from = None
+
         environment_variables = _process_env_variables(
             bound_args.arguments.get("env", [])
         )
@@ -85,6 +93,10 @@ def generate_dev_run(crd: CRD, channel: Channel):
         yaml_path = Path(yaml_path_string).resolve()
         yaml_dict = yaml_to_dict(yaml_path_string)
         yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
+
+        # Add resume_from to yaml_dict so it can be processed by the metadata converter
+        if _resume_from:
+            yaml_dict["resume_from"] = _resume_from
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
             yaml_dict, input_class, yaml_path
@@ -156,13 +168,21 @@ def convert_crd_metadata_pipeline_dev_run(
         workflow_function_name,
     )
 
-    pipeline_dev_run_cr = generate_pipeline_dev_run_object(yaml_dict, pipeline_spec)
+    # Extract resume_from parameter if present
+    resume_from = yaml_dict.get("resume_from")
+
+    pipeline_dev_run_cr = generate_pipeline_dev_run_object(yaml_dict, pipeline_spec, resume_from)
     return {"pipeline_run": pipeline_dev_run_cr}
 
 
-def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict) -> dict:
+def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict, resume_from: str = None) -> dict:
     """
     Generate Pipeline Dev Run CR as dictionary.
+
+    Args:
+        yaml_dict: YAML configuration dictionary
+        pipeline_spec: Pipeline specification dictionary
+        resume_from: Optional resume specification in format "pipeline_run_name:step_name"
     """
 
     namespace = yaml_dict.get("metadata", {}).get("namespace", "")
@@ -170,7 +190,7 @@ def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict) -> di
     pipeline_run_name = generate_pipeline_run_name()
 
     pipeline_run_obj = generate_pipeline_run_object(
-        run_name=pipeline_run_name, pipeline_name=pipeline_name, namespace=namespace
+        run_name=pipeline_run_name, pipeline_name=pipeline_name, namespace=namespace, resume_from=resume_from
     )
 
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})
