@@ -14,6 +14,7 @@ from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.ref import ref, unref, Ref
 from michelangelo.uniflow.core.task_config import TaskConfig, Dependencies
 from michelangelo.uniflow.core.utils import dot_path
+from michelangelo.uniflow.core.image_spec import ImageSpec
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec
@@ -43,6 +44,7 @@ class TaskFunction(Generic[P, R]):
         cache_enabled: bool = False,
         cache_version: Optional[str] = None,
         retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
+        image_spec: Optional[ImageSpec] = None,
     ):
         self._fn = fn
         self._config = config
@@ -51,6 +53,7 @@ class TaskFunction(Generic[P, R]):
         self._cache_enabled = cache_enabled
         self._cache_version = cache_version
         self._retry_attempts = retry_attempts
+        self._image_spec = image_spec
 
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         fn_path = dot_path(self._fn)
@@ -109,6 +112,7 @@ class TaskFunction(Generic[P, R]):
         alias: Optional[str] = None,
         config: Optional[TaskConfig] = None,
         retry_attempts: Optional[int] = None,
+        image_spec: Optional[ImageSpec] = None,
     ) -> "TaskFunction[P, R]":
         """
         Creates a new TaskFunction instance with overridden alias and/or config.
@@ -124,6 +128,11 @@ class TaskFunction(Generic[P, R]):
                                            For example, if the original configuration specifies a head_cpu = 4, head_memory = 16GB,
                                            and the new configuration specifies a CPU count of 8,
                                            the resulting configuration will have a head_cpu = 8 and a head_memory = 16GB.
+            retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries).
+            image_spec (Optional[ImageSpec]): An optional ImageSpec object. This object will be merged the original image spec in the decorator.
+                                             For example, if the original image spec specifies a container image = "docker.io/library/examples:latest",
+                                             and the new image spec specifies a container image = "docker.io/library/examples:latest",
+                                             the resulting image spec will have a container image = "docker.io/library/examples:latest".
         Returns:
             TaskFunction[P, R]: A new TaskFunction instance with the specified overrides.
         """
@@ -135,6 +144,7 @@ class TaskFunction(Generic[P, R]):
             cache_enabled=self._cache_enabled,
             cache_version=self._cache_version,
             retry_attempts=retry_attempts or self._retry_attempts,
+            image_spec=image_spec or self._image_spec,
         )
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
@@ -181,6 +191,12 @@ class TaskFunction(Generic[P, R]):
             ast.keyword("retry_attempts", ast.Constant(self._retry_attempts))
         )
 
+        if self._image_spec:
+            if self._image_spec.container_image:
+                keywords.append(ast.keyword("container_image", ast.Constant(self._image_spec.container_image)))
+            if self._image_spec.receipt:
+                keywords.append(ast.keyword("receipt", ast.Constant(self._image_spec.receipt)))
+
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)
         return ast.Call(
@@ -197,6 +213,7 @@ def task(
     cache_enabled: bool = False,
     cache_version: Optional[str] = None,
     retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
+    image_spec: Optional[ImageSpec] = None,
 ):
     """
     Decorator for defining a task function. Usage example:
@@ -204,6 +221,16 @@ def task(
         @task(config=Python(cpu=1), cache_enabled=True, cache_version="v0")
         def task_1(a, b):
             return a + b
+
+        @task(
+            config=RayTask(cpu=1),
+            image_spec=ImageSpec(
+                container_image="my-image:latest",
+                receipt="bazel://path/to:target"
+            )
+        )
+        def task_with_custom_image():
+            pass
 
     Parameters:
         config: Task configuration object. It defines task type, such as Python, Spark, etc, as well as type-specific parameters.
@@ -218,6 +245,7 @@ def task(
             We can use this to save multiple versions of caches for the same task and specify the cache version used to
             skip the task. If it is None, the default cached version will be calculated by the docker image id of the task.
         retry_attempts: int: Number of retry attempts for the task. Default is 1 (no retries).
+        image_spec: Optional[ImageSpec]: Container image specification for the task. Allows specifying custom container images and build targets.
     """
 
     def decorator(fn: Callable[P, R]) -> TaskFunction[P, R]:
@@ -229,6 +257,7 @@ def task(
             cache_enabled=cache_enabled,
             cache_version=cache_version,
             retry_attempts=retry_attempts,
+            image_spec=image_spec,
         )
         update_wrapper(task_fn, fn)
 

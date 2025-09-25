@@ -10,6 +10,7 @@ from unittest import mock
 from michelangelo.uniflow.core.decorator import task, TaskFunction, workflow
 from michelangelo.uniflow.core.task_config import Dependencies
 from michelangelo.uniflow.core.ref import Ref
+from michelangelo.uniflow.core.image_spec import ImageSpec
 from tests.uniflow.core.test_task_config import TaskA, TaskB, a_environ, b_environ
 
 
@@ -99,6 +100,33 @@ def _echo_task(x):
     return x
 
 
+@task(
+    config=TaskA(cpu=1),
+    image_spec=ImageSpec(
+        container_image="test-image:latest",
+        receipt="bazel://test/path:target"
+    )
+)
+def task_with_image_spec():
+    """Task that uses ImageSpec with both container_image and receipt."""
+    return "task_with_image_spec_result"
+
+
+@task(
+    config=TaskA(cpu=2),
+    image_spec=ImageSpec(container_image="registry-image:v1.0")
+)
+def task_with_registry_image():
+    """Task that uses ImageSpec with only container_image (no receipt)."""
+    return "task_with_registry_image_result"
+
+
+@task(config=TaskA(cpu=1))
+def task_without_image_spec():
+    """Task without ImageSpec (baseline for comparison)."""
+    return "task_without_image_spec_result"
+
+
 @workflow()
 def generate_random_text_workflow(
     spec: RandomTextSpec,
@@ -120,6 +148,20 @@ def with_overrides_workflow(a, b) -> tuple:
     b = echo_task.with_overrides(alias="echo_b")(b)
 
     return a, b
+
+
+@workflow()
+def image_spec_workflow() -> dict:
+    """Workflow that tests ImageSpec functionality."""
+    result1 = task_with_image_spec()
+    result2 = task_with_registry_image()
+    result3 = task_without_image_spec()
+
+    return {
+        "with_image_spec": result1,
+        "with_registry_image": result2,
+        "without_image_spec": result3
+    }
 
 
 class TaskTest(unittest.TestCase):
@@ -233,3 +275,95 @@ class TestWorkflow(unittest.TestCase):
         a, b = with_overrides_workflow("foo", "bar")
         self.assertEqual(a, "foo")
         self.assertEqual(b, "bar")
+
+
+class ImageSpecTest(unittest.TestCase):
+    """Test cases for ImageSpec functionality in uniflow tasks."""
+
+    def test_task_with_image_spec(self):
+        """Test that tasks with ImageSpec can be created and have the correct attributes."""
+        self.assertIsInstance(task_with_image_spec, TaskFunction)
+        self.assertIsNotNone(task_with_image_spec._image_spec)
+        self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
+        self.assertEqual(task_with_image_spec._image_spec.receipt, "bazel://test/path:target")
+
+    def test_task_without_image_spec(self):
+        """Test that tasks without ImageSpec have None for image_spec."""
+        self.assertIsInstance(task_without_image_spec, TaskFunction)
+        self.assertIsNone(task_without_image_spec._image_spec)
+
+    @mock.patch.dict(
+        "os.environ",
+        {
+            "UF_STORAGE_URL": "memory://test",
+        },
+    )
+    def test_task_execution_with_image_spec(self):
+        """Test that tasks with ImageSpec execute correctly."""
+        result = task_with_image_spec()
+        self.assertEqual(result, "task_with_image_spec_result")
+
+        result2 = task_with_registry_image()
+        self.assertEqual(result2, "task_with_registry_image_result")
+
+    def test_task_transpile_with_image_spec(self):
+        """Test AST transpilation includes ImageSpec container_image and receipt."""
+        self.assertIsInstance(task_with_image_spec, TaskFunction)
+
+        deps = Dependencies()
+        exp = task_with_image_spec._transpile(deps)
+
+        # Check that container_image and receipt are included in transpiled AST
+        transpiled_code = ast.unparse(exp)
+        self.assertIn("container_image='test-image:latest'", transpiled_code)
+        self.assertIn("receipt='bazel://test/path:target'", transpiled_code)
+
+        # Verify basic task parameters are still present
+        self.assertIn("cpu=1", transpiled_code)
+        self.assertIn("cache_enabled=False", transpiled_code)
+
+    def test_task_transpile_with_registry_image_only(self):
+        """Test AST transpilation with only container_image (no receipt)."""
+        self.assertIsInstance(task_with_registry_image, TaskFunction)
+
+        deps = Dependencies()
+        exp = task_with_registry_image._transpile(deps)
+
+        transpiled_code = ast.unparse(exp)
+        self.assertIn("container_image='registry-image:v1.0'", transpiled_code)
+        # Receipt should not be present since it's None
+        self.assertNotIn("receipt=", transpiled_code)
+
+    def test_task_transpile_without_image_spec(self):
+        """Test AST transpilation without ImageSpec doesn't include image parameters."""
+        self.assertIsInstance(task_without_image_spec, TaskFunction)
+
+        deps = Dependencies()
+        exp = task_without_image_spec._transpile(deps)
+
+        transpiled_code = ast.unparse(exp)
+        # Neither container_image nor receipt should be present
+        self.assertNotIn("container_image=", transpiled_code)
+        self.assertNotIn("receipt=", transpiled_code)
+
+    def test_with_overrides_image_spec(self):
+        """Test task overrides with ImageSpec."""
+        # Create override with new ImageSpec
+        new_image_spec = ImageSpec(
+            container_image="override-image:v2.0",
+            receipt="bazel://override/path:target"
+        )
+
+        overridden_task = task_with_image_spec.with_overrides(
+            alias="overridden_task",
+            image_spec=new_image_spec
+        )
+
+        # Verify the override worked
+        self.assertEqual(overridden_task._alias, "overridden_task")
+        self.assertIsNotNone(overridden_task._image_spec)
+        self.assertEqual(overridden_task._image_spec.container_image, "override-image:v2.0")
+        self.assertEqual(overridden_task._image_spec.receipt, "bazel://override/path:target")
+
+        # Original task should be unchanged
+        self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
