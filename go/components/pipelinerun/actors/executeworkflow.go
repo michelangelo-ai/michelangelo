@@ -131,12 +131,14 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		// Propagate failed state to substeps to ensure no substeps remain in running state
+		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_FAILED, "Failed due to workflow failure")
 	case clientInterfaces.WorkflowExecutionStatusCanceled, clientInterfaces.WorkflowExecutionStatusTerminated:
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
 		// Propagate appropriate states to substeps based on their current state
-		a.propagateKilledStateToSubsteps(executeWorkflowStep)
+		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, "Killed due to workflow termination")
 	}
 	return newCondition, nil
 }
@@ -258,11 +260,12 @@ func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }
 
-// propagateKilledStateToSubsteps updates substep states when the parent workflow is terminated or canceled
+// propagateTerminalStateToSubsteps updates substep states when the parent workflow reaches a terminal state
+// This ensures no substeps remain in RUNNING or PENDING state when the workflow has ended
 // - PENDING substeps become INVALID (never started execution)
-// - RUNNING substeps become KILLED (were actively executing when terminated)
+// - RUNNING substeps become the specified terminal state (FAILED, KILLED, etc.)
 // - Terminal states (SUCCEEDED, FAILED, KILLED, SKIPPED) remain unchanged
-func (a *ExecuteWorkflowActor) propagateKilledStateToSubsteps(executeWorkflowStep *v2.PipelineRunStepInfo) {
+func (a *ExecuteWorkflowActor) propagateTerminalStateToSubsteps(executeWorkflowStep *v2.PipelineRunStepInfo, terminalState v2.PipelineRunStepState, message string) {
 	if executeWorkflowStep.SubSteps == nil {
 		return
 	}
@@ -271,14 +274,14 @@ func (a *ExecuteWorkflowActor) propagateKilledStateToSubsteps(executeWorkflowSte
 		switch substep.State {
 		case v2.PIPELINE_RUN_STEP_STATE_PENDING:
 			substep.State = v2.PIPELINE_RUN_STEP_STATE_INVALID
-			substep.Message = "Workflow terminated before step could start"
+			substep.Message = "Workflow ended before step could start"
 			// Set end time if not already set
 			if substep.EndTime == nil {
 				substep.EndTime = pbtypes.TimestampNow()
 			}
 		case v2.PIPELINE_RUN_STEP_STATE_RUNNING:
-			substep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
-			substep.Message = "Killed due to workflow termination"
+			substep.State = terminalState
+			substep.Message = message
 			// Set end time if not already set
 			if substep.EndTime == nil {
 				substep.EndTime = pbtypes.TimestampNow()
