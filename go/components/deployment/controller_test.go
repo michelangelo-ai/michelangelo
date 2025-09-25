@@ -8,7 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/handler"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -69,7 +69,7 @@ func TestReconciler_Reconcile(t *testing.T) {
 	reconciler.Handler = mockFactory.handler
 
 	// Register the plugin manually since we're not using SetupWithManager
-	noOpPlugin := plugins.NewNoOpPlugin()
+	noOpPlugin := noop.NewNoOpPlugin()
 	reconciler.Registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin)
 
 	// Test reconcile
