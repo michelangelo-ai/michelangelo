@@ -25,9 +25,10 @@ _sym_db = _symbol_database.Default()
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import generated_pb2 as k8s_dot_io_dot_apimachinery_dot_pkg_dot_apis_dot_meta_dot_v1_dot_generated__pb2
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
 from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'michelangelo/api/v2/cached_output.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a\x1cgoogle/protobuf/struct.proto\"\x8a\x01\n\x0cVariableSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x35\n\x04type\x18\x02 \x01(\x0e\x32!.michelangelo.api.v2.VariableTypeR\x04type\x12\x33\n\x08metadata\x18\x03 \x01(\x0b\x32\x17.google.protobuf.StructR\x08metadata\"U\n\x0e\x43heckpointSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x33\n\x08metadata\x18\x02 \x01(\x0b\x32\x17.google.protobuf.StructR\x08metadata\"\x1e\n\x0cRawModelSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\"\x14\n\x12\x43\x61\x63hedOutputStatus\"\x96\x05\n\x10\x43\x61\x63hedOutputSpec\x12\x39\n\x04type\x18\x01 \x01(\x0e\x32%.michelangelo.api.v2.CachedOutputTypeR\x04type\x12\x43\n\x0cstorage_type\x18\x02 \x01(\x0e\x32 .michelangelo.api.v2.StorageTypeR\x0bstorageType\x12\x1f\n\x0bstorage_uri\x18\x03 \x01(\tR\nstorageUri\x12\x12\n\x04zone\x18\t \x01(\tR\x04zone\x12\x1e\n\x0bttl_in_days\x18\x04 \x01(\x05R\tttlInDays\x12}\n\x13source_pipeline_run\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB\'\xda\xe8\x02#\n!michelangelo.uber.com/PipelineRunR\x11sourcePipelineRun\x12\x37\n\x18source_pipeline_run_step\x18\x06 \x01(\tR\x15sourcePipelineRunStep\x12H\n\rvariable_spec\x18\x07 \x01(\x0b\x32!.michelangelo.api.v2.VariableSpecH\x00R\x0cvariableSpec\x12N\n\x0f\x63heckpoint_spec\x18\x08 \x01(\x0b\x32#.michelangelo.api.v2.CheckpointSpecH\x00R\x0e\x63heckpointSpec\x12I\n\x0eraw_model_spec\x18\n \x01(\x0b\x32!.michelangelo.api.v2.RawModelSpecH\x00R\x0crawModelSpecB\x10\n\x08metadata\x12\x04\xe0\xc0\x03\x01\"\xad\x02\n\x0c\x43\x61\x63hedOutput\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x39\n\x04spec\x18\x03 \x01(\x0b\x32%.michelangelo.api.v2.CachedOutputSpecR\x04spec\x12?\n\x06status\x18\x04 \x01(\x0b\x32\'.michelangelo.api.v2.CachedOutputStatusR\x06status:\x06\x82\x42\x03\xa8\x06\x01\"\xe9\x01\n\x10\x43\x61\x63hedOutputList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x37\n\x05items\x18\x03 \x03(\x0b\x32!.michelangelo.api.v2.CachedOutputR\x05items:\x03\xfa\x41\x00*\xc2\x01\n\x10\x43\x61\x63hedOutputType\x12\x1e\n\x1a\x43\x41\x43HED_OUTPUT_TYPE_INVALID\x10\x00\x12\x1f\n\x1b\x43\x41\x43HED_OUTPUT_TYPE_VARIABLE\x10\x01\x12%\n!CACHED_OUTPUT_TYPE_TRANSFORM_CKPT\x10\x02\x12$\n CACHED_OUTPUT_TYPE_TRAINING_CKPT\x10\x03\x12 \n\x1c\x43\x41\x43HED_OUTPUT_TYPE_RAW_MODEL\x10\x04*<\n\x0bStorageType\x12\x18\n\x14STORAGE_TYPE_INVALID\x10\x00\x12\x13\n\x0fSTORAGE_TYPE_S3\x10\x01*\xea\x01\n\x0cVariableType\x12\x19\n\x15VARIABLE_TYPE_INVALID\x10\x00\x12\x18\n\x14VARIABLE_TYPE_CUSTOM\x10\x01\x12\x17\n\x13VARIABLE_TYPE_PROTO\x10\x02\x12\"\n\x1eVARIABLE_TYPE_SPARK_DATA_FRAME\x10\x03\x12#\n\x1fVARIABLE_TYPE_SPARK_ML_PIPELINE\x10\x04\x12)\n%VARIABLE_TYPE_SPARK_ML_PIPELINE_MODEL\x10\x05\x12\x18\n\x14VARIABLE_TYPE_PARAMS\x10\x06\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\'michelangelo/api/v2/cached_output.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x19google/protobuf/any.proto\"\x8a\x01\n\x0cVariableSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x35\n\x04type\x18\x02 \x01(\x0e\x32!.michelangelo.api.v2.VariableTypeR\x04type\x12\x33\n\x08metadata\x18\x03 \x01(\x0b\x32\x17.google.protobuf.StructR\x08metadata\"U\n\x0e\x43heckpointSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\x12\x33\n\x08metadata\x18\x02 \x01(\x0b\x32\x17.google.protobuf.StructR\x08metadata\"\x1e\n\x0cRawModelSpec\x12\x0e\n\x02id\x18\x01 \x01(\tR\x02id\"=\n\x12\x43\x61\x63hedOutputStatus\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\xbf\x05\n\x10\x43\x61\x63hedOutputSpec\x12\x39\n\x04type\x18\x01 \x01(\x0e\x32%.michelangelo.api.v2.CachedOutputTypeR\x04type\x12\x43\n\x0cstorage_type\x18\x02 \x01(\x0e\x32 .michelangelo.api.v2.StorageTypeR\x0bstorageType\x12\x1f\n\x0bstorage_uri\x18\x03 \x01(\tR\nstorageUri\x12\x12\n\x04zone\x18\t \x01(\tR\x04zone\x12\x1e\n\x0bttl_in_days\x18\x04 \x01(\x05R\tttlInDays\x12}\n\x13source_pipeline_run\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB\'\xda\xe8\x02#\n!michelangelo.uber.com/PipelineRunR\x11sourcePipelineRun\x12\x37\n\x18source_pipeline_run_step\x18\x06 \x01(\tR\x15sourcePipelineRunStep\x12H\n\rvariable_spec\x18\x07 \x01(\x0b\x32!.michelangelo.api.v2.VariableSpecH\x00R\x0cvariableSpec\x12N\n\x0f\x63heckpoint_spec\x18\x08 \x01(\x0b\x32#.michelangelo.api.v2.CheckpointSpecH\x00R\x0e\x63heckpointSpec\x12I\n\x0eraw_model_spec\x18\n \x01(\x0b\x32!.michelangelo.api.v2.RawModelSpecH\x00R\x0crawModelSpec\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xtB\x10\n\x08metadata\x12\x04\xe0\xc0\x03\x01\"\xad\x02\n\x0c\x43\x61\x63hedOutput\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x39\n\x04spec\x18\x03 \x01(\x0b\x32%.michelangelo.api.v2.CachedOutputSpecR\x04spec\x12?\n\x06status\x18\x04 \x01(\x0b\x32\'.michelangelo.api.v2.CachedOutputStatusR\x06status:\x06\x82\x42\x03\xa8\x06\x01\"\xe9\x01\n\x10\x43\x61\x63hedOutputList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x37\n\x05items\x18\x03 \x03(\x0b\x32!.michelangelo.api.v2.CachedOutputR\x05items:\x03\xfa\x41\x00*\xc2\x01\n\x10\x43\x61\x63hedOutputType\x12\x1e\n\x1a\x43\x41\x43HED_OUTPUT_TYPE_INVALID\x10\x00\x12\x1f\n\x1b\x43\x41\x43HED_OUTPUT_TYPE_VARIABLE\x10\x01\x12%\n!CACHED_OUTPUT_TYPE_TRANSFORM_CKPT\x10\x02\x12$\n CACHED_OUTPUT_TYPE_TRAINING_CKPT\x10\x03\x12 \n\x1c\x43\x41\x43HED_OUTPUT_TYPE_RAW_MODEL\x10\x04*<\n\x0bStorageType\x12\x18\n\x14STORAGE_TYPE_INVALID\x10\x00\x12\x13\n\x0fSTORAGE_TYPE_S3\x10\x01*\xea\x01\n\x0cVariableType\x12\x19\n\x15VARIABLE_TYPE_INVALID\x10\x00\x12\x18\n\x14VARIABLE_TYPE_CUSTOM\x10\x01\x12\x17\n\x13VARIABLE_TYPE_PROTO\x10\x02\x12\"\n\x1eVARIABLE_TYPE_SPARK_DATA_FRAME\x10\x03\x12#\n\x1fVARIABLE_TYPE_SPARK_ML_PIPELINE\x10\x04\x12)\n%VARIABLE_TYPE_SPARK_ML_PIPELINE_MODEL\x10\x05\x12\x18\n\x14VARIABLE_TYPE_PARAMS\x10\x06\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -43,24 +44,24 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CACHEDOUTPUT']._serialized_options = b'\202B\003\250\006\001'
   _globals['_CACHEDOUTPUTLIST']._loaded_options = None
   _globals['_CACHEDOUTPUTLIST']._serialized_options = b'\372A\000'
-  _globals['_CACHEDOUTPUTTYPE']._serialized_start=1668
-  _globals['_CACHEDOUTPUTTYPE']._serialized_end=1862
-  _globals['_STORAGETYPE']._serialized_start=1864
-  _globals['_STORAGETYPE']._serialized_end=1924
-  _globals['_VARIABLETYPE']._serialized_start=1927
-  _globals['_VARIABLETYPE']._serialized_end=2161
-  _globals['_VARIABLESPEC']._serialized_start=181
-  _globals['_VARIABLESPEC']._serialized_end=319
-  _globals['_CHECKPOINTSPEC']._serialized_start=321
-  _globals['_CHECKPOINTSPEC']._serialized_end=406
-  _globals['_RAWMODELSPEC']._serialized_start=408
-  _globals['_RAWMODELSPEC']._serialized_end=438
-  _globals['_CACHEDOUTPUTSTATUS']._serialized_start=440
-  _globals['_CACHEDOUTPUTSTATUS']._serialized_end=460
-  _globals['_CACHEDOUTPUTSPEC']._serialized_start=463
-  _globals['_CACHEDOUTPUTSPEC']._serialized_end=1125
-  _globals['_CACHEDOUTPUT']._serialized_start=1128
-  _globals['_CACHEDOUTPUT']._serialized_end=1429
-  _globals['_CACHEDOUTPUTLIST']._serialized_start=1432
-  _globals['_CACHEDOUTPUTLIST']._serialized_end=1665
+  _globals['_CACHEDOUTPUTTYPE']._serialized_start=1777
+  _globals['_CACHEDOUTPUTTYPE']._serialized_end=1971
+  _globals['_STORAGETYPE']._serialized_start=1973
+  _globals['_STORAGETYPE']._serialized_end=2033
+  _globals['_VARIABLETYPE']._serialized_start=2036
+  _globals['_VARIABLETYPE']._serialized_end=2270
+  _globals['_VARIABLESPEC']._serialized_start=208
+  _globals['_VARIABLESPEC']._serialized_end=346
+  _globals['_CHECKPOINTSPEC']._serialized_start=348
+  _globals['_CHECKPOINTSPEC']._serialized_end=433
+  _globals['_RAWMODELSPEC']._serialized_start=435
+  _globals['_RAWMODELSPEC']._serialized_end=465
+  _globals['_CACHEDOUTPUTSTATUS']._serialized_start=467
+  _globals['_CACHEDOUTPUTSTATUS']._serialized_end=528
+  _globals['_CACHEDOUTPUTSPEC']._serialized_start=531
+  _globals['_CACHEDOUTPUTSPEC']._serialized_end=1234
+  _globals['_CACHEDOUTPUT']._serialized_start=1237
+  _globals['_CACHEDOUTPUT']._serialized_end=1538
+  _globals['_CACHEDOUTPUTLIST']._serialized_start=1541
+  _globals['_CACHEDOUTPUTLIST']._serialized_end=1774
 # @@protoc_insertion_point(module_scope)

@@ -23,9 +23,10 @@ _sym_db = _symbol_database.Default()
 
 
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import generated_pb2 as k8s_dot_io_dot_apimachinery_dot_pkg_dot_apis_dot_meta_dot_v1_dot_generated__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dmichelangelo/api/v2/job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\"c\n\x10ResourceAffinity\x12O\n\x08selector\x18\x01 \x01(\x0b\x32\x33.k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelectorR\x08selector\"^\n\x08\x41\x66\x66inity\x12R\n\x11resource_affinity\x18\x02 \x01(\x0b\x32%.michelangelo.api.v2.ResourceAffinityR\x10resourceAffinity\"O\n\x0e\x41ssignmentInfo\x12#\n\rresource_pool\x18\x01 \x01(\tR\x0cresourcePool\x12\x18\n\x07\x63luster\x18\x02 \x01(\tR\x07\x63luster\"c\n\x0fTerminationSpec\x12\x38\n\x04type\x18\x01 \x01(\x0e\x32$.michelangelo.api.v2.TerminationTypeR\x04type\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason\"2\n\x0eSchedulingSpec\x12 \n\x0bpreemptible\x18\x01 \x01(\x08R\x0bpreemptible\"\x8b\x01\n\x0eSchedulingInfo\x12V\n\x11last_attempt_time\x18\x01 \x01(\x0b\x32*.k8s.io.apimachinery.pkg.apis.meta.v1.TimeR\x0flastAttemptTime\x12!\n\x0cnum_attempts\x18\x02 \x01(\x05R\x0bnumAttempts*l\n\x0fTerminationType\x12\x1c\n\x18TERMINATION_TYPE_INVALID\x10\x00\x12\x1e\n\x1aTERMINATION_TYPE_SUCCEEDED\x10\x01\x12\x1b\n\x17TERMINATION_TYPE_FAILED\x10\x02\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dmichelangelo/api/v2/job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x19google/protobuf/any.proto\"c\n\x10ResourceAffinity\x12O\n\x08selector\x18\x01 \x01(\x0b\x32\x33.k8s.io.apimachinery.pkg.apis.meta.v1.LabelSelectorR\x08selector\"^\n\x08\x41\x66\x66inity\x12R\n\x11resource_affinity\x18\x02 \x01(\x0b\x32%.michelangelo.api.v2.ResourceAffinityR\x10resourceAffinity\"O\n\x0e\x41ssignmentInfo\x12#\n\rresource_pool\x18\x01 \x01(\tR\x0cresourcePool\x12\x18\n\x07\x63luster\x18\x02 \x01(\tR\x07\x63luster\"c\n\x0fTerminationSpec\x12\x38\n\x04type\x18\x01 \x01(\x0e\x32$.michelangelo.api.v2.TerminationTypeR\x04type\x12\x16\n\x06reason\x18\x02 \x01(\tR\x06reason\"2\n\x0eSchedulingSpec\x12 \n\x0bpreemptible\x18\x01 \x01(\x08R\x0bpreemptible\"\x8b\x01\n\x0eSchedulingInfo\x12V\n\x11last_attempt_time\x18\x01 \x01(\x0b\x32*.k8s.io.apimachinery.pkg.apis.meta.v1.TimeR\x0flastAttemptTime\x12!\n\x0cnum_attempts\x18\x02 \x01(\x05R\x0bnumAttempts*l\n\x0fTerminationType\x12\x1c\n\x18TERMINATION_TYPE_INVALID\x10\x00\x12\x1e\n\x1aTERMINATION_TYPE_SUCCEEDED\x10\x01\x12\x1b\n\x17TERMINATION_TYPE_FAILED\x10\x02\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,18 +34,18 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'michelangelo.api.v2.job_pb2
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\002v2'
-  _globals['_TERMINATIONTYPE']._serialized_start=681
-  _globals['_TERMINATIONTYPE']._serialized_end=789
-  _globals['_RESOURCEAFFINITY']._serialized_start=108
-  _globals['_RESOURCEAFFINITY']._serialized_end=207
-  _globals['_AFFINITY']._serialized_start=209
-  _globals['_AFFINITY']._serialized_end=303
-  _globals['_ASSIGNMENTINFO']._serialized_start=305
-  _globals['_ASSIGNMENTINFO']._serialized_end=384
-  _globals['_TERMINATIONSPEC']._serialized_start=386
-  _globals['_TERMINATIONSPEC']._serialized_end=485
-  _globals['_SCHEDULINGSPEC']._serialized_start=487
-  _globals['_SCHEDULINGSPEC']._serialized_end=537
-  _globals['_SCHEDULINGINFO']._serialized_start=540
-  _globals['_SCHEDULINGINFO']._serialized_end=679
+  _globals['_TERMINATIONTYPE']._serialized_start=708
+  _globals['_TERMINATIONTYPE']._serialized_end=816
+  _globals['_RESOURCEAFFINITY']._serialized_start=135
+  _globals['_RESOURCEAFFINITY']._serialized_end=234
+  _globals['_AFFINITY']._serialized_start=236
+  _globals['_AFFINITY']._serialized_end=330
+  _globals['_ASSIGNMENTINFO']._serialized_start=332
+  _globals['_ASSIGNMENTINFO']._serialized_end=411
+  _globals['_TERMINATIONSPEC']._serialized_start=413
+  _globals['_TERMINATIONSPEC']._serialized_end=512
+  _globals['_SCHEDULINGSPEC']._serialized_start=514
+  _globals['_SCHEDULINGSPEC']._serialized_end=564
+  _globals['_SCHEDULINGINFO']._serialized_start=567
+  _globals['_SCHEDULINGINFO']._serialized_end=706
 # @@protoc_insertion_point(module_scope)

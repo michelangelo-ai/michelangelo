@@ -24,9 +24,10 @@ _sym_db = _symbol_database.Default()
 
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import generated_pb2 as k8s_dot_io_dot_apimachinery_dot_pkg_dot_apis_dot_meta_dot_v1_dot_generated__pb2
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n&michelangelo/api/v2/model_family.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\"\x13\n\x11ModelFamilyStatus\"\x93\x01\n\x0fModelFamilySpec\x12^\n\x04name\x18\x01 \x01(\tBJ\xd2\xe8\x02>B\x11[a-zA-Z0-9][\\w-]*\xca\x0c(must be alphanumeric, underscore or dash\xd2\xe8\x02\x04\x32\x02\x34\x30R\x04name\x12 \n\x0b\x64\x65scription\x18\x02 \x01(\tR\x0b\x64\x65scription\"\xc8\x02\n\x0bModelFamily\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x38\n\x04spec\x18\x03 \x01(\x0b\x32$.michelangelo.api.v2.ModelFamilySpecR\x04spec\x12>\n\x06status\x18\x04 \x01(\x0b\x32&.michelangelo.api.v2.ModelFamilyStatusR\x06status:$\x82\x42\x00\x8a\x42\x1e\n\tspec.name\x12\x11model_family_name\"\xe7\x01\n\x0fModelFamilyList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x36\n\x05items\x18\x03 \x03(\x0b\x32 .michelangelo.api.v2.ModelFamilyR\x05items:\x03\xfa\x41\x00\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n&michelangelo/api/v2/model_family.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x1emichelangelo/api/options.proto\x1a\x19google/protobuf/any.proto\"<\n\x11ModelFamilyStatus\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\xbc\x01\n\x0fModelFamilySpec\x12^\n\x04name\x18\x01 \x01(\tBJ\xd2\xe8\x02>B\x11[a-zA-Z0-9][\\w-]*\xca\x0c(must be alphanumeric, underscore or dash\xd2\xe8\x02\x04\x32\x02\x34\x30R\x04name\x12 \n\x0b\x64\x65scription\x18\x02 \x01(\tR\x0b\x64\x65scription\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\xc8\x02\n\x0bModelFamily\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x38\n\x04spec\x18\x03 \x01(\x0b\x32$.michelangelo.api.v2.ModelFamilySpecR\x04spec\x12>\n\x06status\x18\x04 \x01(\x0b\x32&.michelangelo.api.v2.ModelFamilyStatusR\x06status:$\x82\x42\x00\x8a\x42\x1e\n\tspec.name\x12\x11model_family_name\"\xe7\x01\n\x0fModelFamilyList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x36\n\x05items\x18\x03 \x03(\x0b\x32 .michelangelo.api.v2.ModelFamilyR\x05items:\x03\xfa\x41\x00\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -40,12 +41,12 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_MODELFAMILY']._serialized_options = b'\202B\000\212B\036\n\tspec.name\022\021model_family_name'
   _globals['_MODELFAMILYLIST']._loaded_options = None
   _globals['_MODELFAMILYLIST']._serialized_options = b'\372A\000'
-  _globals['_MODELFAMILYSTATUS']._serialized_start=149
-  _globals['_MODELFAMILYSTATUS']._serialized_end=168
-  _globals['_MODELFAMILYSPEC']._serialized_start=171
-  _globals['_MODELFAMILYSPEC']._serialized_end=318
-  _globals['_MODELFAMILY']._serialized_start=321
-  _globals['_MODELFAMILY']._serialized_end=649
-  _globals['_MODELFAMILYLIST']._serialized_start=652
-  _globals['_MODELFAMILYLIST']._serialized_end=883
+  _globals['_MODELFAMILYSTATUS']._serialized_start=176
+  _globals['_MODELFAMILYSTATUS']._serialized_end=236
+  _globals['_MODELFAMILYSPEC']._serialized_start=239
+  _globals['_MODELFAMILYSPEC']._serialized_end=427
+  _globals['_MODELFAMILY']._serialized_start=430
+  _globals['_MODELFAMILY']._serialized_end=758
+  _globals['_MODELFAMILYLIST']._serialized_start=761
+  _globals['_MODELFAMILYLIST']._serialized_end=992
 # @@protoc_insertion_point(module_scope)

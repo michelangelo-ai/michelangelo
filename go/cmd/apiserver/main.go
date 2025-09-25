@@ -52,6 +52,7 @@ func opts() fx.Option {
 		v2pb.ModelFamilySvcModule,
 		v2pb.ModelSvcModule,
 		v2pb.TriggerRunSvcModule,
+		v2pb.DeploymentSvcModule,
 		crd.Module,
 		crd.SyncCRDs(v2pb.GroupVersion.Group, v2pb.YamlSchemas),
 		fx.Invoke(registerProcedures),

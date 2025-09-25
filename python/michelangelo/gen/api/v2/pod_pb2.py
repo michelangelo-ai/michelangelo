@@ -23,9 +23,10 @@ _sym_db = _symbol_database.Default()
 
 
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
+from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dmichelangelo/api/v2/pod.proto\x12\x13michelangelo.api.v2\x1a\x1emichelangelo/api/options.proto\"\xc6\x01\n\x0cResourceSpec\x12\x19\n\x03\x63pu\x18\x01 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x03\x63pu\x12\x16\n\x06memory\x18\x02 \x01(\tR\x06memory\x12\x1b\n\tdisk_size\x18\x03 \x01(\tR\x08\x64iskSize\x12\x19\n\x03gpu\x18\x04 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x03gpu\x12\x32\n\x10\x66ile_descriptors\x18\x05 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x0f\x66ileDescriptors\x12\x17\n\x07gpu_sku\x18\x06 \x01(\tR\x06gpuSku\"7\n\x0b\x45nvironment\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value\"\xfb\x02\n\x07PodSpec\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12=\n\x08resource\x18\x02 \x01(\x0b\x32!.michelangelo.api.v2.ResourceSpecR\x08resource\x12\x14\n\x05image\x18\x03 \x01(\tR\x05image\x12.\n\x12imagePullingPolicy\x18\x08 \x01(\tR\x12imagePullingPolicy\x12\x32\n\x03\x65nv\x18\x04 \x03(\x0b\x32 .michelangelo.api.v2.EnvironmentR\x03\x65nv\x12<\n\x07\x65nvFrom\x18\t \x03(\x0b\x32\".michelangelo.api.v2.EnvFromSourceR\x07\x65nvFrom\x12\x32\n\x15hdfs_delegation_token\x18\x05 \x01(\tR\x13hdfsDelegationToken\x12\x17\n\x07on_init\x18\x06 \x01(\tR\x06onInit\x12\x18\n\x07\x63ommand\x18\x07 \x03(\tR\x07\x63ommand\"\xb8\x01\n\rEnvFromSource\x12\x16\n\x06prefix\x18\x01 \x01(\tR\x06prefix\x12K\n\x0c\x63onfigMapRef\x18\x02 \x01(\x0b\x32\'.michelangelo.api.v2.ConfigMapEnvSourceR\x0c\x63onfigMapRef\x12\x42\n\tsecretRef\x18\x03 \x01(\x0b\x32$.michelangelo.api.v2.SecretEnvSourceR\tsecretRef\"\x8f\x01\n\x12\x43onfigMapEnvSource\x12]\n\x14localObjectReference\x18\x01 \x01(\x0b\x32).michelangelo.api.v2.LocalObjectReferenceR\x14localObjectReference\x12\x1a\n\x08optional\x18\x02 \x01(\x08R\x08optional\"\x8c\x01\n\x0fSecretEnvSource\x12]\n\x14localObjectReference\x18\x01 \x01(\x0b\x32).michelangelo.api.v2.LocalObjectReferenceR\x14localObjectReference\x12\x1a\n\x08optional\x18\x02 \x01(\x08R\x08optional\"*\n\x14LocalObjectReference\x12\x12\n\x04name\x18\x01 \x01(\tR\x04nameB\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1dmichelangelo/api/v2/pod.proto\x12\x13michelangelo.api.v2\x1a\x1emichelangelo/api/options.proto\x1a\x19google/protobuf/any.proto\"\xef\x01\n\x0cResourceSpec\x12\x19\n\x03\x63pu\x18\x01 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x03\x63pu\x12\x16\n\x06memory\x18\x02 \x01(\tR\x06memory\x12\x1b\n\tdisk_size\x18\x03 \x01(\tR\x08\x64iskSize\x12\x19\n\x03gpu\x18\x04 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x03gpu\x12\x32\n\x10\x66ile_descriptors\x18\x05 \x01(\x05\x42\x07\xd2\xe8\x02\x03\n\x01\x30R\x0f\x66ileDescriptors\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\x12\x17\n\x07gpu_sku\x18\x06 \x01(\tR\x06gpuSku\"7\n\x0b\x45nvironment\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value\"\xa4\x03\n\x07PodSpec\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12=\n\x08resource\x18\x02 \x01(\x0b\x32!.michelangelo.api.v2.ResourceSpecR\x08resource\x12\x14\n\x05image\x18\x03 \x01(\tR\x05image\x12.\n\x12imagePullingPolicy\x18\x08 \x01(\tR\x12imagePullingPolicy\x12\x32\n\x03\x65nv\x18\x04 \x03(\x0b\x32 .michelangelo.api.v2.EnvironmentR\x03\x65nv\x12<\n\x07\x65nvFrom\x18\t \x03(\x0b\x32\".michelangelo.api.v2.EnvFromSourceR\x07\x65nvFrom\x12\x32\n\x15hdfs_delegation_token\x18\x05 \x01(\tR\x13hdfsDelegationToken\x12\x17\n\x07on_init\x18\x06 \x01(\tR\x06onInit\x12\x18\n\x07\x63ommand\x18\x07 \x03(\tR\x07\x63ommand\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\xb8\x01\n\rEnvFromSource\x12\x16\n\x06prefix\x18\x01 \x01(\tR\x06prefix\x12K\n\x0c\x63onfigMapRef\x18\x02 \x01(\x0b\x32\'.michelangelo.api.v2.ConfigMapEnvSourceR\x0c\x63onfigMapRef\x12\x42\n\tsecretRef\x18\x03 \x01(\x0b\x32$.michelangelo.api.v2.SecretEnvSourceR\tsecretRef\"\x8f\x01\n\x12\x43onfigMapEnvSource\x12]\n\x14localObjectReference\x18\x01 \x01(\x0b\x32).michelangelo.api.v2.LocalObjectReferenceR\x14localObjectReference\x12\x1a\n\x08optional\x18\x02 \x01(\x08R\x08optional\"\x8c\x01\n\x0fSecretEnvSource\x12]\n\x14localObjectReference\x18\x01 \x01(\x0b\x32).michelangelo.api.v2.LocalObjectReferenceR\x14localObjectReference\x12\x1a\n\x08optional\x18\x02 \x01(\x08R\x08optional\"*\n\x14LocalObjectReference\x12\x12\n\x04name\x18\x01 \x01(\tR\x04nameB\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,18 +40,18 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RESOURCESPEC'].fields_by_name['gpu']._serialized_options = b'\322\350\002\003\n\0010'
   _globals['_RESOURCESPEC'].fields_by_name['file_descriptors']._loaded_options = None
   _globals['_RESOURCESPEC'].fields_by_name['file_descriptors']._serialized_options = b'\322\350\002\003\n\0010'
-  _globals['_RESOURCESPEC']._serialized_start=87
-  _globals['_RESOURCESPEC']._serialized_end=285
-  _globals['_ENVIRONMENT']._serialized_start=287
-  _globals['_ENVIRONMENT']._serialized_end=342
-  _globals['_PODSPEC']._serialized_start=345
-  _globals['_PODSPEC']._serialized_end=724
-  _globals['_ENVFROMSOURCE']._serialized_start=727
-  _globals['_ENVFROMSOURCE']._serialized_end=911
-  _globals['_CONFIGMAPENVSOURCE']._serialized_start=914
-  _globals['_CONFIGMAPENVSOURCE']._serialized_end=1057
-  _globals['_SECRETENVSOURCE']._serialized_start=1060
-  _globals['_SECRETENVSOURCE']._serialized_end=1200
-  _globals['_LOCALOBJECTREFERENCE']._serialized_start=1202
-  _globals['_LOCALOBJECTREFERENCE']._serialized_end=1244
+  _globals['_RESOURCESPEC']._serialized_start=114
+  _globals['_RESOURCESPEC']._serialized_end=353
+  _globals['_ENVIRONMENT']._serialized_start=355
+  _globals['_ENVIRONMENT']._serialized_end=410
+  _globals['_PODSPEC']._serialized_start=413
+  _globals['_PODSPEC']._serialized_end=833
+  _globals['_ENVFROMSOURCE']._serialized_start=836
+  _globals['_ENVFROMSOURCE']._serialized_end=1020
+  _globals['_CONFIGMAPENVSOURCE']._serialized_start=1023
+  _globals['_CONFIGMAPENVSOURCE']._serialized_end=1166
+  _globals['_SECRETENVSOURCE']._serialized_start=1169
+  _globals['_SECRETENVSOURCE']._serialized_end=1309
+  _globals['_LOCALOBJECTREFERENCE']._serialized_start=1311
+  _globals['_LOCALOBJECTREFERENCE']._serialized_end=1353
 # @@protoc_insertion_point(module_scope)
