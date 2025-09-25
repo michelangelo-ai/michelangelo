@@ -27,6 +27,7 @@ const (
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"
+	KillReason                 = "Kill by user through API"
 )
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
@@ -77,6 +78,13 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		// the previous condition is terminal, so we don't need to run the actor again
 		logger.Info("pipeline run has a terminal condition, skipping")
 		return previousCondition, nil
+	}
+
+	if pipelineRun.Spec.Kill {
+		err := a.processJobTermination(ctx, pipelineRun)
+		if err != nil {
+			logger.Error("Failed to terminate workflow", zap.Error(err))
+		}
 	}
 
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
@@ -142,6 +150,22 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, "Killed due to workflow termination")
 	}
 	return newCondition, nil
+}
+
+func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+	workflowID := pipelineRun.Status.WorkflowId
+	runID := pipelineRun.Status.WorkflowRunId
+
+	if workflowID != "" && runID != "" {
+		workflowStatus, statusErr := a.workflowClient.GetWorkflowExecutionInfo(ctx, workflowID, runID)
+		if statusErr == nil {
+			if workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusCompleted && workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusTerminated {
+				err := a.workflowClient.CancelWorkflow(ctx, workflowID, runID, KillReason)
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {
