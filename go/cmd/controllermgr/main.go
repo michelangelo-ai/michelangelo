@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/go-logr/zapr"
-	"github.com/michelangelo-ai/michelangelo/go/deployment"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -80,7 +79,6 @@ func options() fx.Option {
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
-		spark.Module,
 		ray.Module,
 		triggerrun.Module,
 		cadenceclient.Module,
@@ -90,7 +88,6 @@ func options() fx.Option {
 		inferenceserver.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
-		deployment.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
