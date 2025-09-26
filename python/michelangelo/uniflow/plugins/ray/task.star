@@ -84,6 +84,8 @@ def task(
         breakpoint = False,
         runtime_env = None):
     def callable(*args, **kwargs):
+
+
         task_name = get_task_name(task_path, alias)
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
@@ -112,6 +114,8 @@ def task(
                     result = io_read_json(cached_result_json_url)
                     print("ray | cached", "result:", result)
                     return result
+
+
 
         # Apply resource overrides
         _head_cpu = os.environ.get("RAY_OVERRIDE_HEAD_CPU." + task_path, head_cpu)
@@ -274,6 +278,15 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
 def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, breakpoint=False):
 
     print("Ray job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
+    report_progress(
+        task_path = task_path,
+        task_name = task_name,
+        task_message = "Provisioning Ray Cluster...",
+        task_state = TASK_STATE_PENDING,
+        start_time = start_time_formated_str,
+        end_time = "",
+        retry_attempt_id = retry_attempt_id,
+    )
 
     cluster = ray.create_cluster(cluster)
     cluster_name = cluster["metadata"]["name"]
@@ -287,6 +300,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         task_state = TASK_STATE_RUNNING,
         start_time = start_time_formated_str,
         end_time = "",
+        retry_attempt_id = retry_attempt_id,
     )
 
     atexit.register(terminate_cluster, cluster_namespace, cluster_name)
