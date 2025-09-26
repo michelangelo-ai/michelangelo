@@ -19,6 +19,7 @@ export const Icon = memo<Props>(function Icon(props: Props) {
   return (
     <IconComponent
       {...props}
+      role="img"
       size={size}
       color={color ?? theme.colors[`content${capitalizeFirstLetter(kind)}`]}
       style={{ minWidth: 'fit-content' }}
