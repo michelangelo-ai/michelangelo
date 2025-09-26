@@ -33,7 +33,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -82,15 +81,7 @@ type Reconciler struct {
 }
 
 // NewReconciler returns a new model deployment reconciler.
-func NewReconciler(apiHandlerFactory apiHandler.Factory) *Reconciler {
-	registrar := pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard())
-
-	// Register plugins following Uber pattern - each plugin registers itself
-	if err := noop.RegisterNoOpPlugins(registrar); err != nil {
-		// In production, this would be handled properly, but for testing we continue
-		logr.Discard().Error(err, "failed to register noop plugins")
-	}
-
+func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager.Registrar[plugins.Plugin]) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
 		Registrar:         registrar,
@@ -252,7 +243,11 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		if shouldRequeue {
 			result.Result = defaultResult
 		}
-		plugin.PopulateDeploymentLogs(ctx, deployment)
+		runtimeCtx := plugins.RequestContext{
+			Deployment: deployment,
+			Logger:     log,
+		}
+		plugin.PopulateDeploymentLogs(ctx, runtimeCtx, deployment)
 	} else if result.IsTerminal && result.AreSatisfied {
 		// Successful terminal condition - allow progression by ensuring requeue
 		result.Result = ctrl.Result{
@@ -282,7 +277,11 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			}
 			deployment.Status.Conditions = nil
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
-				plugin.PopulateMessage(ctx, deployment)
+				runtimeCtx := plugins.RequestContext{
+					Deployment: deployment,
+					Logger:     log,
+				}
+				plugin.PopulateMessage(ctx, runtimeCtx, deployment)
 			}
 		}
 		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
@@ -300,7 +299,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		return defaultResult, getStateErr
 	}
 	sw.Stop()
-	deployment.Status = *status
+	deployment.Status = status
 
 	if IsCleanupCompleteStage(deployment.Status.Stage) {
 		// If the resource is in cleanup completion stage, then it is eligible for deletion.
