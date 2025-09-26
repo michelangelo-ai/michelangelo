@@ -605,4 +605,112 @@ describe('EntityDetailRoute', () => {
 
     await screen.findByText('Unable to fetch data for the table');
   });
+
+  test('resolves interpolation at various configuration levels', async () => {
+    const testPhases = {
+      train: buildPhase({
+        id: 'train',
+        entities: [
+          buildEntity({
+            views: [
+              {
+                type: 'detail',
+                metadata: [
+                  { id: 'status.state', label: 'State', type: CellType.STATE },
+                  {
+                    id: 'metadata.name',
+                    label: 'Name: ${page.metadata.name}',
+                    type: CellType.TEXT,
+                  },
+                ],
+                pages: [
+                  {
+                    id: 'interpolated-table',
+                    label: 'Related Runs',
+                    type: 'table',
+                    queryConfig: {
+                      endpoint: 'list',
+                      service: 'pipelineRun',
+                      serviceOptions: {
+                        listOptions: {
+                          labelSelector:
+                            'pipelinerun.michelangelo/source-trigger=${page.metadata.name}',
+                        },
+                      },
+                    },
+                    tableConfig: buildTableConfig({
+                      columns: [
+                        {
+                          id: 'metadata.name',
+                          label: 'Run Name',
+                          type: CellType.TEXT,
+                          url: '/${studio.projectId}/${studio.phase}/runs/${row.metadata.name}?page=${page.metadata.name}',
+                        },
+                      ],
+                    }),
+                  },
+                ],
+              },
+            ],
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = createQueryMockRouter({
+      GetPipelineRun: {
+        pipelineRun: {
+          metadata: {
+            name: 'test-trigger-123',
+            namespace: 'myproject',
+            creationTimestamp: { seconds: 1640995200 },
+          },
+          status: { state: 'SUCCESS' },
+        },
+      },
+      'ListPipelineRun:{"listOptions":{"labelSelector":"pipelinerun.michelangelo/source-trigger=test-trigger-123"},"namespace":"myproject"}':
+        {
+          pipelineRunList: {
+            items: [
+              {
+                metadata: { name: 'run-1' },
+                status: { state: 'SUCCESS' },
+              },
+              {
+                metadata: { name: 'run-2' },
+                status: { state: 'FAILED' },
+              },
+            ],
+          },
+        },
+    });
+
+    render(
+      <EntityDetailRoute phases={testPhases} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({
+          location: '/myproject/train/runs/test-trigger-123',
+        }),
+        getServiceProviderWrapper({ request: mockRequest }),
+      ])
+    );
+
+    // Resolve interpolation in metadata label
+    await screen.findByText('Name: test-trigger-123');
+
+    // Verify interpolation in serviceOptions worked by checking the table data loads
+    await screen.findByRole('row', { name: /run-1/ });
+    await screen.findByRole('row', { name: /run-2/ });
+
+    // Verify interpolation of shared page/row data
+    expect(screen.getByRole('link', { name: /run-1/ })).toHaveAttribute(
+      'href',
+      '/myproject/train/runs/run-1?page=test-trigger-123'
+    );
+    expect(screen.getByRole('link', { name: /run-2/ })).toHaveAttribute(
+      'href',
+      '/myproject/train/runs/run-2?page=test-trigger-123'
+    );
+  });
 });

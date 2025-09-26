@@ -12,6 +12,7 @@ import { DetailView } from '#core/components/views/detail-view/detail-view';
 import { PHASES } from '#core/config/phases/phases';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { useStudioQuery } from '#core/hooks/use-studio-query';
+import { useInterpolationResolver } from '#core/interpolation/use-interpolation-resolver';
 import { capitalizeFirstLetter } from '#core/utils/string-utils';
 
 import type { PhaseConfig } from '#core/types/common/studio-types';
@@ -30,6 +31,7 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
   const { phase, entity, entityId, projectId, entityTab } = useStudioParams('detail');
   const navigate = useNavigate();
   const entityConfig = phases[phase].entities.find((e) => e.id === entity);
+  const resolver = useInterpolationResolver();
 
   const { data, isLoading, error } = useStudioQuery<Record<string, unknown>>({
     queryName: `Get${capitalizeFirstLetter(entityConfig?.service ?? '')}`,
@@ -93,30 +95,22 @@ export function EntityDetailRoute({ phases = PHASES }: { phases?: Record<string,
     );
   }
 
+  const entityData = data?.[entityConfig!.service] as Record<string, unknown> | undefined;
+  const resolvedDetailViewConfig = resolver(detailViewConfig, { page: entityData });
   return (
     <DetailView
       subtitle={entityConfig!.name}
       title={entityId}
       onGoBack={returnToEntityList}
       headerContent={
-        <Row
-          items={detailViewConfig!.metadata}
-          record={data?.[entityConfig!.service] as Record<string, unknown>}
-          loading={isLoading}
-        />
+        <Row items={resolvedDetailViewConfig!.metadata} record={entityData} loading={isLoading} />
       }
     >
       <DetailViewPages
-        tabs={detailViewConfig!.pages.map((page) => ({
+        tabs={resolvedDetailViewConfig!.pages.map((page) => ({
           id: page.id,
           label: page.label,
-          content: (
-            <DetailViewPageRenderer
-              page={page}
-              data={data?.[entityConfig!.service] as object | undefined}
-              isLoading={isLoading}
-            />
-          ),
+          content: <DetailViewPageRenderer page={page} data={entityData} isLoading={isLoading} />,
         }))}
         activeTabId={entityTab}
         onTabSelect={navigateToTab}
