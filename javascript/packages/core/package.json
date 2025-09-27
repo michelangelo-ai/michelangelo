@@ -23,11 +23,13 @@
     "@types/pluralize": "^0.0.33",
     "@uiw/react-codemirror": "^4.21.23",
     "baseui": "15.0.0",
+    "final-form": "4.20.10",
     "lodash": "^4.17.21",
     "markdown-to-jsx": "7.4.7",
     "pluralize": "^8.0.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "react-final-form": "6.5.9",
     "validator": "^13.15.15"
   },
   "devDependencies": {
