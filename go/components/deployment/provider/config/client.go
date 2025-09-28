@@ -27,7 +27,7 @@ type ConfigProvider struct {
 func (c *ConfigProvider) UpdateModelConfig(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error {
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	modelName := deployment.Spec.DesiredRevision.Name
-	
+
 	log.Info("Updating model configuration", "inferenceServer", inferenceServerName, "modelName", modelName)
 
 	if c.Gateway == nil {
@@ -69,7 +69,7 @@ func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, log logr.Logger, d
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	httpRouteName := fmt.Sprintf("%s-http-route", inferenceServerName)
 	modelName := deployment.Spec.DesiredRevision.Name
-	
+
 	log.Info("Updating HTTPRoute for deployment", "httpRoute", httpRouteName, "modelName", modelName)
 
 	// Try HTTPRoute first (Gateway API)
@@ -92,7 +92,7 @@ func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, log logr.Logger, d
 
 	// Fallback to VirtualService (Istio)
 	log.Info("HTTPRoute not found, falling back to VirtualService", "error", err)
-	
+
 	virtualServiceGvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
 		Version:  "v1beta1",
@@ -134,7 +134,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 
 		if c.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPrefix) {
 			log.Info("Updating existing HTTPRoute deployment route", "modelName", modelName, "prefix", deploymentPrefix)
-			
+
 			// Update URLRewrite filter to route to specific model
 			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
 			if found {
@@ -143,7 +143,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 					if !ok {
 						continue
 					}
-					
+
 					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
 						newPath := fmt.Sprintf("/v2/models/%s", modelName)
 						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
@@ -153,13 +153,13 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 						break
 					}
 				}
-				
+
 				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
 					log.Error(err, "Failed to update filters in HTTPRoute rule")
 					return err
 				}
 			}
-			
+
 			updated = true
 			break
 		}
@@ -362,7 +362,7 @@ func (c *ConfigProvider) hasMatchingHTTPRoutePrefix(ruleMap map[string]interface
 func (c *ConfigProvider) GetCurrentModelName(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) (string, error) {
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	deploymentPrefix := fmt.Sprintf("/%s-endpoint/%s", inferenceServerName, deployment.Name)
-	
+
 	// Try HTTPRoute first
 	httpRouteGvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",
@@ -412,7 +412,7 @@ func (c *ConfigProvider) getModelNameFromHTTPRoute(httpRoute *unstructured.Unstr
 					if !ok {
 						continue
 					}
-					
+
 					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
 						replacePrefixMatch, found, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
 						if found && len(replacePrefixMatch) > 11 && replacePrefixMatch[:11] == "/v2/models/" {

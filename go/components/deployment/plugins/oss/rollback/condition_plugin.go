@@ -96,11 +96,11 @@ func (a *RollbackActor) Retrieve(ctx context.Context, runtimeCtx plugins.Request
 
 func (a *RollbackActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running rollback for deployment", "deployment", resource.Name)
-	
+
 	// Update deployment status to indicate rollback is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 	resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-	
+
 	if resource.Status.CurrentRevision != nil {
 		// In Uber's implementation, rollback involves:
 		// 1. Identify the previous known good revision
@@ -109,19 +109,19 @@ func (a *RollbackActor) Run(ctx context.Context, runtimeCtx plugins.RequestConte
 		// 4. Execute reverse rolling deployment to previous revision
 		// 5. Monitor rollback progress and validate success
 		// 6. Update MES records and clean up failed rollout artifacts
-		
+
 		// Store the failed revision for reference
 		failedRevision := resource.Spec.DesiredRevision
-		
+
 		// For OSS, rollback means restoring the previous revision
 		resource.Spec.DesiredRevision = resource.Status.CurrentRevision
-		
+
 		// Update status to reflect rollback completion
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		
-		runtimeCtx.Logger.Info("Rolled back to previous revision", 
-			"from", failedRevision.Name, 
+
+		runtimeCtx.Logger.Info("Rolled back to previous revision",
+			"from", failedRevision.Name,
 			"to", resource.Status.CurrentRevision.Name)
 	} else {
 		runtimeCtx.Logger.Info("No previous revision available for rollback")

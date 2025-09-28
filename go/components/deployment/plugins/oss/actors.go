@@ -417,11 +417,11 @@ func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deplo
 
 // ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
 type ModelSyncActor struct {
-	client           client.Client
-	gateway          gateways.Gateway
-	dynamicClient    dynamic.Interface
+	client            client.Client
+	gateway           gateways.Gateway
+	dynamicClient     dynamic.Interface
 	configMapProvider *gateways.ConfigMapProvider
-	logger           logr.Logger
+	logger            logr.Logger
 }
 
 func (a *ModelSyncActor) GetType() string {
@@ -742,10 +742,10 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 
 // RolloutCompletionActor handles post-rollout completion tasks (following Uber pattern)
 type RolloutCompletionActor struct {
-	client           client.Client
-	gateway          gateways.Gateway
+	client            client.Client
+	gateway           gateways.Gateway
 	configMapProvider *gateways.ConfigMapProvider
-	logger           logr.Logger
+	logger            logr.Logger
 }
 
 func (a *RolloutCompletionActor) GetType() string {

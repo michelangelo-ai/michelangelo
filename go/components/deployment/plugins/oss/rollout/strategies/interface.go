@@ -21,9 +21,9 @@ type Params struct {
 func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.Deployment) ([]plugins.ConditionActor, error) {
 	// Determine strategy from deployment spec or default to rolling
 	strategy := getDeploymentStrategy(deployment)
-	
+
 	params.Logger.Info("Selected rollout strategy", "strategy", strategy, "deployment", deployment.Name)
-	
+
 	switch strategy {
 	case "blast":
 		return GetBlastActors(params, deployment), nil
@@ -48,14 +48,14 @@ func getDeploymentStrategy(deployment *v2pb.Deployment) string {
 			return strategy
 		}
 	}
-	
+
 	// Check labels for strategy
 	if deployment.Labels != nil {
 		if strategy, ok := deployment.Labels["rollout.strategy"]; ok {
 			return strategy
 		}
 	}
-	
+
 	// Default to rolling strategy
 	return "rolling"
 }
@@ -72,6 +72,11 @@ func GetRollingActors(params Params, deployment *v2pb.Deployment) []plugins.Cond
 			client:  params.Client,
 			gateway: params.Gateway,
 			logger:  params.Logger,
+		},
+		&ModelCleanupActor{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
 		},
 		&RollingRolloutActor{
 			client:  params.Client,
