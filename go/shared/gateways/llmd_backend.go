@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // LLMD Infrastructure Management
@@ -19,7 +19,7 @@ import (
 func (g *gateway) createLLMDInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
 	logger.Info("Creating LLMD infrastructure", "server", request.InferenceServer.Name)
 
-	// Create VirtualService first for fixed endpoint routing  
+	// Create VirtualService first for fixed endpoint routing
 	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
 		return nil, fmt.Errorf("failed to create VirtualService: %w", err)
 	}
@@ -58,7 +58,7 @@ func (g *gateway) getLLMDInfrastructureStatus(ctx context.Context, logger logr.L
 	// Check deployment status
 	deployment := &appsv1.Deployment{}
 	deploymentKey := client.ObjectKey{Name: request.InferenceServer, Namespace: request.Namespace}
-	
+
 	if err := g.kubeClient.Get(ctx, deploymentKey, deployment); err != nil {
 		return &InfrastructureStatus{
 			State:   v2pb.INFERENCE_SERVER_STATE_FAILED,
@@ -256,7 +256,7 @@ func (g *gateway) createLLMDService(ctx context.Context, logger logr.Logger, req
 
 func (g *gateway) loadLLMDModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error {
 	logger.Info("Loading LLMD model", "model", request.ModelName)
-	
+
 	// For now, return success as the model is loaded via config
 	// In a real implementation, this would call the LLMD model loading API
 	return nil
@@ -264,7 +264,7 @@ func (g *gateway) loadLLMDModel(ctx context.Context, logger logr.Logger, request
 
 func (g *gateway) checkLLMDModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error) {
 	logger.Info("Checking LLMD model status", "model", request.ModelName)
-	
+
 	// For now, assume model is ready if infrastructure is ready
 	// In a real implementation, this would call the LLMD model status API
 	return true, nil
@@ -272,7 +272,7 @@ func (g *gateway) checkLLMDModelStatus(ctx context.Context, logger logr.Logger, 
 
 func (g *gateway) getLLMDModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {
 	logger.Info("Getting LLMD model status", "model", request.ModelName)
-	
+
 	return &ModelStatus{
 		State:   v2pb.INFERENCE_SERVER_STATE_SERVING,
 		Message: "Model is loaded and ready",
@@ -282,7 +282,7 @@ func (g *gateway) getLLMDModelStatus(ctx context.Context, logger logr.Logger, re
 
 func (g *gateway) isLLMDHealthy(ctx context.Context, logger logr.Logger, serverName string) (bool, error) {
 	logger.Info("Checking LLMD health", "server", serverName)
-	
+
 	// For now, assume healthy if infrastructure exists
 	// In a real implementation, this would call the LLMD health API
 	return true, nil
@@ -307,13 +307,13 @@ resources:
   cpu: "%s"
   memory: "%s"
   gpu: %d
-`, request.InferenceServer.Name, request.InferenceServer.Name, 
-   request.Resources.CPU, request.Resources.Memory, request.Resources.GPU)
+`, request.InferenceServer.Name, request.InferenceServer.Name,
+		request.Resources.CPU, request.Resources.Memory, request.Resources.GPU)
 }
 
 func getLLMDImageTag(tag string) string {
 	if tag == "" {
-		return "latest"  // Default LLMD image tag
+		return "latest" // Default LLMD image tag
 	}
 	return tag
 }

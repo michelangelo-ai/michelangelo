@@ -177,8 +177,8 @@ func (g *gateway) createTorchServeDeployment(ctx context.Context, logger logr.Lo
 
 	// Model sync sidecar for downloading models
 	modelSyncContainer := corev1.Container{
-		Name:  "model-sync",
-		Image: "amazon/aws-cli:2.15.50",
+		Name:    "model-sync",
+		Image:   "amazon/aws-cli:2.15.50",
 		Command: []string{"/bin/sh", "-c"},
 		Args: []string{`
 			yum install -y jq && \

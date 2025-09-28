@@ -9,8 +9,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -230,7 +230,7 @@ func (a *DisaggregatedRolloutActor) executeZonalStep(ctx context.Context, deploy
 	}
 
 	targetZones := a.selectZonesByPercentage(zones, step.Percentage)
-	
+
 	for _, zone := range targetZones {
 		if err := a.deployToZone(ctx, deployment, zone, modelName); err != nil {
 			return fmt.Errorf("failed to deploy to zone %s: %w", zone, err)

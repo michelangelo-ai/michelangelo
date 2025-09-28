@@ -156,7 +156,7 @@ func (p *RolloutPlugin) HandleCleanup(ctx context.Context, logger logr.Logger, d
 	return nil
 }
 
-// CleanupPlugin handles cleanup operations  
+// CleanupPlugin handles cleanup operations
 type CleanupPlugin struct {
 	client  client.Client
 	gateway gateways.Gateway

@@ -9,8 +9,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -118,7 +118,7 @@ func (a *ZonalRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 func (a *ZonalRolloutActor) getTargetZones(ctx context.Context, deployment *v2pb.Deployment) ([]string, error) {
 	// In OSS implementation, we use Kubernetes nodes' zone labels
 	// In Uber's implementation, this would query UNS for zone mapping
-	
+
 	nodes := &corev1.NodeList{}
 	if err := a.client.List(ctx, nodes); err != nil {
 		return nil, fmt.Errorf("failed to list nodes: %w", err)
@@ -175,7 +175,7 @@ func (a *ZonalRolloutActor) waitForZoneStability(ctx context.Context, deployment
 	// Wait for pods in the zone to be ready
 	// In OSS implementation, we check deployment readiness
 	// In Uber's implementation, this would check UNS health for the zone
-	
+
 	timeout := time.After(5 * time.Minute)
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()

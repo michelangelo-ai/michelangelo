@@ -124,7 +124,7 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "NoInferenceServer", 
+			Reason:  "NoInferenceServer",
 			Message: "No inference server specified for deployment",
 		}, nil
 	}
@@ -159,14 +159,14 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 
 func (a *ValidationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running validation for deployment", "deployment", resource.Name)
-	
+
 	// Update deployment status to show validation is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
-	
+
 	if resource.Spec.DesiredRevision != nil {
 		runtimeCtx.Logger.Info("Validation completed successfully", "model", resource.Spec.DesiredRevision.Name)
 	}
-	
+
 	return nil
 }
 
@@ -192,7 +192,7 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins
 	}
 
 	modelName := resource.Spec.DesiredRevision.Name
-	
+
 	// For OSS, check if model assets are available
 	if !common.IsModelAvailable(modelName) {
 		return &apipb.Condition{
@@ -213,16 +213,16 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins
 
 func (a *AssetPreparationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running asset preparation for deployment", "deployment", resource.Name)
-	
+
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		runtimeCtx.Logger.Info("Preparing assets for model", "model", modelName)
-		
+
 		// For OSS, asset preparation involves validating model accessibility
 		// In Uber's implementation, this downloads from S3, compiles, and uploads to TerraBob
 		runtimeCtx.Logger.Info("Asset preparation completed", "model", modelName)
 	}
-	
+
 	return nil
 }
 
@@ -256,12 +256,12 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, runtimeCtx plug
 
 func (a *ResourceAcquisitionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running resource acquisition for deployment", "deployment", resource.Name)
-	
+
 	if resource.Spec.GetInferenceServer() != nil {
-		runtimeCtx.Logger.Info("Resources acquired successfully", 
+		runtimeCtx.Logger.Info("Resources acquired successfully",
 			"inference_server", resource.Spec.GetInferenceServer().Name)
 	}
-	
+
 	return nil
 }
 
@@ -296,23 +296,23 @@ func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugin
 
 func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
-	
+
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
-		
+
 		// Mark deployment as complete and healthy
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		resource.Status.Message = fmt.Sprintf("Rollout completed successfully for model %s", modelName)
-		
+
 		// Clean up temporary annotations
 		if resource.Annotations != nil {
 			delete(resource.Annotations, "rollout.michelangelo.ai/in-progress")
 			delete(resource.Annotations, "rollout.michelangelo.ai/start-time")
 		}
-		
+
 		runtimeCtx.Logger.Info("Rollout completion tasks finished successfully", "model", modelName)
 	}
-	
+
 	return nil
 }

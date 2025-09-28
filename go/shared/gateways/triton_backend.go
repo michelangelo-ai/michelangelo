@@ -254,8 +254,8 @@ func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger
 							},
 						},
 						{
-							Name:  "model-sync",
-							Image: "amazon/aws-cli:2.15.50",
+							Name:    "model-sync",
+							Image:   "amazon/aws-cli:2.15.50",
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
 								`yum install -y jq curl && \
@@ -611,8 +611,8 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 						},
 						"backendRefs": []map[string]interface{}{
 							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
+								"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port":   80,
 								"weight": 100,
 							},
 						},
@@ -986,8 +986,8 @@ func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, exist
 						},
 						"backendRefs": []map[string]interface{}{
 							{
-								"name": fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
-								"port": 80,
+								"name":   fmt.Sprintf("%s-inference-service", request.InferenceServer.Name),
+								"port":   80,
 								"weight": 100,
 							},
 						},

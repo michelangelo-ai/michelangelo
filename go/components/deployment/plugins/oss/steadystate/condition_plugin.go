@@ -97,7 +97,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, runtimeCtx plugins.Requ
 
 func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Monitoring steady state for deployment", "deployment", resource.Name)
-	
+
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 		// In Uber's implementation, steady state monitoring involves:
 		// 1. Continuous health monitoring of inference servers
@@ -106,7 +106,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 		// 4. Automatic drift detection and correction
 		// 5. SLA compliance monitoring
 		// 6. Integration with MES for model lifecycle management
-		
+
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			runtimeCtx.Logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
@@ -114,7 +114,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 			// For now, assume we can restore to healthy state
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		}
-		
+
 		// Ensure current revision matches desired revision
 		if resource.Status.CurrentRevision != nil && resource.Spec.DesiredRevision != nil {
 			if resource.Status.CurrentRevision.Name != resource.Spec.DesiredRevision.Name {
@@ -123,9 +123,9 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 					"desired", resource.Spec.DesiredRevision.Name)
 			}
 		}
-		
+
 		runtimeCtx.Logger.Info("Deployment is in steady state", "deployment", resource.Name)
 	}
-	
+
 	return nil
 }

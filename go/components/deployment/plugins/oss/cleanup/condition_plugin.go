@@ -96,10 +96,10 @@ func (a *CleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestC
 
 func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
 	runtimeCtx.Logger.Info("Running cleanup for deployment", "deployment", resource.Name)
-	
+
 	// Update deployment status to indicate cleanup is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-	
+
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		// In Uber's implementation, cleanup involves:
 		// 1. Remove model from UCS cache
@@ -107,18 +107,18 @@ func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContex
 		// 3. Remove ConfigMaps and other Kubernetes resources
 		// 4. Update MES (Model Execution Service) records
 		// 5. Clean up monitoring and logging configurations
-		
+
 		// For OSS, simulate cleanup operations:
 		// - Remove model-related ConfigMaps
 		// - Clean up temporary resources
 		// - Update inference server configurations
-		
+
 		runtimeCtx.Logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
-		
+
 		// Mark cleanup as complete
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
 		runtimeCtx.Logger.Info("Cleanup completed for OSS deployment")
 	}
-	
+
 	return nil
 }

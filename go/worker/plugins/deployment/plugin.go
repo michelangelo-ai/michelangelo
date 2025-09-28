@@ -2,10 +2,11 @@ package deployment
 
 import (
 	"fmt"
+	"time"
+
 	jsoniter "github.com/json-iterator/go"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.starlark.net/starlark"
-	"time"
 
 	"github.com/cadence-workflow/starlark-worker/ext"
 	"github.com/cadence-workflow/starlark-worker/service"

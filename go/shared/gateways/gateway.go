@@ -7,13 +7,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Gateway provides a unified interface for inference server operations across different providers
@@ -35,7 +35,7 @@ type Gateway interface {
 
 	// Health Checking
 	IsHealthy(ctx context.Context, logger logr.Logger, serverName string, backendType v2pb.BackendType) (bool, error)
-	
+
 	// Model Configuration Updates (for rolling out new models)
 	UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error
 
@@ -51,13 +51,13 @@ type Gateway interface {
 
 // ModelLoadRequest contains information needed to load a model
 type ModelLoadRequest struct {
-	ModelName        string
-	ModelVersion     string
-	PackagePath      string
-	InferenceServer  string
-	Namespace        string
-	BackendType      v2pb.BackendType
-	Config           map[string]string
+	ModelName       string
+	ModelVersion    string
+	PackagePath     string
+	InferenceServer string
+	Namespace       string
+	BackendType     v2pb.BackendType
+	Config          map[string]string
 }
 
 // ModelStatusRequest contains information needed to check model status
@@ -84,7 +84,6 @@ type ModelConfigUpdateRequest struct {
 	BackendType     v2pb.BackendType
 	ModelConfigs    []ModelConfigEntry
 }
-
 
 // ModelConfigMapRequest contains information needed to create/update model ConfigMaps
 type ModelConfigMapRequest struct {
@@ -194,9 +193,9 @@ type HealthStatus struct {
 
 // gateway implements the Gateway interface
 type gateway struct {
-	httpClient       *http.Client
-	kubeClient       client.Client
-	dynamicClient    dynamic.Interface
+	httpClient        *http.Client
+	kubeClient        client.Client
+	dynamicClient     dynamic.Interface
 	configMapProvider *ConfigMapProvider
 }
 
@@ -215,8 +214,8 @@ func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Inter
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		kubeClient:       kubeClient,
-		dynamicClient:    dynamicClient,
+		kubeClient:        kubeClient,
+		dynamicClient:     dynamicClient,
 		configMapProvider: NewConfigMapProvider(kubeClient, logger),
 	}
 }
@@ -316,7 +315,7 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 		// TODO: Implement LLMD model config updates
 		return fmt.Errorf("model config updates not yet implemented for LLMD backend")
 	case v2pb.BACKEND_TYPE_DYNAMO:
-		// TODO: Implement Dynamo model config updates  
+		// TODO: Implement Dynamo model config updates
 		return fmt.Errorf("model config updates not yet implemented for Dynamo backend")
 	case v2pb.BACKEND_TYPE_TORCHSERVE:
 		return g.updateTorchServeModelConfig(ctx, logger, request)
@@ -445,7 +444,7 @@ func (g *gateway) DeleteInfrastructure(ctx context.Context, logger logr.Logger, 
 // ConfigureProxy sets up Istio VirtualService routing
 func (g *gateway) ConfigureProxy(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
 	logger.Info("Configuring proxy", "server", request.InferenceServer, "model", request.ModelName)
-	
+
 	// Use the same Istio logic from the deployment provider
 	return g.configureIstioProxy(ctx, logger, request)
 }

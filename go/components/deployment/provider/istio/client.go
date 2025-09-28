@@ -3,9 +3,10 @@ package istio
 import (
 	"context"
 	"fmt"
+	"strings"
+
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"strings"
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/provider/proxy"
@@ -45,7 +46,7 @@ func (r IstioProvider) UpdateProxy(ctx context.Context, log logr.Logger, deploym
 
 	// Fallback to VirtualService
 	log.Info("HTTPRoute not found, falling back to VirtualService", "error", err)
-	
+
 	gvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
 		Version:  "v1beta1",
@@ -367,7 +368,6 @@ func (r IstioProvider) updateProductionRoute(ctx context.Context, log logr.Logge
 	return nil
 }
 
-
 // HTTPRoute functions for Gateway API
 
 // updateHTTPRouteProductionRoute updates the existing production route in HTTPRoute with new model name
@@ -389,7 +389,7 @@ func (r IstioProvider) updateHTTPRouteProductionRoute(ctx context.Context, log l
 
 		if r.hasMatchingHTTPRoutePrefix(ruleMap, productionPrefix) {
 			log.Info("Updating existing HTTPRoute production route", "modelName", modelName)
-			
+
 			// Update URLRewrite filter to route to specific model
 			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
 			if found {
@@ -398,7 +398,7 @@ func (r IstioProvider) updateHTTPRouteProductionRoute(ctx context.Context, log l
 					if !ok {
 						continue
 					}
-					
+
 					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
 						newPath := fmt.Sprintf("/v2/models/%s", modelName)
 						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
@@ -408,13 +408,13 @@ func (r IstioProvider) updateHTTPRouteProductionRoute(ctx context.Context, log l
 						break
 					}
 				}
-				
+
 				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
 					log.Error(err, "Failed to update filters in HTTPRoute rule")
 					return err
 				}
 			}
-			
+
 			updated = true
 			break
 		}
