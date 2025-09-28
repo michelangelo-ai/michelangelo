@@ -57,10 +57,10 @@ export const sentenceCaseEnumValue = (
 
 /**
  * @description
- * Safely conversion any value to a string, with JSON.stringify for objects.
+ * Safely convert any value to a string, with JSON.stringify for objects.
  * Handles edge cases like circular references, BigInt, and undefined values.
  *
- * @param value - The value to conversion to a string
+ * @param value - The value to convert to a string
  * @returns A string representation of the value
  *
  * @example

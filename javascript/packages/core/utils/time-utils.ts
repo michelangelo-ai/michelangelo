@@ -61,7 +61,7 @@ export function getDateFromEpochSeconds(epochSeconds: number): Date {
 
 /**
  * Converts a JavaScript Date object to epoch seconds
- * @param date - Date object to conversion
+ * @param date - Date object to convert
  * @returns Unix timestamp in seconds
  */
 export function getEpochSecondsFromDate(date: Date): number {
