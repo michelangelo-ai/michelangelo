@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// MarshalToString marshals the input message into JSON form and convert into string.
+// MarshalToString marshals the input message into JSON form and conversion into string.
 func MarshalToString(v interface{}) string {
 	b, _ := json.Marshal(v)
 	return string(b)

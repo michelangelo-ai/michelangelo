@@ -51,7 +51,7 @@ describe('useCellToString', () => {
     expect(cellToString(props)).toBe('test');
   });
 
-  it('should convert number to string when no renderer is available', () => {
+  it('should conversion number to string when no renderer is available', () => {
     const { result } = renderHook(() => useCellToString());
     const cellToString = result.current;
 
@@ -63,7 +63,7 @@ describe('useCellToString', () => {
     expect(cellToString(props)).toBe('123');
   });
 
-  it('should convert boolean to string when no renderer is available', () => {
+  it('should conversion boolean to string when no renderer is available', () => {
     const { result } = renderHook(() => useCellToString());
     const cellToString = result.current;
 

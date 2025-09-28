@@ -59,6 +59,7 @@ use_repo(
     "com_github_michelangelo_ai_michelangelo_proto",
     "com_github_minio_minio_go_v7",
     "com_github_prometheus_client_golang",
+    "com_github_r3labs_diff_v3",
     "com_github_ray_project_kuberay_ray_operator",
     "com_github_stretchr_testify",
     "com_github_tidwall_gjson",

@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.conversion.v2;
+
+import "michelangelo/api/options.proto";
+
+option go_package = "v2";
+
+option (michelangelo.api.group_info) = {
+  name: "test.api";
+  version: "v2";
+  hub_version: "v2";
+};

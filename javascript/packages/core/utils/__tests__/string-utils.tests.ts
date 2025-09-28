@@ -38,7 +38,7 @@ describe('isAbsoluteURL', () => {
 });
 
 describe('sentenceCaseEnumValue', () => {
-  it('should convert enum values to sentence case', () => {
+  it('should conversion enum values to sentence case', () => {
     expect(sentenceCaseEnumValue('PIPELINE_STATE_BUILDING', 'PIPELINE_STATE_')).toBe('Building');
     expect(sentenceCaseEnumValue('PIPELINE_STATE_MULTIPLE_ERRORS', 'PIPELINE_STATE_')).toBe(
       'Multiple errors'
