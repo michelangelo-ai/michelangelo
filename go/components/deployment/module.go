@@ -10,7 +10,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 			return pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard())
 		}),
 		fx.Invoke(register),
-		noop.Module,
+		oss.Module,
 	)
 )
 

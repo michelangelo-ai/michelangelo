@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -25,7 +26,7 @@ type RolloutPlugin struct {
 	logger            logr.Logger
 }
 
-func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, logger logr.Logger) plugins.ConditionsPlugin {
+func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, logger logr.Logger) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &RolloutPlugin{
 		client:        client,
 		gateway:       gateway,
@@ -35,7 +36,7 @@ func NewRolloutPlugin(client client.Client, gateway gateways.Gateway, blobstore 
 	}
 }
 
-func NewRolloutPluginWithDynamicClient(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, dynamicClient dynamic.Interface, logger logr.Logger) plugins.ConditionsPlugin {
+func NewRolloutPluginWithDynamicClient(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, dynamicClient dynamic.Interface, logger logr.Logger) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	// Create ConfigMapProvider for deployment-level model sync following Uber's UCS cache pattern
 	configMapProvider := gateways.NewConfigMapProvider(client, logger)
 
@@ -49,7 +50,7 @@ func NewRolloutPluginWithDynamicClient(client client.Client, gateway gateways.Ga
 	}
 }
 
-func (p *RolloutPlugin) GetActors() []plugins.ConditionActor {
+func (p *RolloutPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	// Pre-placement actors (following Uber pattern)
 	prePlacementActors := []plugins.ConditionActor{
 		&ValidationActor{client: p.client, blobstore: p.blobstore, logger: p.logger},
@@ -85,7 +86,13 @@ func (p *RolloutPlugin) GetActors() []plugins.ConditionActor {
 	actors = append(actors, placementActors...)
 	actors = append(actors, postPlacementActors...)
 
-	return actors
+	// Convert to the expected interface
+	result := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], len(actors))
+	for i, actor := range actors {
+		result[i] = &ActorWrapper{actor: actor}
+	}
+
+	return result
 }
 
 func (p *RolloutPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {

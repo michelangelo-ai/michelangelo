@@ -101,6 +101,16 @@ func (e *DefaultEngine[T]) runPlugin(ctx context.Context, plugin conditionInterf
 		}
 		lastCondition = newCondition
 		plugin.PutCondition(resource, newCondition)
+
+		// Stop execution immediately if any actor returns FALSE condition
+		// This follows Uber internal pattern where FALSE conditions are terminal
+		if newCondition.Status == api.CONDITION_STATUS_FALSE {
+			e.logger.Error("actor returned FALSE condition - stopping execution",
+				zap.String("actor", actor.GetType()),
+				zap.String("reason", newCondition.Reason),
+				zap.String("message", newCondition.Message))
+			return newCondition, nil
+		}
 	}
 
 	return lastCondition, nil

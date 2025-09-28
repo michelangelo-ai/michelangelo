@@ -28,6 +28,10 @@ func (a *ValidationActor) GetType() string {
 	return "Validated"
 }
 
+func (a *ValidationActor) GetLogger() logr.Logger {
+	return a.logger
+}
+
 func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Basic validation for OSS
 	if resource.Spec.DesiredRevision == nil {
@@ -61,26 +65,11 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 
 	// Check if model folder exists in MinIO storage
 	if a.blobstore != nil {
-		// Check if model folder exists by looking for any objects with the model prefix
-		modelFolderURI := fmt.Sprintf("s3://deploy-models/%s/", modelName)
-
-		exists, err := a.blobstore.Exists(ctx, modelFolderURI)
-		if err != nil {
-			// Following Uber's pattern: Log storage check failure but don't fail validation
-			// This allows for runtime validation during model sync instead of strict pre-validation
-			runtimeCtx.Logger.Info("Storage validation failed, proceeding with runtime validation",
-				"model", modelName, "uri", modelFolderURI, "error", err.Error())
-			// Skip storage validation and proceed - model will be validated during sync
-		} else {
-			if !exists {
-				return &apipb.Condition{
-					Type:    a.GetType(),
-					Status:  apipb.CONDITION_STATUS_FALSE,
-					Reason:  "ModelNotFound",
-					Message: fmt.Sprintf("Model folder %s not found in storage", modelName),
-				}, nil
-			}
-		}
+		// TODO: Implement storage validation when blobstore.Exists method is available
+		// For now, skip storage validation as it's optional pre-validation
+		// Model will be validated during sync phase instead
+		a.logger.Info("Skipping storage validation - will validate during model sync",
+			"model", modelName)
 	}
 	// If blobstore is not available, skip storage validation and trust the model name
 
@@ -92,8 +81,8 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 	}, nil
 }
 
-func (a *ValidationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running validation for deployment", "deployment", resource.Name)
+func (a *ValidationActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running validation for deployment", "deployment", resource.Name)
 
 	// Update deployment status to show validation is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
@@ -102,34 +91,34 @@ func (a *ValidationActor) Run(ctx context.Context, runtimeCtx plugins.RequestCon
 	if resource.Spec.DesiredRevision == nil {
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		resource.Status.Message = "Validation failed: No desired revision specified"
-		return nil
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "NoDesiredRevision", Message: "Validation failed: No desired revision specified"}, nil
 	}
 
 	if resource.Spec.GetInferenceServer() == nil {
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		resource.Status.Message = "Validation failed: No inference server specified"
-		return nil
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "NoInferenceServer", Message: "Validation failed: No inference server specified"}, nil
 	}
 
 	// Additional OSS-specific validations
 	if resource.Spec.DesiredRevision.Name == "" {
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		resource.Status.Message = "Validation failed: Desired revision name is empty"
-		return nil
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "EmptyRevisionName", Message: "Validation failed: Desired revision name is empty"}, nil
 	}
 
 	if resource.Spec.GetInferenceServer().Name == "" {
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 		resource.Status.Message = "Validation failed: Inference server name is empty"
-		return nil
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "EmptyInferenceServerName", Message: "Validation failed: Inference server name is empty"}, nil
 	}
 
 	// If all validations pass
 	resource.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
 	resource.Status.Message = "Validation completed successfully"
-	runtimeCtx.Logger.Info("Validation completed successfully", "deployment", resource.Name)
+	a.logger.Info("Validation completed successfully", "deployment", resource.Name)
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // RolloutActor handles the rollout process
@@ -140,6 +129,10 @@ type RolloutActor struct {
 
 func (a *RolloutActor) GetType() string {
 	return "RolloutComplete"
+}
+
+func (a *RolloutActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *RolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -177,8 +170,8 @@ func (a *RolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestC
 	}, nil
 }
 
-func (a *RolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running rollout for deployment", "deployment", resource.Name)
+func (a *RolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running rollout for deployment", "deployment", resource.Name)
 
 	// Update deployment status to indicate rollout is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -189,10 +182,10 @@ func (a *RolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestContex
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		runtimeCtx.Logger.Info("Rollout completed for OSS deployment", "model", resource.Spec.DesiredRevision.Name)
+		a.logger.Info("Rollout completed for OSS deployment", "model", resource.Spec.DesiredRevision.Name)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // CleanupActor handles cleanup operations
@@ -203,6 +196,10 @@ type CleanupActor struct {
 
 func (a *CleanupActor) GetType() string {
 	return "CleanupComplete"
+}
+
+func (a *CleanupActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *CleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -224,8 +221,8 @@ func (a *CleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestC
 	}, nil
 }
 
-func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running cleanup for deployment", "deployment", resource.Name)
+func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running cleanup for deployment", "deployment", resource.Name)
 
 	// Update deployment status to indicate cleanup is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
@@ -233,14 +230,14 @@ func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContex
 	// For OSS, cleanup involves removing model-related ConfigMaps and updating status
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		// Simulate cleanup of model artifacts and ConfigMaps
-		runtimeCtx.Logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
+		a.logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
 
 		// Mark cleanup as complete
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-		runtimeCtx.Logger.Info("Cleanup completed for OSS deployment")
+		a.logger.Info("Cleanup completed for OSS deployment")
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // RollbackActor handles rollback operations
@@ -251,6 +248,10 @@ type RollbackActor struct {
 
 func (a *RollbackActor) GetType() string {
 	return "RollbackComplete"
+}
+
+func (a *RollbackActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *RollbackActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -272,8 +273,8 @@ func (a *RollbackActor) Retrieve(ctx context.Context, runtimeCtx plugins.Request
 	}, nil
 }
 
-func (a *RollbackActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running rollback for deployment", "deployment", resource.Name)
+func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running rollback for deployment", "deployment", resource.Name)
 
 	// Update deployment status to indicate rollback is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
@@ -291,14 +292,14 @@ func (a *RollbackActor) Run(ctx context.Context, runtimeCtx plugins.RequestConte
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 
-		runtimeCtx.Logger.Info("Rolled back to previous revision",
+		a.logger.Info("Rolled back to previous revision",
 			"from", failedRevision.Name,
 			"to", resource.Status.CurrentRevision.Name)
 	} else {
-		runtimeCtx.Logger.Info("No previous revision available for rollback")
+		a.logger.Info("No previous revision available for rollback")
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // SteadyStateActor handles steady state monitoring
@@ -309,6 +310,10 @@ type SteadyStateActor struct {
 
 func (a *SteadyStateActor) GetType() string {
 	return "StateSteady"
+}
+
+func (a *SteadyStateActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *SteadyStateActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -331,14 +336,20 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, runtimeCtx plugins.Requ
 	}, nil
 }
 
-func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Monitoring steady state for deployment", "deployment", resource.Name)
+func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("SteadyStateActor.Run() called",
+		"deployment", resource.Name,
+		"currentStage", resource.Status.Stage,
+		"currentState", resource.Status.State,
+		"candidateRevision", resource.Status.CandidateRevision,
+		"currentRevision", resource.Status.CurrentRevision,
+		"desiredRevision", resource.Spec.DesiredRevision)
 
 	// For OSS, actively monitor and maintain steady state
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 		// Check if deployment remains healthy
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
-			runtimeCtx.Logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
+			a.logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
 			// In a real implementation, this would check inference server health
 			// For now, assume we can restore to healthy state
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -347,16 +358,16 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 		// Ensure current revision matches desired revision
 		if resource.Status.CurrentRevision != nil && resource.Spec.DesiredRevision != nil {
 			if resource.Status.CurrentRevision.Name != resource.Spec.DesiredRevision.Name {
-				runtimeCtx.Logger.Info("Revision mismatch detected, needs reconciliation",
+				a.logger.Info("Revision mismatch detected, needs reconciliation",
 					"current", resource.Status.CurrentRevision.Name,
 					"desired", resource.Spec.DesiredRevision.Name)
 			}
 		}
 
-		runtimeCtx.Logger.Info("Deployment is in steady state", "deployment", resource.Name)
+		a.logger.Info("Deployment is in steady state", "deployment", resource.Name)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // ResourceAcquisitionActor handles resource acquisition for deployments
@@ -367,6 +378,10 @@ type ResourceAcquisitionActor struct {
 
 func (a *ResourceAcquisitionActor) GetType() string {
 	return "ResourcesAcquired"
+}
+
+func (a *ResourceAcquisitionActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -388,16 +403,16 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, runtimeCtx plug
 	}, nil
 }
 
-func (a *ResourceAcquisitionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running resource acquisition for deployment", "deployment", resource.Name)
+func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running resource acquisition for deployment", "deployment", resource.Name)
 
 	// For OSS, this would ensure inference server is ready and has capacity
 	if resource.Spec.GetInferenceServer() != nil {
-		runtimeCtx.Logger.Info("Resources acquired successfully",
+		a.logger.Info("Resources acquired successfully",
 			"inference_server", resource.Spec.GetInferenceServer().Name)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
@@ -411,6 +426,10 @@ type ModelSyncActor struct {
 
 func (a *ModelSyncActor) GetType() string {
 	return "ModelSynced"
+}
+
+func (a *ModelSyncActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -432,11 +451,11 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 			}
 
 			// Implement retry logic with configurable timeout for health checks
-			modelReady, err := a.checkModelStatusWithTimeout(ctx, runtimeCtx.Logger, modelStatusRequest)
+			modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelStatusRequest)
 			if err != nil {
 				// Check if this is a timeout error vs other errors
 				if err.Error() == "health check timeout exceeded" {
-					runtimeCtx.Logger.Info("Model health check timed out after 10 minutes", "model", modelName)
+					a.logger.Info("Model health check timed out after 10 minutes", "model", modelName)
 					return &apipb.Condition{
 						Type:    a.GetType(),
 						Status:  apipb.CONDITION_STATUS_FALSE,
@@ -445,7 +464,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 					}, nil
 				}
 
-				runtimeCtx.Logger.Error(err, "Failed to check model status in Triton", "model", modelName)
+				a.logger.Error(err, "Failed to check model status in Triton", "model", modelName)
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
@@ -455,7 +474,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 			}
 
 			if modelReady {
-				runtimeCtx.Logger.Info("New model is loaded and ready in Triton", "model", modelName)
+				a.logger.Info("New model is loaded and ready in Triton", "model", modelName)
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_TRUE,
@@ -463,7 +482,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 					Message: fmt.Sprintf("Model %s successfully loaded and ready in Triton", modelName),
 				}, nil
 			} else {
-				runtimeCtx.Logger.Info("New model is not yet ready in Triton, continuing to wait", "model", modelName)
+				a.logger.Info("New model is not yet ready in Triton, continuing to wait", "model", modelName)
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
@@ -482,15 +501,15 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reques
 	}, nil
 }
 
-func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running model sync for deployment", "deployment", resource.Name)
+func (a *ModelSyncActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running model sync for deployment", "deployment", resource.Name)
 
 	// For OSS, this would sync the model from storage to the inference server
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
-		runtimeCtx.Logger.Info("Syncing model to inference server",
+		a.logger.Info("Syncing model to inference server",
 			"model", modelName,
 			"inference_server", inferenceServerName)
 
@@ -500,22 +519,27 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 			// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
 			// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
 			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, resource.Namespace, resource.Name, modelName, "candidate"); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to update deployment via ConfigMapProvider (UCS cache pattern)")
-				return fmt.Errorf("failed to update deployment: %w", err)
+				a.logger.Error(err, "Failed to update deployment via ConfigMapProvider (UCS cache pattern)")
+				return &apipb.Condition{
+					Type:    a.GetType(),
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "ConfigMapUpdateFailed",
+					Message: fmt.Sprintf("Failed to update deployment: %v", err),
+				}, nil
 			}
 
-			runtimeCtx.Logger.Info("UCS cache pattern update completed successfully",
+			a.logger.Info("UCS cache pattern update completed successfully",
 				"deployment", resource.Name,
 				"candidateModel", modelName,
 				"roleType", "candidate")
 		} else {
 			// Fallback to old gateway-based approach if ConfigMapProvider not available
-			runtimeCtx.Logger.Info("ConfigMapProvider not available, falling back to gateway approach")
+			a.logger.Info("ConfigMapProvider not available, falling back to gateway approach")
 			if a.gateway != nil {
 				// Get current models from ConfigMap to preserve them during deployment
-				currentModels, err := a.getCurrentModelsFromConfigMap(ctx, runtimeCtx.Logger, inferenceServerName, resource.Namespace)
+				currentModels, err := a.getCurrentModelsFromConfigMap(ctx, a.logger, inferenceServerName, resource.Namespace)
 				if err != nil {
-					runtimeCtx.Logger.Error(err, "Failed to get current models from ConfigMap")
+					a.logger.Error(err, "Failed to get current models from ConfigMap")
 					// Continue with just the new model if we can't read existing ones
 					currentModels = []gateways.ModelConfigEntry{}
 				}
@@ -535,10 +559,10 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 						Name:   modelName,
 						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
 					})
-					runtimeCtx.Logger.Info("Adding new model for zero-downtime deployment",
+					a.logger.Info("Adding new model for zero-downtime deployment",
 						"newModel", modelName, "totalModels", len(currentModels))
 				} else {
-					runtimeCtx.Logger.Info("Model already exists in ConfigMap", "model", modelName)
+					a.logger.Info("Model already exists in ConfigMap", "model", modelName)
 				}
 
 				updateRequest := gateways.ModelConfigUpdateRequest{
@@ -548,12 +572,17 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 					ModelConfigs:    currentModels,
 				}
 
-				if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, updateRequest); err != nil {
-					runtimeCtx.Logger.Error(err, "Failed to update model config via gateway")
-					return fmt.Errorf("failed to update model config: %w", err)
+				if err := a.gateway.UpdateModelConfig(ctx, a.logger, updateRequest); err != nil {
+					a.logger.Error(err, "Failed to update model config via gateway")
+					return &apipb.Condition{
+						Type:    a.GetType(),
+						Status:  apipb.CONDITION_STATUS_FALSE,
+						Reason:  "ModelConfigUpdateFailed",
+						Message: fmt.Sprintf("Failed to update model config: %v", err),
+					}, nil
 				}
 
-				runtimeCtx.Logger.Info("Model configuration updated successfully for zero-downtime deployment",
+				a.logger.Info("Model configuration updated successfully for zero-downtime deployment",
 					"model", modelName, "totalModels", len(currentModels))
 			}
 		}
@@ -561,10 +590,10 @@ func (a *ModelSyncActor) Run(ctx context.Context, runtimeCtx plugins.RequestCont
 		// DO NOT update HTTPRoute or CurrentRevision yet!
 		// We only sync the model to ConfigMap here. HTTPRoute update and CurrentRevision
 		// will be handled by ModelHealthCheckActor after verifying the new model is ready.
-		runtimeCtx.Logger.Info("Model sync to ConfigMap completed successfully - waiting for health check before switching traffic")
+		a.logger.Info("Model sync to ConfigMap completed successfully - waiting for health check before switching traffic")
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // AssetPreparationActor handles asset preparation for deployments (following Uber pattern)
@@ -576,6 +605,10 @@ type AssetPreparationActor struct {
 
 func (a *AssetPreparationActor) GetType() string {
 	return "AssetsPrepared"
+}
+
+func (a *AssetPreparationActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -603,12 +636,12 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins
 	}, nil
 }
 
-func (a *AssetPreparationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running asset preparation for deployment", "deployment", resource.Name)
+func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running asset preparation for deployment", "deployment", resource.Name)
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
-		runtimeCtx.Logger.Info("Preparing assets for model", "model", modelName)
+		a.logger.Info("Preparing assets for model", "model", modelName)
 
 		// In Uber's implementation, this downloads from S3, compiles, and uploads to TerraBob
 		// For OSS, we simulate asset preparation by ensuring model is accessible in storage
@@ -618,10 +651,10 @@ func (a *AssetPreparationActor) Run(ctx context.Context, runtimeCtx plugins.Requ
 		// 3. Prepare model configuration files
 		// 4. Ensure model is ready for inference server deployment
 
-		runtimeCtx.Logger.Info("Asset preparation completed", "model", modelName)
+		a.logger.Info("Asset preparation completed", "model", modelName)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // RollingRolloutActor handles rolling rollout strategy (following Uber pattern)
@@ -633,6 +666,10 @@ type RollingRolloutActor struct {
 
 func (a *RollingRolloutActor) GetType() string {
 	return "RollingRolloutComplete"
+}
+
+func (a *RollingRolloutActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *RollingRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -668,8 +705,8 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.R
 	}, nil
 }
 
-func (a *RollingRolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running rolling rollout for deployment", "deployment", resource.Name)
+func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running rolling rollout for deployment", "deployment", resource.Name)
 
 	// Update deployment to placement stage
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -679,7 +716,7 @@ func (a *RollingRolloutActor) Run(ctx context.Context, runtimeCtx plugins.Reques
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
-		runtimeCtx.Logger.Info("Starting rolling rollout",
+		a.logger.Info("Starting rolling rollout",
 			"model", modelName,
 			"inference_server", inferenceServerName)
 
@@ -697,10 +734,10 @@ func (a *RollingRolloutActor) Run(ctx context.Context, runtimeCtx plugins.Reques
 
 		// Simulate rollout completion
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
-		runtimeCtx.Logger.Info("Rolling rollout completed successfully", "model", modelName)
+		a.logger.Info("Rolling rollout completed successfully", "model", modelName)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // RolloutCompletionActor handles post-rollout completion tasks (following Uber pattern)
@@ -713,6 +750,10 @@ type RolloutCompletionActor struct {
 
 func (a *RolloutCompletionActor) GetType() string {
 	return "RolloutCompleted"
+}
+
+func (a *RolloutCompletionActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
 func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -735,8 +776,8 @@ func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugin
 	}, nil
 }
 
-func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
+func (a *RolloutCompletionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
@@ -744,7 +785,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 
 		// ZERO-DOWNTIME TRAFFIC SWITCH: Now that ModelSyncActor has confirmed the new model
 		// is loaded and ready in Triton, we can safely switch traffic by adding deployment-specific routing
-		runtimeCtx.Logger.Info("Adding deployment-specific route after health check confirmation", "newModel", modelName)
+		a.logger.Info("Adding deployment-specific route after health check confirmation", "newModel", modelName)
 
 		// Add deployment-specific route for the new routing architecture
 		if a.gateway != nil {
@@ -757,38 +798,43 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			}
 
-			if err := a.gateway.AddDeploymentSpecificRoute(ctx, runtimeCtx.Logger, proxyConfigRequest); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to add deployment-specific route")
-				return fmt.Errorf("failed to add deployment-specific route: %w", err)
+			if err := a.gateway.AddDeploymentSpecificRoute(ctx, a.logger, proxyConfigRequest); err != nil {
+				a.logger.Error(err, "Failed to add deployment-specific route")
+				return &apipb.Condition{
+					Type:    a.GetType(),
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "RouteCreationFailed",
+					Message: fmt.Sprintf("Failed to add deployment-specific route: %v", err),
+				}, nil
 			}
 
-			runtimeCtx.Logger.Info("Deployment-specific route added successfully for zero-downtime traffic switch",
+			a.logger.Info("Deployment-specific route added successfully for zero-downtime traffic switch",
 				"newModel", modelName, "deployment", resource.Name,
 				"route", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
 		}
 
 		// NOW we can safely update CurrentRevision since traffic has been switched
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
-		runtimeCtx.Logger.Info("CurrentRevision updated after successful traffic switch", "model", modelName)
+		a.logger.Info("CurrentRevision updated after successful traffic switch", "model", modelName)
 
 		// DEPLOYMENT-LEVEL CLEANUP: Promote candidate to current and trigger safe cleanup
 		if a.configMapProvider != nil {
 			// Promote candidate model to current (this automatically triggers cleanup of unused models)
-			runtimeCtx.Logger.Info("Promoting candidate model to current and cleaning up unused models", "newModel", modelName)
+			a.logger.Info("Promoting candidate model to current and cleaning up unused models", "newModel", modelName)
 
 			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, resource.Namespace, resource.Name, modelName, "current"); err != nil {
-				runtimeCtx.Logger.Error(err, "Failed to promote model to current via ConfigMapProvider")
+				a.logger.Error(err, "Failed to promote model to current via ConfigMapProvider")
 				// Don't fail the whole rollout completion due to cleanup failure
 				// but log the error for investigation
 			} else {
-				runtimeCtx.Logger.Info("Successfully promoted candidate to current and cleaned up unused models", "currentModel", modelName)
+				a.logger.Info("Successfully promoted candidate to current and cleaned up unused models", "currentModel", modelName)
 			}
 		} else {
 			// Fallback to old gateway-based approach if ConfigMapProvider not available
-			runtimeCtx.Logger.Info("ConfigMapProvider not available, falling back to gateway cleanup")
+			a.logger.Info("ConfigMapProvider not available, falling back to gateway cleanup")
 			if a.gateway != nil {
 				// Get current model configuration to identify old models
-				runtimeCtx.Logger.Info("Cleaning up old models from ConfigMap", "newModel", modelName)
+				a.logger.Info("Cleaning up old models from ConfigMap", "newModel", modelName)
 
 				// Create cleanup request that will remove old models and keep only the new one
 				cleanupRequest := gateways.ModelConfigUpdateRequest{
@@ -803,12 +849,12 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 					},
 				}
 
-				if err := a.gateway.UpdateModelConfig(ctx, runtimeCtx.Logger, cleanupRequest); err != nil {
-					runtimeCtx.Logger.Error(err, "Failed to cleanup old models from ConfigMap")
+				if err := a.gateway.UpdateModelConfig(ctx, a.logger, cleanupRequest); err != nil {
+					a.logger.Error(err, "Failed to cleanup old models from ConfigMap")
 					// Don't fail the whole rollout completion due to cleanup failure
 					// but log the error for investigation
 				} else {
-					runtimeCtx.Logger.Info("Successfully cleaned up old models from ConfigMap", "activeModel", modelName)
+					a.logger.Info("Successfully cleaned up old models from ConfigMap", "activeModel", modelName)
 				}
 			}
 		}
@@ -824,10 +870,10 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 			delete(resource.Annotations, "rollout.michelangelo.ai/start-time")
 		}
 
-		runtimeCtx.Logger.Info("Rollout completion tasks finished successfully", "model", modelName)
+		a.logger.Info("Rollout completion tasks finished successfully", "model", modelName)
 	}
 
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 // getCurrentModelsFromConfigMap retrieves current models from the inference server ConfigMap

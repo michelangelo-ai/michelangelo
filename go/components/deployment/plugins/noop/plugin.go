@@ -267,19 +267,19 @@ func RegisterNoOpPlugins(registrar pluginmanager.Registrar[plugins.Plugin]) erro
 func registerPlugins(registrar pluginmanager.Registrar[plugins.Plugin]) error {
 	noOpPlugin := NewNoOpPlugin()
 
-	// Register for inference server with empty subtype
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin); err != nil {
-		return err
-	}
+	// TEMPORARILY DISABLED: Register for inference server with empty subtype
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
-	// Register for inference server with common subtypes
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "realtime-serving", noOpPlugin); err != nil {
-		return err
-	}
+	// TEMPORARILY DISABLED: Register for inference server with common subtypes
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "realtime-serving", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "batch-serving", noOpPlugin); err != nil {
-		return err
-	}
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "batch-serving", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
 	// Register for offline deployments
 	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_OFFLINE.String(), "", noOpPlugin); err != nil {

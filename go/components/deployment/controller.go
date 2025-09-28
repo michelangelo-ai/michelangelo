@@ -85,7 +85,7 @@ func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
 		Registrar:         registrar,
-		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](zap.NewNop()),
+		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
 		RevisionManager:   revision.NewNoOpManager(),
 		Scope:             tally.NoopScope,
 		auditLogEmitter:   &logging.DummyAuditLog{},
@@ -340,7 +340,11 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
 	// This requires updating the Engine interface to match Uber's 4-parameter signature
 	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
+	fmt.Printf("DEBUG processPlugin for %s: ShouldCleanup=%v, RolloutInProgress=%v\n",
+		deployment.Name, ShouldCleanup(*deployment), RolloutInProgress(*deployment))
+
 	if ShouldCleanup(*deployment) {
+		fmt.Printf("DEBUG: Taking cleanup branch for %s\n", deployment.Name)
 		if !IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
 			metrics.cleanupMetrics.initiatedCount.Inc(1)
@@ -354,6 +358,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			return result, err
 		}
 	} else if RolloutInProgress(*deployment) {
+		fmt.Printf("DEBUG: Taking rollout branch for %s\n", deployment.Name)
 		sw := metrics.healthCheckGateMetrics.duration.Start()
 		metrics.healthCheckGateMetrics.count.Inc(1)
 		observability := r.getObservability(log, deployment.Namespace)
@@ -397,6 +402,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 		}
 	} else if TriggerNewRollout(*deployment) {
+		fmt.Printf("DEBUG: Taking new rollout branch for %s\n", deployment.Name)
 		log.Info("detected new rollout")
 		metrics.rolloutMetrics.initiatedCount.Inc(1)
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
@@ -427,6 +433,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 		}
 	} else if InSteadyState(*deployment) {
+		fmt.Printf("DEBUG: Taking steady state branch for %s\n", deployment.Name)
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
@@ -435,6 +442,8 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			log.Error(err, "Steady state plugin processing failed with error")
 			return result, err
 		}
+	} else {
+		fmt.Printf("DEBUG: No branch taken for %s - falling through!\n", deployment.Name)
 	}
 	// Simplified: Skip condition removal for now
 	// removeConditionsForDeployment(deployment, conditionPlugin)
@@ -658,8 +667,14 @@ var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
 // TriggerNewRollout determines if a new rollout should be triggered
 func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	desiredRevision := deployment.Spec.DesiredRevision
-	return !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision) &&
-		(IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage))
+	desiredCandidateDiffer := !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision)
+	terminalOrInit := IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage)
+	result := desiredCandidateDiffer && terminalOrInit
+
+	fmt.Printf("DEBUG TriggerNewRollout for %s: desiredCandidateDiffer=%v (desired=%v, candidate=%v), terminalOrInit=%v (stage=%v), result=%v\n",
+		deployment.Name, desiredCandidateDiffer, desiredRevision, deployment.Status.CandidateRevision, terminalOrInit, deployment.Status.Stage, result)
+
+	return result
 }
 
 // ShouldRollback determines if a rollback should occur
@@ -676,9 +691,23 @@ func ShouldRollback(deployment v2pb.Deployment) bool {
 func RolloutInProgress(deployment v2pb.Deployment) bool {
 	currentRevision := deployment.Status.CurrentRevision
 	candidateRevision := deployment.Status.CandidateRevision
-	return !revisionEqual(currentRevision, candidateRevision) &&
-		!IsTerminalStage(deployment.Status.Stage) &&
-		!isInitializationStage(deployment.Status.Stage)
+
+	revisionsDiffer := !revisionEqual(currentRevision, candidateRevision)
+	notTerminal := !IsTerminalStage(deployment.Status.Stage)
+	notInitialization := !isInitializationStage(deployment.Status.Stage)
+
+	// FIXED: If deployment is in an active rollout stage (validation, placement),
+	// consider it in progress even if revisions are equal
+	isActiveRolloutStage := deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_VALIDATION ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_PLACEMENT
+
+	result := (revisionsDiffer || isActiveRolloutStage) && notTerminal && notInitialization
+
+	// Debug logging to understand why RolloutInProgress might return false
+	fmt.Printf("DEBUG RolloutInProgress for %s: revisionsDiffer=%v (current=%v, candidate=%v), isActiveRolloutStage=%v, notTerminal=%v (stage=%v), notInitialization=%v, result=%v\n",
+		deployment.Name, revisionsDiffer, currentRevision, candidateRevision, isActiveRolloutStage, notTerminal, deployment.Status.Stage, notInitialization, result)
+
+	return result
 }
 
 // InSteadyState checks if deployment needs to go through steady state plugin
@@ -764,4 +793,16 @@ func revisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 
 func desiredRevisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 	return revisionEqual(a, b)
+}
+
+// createEngineLogger creates a proper zap logger for the engine instead of a no-op logger
+func createEngineLogger() *zap.Logger {
+	config := zap.NewDevelopmentConfig()
+	config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	logger, err := config.Build()
+	if err != nil {
+		// Fallback to a basic logger if building fails
+		return zap.NewExample()
+	}
+	return logger
 }

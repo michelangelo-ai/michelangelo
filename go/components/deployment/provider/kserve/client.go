@@ -149,15 +149,18 @@ func (r KserveProvider) updateDeploymentStatus(result *unstructured.Unstructured
 		logger.Error(err, "Failed to retrieve InferenceService status")
 		return err
 	}
+
+	// PLUGIN COMPATIBILITY: Only update model reference, not CurrentRevision
+	// Let OSS plugins manage CurrentRevision updates through proper rollout flow
 	if foundModel {
-		deployment.Status.CurrentRevision = &apipb.ResourceIdentifier{
-			Namespace: deployment.Namespace,
-			Name:      model,
-		}
+		logger.Info("KServe provider found model in InferenceService", "model", model)
+		// Store model reference for plugin use but don't set CurrentRevision directly
+		// Plugins will handle CurrentRevision updates at appropriate rollout stages
 	}
+
 	conditions, found, _ := unstructured.NestedSlice(result.Object, "status", "conditions")
 	if found {
-		deployment.Status.Conditions = nil
+		// Only append InferenceService conditions, don't replace plugin conditions
 		for _, c := range conditions {
 			condition, _ := c.(map[string]interface{})
 			typeStr, _, _ := unstructured.NestedString(condition, "type")
@@ -174,29 +177,58 @@ func (r KserveProvider) updateDeploymentStatus(result *unstructured.Unstructured
 			} else {
 				conditionStatus = apipb.CONDITION_STATUS_UNKNOWN
 			}
-			deployment.Status.Conditions = append(deployment.Status.Conditions, &apipb.Condition{
-				Type:                 typeStr,
-				Status:               conditionStatus,
-				Message:              message,
-				LastUpdatedTimestamp: timestamp.Unix(),
-			})
 
+			// Check if this InferenceService condition already exists
+			conditionExists := false
+			for i, existing := range deployment.Status.Conditions {
+				if existing.Type == "InferenceService"+typeStr {
+					// Update existing InferenceService condition
+					deployment.Status.Conditions[i] = &apipb.Condition{
+						Type:                 "InferenceService" + typeStr,
+						Status:               conditionStatus,
+						Message:              message,
+						LastUpdatedTimestamp: timestamp.Unix(),
+					}
+					conditionExists = true
+					break
+				}
+			}
+
+			if !conditionExists {
+				// Add new InferenceService condition with prefixed type to avoid conflicts
+				deployment.Status.Conditions = append(deployment.Status.Conditions, &apipb.Condition{
+					Type:                 "InferenceService" + typeStr,
+					Status:               conditionStatus,
+					Message:              message,
+					LastUpdatedTimestamp: timestamp.Unix(),
+				})
+			}
+
+			// PLUGIN COMPATIBILITY: Don't override deployment stage/state - let plugins manage rollout flow
 			if typeStr == "Ready" {
 				if statusStr == "True" {
-					deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-					deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-					deployment.Status.Message = message
+					logger.Info("InferenceService is ready - plugins will handle rollout completion")
+					// Don't set Stage to ROLLOUT_COMPLETE - let OSS plugins manage the rollout flow
+					// Only update state if deployment is not already managing its own state
+					if deployment.Status.State == v2pb.DEPLOYMENT_STATE_INVALID {
+						deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+					}
 				} else {
-					deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-					deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED
-					deployment.Status.Message = message
+					logger.Info("InferenceService is not ready", "message", message)
+					// Only update state if deployment is not already managing its own state
+					if deployment.Status.State == v2pb.DEPLOYMENT_STATE_INVALID {
+						deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
+					}
 				}
 			}
 		}
 	} else {
-		deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
-		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
-		deployment.Status.Message = "InferenceService conditions not yet available"
+		logger.Info("InferenceService conditions not yet available - plugins will manage initial state")
+		// Don't override plugin-managed state - only set if completely uninitialized
+		if deployment.Status.State == v2pb.DEPLOYMENT_STATE_INVALID {
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
+		}
+		// Don't override plugin-managed stage
 	}
 
 	logger.Info("Updated InferenceService status", "state", deployment.Status.State, "stage", deployment.Status.Stage)
