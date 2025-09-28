@@ -1,0 +1,45 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+proto_library(
+    name = "v1_proto",
+    srcs = [
+        "groupversion_info.proto",
+        "testobject.proto",
+    ],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:api_proto",
+        "//proto/test/kubeproto/conversion/v2:v2_proto",
+        "@io_k8s_api//core/v1:v1_proto",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
+    ],
+)
+
+go_proto_library(
+    name = "v1_go_proto",
+    compilers = [
+        "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_kubeproto_unittest",
+        "//bazel/rules/proto:go_kubeconversion",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1",
+    proto = ":v1_proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:go_default_library",
+        "//proto/test/kubeproto/conversion/v2:go_default_library",
+        "@io_k8s_api//core/v1:core",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    embed = [":v1_go_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1",
+    visibility = ["//visibility:public"],
+)

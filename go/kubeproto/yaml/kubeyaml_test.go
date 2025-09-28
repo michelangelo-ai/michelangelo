@@ -5,15 +5,17 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/pluginpb"
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
+
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
 )
 
 func readInput(t *testing.T) (*protogen.Plugin, *protoregistry.Types) {
@@ -34,7 +36,10 @@ func readInput(t *testing.T) (*protogen.Plugin, *protoregistry.Types) {
 
 func TestGroupVersionInfo(t *testing.T) {
 	gen, extTypes := readInput(t)
-	gInfo := LoadGroupInfo(gen, extTypes, true)
+	gInfoMap := groupinfo.Load(gen, extTypes)
+	assert.Equal(t, 1, len(gInfoMap))
+	gInfo, ok := gInfoMap["michelangelo.test.kubeproto"]
+	assert.True(t, ok)
 	assert.Equal(t, "v2", gInfo.Version)
 	assert.Equal(t, "michelangelo.api", gInfo.Name)
 }

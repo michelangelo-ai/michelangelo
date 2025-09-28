@@ -2,15 +2,13 @@ package yaml
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/gobuffalo/flect"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -19,17 +17,15 @@ import (
 	apiext "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/yaml"
+
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
 )
 
 var _reGetComment = regexp.MustCompile("\r?\n|\r")
 
 var logger = log.New(os.Stderr, "", 0)
-
-// GroupInfo contains the information of a CRD group from groupversion_info.proto file.
-type GroupInfo struct {
-	Name    string
-	Version string
-}
 
 type crdInfo struct {
 	Kind         string // CamelCased singular type
@@ -412,7 +408,7 @@ func generateFileHeader(gen *protogen.Plugin, file *protogen.File) *protogen.Gen
 
 // GenerateYamlFile generates CRD Yaml file
 func GenerateYamlFile(gen *protogen.Plugin, file *protogen.File,
-	extTypes *protoregistry.Types, gInfo GroupInfo) *protogen.GeneratedFile {
+	extTypes *protoregistry.Types, gInfo groupinfo.GroupInfo) *protogen.GeneratedFile {
 	// Output to CRD yaml file.
 	g := generateFileHeader(gen, file)
 
@@ -426,7 +422,7 @@ func GenerateYamlFile(gen *protogen.Plugin, file *protogen.File,
 }
 
 // GenerateCRDYaml generates CRD Yaml schema
-func GenerateCRDYaml(file *protogen.File, extTypes *protoregistry.Types, gInfo GroupInfo) []byte {
+func GenerateCRDYaml(file *protogen.File, extTypes *protoregistry.Types, gInfo groupinfo.GroupInfo) []byte {
 	cInfo := getCrdInfo(file, extTypes)
 	if cInfo.MainMsg == nil {
 		// No michelangelo api resource is found.
@@ -481,59 +477,13 @@ func GenerateCRDYaml(file *protogen.File, extTypes *protoregistry.Types, gInfo G
 	return buf
 }
 
-func isGroupFile(filename string) bool {
-	groupFileID := "groupversion_info"
-	if len(filename) < len(groupFileID) {
-		return false
-	}
-	return filename[:len(groupFileID)] == groupFileID
-}
-
-// LoadGroupInfo loads group version info from groupversion_info.proto file
-func LoadGroupInfo(gen *protogen.Plugin, extTypes *protoregistry.Types, mustHave bool) *GroupInfo {
-	var groupInfoFile *protogen.File
-	var gInfo GroupInfo
-
-	for _, f := range gen.Files {
-		if isGroupFile(filepath.Base(f.GeneratedFilenamePrefix)) {
-			groupInfoFile = f
-		}
-	}
-
-	if groupInfoFile == nil {
-		if mustHave {
-			logger.Panicln("Failed to derive API group version info. " +
-				"Make sure to define groupversion_info.proto for the API group.")
-		} else {
-			return nil
-		}
-	}
-
-	options, err := pboptions.ReadOptions(extTypes, groupInfoFile.Proto.Options)
-	if err != nil {
-		logger.Panicf("Failed to read protobuf options: %v", err)
-	}
-
-	if options.Bool("has_group_info") {
-		gInfo.Name = options.String("group_info.name")
-		gInfo.Version = options.String("group_info.version")
-	}
-
-	if gInfo.Name == "" || gInfo.Version == "" {
-		logger.Panicln("Failed to derive API group version info. " +
-			"Make sure both name and version are defined in groupversion_info.proto")
-	}
-
-	return &gInfo
-}
-
 // GenerateYaml generates CRD yaml files for the protoc request.
 func GenerateYaml(reqData []byte) *pluginpb.CodeGeneratorResponse {
 	gen, extTypes, err := util.GetPluginAndExtensions(reqData, true)
 	if err != nil {
 		logger.Panic(err)
 	}
-	gInfo := LoadGroupInfo(gen, extTypes, true)
+	gInfoMap := groupinfo.Load(gen, extTypes)
 
 	for _, f := range gen.Files {
 		// Skip the proto file that don't need to generate yaml files,
@@ -541,7 +491,11 @@ func GenerateYaml(reqData []byte) *pluginpb.CodeGeneratorResponse {
 		if !f.Generate {
 			continue
 		}
-
+		gInfo, ok := gInfoMap[string(f.Desc.Package())]
+		if !ok {
+			logger.Panicln(fmt.Sprintf("Failed to derive API group version info for protobuf package: %v. "+
+				"Make sure to define groupversion_info.proto for the API group.", f.Desc.Package()))
+		}
 		GenerateYamlFile(gen, f, extTypes, *gInfo)
 	}
 

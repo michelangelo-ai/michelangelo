@@ -10,6 +10,7 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/kubeproto/groupinfo:go_default_library",
         "//go/kubeproto/pboptions:go_default_library",
         "//go/kubeproto/util:go_default_library",
         "@com_github_gobuffalo_flect//:go_default_library",
@@ -34,6 +35,7 @@ go_test(
         "test/testobject.yaml",
     ],
     deps = [
+        "//go/kubeproto/groupinfo:go_default_library",
         "//go/kubeproto/pboptions:go_default_library",
         "//go/kubeproto/util:go_default_library",
         "//proto/test/kubeproto:go_default_library",
