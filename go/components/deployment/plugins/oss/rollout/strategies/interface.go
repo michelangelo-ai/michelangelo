@@ -64,6 +64,11 @@ func getDeploymentStrategy(deployment *v2pb.Deployment) string {
 func GetRollingActors(params Params, deployment *v2pb.Deployment) []plugins.ConditionActor {
 	return []plugins.ConditionActor{
 		&ModelSyncActor{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
+		},
+		&TrafficRoutingActor{
 			client:  params.Client,
 			gateway: params.Gateway,
 			logger:  params.Logger,

@@ -18,11 +18,6 @@ import (
 // GetZonalActors returns actors for zonal rollout strategy (zone-by-zone deployment)
 func GetZonalActors(params Params, deployment *v2pb.Deployment) []plugins.ConditionActor {
 	return []plugins.ConditionActor{
-		&ModelSyncActor{
-			client:  params.Client,
-			gateway: params.Gateway,
-			logger:  params.Logger,
-		},
 		&ZonalRolloutActor{
 			client:  params.Client,
 			gateway: params.Gateway,
@@ -42,62 +37,82 @@ func (a *ZonalRolloutActor) GetType() string {
 	return common.ActorTypeZonalRollout
 }
 
-func (a *ZonalRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, existingCondition *apipb.Condition) (*apipb.Condition, error) {
-	condition := &apipb.Condition{
-		Type:   "ZonalRollout",
-		Status: apipb.CONDITION_STATUS_FALSE,
-		Reason: "ZonalRolloutInProgress",
-	}
-
-	if existingCondition != nil {
-		condition = existingCondition
-	}
-
-	a.logger.Info("Retrieved zonal rollout condition", "status", condition.Status, "reason", condition.Reason)
-	return condition, nil
+func (a *ZonalRolloutActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
-func (a *ZonalRolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *apipb.Condition) error {
-	a.logger.Info("Starting zonal rollout", "deployment", deployment.Name, "inferenceServer", deployment.Spec.GetInferenceServer().Name)
+func (a *ZonalRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	// Check if zonal rollout is complete
+	if resource.Status.CurrentRevision != nil &&
+		resource.Spec.DesiredRevision != nil &&
+		resource.Status.CurrentRevision.Name == resource.Spec.DesiredRevision.Name &&
+		resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 
-	// Get zones from deployment replicas/infrastructure
-	zones, err := a.getTargetZones(ctx, deployment)
-	if err != nil {
-		condition.Status = apipb.CONDITION_STATUS_FALSE
-		condition.Reason = "ZonalRolloutFailed"
-		condition.Message = fmt.Sprintf("Failed to get target zones: %v", err)
-		return err
+		return &apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_TRUE,
+			Reason:  "ZonalRolloutCompleted",
+			Message: "Zonal rollout completed successfully",
+		}, nil
 	}
 
-	modelName := deployment.Spec.DesiredRevision.Name
-	if modelName == "" {
-		modelName = deployment.Name
-	}
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_FALSE,
+		Reason:  "ZonalRolloutPending",
+		Message: "Zonal rollout has not started yet",
+	}, nil
+}
 
-	// Deploy zone by zone
-	for i, zone := range zones {
-		a.logger.Info("Deploying to zone", "zone", zone, "step", i+1, "totalZones", len(zones))
+func (a *ZonalRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running zonal rollout for deployment", "deployment", resource.Name)
 
-		if err := a.deployToZone(ctx, deployment, zone, modelName); err != nil {
-			condition.Status = apipb.CONDITION_STATUS_FALSE
-			condition.Reason = "ZonalRolloutFailed"
-			condition.Message = fmt.Sprintf("Failed to deploy to zone %s: %v", zone, err)
-			return err
+	if resource.Spec.DesiredRevision != nil {
+		modelName := resource.Spec.DesiredRevision.Name
+		inferenceServerName := resource.Spec.GetInferenceServer().Name
+
+		a.logger.Info("Starting zonal rollout",
+			"model", modelName,
+			"inference_server", inferenceServerName)
+
+		// Get zones from deployment replicas/infrastructure
+		zones, err := a.getTargetZones(ctx, resource)
+		if err != nil {
+			a.logger.Error(err, "Failed to get target zones")
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ZonalRolloutFailed",
+				Message: fmt.Sprintf("Failed to get target zones: %v", err),
+			}, nil
 		}
 
-		// Wait between zones for stability
-		if i < len(zones)-1 {
-			a.logger.Info("Waiting between zones", "waitTime", "30s")
-			time.Sleep(30 * time.Second)
+		// Deploy zone by zone
+		for i, zone := range zones {
+			a.logger.Info("Deploying to zone", "zone", zone, "step", i+1, "totalZones", len(zones))
+
+			if err := a.deployToZone(ctx, resource, zone, modelName); err != nil {
+				a.logger.Error(err, "Failed to deploy to zone", "zone", zone)
+				return &apipb.Condition{
+					Type:    a.GetType(),
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "ZonalRolloutFailed",
+					Message: fmt.Sprintf("Failed to deploy to zone %s: %v", zone, err),
+				}, nil
+			}
+
+			// For OSS, skip the wait between zones to simplify
+			a.logger.Info("Zone deployment completed", "zone", zone)
 		}
+
+		// Simulate zonal rollout completion
+		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+		a.logger.Info("Zonal rollout completed successfully", "zones", len(zones), "model", modelName)
 	}
 
-	condition.Status = apipb.CONDITION_STATUS_TRUE
-	condition.Reason = "ZonalRolloutCompleted"
-	condition.Message = fmt.Sprintf("Model deployed to all %d zones successfully", len(zones))
-
-	a.logger.Info("Zonal rollout completed successfully", "zones", len(zones), "model", modelName)
-	return nil
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 func (a *ZonalRolloutActor) getTargetZones(ctx context.Context, deployment *v2pb.Deployment) ([]string, error) {

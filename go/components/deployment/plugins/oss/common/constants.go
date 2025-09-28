@@ -2,7 +2,6 @@ package common
 
 import (
 	"strconv"
-	"strings"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -20,6 +19,7 @@ const (
 	ActorTypeShadowAnalysis     = "ShadowAnalysisComplete"
 	ActorTypeShadowPromotion    = "ShadowPromotionComplete"
 	ActorTypeDisaggregatedRollout = "DisaggregatedRolloutComplete"
+	ActorTypeTrafficRouting     = "TrafficRoutingConfigured"
 	ActorTypeRolloutCompletion  = "RolloutCompleted"
 	ActorTypeCleanup            = "CleanupComplete"
 	ActorTypeRollback           = "RollbackComplete"
@@ -33,27 +33,14 @@ const (
 	AnnotationRolloutStrategy = "rollout.michelangelo.ai/strategy"
 )
 
-// Available models in OSS environment
-var availableModels = []string{
-	"bert-cola-6",
-	"bert-cola-7", 
-	"bert-cola-8",
-	"bert-cola-23",
-}
-
-// IsModelAvailable checks if a model is available in the OSS environment
+// IsModelAvailable checks if a model is available (always true for OSS)
 func IsModelAvailable(modelName string) bool {
-	for _, model := range availableModels {
-		if model == modelName {
-			return true
-		}
-	}
-	return false
+	return modelName != ""
 }
 
-// GetAvailableModels returns a comma-separated list of available models
+// GetAvailableModels returns a message about available models
 func GetAvailableModels() string {
-	return strings.Join(availableModels, ", ")
+	return "all models in configured storage"
 }
 
 // GetRolloutIncrement gets the rollout increment percentage from deployment annotations

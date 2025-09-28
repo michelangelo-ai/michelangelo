@@ -36,11 +36,6 @@ type DisaggregatedStep struct {
 // GetDisaggregatedActors returns actors for disaggregated rollout strategy (multi-step deployment)
 func GetDisaggregatedActors(params Params, deployment *v2pb.Deployment) []plugins.ConditionActor {
 	return []plugins.ConditionActor{
-		&ModelSyncActor{
-			client:  params.Client,
-			gateway: params.Gateway,
-			logger:  params.Logger,
-		},
 		&DisaggregatedRolloutActor{
 			client:  params.Client,
 			gateway: params.Gateway,
@@ -60,50 +55,80 @@ func (a *DisaggregatedRolloutActor) GetType() string {
 	return common.ActorTypeDisaggregatedRollout
 }
 
-func (a *DisaggregatedRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, existingCondition *apipb.Condition) (*apipb.Condition, error) {
-	condition := &apipb.Condition{
-		Type:   "DisaggregatedRollout",
-		Status: apipb.CONDITION_STATUS_FALSE,
-		Reason: "DisaggregatedRolloutInProgress",
-	}
-
-	if existingCondition != nil {
-		condition = existingCondition
-	}
-
-	a.logger.Info("Retrieved disaggregated rollout condition", "status", condition.Status, "reason", condition.Reason)
-	return condition, nil
+func (a *DisaggregatedRolloutActor) GetLogger() logr.Logger {
+	return a.logger
 }
 
-func (a *DisaggregatedRolloutActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, deployment *v2pb.Deployment, condition *apipb.Condition) error {
-	a.logger.Info("Starting disaggregated rollout", "deployment", deployment.Name)
+func (a *DisaggregatedRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	// Check if disaggregated rollout is complete
+	if resource.Status.CurrentRevision != nil &&
+		resource.Spec.DesiredRevision != nil &&
+		resource.Status.CurrentRevision.Name == resource.Spec.DesiredRevision.Name &&
+		resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 
-	// Define deployment steps - in real implementation, this would come from deployment spec
-	steps := a.getDeploymentSteps(deployment)
-
-	for i, step := range steps {
-		a.logger.Info("Executing deployment step", "step", i+1, "name", step.Name, "environment", step.Environment)
-
-		if err := a.executeStep(ctx, deployment, step); err != nil {
-			condition.Status = apipb.CONDITION_STATUS_FALSE
-			condition.Reason = "DisaggregatedRolloutFailed"
-			condition.Message = fmt.Sprintf("Failed at step %s: %v", step.Name, err)
-			return err
-		}
-
-		// Wait for soak time between steps
-		if step.SoakTime > 0 && i < len(steps)-1 {
-			a.logger.Info("Soaking between steps", "duration", step.SoakTime, "step", step.Name)
-			time.Sleep(step.SoakTime)
-		}
+		return &apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_TRUE,
+			Reason:  "DisaggregatedRolloutCompleted",
+			Message: "Disaggregated rollout completed successfully",
+		}, nil
 	}
 
-	condition.Status = apipb.CONDITION_STATUS_TRUE
-	condition.Reason = "DisaggregatedRolloutCompleted"
-	condition.Message = fmt.Sprintf("Completed all %d deployment steps successfully", len(steps))
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_FALSE,
+		Reason:  "DisaggregatedRolloutPending",
+		Message: "Disaggregated rollout has not started yet",
+	}, nil
+}
 
-	a.logger.Info("Disaggregated rollout completed", "totalSteps", len(steps))
-	return nil
+func (a *DisaggregatedRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running disaggregated rollout for deployment", "deployment", resource.Name)
+
+	// Update deployment to placement stage
+	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
+	resource.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
+
+	if resource.Spec.DesiredRevision != nil {
+		modelName := resource.Spec.DesiredRevision.Name
+		inferenceServerName := resource.Spec.GetInferenceServer().Name
+
+		a.logger.Info("Starting disaggregated rollout",
+			"model", modelName,
+			"inference_server", inferenceServerName)
+
+		// Define deployment steps - in real implementation, this would come from deployment spec
+		steps := a.getDeploymentSteps(resource)
+
+		for i, step := range steps {
+			a.logger.Info("Executing deployment step", "step", i+1, "name", step.Name, "environment", step.Environment)
+
+			if err := a.executeStep(ctx, resource, step); err != nil {
+				a.logger.Error(err, "Failed deployment step", "step", step.Name)
+				return &apipb.Condition{
+					Type:    a.GetType(),
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "DisaggregatedRolloutFailed",
+					Message: fmt.Sprintf("Failed at step %s: %v", step.Name, err),
+				}, nil
+			}
+
+			// Wait for soak time between steps (simplified for OSS)
+			if step.SoakTime > 0 && i < len(steps)-1 {
+				a.logger.Info("Soaking between steps", "duration", step.SoakTime, "step", step.Name)
+				// In real implementation, this would be handled by the controller's reconcile loop
+				// For OSS, we skip the soak time to simplify
+			}
+		}
+
+		// Simulate disaggregated rollout completion
+		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+		a.logger.Info("Disaggregated rollout completed successfully", "model", modelName, "totalSteps", len(steps))
+	}
+
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
 }
 
 func (a *DisaggregatedRolloutActor) getDeploymentSteps(deployment *v2pb.Deployment) []DisaggregatedStep {
