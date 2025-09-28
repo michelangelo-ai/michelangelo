@@ -83,7 +83,7 @@ describe('DatetimeFilter', () => {
     expect(screen.getByText(/Selected date range is from 01–01–2022/i)).toBeInTheDocument();
   });
 
-  it('should conversion string dates to Date objects and display correctly', () => {
+  it('should convert string dates to Date objects and display correctly', () => {
     const filterWithStringDates: DatetimeFilterValue = {
       operation: 'RANGE_DATETIME',
       // Simulate dates stored as strings in localStorage
