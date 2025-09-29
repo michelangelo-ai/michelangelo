@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -29,7 +28,7 @@ func (a *ModelCleanupActor) GetLogger() logr.Logger {
 	return a.Logger
 }
 
-func (a *ModelCleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if cleanup is needed by comparing current vs desired revision
 	if resource.Status.CurrentRevision == nil || resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{

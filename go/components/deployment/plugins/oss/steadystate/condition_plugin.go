@@ -75,7 +75,7 @@ func (a *SteadyStateActor) GetType() string {
 	return common.ActorTypeSteadyState
 }
 
-func (a *SteadyStateActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if deployment is in steady state (complete and healthy)
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE &&
 		resource.Status.State == v2pb.DEPLOYMENT_STATE_HEALTHY {
@@ -95,8 +95,8 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, runtimeCtx plugins.Requ
 	}, nil
 }
 
-func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Monitoring steady state for deployment", "deployment", resource.Name)
+func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Monitoring steady state for deployment", "deployment", resource.Name)
 
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 		// In Uber's implementation, steady state monitoring involves:
@@ -109,7 +109,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
-			runtimeCtx.Logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
+			a.logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
 			// In a real implementation, this would check inference server health
 			// For now, assume we can restore to healthy state
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -118,14 +118,19 @@ func (a *SteadyStateActor) Run(ctx context.Context, runtimeCtx plugins.RequestCo
 		// Ensure current revision matches desired revision
 		if resource.Status.CurrentRevision != nil && resource.Spec.DesiredRevision != nil {
 			if resource.Status.CurrentRevision.Name != resource.Spec.DesiredRevision.Name {
-				runtimeCtx.Logger.Info("Revision mismatch detected, needs reconciliation",
+				a.logger.Info("Revision mismatch detected, needs reconciliation",
 					"current", resource.Status.CurrentRevision.Name,
 					"desired", resource.Spec.DesiredRevision.Name)
 			}
 		}
 
-		runtimeCtx.Logger.Info("Deployment is in steady state", "deployment", resource.Name)
+		a.logger.Info("Deployment is in steady state", "deployment", resource.Name)
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "SteadyStateReached",
+		Message: "Deployment is in steady state",
+	}, nil
 }

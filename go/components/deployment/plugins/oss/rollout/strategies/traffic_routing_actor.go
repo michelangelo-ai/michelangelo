@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -30,7 +29,7 @@ func (a *TrafficRoutingActor) GetLogger() logr.Logger {
 	return a.logger
 }
 
-func (a *TrafficRoutingActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *TrafficRoutingActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if deployment HTTPRoute exists and is properly configured
 	deploymentRouteName := fmt.Sprintf("%s-httproute", resource.Name)
 
@@ -122,7 +121,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 			"spec": map[string]interface{}{
 				"parentRefs": []interface{}{
 					map[string]interface{}{
-						"name": "gateway",
+						"name": "ma-gateway",
 						"kind": "Gateway",
 					},
 				},
@@ -132,7 +131,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 							map[string]interface{}{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s", resource.Name),
+									"value": fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name),
 								},
 							},
 						},
@@ -148,7 +147,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
+										"replacePrefixMatch": fmt.Sprintf("/%s", resource.Name),
 									},
 								},
 							},
@@ -185,7 +184,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 		a.logger.Info("Created HTTPRoute for deployment",
 			"httproute", deploymentRouteName,
 			"deployment", resource.Name,
-			"path", fmt.Sprintf("/%s", resource.Name))
+			"path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
 	} else {
 		// Update existing HTTPRoute spec
 		existingRoute.Object["spec"] = httpRoute.Object["spec"]
@@ -200,7 +199,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 		a.logger.Info("Updated HTTPRoute for deployment",
 			"httproute", deploymentRouteName,
 			"deployment", resource.Name,
-			"path", fmt.Sprintf("/%s", resource.Name))
+			"path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
 	}
 
 	return &apipb.Condition{
