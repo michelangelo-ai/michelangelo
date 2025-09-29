@@ -13,9 +13,9 @@ import (
 
 func TestGeneratePipelineRunName(t *testing.T) {
 	now := time.Date(2023, 1, 15, 10, 30, 45, 123456789, time.UTC)
-	
+
 	result := generatePipelineRunName(now)
-	
+
 	// Should generate a name based on timestamp
 	assert.Contains(t, result, "20230115")
 	assert.Contains(t, result, "103045")
@@ -49,7 +49,7 @@ func TestGeneratePipelineRunRequest_WithEmptyParameters(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, pipelineRunName, result.PipelineRun.ObjectMeta.Name)
 	assert.Equal(t, "test-namespace", result.PipelineRun.ObjectMeta.Namespace)
-	
+
 	// Check labels
 	labels := result.PipelineRun.ObjectMeta.Labels
 	assert.Equal(t, "1673778645", labels[PipelineRunExecutionTimestampLabel])
@@ -93,7 +93,7 @@ func TestGeneratePipelineRunRequest_WithParameters(t *testing.T) {
 	result, err := generatePipelineRunRequest(triggerRun, paramID, pipelineRunName, ts)
 
 	require.NoError(t, err)
-	
+
 	// Check labels
 	labels := result.PipelineRun.ObjectMeta.Labels
 	assert.Equal(t, "param1", labels[ParameterIDLabel])
@@ -129,7 +129,7 @@ func TestConstants(t *testing.T) {
 	// Test that important constants are defined correctly
 	assert.Equal(t, 600, _defaultWaitSeconds)
 	assert.Equal(t, "default", _defaultParameterID)
-	
+
 	// Test label constants
 	assert.Equal(t, "pipelinerun.michelangelo/triggered-by", TriggerredByLabel)
 	assert.Equal(t, "pipelinerun.michelangelo/environment", EnvironmentLabel)
@@ -143,18 +143,18 @@ func TestActivityOptions(t *testing.T) {
 	// Test that activity options are configured correctly
 	assert.Equal(t, 30*time.Second, _activityOptionsDefault.ScheduleToStartTimeout)
 	assert.Equal(t, 30*time.Second, _activityOptionsDefault.StartToCloseTimeout)
-	
+
 	// Test retry policy
 	retryPolicy := _activityOptionsDefault.RetryPolicy
 	require.NotNil(t, retryPolicy)
 	assert.Equal(t, 500*time.Millisecond, retryPolicy.InitialInterval)
 	assert.Equal(t, 2.0, retryPolicy.BackoffCoefficient)
 	assert.Equal(t, int32(5), retryPolicy.MaximumAttempts)
-	
+
 	// Test non-retriable errors
 	expectedErrors := []string{
 		"400",
-		"404", 
+		"404",
 		"500",
 		"cadenceInternal:Panic",
 		"cadenceInternal:CanceledError",
@@ -175,7 +175,7 @@ func TestWorkflowsStruct(t *testing.T) {
 	// Test that the workflows struct can be instantiated
 	w := &workflows{}
 	assert.NotNil(t, w)
-	
+
 	// Test that the global Workflows variable is properly typed
 	assert.Nil(t, Workflows) // It's initialized as nil in the original code
 }

@@ -17,8 +17,13 @@ go_library(
         "@io_temporal_go_api//filter/v1:go_default_library",
         "@io_temporal_go_api//workflowservice/v1:go_default_library",
         "@io_temporal_go_sdk//client:go_default_library",
+<<<<<<< HEAD
         "@org_uber_go_fx//:go_default_library",
+=======
+        "@io_temporal_go_sdk//converter:go_default_library",
+>>>>>>> 67b8ea7b (run gazelle and goimports)
         "@org_golang_google_protobuf//types/known/timestamppb:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
     ],
 )
 

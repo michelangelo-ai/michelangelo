@@ -24,7 +24,7 @@ func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
 
 		require.NoError(t, err)
 		require.NotNil(t, result)
-		assert.Len(t, result, 1) // Should return one empty batch
+		assert.Len(t, result, 1)    // Should return one empty batch
 		assert.Len(t, result[0], 1) // Should have one parameter with empty ID
 		assert.Equal(t, "", result[0][0].ParamID)
 	})

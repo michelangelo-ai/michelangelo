@@ -22,16 +22,11 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "trigger_activities_test.go",
-    ],
+    srcs = ["trigger_activities_test.go"],
     embed = [":go_default_library"],
     deps = [
+        "//go/components/triggerrun:go_default_library",
         "//go/worker/activities/trigger/parameter:go_default_library",
-        "//proto/api/v2:go_default_library",
-        "@com_github_golang_mock//gomock:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
-        "@com_github_stretchr_testify//require:go_default_library",
-        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
     ],
 )

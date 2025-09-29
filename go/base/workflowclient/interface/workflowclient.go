@@ -27,8 +27,8 @@ const (
 )
 
 type WorkflowExecutionInfo struct {
-	Status WorkflowExecutionStatus
-	Execution *WorkflowExecution
+	Status        WorkflowExecutionStatus
+	Execution     *WorkflowExecution
 	ExecutionTime time.Time
 }
 

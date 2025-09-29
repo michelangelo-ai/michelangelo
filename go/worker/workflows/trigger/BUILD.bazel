@@ -27,12 +27,9 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "cron_trigger_workflows_test.go",
-    ],
+    srcs = ["cron_trigger_workflows_test.go"],
     embed = [":go_default_library"],
     deps = [
-        "//go/components/triggerrun:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
