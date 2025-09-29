@@ -3,6 +3,15 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    coverage: {
+      exclude: [
+        '**/dist/**', // Distributed assets, e.g., compiled code
+        '**/gen/**', // Generated code, e.g., grpc client
+        '*config*', // Configuration files, e.g., e.g., vitest.config.ts
+        'packages/*/*config*', // Configuration files, vite.config.ts
+        'packages/core/components/views/sandbox/**', // Developer sandbox for WIP features,
+      ],
+    },
     globals: true, // Enable global Jest-like functions (describe, it, expect)
     silent: 'passed-only', // Clean output - only show failures
     env: {

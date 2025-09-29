@@ -31,3 +31,6 @@ dist-ssr
 
 # Generated files
 gen/
+
+# Coverage report
+coverage/
