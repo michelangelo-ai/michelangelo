@@ -191,7 +191,7 @@ func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, pr
 }
 
 // Retrieve retrieves the current condition state
-func (a *CompletingActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
+func (a *CompletingActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
 	// Return a progressing condition based on current stage
 	now := time.Now().UnixMilli()
 	return &api.Condition{
@@ -224,7 +224,7 @@ func (a *NoOpActor) Run(ctx context.Context, resource *v2pb.Deployment, previous
 }
 
 // Retrieve retrieves the current condition state
-func (a *NoOpActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
+func (a *NoOpActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
 	// Return a successful no-op condition
 	now := time.Now().UnixMilli()
 	return &api.Condition{

@@ -31,6 +31,56 @@ func NewSourcePipelineActor(apiHandler api.Handler, logger *zap.Logger) *SourceP
 
 var _ conditionInterfaces.ConditionActor[*v2.PipelineRun] = &SourcePipelineActor{}
 
+func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
+
+	// Check if source pipeline is already populated
+	if resource.Status.SourcePipeline != nil && resource.Status.SourcePipeline.Pipeline != nil {
+		logger.Info("source pipeline already retrieved")
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_TRUE,
+		}, nil
+	}
+
+	// Check if this is a DevRun with inline pipeline_spec
+	if resource.GetSpec().GetPipelineSpec() != nil {
+		logger.Info("dev run detected with inline pipeline_spec")
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+		}, nil
+	}
+
+	// Check if regular pipeline run has pipeline reference
+	if resource.GetSpec().GetPipeline() == nil {
+		logger.Info("pipeline run has no pipeline resource ID")
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+		}, nil
+	}
+
+	// Try to fetch the pipeline to verify it exists
+	pipeline := &v2.Pipeline{}
+	pipelineResourceID := resource.GetSpec().GetPipeline()
+	err := a.apiHandler.Get(ctx, resource.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
+	if err != nil {
+		logger.Error("failed to retrieve pipeline", zap.Error(err))
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+		}, nil
+	}
+
+	// Pipeline exists but hasn't been loaded into status yet
+	logger.Info("pipeline exists but needs to be loaded into status")
+	return &apipb.Condition{
+		Type:   SourcePipelineType,
+		Status: apipb.CONDITION_STATUS_FALSE,
+	}, nil
+}
+
 func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 	if previousCondition == nil {

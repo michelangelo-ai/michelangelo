@@ -17,6 +17,10 @@ type Engine[T client.Object] interface {
 }
 
 type ConditionActor[T client.Object] interface {
+	// Retrieve retrieves the current state/status of the condition without performing any action.
+	// This is used to check if the condition is satisfied before attempting to run the action.
+	Retrieve(ctx context.Context, resource T, previousCondition *api.Condition) (*api.Condition, error)
+
 	// Run runs the action that will attempt to move the condition status in the positive direction.
 	// If there is a failure to perform any action, the plugin must set the appropriate properties in the returned
 	// condition. Any errors that are returned are used only for logging purposes.

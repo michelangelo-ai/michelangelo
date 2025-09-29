@@ -91,25 +91,35 @@ func (e *DefaultEngine[T]) runPlugin(ctx context.Context, plugin conditionInterf
 	actors := plugin.GetActors()
 
 	var lastCondition *api.Condition
+	actionRun := false
 
+	// Phase 1: Retrieve status from all actors
 	for _, actor := range actors {
 		previousCondition := conditionUtils.GetCondition(actor.GetType(), plugin.GetConditions(resource))
-		newCondition, err := actor.Run(ctx, resource, previousCondition)
+		retrievedCondition, err := actor.Retrieve(ctx, resource, previousCondition)
 		if err != nil {
-			e.logger.Error("error running actor", zap.Error(err))
+			e.logger.Error("error retrieving actor condition", zap.Error(err))
 			return nil, err
 		}
-		lastCondition = newCondition
-		plugin.PutCondition(resource, newCondition)
 
-		// Stop execution immediately if any actor returns FALSE condition
-		// This follows Uber internal pattern where FALSE conditions are terminal
-		if newCondition.Status == api.CONDITION_STATUS_FALSE {
-			e.logger.Error("actor returned FALSE condition - stopping execution",
+		lastCondition = retrievedCondition
+		plugin.PutCondition(resource, retrievedCondition)
+
+		// Phase 2: Run only the first non-satisfied condition (matching Uber's pattern)
+		if retrievedCondition.Status != api.CONDITION_STATUS_TRUE && !actionRun {
+			e.logger.Info("running action for first non-satisfied condition",
 				zap.String("actor", actor.GetType()),
-				zap.String("reason", newCondition.Reason),
-				zap.String("message", newCondition.Message))
-			return newCondition, nil
+				zap.String("status", retrievedCondition.Status.String()))
+
+			runCondition, err := actor.Run(ctx, resource, retrievedCondition)
+			if err != nil {
+				e.logger.Error("error running actor", zap.Error(err))
+				return nil, err
+			}
+
+			lastCondition = runCondition
+			plugin.PutCondition(resource, runCondition)
+			actionRun = true
 		}
 	}
 

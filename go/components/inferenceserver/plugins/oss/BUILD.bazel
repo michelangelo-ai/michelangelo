@@ -1,0 +1,17 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["plugin.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/inferenceserver/plugins:go_default_library",
+        "//go/components/inferenceserver/plugins/oss/dynamo:go_default_library",
+        "//go/components/inferenceserver/plugins/oss/llmd:go_default_library",
+        "//go/components/inferenceserver/plugins/oss/torchserve:go_default_library",
+        "//go/components/inferenceserver/plugins/oss/triton:go_default_library",
+        "//go/shared/gateways:go_default_library",
+        "//proto/api/v2:go_default_library",
+    ],
+)
