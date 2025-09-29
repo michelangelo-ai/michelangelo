@@ -139,7 +139,7 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 		Namespace:     request.Domain,
 		NextPageToken: request.NextPageToken,
 	}
-	
+
 	// Only set MaximumPageSize if provided, let Temporal use its default otherwise
 	if request.MaximumPageSize != nil {
 		temporalRequest.MaximumPageSize = *request.MaximumPageSize
@@ -150,7 +150,7 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 		// Convert nanoseconds to time.Time for Temporal's timestamppb
 		earliestTime := time.Unix(0, *request.StartTimeFilter.EarliestTime)
 		latestTime := time.Unix(0, *request.StartTimeFilter.LatestTime)
-		
+
 		temporalRequest.StartTimeFilter = &filterV1.StartTimeFilter{
 			EarliestTime: timestamppb.New(earliestTime),
 			LatestTime:   timestamppb.New(latestTime),

@@ -20,11 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var Workflows = (*workflows)(nil)
-
 type (
 	// workflows struct encapsulates the trigger workflow
-	workflows struct{}
+	workflows struct {
+		workflow workflow.Workflow
+	}
 
 	// Object alias for map[string]interface{}
 	Object = map[string]interface{}
@@ -94,6 +94,7 @@ var (
 
 // CronTrigger workflow with provided trigger run spec
 func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrunUtil.CreateTriggerRequest) (map[string]any, error) {
+	ctx = workflow.WithBackend(ctx, r.workflow)
 	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
 	tr := req.TriggerRun
 	log := workflow.GetLogger(ctx).With(
