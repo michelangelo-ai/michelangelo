@@ -209,7 +209,7 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
-				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
 					ID:    "456",
 					RunID: "123",
 				}, nil)
@@ -551,7 +551,7 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
-				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
 					ID:    "456",
 					RunID: "123",
 				}, nil)
@@ -635,7 +635,7 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
-				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
 					ID:    "789",
 					RunID: "321",
 				}, nil)
@@ -1006,19 +1006,25 @@ func TestResumeFromPipelineRun(t *testing.T) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
 
 				// Capture the environment variables passed to StartWorkflow
-				var capturedEnvs map[string]interface{}
 				workflowClient.EXPECT().StartWorkflow(
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
-					capturedEnvs = envs
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					// Extract the individual arguments from the variadic args
+					tarContent := args[0].([]byte)
+					starName := args[1].(string)
+					workflowFuncName := args[2].(string)
+					workflowArgs := args[3].([]interface{})
+					kwargs := args[4].([]interface{})
+					envs := args[5].(map[string]interface{})
+					_ = tarContent
+					_ = starName
+					_ = workflowFuncName
+					_ = workflowArgs
+					_ = kwargs
+					capturedEnvs := envs
 
 					// Verify cache is enabled
 					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
@@ -1105,19 +1111,25 @@ func TestResumeFromPipelineRun(t *testing.T) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
 
 				// Capture the environment variables passed to StartWorkflow
-				var capturedEnvs map[string]interface{}
 				workflowClient.EXPECT().StartWorkflow(
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
-					capturedEnvs = envs
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					// Extract the individual arguments from the variadic args
+					tarContent := args[0].([]byte)
+					starName := args[1].(string)
+					workflowFuncName := args[2].(string)
+					workflowArgs := args[3].([]interface{})
+					kwargs := args[4].([]interface{})
+					envs := args[5].(map[string]interface{})
+					_ = tarContent
+					_ = starName
+					_ = workflowFuncName
+					_ = workflowArgs
+					_ = kwargs
+					capturedEnvs := envs
 
 					// Verify cache is enabled
 					require.Equal(t, "true", capturedEnvs["CACHE_ENABLED"])
@@ -1202,19 +1214,25 @@ func TestResumeFromPipelineRun(t *testing.T) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
 
 				// Capture the environment variables passed to StartWorkflow
-				var capturedEnvs map[string]interface{}
 				workflowClient.EXPECT().StartWorkflow(
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
 					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-					gomock.Any(),
-				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, tarContent []byte, starName string, workflowFuncName string, args []interface{}, kwargs []interface{}, envs map[string]interface{}) (*clientInterfaces.WorkflowExecution, error) {
-					capturedEnvs = envs
+				).DoAndReturn(func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+					// Extract the individual arguments from the variadic args
+					tarContent := args[0].([]byte)
+					starName := args[1].(string)
+					workflowFuncName := args[2].(string)
+					workflowArgs := args[3].([]interface{})
+					kwargs := args[4].([]interface{})
+					envs := args[5].(map[string]interface{})
+					_ = tarContent
+					_ = starName
+					_ = workflowFuncName
+					_ = workflowArgs
+					_ = kwargs
+					capturedEnvs := envs
 
 					// Verify cache is disabled
 					require.Equal(t, "false", capturedEnvs["CACHE_ENABLED"])
