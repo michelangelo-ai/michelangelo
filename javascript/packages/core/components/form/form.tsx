@@ -1,9 +1,12 @@
 import React from 'react';
 import { Form as FinalForm } from 'react-final-form';
+import { useStyletron } from 'baseui';
 
 import type { FormProps } from './types';
 
 export const Form: React.FC<FormProps> = ({ onSubmit, initialValues, id, children }) => {
+  const [css, theme] = useStyletron();
+
   return (
     <FinalForm
       onSubmit={onSubmit}
@@ -13,8 +16,12 @@ export const Form: React.FC<FormProps> = ({ onSubmit, initialValues, id, childre
         // so we need to disable the eslint rule. I tested the execution of handleSubmit
         // and it is synchronous.
 
-        // eslint-disable-next-line @typescript-eslint/no-misused-promises
-        <form id={id} onSubmit={handleSubmit}>
+        <form
+          className={css({ display: 'flex', flexDirection: 'column', gap: theme.sizing.scale600 })}
+          id={id}
+          // eslint-disable-next-line @typescript-eslint/no-misused-promises
+          onSubmit={handleSubmit}
+        >
           {children}
         </form>
       )}
