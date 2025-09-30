@@ -26,7 +26,7 @@ export function TaskDetails<TTaskRecord extends object = object>(
       <TaskPanel
         id={scrollId}
         title={<TaskHeader task={task} metadata={metadata} />}
-        initialState={{ expanded: task.focused }}
+        defaultExpanded={task.focused}
       >
         <TaskBody task={task} bodySchema={bodySchema} metadata={metadata} overrides={overrides} />
       </TaskPanel>
