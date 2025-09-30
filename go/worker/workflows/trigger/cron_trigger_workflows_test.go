@@ -14,12 +14,12 @@ import (
 
 func TestGeneratePipelineRunRequest(t *testing.T) {
 	tests := []struct {
-		name                             string
-		triggerRun                       *v2pb.TriggerRun
-		paramID                          string
-		pipelineRunName                  string
-		ts                               time.Time
-		expectedError                    string
+		name                               string
+		triggerRun                         *v2pb.TriggerRun
+		paramID                            string
+		pipelineRunName                    string
+		ts                                 time.Time
+		expectedError                      string
 		expectedGeneratePipelineRunRequest *v2pb.CreatePipelineRunRequest
 	}{
 		{
@@ -122,7 +122,7 @@ func TestGeneratePipelineRunRequest(t *testing.T) {
 				assert.Contains(t, err.Error(), tt.expectedError)
 			} else {
 				assert.NoError(t, err)
-				
+
 				// Validate ParameterIDLabel
 				expectedLabel := tt.expectedGeneratePipelineRunRequest.PipelineRun.ObjectMeta.Labels[ParameterIDLabel]
 				actualLabel := result.PipelineRun.ObjectMeta.Labels[ParameterIDLabel]
@@ -410,7 +410,7 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 			},
 		},
 		{
-			name: "Empty parameters",
+			name:   "Empty parameters",
 			params: &v2pb.PipelineExecutionParameters{},
 			expectedResult: &types.Struct{
 				Fields: map[string]*types.Value{},
@@ -421,7 +421,7 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := generateUniflowPRInput(tt.params)
-			
+
 			// Compare protobuf structs directly
 			assert.True(t, proto.Equal(tt.expectedResult, result))
 		})
