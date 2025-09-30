@@ -172,14 +172,14 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 	}
 
 	createdRayJob, err := r.RayJobs(cluster.Namespace).Create(ctx, rayJob, metav1.CreateOptions{})
+	if err != nil {
+		return fmt.Errorf("create ray job %q in cluster %s/%s: %w", job.Name, cluster.Namespace, cluster.Name, err)
+	}
+
 	job.Status.JobId = createdRayJob.Status.JobId
 	job.Status.DashboardUrl = createdRayJob.Status.DashboardURL
 	job.Status.JobDeploymentStatus = string(createdRayJob.Status.JobDeploymentStatus)
 	log.Info("ray job created", "namespace", createdRayJob.Namespace, "name", createdRayJob.Name)
-	if err != nil {
-		log.Error(err, "Failed to submit RayJob")
-		return err
-	}
 
 	return nil
 }
@@ -188,8 +188,7 @@ func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, rayJo
 	rayV1Job, err := r.RayJobs(rayJob.Namespace).Get(ctx, rayJob.Name, metav1.GetOptions{})
 	// Fetch the status of the RayJob
 	if err != nil {
-		logger.Error(err, "failed to get RayJob status: %v")
-		return nil, "", err
+		return nil, "", fmt.Errorf("get ray job %q status: %w", rayJob.Name, err)
 	}
 	rayJob.Status.JobId = rayV1Job.Status.JobId
 	rayJob.Status.DashboardUrl = rayV1Job.Status.DashboardURL

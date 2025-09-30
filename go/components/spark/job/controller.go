@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -42,12 +43,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		if utils.IsNotFoundError(err) {
 			logger.Info("SparkApplication not found, creating new one")
 			if err = r.createJob(ctx, logger, &sparkJob); err != nil {
-				logger.Error(err, "failed to create SparkApplication")
+				logger.Error(err, "failed to create SparkApplication",
+					"operation", "create_job",
+					"namespace", req.Namespace,
+					"name", req.Name)
 				sparkJob.Status.StatusConditions = nil
 				sparkJob.Status.JobUrl = ""
 				sparkJob.Status.ApplicationId = ""
 				res.RequeueAfter = requeueAfter
-				return res, err
+				return res, fmt.Errorf("create spark job %q: %w", req.NamespacedName, err)
 			}
 			sparkJob.Status.JobUrl = ""
 			sparkJob.Status.ApplicationId = ""
@@ -69,9 +73,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 
 	if !reflect.DeepEqual(original, sparkJob) {
 		if err := r.Status().Update(ctx, &sparkJob); err != nil {
-			logger.Error(err, "failed to update SparkJob status")
+			logger.Error(err, "failed to update SparkJob status",
+				"operation", "update_status",
+				"namespace", req.Namespace,
+				"name", req.Name)
 			res.RequeueAfter = requeueAfter
-			return res, err
+			return res, fmt.Errorf("update spark job status for %q: %w", req.NamespacedName, err)
 		}
 	}
 

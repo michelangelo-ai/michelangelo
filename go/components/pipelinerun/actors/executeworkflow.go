@@ -85,11 +85,15 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		logger.Info("Workflow run ID is empty, starting workflow")
 		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun)
 		if err != nil {
-			logger.Error("failed to start workflow", zap.Error(err))
+			logger.Error("failed to start workflow",
+				zap.Error(err),
+				zap.String("operation", "start_workflow"),
+				zap.String("namespace", pipelineRun.Namespace),
+				zap.String("name", pipelineRun.Name))
 			return &apipb.Condition{
 				Type:   ExecuteWorkflowType,
 				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to start workflow: %v", err)
+			}, fmt.Errorf("start workflow for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
 		executeWorkflowStep.StartTime = pbtypes.TimestampNow()
@@ -104,7 +108,8 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	logger.Info("Workflow run ID is not empty, checking workflow status")
 	workflowExecution, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get workflow execution info for pipeline run %s/%s (workflow %s, run %s): %w",
+			pipelineRun.Namespace, pipelineRun.Name, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, err)
 	}
 	newCondition := &apipb.Condition{
 		Type:   ExecuteWorkflowType,
@@ -147,13 +152,13 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get workflow inputs: %v", err)
+		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	// after tarContent is passed to Temporal client, convert tarball bytes to string?
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get tar content: %v", err)
+		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
 
 	workflowExecution, err := a.workflowClient.StartWorkflow(
@@ -184,7 +189,7 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to decode pipeline manifest content: %v", err)
+		return nil, nil, nil, fmt.Errorf("decode pipeline manifest content for %s: %w", pipeline.Name, err)
 	}
 
 	var args []interface{} = []interface{}{}
@@ -230,14 +235,14 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 	fmt.Println(t)
 	err := pbtypes.UnmarshalAny(pipelineSpec.Manifest.Content, pbStruct)
 	if err != nil || pbStruct.Value == nil {
-		return nil, fmt.Errorf("failed to unmarshal pipeline manifest content to typed struct: %v", err)
+		return nil, fmt.Errorf("unmarshal pipeline manifest content to typed struct: %w", err)
 	}
 	marshaler := &jsonpb.Marshaler{}
 	pipelineConfigStr, _ := marshaler.MarshalToString(pbStruct.Value)
 	pipelineConfig := make(map[string]interface{})
 	err = json.Unmarshal([]byte(pipelineConfigStr), &pipelineConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal pipeline manifest content to map : %v", err)
+		return nil, fmt.Errorf("unmarshal pipeline manifest content to map: %w", err)
 	}
 	return pipelineConfig, nil
 }

@@ -149,7 +149,7 @@ func TestSourcePipelineActor(t *testing.T) {
 				Status: apipb.CONDITION_STATUS_FALSE,
 			},
 			expectedSourcePipeline: nil,
-			errMsg:                 "failed to get pipeline",
+			errMsg:                 "get pipeline",
 		},
 	}
 
