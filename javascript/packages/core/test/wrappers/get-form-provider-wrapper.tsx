@@ -1,4 +1,4 @@
-import { Form } from 'react-final-form';
+import { Form } from '#core/components/form/form';
 
 import type { FormProps } from '#core/components/form/types';
 import type { WrapperComponentProps } from './types';
@@ -10,7 +10,7 @@ export function getFormProviderWrapper(
   return function FormProviderWrapper({ children }: WrapperComponentProps) {
     return (
       <Form onSubmit={onSubmit} initialValues={initialValues}>
-        {() => <>{children}</>}
+        {children}
       </Form>
     );
   };
