@@ -87,7 +87,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	}
 
 	if pipelineRun.Spec.Kill {
-		err := a.processJobTermination(ctx, pipelineRun)
+		err, workflowTerminated := a.processJobTermination(ctx, pipelineRun)
 		if err != nil {
 			logger.Error("failed to terminate workflow", zap.Error(err))
 			return &apipb.Condition{
@@ -95,14 +95,16 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 				Status: apipb.CONDITION_STATUS_FALSE,
 			}, fmt.Errorf("failed to terminate workflow: %v", err)
 		}
-
-		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
-		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
-		newCondition.Status = apipb.CONDITION_STATUS_FALSE
-		newCondition.Reason = defaultengine.KillReason
-		// Propagate appropriate states to substeps based on their current state
-		a.propagateKilledStateToSubsteps(executeWorkflowStep)
-		return newCondition, nil
+		// check to see if workflow has been successfully terminated
+		if workflowTerminated {
+			executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+			newCondition.Status = apipb.CONDITION_STATUS_FALSE
+			newCondition.Reason = defaultengine.KillReason
+			// Propagate appropriate states to substeps based on their current state
+			a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, defaultengine.KillReason)
+			return newCondition, nil
+		}
 	}
 
 	if pipelineRun.Status.WorkflowRunId == "" || pipelineRun.Status.WorkflowId == "" {
@@ -165,7 +167,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	return newCondition, nil
 }
 
-func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) error {
+func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) (error, bool) {
 	workflowID := pipelineRun.Status.WorkflowId
 	runID := pipelineRun.Status.WorkflowRunId
 
@@ -174,11 +176,17 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 		if getWorkflowExecutionInfoError == nil {
 			if workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusCompleted && workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusTerminated {
 				err := a.workflowClient.CancelWorkflow(ctx, workflowID, runID, defaultengine.KillReason)
-				return err
+				// if CancelWorkflow return a non-nil error, the workflow has not been successfully terminated
+				if err != nil {
+					return err, false
+				} else {
+					return err, true
+				}
 			}
 		}
 	}
-	return nil
+	// in this case, the workflow is unable to be terminated because it has not yet been started
+	return nil, false
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {

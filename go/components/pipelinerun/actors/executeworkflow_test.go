@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	blobstoreMock "github.com/michelangelo-ai/michelangelo/go/base/blobstore/blobstore_mocks"
+	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	workflowclientMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
@@ -267,18 +268,13 @@ func TestExecuteWorkflowActor(t *testing.T) {
 				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(&clientInterfaces.WorkflowExecutionInfo{
 					Status: clientInterfaces.WorkflowExecutionStatusRunning,
 				}, nil)
-				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", KillReason).Return(nil)
-
-				// Mock for main workflow status check
-				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(&clientInterfaces.WorkflowExecutionInfo{
-					Status: clientInterfaces.WorkflowExecutionStatusTerminated,
-				}, nil)
-				workflowClient.EXPECT().QueryWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", "task_progress", gomock.Any()).Return(nil)
+				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", defaultengine.KillReason).Return(nil)
+				// No additional mock calls needed since function returns early when terminated = true
 			},
 			expectedCondition: &apipb.Condition{
 				Type:   ExecuteWorkflowType,
 				Status: apipb.CONDITION_STATUS_FALSE,
-				Reason: "Killed",
+				Reason: defaultengine.KillReason,
 			},
 			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
 				Name:        pipelinerunutils.ExecuteWorkflowStepName,
@@ -439,7 +435,7 @@ func TestProcessJobTermination(t *testing.T) {
 				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(&clientInterfaces.WorkflowExecutionInfo{
 					Status: clientInterfaces.WorkflowExecutionStatusRunning,
 				}, nil)
-				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", KillReason).Return(nil)
+				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", defaultengine.KillReason).Return(nil)
 			},
 			expectError: false,
 		},
@@ -501,7 +497,7 @@ func TestProcessJobTermination(t *testing.T) {
 				workflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(&clientInterfaces.WorkflowExecutionInfo{
 					Status: clientInterfaces.WorkflowExecutionStatusRunning,
 				}, nil)
-				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", KillReason).Return(fmt.Errorf("failed to cancel workflow"))
+				workflowClient.EXPECT().CancelWorkflow(gomock.Any(), "test-workflow-id", "test-run-id", defaultengine.KillReason).Return(fmt.Errorf("failed to cancel workflow"))
 			},
 			expectError: true, // processJobTermination should return error from CancelWorkflow
 		},
@@ -542,7 +538,7 @@ func TestProcessJobTermination(t *testing.T) {
 			testCase.mockFunc(workflowClient)
 
 			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient)
-			err := actor.processJobTermination(context.Background(), testCase.pipelineRun)
+			err, _ := actor.processJobTermination(context.Background(), testCase.pipelineRun)
 
 			if testCase.expectError {
 				require.Error(t, err)

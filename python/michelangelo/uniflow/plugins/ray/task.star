@@ -167,7 +167,7 @@ def task(
         total_retry_attempt = retry_attempts + 1
         for retry_attempt_id in range(1, total_retry_attempt + 1):
 
-            job_state, job = execute_ray_task(
+            job_state, job, cluster_url = execute_ray_task(
                 task_path=task_path,
                 task_name=task_name,
                 cluster=cluster,
@@ -195,6 +195,7 @@ def task(
                 start_time_formated_str,
                 retry_attempt_id,
                 total_retry_attempt,
+                cluster_url,
             )
 
             if retryable == False:
@@ -232,7 +233,7 @@ def task(
     callable.with_overrides = with_overrides
     return callable
 
-def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt, cluster_url):
 
     retryable = False
 
@@ -254,6 +255,7 @@ def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwarg
             task_name = task_name,
             task_path = task_path,
             task_state = TASK_STATE_SUCCEEDED,
+            task_log = cluster_url,
             start_time = start_time_formated_str,
             end_time = end_time_formated_str,
             task_message = "Ray Task Completed Successfully",
@@ -289,17 +291,18 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     )
 
     cluster = ray.create_cluster(cluster)
+    cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
     cluster_name = cluster["metadata"]["name"]
     cluster_namespace = cluster["metadata"]["namespace"]
 
-    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name)
+    print("ray | cluster created:", "ns=" + cluster_namespace, "n=" + cluster_name, "url=" + cluster_url)
     report_progress(
         task_path = task_path,
         task_name = task_name,
+        task_log = cluster_url,
         task_message = "Ray Cluster Created Successfully",
         task_state = TASK_STATE_RUNNING,
         start_time = start_time_formated_str,
-        end_time = "",
         retry_attempt_id = retry_attempt_id,
     )
 
@@ -315,7 +318,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     )
     print("ray | +run job: job=" + str(job))
 
-    atexit.register(report_ray_task_result, job, task_path, task_name, start_time_formated_str, retry_attempt_id)
+    atexit.register(report_ray_task_result, job, task_path, task_name, cluster_url, start_time_formated_str, retry_attempt_id)
 
     if breakpoint:
         print("ray | breakpoint:", "ns=" + cluster_namespace, "n=" + cluster_name)
@@ -326,7 +329,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         fail(err_message)
 
     # Terminate cluster
-    job_state = report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id)
+    job_state = report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, retry_attempt_id)
     if job_state == TASK_STATE_SUCCEEDED:
         ray.terminate_cluster(cluster_name, cluster_namespace, "job succeeded", "TERMINATION_TYPE_SUCCEEDED")
     else:
@@ -335,13 +338,13 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     atexit.unregister(terminate_cluster)
     atexit.unregister(report_ray_task_result)
 
-    return(job_state, job)
+    return(job_state, job, cluster_url)
 
 def terminate_cluster(cluster_namespace, cluster_name):
     ray.terminate_cluster(cluster_name, cluster_namespace, "job failed", "TERMINATION_TYPE_FAILED")
     print("ray | cluster terminated:", "ns=" + cluster_namespace, "n=" + cluster_name)
 
-def report_ray_task_result(job, task_path, task_name, start_time_formated_str, retry_attempt_id):
+def report_ray_task_result(job, task_path, task_name, cluster_url, start_time_formated_str, retry_attempt_id):
 
     end_time_seconds = time.time()
     end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
@@ -349,6 +352,7 @@ def report_ray_task_result(job, task_path, task_name, start_time_formated_str, r
         report_progress(
             task_path = task_path,
             task_name = task_name,
+            task_log = cluster_url,
             task_message = "Ray Job Succeeded",
             task_state = TASK_STATE_SUCCEEDED,
             start_time = start_time_formated_str,
@@ -362,6 +366,7 @@ def report_ray_task_result(job, task_path, task_name, start_time_formated_str, r
         report_progress(
             task_path = task_path,
             task_name = task_name,
+            task_log = cluster_url,
             task_message = task_message,
             task_state = TASK_STATE_KILLED,
             start_time = start_time_formated_str,
@@ -376,6 +381,7 @@ def report_ray_task_result(job, task_path, task_name, start_time_formated_str, r
         report_progress(
             task_path = task_path,
             task_name = task_name,
+            task_log = cluster_url,
             task_message = task_message,
             task_state = TASK_STATE_FAILED,
             start_time = start_time_formated_str,
