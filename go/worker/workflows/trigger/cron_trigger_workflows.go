@@ -9,7 +9,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	pbtypes "github.com/gogo/protobuf/types"
-	triggerrunUtil "github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/components/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
@@ -93,7 +93,7 @@ var (
 )
 
 // CronTrigger workflow with provided trigger run spec
-func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrunUtil.CreateTriggerRequest) (map[string]any, error) {
+func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithBackend(ctx, r.workflow)
 	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
 	tr := req.TriggerRun
