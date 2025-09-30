@@ -3,9 +3,9 @@ import { getOverrides } from 'baseui';
 import { DescriptionText } from '#core/components/description-text';
 import { StyledBoxContainer, StyledBoxHeader, StyledBoxTitle } from './styled-components';
 
-import type { Props } from './types';
+import type { BoxProps } from './types';
 
-export function Box(props: Props) {
+export function Box(props: BoxProps) {
   const { children, description, overrides = {}, title } = props;
 
   const [BoxContainer, boxContainerProps] = getOverrides(

@@ -1,10 +1,8 @@
 import { styled } from 'baseui';
-import { StatefulPanel } from 'baseui/accordion';
 
-import { StyledBoxContainer } from '#core/components/box/styled-components';
+import { CollapsibleBox } from '#core/components/box/collapsible-box';
 
-import type { Theme } from 'baseui';
-import type { StatefulPanelProps } from 'baseui/accordion';
+import type { CollapsibleBoxProps } from '#core/components/box/types';
 
 export const TaskSeparator = styled('hr', ({ $theme }) => ({
   border: 'none',
@@ -22,43 +20,24 @@ export const TaskContentStack = styled('div', ({ $theme }) => ({
   gap: $theme.sizing.scale800,
 }));
 
-export function TaskPanel(props: StatefulPanelProps & { id?: string }) {
-  const { id, ...restProps } = props;
+export function TaskPanel(props: CollapsibleBoxProps & { id?: string }) {
+  const { id, defaultExpanded, overrides: userOverrides, ...collapsibleBoxProps } = props;
+
+  const taskPanelOverrides = {
+    Container: {
+      props: {
+        id,
+        onClick: (e: MouseEvent) => e.stopPropagation(),
+      },
+    },
+    ...userOverrides,
+  };
+
   return (
-    <StatefulPanel
-      {...restProps}
-      overrides={{
-        PanelContainer: {
-          component: StyledBoxContainer,
-          props: {
-            id,
-            onClick: (e: MouseEvent) => e.stopPropagation(),
-          },
-          style: ({ $theme, $expanded }: { $expanded: boolean; $theme: Theme }) => ({
-            ...(!$expanded && { gap: 0 }),
-            transitionProperty: 'gap',
-            transitionDuration: $theme.animation.timing500,
-          }),
-        },
-        Content: {
-          style: {
-            padding: 0,
-            // paddingBottom appears provided by the StyledContent component controlled by
-            // baseui overrides padding: 0
-            paddingBottom: 0,
-          },
-        },
-        Header: {
-          style: {
-            padding: 0,
-          },
-        },
-        ToggleIcon: {
-          style: {
-            alignSelf: 'flex-start',
-          },
-        },
-      }}
+    <CollapsibleBox
+      {...collapsibleBoxProps}
+      defaultExpanded={defaultExpanded ?? false}
+      overrides={taskPanelOverrides}
     />
   );
 }
