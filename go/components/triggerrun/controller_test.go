@@ -409,7 +409,11 @@ func setUpReconciler(t *testing.T, initialObjects []runtime.Object, params Param
 	scheme := runtime.NewScheme()
 	err := v2pb.AddToScheme(scheme)
 	assert.NoError(t, err)
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialObjects...).Build()
+	k8sClient := fake.NewClientBuilder().
+		WithScheme(scheme).
+		WithRuntimeObjects(initialObjects...).
+		WithStatusSubresource(&v2pb.TriggerRun{}).
+		Build()
 	reconciler := NewReconciler(params)
 	reconciler.Handler = apiHandler.NewFakeAPIHandler(k8sClient)
 	return *reconciler
