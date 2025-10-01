@@ -74,12 +74,12 @@ var (
 
 	// NonRetriableErrorReasonsDefault defines errors that should not be retried
 	NonRetriableErrorReasonsDefault = []string{
-		"400", // Bad Request
-		"404", // Not Found
-		"500", // Internal Server Error
-		"cadenceInternal:Panic", // Panic error
+		"400",                           // Bad Request
+		"404",                           // Not Found
+		"500",                           // Internal Server Error
+		"cadenceInternal:Panic",         // Panic error
 		"cadenceInternal:CanceledError", // Canceled error
-		"no-retry", // No retry error
+		"no-retry",                      // No retry error
 	}
 
 	// SensorRetryPolicyDefault is the default retry policy for the sensor activity
