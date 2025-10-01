@@ -7,6 +7,7 @@ import (
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	pipelinerunapihook "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/apihook"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -42,6 +43,7 @@ func opts() fx.Option {
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
+		fx.Invoke(pipelinerunapihook.RegisterPipelineRunAPIHook),
 		v2pb.ProjectSvcModule,
 		v2pb.PipelineSvcModule,
 		v2pb.RayClusterSvcModule,
