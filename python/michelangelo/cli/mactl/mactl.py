@@ -807,7 +807,10 @@ def parse_args() -> tuple[list[str], dict[str, list[str]]]:
 def handle_args() -> tuple[str, str, dict[str, list[str]]]:
     args, kwargs = parse_args()
 
-    user_command_action = args[0]
+    # New syntax: mactl <resource> <action> [options]
+    user_command_crd = args[0]
+    user_command_action = args[1]
+
     assert user_command_action in [
         "get",
         "create",
@@ -818,12 +821,9 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
         "dev-run",
     ]
 
-    if user_command_action not in ["apply", "create", "dev-run"]:
-        user_command_crd = args[1]
-    else:
-        _LOG.info("read user_command_crd from yaml")
+    # For file-based actions, validate file parameter exists (preserving original validation)
+    if user_command_action in ["apply", "create", "dev-run"]:
         assert len(kwargs["file"]) == 1, "exactly one yaml file is required"
-        user_command_crd = camel_to_snake(get_crd_name_from_yaml(kwargs["file"][0]))
 
     user_command_action = kebab_to_snake(user_command_action)
 
