@@ -9,6 +9,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
+	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -278,6 +279,12 @@ func (r *Suite) TestCreatePipelineRun() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-pipeline-run",
 				},
+				Spec: v2pb.PipelineRunSpec{
+					Pipeline: &api.ResourceIdentifier{
+						Namespace: "test-namespace",
+						Name:      "test-pipeline",
+					},
+				},
 			},
 			mockResponse: &v2pb.CreatePipelineRunResponse{
 				PipelineRun: &v2pb.PipelineRun{
@@ -294,6 +301,12 @@ func (r *Suite) TestCreatePipelineRun() {
 			pipelineRun: &v2pb.PipelineRun{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "test-pipeline-run",
+				},
+				Spec: v2pb.PipelineRunSpec{
+					Pipeline: &api.ResourceIdentifier{
+						Namespace: "test-namespace",
+						Name:      "test-pipeline",
+					},
 				},
 			},
 			mockResponse:  nil,

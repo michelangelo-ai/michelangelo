@@ -26,6 +26,7 @@ go_test(
     embed = [":go_default_library"],
     deps = [
         "//go/worker/activities/trigger/parameter:go_default_library",
+        "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "//proto/api/v2:go_michelangelo_v2_gomock_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
