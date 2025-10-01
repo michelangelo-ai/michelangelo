@@ -30,11 +30,12 @@ from yaml import YAMLError, safe_load as yaml_safe_load
 ADDRESS = "127.0.0.1:5435"
 METADATA = [
     ("rpc-caller", "grpcurl"),
-    # ("rpc-service", "michelangelo-apiserver"),
-    ("rpc-service", "michelangelo-apiserver-staging"),
+    ("rpc-service", "michelangelo-apiserver"),
+    # ("rpc-service", "michelangelo-apiserver-staging"),
     ("rpc-encoding", "proto"),
 ]
 
+'''
 ### For OSS server
 # $ (Run oss server)
 ADDRESS = "127.0.0.1:14566"
@@ -43,6 +44,7 @@ METADATA = [
     ("rpc-service", "ma-apiserver"),
     ("rpc-encoding", "proto"),
 ]
+'''
 
 # Allow overriding the API server address via environment variable
 # This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
@@ -756,6 +758,8 @@ def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
     for service in services:
         if service.endswith("Service") and not service.endswith("ExtService"):
             name = camel_to_snake(re.sub(r"Service$", "", service.split(".")[-1]))
+            print('!!!')
+            print('!!!', name, '/', service)
             res[name] = CRD(name=name, full_name=service)
     _LOG.info("Created %d CRD instances: %r", len(res), res)
     return res
