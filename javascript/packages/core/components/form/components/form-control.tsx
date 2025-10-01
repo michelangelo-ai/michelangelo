@@ -22,6 +22,15 @@ export const FormControl: React.FC<FormControlProps> = ({
         label={label && <Label label={label} required={required} description={description} />}
         caption={caption}
         error={error}
+        overrides={{
+          ControlContainer: {
+            style: {
+              // For form fields, spacing is handled by form layout components. The marginBottom
+              // provided by FormControl default interferes with form layout spacing.
+              marginBottom: 0,
+            },
+          },
+        }}
       >
         {children}
       </BaseFormControl>

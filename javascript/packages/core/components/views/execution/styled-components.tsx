@@ -1,4 +1,4 @@
-import { styled } from 'baseui';
+import { styled, Theme } from 'baseui';
 
 import { CollapsibleBox } from '#core/components/box/collapsible-box';
 
@@ -29,6 +29,13 @@ export function TaskPanel(props: CollapsibleBoxProps & { id?: string }) {
         id,
         onClick: (e: MouseEvent) => e.stopPropagation(),
       },
+    },
+    Content: {
+      style: ({ $theme }: { $theme: Theme }) => ({
+        // When combined with CollapsibleBox gap between content and header, results in designed
+        // spacing of 24px
+        paddingTop: $theme.sizing.scale300,
+      }),
     },
     ...userOverrides,
   };
