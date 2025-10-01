@@ -3,7 +3,6 @@ controllermgr:
   healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
-  port: 9443
 
 workflowClient:
   service: cadence-frontend

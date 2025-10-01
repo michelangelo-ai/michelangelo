@@ -441,7 +441,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 		return nil, errors.New("test dialer failure")
 	}
 
-	handler, err = NewAPIServerHandler(Params{
+	handler, err := NewAPIServerHandler(Params{
 		K8sRestConfig: &rest.Config{
 			Host:    "test.host",
 			Timeout: 0,

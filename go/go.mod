@@ -18,7 +18,7 @@ require (
 	github.com/json-iterator/go v1.1.12
 	github.com/michelangelo-ai/michelangelo/proto v0.0.0-00010101000000-000000000000
 	github.com/minio/minio-go/v7 v7.0.86
-	github.com/prometheus/client_golang v1.12.1
+	github.com/prometheus/client_golang v1.16.0
 	github.com/ray-project/kuberay/ray-operator v1.0.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
@@ -38,10 +38,10 @@ require (
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d
 	google.golang.org/grpc v1.71.0
 	google.golang.org/protobuf v1.36.6
-	k8s.io/api v0.28.9
-	k8s.io/apiextensions-apiserver v0.28.9
-	k8s.io/apimachinery v0.28.9
-	k8s.io/client-go v0.28.9
+	k8s.io/api v0.28.15
+	k8s.io/apiextensions-apiserver v0.28.15
+	k8s.io/apimachinery v0.28.15
+	k8s.io/client-go v0.28.15
 	sigs.k8s.io/controller-runtime v0.16.6
 	sigs.k8s.io/yaml v1.4.0
 )
@@ -88,7 +88,6 @@ require (
 	github.com/pborman/uuid v1.2.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
@@ -129,7 +128,7 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	honnef.co/go/tools v0.4.3 // indirect
-	k8s.io/component-base v0.28.9 // indirect
+	k8s.io/component-base v0.28.15 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20230717233707-2695361300d9 // indirect
 	k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 // indirect
