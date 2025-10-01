@@ -89,7 +89,7 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 	}, nil
 }
 
-// Kill kills (disables) the cron trigger
+// Kill kills (terminates) the cron trigger
 func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
@@ -99,7 +99,7 @@ func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2
 	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
 
-// GetStatus - TODO: implement GetStatus to get more information of a running triggerrun
+// GetStatus gets the status of a running cron trigger
 func (r *cronTrigger) GetStatus(
 	ctx context.Context, triggerRun *v2pb.TriggerRun,
 ) (v2pb.TriggerRunStatus, error) {

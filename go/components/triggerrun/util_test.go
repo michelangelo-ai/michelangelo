@@ -291,7 +291,7 @@ func TestGetWorkflowStatus(t *testing.T) {
 			},
 			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
 			expectError:           true,
-			expectedErrorContains: "workflow is terminated with state:",
+			expectedErrorContains: "workflow failed with state:",
 		},
 		{
 			name: "canceled workflow",
@@ -319,9 +319,8 @@ func TestGetWorkflowStatus(t *testing.T) {
 					},
 				}, nil)
 			},
-			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
-			expectError:           true,
-			expectedErrorContains: "workflow is terminated with state:",
+			expectedState: v2pb.TRIGGER_RUN_STATE_KILLED,
+			expectError:   false,
 		},
 		{
 			name: "terminated workflow",
@@ -349,9 +348,8 @@ func TestGetWorkflowStatus(t *testing.T) {
 					},
 				}, nil)
 			},
-			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
-			expectError:           true,
-			expectedErrorContains: "workflow is terminated with state:",
+			expectedState: v2pb.TRIGGER_RUN_STATE_KILLED,
+			expectError:   false,
 		},
 		{
 			name: "timed out workflow",
@@ -381,7 +379,7 @@ func TestGetWorkflowStatus(t *testing.T) {
 			},
 			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
 			expectError:           true,
-			expectedErrorContains: "workflow is terminated with state:",
+			expectedErrorContains: "workflow failed with state:",
 		},
 		{
 			name: "no open workflows",

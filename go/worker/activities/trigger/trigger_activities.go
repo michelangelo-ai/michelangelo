@@ -6,7 +6,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/activity"
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	triggerrunUtil "github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
+	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
@@ -22,7 +22,7 @@ type activities struct {
 // Parameter generator factory function
 func getParameterGenerator(triggerType string) parameter.ParameterGenerator {
 	switch triggerType {
-	case triggerrunUtil.TriggerTypeCron, triggerrunUtil.TriggerTypeInterval:
+	case triggerrun.TriggerTypeCron, triggerrun.TriggerTypeInterval:
 		return &parameter.CronParameterGenerator{}
 	// TODO: Add other parameter generators here, such as backfill and batch rerun
 	default:
@@ -43,15 +43,22 @@ func getParameterGenerator(triggerType string) parameter.ParameterGenerator {
 // - error: Error information if the operation fails.
 func (r *activities) CreatePipelineRun(ctx context.Context, request *v2pb.CreatePipelineRunRequest) (*v2pb.PipelineRun, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.Any("request", request))
+	logger.Info("create pipeline run activity started",
+		zap.String("operation", "create_pipeline_run"),
+		zap.String("pipeline", request.PipelineRun.Spec.Pipeline.Name),
+		zap.String("namespace", request.PipelineRun.Namespace))
 
 	response, err := r.pipelineRunService.CreatePipelineRun(ctx, request)
 	if err != nil || response == nil || response.PipelineRun == nil {
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("failed to create pipeline run",
+			zap.String("operation", "create_pipeline_run"),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "CreatePipelineRun", err.Error())
 	}
 
-	logger.Info("activity-success", zap.String("pipeline_run_name", response.PipelineRun.Name))
+	logger.Info("pipeline run created successfully",
+		zap.String("operation", "create_pipeline_run"),
+		zap.String("pipeline_run_name", response.PipelineRun.Name))
 	return response.PipelineRun, nil
 }
 
@@ -68,20 +75,29 @@ func (r *activities) CreatePipelineRun(ctx context.Context, request *v2pb.Create
 // - error: Error information if the operation fails.
 func (r *activities) GenerateBatchRunParams(ctx context.Context, triggerRun *v2pb.TriggerRun) ([][]parameter.Params, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.String("trigger_run", triggerRun.Name))
+	triggerType := triggerrun.GetTriggerType(triggerRun)
+	logger.Info("generate batch run params activity started",
+		zap.String("operation", "generate_batch_params"),
+		zap.String("trigger_run", triggerRun.Name),
+		zap.String("trigger_type", triggerType))
 
 	// Get trigger type and appropriate parameter generator
-	triggerType := triggerrunUtil.GetTriggerType(triggerRun)
 	generator := getParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
 	batches, err := generator.GenerateBatchParams(triggerRun)
 	if err != nil {
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("failed to generate batch params",
+			zap.String("operation", "generate_batch_params"),
+			zap.String("trigger_run", triggerRun.Name),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "GenerateBatchParams", err.Error())
 	}
 
-	logger.Info("activity-success", zap.Int("batch_count", len(batches)), zap.String("trigger_type", triggerType))
+	logger.Info("batch params generated successfully",
+		zap.String("operation", "generate_batch_params"),
+		zap.Int("batch_count", len(batches)),
+		zap.String("trigger_type", triggerType))
 	return batches, nil
 }
 
@@ -98,20 +114,29 @@ func (r *activities) GenerateBatchRunParams(ctx context.Context, triggerRun *v2p
 // - error: Error information if the operation fails.
 func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun *v2pb.TriggerRun) ([]parameter.Params, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.String("trigger_run", triggerRun.Name))
+	triggerType := triggerrun.GetTriggerType(triggerRun)
+	logger.Info("generate concurrent run params activity started",
+		zap.String("operation", "generate_concurrent_params"),
+		zap.String("trigger_run", triggerRun.Name),
+		zap.String("trigger_type", triggerType))
 
 	// Get trigger type and appropriate parameter generator
-	triggerType := triggerrunUtil.GetTriggerType(triggerRun)
 	generator := getParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
 	params, err := generator.GenerateConcurrentParams(triggerRun)
 	if err != nil {
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("failed to generate concurrent params",
+			zap.String("operation", "generate_concurrent_params"),
+			zap.String("trigger_run", triggerRun.Name),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "GenerateConcurrentParams", err.Error())
 	}
 
-	logger.Info("activity-success", zap.Int("param_count", len(params)), zap.String("trigger_type", triggerType))
+	logger.Info("concurrent params generated successfully",
+		zap.String("operation", "generate_concurrent_params"),
+		zap.Int("param_count", len(params)),
+		zap.String("trigger_type", triggerType))
 	return params, nil
 }
 
@@ -128,11 +153,16 @@ func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun
 // - error: Error information if the operation fails.
 func (r *activities) PipelineRunSensor(ctx context.Context, pipelineRun *v2pb.PipelineRun) (*v2pb.PipelineRun, error) {
 	logger := activity.GetLogger(ctx)
-	logger.Info("activity-start", zap.String("pipeline_run", pipelineRun.Name), zap.String("namespace", pipelineRun.Namespace))
+	logger.Info("pipeline run sensor activity started",
+		zap.String("operation", "pipeline_run_sensor"),
+		zap.String("pipeline_run", pipelineRun.Name),
+		zap.String("namespace", pipelineRun.Namespace))
 
 	if pipelineRun == nil {
 		err := fmt.Errorf("pipeline run is nil")
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("invalid input for pipeline run sensor",
+			zap.String("operation", "pipeline_run_sensor"),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "InvalidInput", err.Error())
 	}
 
@@ -143,16 +173,25 @@ func (r *activities) PipelineRunSensor(ctx context.Context, pipelineRun *v2pb.Pi
 
 	response, err := r.pipelineRunService.GetPipelineRun(ctx, getRequest)
 	if err != nil {
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("failed to get pipeline run status",
+			zap.String("operation", "pipeline_run_sensor"),
+			zap.String("pipeline_run", pipelineRun.Name),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "GetPipelineRun", err.Error())
 	}
 
 	if response == nil || response.PipelineRun == nil {
 		err := fmt.Errorf("empty response from pipeline run service")
-		logger.Error("activity-error", zap.Error(err))
+		logger.Error("empty response from pipeline run service",
+			zap.String("operation", "pipeline_run_sensor"),
+			zap.String("pipeline_run", pipelineRun.Name),
+			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "EmptyResponse", err.Error())
 	}
 
-	logger.Info("activity-success", zap.Any("state", response.PipelineRun.Status.State))
+	logger.Info("pipeline run status retrieved successfully",
+		zap.String("operation", "pipeline_run_sensor"),
+		zap.String("pipeline_run", pipelineRun.Name),
+		zap.String("state", response.PipelineRun.Status.State.String()))
 	return response.PipelineRun, nil
 }

@@ -81,14 +81,30 @@ func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log log
 		execTs := execInfo.ExecutionTime
 		log.Info("current scheduled execution time", "execution_ts", execTs)
 		status := execInfo.Status
-		if status == clientInterface.WorkflowExecutionStatusFailed || status == clientInterface.WorkflowExecutionStatusTimedOut ||
-			status == clientInterface.WorkflowExecutionStatusCanceled || status == clientInterface.WorkflowExecutionStatusTerminated {
-			err := fmt.Errorf("workflow is terminated with state: %v", status)
-			log.Error(err, "workflow is terminated",
+		// Terminated and Canceled are user-initiated actions, treat as KILLED
+		if status == clientInterface.WorkflowExecutionStatusTerminated ||
+			status == clientInterface.WorkflowExecutionStatusCanceled {
+			log.Info("workflow was terminated or canceled",
 				"operation", "get_workflow_status",
 				"namespace", triggerRun.Namespace,
 				"name", triggerRun.Name,
-				"workflowId", wid)
+				"workflowId", wid,
+				"status", status)
+			return v2pb.TriggerRunStatus{
+				State:        v2pb.TRIGGER_RUN_STATE_KILLED,
+				ErrorMessage: fmt.Sprintf("workflow was terminated with state: %v", status),
+			}, nil
+		}
+		// Failed and TimedOut are actual failures
+		if status == clientInterface.WorkflowExecutionStatusFailed ||
+			status == clientInterface.WorkflowExecutionStatusTimedOut {
+			err := fmt.Errorf("workflow failed with state: %v", status)
+			log.Error(err, "workflow failed",
+				"operation", "get_workflow_status",
+				"namespace", triggerRun.Namespace,
+				"name", triggerRun.Name,
+				"workflowId", wid,
+				"status", status)
 			return v2pb.TriggerRunStatus{
 				State:        v2pb.TRIGGER_RUN_STATE_FAILED,
 				ErrorMessage: err.Error(),
@@ -150,21 +166,21 @@ func generateWorkflowID(tr *v2pb.TriggerRun) string {
 // util function to get workflow URL based on provider
 func getWorkflowURL(wid string, provider string) string {
 	domain := "default" // Default domain for both Cadence and Temporal
-	urlPath := ""
-	switch provider {
-	case "temporal":
+	var (
+		logURL  string
+		urlPath string
+	)
+	if provider == "temporal" {
 		// Temporal Web UI configuration
 		// For local development: localhost:8080
+		logURL = "http://localhost:8080"
 		urlPath = fmt.Sprintf("/namespaces/%s/workflows/%s", domain, wid)
-	case "cadence":
-		// Cadence Web UI configuration
+	} else {
+		// Cadence Web UI configuration (default)
 		// For local development: localhost:8088
-		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
-	default:
-		// Default to Cadence format
+		logURL = "http://localhost:8088"
 		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
 	}
-	logURL := "http://localhost:8088"
 	path, _ := url.PathUnescape(urlPath)
 	return logURL + path
 }

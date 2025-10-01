@@ -17,7 +17,6 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 type (
@@ -75,12 +74,12 @@ var (
 
 	// NonRetriableErrorReasonsDefault defines errors that should not be retried
 	NonRetriableErrorReasonsDefault = []string{
-		"400",
-		"404",
-		"500",
-		"cadenceInternal:Panic",
-		"cadenceInternal:CanceledError",
-		"no-retry",
+		"400", // Bad Request
+		"404", // Not Found
+		"500", // Internal Server Error
+		"cadenceInternal:Panic", // Panic error
+		"cadenceInternal:CanceledError", // Canceled error
+		"no-retry", // No retry error
 	}
 
 	// SensorRetryPolicyDefault is the default retry policy for the sensor activity
@@ -98,7 +97,8 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
 	tr := req.TriggerRun
 	log := workflow.GetLogger(ctx).With(
-		zap.Any("triggerRun", types.NamespacedName{Namespace: tr.Namespace, Name: tr.Name}),
+		zap.String("trigger_run", tr.Name),
+		zap.String("namespace", tr.Namespace),
 	)
 	logicalTs := workflow.Now(ctx).UTC()
 	ctx = workflow.WithValue(ctx, contextKeylogicalTs, logicalTs)
@@ -112,12 +112,10 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 	if err := workflow.SetQueryHandler(ctx, "triggerContext", func() (map[string]any, error) {
 		return triggerContext, nil
 	}); err != nil {
-		log.Error("setQueryHandler for triggerContext failed", zap.Error(err))
+		log.Error("failed to set query handler for triggerContext", zap.Error(err))
 		return nil, err
 	}
-	log.Info("starting cron trigger workflow", zap.Any("request", req))
-
-	// Use shared package functions
+	log.Info("cron trigger workflow started", zap.String("operation", "cron_trigger_workflow"))
 	var err error
 	if tr.Spec.Trigger.MaxConcurrency > 0 {
 		err = concurrentRun(ctx, tr)
@@ -133,7 +131,10 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 
 // batchRun executes trigger runs in batches with configurable wait times between batches
 func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
-	log := workflow.GetLogger(ctx).With(zap.String("namespace", tr.Namespace), zap.String("trigger_name", tr.Name))
+	log := workflow.GetLogger(ctx).With(
+		zap.String("namespace", tr.Namespace),
+		zap.String("trigger_name", tr.Name),
+	)
 	waitSeconds := _defaultWaitSeconds
 	if tr.Spec.Trigger.BatchPolicy != nil && tr.Spec.Trigger.BatchPolicy.Wait != nil {
 		waitSeconds = int(tr.Spec.Trigger.BatchPolicy.Wait.Seconds)
@@ -148,13 +149,13 @@ func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 		err     error
 	)
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.GenerateBatchRunParams, tr).Get(ctx, &batches); err != nil {
-		log.Error("GenerateBatchRunParams failed", zap.Error(err))
+		log.Error("failed to generate batch run params", zap.String("operation", "batch_run"), zap.Error(err))
 		return err
 	}
 	for idx, batch := range batches {
 		for _, param := range batch {
 			if _err := runPipeline(ctx, tr, param, false); _err != nil {
-				log.Error("failed to run pipeline in trigger", zap.Error(_err), zap.Any("param_id", param))
+				log.Error("failed to run pipeline in batch", zap.String("operation", "batch_run"), zap.String("param_id", param.ParamID), zap.Error(_err))
 				err = _err
 			}
 		}
@@ -179,7 +180,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 		err    error
 	)
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.GenerateConcurrentRunParams, tr).Get(ctx, &params); err != nil {
-		log.Error("generate concurrent run parameters failed", zap.Error(err))
+		log.Error("failed to generate concurrent run parameters", zap.String("operation", "concurrent_run"), zap.Error(err))
 		return err
 	}
 	t := len(params)
@@ -192,14 +193,14 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 	futureF := func(f workflow.Future) {
 		var v any
 		if _err := f.Get(ctx, &v); _err != nil {
-			log.Error("Future.Get error", zap.Error(_err))
+			log.Error("failed to get future result", zap.String("operation", "concurrent_run"), zap.Error(_err))
 			err = _err
 		}
 	}
 	// Run initial N params all at once
 	for i := 0; i < n; i++ {
 		param := params[i]
-		log.Info("run pipeline async", zap.Any("current parameter", param), zap.Int("param_idx", i))
+		log.Info("starting pipeline run async", zap.String("operation", "concurrent_run"), zap.String("param_id", param.ParamID), zap.Int("param_idx", i))
 		f := runPipelineAsync(ctx, tr, param, true)
 		selector.AddFuture(f, futureF)
 	}
@@ -208,7 +209,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 		selector.Select(ctx)
 		if n < t {
 			param := params[n]
-			log.Info("run pipeline async", zap.Any("current parameter", param), zap.Int("param_idx", n))
+			log.Info("starting pipeline run async", zap.String("operation", "concurrent_run"), zap.String("param_id", param.ParamID), zap.Int("param_idx", n))
 			f := runPipelineAsync(ctx, tr, param, true)
 			selector.AddFuture(f, futureF)
 			n++
@@ -230,14 +231,24 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
 	createRequest, err = generatePipelineRunRequest(triggerRun, param.ParamID, name, logicalTs)
 	if err != nil {
-		log.Error("failed to generate CreatePipelineRunRequest", zap.Error(err))
+		log.Error("failed to generate pipeline run request",
+			zap.String("operation", "run_pipeline"),
+			zap.String("param_id", param.ParamID),
+			zap.Error(err))
 		return err
 	}
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.CreatePipelineRun, createRequest).Get(ctx, &pr); err != nil {
-		log.Error("CreatePipelineRun error", zap.Any("parameter", param), zap.Error(err), zap.Any("request", createRequest))
+		log.Error("failed to create pipeline run",
+			zap.String("operation", "run_pipeline"),
+			zap.String("param_id", param.ParamID),
+			zap.String("pipeline_run_name", name),
+			zap.Error(err))
 		return err
 	}
-	log.Info("pipeline run created", zap.Any("parameter", param), zap.Any("pipeline_run", pr))
+	log.Info("pipeline run created successfully",
+		zap.String("operation", "run_pipeline"),
+		zap.String("param_id", param.ParamID),
+		zap.String("pipeline_run_name", pr.Name))
 	createdTimestamp := workflow.Now(ctx)
 	// TriggeredRuns is a map[parameter_id -> run_information]
 	triggerContext["TriggeredRuns"].(map[string]Object)[param.ParamID] = Object{
@@ -253,7 +264,10 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	}
 	sensorCtx := workflow.WithRetryPolicy(ctx, SensorRetryPolicyDefault)
 	if err := workflow.ExecuteActivity(sensorCtx, trigger.Activities.PipelineRunSensor, sensorRequest).Get(sensorCtx, &pr); err != nil {
-		log.Error("PipelineRunSensor failed", zap.Error(err))
+		log.Error("pipeline run sensor failed",
+			zap.String("operation", "run_pipeline"),
+			zap.String("pipeline_run_name", pr.Name),
+			zap.Error(err))
 		return err
 	}
 	return nil
@@ -269,6 +283,7 @@ func runPipelineAsync(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param p
 	return future
 }
 
+// generatePipelineRunRequest generates a pipeline run request due to trigger run, parameter id and execution timestamp
 func generatePipelineRunRequest(
 	triggerRun *v2pb.TriggerRun, paramID string, pipelineRunName string, ts time.Time,
 ) (v2pb.CreatePipelineRunRequest, error) {
@@ -330,6 +345,7 @@ func generatePipelineRunRequest(
 	}, nil
 }
 
+// generateUniflowPRInput generates a uniflow pipeline run input due to pipeline execution parameters
 func generateUniflowPRInput(dp *v2pb.PipelineExecutionParameters) *pbtypes.Struct {
 	pbStruct := &pbtypes.Struct{
 		Fields: make(map[string]*pbtypes.Value),
