@@ -90,4 +90,79 @@ describe('Form integration', () => {
       )
     );
   });
+
+  it('supports render prop for wrapping form element', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <Form
+        id="wrapped-form"
+        onSubmit={onSubmit}
+        render={(formElement) => (
+          <div data-testid="wrapper">
+            <div data-testid="header">Header Content</div>
+            {formElement}
+            <div data-testid="footer">Footer Content</div>
+          </div>
+        )}
+      >
+        <StringField name="email" label="Email" />
+        <button type="submit">Submit</button>
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    expect(screen.getByTestId('wrapper')).toBeInTheDocument();
+    expect(screen.getByTestId('header')).toHaveTextContent('Header Content');
+    expect(screen.getByTestId('footer')).toHaveTextContent('Footer Content');
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText('Email'), 'test@example.com');
+    await user.click(screen.getByRole('button', { name: 'Submit' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { email: 'test@example.com' },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
+
+  it('allows external submit button in render prop wrapper via form id', async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn();
+
+    render(
+      <Form
+        id="wrapped-form"
+        onSubmit={onSubmit}
+        render={(formElement) => (
+          <div data-testid="wrapper">
+            {formElement}
+            <div data-testid="footer">
+              <button type="submit" form="wrapped-form">
+                External Submit
+              </button>
+            </div>
+          </div>
+        )}
+      >
+        <StringField name="email" label="Email" />
+      </Form>,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    await user.type(screen.getByLabelText('Email'), 'test@example.com');
+    await user.click(screen.getByRole('button', { name: 'External Submit' }));
+
+    await waitFor(() =>
+      expect(onSubmit).toHaveBeenCalledWith(
+        { email: 'test@example.com' },
+        expect.anything(),
+        expect.anything()
+      )
+    );
+  });
 });
