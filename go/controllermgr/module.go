@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 
+	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
@@ -64,8 +66,7 @@ func create(p params) (result, error) {
 
 	mgr, err := ctrl.NewManager(restConf, ctrl.Options{
 		Scheme:                 p.Scheme,
-		MetricsBindAddress:     p.Config.MetricsBindAddress,
-		Port:                   p.Config.Port,
+		Metrics:                server.Options{BindAddress: p.Config.MetricsBindAddress},
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,

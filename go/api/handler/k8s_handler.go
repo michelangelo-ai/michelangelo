@@ -46,10 +46,12 @@ func (k *K8sHandlerImpl) Update(ctx context.Context, obj ctrlRTClient.Object, op
 
 // UpdateStatus implements K8sHandler.UpdateStatus by delegating to the status writer.
 func (k *K8sHandlerImpl) UpdateStatus(ctx context.Context, obj ctrlRTClient.Object, opts *metav1.UpdateOptions) error {
-	return k.client.Status().Update(ctx, obj, &ctrlRTClient.UpdateOptions{
-		DryRun:       opts.DryRun,
-		FieldManager: opts.FieldManager,
-		Raw:          opts,
+	return k.client.Status().Update(ctx, obj, &ctrlRTClient.SubResourceUpdateOptions{
+		UpdateOptions: ctrlRTClient.UpdateOptions{
+			DryRun:       opts.DryRun,
+			FieldManager: opts.FieldManager,
+			Raw:          opts,
+		},
 	})
 }
 

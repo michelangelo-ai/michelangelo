@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -21,7 +23,7 @@ import (
 func TestReconcile(t *testing.T) {
 	testCases := []struct {
 		name                         string
-		initialObjects               []runtime.Object
+		initialObjects               []client.Object
 		env                          env.Context
 		expectedResult               ctrl.Result
 		expectedError                string
@@ -30,7 +32,7 @@ func TestReconcile(t *testing.T) {
 	}{
 		{
 			name: "Invalid -> READY",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline",
@@ -54,7 +56,7 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "Ready -> should not reconcile",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline",
@@ -85,7 +87,7 @@ func TestReconcile(t *testing.T) {
 		},
 		{
 			name: "Ready -> should reconcile",
-			initialObjects: []runtime.Object{
+			initialObjects: []client.Object{
 				&v2pb.Pipeline{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline",
@@ -139,11 +141,11 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func setUpReconciler(t *testing.T, initialObjects []runtime.Object, env env.Context) *Reconciler {
+func setUpReconciler(t *testing.T, initialObjects []client.Object, env env.Context) *Reconciler {
 	scheme := runtime.NewScheme()
 	err := v2pb.AddToScheme(scheme)
 	require.NoError(t, err)
-	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(initialObjects...).Build()
+	k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithObjects(initialObjects...).WithStatusSubresource(initialObjects...).Build()
 	reconciler := &Reconciler{
 		Handler: apiHandler.NewFakeAPIHandler(k8sClient),
 		logger:  zaptest.NewLogger(t),

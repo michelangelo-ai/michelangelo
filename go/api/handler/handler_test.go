@@ -105,7 +105,8 @@ func setupK8s() (ctrlRTClient.Client, error) {
 
 	fakeClient := fake.NewClientBuilder().
 		WithScheme(scheme.Scheme).
-		WithLists(initLists...).Build()
+		WithLists(initLists...).
+		WithStatusSubresource(initObjs...).Build()
 
 	return fakeClient, nil
 }
@@ -440,7 +441,7 @@ func TestNewAPIServerHandler(t *testing.T) {
 		return nil, errors.New("test dialer failure")
 	}
 
-	_, err = NewAPIServerHandler(Params{
+	handler, err := NewAPIServerHandler(Params{
 		K8sRestConfig: &rest.Config{
 			Host:    "test.host",
 			Timeout: 0,
@@ -455,6 +456,8 @@ func TestNewAPIServerHandler(t *testing.T) {
 		Logger:  zap.Must(zap.NewDevelopment()),
 		Metrics: tally.NoopScope,
 	})
-	assert.Error(t, err)
+	assert.NoError(t, err)
+	job := v2pb.RayJob{}
+	err = handler.Get(context.Background(), "project0", "job01", &metav1.GetOptions{}, &job)
 	assert.True(t, strings.Contains(err.Error(), "test dialer failure"))
 }

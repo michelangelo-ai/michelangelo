@@ -159,8 +159,6 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      clusterName:
-                        type: string
                       creationTimestamp:
                         properties:
                           nanos:
@@ -307,8 +305,6 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
-                      clusterName:
-                        type: string
                       creationTimestamp:
                         properties:
                           nanos:
@@ -1425,8 +1421,24 @@ spec:
                                   format: int32
                                   type: integer
                               type: object
+                            resizePolicy:
+                              items:
+                                properties:
+                                  resourceName:
+                                    type: string
+                                  restartPolicy:
+                                    type: string
+                                type: object
+                              type: array
                             resources:
                               properties:
+                                claims:
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                    type: object
+                                  type: array
                                 limits:
                                   additionalProperties:
                                     anyOf:
@@ -1444,6 +1456,8 @@ spec:
                                     x-kubernetes-int-or-string: true
                                   type: object
                               type: object
+                            restartPolicy:
+                              type: string
                             securityContext:
                               properties:
                                 allowPrivilegeEscalation:
@@ -2066,8 +2080,24 @@ spec:
                                       format: int32
                                       type: integer
                                   type: object
+                                resizePolicy:
+                                  items:
+                                    properties:
+                                      resourceName:
+                                        type: string
+                                      restartPolicy:
+                                        type: string
+                                    type: object
+                                  type: array
                                 resources:
                                   properties:
+                                    claims:
+                                      items:
+                                        properties:
+                                          name:
+                                            type: string
+                                        type: object
+                                      type: array
                                     limits:
                                       additionalProperties:
                                         anyOf:
@@ -2085,6 +2115,8 @@ spec:
                                         x-kubernetes-int-or-string: true
                                       type: object
                                   type: object
+                                restartPolicy:
+                                  type: string
                                 securityContext:
                                   properties:
                                     allowPrivilegeEscalation:
@@ -2292,6 +2324,8 @@ spec:
                       hostNetwork:
                         type: boolean
                       hostPID:
+                        type: boolean
+                      hostUsers:
                         type: boolean
                       hostname:
                         type: string
@@ -2710,8 +2744,24 @@ spec:
                                   format: int32
                                   type: integer
                               type: object
+                            resizePolicy:
+                              items:
+                                properties:
+                                  resourceName:
+                                    type: string
+                                  restartPolicy:
+                                    type: string
+                                type: object
+                              type: array
                             resources:
                               properties:
+                                claims:
+                                  items:
+                                    properties:
+                                      name:
+                                        type: string
+                                    type: object
+                                  type: array
                                 limits:
                                   additionalProperties:
                                     anyOf:
@@ -2729,6 +2779,8 @@ spec:
                                     x-kubernetes-int-or-string: true
                                   type: object
                               type: object
+                            restartPolicy:
+                              type: string
                             securityContext:
                               properties:
                                 allowPrivilegeEscalation:
@@ -2950,12 +3002,33 @@ spec:
                               type: string
                           type: object
                         type: array
+                      resourceClaims:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                            source:
+                              properties:
+                                resourceClaimName:
+                                  type: string
+                                resourceClaimTemplateName:
+                                  type: string
+                              type: object
+                          type: object
+                        type: array
                       restartPolicy:
                         type: string
                       runtimeClassName:
                         type: string
                       schedulerName:
                         type: string
+                      schedulingGates:
+                        items:
+                          properties:
+                            name:
+                              type: string
+                          type: object
+                        type: array
                       securityContext:
                         properties:
                           fsGroup:
@@ -3104,12 +3177,20 @@ spec:
                                   type: object
                               type: object
                               x-kubernetes-map-type: atomic
+                            matchLabelKeys:
+                              items:
+                                type: string
+                              type: array
                             maxSkew:
                               format: int32
                               type: integer
                             minDomains:
                               format: int32
                               type: integer
+                            nodeAffinityPolicy:
+                              type: string
+                            nodeTaintsPolicy:
+                              type: string
                             topologyKey:
                               type: string
                             whenUnsatisfiable:
@@ -3293,8 +3374,6 @@ spec:
                                               additionalProperties:
                                                 type: string
                                               type: object
-                                            clusterName:
-                                              type: string
                                             creationTimestamp:
                                               properties:
                                                 nanos:
@@ -3415,9 +3494,18 @@ spec:
                                                   type: string
                                                 name:
                                                   type: string
+                                                namespace:
+                                                  type: string
                                               type: object
                                             resources:
                                               properties:
+                                                claims:
+                                                  items:
+                                                    properties:
+                                                      name:
+                                                        type: string
+                                                    type: object
+                                                  type: array
                                                 limits:
                                                   additionalProperties:
                                                     anyOf:
