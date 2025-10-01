@@ -17,6 +17,7 @@ import (
 const (
 	// TODO: Make this configurable
 	defaultInactiveRequeuePeriodInSeconds = 10
+	KillReason                            = "killed due to workflow termination"
 )
 
 var _ conditionInterfaces.Engine[client.Object] = &DefaultEngine[client.Object]{}
@@ -62,14 +63,26 @@ func (e *DefaultEngine[T]) Run(ctx context.Context, plugin conditionInterfaces.P
 			IsTerminal:   true,
 		}, nil
 	case api.CONDITION_STATUS_FALSE:
-		return conditionInterfaces.Result{
-			Result: ctrl.Result{
-				Requeue:      false,
-				RequeueAfter: 0,
-			},
-			AreSatisfied: false,
-			IsTerminal:   true,
-		}, nil
+		if lastCondition.Reason == KillReason {
+			return conditionInterfaces.Result{
+				Result: ctrl.Result{
+					Requeue:      false,
+					RequeueAfter: 0,
+				},
+				AreSatisfied: false,
+				IsTerminal:   true,
+				IsKilled:     true,
+			}, nil
+		} else {
+			return conditionInterfaces.Result{
+				Result: ctrl.Result{
+					Requeue:      false,
+					RequeueAfter: 0,
+				},
+				AreSatisfied: false,
+				IsTerminal:   true,
+			}, nil
+		}
 	}
 	return defaultResult, nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
+	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
@@ -80,6 +81,31 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	}
 
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	newCondition := &apipb.Condition{
+		Type:   ExecuteWorkflowType,
+		Status: apipb.CONDITION_STATUS_UNKNOWN,
+	}
+
+	if pipelineRun.Spec.Kill {
+		err, workflowTerminated := a.processJobTermination(ctx, pipelineRun)
+		if err != nil {
+			logger.Error("failed to terminate workflow", zap.Error(err))
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("failed to terminate workflow: %v", err)
+		}
+		// check to see if workflow has been successfully terminated
+		if workflowTerminated {
+			executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
+			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+			newCondition.Status = apipb.CONDITION_STATUS_FALSE
+			newCondition.Reason = defaultengine.KillReason
+			// Propagate appropriate states to substeps based on their current state
+			a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, defaultengine.KillReason)
+			return newCondition, nil
+		}
+	}
 
 	if pipelineRun.Status.WorkflowRunId == "" || pipelineRun.Status.WorkflowId == "" {
 		logger.Info("Workflow run ID is empty, starting workflow")
@@ -105,21 +131,18 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			Status: apipb.CONDITION_STATUS_UNKNOWN,
 		}, nil
 	}
-	logger.Info("Workflow run ID is not empty, checking workflow status")
+
+	logger.Info("workflow run ID is not empty, checking workflow status")
 	workflowExecution, err := a.workflowClient.GetWorkflowExecutionInfo(ctx, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId)
 	if err != nil {
 		return nil, fmt.Errorf("get workflow execution info for pipeline run %s/%s (workflow %s, run %s): %w",
 			pipelineRun.Namespace, pipelineRun.Name, pipelineRun.Status.WorkflowId, pipelineRun.Status.WorkflowRunId, err)
 	}
-	newCondition := &apipb.Condition{
-		Type:   ExecuteWorkflowType,
-		Status: apipb.CONDITION_STATUS_UNKNOWN,
-	}
 
 	// Query and update task-level status for all workflow states
 	taskSteps, queryErr := a.constructPipelineRunStepInfo(ctx, pipelineRun)
 	if queryErr != nil {
-		logger.Error("Failed to query task progress", zap.Error(queryErr))
+		logger.Error("failed to query task progress", zap.Error(queryErr))
 		return nil, queryErr
 	} else if len(taskSteps) > 0 {
 		executeWorkflowStep.SubSteps = taskSteps
@@ -142,10 +165,33 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_KILLED
 		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
 		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		newCondition.Reason = defaultengine.KillReason
 		// Propagate appropriate states to substeps based on their current state
-		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, "Killed due to workflow termination")
+		a.propagateTerminalStateToSubsteps(executeWorkflowStep, v2.PIPELINE_RUN_STEP_STATE_KILLED, defaultengine.KillReason)
 	}
 	return newCondition, nil
+}
+
+func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) (error, bool) {
+	workflowID := pipelineRun.Status.WorkflowId
+	runID := pipelineRun.Status.WorkflowRunId
+
+	if workflowID != "" && runID != "" {
+		workflowStatus, getWorkflowExecutionInfoError := a.workflowClient.GetWorkflowExecutionInfo(ctx, workflowID, runID)
+		if getWorkflowExecutionInfoError == nil {
+			if workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusCompleted && workflowStatus.Status != clientInterfaces.WorkflowExecutionStatusTerminated {
+				err := a.workflowClient.CancelWorkflow(ctx, workflowID, runID, defaultengine.KillReason)
+				// if CancelWorkflow return a non-nil error, the workflow has not been successfully terminated
+				if err != nil {
+					return err, false
+				} else {
+					return err, true
+				}
+			}
+		}
+	}
+	// in this case, the workflow is unable to be terminated because it has not yet been started
+	return nil, false
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {

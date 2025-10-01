@@ -52,7 +52,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			zap.String("name", req.Name))
 		returnErr = fmt.Errorf("run engine for pipeline run %q: %w", req.NamespacedName, err)
 	} else {
-		if !conditionResult.IsTerminal {
+		if conditionResult.IsKilled {
+			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
+		} else if !conditionResult.IsTerminal {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_RUNNING
 		} else if conditionResult.AreSatisfied {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_SUCCEEDED
