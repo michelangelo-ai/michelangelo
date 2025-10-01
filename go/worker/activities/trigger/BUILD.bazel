@@ -1,0 +1,39 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "module.go",
+        "trigger_activities.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/triggerrun:go_default_library",
+        "//go/worker/activities/trigger/parameter:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//activity:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//worker:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//workflow:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["trigger_activities_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/worker/activities/trigger/parameter:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "//proto/api/v2:go_michelangelo_v2_gomock_library",
+        "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@com_github_cadence_workflow_starlark_worker//test/types:go_default_library",
+        "@com_github_golang_mock//gomock:go_default_library",
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//suite:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)

@@ -4,15 +4,42 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"time"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	filterV1 "go.temporal.io/api/filter/v1"
+	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
 	temporalClient "go.temporal.io/sdk/client"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+// mapTemporalStatusToInterface maps Temporal workflow status to our interface status
+func mapTemporalStatusToInterface(status temporalEnumsV1.WorkflowExecutionStatus) clientInterface.WorkflowExecutionStatus {
+	switch status {
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_RUNNING:
+		return clientInterface.WorkflowExecutionStatusRunning
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_COMPLETED:
+		return clientInterface.WorkflowExecutionStatusCompleted
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_FAILED:
+		return clientInterface.WorkflowExecutionStatusFailed
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_CANCELED:
+		return clientInterface.WorkflowExecutionStatusCanceled
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TERMINATED:
+		return clientInterface.WorkflowExecutionStatusTerminated
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW:
+		return clientInterface.WorkflowExecutionStatusContinuedAsNew
+	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
+		return clientInterface.WorkflowExecutionStatusTimedOut
+	default:
+		return clientInterface.WorkflowExecutionStatusUnSpecified
+	}
+}
 
 type TemporalClient struct {
 	Client   temporalClient.Client
 	Provider string
+	Domain   string
 }
 
 // ensure TemporalClient implements clientInterface.WorkflowClient
@@ -25,6 +52,7 @@ func (c *TemporalClient) StartWorkflow(ctx context.Context, options clientInterf
 		TaskQueue:                options.TaskList,
 		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
 		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
+		CronSchedule:             options.CronSchedule,
 	}
 	// This is a workaround for Grab Temporal demo
 	_args := make([]any, len(args))
@@ -64,43 +92,9 @@ func (c *TemporalClient) GetWorkflowExecutionInfo(ctx context.Context, workflowI
 		}, nil
 	}
 
-	temporalStatus := workflowExecutionInfo.Status
-
-	switch temporalStatus {
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_UNSPECIFIED:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusUnSpecified,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_RUNNING:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusRunning,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_COMPLETED:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusCompleted,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_FAILED:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusFailed,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_CANCELED:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusCanceled,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TERMINATED:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusTerminated,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_CONTINUED_AS_NEW:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusContinuedAsNew,
-		}, nil
-	case temporalEnumsV1.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:
-		return &clientInterface.WorkflowExecutionInfo{
-			Status: clientInterface.WorkflowExecutionStatusTimedOut,
-		}, nil
-	}
-	return nil, fmt.Errorf("unknown workflow execution status: %s", temporalStatus)
+	return &clientInterface.WorkflowExecutionInfo{
+		Status: mapTemporalStatusToInterface(workflowExecutionInfo.Status),
+	}, nil
 }
 
 // QueryWorkflow queries a workflow
@@ -134,4 +128,69 @@ func (c *TemporalClient) CancelWorkflow(ctx context.Context, workflowID string, 
 // GetProvider gets the provider of the client
 func (c *TemporalClient) GetProvider() string {
 	return c.Provider
+}
+
+func (c *TemporalClient) GetDomain() string {
+	return c.Domain
+}
+
+func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInterface.ListOpenWorkflowExecutionsRequest) (*clientInterface.ListOpenWorkflowExecutionsResponse, error) {
+	temporalRequest := &workflowserviceV1.ListOpenWorkflowExecutionsRequest{
+		Namespace:     request.Domain,
+		NextPageToken: request.NextPageToken,
+	}
+
+	// Only set MaximumPageSize if provided, let Temporal use its default otherwise
+	if request.MaximumPageSize != nil {
+		temporalRequest.MaximumPageSize = *request.MaximumPageSize
+	}
+
+	// Set start time filter if provided
+	if request.StartTimeFilter != nil {
+		// Convert nanoseconds to time.Time for Temporal's timestamppb
+		earliestTime := time.Unix(0, *request.StartTimeFilter.EarliestTime)
+		latestTime := time.Unix(0, *request.StartTimeFilter.LatestTime)
+
+		temporalRequest.StartTimeFilter = &filterV1.StartTimeFilter{
+			EarliestTime: timestamppb.New(earliestTime),
+			LatestTime:   timestamppb.New(latestTime),
+		}
+	}
+
+	// Set execution filter if provided
+	if request.ExecutionFilter != nil {
+		temporalRequest.Filters = &workflowserviceV1.ListOpenWorkflowExecutionsRequest_ExecutionFilter{
+			ExecutionFilter: &filterV1.WorkflowExecutionFilter{
+				WorkflowId: request.ExecutionFilter.WorkflowID,
+				RunId:      request.ExecutionFilter.RunID,
+			},
+		}
+	}
+
+	response, err := c.Client.ListOpenWorkflow(ctx, temporalRequest)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert Temporal response to our interface format
+	executionsInfo := make([]clientInterface.WorkflowExecutionInfo, 0, len(response.Executions))
+	for _, exec := range response.Executions {
+		executionsInfo = append(executionsInfo, clientInterface.WorkflowExecutionInfo{
+			Execution: &clientInterface.WorkflowExecution{
+				ID:    exec.Execution.GetWorkflowId(),
+				RunID: exec.Execution.GetRunId(),
+			},
+			ExecutionTime: exec.StartTime.AsTime(),
+			Status:        mapTemporalStatusToInterface(exec.Status),
+		})
+	}
+
+	return &clientInterface.ListOpenWorkflowExecutionsResponse{
+		Executions:    executionsInfo,
+		NextPageToken: response.NextPageToken,
+	}, nil
+}
+
+func (c *TemporalClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
+	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason)
 }

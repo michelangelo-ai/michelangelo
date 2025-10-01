@@ -74,8 +74,9 @@ type In struct {
 
 type Out struct {
 	fx.Out
-	Backend service.BackendType
-	Workers []sworker.Worker
+	Backend  service.BackendType
+	Workers  []sworker.Worker
+	Workflow workflow.Workflow
 }
 
 // provide provides workers and clients for either Cadence or Temporal.
@@ -90,12 +91,14 @@ func provide(in In) (Out, error) {
 		if err != nil {
 			return out, err
 		}
+		out.Workflow = cadence.NewWorkflow()
 	} else if conf.Provider == ProviderTemporal {
 		var err error
 		out.Workers, err = newTemporalWorker(in.TemporalFactory, in.Config, in.Logger)
 		if err != nil {
 			return out, err
 		}
+		out.Workflow = temporal.NewWorkflow()
 	}
 	return out, nil
 }

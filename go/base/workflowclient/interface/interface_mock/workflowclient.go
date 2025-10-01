@@ -111,3 +111,46 @@ func (mr *MockWorkflowClientMockRecorder) StartWorkflow(ctx, options, workflowNa
 	varargs := append([]interface{}{ctx, options, workflowName}, args...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).StartWorkflow), varargs...)
 }
+
+// GetDomain mocks base method.
+func (m *MockWorkflowClient) GetDomain() string {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDomain")
+	ret0, _ := ret[0].(string)
+	return ret0
+}
+
+// GetDomain indicates an expected call of GetDomain.
+func (mr *MockWorkflowClientMockRecorder) GetDomain() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDomain", reflect.TypeOf((*MockWorkflowClient)(nil).GetDomain))
+}
+
+// ListOpenWorkflow mocks base method.
+func (m *MockWorkflowClient) ListOpenWorkflow(ctx context.Context, request interface0.ListOpenWorkflowExecutionsRequest) (*interface0.ListOpenWorkflowExecutionsResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListOpenWorkflow", ctx, request)
+	ret0, _ := ret[0].(*interface0.ListOpenWorkflowExecutionsResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListOpenWorkflow indicates an expected call of ListOpenWorkflow.
+func (mr *MockWorkflowClientMockRecorder) ListOpenWorkflow(ctx, request interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListOpenWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).ListOpenWorkflow), ctx, request)
+}
+
+// TerminateWorkflow mocks base method.
+func (m *MockWorkflowClient) TerminateWorkflow(ctx context.Context, workflowID, runID, reason string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TerminateWorkflow", ctx, workflowID, runID, reason)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// TerminateWorkflow indicates an expected call of TerminateWorkflow.
+func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, runID, reason interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
+}

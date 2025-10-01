@@ -5,6 +5,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger"
 	"go.uber.org/fx"
 )
 
@@ -13,4 +14,5 @@ var Module = fx.Options(
 	spark.Module,
 	storage.Module,
 	cachedoutput.Module,
+	trigger.Module,
 )

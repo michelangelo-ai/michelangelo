@@ -73,3 +73,8 @@ func NewSparkJobServiceClient(p ClientParams) v2pb.SparkJobServiceYARPCClient {
 func NewCachedOutputServiceClient(p ClientParams) v2pb.CachedOutputServiceYARPCClient {
 	return v2pb.NewCachedOutputServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
 }
+
+// NewPipelineRunServiceClient creates a PipelineRunService YARPC client.
+func NewPipelineRunServiceClient(p ClientParams) v2pb.PipelineRunServiceYARPCClient {
+	return v2pb.NewPipelineRunServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
+}

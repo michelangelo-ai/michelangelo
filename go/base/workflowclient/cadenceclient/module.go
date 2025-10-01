@@ -37,6 +37,7 @@ func NewCadenceClient(config baseconfig.WorkflowClientConfig) (CadenceClientOut,
 		CadenceClient: &CadenceClient{
 			Client:   client,
 			Provider: "cadence",
+			Domain:   config.Domain,
 		},
 	}, nil
 }
