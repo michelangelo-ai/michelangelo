@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Dialog as BaseDialog } from 'baseui/dialog';
 
 import { mergeAllOverrides } from '#core/utils/style-utils';
-import { LAYER_HEADER_ABOVE_CONTENTS, enableButtonDockShadow } from './styled-components';
+import { enableButtonDockShadow, LAYER_HEADER_ABOVE_CONTENTS } from './styled-components';
 
 import type { DialogProps } from 'baseui/dialog';
 
