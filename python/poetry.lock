@@ -1319,7 +1319,7 @@ description = "Git Object Database"
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"mactl\""
+markers = "extra == \"dev\" or extra == \"mactl\""
 files = [
     {file = "gitdb-4.0.12-py3-none-any.whl", hash = "sha256:67073e15955400952c6565cc3e707c554a4eea2e428946f7a4c162fab9bd9bcf"},
     {file = "gitdb-4.0.12.tar.gz", hash = "sha256:5ef71f855d191a3326fcfbc0d5da835f26b13fbcba60c32c21091c349ffdb571"},
@@ -1335,7 +1335,7 @@ description = "GitPython is a Python library used to interact with Git repositor
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"mactl\""
+markers = "extra == \"dev\" or extra == \"mactl\""
 files = [
     {file = "GitPython-3.1.44-py3-none-any.whl", hash = "sha256:9e0e10cda9bed1ee64bc9a6de50e7e38a9c9943241cd7f585f6df3ed28011110"},
     {file = "gitpython-3.1.44.tar.gz", hash = "sha256:c87e30b26253bf5418b01b0660f818967f3c503193838337fe5e573331249269"},
@@ -1495,7 +1495,7 @@ description = "Standard Protobuf Reflection Service for gRPC"
 optional = true
 python-versions = ">=3.9"
 groups = ["main"]
-markers = "extra == \"mactl\""
+markers = "extra == \"dev\" or extra == \"mactl\""
 files = [
     {file = "grpcio_reflection-1.72.1-py3-none-any.whl", hash = "sha256:f02391bc48962f3d4790c2dd2e847437f0f232f09457ad6be097168074f8e1a5"},
     {file = "grpcio_reflection-1.72.1.tar.gz", hash = "sha256:f04f0c8c21937162c3a7d2b9532a42e568fd4096327bec8eb1cff8e7d8146150"},
@@ -3908,7 +3908,7 @@ description = "YAML parser and emitter for Python"
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
-markers = "extra == \"mactl\" or extra == \"plugin\" or extra == \"example\" or extra == \"vllm\" or extra == \"dev\""
+markers = "extra == \"dev\" or extra == \"mactl\" or extra == \"plugin\" or extra == \"example\" or extra == \"vllm\""
 files = [
     {file = "PyYAML-6.0.2-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:0a9a2848a5b7feac301353437eb7d5957887edbf81d56e903999a75a3d743086"},
     {file = "PyYAML-6.0.2-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:29717114e51c84ddfba879543fb232a6ed60086602313ca38cce623c1d62cfbf"},
@@ -4823,7 +4823,7 @@ description = "A pure Python implementation of a sliding window memory map manag
 optional = true
 python-versions = ">=3.7"
 groups = ["main"]
-markers = "extra == \"mactl\""
+markers = "extra == \"dev\" or extra == \"mactl\""
 files = [
     {file = "smmap-5.0.2-py3-none-any.whl", hash = "sha256:b30115f0def7d7531d22a0fb6502488d879e75b260a9db4d0819cfb25403af5e"},
     {file = "smmap-5.0.2.tar.gz", hash = "sha256:26ea65a03958fa0c8a1c7e8c7a58fdc77221b8910f6be2131affade476898ad5"},
@@ -6195,7 +6195,7 @@ test = ["big-O", "importlib-resources ; python_version < \"3.9\"", "jaraco.funct
 type = ["pytest-mypy"]
 
 [extras]
-dev = ["jinja2", "numpy", "pandas", "pre-commit", "pyarrow", "pytest", "pytorch_lightning", "ruff", "torch", "transformers"]
+dev = ["GitPython", "PyYAML", "grpcio-reflection", "jinja2", "numpy", "pandas", "pre-commit", "pyarrow", "pytest", "pytorch_lightning", "pyyaml", "ruff", "torch", "transformers"]
 example = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytorch_lightning", "ray", "s3fs", "torch", "transformers", "xgboost", "xgboost_ray"]
 mactl = ["GitPython", "PyYAML", "grpcio-reflection", "pyyaml"]
 plugin = ["pyspark", "ray"]
@@ -6204,4 +6204,4 @@ vllm = ["accelerate", "datasets", "einops", "numpy", "pandas", "pyarrow", "pytor
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.9.0"
-content-hash = "d83bd9771dfe332cbde603d3350a4b0561711bc04d42c8b8cab318d508f0d29f"
+content-hash = "c5b3eb46754238a3cf72a3b9b5890e7a81e79573986ad8acf3f9905222c5072b"
