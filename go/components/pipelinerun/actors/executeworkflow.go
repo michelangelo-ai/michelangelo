@@ -14,10 +14,12 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap"
 )
 
@@ -53,14 +55,16 @@ type ExecuteWorkflowActor struct {
 	workflowClient clientInterfaces.WorkflowClient
 	blobStore      *blobstore.BlobStore
 	apiHandler     api.Handler
+	configProvider uberconfig.Provider
 }
 
-func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler) *ExecuteWorkflowActor {
+func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler, configProvider uberconfig.Provider) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),
 		workflowClient: workflowClient,
 		blobStore:      blobStore,
 		apiHandler:     apiHandler,
+		configProvider: configProvider,
 	}
 }
 
@@ -115,7 +119,23 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 
 	if pipelineRun.Status.WorkflowRunId == "" || pipelineRun.Status.WorkflowId == "" {
 		logger.Info("Workflow run ID is empty, starting workflow")
-		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun)
+
+		// Get taskList from config
+		workflowConfig, err := config.GetWorkflowClientConfig(a.configProvider)
+		if err != nil {
+			logger.Error("failed to get workflow client config", zap.Error(err))
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("get workflow client config: %w", err)
+		}
+
+		taskList := workflowConfig.TaskList
+		if taskList == "" {
+			taskList = DefaultWorkflowTaskList
+		}
+
+		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun, taskList)
 		if err != nil {
 			logger.Error("failed to start workflow",
 				zap.Error(err),
@@ -200,7 +220,7 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 	return nil, false
 }
 
-func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {
+func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
 
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
@@ -220,7 +240,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		ctx,
 		clientInterfaces.StartWorkflowOptions{
 			ID:                              pipelineRun.Name,
-			TaskList:                        DefaultWorkflowTaskList, // TODO: make this configurable
+			TaskList:                        taskList,
 			ExecutionStartToCloseTimeout:    7 * 24 * time.Hour,
 			DecisionTaskStartToCloseTimeout: 1 * time.Minute,
 		},
@@ -274,7 +294,11 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
-	envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
+	if pipelineRun.Spec.WorkspaceRootDir != "" {
+		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
+	} else {
+		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
+	}
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
 }

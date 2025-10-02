@@ -12,6 +12,7 @@ import (
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -139,10 +140,20 @@ func setupPlugin(t *testing.T) *Plugin {
 		Logger:  logger,
 		Clients: map[string]blobstore.BlobStoreClient{"mock": mockBlobStoreClient},
 	}
+
+	// Create a mock config provider for testing
+	configProvider, err := uberconfig.NewYAML(uberconfig.Static(map[string]interface{}{
+		"workflowClient": map[string]interface{}{
+			"taskList": "default",
+		},
+	}))
+	require.NoError(t, err)
+
 	plugin := NewPlugin(PluginParams{
 		ApiHandler:     handler,
 		WorkflowClient: mockWorkflowClient,
 		BlobStore:      &blobStore,
+		ConfigProvider: configProvider,
 		Logger:         logger,
 	})
 	return plugin

@@ -20,6 +20,7 @@ import (
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -834,7 +835,15 @@ func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.
 			"mock": blobStoreClient,
 		},
 	}
-	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler)
+	// Create a mock config provider for testing
+	configProvider, err := uberconfig.NewYAML(uberconfig.Static(map[string]interface{}{
+		"workflowClient": map[string]interface{}{
+			"taskList": "default",
+		},
+	}))
+	require.NoError(t, err)
+
+	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler, configProvider)
 }
 
 func TestResumeFromPipelineRun(t *testing.T) {

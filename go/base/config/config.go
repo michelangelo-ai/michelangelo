@@ -34,6 +34,7 @@ type WorkflowClientConfig struct {
 	Host      string `yaml:"host"`
 	Transport string `yaml:"transport"`
 	Domain    string `yaml:"domain"`
+	TaskList  string `yaml:"taskList"`
 }
 
 // Params defines the dependencies of the config fx module.
