@@ -12,9 +12,9 @@ go_library(
     deps = [
         "//go/api:go_default_library",
         "//go/base/blobstore:go_default_library",
-        "//go/base/config:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/base/config:go_default_library",
         "//go/base/workflowclient/interface:go_default_library",
         "//go/components/pipelinerun/actors/utils:go_default_library",
         "//proto/api:go_default_library",
@@ -41,7 +41,6 @@ go_test(
         "//go/api/handler:go_default_library",
         "//go/base/blobstore:go_default_library",
         "//go/base/blobstore/blobstore_mocks:go_default_library",
-        "//go/base/config:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/utils:go_default_library",
         "//go/base/workflowclient/interface:go_default_library",
