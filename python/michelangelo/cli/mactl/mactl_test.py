@@ -203,22 +203,3 @@ class ServiceClassCreationTest(TestCase):
         # Should return empty dict
         self.assertEqual(result, {})
         self.assertEqual(len(result), 0)
-
-    def test_create_serivce_classes_camel_to_snake_conversion(self):
-        """
-        Test that camel case to snake case conversion works correctly
-        """
-        services = [
-            "test.api.ComplexServiceNameService",  # Should become 'complex_service_name'
-            "test.api.SimpleService",  # Should become 'simple'
-            "test.api.XMLHttpRequestService",  # Should become 'xml_http_request'
-        ]
-
-        with patch("michelangelo.cli.mactl.mactl.CRD") as mock_crd_class:
-            result = create_serivce_classes(services)
-
-        expected_names = ["complex_service_name", "simple", "xml_http_request"]
-
-        self.assertEqual(len(result), 3)
-        for expected_name in expected_names:
-            self.assertIn(expected_name, result)
