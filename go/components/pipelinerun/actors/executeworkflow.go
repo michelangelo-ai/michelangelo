@@ -132,7 +132,11 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 
 		taskList := workflowConfig.TaskList
 		if taskList == "" {
-			taskList = DefaultWorkflowTaskList
+			logger.Error("WorkflowClient TaskList is empty")
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("WorkflowClient TaskList is empty")
 		}
 
 		workflowExecution, err := a.StartWorkflow(ctx, pipelineRun, taskList)
