@@ -1,0 +1,18 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  name: training-pipeline2
+  namespace: ma-dev-test
+  annotations:
+   michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  description: Training pipeline for my ML project
+  owner:
+    name: craig.marker
+  type: PIPELINE_TYPE_TRAIN
+  manifest:
+    type: PIPELINE_MANIFEST_TYPE_TEST
+    uniflowTar: s3://default/bert_local.tar
+  commit:
+    gitRef: "main"
+    branch: "main"

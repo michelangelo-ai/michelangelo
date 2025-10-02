@@ -1,0 +1,13 @@
+schema:
+  version: 1
+---
+reviewers:
+  groups:
+    - michelangelo-feature-engine
+owner:
+  # https://uown.uberinternal.com/assets/969d6003-f5bc-4157-bf5b-2280150ad7a1
+  assetUuid: 969d6003-f5bc-4157-bf5b-2280150ad7a1
+  # Owner information updated from uOwn by assetUuid value.
+  # "managerEmail" retrieved from "Accountable" role on uOwn.
+  name: michelangelo-feature-engine
+  managerEmail: nmarcott@uber.com
