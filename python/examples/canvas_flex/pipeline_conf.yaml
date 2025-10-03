@@ -1,100 +1,208 @@
-workflow_function: uber.ai.michelangelo.sdk.workflow.defs.tabular_train.workflow_function
-workflow_config: {}
-task_configs:
-  tabular_feature_prep:
-    job_specs:
-      spark:
-        disable_resource_auto_scaling: ENUM_TRUE
-        driver:
-          pod:
-            resource:
-              cpu: 10
-              memory: 192G
-        executor:
-          pod:
-            resource:
-              cpu: 2
-              memory: 96G
-          instances: 400
-        spark_conf:
-          spark.rpc.message.maxSize: '1024'
-          spark.driver.maxResultSize: '92G'
-          spark.driver.extraJavaOptions: '-Dconfig.featureJoinBatchSize=2'
-          spark.peloton.disk.limit: '750000'
-          spark.executor.heartbeatInterval: '300s'
-          spark.sql.shuffle.partitions: '2000'
-    config:
-      source:
-        spark_sql:
-          query: >
-            SELECT
-              1 AS city_id,
-              'model_v01' AS model_id,
-              '5664200f-cba4-491e-8f5f-7f456110137b' AS client_uuid,
-              13.5 AS gross_bookings_local,
-              20.5 AS courier_utilized_time_min,
-              '2024-02-06' AS datestr
-      post_processing_module: !py_import uber.ai.michelangelo.projects.ma_dev_test_uber_one.pipelines.custom.simple.lib.simple_post_processer.SimplePostProcessor
-  tabular_transform:
-    job_specs:
-      spark:
-        disable_resource_auto_scaling: ENUM_TRUE
-        driver:
-          pod:
-            resource:
-              cpu: 10
-              memory: 192G
-        executor:
-          pod:
-            resource:
-              cpu: 2
-              memory: 96G
-          instances: 400
-        spark_conf:
-          spark.rpc.message.maxSize: '1024'
-          spark.driver.maxResultSize: '92G'
-          spark.driver.extraJavaOptions: '-Dconfig.featureJoinBatchSize=2'
-          spark.peloton.disk.limit: '750000'
-          spark.executor.heartbeatInterval: '300s'
-          spark.sql.shuffle.partitions: '2000'
-    config:
-      dsl:
-        - derived_feature: "model_id_impute"
-          transform: "sFill(sVal(model_id), \"missing\")"
-        - derived_feature: "basket_size_bucket"
-          transform: "if (nVal(gross_bookings_local) >= 50) \"50-inf\" else if (nVal(gross_bookings_local) >= 30) \"30-50\" else if (nVal(gross_bookings_local) >= 20) \"20-30\" else if (nVal(gross_bookings_local) > 0) \"0-20\" else \"missing\""
-        - derived_feature: "courier_utilized_time_bucket"
-          transform: "if (nVal(courier_utilized_time_min) >= 20) \"20-inf\" else if (nVal(courier_utilized_time_min) >= 14) \"14-20\" else if (nVal(courier_utilized_time_min) > 0) \"0-14\" else \"missing\""
-        # - derived_feature: "eater_segment"
-        #   transform: "if (sVal(@palette:eater:agg_eater_pricing:eater_segment:client_uuid:1) == \"3. high\") \"3. high\" else if (Set(\"2. sporadic\",\"lapsed\",\"hard_churned\",\"banned_or_uber_users\").contains(sVal(@palette:eater:agg_eater_pricing:eater_segment:client_uuid:1))) \"2. sporadic\" else \"1. elc\""
-        # - derived_feature: "eater_tipping_history_segment"
-        #   transform: "if (nFill(nVal(@palette:eater:tipping_frozen:trip_count_last_all_lookback_days:client_uuid:1), 0) < 3) \"other\" else if (nVal(@palette:eater:tipping_frozen:tip_frequency_last_10_orders:client_uuid:1) >= 0.9 && nVal(@palette:eater:tipping_frozen:tip_gb_pct_last_10_orders:client_uuid:1) < 0.1) \"frequent_low\" else if (nVal(@palette:eater:tipping_frozen:tip_frequency_last_10_orders:client_uuid:1) >= 0.9 && nVal(@palette:eater:tipping_frozen:tip_gb_pct_last_10_orders:client_uuid:1) >= 0.1 && nVal(@palette:eater:tipping_frozen:tip_gb_pct_last_10_orders:client_uuid:1) < 0.15) \"frequent_mid\" else if (nVal(@palette:eater:tipping_frozen:tip_frequency_last_10_orders:client_uuid:1) >= 0.9 && nVal(@palette:eater:tipping_frozen:tip_gb_pct_last_10_orders:client_uuid:1) >= 0.15) \"frequent_high\" else \"other\""
-        # - derived_feature: "concat_key"
-        #   transform: "sVal(model_id_impute) + \"|\" + sVal(basket_size_bucket) + \"|\" + sVal(courier_utilized_time_bucket) + \"|\" + sVal(eater_tipping_history_segment) + \"|\" + sVal(eater_segment)"
-        # - derived_feature: "preset"
-        #   transform: "nFill(nVal(@palette:category:tipping_preset_lookup:preset:concat_key:1), 0)"
-  tabular_trainer:
-    config:
-      custom:
-        train_class: !py_import uber.ai.michelangelo.projects.ma_dev_test_uber_one.pipelines.custom.simple.lib.simple_trainer.SimpleTrainer
-  tabular_assembler:
-    config:
-      model_class: !py_import uber.ai.michelangelo.projects.ma_dev_test_uber_one.pipelines.custom.simple.lib.simple_model.SimpleModel
-  tabular_inference:
-    config: {}
-  evaluator:
-    config: {}
-  pusher:
-    config:
-      items:
-        - name: model
-          model_plugin:
-            model_kind: custom
-            model_family: ma-dev-test-uber-simple
-            model_description: "test custom model"
-        - name: train_inference_result
-          dataset_plugin: {}
-        - name: validation_inference_result
-          dataset_plugin: {}
-        - name: test_inference_result
-          dataset_plugin: {}
+meta:
+  name: explainer_torch_maker_boston_housing
+  project_id: ma_dev_test
+  workflow_version: v2
+  proto_module: idl.data.michelangelo.maf.app.training_pb2.TrainingAppSpec
+feature_prep:
+  meta:
+    name: builtin_feature_prep
+    module: data.michelangelo.app_framework.steps.feature_prep.HiveFeaturePrep
+  source:
+    hive_table:
+      table_name: michelangelo.dl_example_datasets_boston_housing_fp64_label
+      start_date: "2016-01-01T00:00:00Z"
+      end_date: "2016-01-02T00:00:00Z"
+  splits:
+    train_ratio: 0.7
+transform:
+  meta:
+    name: builtin_transform
+    module: data.michelangelo.app_framework.steps.transform.MATransform
+  dsl:
+    age_1: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_2: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_3: 'nFill(nVal("age")-1, 0.0).toInt'
+    age_4: 'nFill(nVal("age")-1, 0.0).toInt'
+  feature_batch_bucketizers:
+    - name: Bucketizer
+      input_cols: ['age']
+      bucketizer_args:
+        splits_shared: [0, 18, 25, 35, 45, 55, 65, 200]
+    - name: QuantileDiscretizer
+      input_cols: ['crim', 'tax']
+      quantile_discretizer_args:
+        num_buckets_shared: 20
+  feature_group_scalers:
+    - name: StandardScaler
+      input_cols: ['age_after_Bucketizer_0', 'b', 'crim_after_QuantileDiscretizer_1', 'dis', 'lstat', 'rad', 'rm', 'tax_after_QuantileDiscretizer_1']
+      output_col: scaler_output_vec
+  skip_compute_stats: true
+trainer:
+  meta:
+    name: torch_trainer
+    module: data.michelangelo.app_framework.steps.TorchEstimatorTrainer
+  features:
+    - name: scaler_output_vec
+    - name: age
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_1
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_2
+      embedding:
+        fully_connected:
+          input_dim: 200
+          output_dim: 8
+    - name: derived_age_3
+    - name: derived_age_4
+  torch:
+    optimizer:
+      module: torch.optim.Adam
+      args:
+        lr: "0.01"
+        betas->0: '0.6214097507424637'
+        betas->1: '0.8163828505472781'
+        weight_decay: '1.2367151663850924e-05'
+    lr_scheduler:
+      module: data.michelangelo.app_framework.models.torch.lr_scheduler.RelativeCosineAnnealingLR
+      args:
+        T_max: "140000"
+        eta_min: "0.01"
+      interval_type: "step"
+    loss:
+      module: data.michelangelo.app_framework.models.torch.loss.asymmetric_huber_loss
+    model_maker:
+      graph:
+        layer_1:
+          module: "blocks.Linear"
+          inputs: ["scaler_output_vec"]
+          outputs: ["internal_0"]
+          args:
+            in_feature_size: "8"
+            out_feature_size: "10"
+            activation_fn: "torch.nn.ReLU"
+        layer_2:
+          module: "blocks.DeepMoECross"
+          inputs: ["internal_0"]
+          outputs: ["internal_1"]
+          args:
+            in_feature_size: "10"
+            proj_feature_size: "4"
+            num_experts: "4"
+            depth: "4"
+            gate_sizes->0: "8"
+            gate_sizes->1: "4"
+        layer_3:
+          module: "blocks.EmbeddingBag"
+          inputs: ["derived_age_3", "derived_age_4"]
+          outputs: ["internal_2"]
+          args:
+            num_embeddings: "200"
+            embed_dim: "16"
+        layer_4:
+          module: "blocks.EmbeddingBag"
+          inputs: ["derived_age_3", "derived_age_4"]
+          outputs: ["internal_3"]
+          args:
+            num_embeddings: "200"
+            embed_dim: "8"
+        layer_5:
+          module: "blocks.Bilinear"
+          inputs: ["internal_2", "internal_3"]
+          outputs: ["internal_4"]
+          args:
+            in1_feature_size: "16"
+            in2_feature_size: "8"
+            out_feature_size: "8"
+        layer_6:
+          module: "blocks.FastTransformer"
+          inputs:
+            - embedding_age
+            - embedding_derived_age_1
+            - embedding_derived_age_2
+            - internal_4
+          outputs: ["internal_5"]
+          args:
+            num_atten_layers: "1"
+            num_atten_heads: "1"
+            d_model: "8"
+            d_k: "1"
+        layer_7:
+          module: "blocks.Cat"
+          inputs: ["internal_1", "internal_5"]
+          outputs: ["internal_6"]
+        layer_8:
+          module: "graphs.MLP"
+          inputs: ["internal_6"]
+          outputs: ["predict"]
+          args:
+            input_size: "42"
+            layer_sizes->0: "80"
+            layer_sizes->1: "10"
+            layer_sizes->2: "1"
+            use_bn: "true"
+            dropout_rate: "0.5"
+            activation_fn: "torch.nn.ReLU"
+    metrics:
+      - name: MSE
+        module: torch.nn.functional.mse_loss
+      - name: MAE
+        module: torch.nn.functional.l1_loss
+      - name: Bias
+        module: data.michelangelo.app_framework.models.torch.loss.bias
+    estimator:
+      epochs: 2
+      batch_size: 64
+      partitions_per_process: 3
+      log_every_n_steps: 5
+      verbose: True
+    train_async_data_loader_queue_size: 10
+    val_async_data_loader_queue_size: 5
+    prefix_path: null
+  labels:
+    - name: medv
+  outputs:
+    - name: predict
+  save_model_metadata_for_explain: True
+assembler:
+  meta:
+    name: mlcode_assembler
+    module: data.michelangelo.app_framework.steps.MAAssembler
+  project:
+    project_id: ma_dev_test
+  export_raw_model: True
+  derived_fields:
+    - feature_match:DERIVED
+evaluator:
+  meta:
+    name: mlcode_evaluator
+    module: data.michelangelo.app_framework.steps.evaluator.MARegressionEvaluator
+  regression_eval:
+    label_cols:
+      - 'medv'
+    prediction_cols:
+      - 'predict'
+  explainer:
+    explainer:
+      module: data.michelangelo.app_framework.steps.explainer.torch_explainer.TorchIGExplainer
+      args:
+        target: "0"
+        target_index: "0"
+    model_loader_args:
+      training_type: torch
+    model_wrapper:
+      module: data.michelangelo.app_framework.steps.explainer.torch_explainer.TensorDictTorchModelWrapper
+    baseline: 1
+pusher:
+  meta:
+    name: mlcode_pusher
+    module: data.michelangelo.app_framework.steps.MAPusherV1
+  project_id: ma_dev_test
+  model_desc: mlcode_boston_example_model
+  requires_gpu: false
+  predict_column: predict
