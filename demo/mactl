@@ -1,0 +1,22 @@
+#!/bin/bash
+
+# Mock mactl command that redirects to demo script
+# This script provides a demo environment for the Michelangelo AI CLI
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEMO_SCRIPT="$SCRIPT_DIR/demo_mactl.py"
+
+# Check if Python 3 is available
+if ! command -v python3 &> /dev/null; then
+    echo "❌ Error: Python 3 is required but not installed."
+    exit 1
+fi
+
+# Check if demo script exists
+if [ ! -f "$DEMO_SCRIPT" ]; then
+    echo "❌ Error: Demo script not found at $DEMO_SCRIPT"
+    exit 1
+fi
+
+# Run the demo script with all arguments
+python3 "$DEMO_SCRIPT" "$@"
