@@ -49,7 +49,7 @@ def train(
     max_epochs = 1
     lr = 2e-5
     eps = 1e-8
-    output_dir = "./bert_cola"
+    output_dir = "./pytorch_boston_housing.py"
 
     # Load model
     model = create_model(lr=lr, eps=eps)
