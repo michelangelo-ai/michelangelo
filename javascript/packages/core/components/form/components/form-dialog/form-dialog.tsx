@@ -70,7 +70,17 @@ export const FormDialog: React.FC<FormDialogProps> = ({
           buttonDock={{
             primaryAction: <SubmitButton formId={formId}>{submitLabel}</SubmitButton>,
             dismissiveAction: (
-              <Button kind={KIND.tertiary} onClick={onDismiss}>
+              <Button
+                kind={KIND.tertiary}
+                onClick={onDismiss}
+                overrides={{
+                  BaseButton: {
+                    style: {
+                      minWidth: '150px',
+                    },
+                  },
+                }}
+              >
                 Cancel
               </Button>
             ),

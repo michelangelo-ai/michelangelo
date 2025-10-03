@@ -56,7 +56,7 @@ export const SubmitButton: React.FC<SubmitButtonProps> = ({
         {
           BaseButton: {
             style: {
-              width: '200px',
+              minWidth: '200px',
             },
           },
         },
