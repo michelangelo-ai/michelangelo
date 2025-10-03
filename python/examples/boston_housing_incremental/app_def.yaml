@@ -1,0 +1,78 @@
+meta:
+  name: boston_housing_example
+  project_id: ma_integration_test
+  workflow_version: v2
+  owning_team: michelangelo-spark
+feature_prep:
+  meta:
+    name: builtin_feature_prep
+    module: data.michelangelo.app_framework.steps.feature_prep.HiveFeaturePrep
+  source:
+    hive_table:
+      table_name: michelangelo.dl_example_datasets_boston_housing_fp64_label
+      start_date: "2016-01-01T00:00:00Z"
+      end_date: "2016-01-02T00:00:00Z"
+  splits:
+    train_ratio: 0.7
+transform:
+  meta:
+    name: builtin_transform
+    module: data.michelangelo.app_framework.steps.transform.MATransform
+  feature_batch_bucketizers:
+    - name: Bucketizer
+      input_cols: ['age']
+      bucketizer_args:
+        splits_shared: [0, 18, 25, 35, 45, 55, 65, 200]
+    - name: QuantileDiscretizer
+      input_cols: ['crim', 'tax']
+      quantile_discretizer_args:
+        num_buckets_shared: 20
+  feature_group_scalers:
+    - name: StandardScaler
+      input_cols: ['age_after_Bucketizer_0', 'b', 'crim_after_QuantileDiscretizer_1', 'dis', 'lstat', 'rad', 'rm', 'tax_after_QuantileDiscretizer_1']
+      output_col: scaler_output_vec
+trainer:
+  features:
+    - name: scaler_output_vec
+  labels:
+    - name: medv
+  outputs:
+    - name: predict
+  incremental:
+    load_optimizer_weights: True
+assembler:
+  # how to set, refer to /idl/data/michelangelo/maf/steps/assembler.proto
+  meta:
+    name: mlcode_assembler
+    module: data.michelangelo.app_framework.steps.MAAssembler
+  project:
+    project_id: boston_housing_example  # FIXME: use project_id from project.yaml
+    owner: fardin@uber.com  # FIXME: use the current user of the session
+    team: michelangelo
+evaluator:
+  meta:
+    name: mlcode_evaluator
+    module: data.michelangelo.app_framework.steps.evaluator.MARegressionEvaluator
+  regression_eval:
+    label_cols:
+      - 'medv'
+    prediction_cols:
+      - 'predict'
+pusher:
+  meta:
+    name: mlcode_pusher
+    module: data.michelangelo.app_framework.steps.MAPusherV1
+    job_specs:
+      spark:
+        executor:
+          instances: 1
+  project_id: ma_integration_test
+  model_desc: mlcode_example_torch_model
+  requires_gpu: True
+  predict_column: prediction
+
+
+common:
+  incremental:
+    training_type: BASE_MODEL_TRAINING
+    project_id: boston_housing_keras
