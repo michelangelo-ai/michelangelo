@@ -8,7 +8,7 @@ spec:
   owner:
     owningTeam: "michelangelo"
     owners:
-      - craig.marker
+      - weric
   tier: 4
-  gitRepo: https://github.com/uber/michelangelo
-  rootDir: python/michelangelo/cli/sandbox/crds
+  gitRepo: https://github.com/michelangelo-ai/michelangelo
+  rootDir: python/examples
