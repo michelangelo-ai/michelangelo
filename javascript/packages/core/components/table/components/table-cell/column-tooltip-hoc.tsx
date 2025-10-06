@@ -4,7 +4,7 @@ import { isFilterAlreadyApplied } from './utils';
 
 import type { TooltipHOCProps } from '#core/components/cell/components/tooltip/types';
 import type { CellRenderer } from '#core/components/cell/types';
-import type { TableRow } from '#core/components/table/components/table-body/types';
+import type { TableRow } from '#core/components/table/types/row-types';
 import type { TableCellProps } from './types';
 
 /**
