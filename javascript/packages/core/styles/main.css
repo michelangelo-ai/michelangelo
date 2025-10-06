@@ -20,3 +20,34 @@ input[type='search']::-webkit-search-decoration {
   -webkit-appearance: none;
   appearance: none;
 }
+
+/**
+ * Baseweb's button dock leverages container queries to styling of the button dock
+ * for dialogs, based on the size of the dialog. These container queries do not appear
+ * to work with the version of Styletron we are using.
+ *
+ * To match the expected behavior, we detect the `data-baseweb` attribute and apply the
+ * same styles as the container query.
+ *
+ * @link https://github.com/uber/baseweb/blob/7190c45a00d794f616cc22f520634523c2fbb1bc/src/button-dock/styled-components.ts
+ */
+@container root (inline-size > 600px) {
+  [data-baseweb='button-dock'] > div > div:last-child {
+    flex-direction: row-reverse !important;
+  }
+
+  [data-baseweb='button-dock'] > div > div:first-child {
+    flex-direction: row !important;
+  }
+}
+
+@container root (inline-size > 600px) {
+  [data-baseweb='button-dock'] > div {
+    flex-direction: row;
+    justify-content: space-between;
+
+    /* theme.sizing.scale800 */
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}

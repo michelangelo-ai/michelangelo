@@ -41,9 +41,7 @@ export interface FormProps {
 
 export interface FormState {
   submitting: boolean;
-  hasErrors: boolean;
-  dirty: boolean;
-  valid: boolean;
+  submitError?: string;
 }
 
 export interface FieldState {

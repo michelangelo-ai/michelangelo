@@ -22,3 +22,25 @@ export function enableButtonDockShadow(hasScrolledToBottom: boolean) {
     },
   };
 }
+
+/**
+ * Baseweb's button dock leverages container queries to styling of the button dock
+ * for dialogs, based on the size of the dialog. These container queries do not appear
+ * to work with the version of Styletron we are using.
+ *
+ * To match the expected behavior, we tag the button dock with a data-baseweb attribute
+ * and add a container query using this attribute to packages/core/styles/main.css stylesheet
+ */
+export const ENABLE_BUTTON_DOCK_CONTAINER_QUERY_WORKAROUND = {
+  ButtonDock: {
+    props: {
+      overrides: {
+        Root: {
+          props: {
+            'data-baseweb': 'button-dock',
+          },
+        },
+      },
+    },
+  },
+};

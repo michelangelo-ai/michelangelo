@@ -2,7 +2,11 @@ import React, { useCallback, useRef, useState } from 'react';
 import { Dialog as BaseDialog } from 'baseui/dialog';
 
 import { mergeAllOverrides } from '#core/utils/style-utils';
-import { enableButtonDockShadow, LAYER_HEADER_ABOVE_CONTENTS } from './styled-components';
+import {
+  ENABLE_BUTTON_DOCK_CONTAINER_QUERY_WORKAROUND,
+  enableButtonDockShadow,
+  LAYER_HEADER_ABOVE_CONTENTS,
+} from './styled-components';
 
 import type { DialogProps } from 'baseui/dialog';
 
@@ -37,7 +41,8 @@ export const Dialog: React.FC<DialogProps> = (props) => {
         overrides,
         LAYER_HEADER_ABOVE_CONTENTS,
         enableButtonDockShadow(hasScrolledToBottom),
-        { ScrollContainer: { props: { ref: setScrollRef } } }
+        { ScrollContainer: { props: { ref: setScrollRef } } },
+        ENABLE_BUTTON_DOCK_CONTAINER_QUERY_WORKAROUND
       )}
     />
   );
