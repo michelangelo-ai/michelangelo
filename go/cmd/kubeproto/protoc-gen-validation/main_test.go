@@ -516,7 +516,7 @@ func TestValidationExtension(t *testing.T) {
 	assert.Error(t, err)
 	assert.Equal(t, status.Error(codes.InvalidArgument, "test.extension validation failed"), err)
 
-	// Register extension that checks custom business logic with prefix
+	// Register extension that checks custom business logic with message access
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
 		if msg.F1 > 75 {
 			return status.Error(codes.InvalidArgument, prefix+"f1 cannot exceed 75 in extension validation")
@@ -559,7 +559,7 @@ func TestValidationExtensionWithComplexMessage(t *testing.T) {
 	err := m2.Validate("")
 	assert.NoError(t, err)
 
-	// Register extension that validates array contents and uses prefix
+	// Register extension that validates array contents with message access
 	testpb.RegisterValidationMsg2ValidateExt(func(msg *testpb.ValidationMsg2, prefix string) error {
 		if len(msg.F9) > 0 && msg.F9[0] < 50 {
 			return status.Error(codes.InvalidArgument, prefix+"first element of f9 must be >= 50")
@@ -591,7 +591,7 @@ func TestMultipleValidationExtensions(t *testing.T) {
 
 	m3 := testpb.ValidationMsg3{}
 
-	// Register extensions for both types with prefix usage
+	// Register extensions for both types with message access
 	testpb.RegisterValidationMsg1ValidateExt(func(msg *testpb.ValidationMsg1, prefix string) error {
 		if msg.F3 == "forbidden" {
 			return status.Error(codes.InvalidArgument, prefix+"f3 cannot be 'forbidden'")

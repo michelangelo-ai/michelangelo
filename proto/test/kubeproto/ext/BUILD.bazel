@@ -1,0 +1,55 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
+load("@rules_proto//proto:defs.bzl", "proto_library")
+
+# gazelle:go_proto_compilers @io_bazel_rules_go//proto:gogoslick_proto,//bazel/rules/proto:go_ext
+
+proto_library(
+    name = "ext_proto",
+    srcs = [
+        "ext_ut.proto",
+    ],
+    import_prefix = "michelangelo",
+    strip_import_prefix = "/proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:api_proto",
+        "//proto/test/kubeproto:kubeproto_proto",  # Include original proto for field comparison and access to validation_ut.proto
+        "@com_google_protobuf//:any_proto",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
+    ],
+)
+
+go_proto_library(
+    name = "ext_go_proto",
+    compilers = [
+        "@io_bazel_rules_go//proto:gogoslick_proto",
+        "//bazel/rules/proto:go_ext",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/ext",
+    proto = ":ext_proto",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api:go_default_library",
+        "//proto/test/kubeproto:go_default_library",  # Add original proto go_library for Register functions
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)
+
+go_library(
+    name = "go_default_library",
+    embed = [":ext_go_proto"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/ext",
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["ext_test.go"],
+    deps = [
+        ":go_default_library",
+        "//proto/test/kubeproto:go_default_library",  # Add original proto go_library for Register functions
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_gogo_protobuf//types:go_default_library",
+    ],
+)

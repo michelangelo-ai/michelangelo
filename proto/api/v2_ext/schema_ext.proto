@@ -1,0 +1,48 @@
+// Example ext proto file for extending v2 validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/schema.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/schema.proto";
+
+// DataSchema extends the original DataSchema with additional validation
+message DataSchema {
+  repeated DataSchemaItem schema_items = 1;
+}
+
+// DataSchemaItem extends the original DataSchemaItem
+message DataSchemaItem {
+  // The name that uniquely identifies this schema item
+  string name = 1 [(michelangelo.api.validation) = {
+    required: true
+    pattern: "^[a-zA-Z][a-zA-Z0-9_]*$"
+    min_length: "1"
+    max_length: "255"
+  }];
+
+  // The data type that specifies what kind of values this field can contain
+  DataType data_type = 2 [(michelangelo.api.validation) = {required: true}];
+
+  // The shape of the data
+  repeated int32 shape = 3 [(michelangelo.api.validation) = {
+    items: {min: "0", max: "10000"}
+  }];
+}
+
+// DataType enum matching the original DataType exactly
+enum DataType {
+  DATA_TYPE_INVALID = 0;
+  DATA_TYPE_UNKNOWN = 1;
+  DATA_TYPE_STRING = 7;
+  DATA_TYPE_BYTE = 15;
+  DATA_TYPE_CHAR = 16;
+  DATA_TYPE_SHORT = 17;
+  DATA_TYPE_INT = 18;
+  DATA_TYPE_LONG = 19;
+  DATA_TYPE_FLOAT = 20;
+  DATA_TYPE_DOUBLE = 21;
+}

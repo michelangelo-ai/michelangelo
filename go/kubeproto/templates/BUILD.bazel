@@ -2,12 +2,14 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 
 go_library(
     name = "go_default_library",
-    srcs = ["templates.go"],
+    srcs = [
+        "templates.go",
+    ],
     embedsrcs = [
         "crd.tmpl",
         "crd_list.tmpl",
-        "group_version.tmpl",
         "crd_svc.tmpl",
+        "group_version.tmpl",
         "mysql_label_annotation_tables.tmpl",
         "mysql_main_table_columns.tmpl",
         "mysql_main_table_indices.tmpl",
@@ -22,6 +24,5 @@ go_test(
     name = "go_default_test",
     srcs = ["templates_test.go"],
     embed = [":go_default_library"],
-    embedsrcs = ["test/group_version_test.txt"],
-    deps = ["@com_github_stretchr_testify//assert:go_default_library"],
+    data = ["test/group_version_test.txt"],
 )

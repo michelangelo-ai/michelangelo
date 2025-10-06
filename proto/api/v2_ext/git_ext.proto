@@ -1,0 +1,29 @@
+// Example ext proto file for extending v2 git validation
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/git.proto";
+
+option go_package = "v2_ext";
+option (michelangelo.api.ext_original_proto) = "michelangelo/api/v2/git.proto";
+
+// CommitInfo extends the original CommitInfo with additional validation
+message CommitInfo {
+  // GIT reference of a resource, in either short/long SHA1 hash format, or branch/HEAD
+  string git_ref = 1 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+    pattern: "^[a-zA-Z0-9._/-]+$"
+  }];
+
+  // Git branch name
+  string branch = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+    pattern: "^[a-zA-Z0-9._/-]+$"
+  }];
+}

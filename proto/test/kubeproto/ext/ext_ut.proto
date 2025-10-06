@@ -1,14 +1,24 @@
 syntax = "proto3";
 
-package michelangelo.test.kubeproto;
+package michelangelo.test.kubeproto_ext;
 
+import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "google/protobuf/any.proto";
 
+option go_package = "kubeproto_ext";
 
-option go_package = "kubeproto";
+// Option to specify the original proto for comparison
+option (michelangelo.api.ext_original_proto) = "michelangelo/test/kubeproto/validation_ut.proto";
 
+// Enum1 must match the original exactly
+enum Enum1 {
+  E1_A = 0;
+  E1_B = 1;
+  E1_C = 2;
+}
+
+// ValidationMsg1 extends the original with same fields and types
 message ValidationMsg1 {
   int32 f1 = 1 [
     (michelangelo.api.validation) = {required: true},
@@ -21,6 +31,7 @@ message ValidationMsg1 {
   repeated int64 f6 = 6;
 }
 
+// ValidationMsg2 extends the original with same fields
 message ValidationMsg2 {
   option (michelangelo.api.no_default) = true;
   int32 f1 = 1 [(michelangelo.api.validation) = {max: "5"}];
@@ -38,9 +49,11 @@ message ValidationMsg2 {
   bytes f10 = 10;
 }
 
+// ValidationMsg3 matches the original empty message
 message ValidationMsg3 {
 }
 
+// ValidationMsg4 with length and items validation
 message ValidationMsg4 {
   string f1 = 1 [(michelangelo.api.validation) = {min_length: "3", max_length:"10"}];
   repeated int32 f2 = 2 [(michelangelo.api.validation) = {min_items: "2"}];
@@ -48,11 +61,13 @@ message ValidationMsg4 {
   map<int64, string> f4 = 4 [(michelangelo.api.validation) = {min_items: "1", max_items: "3"}];
 }
 
+// ValidationMsg5 with pattern validation
 message ValidationMsg5 {
   string f1 = 1 [(michelangelo.api.validation) = {pattern: "[ab]+", not_pattern: "aa.*"}];
   string f2 = 2 [(michelangelo.api.validation) = {pattern: "[1-9][0-9]*", msg: "must be a positive number"}];
 }
 
+// ValidationMsg6 with in/not_in validation
 message ValidationMsg6 {
   string f1 = 1 [(michelangelo.api.validation) = {in: ["a", "b"]}];
   int32 f2 = 2 [(michelangelo.api.validation) = {in: ["1", "2"], msg: "custom msg"}];
@@ -65,6 +80,7 @@ message ValidationMsg6 {
   double f6 = 6 [(michelangelo.api.validation) = {in: ["1.0", "2.0"]}];
 }
 
+// ValidationMsg7 with well-known format validation
 message ValidationMsg7 {
   string f1 = 1 [(michelangelo.api.validation) = {uuid: true}];
   string f2 = 2 [(michelangelo.api.validation) = {email: true}];
@@ -74,17 +90,20 @@ message ValidationMsg7 {
   string f6 = 6 [(michelangelo.api.validation) = {ip: true}];
 }
 
+// ValidationMsg8 with nested messages
 message ValidationMsg8 {
-    ValidationMsg9 f1 = 1;
-    ValidationMsg5 f2 = 2;
+  ValidationMsg9 f1 = 1;
+  ValidationMsg5 f2 = 2;
 }
 
+// ValidationMsg9 with no_default option
 message ValidationMsg9 {
   option (michelangelo.api.no_default) = true;
   int32 f1 = 1;
   ValidationMsg5 f2 = 2;
 }
 
+// ValidationMsg10 with items/keys/values validation
 message ValidationMsg10 {
   repeated string f1 = 1 [(michelangelo.api.validation) = {items: {pattern: "[ab]+"}}];
   map<int32,string> f2 = 2 [(michelangelo.api.validation) = {min_items: "2", keys: {min: "1", max: "5"}, values: {pattern: "[a-z]+"}}];
@@ -98,6 +117,7 @@ message ValidationMsg10 {
   map<string,bytes> f7 = 7 [(michelangelo.api.validation) = {keys: {uuid: true}, values: {min_length: "3"}}];
 }
 
+// ValidationMsg11 with oneof validation - must match original exactly
 message ValidationMsg11 {
   oneof test {
     option (michelangelo.api.required) = true;
@@ -106,6 +126,7 @@ message ValidationMsg11 {
   }
 }
 
+// ValidationMsg12 with required oneof - must match original exactly
 message ValidationMsg12 {
   option (michelangelo.api.no_default) = true;
   oneof test_oneof {
@@ -122,7 +143,9 @@ message ValidationMsg12 {
 message ValidationMsg13 {
   option (michelangelo.api.no_default) = true;
   oneof test_oneof {
-    int32 f1 = 1;
+    int32 f1 = 1[
+      (michelangelo.api.validation) = {min: "1", max: "20"}
+    ];
     ValidationMsg1 f2 = 2;
   }
   oneof test_oneof_optional {
@@ -130,12 +153,9 @@ message ValidationMsg13 {
     int32 f3 = 3;
     ValidationMsg1 f4 = 4;
   }
-  google.protobuf.Any ext = 999;
+  google.protobuf.Any ext = 999 [(michelangelo.api.type) = "Himanshu"];
 }
 
-
-enum Enum1 {
-  E1_A = 0;
-  E1_B = 1;
-  E1_C = 2;
+message Himanshu{
+  string name = 1;
 }
