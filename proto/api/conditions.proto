@@ -33,6 +33,9 @@ message Condition {
 
   // Condition and plugin specific information that can be stored in between condition evluations.
   google.protobuf.Any metadata = 6;
+
+  // ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+  int64 observed_generation = 7;
 }
 
 // Defines the status of a condition.
