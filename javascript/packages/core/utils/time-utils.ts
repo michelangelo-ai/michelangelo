@@ -67,3 +67,29 @@ export function getDateFromEpochSeconds(epochSeconds: number): Date {
 export function getEpochSecondsFromDate(date: Date): number {
   return Math.floor(date.getTime() / 1000);
 }
+
+/**
+ * Parses an ISO string into date and time components.
+ *
+ * @param isoString - ISO date string like "2024-01-01T12:00:00.000Z"
+ * @returns Object with compact date and time strings, or null if invalid
+ *
+ * @example
+ * parseISOString("2024-01-01T12:00:00.000Z")
+ * // { date: "2024-01-01", time: "12:00:00" }
+ *
+ * parseISOString("invalid") // null
+ */
+export function parseISOString(isoString: string): { date: string; time: string } | null {
+  if (isNaN(Date.parse(isoString))) {
+    return null;
+  }
+
+  // "2024-01-01T12:00:00.000Z" -> ["2024-01-01", "12:00:00.000Z"]
+  const parts = isoString.split('T');
+  if (parts.length !== 2) {
+    return null;
+  }
+
+  return { date: parts[0], time: parts[1] };
+}
