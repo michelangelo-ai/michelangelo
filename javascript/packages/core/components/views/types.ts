@@ -51,4 +51,7 @@ export interface TableConfig<T extends TableData = TableData> {
 
   /** Whether to enable sticky sides in the table */
   enableStickySides?: boolean;
+
+  /** Optional actions component for the table */
+  actions?: React.ComponentType<{ record: T }>;
 }

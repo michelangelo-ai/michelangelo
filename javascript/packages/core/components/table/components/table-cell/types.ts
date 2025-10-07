@@ -1,8 +1,8 @@
 import type { TooltipHOCProps } from '#core/components/cell/components/tooltip/types';
 import type { CellRendererProps } from '#core/components/cell/types';
-import type { TableRow } from '#core/components/table/components/table-body/types';
 import type { ColumnConfig } from '#core/components/table/types/column-types';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { TableRow } from '#core/components/table/types/row-types';
 
 export interface TableCellProps<T extends TableData = TableData>
   extends CellRendererProps<T, ColumnConfig> {

@@ -102,6 +102,11 @@ export interface PhaseEntityConfig<T extends object = object> {
   state: PhaseEntityState;
   /** List of view configurations for this entity */
   views: ViewConfig<T>[];
+  /**
+   * Optional actions component for this entity
+   * Rendered in table rows for list views and in detail view headers
+   */
+  actions?: React.ComponentType<{ record: T }>;
 }
 
 /**

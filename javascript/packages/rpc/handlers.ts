@@ -28,6 +28,9 @@ async function createHandlers() {
     GetTriggerRun: services.TriggerRunService.getTriggerRun as ExtractUnaryRpc<
       typeof services.TriggerRunService.getTriggerRun
     >,
+    CreatePipelineRun: services.PipelineRunService.createPipelineRun as ExtractUnaryRpc<
+      typeof services.PipelineRunService.createPipelineRun
+    >,
   } as const;
 }
 

@@ -1,5 +1,6 @@
 import type { TableActionBarConfig } from '#core/components/table/components/table-action-bar/types';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { TableRow } from '#core/components/table/types/row-types';
 import type { TableProps } from '#core/components/table/types/table-types';
 import type { ApplicationError } from '#core/types/error-types';
 import type { TableConfig } from '../types';
@@ -29,6 +30,13 @@ export function adaptTableConfigToTableProps<T extends TableData = TableData>(
     error: runtimeProps.error,
     columns: config.columns,
     emptyState: config.emptyState,
+    actions:
+      'actions' in config && config.actions
+        ? ({ row }: { row: TableRow<T> }) => {
+            const ActionsComponent = config.actions!;
+            return <ActionsComponent record={row.record} />;
+          }
+        : undefined,
     actionBarConfig,
     disablePagination: config.disablePagination,
     disableSorting: config.disableSorting,

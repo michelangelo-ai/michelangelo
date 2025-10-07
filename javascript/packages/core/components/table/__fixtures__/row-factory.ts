@@ -4,8 +4,8 @@ import { vi } from 'vitest';
 import type { Cell, Row } from '@tanstack/react-table';
 import type { ReactNode } from 'react';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { TableRow } from '#core/components/table/types/row-types';
 import type { DeepPartial } from '#core/types/utility-types';
-import type { TableRow } from '../components/table-body/types';
 
 /**
  * Factory for creating internal {@link TableRow} test fixtures.

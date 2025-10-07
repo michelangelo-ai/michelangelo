@@ -1,5 +1,5 @@
-import type { TableRow } from '#core/components/table/components/table-body/types';
 import type { TableData } from '#core/components/table/types/data-types';
+import type { TableRow } from '#core/components/table/types/row-types';
 
 export type TableSelectionContext<T extends TableData = TableData> = {
   selectedRows: TableRow<T>[];

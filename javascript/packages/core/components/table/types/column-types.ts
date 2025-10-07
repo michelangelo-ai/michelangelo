@@ -1,13 +1,12 @@
 import '@tanstack/react-table'; //or vue, svelte, solid, qwik, etc.
 
-import { TableRow } from '../components/table-body/types';
-
 import type { AggregationFnOption, SortingFnOption } from '@tanstack/react-table';
 import type { ComponentType, ReactNode } from 'react';
 import type { Cell, CellRendererProps, CellTooltip } from '#core/components/cell/types';
 import type { DistributiveOmit } from '#core/types/utility-types';
 import type { FilterMode } from '../components/filter/types';
 import type { TableData } from './data-types';
+import type { TableRow } from './row-types';
 
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-object-type
