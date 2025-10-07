@@ -40,7 +40,7 @@ func NewPlugin(params PluginParams) *Plugin {
 		Actors: []conditionsInterfaces.ConditionActor[*v2.PipelineRun]{
 			actors.NewSourcePipelineActor(params.ApiHandler, logger),
 			actors.NewImageBuildActor(logger),
-			actors.NewExecuteWorkflowActor(logger, params.WorkflowClient, params.BlobStore),
+			actors.NewExecuteWorkflowActor(logger, params.WorkflowClient, params.BlobStore, params.ApiHandler),
 		},
 		Logger: logger,
 	}

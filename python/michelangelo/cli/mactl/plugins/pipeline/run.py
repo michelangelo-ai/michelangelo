@@ -52,6 +52,7 @@ def generate_run(crd: CRD, channel: Channel):
             Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
             for name in ["namespace", "name"]
         ]
+        + [Parameter("resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None)]
     )
 
     @bind_signature(run_func_signature)
@@ -63,9 +64,13 @@ def generate_run(crd: CRD, channel: Channel):
         _namespace = get_single_arg(bound_args.arguments, "namespace")
         _name = get_single_arg(bound_args.arguments, "name")
 
+        # Handle optional resume_from parameter
+        _resume_from = bound_args.arguments.get("resume_from")
+
         run_kwargs = {
             "namespace": _namespace,
             "name": _name,
+            "resume_from": _resume_from,
         }
 
         pipeline_run_dict = _self.func_crd_metadata_converter(
@@ -117,6 +122,7 @@ def convert_crd_metadata_pipeline_run(
 
     namespace = yaml_dict["namespace"]
     pipeline_name = yaml_dict["name"]
+    resume_from = yaml_dict.get("resume_from")
     run_name = generate_pipeline_run_name()
 
     _LOG.info(
@@ -127,14 +133,14 @@ def convert_crd_metadata_pipeline_run(
     )
 
     pipeline_run = generate_pipeline_run_object(
-        run_name=run_name, pipeline_name=pipeline_name, namespace=namespace
+        run_name=run_name, pipeline_name=pipeline_name, namespace=namespace, resume_from=resume_from
     )
 
     return {"pipeline_run": pipeline_run}
 
 
 def generate_pipeline_run_object(
-    run_name: str, pipeline_name: str, namespace: str
+    run_name: str, pipeline_name: str, namespace: str, resume_from: str = None
 ) -> dict:
     """
     Generate PipelineRun object as dictionary.
@@ -143,6 +149,7 @@ def generate_pipeline_run_object(
         run_name: Generated unique name for the pipeline run
         pipeline_name: Name of the target pipeline to run
         namespace: Kubernetes namespace
+        resume_from: Optional resume specification in format "pipeline_run_name:step_name"
 
     Returns:
         dict: Configured pipeline run object as dictionary
@@ -168,8 +175,52 @@ def generate_pipeline_run_object(
         },
     }
 
+    # Add resume spec if resume_from is provided
+    if resume_from:
+        resume_spec = parse_resume_from(resume_from, namespace)
+        if resume_spec:
+            pipeline_run_dict["spec"]["resume"] = resume_spec
+            _LOG.info("Added resume spec to pipeline run: %r", resume_spec)
+        else:
+            _LOG.warning("Failed to parse resume_from: %r", resume_from)
+
     _LOG.info("Generated pipeline run object: %s", run_name)
     return pipeline_run_dict
+
+
+def parse_resume_from(resume_from: str, namespace: str) -> dict:
+    """
+    Parse the resume_from parameter and return a resume spec.
+
+    Args:
+        resume_from: Resume specification in format "pipeline_run_name" or "pipeline_run_name:step_name"
+        namespace: Kubernetes namespace for the pipeline run reference
+
+    Returns:
+        dict: Resume spec dictionary matching the Resume proto message
+    """
+    if not resume_from:
+        _LOG.error("Invalid resume_from format. Expected 'pipeline_run_name' or 'pipeline_run_name:step_name', got: %r", resume_from)
+        return None
+
+    # Check if step name is provided
+    if ":" in resume_from:
+        pipeline_run_name, step_name = resume_from.split(":", 1)
+        resume_from_list = [step_name]
+    else:
+        pipeline_run_name = resume_from
+        resume_from_list = []
+
+    resume_spec = {
+        "pipelineRun": {
+            "name": pipeline_run_name,
+            "namespace": namespace,
+        },
+        "resumeFrom": resume_from_list
+    }
+
+    _LOG.info("Parsed resume_from '%s' to resume spec: %r", resume_from, resume_spec)
+    return resume_spec
 
 
 def generate_pipeline_run_name() -> str:

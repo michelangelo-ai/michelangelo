@@ -10,6 +10,7 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -28,6 +29,9 @@ const (
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"
+	_cacheEnabledVarName       = "CACHE_ENABLED"
+	_cacheVersionVarName       = "CACHE_VERSION"
+	_CacheOperationGet         = "GET"
 )
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
@@ -48,13 +52,15 @@ type ExecuteWorkflowActor struct {
 	logger         *zap.Logger
 	workflowClient clientInterfaces.WorkflowClient
 	blobStore      *blobstore.BlobStore
+	apiHandler     api.Handler
 }
 
-func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore) *ExecuteWorkflowActor {
+func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),
 		workflowClient: workflowClient,
 		blobStore:      blobStore,
+		apiHandler:     apiHandler,
 	}
 }
 
@@ -200,8 +206,11 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 	if err != nil {
 		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 	}
+	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to add task cache env: %v", err)
+	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	// after tarContent is passed to Temporal client, convert tarball bytes to string?
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
@@ -291,6 +300,69 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 		return nil, fmt.Errorf("unmarshal pipeline manifest content to map: %w", err)
 	}
 	return pipelineConfig, nil
+}
+
+func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+	envs[_cacheEnabledVarName] = "false"
+	envs[_cacheVersionVarName] = pipelineRun.Name
+	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
+		return nil
+	}
+
+	// if resume from a previous run, enable cache
+	envs[_cacheEnabledVarName] = "true"
+	resumePipelineRunID := pipelineRun.Spec.Resume.PipelineRun
+	taskCacheVersion := map[string]string{}
+
+	// Loop continues as long as resumePipelineRunID is not nil
+	for resumePipelineRunID != nil {
+		resumePipelineRun := &v2.PipelineRun{}
+		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.apiHandler, resumePipelineRun)
+		if err != nil {
+			logger.Error("failed to get resume pipeline run", zap.Error(err))
+			return fmt.Errorf("failed to get resume pipeline run: %v", err)
+		}
+		getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
+		if resumePipelineRun.Spec.Resume == nil || resumePipelineRun.Spec.Resume.PipelineRun == nil {
+			break
+		}
+		logger.Info("Task Cache Version from resume pipeline run", zap.Any("taskCacheVersion", taskCacheVersion), zap.String("resumePipelineRun", resumePipelineRun.Name))
+		resumePipelineRunID = resumePipelineRun.Spec.Resume.PipelineRun
+	}
+	logger.Info("Final Task Cache Version", zap.Any("taskCacheVersion", taskCacheVersion))
+	for taskName, cacheVersion := range taskCacheVersion {
+		envs[fmt.Sprintf("%s_%s_%s", _cacheVersionVarName, _CacheOperationGet, taskName)] = cacheVersion
+	}
+	// Finally, we disable cache for the specified task
+	resumeFromTasks := pipelineRun.Spec.Resume.ResumeFrom
+	if resumeFromTasks != nil && len(resumeFromTasks) > 0 {
+		for _, resumeFromTask := range resumeFromTasks {
+			envs[fmt.Sprintf("%s_%s", _cacheEnabledVarName, resumeFromTask)] = "false"
+		}
+	}
+	return nil
+}
+
+func getTaskCacheVersionFromResumePipelineRun(taskCacheVersion map[string]string, resumePipelineRun *v2.PipelineRun) {
+	executeWorkflowStep := getStepInfoByName(pipelinerunutils.ExecuteWorkflowStepName, resumePipelineRun.Status.Steps)
+	for _, subStepInfo := range executeWorkflowStep.SubSteps {
+		if subStepInfo.StepCachedOutputs != nil && subStepInfo.State == v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED {
+			if _, ok := taskCacheVersion[subStepInfo.DisplayName]; !ok {
+				taskCacheVersion[subStepInfo.DisplayName] = resumePipelineRun.Name
+			}
+		}
+	}
+	return
+}
+
+func getStepInfoByName(stepName string, steps []*v2.PipelineRunStepInfo) *v2.PipelineRunStepInfo {
+	for _, step := range steps {
+		if step.Name == stepName {
+			return step
+		}
+	}
+	return nil
 }
 
 func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{}) {
