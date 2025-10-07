@@ -105,6 +105,8 @@ gomock(
         "SparkJobServiceYARPCClient",
         "CachedOutputServiceYARPCClient",
         "PipelineRunServiceYARPCClient",
+        "ModelServiceYARPCClient",
+        "DeploymentServiceYARPCClient",
     ],
     library = ":go_default_library",
     package = "v2mock",

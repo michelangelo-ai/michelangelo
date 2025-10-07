@@ -3,13 +3,14 @@ package worker
 import (
 	"github.com/cadence-workflow/starlark-worker/plugin"
 	"github.com/cadence-workflow/starlark-worker/service"
+	"go.uber.org/fx"
+
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities"
 	"github.com/michelangelo-ai/michelangelo/go/worker/starlark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflowfx"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows"
-	"go.uber.org/fx"
 )
 
 // ProvidePluginRegistry creates a new plugin registry based on the global registry.
@@ -31,6 +32,8 @@ var Module = fx.Options(
 		NewSparkJobServiceClient,
 		NewCachedOutputServiceClient,
 		NewPipelineRunServiceClient,
+		NewModelServiceClient,
+		NewDeploymentServiceClient,
 		ProvidePluginRegistry,
 	),
 	workflowfx.Module,
