@@ -1,0 +1,35 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["webhook.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/api/webhook",
+    visibility = ["//visibility:public"],
+    deps = [
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/webhook:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/webhook/conversion:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["webhook_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_stretchr_testify//require:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
+        "@io_k8s_apiextensions_apiserver//pkg/apis/apiextensions/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@org_uber_go_config//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_fx//fxtest:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+        "@org_uber_go_zap//zaptest:go_default_library",
+    ],
+)
