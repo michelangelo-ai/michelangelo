@@ -1,0 +1,72 @@
+package conversion
+
+import (
+	"reflect"
+	"testing"
+
+	"github.com/r3labs/diff/v3"
+	"github.com/stretchr/testify/assert"
+	"sigs.k8s.io/controller-runtime/pkg/conversion"
+
+	v1pb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v2"
+)
+
+func TestGen(t *testing.T) {
+	data := v1pb.GetProtocReqData()
+	resp := Generate(data)
+	assert.NotNil(t, resp)
+	data2 := v2pb.GetProtocReqData()
+	resp2 := Generate(data2)
+	assert.NotNil(t, resp2)
+}
+
+func TestConvert(t *testing.T) {
+	v2obj := &v2pb.TestObject{}
+	assert.Implements(t, (*conversion.Hub)(nil), v2obj)
+	v1obj := &v1pb.TestObject{}
+	assert.Implements(t, (*conversion.Convertible)(nil), v1obj)
+	v1obj = &v1pb.TestObject{
+		Spec: v1pb.TestObjectSpec{
+			F1: 123,
+			F2: []string{"A", "BC"},
+			F3: &v1pb.M1{
+				F1: []v1pb.E1{v1pb.E1_3},
+				F2: map[string]string{
+					"ABC": "DEF",
+					"123": "",
+				},
+				F3: map[string]v1pb.E1{
+					"1": v1pb.E1_2,
+					"3": v1pb.E1_3,
+				},
+			},
+			F4: []*v1pb.M1{},
+			F5: map[string]*v1pb.M2{
+				"A": nil,
+				"B": {
+					F1: []*v1pb.M3{
+						{
+							F1: []v1pb.E2{v1pb.A, v1pb.B},
+						},
+						{
+							F1: []v1pb.E2{v1pb.B},
+						},
+					},
+				},
+			},
+		},
+		Status: v1pb.TestObjectStatus{
+			F1: v1pb.E1_2,
+		},
+	}
+	err := v1obj.ConvertTo(v2obj)
+	assert.NoError(t, err)
+	v1objres := &v1pb.TestObject{}
+	err = v1objres.ConvertFrom(v2obj)
+	assert.NoError(t, err)
+	change, err := diff.Diff(v1obj, v1objres)
+	assert.NoError(t, err)
+	assert.Empty(t, change)
+	assert.True(t, reflect.DeepEqual(v1obj, v1objres)) // reflect.DeepEqual() is more restricted than diff.Diff()
+}

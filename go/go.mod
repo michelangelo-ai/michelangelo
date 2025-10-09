@@ -19,6 +19,7 @@ require (
 	github.com/michelangelo-ai/michelangelo/proto v0.0.0-00010101000000-000000000000
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/prometheus/client_golang v1.16.0
+	github.com/r3labs/diff/v3 v3.0.1
 	github.com/ray-project/kuberay/ray-operator v1.0.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
@@ -103,6 +104,8 @@ require (
 	github.com/twmb/murmur3 v1.1.8 // indirect
 	github.com/uber-go/mapdecode v1.0.0 // indirect
 	github.com/uber/tchannel-go v1.34.4 // indirect
+	github.com/vmihailenco/msgpack/v5 v5.4.1 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.3 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
 	go.uber.org/dig v1.17.1 // indirect

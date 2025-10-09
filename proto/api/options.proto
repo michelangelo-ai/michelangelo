@@ -13,6 +13,10 @@ extend google.protobuf.MessageOptions {
   // no_default indicate that, for each field in the message, user has to specify a non-default value.
   bool no_default = 1058;
   repeated RelationshipDescriptor relationship = 1059;
+  // rename_to specifies the new name of this message type in the hub version.
+  string rename_to = 1060;
+  // ignore_unmapped_hub_fields specifies a list of fields in the hub version that are not mapped in this spoke version.
+  repeated string ignore_unmapped_hub_fields = 1061;
 }
 
 // An annotation that describes an API resource definition
@@ -82,6 +86,12 @@ message ResourceDescriptor {
   // 2) spec / status cannot be changed after creation
   // Objects of an immutable type will be stored in metadata storage only.
   bool immutable = 101;
+
+  // When conversion is set protoc-gen-convert will generate go code for version conversion.
+  // If the current version is a spoke version, the generated go code will convert this message type to / from
+  // the message type of the same name in the hub version.
+  // If the current version is hub version, the generated go code will contain the Hub() function.
+  bool conversion = 102;
 }
 
 // An annotation for CRD list message
@@ -190,6 +200,11 @@ message GroupInfo {
   string name = 1;
   // K8s API group version
   string version = 2;
+  // The hub version that will be used in the version conversion.
+  // When hub_version == version, it means this is the hub version.
+  // When hub_version != version, it means this is a spoke version.
+  // https://book.kubebuilder.io/multiversion-tutorial/conversion-concepts
+  string hub_version = 3;
 }
 
 extend google.protobuf.FieldOptions {
@@ -205,6 +220,11 @@ extend google.protobuf.FieldOptions {
   // This means that these fields contain information that should only be visible
   // to authorized users.
   bool sensitive = 5773;
+  // ignore_unmapped indicates that the field is not mapped in the hub version.
+  // When this option is set, the field will be ignored when converting to / from the hub version.
+  bool ignore_unmapped = 5774;
+  // field_rename_to specifies the new name of this field in the hub version.
+  string field_rename_to = 5775;
 }
 
 // Identifier of a resource.
@@ -312,4 +332,9 @@ message ResourceReference {
   //       }];
   //     }
   string type = 1;
+}
+
+extend google.protobuf.EnumOptions {
+  // enum_rename_to specifies the new name of this enum in the hub version.
+  string enum_rename_to = 7181;
 }

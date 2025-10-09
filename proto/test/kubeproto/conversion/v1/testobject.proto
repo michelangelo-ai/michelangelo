@@ -1,0 +1,75 @@
+syntax = "proto3";
+
+package michelangelo.test.kubeproto.conversion.v1;
+
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "k8s.io/api/core/v1/generated.proto";
+
+import "michelangelo/api/options.proto";
+import "michelangelo/test/kubeproto/conversion/v2/testobject.proto";
+
+option go_package = "v1";
+
+// Defines the spec of a TestObject.
+message TestObjectSpec {
+  int32 f1 = 1;
+  repeated string f2 = 2;
+  M1 f3 = 3;
+  repeated M1 f4 = 4;
+  map<string, M2> f5 = 5;
+}
+
+// Defines the status of a TestObject.
+message TestObjectStatus {
+  E1 f1 = 1;
+}
+
+enum E1 {
+  E1_1 = 0;
+  E1_2 = 1;
+  E1_3 = 2;
+}
+
+message M1 {
+  repeated E1 f1 = 1;
+  map<string, string> f2 = 2;
+  map<string, E1> f3 = 3;
+}
+
+message M2 {
+  repeated M3 f1 = 1;
+}
+
+message M3 {
+  repeated E2 f1 = 1;
+}
+
+enum E2 {
+  A = 0;
+  B = 1;
+}
+
+// Define TestObject.
+message TestObject {
+  option (michelangelo.api.resource) = {
+    conversion: True
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  TestObjectSpec spec = 3;
+
+  TestObjectStatus status = 4;
+}
+
+// A list of TestObject objects.
+message TestObjectList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of TestObjects
+  repeated TestObject items = 3;
+}

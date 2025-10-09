@@ -30,7 +30,7 @@ func newTestParams(t *testing.T, cfg *Configuration) Params {
 
 // createDummyCerts creates dummy tls.crt, tls.key and ca.crt files in the given directory.
 func createDummyCerts(t *testing.T, dir string) {
-	caCrt := `-----BEGIN CERTIFICATE-----
+	caCrt := /*git-secrets-false-positive(This is not a real secret.)*/ `-----BEGIN CERTIFICATE-----
 MIIDCDCCAfCgAwIBAgITEST/ERQ+mSdSKQk9f2NzlbfgFjANBgkqhkiG9w0BAQsF
 ADATMREwDwYDVQQDDAhNeVRlc3RDQTAgFw0yNTA2MDMyMjI2MzRaGA8yMDUyMTAx
 OTIyMjYzNFowEzERMA8GA1UEAwwITXlUZXN0Q0EwggEiMA0GCSqGSIb3DQEBAQUA
@@ -49,7 +49,7 @@ LYP19cHi0FsRwY1Dw7H5xEdyX0/HNrgVZFxFfMJts4MXHGiEOv0Vh/90TqgbS3YY
 vxzdIpe1bp/+gpjVntM0kT46divBczhqBDnDDsYqgrw9LD1VhjP5XaTn//JcLIfP
 CrjDtZGb6Hpui7Ph
 -----END CERTIFICATE-----`
-	tlsCrt := `-----BEGIN CERTIFICATE-----
+	tlsCrt := /*git-secrets-false-positive(This is not a real secret.)*/ `-----BEGIN CERTIFICATE-----
 MIIDQTCCAimgAwIBAgIUU7Zg1VC/flid2JtPa+82olDRccswDQYJKoZIhvcNAQEL
 BQAwEzERMA8GA1UEAwwITXlUZXN0Q0EwHhcNMjUwNjAzMjIyODMxWhcNMjYwNjAz
 MjIyODMxWjAeMRwwGgYDVQQDDBN0ZXN0LXdlYmhvb2stc2VydmVyMIIBIjANBgkq
@@ -69,7 +69,7 @@ PCeV4Zh50dno1D7dn4PD3BUj9IXoF1DmGGl7q3/ZcBw51cB3u9UAo0hss1p7Mkai
 tsXlsxefmwRqC7/StEW1Mdm8pQnZdNjJtLy+ko7i7LztRgQ3t7489KhQQ7l/vJr9
 tuTntNMpHDZ5Yo3rGh12hW3GBTek
 -----END CERTIFICATE-----`
-	tlsKey := `-----BEGIN PRIVATE KEY-----
+	tlsKey := /*git-secrets-false-positive(This is not a real secret.)*/ `-----BEGIN PRIVATE KEY-----
 MIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCrMS8PMKQPKLUp
 QgMG7m4Moop+Siih/czqBToXSyzQAUhQwYLkWmqZLBM2TsnG1FqTpC25K+QP0tl8
 20Stv/li4WpZGRJGBnNE5ixb9aPJxaT/+kFtYebu+OQALD3KMKPULBqg79V2TU/C

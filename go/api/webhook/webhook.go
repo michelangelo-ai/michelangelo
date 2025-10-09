@@ -112,16 +112,14 @@ func StartWebhookServer(lc fx.Lifecycle, params Params) {
 }
 
 func startWebhookServer(params Params) (error, context.CancelFunc) {
-	server := &webhook.Server{
+	serverOptions := webhook.Options{
 		Host:    params.Config.Host,
 		Port:    params.Config.Port,
 		CertDir: params.Config.CertDir,
 	}
+	server := webhook.NewServer(serverOptions)
 
-	conversionWebhook := &conversion.Webhook{}
-	if err := conversionWebhook.InjectScheme(params.Scheme); err != nil {
-		return err, nil
-	}
+	conversionWebhook := conversion.NewWebhookHandler(params.Scheme)
 
 	server.Register("/convert", conversionWebhook)
 

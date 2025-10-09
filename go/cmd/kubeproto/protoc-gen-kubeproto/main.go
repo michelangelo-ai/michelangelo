@@ -11,12 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
-
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/gogo/protobuf/proto"
@@ -29,6 +23,13 @@ import (
 	"google.golang.org/protobuf/reflect/protoregistry"
 	"google.golang.org/protobuf/types/descriptorpb"
 	"google.golang.org/protobuf/types/pluginpb"
+
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/tags"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/templates"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
+	"github.com/michelangelo-ai/michelangelo/go/kubeproto/yaml"
 )
 
 var _reProtoFileName = regexp.MustCompile(`\.pb\.go$`)
@@ -200,7 +201,7 @@ func genCRD(crdBuf *bytes.Buffer, filename string, name string, protoComments *p
 //     generate deep copy functions, add controller-tools markers, and register the type to k8s runtime scheme
 //  5. If the input file contains michelangelo.api.k8s_api_group_name option, generate group-version info for k8s runtime
 func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protogen.File,
-	extTypes *protoregistry.Types, gInfo *yaml.GroupInfo, processedGoPackageList *map[string]bool) {
+	extTypes *protoregistry.Types, gInfo *groupinfo.GroupInfo, processedGoPackageList *map[string]bool) {
 	dstFile, err := decorator.Parse(*gofile.Content)
 	if err != nil {
 		logger.Panicf("failed to parse gogoproto generated file %v: %v", gofile.GetName(), err)
@@ -340,7 +341,7 @@ func updateGoFile(gofile *plugingo.CodeGeneratorResponse_File, protofile *protog
 	gofile.Content = &updatedContent
 }
 
-func genCRDObject(crdName string, gInfo *yaml.GroupInfo, crdBuf *bytes.Buffer) {
+func genCRDObject(crdName string, gInfo *groupinfo.GroupInfo, crdBuf *bytes.Buffer) {
 	typeInfo := struct {
 		Group   string
 		Version string
@@ -364,7 +365,7 @@ func genImmutability(crdName string, crdBuf *bytes.Buffer, crdOptions *pboptions
 }
 
 func genCRDIndexedFields(crdName string, crdRootMsg *protogen.Message, crdBuf *bytes.Buffer, crdOptions *pboptions.Options,
-	groupInfo *yaml.GroupInfo) {
+	groupInfo *groupinfo.GroupInfo) {
 	indexedFields := util.ParseIndexedFields(crdRootMsg, crdOptions)
 
 	typeInfo := struct {
@@ -561,7 +562,7 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 	extTypes := pboptions.LoadPBExtensions(gen.Files)
 
 	// Load group info
-	gInfo := yaml.LoadGroupInfo(gen, extTypes, false)
+	gInfoMap := groupinfo.Load(gen, extTypes)
 
 	processedGoPackageList := make(map[string]bool)
 	for _, f := range gen.Files {
@@ -569,6 +570,11 @@ func generate(reqData []byte) *plugingo.CodeGeneratorResponse {
 		// such as imported proto files
 		if !f.Generate {
 			continue
+		}
+		gInfo, ok := gInfoMap[string(f.Desc.Package())]
+		if !ok {
+			logger.Panicln(fmt.Sprintf("Failed to derive API group version info for protobuf package: %v. "+
+				"Make sure to define groupversion_info.proto for the API group.", f.Desc.Package()))
 		}
 		updateGoFile(gofiles[f.Proto.GetName()], f, extTypes, gInfo, &processedGoPackageList)
 	}
