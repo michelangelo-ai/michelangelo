@@ -65,5 +65,5 @@ export function PhaseListRoute({ phases = PHASES }: { phases?: Record<string, Ph
     );
   }
 
-  return <PhaseEntityView phaseId={phase} entities={listableEntities} />;
+  return <PhaseEntityView phaseConfig={phases[phase]} entities={listableEntities} />;
 }

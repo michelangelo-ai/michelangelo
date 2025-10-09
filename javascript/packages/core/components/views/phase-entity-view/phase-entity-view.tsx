@@ -6,9 +6,11 @@ import { Tab, Tabs } from 'baseui/tabs-motion';
 import { ErrorView } from '#core/components/error-view/error-view';
 import { CircleExclamationMark } from '#core/components/illustrations/circle-exclamation-mark/circle-exclamation-mark';
 import { CircleExclamationMarkKind } from '#core/components/illustrations/circle-exclamation-mark/types';
+import { PageHeader } from '#core/components/page-header/page-header';
 import { useStudioParams } from '#core/hooks/routing/use-studio-params/use-studio-params';
 import { EntityTable } from './entity-table';
 
+import type { Theme } from 'baseui/theme';
 import type { PhaseEntityViewProps } from './types';
 
 /**
@@ -18,18 +20,18 @@ import type { PhaseEntityViewProps } from './types';
  * entity if no entity in URL to prevent empty states.
  */
 export function PhaseEntityView<T extends object = object>({
-  phaseId,
+  phaseConfig,
   entities,
 }: PhaseEntityViewProps<T>) {
-  const [, theme] = useStyletron();
+  const [css, theme] = useStyletron();
   const navigate = useNavigate();
   const { projectId, entity: currentEntity } = useStudioParams('list');
 
   useEffect(() => {
     if (!currentEntity) {
-      navigate(`/${projectId}/${phaseId}/${entities[0].id}`);
+      navigate(`/${projectId}/${phaseConfig.id}/${entities[0].id}`);
     }
-  }, [currentEntity, navigate, projectId, phaseId, entities]);
+  }, [currentEntity, navigate, projectId, phaseConfig.id, entities]);
 
   const currentEntityIndex = entities.findIndex((entity) => entity.id === currentEntity);
   const activeKey = currentEntityIndex >= 0 ? currentEntityIndex.toString() : '0';
@@ -37,7 +39,7 @@ export function PhaseEntityView<T extends object = object>({
   const routeToEntity = ({ activeKey }: { activeKey: React.Key }) => {
     const selectedEntity = entities[Number(activeKey)];
     if (selectedEntity) {
-      navigate(`/${projectId}/${phaseId}/${selectedEntity.id}`);
+      navigate(`/${projectId}/${phaseConfig.id}/${selectedEntity.id}`);
     }
   };
 
@@ -62,21 +64,39 @@ export function PhaseEntityView<T extends object = object>({
   }
 
   return (
-    <Tabs activeKey={activeKey} onChange={routeToEntity}>
-      {entities.map((entity, index) => (
-        <Tab key={String(index)} title={entity.name}>
-          {String(index) === activeKey && (
-            <EntityTable<T>
-              service={entity.service}
-              tableConfig={{
-                ...currentEntityConfig.views[0].tableConfig,
-                actions: entity.actions,
-              }}
-              tableSettingsId={`${phaseId}/${entity.id}`}
-            />
-          )}
-        </Tab>
-      ))}
-    </Tabs>
+    <div className={css({ marginTop: theme.sizing.scale800 })}>
+      <PageHeader
+        icon={phaseConfig.icon}
+        label={phaseConfig.name}
+        description={phaseConfig.description}
+        docUrl={phaseConfig.docUrl}
+      />
+      <Tabs
+        activeKey={activeKey}
+        onChange={routeToEntity}
+        overrides={{
+          Root: {
+            style: ({ $theme }: { $theme: Theme }) => ({
+              marginTop: $theme.sizing.scale600,
+            }),
+          },
+        }}
+      >
+        {entities.map((entity, index) => (
+          <Tab key={String(index)} title={entity.name}>
+            {String(index) === activeKey && (
+              <EntityTable<T>
+                service={entity.service}
+                tableConfig={{
+                  ...currentEntityConfig.views[0].tableConfig,
+                  actions: entity.actions,
+                }}
+                tableSettingsId={`${phaseConfig.id}/${entity.id}`}
+              />
+            )}
+          </Tab>
+        ))}
+      </Tabs>
+    </div>
   );
 }

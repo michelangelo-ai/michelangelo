@@ -1,11 +1,13 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Alert } from 'baseui/icon';
 import { vi } from 'vitest';
 
 import { CellType } from '#core/components/cell/constants';
 import { buildTableConfigFactory } from '#core/components/views/__fixtures__/table-config-factory';
 import { buildWrapper } from '#core/test/wrappers/build-wrapper';
 import { getErrorProviderWrapper } from '#core/test/wrappers/get-error-provider-wrapper';
+import { getIconProviderWrapper } from '#core/test/wrappers/get-icon-provider-wrapper';
 import { getRouterWrapper } from '#core/test/wrappers/get-router-wrapper';
 import { getServiceProviderWrapper } from '#core/test/wrappers/get-service-provider-wrapper';
 import {
@@ -375,5 +377,45 @@ describe('PhaseListRoute', () => {
 
     expect(screen.getByRole('tab', { name: 'Pipelines' })).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Pipeline Runs' })).not.toBeInTheDocument();
+  });
+
+  test('renders phase header with config metadata', () => {
+    const configWithDescription = {
+      train: buildPhase({
+        id: 'train',
+        icon: 'train',
+        name: 'Train & Evaluate',
+        description: 'Train machine learning models and evaluate their performance',
+        docUrl: 'https://docs.example.com',
+        entities: [
+          buildEntity({
+            id: 'pipelines',
+            name: 'Pipelines',
+            service: 'pipeline',
+          }),
+        ],
+      }),
+    };
+
+    const mockRequest = vi.fn().mockResolvedValue({
+      pipelineList: { items: [] },
+    });
+
+    render(
+      <PhaseListRoute phases={configWithDescription} />,
+      buildWrapper([
+        getErrorProviderWrapper(),
+        getRouterWrapper({ location: '/myproject/train/pipelines' }),
+        getServiceProviderWrapper({ request: mockRequest }),
+        getIconProviderWrapper({ icons: { train: Alert } }),
+      ])
+    );
+
+    expect(screen.getByRole('img', { name: 'Alert' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Train & Evaluate' })).toBeInTheDocument();
+    expect(
+      screen.getByText('Train machine learning models and evaluate their performance')
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Learn more' })).toBeInTheDocument();
   });
 });

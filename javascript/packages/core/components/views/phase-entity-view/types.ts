@@ -1,5 +1,5 @@
 import type { ListViewConfig, TableConfig, ViewConfig } from '#core/components/views/types';
-import type { PhaseEntityConfig } from '#core/types/common/studio-types';
+import type { PhaseConfig, PhaseEntityConfig } from '#core/types/common/studio-types';
 import type { QueryConfig } from '#core/types/query-types';
 
 export type ListableEntity<T extends object = object> = PhaseEntityConfig<T> & {
@@ -8,7 +8,12 @@ export type ListableEntity<T extends object = object> = PhaseEntityConfig<T> & {
 };
 
 export interface PhaseEntityViewProps<T extends object = object> {
-  phaseId: string;
+  /**
+   * Listable entities passed separately via entities prop; phaseConfig is used for
+   * other metadata
+   */
+  phaseConfig: Omit<PhaseConfig, 'entities'>;
+
   entities: ListableEntity<T>[];
 }
 
