@@ -1,5 +1,5 @@
 """
-uapi_plugins.star allows you to implement uapi plugins in starlark code.
+model.star allows you to implement plugins related to managing models in starlark code.
 
 Functions:
     model_search: searches for a model based on the specified criteria.
@@ -15,7 +15,7 @@ Functions:
                 model_revision_id: int: RevisionID of the model
 """
 
-load("@plugin", "uapi")
+load("@plugin", "model")
 
 def main():
     return test_model_search()
@@ -28,5 +28,5 @@ def test_model_search():
     namespace = "default"
     deployment_name = "test-model"
 
-    data = uapi.model_search(namespace, deployment_name)
+    data = model.model_search(namespace, deployment_name)
     return data
