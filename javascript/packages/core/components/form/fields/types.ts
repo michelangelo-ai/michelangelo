@@ -3,6 +3,7 @@ export interface BaseFieldProps {
    *
    *  - Identifies the field input in the form
    *  - Corresponds to the data key in the form object
+   *  - Supports dot notation for nested fields (e.g., "user.name", "spec.pipeline.name")
    *
    * Learn more:{@link https://final-form.org/docs/final-form/field-names}
    */

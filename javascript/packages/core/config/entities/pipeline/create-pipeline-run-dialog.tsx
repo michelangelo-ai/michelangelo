@@ -8,14 +8,18 @@ import { useStudioMutation } from '#core/hooks/use-studio-mutation';
 import { generateSuffix } from '#core/utils/name-utils';
 
 import type { Pipeline } from '#core/config/entities/pipeline/types';
+import type { PipelineRun } from '#core/config/entities/run/types';
 
 export const CreatePipelineRunDialog: React.FC<{ record: Pipeline }> = ({ record }) => {
   const [showRunModal, setShowRunModal] = useState(false);
   const { projectId } = useStudioParams('base');
 
-  const createPipelineRunMutation = useStudioMutation({ mutationName: 'CreatePipelineRun' });
+  const createPipelineRunMutation = useStudioMutation<
+    { pipelineRun: PipelineRun },
+    { pipelineRun: PipelineRun }
+  >({ mutationName: 'CreatePipelineRun' });
 
-  const handleRunSubmit = async (values: Record<string, unknown>) => {
+  const handleRunSubmit = async (values: PipelineRun) => {
     if (createPipelineRunMutation.isPending) {
       return;
     }
@@ -45,7 +49,7 @@ export const CreatePipelineRunDialog: React.FC<{ record: Pipeline }> = ({ record
         Run
       </Button>
 
-      <FormDialog
+      <FormDialog<PipelineRun>
         isOpen={showRunModal}
         onDismiss={() => setShowRunModal(false)}
         heading="Start new pipeline run"

@@ -1,8 +1,8 @@
 import type { Size as DialogSize } from 'baseui/dialog';
-import type { FormProps } from '#core/components/form/types';
+import type { FormData, FormProps } from '#core/components/form/types';
 
-export interface FormDialogProps
-  extends Pick<FormProps, 'onSubmit' | 'initialValues' | 'children'> {
+export interface FormDialogProps<FieldValues extends FormData = FormData>
+  extends Pick<FormProps<FieldValues>, 'onSubmit' | 'initialValues' | 'children'> {
   isOpen: boolean;
   onDismiss: () => void;
   heading: string;

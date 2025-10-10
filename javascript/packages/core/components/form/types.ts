@@ -1,6 +1,10 @@
-export interface FormProps {
-  onSubmit: (values: Record<string, unknown>) => void | object | Promise<object>;
-  initialValues?: Record<string, unknown>;
+import type { DeepPartial } from '#core/types/utility-types';
+
+export type FormData = Record<string, unknown>;
+
+export interface FormProps<FieldValues extends FormData = FormData> {
+  onSubmit: (values: FieldValues) => void | object | Promise<object>;
+  initialValues?: DeepPartial<FieldValues>;
 
   /** Form ID for external submit button integration */
   id?: string;
@@ -39,9 +43,10 @@ export interface FormProps {
   render?: (formElement: React.ReactNode) => React.ReactNode;
 }
 
-export interface FormState {
+export interface FormState<FieldValues extends FormData = FormData> {
   submitting: boolean;
   submitError?: string;
+  values?: FieldValues;
 }
 
 export interface FieldState {

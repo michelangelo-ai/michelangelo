@@ -1,10 +1,15 @@
-import React from 'react';
 import { Form as FinalForm } from 'react-final-form';
 import { useStyletron } from 'baseui';
 
-import type { FormProps } from './types';
+import type { FormData, FormProps } from './types';
 
-export const Form: React.FC<FormProps> = ({ onSubmit, initialValues, id, children, render }) => {
+export const Form = <FieldValues extends FormData = FormData>({
+  onSubmit,
+  initialValues,
+  id,
+  children,
+  render,
+}: FormProps<FieldValues>) => {
   const [css, theme] = useStyletron();
 
   return (
