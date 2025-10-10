@@ -1,7 +1,7 @@
-load("@plugin", "uapi")
+load("@plugin", "model")
 
 def test_model_search():
-    return uapi.model_search(
+    return model.model_search(
         namespace = "default",
         deployment_name = "test-model-deployment",
     )

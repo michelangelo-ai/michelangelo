@@ -1,4 +1,4 @@
-package uapi
+package model
 
 import (
 	"fmt"

@@ -1,4 +1,4 @@
-package uapi
+package model
 
 import (
 	"testing"
@@ -11,7 +11,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
 
-	uapi "github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
+	modelactivities "github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
 )
 
 type Test struct {
@@ -40,14 +40,14 @@ func (r *Test) TearDownTest() {
 // In particular, we ensure that the plugin returns a starlark.Dict with the correct fields and excludes deprecated fields.
 func (r *Test) TestModelSearch() {
 	env := r.env.Cadence.GetTestWorkflowEnvironment()
-	env.RegisterActivity(uapi.Activities.ModelSearch)
-	modelSearchActivityResponse := &uapi.ModelSearchResponse{
+	env.RegisterActivity(modelactivities.Activities.ModelSearch)
+	modelSearchActivityResponse := &modelactivities.ModelSearchResponse{
 		ModelName:       "test-model",
 		ModelRevisionID: 0,
 		Namespace:       "test-namespace",
 	}
 
-	env.OnActivity(uapi.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(modelSearchActivityResponse, nil)
+	env.OnActivity(modelactivities.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(modelSearchActivityResponse, nil)
 	r.env.Cadence.ExecuteFunction("/test.star", "test_model_search", nil, nil, nil)
 	require := r.Require()
 	var gotResponse *starlark.Dict
@@ -85,8 +85,8 @@ func (r *Test) TestModelSearch() {
 // TestModelSearchWithActivityError checks if the modelsearch plugin returns an error when the activity fails.
 func (r *Test) TestModelSearchWithActivityError() {
 	env := r.env.Cadence.GetTestWorkflowEnvironment()
-	env.RegisterActivity(uapi.Activities.ModelSearch)
-	env.OnActivity(uapi.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(nil, cadence.NewCustomError("activity error"))
+	env.RegisterActivity(modelactivities.Activities.ModelSearch)
+	env.OnActivity(modelactivities.Activities.ModelSearch, mock.Anything, mock.Anything).Once().Return(nil, cadence.NewCustomError("activity error"))
 	r.env.Cadence.ExecuteFunction("/test.star", "test_model_search", nil, nil, nil)
 	require := r.Require()
 	var res any

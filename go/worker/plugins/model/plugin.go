@@ -1,4 +1,4 @@
-package uapi
+package model
 
 import (
 	"github.com/cadence-workflow/starlark-worker/service"
@@ -6,7 +6,7 @@ import (
 	"go.starlark.net/starlark"
 )
 
-const pluginID = "uapi"
+const pluginID = "model"
 
 var Plugin = &plugin{}
 
