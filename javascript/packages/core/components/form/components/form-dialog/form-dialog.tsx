@@ -1,4 +1,4 @@
-import React, { useId } from 'react';
+import { useId } from 'react';
 import { Button, KIND } from 'baseui/button';
 import { PLACEMENT, SIZE } from 'baseui/dialog';
 import { FORM_ERROR } from 'final-form';
@@ -8,6 +8,7 @@ import { FormErrorBanner } from '#core/components/form/components/form-error-ban
 import { SubmitButton } from '#core/components/form/components/submit-button/submit-button';
 import { Form } from '#core/components/form/form';
 
+import type { FormData } from '#core/components/form/types';
 import type { FormDialogProps } from './types';
 
 /**
@@ -34,7 +35,7 @@ import type { FormDialogProps } from './types';
  * </FormDialog>
  * ```
  */
-export const FormDialog: React.FC<FormDialogProps> = ({
+export const FormDialog = <FieldValues extends FormData = FormData>({
   isOpen,
   onDismiss,
   heading,
@@ -43,10 +44,10 @@ export const FormDialog: React.FC<FormDialogProps> = ({
   initialValues,
   submitLabel = 'Submit',
   children,
-}) => {
+}: FormDialogProps<FieldValues>) => {
   const formId = useId();
 
-  const handleSubmit = async (values: Record<string, unknown>) => {
+  const handleSubmit = async (values: FieldValues) => {
     try {
       await onSubmit(values);
       onDismiss(); // Auto-close on successful submit
@@ -56,7 +57,7 @@ export const FormDialog: React.FC<FormDialogProps> = ({
   };
 
   return (
-    <Form
+    <Form<FieldValues>
       id={formId}
       initialValues={initialValues}
       onSubmit={handleSubmit}

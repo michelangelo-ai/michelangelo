@@ -1,12 +1,14 @@
 import { useFormState as useReactFinalFormState } from 'react-final-form';
 
-import type { FormState } from '../types';
+import type { FormData, FormState } from '../types';
 
 /**
  * Hook for accessing form state with customizable subscriptions.
  *
  * @param subscription - Object specifying which state properties to subscribe to.
  *                      If not provided, subscribes to all available properties.
+ *
+ * @generic FieldValues - The shape of the form data. Defaults to {@link FormData}
  *
  * @example
  * ```tsx
@@ -20,17 +22,18 @@ import type { FormState } from '../types';
  * const formState = useFormState();
  * ```
  */
-export function useFormState(): FormState;
-export function useFormState(
-  subscription: Partial<Record<keyof FormState, boolean>>
-): Partial<FormState>;
-export function useFormState(
-  subscription?: Partial<Record<keyof FormState, boolean>>
-): FormState | Partial<FormState> {
+export function useFormState<FieldValues extends FormData = FormData>(): FormState<FieldValues>;
+export function useFormState<FieldValues extends FormData = FormData>(
+  subscription: Partial<Record<keyof FormState<FieldValues>, boolean>>
+): Partial<FormState<FieldValues>>;
+export function useFormState<FieldValues extends FormData = FormData>(
+  subscription?: Partial<Record<keyof FormState<FieldValues>, boolean>>
+): FormState<FieldValues> | Partial<FormState<FieldValues>> {
   const reactFinalFormSubscription = subscription
     ? {
         submitting: subscription.submitting,
         submitError: subscription.submitError,
+        values: subscription.values,
       }
     : undefined;
 
@@ -41,5 +44,6 @@ export function useFormState(
   return {
     submitting: formState.submitting,
     submitError: formState.submitError as unknown,
-  } as FormState | Partial<FormState>;
+    values: formState.values as FieldValues | undefined,
+  } as FormState<FieldValues> | Partial<FormState<FieldValues>>;
 }

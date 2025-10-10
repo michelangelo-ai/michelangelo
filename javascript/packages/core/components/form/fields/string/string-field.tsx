@@ -1,4 +1,3 @@
-import React from 'react';
 import { Input } from 'baseui/input';
 
 import { FormControl } from '#core/components/form/components/form-control';
