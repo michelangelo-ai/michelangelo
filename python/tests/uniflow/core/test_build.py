@@ -8,7 +8,6 @@ import tests.uniflow.core.demo_platform.workflows as demo_platform_workflows
 
 class Test(unittest.TestCase):
     def test_demo_app(self):
-
         package = build(demo_app.main)
 
         # Find and assert the main file
@@ -47,9 +46,7 @@ class Test(unittest.TestCase):
         self.assertEqual(expected_meta, meta)
 
     def test_build_with_transpiler_callback(self):
-
         class MyTranspilerCallback(TranspilerCallback):
-
             def __init__(self):
                 self.task_functions = []
 

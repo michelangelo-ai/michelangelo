@@ -201,9 +201,16 @@ class TaskFunction(Generic[P, R]):
 
         if self._image_spec:
             if self._image_spec.container_image:
-                keywords.append(ast.keyword("container_image", ast.Constant(self._image_spec.container_image)))
+                keywords.append(
+                    ast.keyword(
+                        "container_image",
+                        ast.Constant(self._image_spec.container_image),
+                    )
+                )
             if self._image_spec.receipt:
-                keywords.append(ast.keyword("receipt", ast.Constant(self._image_spec.receipt)))
+                keywords.append(
+                    ast.keyword("receipt", ast.Constant(self._image_spec.receipt))
+                )
 
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)

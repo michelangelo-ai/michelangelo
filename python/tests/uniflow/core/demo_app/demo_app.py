@@ -22,7 +22,9 @@ def test_wrapper(fn: Callable):
     return wrapper
 
 
-@task(config=TaskB(), image_spec=image_spec.ImageSpec(container_image="test_image:test"))
+@task(
+    config=TaskB(), image_spec=image_spec.ImageSpec(container_image="test_image:test")
+)
 def task_1(msg):
     log.info("task_1: msg: %r", msg)
     return {"status": "ok"}
