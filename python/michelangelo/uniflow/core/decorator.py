@@ -55,6 +55,14 @@ class TaskFunction(Generic[P, R]):
         self._retry_attempts = retry_attempts
         self._image_spec = image_spec
 
+    @property
+    def image_spec(self) -> Optional[ImageSpec]:
+        return self._image_spec
+
+    @property
+    def fn(self) -> Callable[P, R]:
+        return self._fn
+
     def __call__(self, *args: P.args, **kwargs: P.kwargs) -> R:
         fn_path = dot_path(self._fn)
         if task_context.config is not None:
@@ -193,9 +201,16 @@ class TaskFunction(Generic[P, R]):
 
         if self._image_spec:
             if self._image_spec.container_image:
-                keywords.append(ast.keyword("container_image", ast.Constant(self._image_spec.container_image)))
+                keywords.append(
+                    ast.keyword(
+                        "container_image",
+                        ast.Constant(self._image_spec.container_image),
+                    )
+                )
             if self._image_spec.receipt:
-                keywords.append(ast.keyword("receipt", ast.Constant(self._image_spec.receipt)))
+                keywords.append(
+                    ast.keyword("receipt", ast.Constant(self._image_spec.receipt))
+                )
 
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)

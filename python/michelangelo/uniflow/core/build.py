@@ -7,8 +7,9 @@ import tarfile
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 from collections.abc import Iterator
+from abc import ABC
 
 import fsspec
 
@@ -44,10 +45,8 @@ def main(args=None):
         return
 
     with (
-        sys.stdout.buffer
-        if a.output == "-"
-        else fsspec.open(a.output, mode="wb") as out
-    ):
+        sys.stdout.buffer if a.output == "-" else fsspec.open(a.output, mode="wb")
+    ) as out:
         out.write(tarball)
 
 
@@ -144,10 +143,26 @@ class Package:
         return bb.getvalue()
 
 
-def build(fn: Callable) -> Package:
-    # TODO: andrii: strip_path_prefix
+class TranspilerCallback(ABC):
+    """
+    Callback interface for the transpiler to make the transpilation process observable.
+    Users can extend this class and override its methods to act on transpilation events,
+    e.g., to collect additional metadata about the transpiled code.
+    """
+
+    def on_task_function(self, task_fn: TaskFunction):
+        """
+        Called when a reference to the @task function is encountered during transpilation.
+        """
+        pass
+
+
+def build(
+    fn: Callable,
+    transpiler_callback: Optional[TranspilerCallback] = None,
+) -> Package:
     files = {}
-    fn_path = _transpile_function(fn, files)
+    fn_path = _transpile_function(fn, files, transpiler_callback)
 
     package_files: dict[str, bytes] = {}
 
@@ -182,7 +197,11 @@ def build(fn: Callable) -> Package:
     )
 
 
-def _transpile_function(fn: Callable, files: dict[Path, Any]) -> Path:
+def _transpile_function(
+    fn: Callable,
+    files: dict[Path, Any],
+    transpiler_callback: Optional[TranspilerCallback],
+) -> Path:
     fn = inspect.unwrap(
         fn
     )  # Get the user function by unwrapping decorators such as @workflow.
@@ -212,7 +231,7 @@ def _transpile_function(fn: Callable, files: dict[Path, Any]) -> Path:
         arg.annotation = None
 
     # Transform function's code using FunctionTransformer
-    transformer = FunctionTransformer(fn)
+    transformer = FunctionTransformer(fn, transpiler_callback)
     transformer.visit(tree)
     # Add transformed function to the file
     file.add_function(tree)
@@ -233,7 +252,7 @@ def _transpile_function(fn: Callable, files: dict[Path, Any]) -> Path:
             # External dependency - add it to the `load` statements
             file.add_load(dep_path.as_posix(), alias, dep.__name__)
 
-        _transpile_function(dep, files)
+        _transpile_function(dep, files, transpiler_callback)
 
     return fn_path
 
@@ -296,18 +315,20 @@ def _fn_path(fn: Callable) -> Path:
 
 
 class FunctionTransformer(ast.NodeTransformer):
-    def __init__(self, fn):
+    def __init__(
+        self,
+        fn,
+        transpiler_callback: Optional[TranspilerCallback],
+    ):
         self._code = fn.__code__
         self._module = inspect.getmodule(fn)
+        self._transpiler_callback = transpiler_callback
         self.deps = Dependencies()
 
     def visit_AnnAssign(self, node):
         # Replace annotated assignment with just assignment. Ex:
         # a: dict = foo()  ->  a = foo()
-        return ast.Assign(
-            value=node.value,
-            targets=[node.target],
-        )
+        return ast.Assign(value=node.value, targets=[node.target])
 
     def visit_Is(self, _node):
         raise NameError("[is] is not supported, use == instead")
@@ -380,6 +401,8 @@ class FunctionTransformer(ast.NodeTransformer):
 
         if task := getattr(v, "_uf_task", None):
             assert isinstance(task, TaskFunction)
+            if self._transpiler_callback:
+                self._transpiler_callback.on_task_function(task)
             return task._transpile(self.deps)
 
         if is_star_plugin(v):

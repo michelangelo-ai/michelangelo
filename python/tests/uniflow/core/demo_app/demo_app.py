@@ -2,7 +2,7 @@ from functools import wraps
 import logging
 from typing import Callable
 
-from michelangelo.uniflow.core import workflow, task
+from michelangelo.uniflow.core import workflow, task, image_spec
 from michelangelo.uniflow.core.lib.time import sleep
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT
 from tests.uniflow.core.demo_platform.test_conf.task_b import TaskB
@@ -22,7 +22,9 @@ def test_wrapper(fn: Callable):
     return wrapper
 
 
-@task(config=TaskB())
+@task(
+    config=TaskB(), image_spec=image_spec.ImageSpec(container_image="test_image:test")
+)
 def task_1(msg):
     log.info("task_1: msg: %r", msg)
     return {"status": "ok"}
