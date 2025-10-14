@@ -20,6 +20,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/prometheus/client_golang v1.16.0
 	github.com/ray-project/kuberay/ray-operator v1.0.0
+	github.com/robfig/cron v1.2.0
 	github.com/stretchr/testify v1.10.0
 	github.com/tidwall/gjson v1.18.0
 	github.com/tidwall/sjson v1.2.5
@@ -91,7 +92,6 @@ require (
 	github.com/prometheus/client_model v0.4.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect
 	github.com/prometheus/procfs v0.10.1 // indirect
-	github.com/robfig/cron v1.2.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
