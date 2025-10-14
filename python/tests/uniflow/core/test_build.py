@@ -1,14 +1,15 @@
 import json
 import unittest
 
-from michelangelo.uniflow.core.build import build
+from michelangelo.uniflow.core.build import build, TranspilerCallback
+import tests.uniflow.core.demo_app.demo_app as demo_app
+import tests.uniflow.core.demo_platform.workflows as demo_platform_workflows
 
 
 class Test(unittest.TestCase):
     def test_demo_app(self):
-        from tests.uniflow.core.demo_app.demo_app import main
 
-        package = build(main)
+        package = build(demo_app.main)
 
         # Find and assert the main file
         main_file = [
@@ -44,3 +45,35 @@ class Test(unittest.TestCase):
             "main_function": package.main_function,
         }
         self.assertEqual(expected_meta, meta)
+
+    def test_build_with_transpiler_callback(self):
+
+        class MyTranspilerCallback(TranspilerCallback):
+
+            def __init__(self):
+                self.task_functions = []
+
+            def on_task_function(self, task_fn):
+                self.task_functions.append(task_fn)
+
+        transpiler_callback = MyTranspilerCallback()
+        package0 = build(demo_app.main, transpiler_callback=transpiler_callback)
+        self.assertIsNotNone(package0)
+
+        task_functions = transpiler_callback.task_functions
+
+        self.assertEqual(len(task_functions), 3)
+
+        t = task_functions[0]
+        self.assertEqual(t, demo_app.task_1)
+        self.assertEqual(t.image_spec.container_image, "test_image:test")
+
+        t = task_functions[1]
+        self.assertEqual(t, demo_app.task_wrapped)
+        self.assertIsNone(t.image_spec)
+
+        t = task_functions[2]
+        self.assertEqual(t, demo_platform_workflows._greetings_task)
+
+        package1 = build(demo_app.main)
+        self.assertEqual(package0, package1)
