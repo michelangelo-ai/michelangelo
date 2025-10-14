@@ -620,7 +620,6 @@ def convert_crd_metadata(
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
     res["metadata"] = {
-        "clusterName": "",
         "generateName": "",
         "generation": "0",
         "name": yaml_dict["metadata"]["name"],
