@@ -511,7 +511,7 @@ def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[M
     return MessageClass
 
 
-def read_plugins(crd: CRD, user_command_action: str, crds: dict[str, CRD]) -> None:
+def read_plugins(crd: CRD, user_command_action: str, crds: dict[str, CRD], channel: Channel) -> None:
     """
     Read and apply plugins for a given crd.
     """
@@ -757,6 +757,8 @@ def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
         if service.endswith("Service") and not service.endswith("ExtService"):
             name = camel_to_snake(re.sub(r"Service$", "", service.split(".")[-1]))
             res[name] = CRD(name=name, full_name=service)
+
+
     _LOG.info("Created %d CRD instances: %r", len(res), res)
     return res
 
@@ -811,6 +813,10 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
     user_command_crd = args[0]
     user_command_action = args[1]
 
+    # Command aliases for better UX
+    if user_command_crd == "trigger":
+        user_command_crd = "trigger_run"
+
     assert user_command_action in [
         "get",
         "create",
@@ -824,6 +830,10 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
     # For file-based actions, validate file parameter exists (preserving original validation)
     if user_command_action in ["apply", "create", "dev-run"]:
         assert len(kwargs["file"]) == 1, "exactly one yaml file is required"
+
+    # For trigger run, file parameter is also required
+    if user_command_crd == "trigger_run" and user_command_action == "run":
+        assert len(kwargs["file"]) == 1, "exactly one yaml file is required for trigger run"
 
     user_command_action = kebab_to_snake(user_command_action)
 
@@ -870,7 +880,8 @@ def main(channel: Channel):
         crds[user_command_crd], f"generate_{user_command_action}"
     )
     func_action_generator(channel)
-    read_plugins(crds[user_command_crd], user_command_action, crds)
+    read_plugins(crds[user_command_crd], user_command_action, crds, channel)
+
 
     assert hasattr(crds[user_command_crd], user_command_action)
     func_action = getattr(crds[user_command_crd], user_command_action)
