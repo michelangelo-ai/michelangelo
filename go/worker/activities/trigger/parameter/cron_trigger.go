@@ -9,24 +9,18 @@ import (
 
 var _defaultBatchSize = 10
 
-type CronParameterGenerator struct{}
+type CronParameterHandler struct{}
 
 // Params is for batch/concurrent run to store parameters for different triggers
 type Params struct {
+	// ParamID is the parameter ID for cron/interval triggers
 	ParamID string
-	// TriggeredRun is a struct to store triggered run information
-	// for backfill trigger, it is initialized with execution timestamp and parameter id when patch created
-	// and will be updated with pipeline run name and created timestamp when pipeline run is created
-	TriggeredRun struct {
-		ExecutionTimestamp *time.Time
-		ParameterID        string
-		PipelineRunName    string
-		CreatedAt          *time.Time
-	}
+	// Backfill stores execution metadata for backfill triggers (empty for cron/interval triggers)
+	Backfill BackfillParam
 }
 
 // GenerateBatchParams generates batch parameters for cron/interval triggers
-func (g *CronParameterGenerator) GenerateBatchParams(triggerRun *v2pb.TriggerRun) ([][]Params, error) {
+func (h *CronParameterHandler) GenerateBatchParams(triggerRun *v2pb.TriggerRun) ([][]Params, error) {
 	batchSize := _defaultBatchSize
 	if triggerRun.Spec.Trigger.BatchPolicy != nil && triggerRun.Spec.Trigger.BatchPolicy.BatchSize != 0 {
 		batchSize = int(triggerRun.Spec.Trigger.BatchPolicy.BatchSize)
@@ -54,7 +48,7 @@ func (g *CronParameterGenerator) GenerateBatchParams(triggerRun *v2pb.TriggerRun
 		}
 		keys = append(keys, cur)
 	}
-	g.SortParams(keys)
+	h.SortParams(keys)
 	for i := 0; i < len(keys); i = i + batchSize {
 		if i+batchSize <= len(keys) {
 			batchedParams[i/batchSize] = keys[i : i+batchSize]
@@ -66,7 +60,7 @@ func (g *CronParameterGenerator) GenerateBatchParams(triggerRun *v2pb.TriggerRun
 }
 
 // GenerateConcurrentParams generates concurrent parameters for cron/interval triggers
-func (g *CronParameterGenerator) GenerateConcurrentParams(triggerRun *v2pb.TriggerRun) ([]Params, error) {
+func (h *CronParameterHandler) GenerateConcurrentParams(triggerRun *v2pb.TriggerRun) ([]Params, error) {
 	params := make([]Params, len(triggerRun.Spec.Trigger.ParametersMap))
 	i := 0
 	for paramID := range triggerRun.Spec.Trigger.ParametersMap {
@@ -75,13 +69,32 @@ func (g *CronParameterGenerator) GenerateConcurrentParams(triggerRun *v2pb.Trigg
 		}
 		i++
 	}
-	g.SortParams(params)
+	h.SortParams(params)
 	return params, nil
 }
 
 // SortParams sorts the parameters alphabetically and chronologically
-func (g *CronParameterGenerator) SortParams(params []Params) {
+func (h *CronParameterHandler) SortParams(params []Params) {
 	sort.Slice(params, func(i, j int) bool {
 		return params[i].ParamID < params[j].ParamID
 	})
+}
+
+// GetParameterID returns the parameter ID for cron trigger
+func (h *CronParameterHandler) GetParameterID(param Params) string {
+	return param.ParamID
+}
+
+// GetExecutionTimestamp returns the logical timestamp for cron trigger
+func (h *CronParameterHandler) GetExecutionTimestamp(param Params, logicalTs time.Time) time.Time {
+	return logicalTs
+}
+
+// UpdateTriggerContext updates the trigger context for cron trigger
+func (h *CronParameterHandler) UpdateTriggerContext(triggerContext Object, param Params, pipelineRunName string, createdTimestamp time.Time) {
+	// TriggeredRuns is a map[parameter_id -> run_information]
+	triggerContext["TriggeredRuns"].(map[string]Object)[param.ParamID] = Object{
+		"PipelineRunName": pipelineRunName,
+		"CreatedAt":       createdTimestamp,
+	}
 }

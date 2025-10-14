@@ -222,39 +222,46 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool) error {
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
-	var (
-		createRequest v2pb.CreatePipelineRunRequest
-		err           error
-		pr            *v2pb.PipelineRun
-	)
-	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
+	
+	// Get the appropriate handler for this parameter type
+	handler := param.GetHandler()
+	
+	// Use handler to get parameter ID and execution timestamp
 	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
-	createRequest, err = generatePipelineRunRequest(triggerRun, param.ParamID, name, logicalTs)
+	paramID := handler.GetParameterID(param)
+	executionTimestamp := handler.GetExecutionTimestamp(param, logicalTs)
+	
+	// Generate pipeline run request
+	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp)
 	if err != nil {
 		log.Error("failed to generate pipeline run request",
 			zap.String("operation", "run_pipeline"),
-			zap.String("param_id", param.ParamID),
+			zap.Any("param", param),
 			zap.Error(err))
 		return err
 	}
+	
+	// Create pipeline run
+	var pr *v2pb.PipelineRun
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.CreatePipelineRun, createRequest).Get(ctx, &pr); err != nil {
 		log.Error("failed to create pipeline run",
 			zap.String("operation", "run_pipeline"),
-			zap.String("param_id", param.ParamID),
+			zap.Any("param", param),
 			zap.String("pipeline_run_name", name),
 			zap.Error(err))
 		return err
 	}
 	log.Info("pipeline run created successfully",
 		zap.String("operation", "run_pipeline"),
-		zap.String("param_id", param.ParamID),
+		zap.Any("param", param),
 		zap.String("pipeline_run_name", pr.Name))
+
+	// Update trigger context using handler
+	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
 	createdTimestamp := workflow.Now(ctx)
-	// TriggeredRuns is a map[parameter_id -> run_information]
-	triggerContext["TriggeredRuns"].(map[string]Object)[param.ParamID] = Object{
-		"PipelineRunName": pr.Name,
-		"CreatedAt":       createdTimestamp,
-	}
+	handler.UpdateTriggerContext(triggerContext, param, pr.Name, createdTimestamp)
+	
+	// Run sensor if needed
 	if !sensor {
 		return nil
 	}

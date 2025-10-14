@@ -22,14 +22,17 @@ func register(
 		mgr.GetLogger().WithName("cron-trigger"),
 		workflowClient,
 	)
+	backfillTrigger := NewBackfillTrigger(
+		mgr.GetLogger().WithName("backfill-trigger"),
+		workflowClient,
+	)
 	reconciler := NewReconciler(Params{
 		Logger:            mgr.GetLogger().WithName("triggerrun"),
 		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
+		BackfillTrigger:   backfillTrigger,
 		// TODO: Add other trigger types as needed
-		BackfillTrigger:   cronTrigger, // placeholder
-		BatchRerunTrigger: cronTrigger, // placeholder
 	})
 	return reconciler.Register(mgr)
 }

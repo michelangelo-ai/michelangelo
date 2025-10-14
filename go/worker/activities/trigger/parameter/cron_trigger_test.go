@@ -2,14 +2,15 @@ package parameter
 
 import (
 	"testing"
+	"time"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
-	generator := &CronParameterGenerator{}
+func TestCronParameterHandler_GenerateBatchParams(t *testing.T) {
+	handler := &CronParameterHandler{}
 
 	tests := []struct {
 		name           string
@@ -88,7 +89,7 @@ func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := generator.GenerateBatchParams(tt.triggerRun)
+			result, err := handler.GenerateBatchParams(tt.triggerRun)
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -109,8 +110,8 @@ func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
 	}
 }
 
-func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
-	generator := &CronParameterGenerator{}
+func TestCronParameterHandler_GenerateConcurrentParams(t *testing.T) {
+	handler := &CronParameterHandler{}
 
 	tests := []struct {
 		name              string
@@ -155,7 +156,7 @@ func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := generator.GenerateConcurrentParams(tt.triggerRun)
+			result, err := handler.GenerateConcurrentParams(tt.triggerRun)
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -170,6 +171,150 @@ func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
 			if len(tt.expectedParams) > 0 {
 				assert.ElementsMatch(t, tt.expectedParams, result, "Params should match exactly")
 			}
+		})
+	}
+}
+
+func TestCronParameterHandler_SortParams(t *testing.T) {
+	handler := &CronParameterHandler{}
+
+	tests := []struct {
+		name     string
+		params   []Params
+		expected []Params
+	}{
+		{
+			name: "sort by parameter ID alphabetically",
+			params: []Params{
+				{ParamID: "param3"},
+				{ParamID: "param1"},
+				{ParamID: "param2"},
+			},
+			expected: []Params{
+				{ParamID: "param1"},
+				{ParamID: "param2"},
+				{ParamID: "param3"},
+			},
+		},
+		{
+			name: "already sorted",
+			params: []Params{
+				{ParamID: "a"},
+				{ParamID: "b"},
+				{ParamID: "c"},
+			},
+			expected: []Params{
+				{ParamID: "a"},
+				{ParamID: "b"},
+				{ParamID: "c"},
+			},
+		},
+		{
+			name:     "empty params",
+			params:   []Params{},
+			expected: []Params{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler.SortParams(tt.params)
+			assert.Equal(t, tt.expected, tt.params)
+		})
+	}
+}
+
+func TestCronParameterHandler_GetParameterID(t *testing.T) {
+	handler := &CronParameterHandler{}
+
+	param := Params{
+		ParamID: "test-param-id",
+	}
+
+	result := handler.GetParameterID(param)
+	assert.Equal(t, "test-param-id", result)
+}
+
+func TestCronParameterHandler_GetExecutionTimestamp(t *testing.T) {
+	handler := &CronParameterHandler{}
+
+	testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	logicalTime := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)
+
+	param := Params{
+		ParamID: "test-param",
+	}
+
+	result := handler.GetExecutionTimestamp(param, logicalTime)
+	// For cron trigger, should return the logical timestamp
+	assert.Equal(t, logicalTime, result)
+	assert.NotEqual(t, testTime, result)
+}
+
+func TestCronParameterHandler_UpdateTriggerContext(t *testing.T) {
+	handler := &CronParameterHandler{}
+
+	createdTime := time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name           string
+		initialContext Object
+		param          Params
+		pipelineRun    string
+		createdAt      time.Time
+		expectedMap    map[string]Object
+	}{
+		{
+			name: "update empty context",
+			initialContext: Object{
+				"TriggeredRuns": map[string]Object{},
+			},
+			param: Params{
+				ParamID: "param1",
+			},
+			pipelineRun: "pipeline-run-1",
+			createdAt:   createdTime,
+			expectedMap: map[string]Object{
+				"param1": {
+					"PipelineRunName": "pipeline-run-1",
+					"CreatedAt":       createdTime,
+				},
+			},
+		},
+		{
+			name: "update existing context",
+			initialContext: Object{
+				"TriggeredRuns": map[string]Object{
+					"param1": {
+						"PipelineRunName": "pipeline-run-1",
+						"CreatedAt":       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					},
+				},
+			},
+			param: Params{
+				ParamID: "param2",
+			},
+			pipelineRun: "pipeline-run-2",
+			createdAt:   createdTime,
+			expectedMap: map[string]Object{
+				"param1": {
+					"PipelineRunName": "pipeline-run-1",
+					"CreatedAt":       time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				},
+				"param2": {
+					"PipelineRunName": "pipeline-run-2",
+					"CreatedAt":       createdTime,
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler.UpdateTriggerContext(tt.initialContext, tt.param, tt.pipelineRun, tt.createdAt)
+
+			triggeredRuns := tt.initialContext["TriggeredRuns"].(map[string]Object)
+			assert.Equal(t, tt.expectedMap, triggeredRuns)
 		})
 	}
 }

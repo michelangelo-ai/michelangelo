@@ -108,5 +108,5 @@ func (r *cronTrigger) GetStatus(
 		Name:      triggerRun.Name,
 	})
 	domain := r.WorkflowClient.GetDomain()
-	return getWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
+	return getRecurringRunWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
