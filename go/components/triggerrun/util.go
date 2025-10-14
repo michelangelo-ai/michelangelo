@@ -114,7 +114,7 @@ func getRecurringRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.Trigger
 	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 }
 
-//util function to get workflow execution status for adhoc run trigger
+// util function to get workflow execution status for adhoc run trigger
 func getAdhocRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
 	var (
 		execResponse *clientInterface.WorkflowExecutionInfo

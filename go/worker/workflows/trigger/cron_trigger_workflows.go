@@ -222,15 +222,15 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool) error {
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
-	
+
 	// Get the appropriate handler for this parameter type
 	handler := param.GetHandler()
-	
+
 	// Use handler to get parameter ID and execution timestamp
 	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
 	paramID := handler.GetParameterID(param)
 	executionTimestamp := handler.GetExecutionTimestamp(param, logicalTs)
-	
+
 	// Generate pipeline run request
 	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp)
 	if err != nil {
@@ -240,7 +240,7 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 			zap.Error(err))
 		return err
 	}
-	
+
 	// Create pipeline run
 	var pr *v2pb.PipelineRun
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.CreatePipelineRun, createRequest).Get(ctx, &pr); err != nil {
@@ -260,7 +260,7 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
 	createdTimestamp := workflow.Now(ctx)
 	handler.UpdateTriggerContext(triggerContext, param, pr.Name, createdTimestamp)
-	
+
 	// Run sensor if needed
 	if !sensor {
 		return nil
