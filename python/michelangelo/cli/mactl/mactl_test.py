@@ -10,6 +10,8 @@ from unittest.mock import Mock, patch
 from michelangelo.cli.mactl.mactl import (
     list_services,
     create_serivce_classes,
+    get_methods_from_service,
+    get_service_descriptors,
 )
 
 
@@ -202,4 +204,138 @@ class ServiceClassCreationTest(TestCase):
 
         # Should return empty dict
         self.assertEqual(result, {})
+        self.assertEqual(len(result), 0)
+
+
+class GetServiceDescriptorsTest(TestCase):
+    """
+    Tests for get_service_descriptors function
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
+    def test_get_service_descriptors_success(
+        self, mock_file_descriptor_proto_class, mock_stub_class
+    ):
+        """
+        Test `get_service_descriptors()` function with valid service
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        service_name = "michelangelo.api.v2.ModelService"
+
+        # Create mock FileDescriptorProto instance
+        mock_fd_instance = Mock()
+        mock_fd_instance.name = "model_service.proto"
+        mock_fd_instance.service = []
+        mock_file_descriptor_proto_class.return_value = mock_fd_instance
+
+        # Create mock file descriptor bytes
+        mock_fd_bytes = b"mock_file_descriptor_data"
+
+        # Create mock response
+        mock_response = Mock()
+        mock_response.file_descriptor_response.file_descriptor_proto = [
+            mock_fd_bytes
+        ]
+
+        # Create mock stub
+        mock_stub = Mock()
+        mock_stub.ServerReflectionInfo.return_value = [mock_response]
+        mock_stub_class.return_value = mock_stub
+
+        # Call the function
+        result = list(get_service_descriptors(mock_channel, service_name))
+
+        # Verify the result
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], mock_fd_instance)
+
+        # Verify stub was created with the channel
+        mock_stub_class.assert_called_once_with(mock_channel)
+
+        # Verify ServerReflectionInfo was called
+        mock_stub.ServerReflectionInfo.assert_called_once()
+
+        # Verify the request was created correctly
+        call_args = mock_stub.ServerReflectionInfo.call_args
+        request_iter = call_args[0][0]
+        request_list = list(request_iter)
+        self.assertEqual(len(request_list), 1)
+        request = request_list[0]
+        self.assertEqual(request.file_containing_symbol, service_name)
+
+        # Verify ParseFromString was called with the correct bytes
+        mock_fd_instance.ParseFromString.assert_called_once_with(mock_fd_bytes)
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
+    def test_get_service_descriptors_multiple_descriptors(
+        self, mock_file_descriptor_proto_class, mock_stub_class
+    ):
+        """
+        Test `get_service_descriptors()` function with multiple file descriptors
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        service_name = "michelangelo.api.v2.MultiService"
+
+        # Create mock FileDescriptorProto instances
+        mock_fd_instance1 = Mock()
+        mock_fd_instance1.name = "service1.proto"
+        mock_fd_instance2 = Mock()
+        mock_fd_instance2.name = "service2.proto"
+
+        # Setup the class to return different instances on each call
+        mock_file_descriptor_proto_class.side_effect = [
+            mock_fd_instance1,
+            mock_fd_instance2,
+        ]
+
+        # Create mock file descriptor bytes
+        mock_fd_bytes1 = b"mock_file_descriptor_data1"
+        mock_fd_bytes2 = b"mock_file_descriptor_data2"
+
+        # Create mock response with multiple file descriptors
+        mock_response = Mock()
+        mock_response.file_descriptor_response.file_descriptor_proto = [
+            mock_fd_bytes1,
+            mock_fd_bytes2,
+        ]
+
+        # Create mock stub
+        mock_stub = Mock()
+        mock_stub.ServerReflectionInfo.return_value = [mock_response]
+        mock_stub_class.return_value = mock_stub
+
+        # Call the function
+        result = list(get_service_descriptors(mock_channel, service_name))
+
+        # Verify the result
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0], mock_fd_instance1)
+        self.assertEqual(result[1], mock_fd_instance2)
+
+        # Verify ParseFromString was called for each descriptor
+        mock_fd_instance1.ParseFromString.assert_called_once_with(mock_fd_bytes1)
+        mock_fd_instance2.ParseFromString.assert_called_once_with(mock_fd_bytes2)
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    def test_get_service_descriptors_empty_response(self, mock_stub_class):
+        """
+        Test `get_service_descriptors()` function with empty response
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        service_name = "michelangelo.api.v2.EmptyService"
+
+        # Create mock stub with empty response
+        mock_stub = Mock()
+        mock_stub.ServerReflectionInfo.return_value = []
+        mock_stub_class.return_value = mock_stub
+
+        # Call the function
+        result = list(get_service_descriptors(mock_channel, service_name))
+
+        # Verify the result is empty
         self.assertEqual(len(result), 0)
