@@ -7,10 +7,11 @@ Tests gRPC reflection services and service class creation logic.
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
+
 from michelangelo.cli.mactl.mactl import (
     list_services,
     create_serivce_classes,
-    get_methods_from_service,
     get_service_descriptors,
 )
 
@@ -212,6 +213,119 @@ class GetServiceDescriptorsTest(TestCase):
     Tests for get_service_descriptors function
     """
 
+    def _get_project_svc_mock(self) -> Mock:
+        """
+        Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
+        """
+        # Create mock fields for CreateProjectRequest
+        mock_field_project = Mock()
+        mock_field_project.name = "project"
+        mock_field_project.number = 1
+        mock_field_project.label = 1  # LABEL_OPTIONAL
+        mock_field_project.type = 11  # TYPE_MESSAGE
+        mock_field_project.type_name = ".michelangelo.api.v2.Project"
+        mock_field_project.json_name = "project"
+
+        mock_field_create_options = Mock()
+        mock_field_create_options.name = "create_options"
+        mock_field_create_options.number = 2
+        mock_field_create_options.label = 1  # LABEL_OPTIONAL
+        mock_field_create_options.type = 11  # TYPE_MESSAGE
+        mock_field_create_options.type_name = (
+            ".k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions"
+        )
+        mock_field_create_options.json_name = "createOptions"
+
+        # Create mock fields for CreateProjectResponse
+        mock_field_response_project = Mock()
+        mock_field_response_project.name = "project"
+        mock_field_response_project.number = 1
+        mock_field_response_project.label = 1  # LABEL_OPTIONAL
+        mock_field_response_project.type = 11  # TYPE_MESSAGE
+        mock_field_response_project.type_name = ".michelangelo.api.v2.Project"
+        mock_field_response_project.json_name = "project"
+
+        # Create mock fields for GetProjectRequest
+        mock_field_name = Mock()
+        mock_field_name.name = "name"
+        mock_field_name.number = 1
+        mock_field_name.label = 1  # LABEL_OPTIONAL
+        mock_field_name.type = 9  # TYPE_STRING
+        mock_field_name.json_name = "name"
+
+        mock_field_namespace = Mock()
+        mock_field_namespace.name = "namespace"
+        mock_field_namespace.number = 2
+        mock_field_namespace.label = 1  # LABEL_OPTIONAL
+        mock_field_namespace.type = 9  # TYPE_STRING
+        mock_field_namespace.json_name = "namespace"
+
+        mock_field_get_options = Mock()
+        mock_field_get_options.name = "get_options"
+        mock_field_get_options.number = 3
+        mock_field_get_options.label = 1  # LABEL_OPTIONAL
+        mock_field_get_options.type = 11  # TYPE_MESSAGE
+        mock_field_get_options.type_name = (
+            ".k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions"
+        )
+        mock_field_get_options.json_name = "getOptions"
+
+        # Create mock methods (mimicking actual protobuf MethodDescriptorProto)
+        mock_method1 = Mock()
+        mock_method1.name = "CreateProject"
+        mock_method1.input_type = ".michelangelo.api.v2.CreateProjectRequest"
+        mock_method1.output_type = ".michelangelo.api.v2.CreateProjectResponse"
+
+        mock_method2 = Mock()
+        mock_method2.name = "GetProject"
+        mock_method2.input_type = ".michelangelo.api.v2.GetProjectRequest"
+        mock_method2.output_type = ".michelangelo.api.v2.GetProjectResponse"
+
+        # Create mock service descriptor (mimicking ServiceDescriptorProto)
+        mock_service_descriptor = Mock()
+        mock_service_descriptor.name = "ProjectService"
+        mock_service_descriptor.method = [mock_method1, mock_method2]
+
+        # Create mock message types (request/response schemas)
+        mock_create_request_msg = Mock()
+        mock_create_request_msg.name = "CreateProjectRequest"
+        mock_create_request_msg.field = [mock_field_project, mock_field_create_options]
+
+        mock_create_response_msg = Mock()
+        mock_create_response_msg.name = "CreateProjectResponse"
+        mock_create_response_msg.field = [mock_field_response_project]
+
+        mock_get_request_msg = Mock()
+        mock_get_request_msg.name = "GetProjectRequest"
+        mock_get_request_msg.field = [
+            mock_field_name,
+            mock_field_namespace,
+            mock_field_get_options,
+        ]
+
+        mock_get_response_msg = Mock()
+        mock_get_response_msg.name = "GetProjectResponse"
+        mock_get_response_msg.field = [mock_field_response_project]
+
+        # Create mock FileDescriptorProto instance for project_svc.proto
+        mock_fd_instance1 = Mock()
+        mock_fd_instance1.name = "michelangelo/api/v2/project_svc.proto"
+        mock_fd_instance1.package = "michelangelo.api.v2"
+        mock_fd_instance1.dependency = [
+            "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto",
+            "michelangelo/api/list.proto",
+            "michelangelo/api/v2/project.proto",
+        ]
+        mock_fd_instance1.message_type = [
+            mock_create_request_msg,
+            mock_create_response_msg,
+            mock_get_request_msg,
+            mock_get_response_msg,
+        ]
+        mock_fd_instance1.service = [mock_service_descriptor]
+
+        return mock_fd_instance1
+
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
     def test_get_service_descriptors_success(
@@ -235,9 +349,7 @@ class GetServiceDescriptorsTest(TestCase):
 
         # Create mock response
         mock_response = Mock()
-        mock_response.file_descriptor_response.file_descriptor_proto = [
-            mock_fd_bytes
-        ]
+        mock_response.file_descriptor_response.file_descriptor_proto = [mock_fd_bytes]
 
         # Create mock stub
         mock_stub = Mock()
@@ -275,16 +387,22 @@ class GetServiceDescriptorsTest(TestCase):
     ):
         """
         Test `get_service_descriptors()` function with multiple file descriptors
+        Mimics the actual protobuf structure with message types, fields, service descriptors, and methods
         """
+
         # Create mock channel
         mock_channel = Mock()
-        service_name = "michelangelo.api.v2.MultiService"
+        service_name = "michelangelo.api.v2.ProjectService"
 
-        # Create mock FileDescriptorProto instances
-        mock_fd_instance1 = Mock()
-        mock_fd_instance1.name = "service1.proto"
+        mock_fd_instance1 = self._get_project_svc_mock()
+
+        # Create second FileDescriptorProto (dependency file)
         mock_fd_instance2 = Mock()
-        mock_fd_instance2.name = "service2.proto"
+        mock_fd_instance2.name = "michelangelo/api/v2/project.proto"
+        mock_fd_instance2.package = "michelangelo.api.v2"
+        mock_fd_instance2.dependency = []
+        mock_fd_instance2.message_type = []
+        mock_fd_instance2.service = []
 
         # Setup the class to return different instances on each call
         mock_file_descriptor_proto_class.side_effect = [
@@ -303,18 +421,49 @@ class GetServiceDescriptorsTest(TestCase):
             mock_fd_bytes2,
         ]
 
-        # Create mock stub
+        # Create mock stub that only returns when called with the correct channel
         mock_stub = Mock()
         mock_stub.ServerReflectionInfo.return_value = [mock_response]
-        mock_stub_class.return_value = mock_stub
 
-        # Call the function
+        # Set ServerReflectionStub mock.
+        def stub_factory(channel):
+            if channel == mock_channel:
+                return mock_stub
+            raise ValueError("Unexpected channel")
+
+        mock_stub_class.side_effect = stub_factory
+
+        ### Call the function
         result = list(get_service_descriptors(mock_channel, service_name))
 
-        # Verify the result
+        ### Verify the result
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0], mock_fd_instance1)
         self.assertEqual(result[1], mock_fd_instance2)
+
+        # Verify the first descriptor has the expected service structure
+        self.assertEqual(len(result[0].service), 1)
+        self.assertEqual(result[0].service[0].name, "ProjectService")
+        self.assertEqual(len(result[0].service[0].method), 2)
+        self.assertEqual(result[0].service[0].method[0].name, "CreateProject")
+        self.assertEqual(result[0].service[0].method[1].name, "GetProject")
+
+        # Verify the first descriptor has the expected message types with fields
+        self.assertEqual(len(result[0].message_type), 4)
+        self.assertEqual(result[0].message_type[0].name, "CreateProjectRequest")
+        self.assertEqual(result[0].message_type[1].name, "CreateProjectResponse")
+        self.assertEqual(result[0].message_type[2].name, "GetProjectRequest")
+        self.assertEqual(result[0].message_type[3].name, "GetProjectResponse")
+
+        # Verify the request was created correctly with service_name and host
+        call_args = mock_stub.ServerReflectionInfo.call_args
+        request_iter = call_args[0][0]
+        request_list = list(request_iter)
+        self.assertEqual(len(request_list), 1)
+        request = request_list[0]
+        self.assertIsInstance(request, ServerReflectionRequest)
+        self.assertEqual(request.file_containing_symbol, service_name)
+        self.assertEqual(request.host, "")
 
         # Verify ParseFromString was called for each descriptor
         mock_fd_instance1.ParseFromString.assert_called_once_with(mock_fd_bytes1)
