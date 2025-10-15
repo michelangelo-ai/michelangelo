@@ -135,7 +135,7 @@ class TaskFunction(Generic[P, R]):
                                            For example, if the original configuration specifies a head_cpu = 4, head_memory = 16GB,
                                            and the new configuration specifies a CPU count of 8,
                                            the resulting configuration will have a head_cpu = 8 and a head_memory = 16GB.
-            retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries)..
+            retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries).
         Returns:
             TaskFunction[P, R]: A new TaskFunction instance with the specified overrides.
         """
