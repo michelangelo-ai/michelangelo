@@ -12,7 +12,7 @@ class ImageSpec:
             config=RayTask(cpu=1),
             image_spec=ImageSpec(
                 container_image="docker.io/library/examples:latest",
-                receipt="bazel://uber/ai/michelangelo/sdk/workflow/tasks/llm_feature_prep:uniflow_default_task_image"
+                recipe="bazel://uber/ai/michelangelo/sdk/workflow/tasks/llm_feature_prep:uniflow_default_task_image"
             )
         )
         def my_task():
@@ -22,5 +22,5 @@ class ImageSpec:
     container_image: Optional[str] = None
     """The container image name/tag to use for task execution"""
 
-    receipt: Optional[str] = None
-    """Build receipt/target for reproducible image builds"""
+    recipe: Optional[str] = None
+    """Build recipe/target for reproducible image builds"""
