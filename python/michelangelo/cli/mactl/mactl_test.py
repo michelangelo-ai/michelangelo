@@ -14,6 +14,7 @@ from michelangelo.cli.mactl.mactl import (
     list_services,
     create_serivce_classes,
     get_service_descriptors,
+    get_all_file_descriptors_by_filename,
 )
 
 
@@ -209,123 +210,124 @@ class ServiceClassCreationTest(TestCase):
         self.assertEqual(len(result), 0)
 
 
+def _get_project_svc_mock() -> Mock:
+    """
+    Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
+    """
+    # Create mock fields for CreateProjectRequest
+    mock_field_project = Mock()
+    mock_field_project.name = "project"
+    mock_field_project.number = 1
+    mock_field_project.label = 1  # LABEL_OPTIONAL
+    mock_field_project.type = 11  # TYPE_MESSAGE
+    mock_field_project.type_name = ".michelangelo.api.v2.Project"
+    mock_field_project.json_name = "project"
+
+    mock_field_create_options = Mock()
+    mock_field_create_options.name = "create_options"
+    mock_field_create_options.number = 2
+    mock_field_create_options.label = 1  # LABEL_OPTIONAL
+    mock_field_create_options.type = 11  # TYPE_MESSAGE
+    mock_field_create_options.type_name = (
+        ".k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions"
+    )
+    mock_field_create_options.json_name = "createOptions"
+
+    # Create mock fields for CreateProjectResponse
+    mock_field_response_project = Mock()
+    mock_field_response_project.name = "project"
+    mock_field_response_project.number = 1
+    mock_field_response_project.label = 1  # LABEL_OPTIONAL
+    mock_field_response_project.type = 11  # TYPE_MESSAGE
+    mock_field_response_project.type_name = ".michelangelo.api.v2.Project"
+    mock_field_response_project.json_name = "project"
+
+    # Create mock fields for GetProjectRequest
+    mock_field_name = Mock()
+    mock_field_name.name = "name"
+    mock_field_name.number = 1
+    mock_field_name.label = 1  # LABEL_OPTIONAL
+    mock_field_name.type = 9  # TYPE_STRING
+    mock_field_name.json_name = "name"
+
+    mock_field_namespace = Mock()
+    mock_field_namespace.name = "namespace"
+    mock_field_namespace.number = 2
+    mock_field_namespace.label = 1  # LABEL_OPTIONAL
+    mock_field_namespace.type = 9  # TYPE_STRING
+    mock_field_namespace.json_name = "namespace"
+
+    mock_field_get_options = Mock()
+    mock_field_get_options.name = "get_options"
+    mock_field_get_options.number = 3
+    mock_field_get_options.label = 1  # LABEL_OPTIONAL
+    mock_field_get_options.type = 11  # TYPE_MESSAGE
+    mock_field_get_options.type_name = (
+        ".k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions"
+    )
+    mock_field_get_options.json_name = "getOptions"
+
+    # Create mock methods (mimicking actual protobuf MethodDescriptorProto)
+    mock_method1 = Mock()
+    mock_method1.name = "CreateProject"
+    mock_method1.input_type = ".michelangelo.api.v2.CreateProjectRequest"
+    mock_method1.output_type = ".michelangelo.api.v2.CreateProjectResponse"
+
+    mock_method2 = Mock()
+    mock_method2.name = "GetProject"
+    mock_method2.input_type = ".michelangelo.api.v2.GetProjectRequest"
+    mock_method2.output_type = ".michelangelo.api.v2.GetProjectResponse"
+
+    # Create mock service descriptor (mimicking ServiceDescriptorProto)
+    mock_service_descriptor = Mock()
+    mock_service_descriptor.name = "ProjectService"
+    mock_service_descriptor.method = [mock_method1, mock_method2]
+
+    # Create mock message types (request/response schemas)
+    mock_create_request_msg = Mock()
+    mock_create_request_msg.name = "CreateProjectRequest"
+    mock_create_request_msg.field = [mock_field_project, mock_field_create_options]
+
+    mock_create_response_msg = Mock()
+    mock_create_response_msg.name = "CreateProjectResponse"
+    mock_create_response_msg.field = [mock_field_response_project]
+
+    mock_get_request_msg = Mock()
+    mock_get_request_msg.name = "GetProjectRequest"
+    mock_get_request_msg.field = [
+        mock_field_name,
+        mock_field_namespace,
+        mock_field_get_options,
+    ]
+
+    mock_get_response_msg = Mock()
+    mock_get_response_msg.name = "GetProjectResponse"
+    mock_get_response_msg.field = [mock_field_response_project]
+
+    # Create mock FileDescriptorProto instance for project_svc.proto
+    mock_fd_instance1 = Mock()
+    mock_fd_instance1.name = "michelangelo/api/v2/project_svc.proto"
+    mock_fd_instance1.package = "michelangelo.api.v2"
+    mock_fd_instance1.dependency = [
+        "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto",
+        "michelangelo/api/list.proto",
+        "michelangelo/api/v2/project.proto",
+    ]
+    mock_fd_instance1.message_type = [
+        mock_create_request_msg,
+        mock_create_response_msg,
+        mock_get_request_msg,
+        mock_get_response_msg,
+    ]
+    mock_fd_instance1.service = [mock_service_descriptor]
+
+    return mock_fd_instance1
+
+
 class GetServiceDescriptorsTest(TestCase):
     """
     Tests for get_service_descriptors function
     """
-
-    def _get_project_svc_mock(self) -> Mock:
-        """
-        Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
-        """
-        # Create mock fields for CreateProjectRequest
-        mock_field_project = Mock()
-        mock_field_project.name = "project"
-        mock_field_project.number = 1
-        mock_field_project.label = 1  # LABEL_OPTIONAL
-        mock_field_project.type = 11  # TYPE_MESSAGE
-        mock_field_project.type_name = ".michelangelo.api.v2.Project"
-        mock_field_project.json_name = "project"
-
-        mock_field_create_options = Mock()
-        mock_field_create_options.name = "create_options"
-        mock_field_create_options.number = 2
-        mock_field_create_options.label = 1  # LABEL_OPTIONAL
-        mock_field_create_options.type = 11  # TYPE_MESSAGE
-        mock_field_create_options.type_name = (
-            ".k8s.io.apimachinery.pkg.apis.meta.v1.CreateOptions"
-        )
-        mock_field_create_options.json_name = "createOptions"
-
-        # Create mock fields for CreateProjectResponse
-        mock_field_response_project = Mock()
-        mock_field_response_project.name = "project"
-        mock_field_response_project.number = 1
-        mock_field_response_project.label = 1  # LABEL_OPTIONAL
-        mock_field_response_project.type = 11  # TYPE_MESSAGE
-        mock_field_response_project.type_name = ".michelangelo.api.v2.Project"
-        mock_field_response_project.json_name = "project"
-
-        # Create mock fields for GetProjectRequest
-        mock_field_name = Mock()
-        mock_field_name.name = "name"
-        mock_field_name.number = 1
-        mock_field_name.label = 1  # LABEL_OPTIONAL
-        mock_field_name.type = 9  # TYPE_STRING
-        mock_field_name.json_name = "name"
-
-        mock_field_namespace = Mock()
-        mock_field_namespace.name = "namespace"
-        mock_field_namespace.number = 2
-        mock_field_namespace.label = 1  # LABEL_OPTIONAL
-        mock_field_namespace.type = 9  # TYPE_STRING
-        mock_field_namespace.json_name = "namespace"
-
-        mock_field_get_options = Mock()
-        mock_field_get_options.name = "get_options"
-        mock_field_get_options.number = 3
-        mock_field_get_options.label = 1  # LABEL_OPTIONAL
-        mock_field_get_options.type = 11  # TYPE_MESSAGE
-        mock_field_get_options.type_name = (
-            ".k8s.io.apimachinery.pkg.apis.meta.v1.GetOptions"
-        )
-        mock_field_get_options.json_name = "getOptions"
-
-        # Create mock methods (mimicking actual protobuf MethodDescriptorProto)
-        mock_method1 = Mock()
-        mock_method1.name = "CreateProject"
-        mock_method1.input_type = ".michelangelo.api.v2.CreateProjectRequest"
-        mock_method1.output_type = ".michelangelo.api.v2.CreateProjectResponse"
-
-        mock_method2 = Mock()
-        mock_method2.name = "GetProject"
-        mock_method2.input_type = ".michelangelo.api.v2.GetProjectRequest"
-        mock_method2.output_type = ".michelangelo.api.v2.GetProjectResponse"
-
-        # Create mock service descriptor (mimicking ServiceDescriptorProto)
-        mock_service_descriptor = Mock()
-        mock_service_descriptor.name = "ProjectService"
-        mock_service_descriptor.method = [mock_method1, mock_method2]
-
-        # Create mock message types (request/response schemas)
-        mock_create_request_msg = Mock()
-        mock_create_request_msg.name = "CreateProjectRequest"
-        mock_create_request_msg.field = [mock_field_project, mock_field_create_options]
-
-        mock_create_response_msg = Mock()
-        mock_create_response_msg.name = "CreateProjectResponse"
-        mock_create_response_msg.field = [mock_field_response_project]
-
-        mock_get_request_msg = Mock()
-        mock_get_request_msg.name = "GetProjectRequest"
-        mock_get_request_msg.field = [
-            mock_field_name,
-            mock_field_namespace,
-            mock_field_get_options,
-        ]
-
-        mock_get_response_msg = Mock()
-        mock_get_response_msg.name = "GetProjectResponse"
-        mock_get_response_msg.field = [mock_field_response_project]
-
-        # Create mock FileDescriptorProto instance for project_svc.proto
-        mock_fd_instance1 = Mock()
-        mock_fd_instance1.name = "michelangelo/api/v2/project_svc.proto"
-        mock_fd_instance1.package = "michelangelo.api.v2"
-        mock_fd_instance1.dependency = [
-            "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto",
-            "michelangelo/api/list.proto",
-            "michelangelo/api/v2/project.proto",
-        ]
-        mock_fd_instance1.message_type = [
-            mock_create_request_msg,
-            mock_create_response_msg,
-            mock_get_request_msg,
-            mock_get_response_msg,
-        ]
-        mock_fd_instance1.service = [mock_service_descriptor]
-
-        return mock_fd_instance1
 
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
@@ -395,7 +397,7 @@ class GetServiceDescriptorsTest(TestCase):
         mock_channel = Mock()
         service_name = "michelangelo.api.v2.ProjectService"
 
-        mock_fd_instance1 = self._get_project_svc_mock()
+        mock_fd_instance1 = _get_project_svc_mock()
 
         # Create second FileDescriptorProto (dependency file)
         mock_fd_instance2 = Mock()
@@ -789,3 +791,302 @@ class TLSErrorHandlingTest(TestCase):
                 mactl.ssl_channel_credentials()
 
             self.assertEqual(str(context.exception), "Failed to create SSL credentials")
+
+
+class GetAllFileDescriptorsByFilenameTest(TestCase):
+    """
+    Tests for `get_all_file_descriptors_by_filename()` function
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
+    def test_no_dependencies(
+        self, mock_fd_proto_class, mock_stub_class
+    ):
+        """
+        Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        filename = "simple.proto"
+
+        # Create mock file descriptor with no dependencies
+        mock_fd = Mock()
+        mock_fd.name = filename
+        mock_fd.dependency = []
+        mock_fd_proto_class.return_value = mock_fd
+
+        # Create mock response
+        mock_fd_bytes = b"mock_fd_bytes"
+        mock_response = Mock()
+        mock_response.file_descriptor_response.file_descriptor_proto = [mock_fd_bytes]
+
+        # Create mock stub
+        mock_stub = Mock()
+        mock_stub.ServerReflectionInfo.return_value = [mock_response]
+        mock_stub_class.return_value = mock_stub
+
+        # Call the function
+        result = list(get_all_file_descriptors_by_filename(mock_channel, filename))
+
+        # Verify result
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0], mock_fd)
+
+        # Verify request was created correctly
+        call_args = mock_stub.ServerReflectionInfo.call_args
+        request_iter = call_args[0][0]
+        request_list = list(request_iter)
+        self.assertEqual(len(request_list), 1)
+        self.assertEqual(request_list[0].file_by_filename, filename)
+
+        # Verify ParseFromString was called
+        mock_fd.ParseFromString.assert_called_once_with(mock_fd_bytes)
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
+    def test_with_dependencies(
+        self, mock_fd_proto_class, mock_stub_class
+    ):
+        """
+        Test `get_all_file_descriptors_by_filename()` with recursive dependencies
+        Mimics the actual behavior from the log where:
+        - project_svc.proto depends on: k8s generated.proto, list.proto, project.proto
+        - k8s generated.proto depends on: runtime/generated.proto,
+            runtime/schema/generated.proto
+        - list.proto depends on: google/protobuf/any.proto
+        - project.proto depends on: timestamp.proto, any.proto (visited),
+            k8s generated.proto (visited), options.proto, git.proto
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        main_filename = "michelangelo/api/v2/project_svc.proto"
+
+        # Create mock file descriptors with dependency tree
+        # Main file: project_svc.proto
+        mock_fd_main = _get_project_svc_mock()
+
+        # Dependency 1: k8s generated.proto
+        mock_fd_k8s = Mock()
+        mock_fd_k8s.name = "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto"
+        mock_fd_k8s.dependency = [
+            "k8s.io/apimachinery/pkg/runtime/generated.proto",
+            "k8s.io/apimachinery/pkg/runtime/schema/generated.proto",
+        ]
+
+        # Dependency 1.1: runtime/generated.proto (no deps)
+        mock_fd_runtime = Mock()
+        mock_fd_runtime.name = "k8s.io/apimachinery/pkg/runtime/generated.proto"
+        mock_fd_runtime.dependency = []
+
+        # Dependency 1.2: runtime/schema/generated.proto (no deps)
+        mock_fd_schema = Mock()
+        mock_fd_schema.name = "k8s.io/apimachinery/pkg/runtime/schema/generated.proto"
+        mock_fd_schema.dependency = []
+
+        # Dependency 2: list.proto
+        mock_fd_list = Mock()
+        mock_fd_list.name = "michelangelo/api/list.proto"
+        mock_fd_list.dependency = ["google/protobuf/any.proto"]
+
+        # Dependency 2.1: any.proto (no deps)
+        mock_fd_any = Mock()
+        mock_fd_any.name = "google/protobuf/any.proto"
+        mock_fd_any.dependency = []
+
+        # Dependency 3: project.proto
+        mock_fd_project = Mock()
+        mock_fd_project.name = "michelangelo/api/v2/project.proto"
+        mock_fd_project.dependency = [
+            "google/protobuf/timestamp.proto",
+            "google/protobuf/any.proto",  # Already visited
+            "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto",  # Already visited
+            "michelangelo/api/options.proto",
+            "michelangelo/api/v2/git.proto",
+        ]
+
+        # Dependency 3.1: timestamp.proto (no deps)
+        mock_fd_timestamp = Mock()
+        mock_fd_timestamp.name = "google/protobuf/timestamp.proto"
+        mock_fd_timestamp.dependency = []
+
+        # Dependency 3.2: options.proto
+        mock_fd_options = Mock()
+        mock_fd_options.name = "michelangelo/api/options.proto"
+        mock_fd_options.dependency = ["google/protobuf/descriptor.proto"]
+
+        # Dependency 3.2.1: descriptor.proto (no deps)
+        mock_fd_descriptor = Mock()
+        mock_fd_descriptor.name = "google/protobuf/descriptor.proto"
+        mock_fd_descriptor.dependency = []
+
+        # Dependency 3.3: git.proto
+        mock_fd_git = Mock()
+        mock_fd_git.name = "michelangelo/api/v2/git.proto"
+        mock_fd_git.dependency = ["michelangelo/api/options.proto"]  # Already visited
+
+        # Create a mapping of filenames to their mock file descriptors
+        mock_fd_map = {
+            "google/protobuf/any.proto": mock_fd_any,
+            "google/protobuf/descriptor.proto": mock_fd_descriptor,
+            "google/protobuf/timestamp.proto": mock_fd_timestamp,
+            "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto": mock_fd_k8s,
+            "k8s.io/apimachinery/pkg/runtime/generated.proto": mock_fd_runtime,
+            "k8s.io/apimachinery/pkg/runtime/schema/generated.proto": mock_fd_schema,
+            "michelangelo/api/list.proto": mock_fd_list,
+            "michelangelo/api/options.proto": mock_fd_options,
+            "michelangelo/api/v2/git.proto": mock_fd_git,
+            "michelangelo/api/v2/project.proto": mock_fd_project,
+            main_filename: mock_fd_main,
+        }
+
+        # Create mock responses for each file
+        mock_responses = {
+            "google/protobuf/any.proto": b"any_bytes",
+            "google/protobuf/descriptor.proto": b"descriptor_bytes",
+            "google/protobuf/timestamp.proto": b"timestamp_bytes",
+            "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto": b"k8s_bytes",
+            "k8s.io/apimachinery/pkg/runtime/generated.proto": b"runtime_bytes",
+            "k8s.io/apimachinery/pkg/runtime/schema/generated.proto": b"schema_bytes",
+            "michelangelo/api/list.proto": b"list_bytes",
+            "michelangelo/api/options.proto": b"options_bytes",
+            "michelangelo/api/v2/git.proto": b"git_bytes",
+            "michelangelo/api/v2/project.proto": b"project_bytes",
+            main_filename: b"main_bytes",
+        }
+
+        # Track requested filenames to verify correct requests
+        requested_filenames = []
+
+        # Setup FileDescriptorProto to return the correct mock based on context
+        # We need to track which file is being requested in the stub call
+        current_filename = [None]  # Use list to allow modification in nested function
+
+        def fd_proto_factory():
+            """Return the appropriate FileDescriptorProto mock based on current request"""
+            filename = current_filename[0]
+            if filename in mock_fd_map:
+                return mock_fd_map[filename]
+            raise ValueError(f"Unexpected filename: {filename}")
+
+        mock_fd_proto_class.side_effect = lambda: fd_proto_factory()
+
+        # Create mock stub
+        mock_stub = Mock()
+
+        def create_response(filename):
+            """Helper to create a mock response for a given filename"""
+            response = Mock()
+            response.file_descriptor_response.file_descriptor_proto = [
+                mock_responses[filename]
+            ]
+            return [response]
+
+        # Setup stub to return appropriate responses based on request
+        def stub_info_side_effect(request_iter, metadata):
+            request_list = list(request_iter)
+            self.assertEqual(len(request_list), 1)
+
+            # Extract and verify the filename from the request
+            filename = request_list[0].file_by_filename
+            self.assertIn(filename, mock_responses.keys())
+
+            # Track the request
+            requested_filenames.append(filename)
+
+            # Set current filename so FileDescriptorProto factory knows which mock to return
+            current_filename[0] = filename
+
+            return create_response(filename)
+
+        mock_stub.ServerReflectionInfo.side_effect = stub_info_side_effect
+        mock_stub_class.return_value = mock_stub
+
+        ### Call the function
+        result = list(get_all_file_descriptors_by_filename(mock_channel, main_filename))
+
+        ### Verification
+        # Verify result - should return 11 file descriptors (matching the log)
+        self.assertEqual(len(result), 11)
+
+        # Verify the order: dependencies are yielded before their dependents
+        result_names = [fd.name for fd in result]
+
+        # runtime/generated.proto should come before k8s generated.proto
+        self.assertLess(
+            result_names.index("k8s.io/apimachinery/pkg/runtime/generated.proto"),
+            result_names.index("k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto"),
+        )
+
+        # any.proto should come before list.proto
+        self.assertLess(
+            result_names.index("google/protobuf/any.proto"),
+            result_names.index("michelangelo/api/list.proto"),
+        )
+
+        # All dependencies should come before main file
+        self.assertEqual(result_names[-1], main_filename)
+
+        # Verify that visited set prevented duplicate processing
+        # any.proto and k8s generated.proto appear in multiple dependency lists
+        # but should only be in result once
+        self.assertEqual(result_names.count("google/protobuf/any.proto"), 1)
+        self.assertEqual(
+            result_names.count("k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto"),
+            1,
+        )
+
+        # Verify all expected files are in the result
+        expected_files = set(mock_responses.keys())
+        actual_files = set(result_names)
+        self.assertEqual(actual_files, expected_files)
+
+        # Verify that each requested filename corresponds to an expected file
+        self.assertEqual(len(requested_filenames), 11)
+        for filename in requested_filenames:
+            self.assertIn(filename, mock_responses.keys())
+
+        # Verify that all expected files were requested
+        self.assertEqual(set(requested_filenames), expected_files)
+
+    @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
+    @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
+    def test_recursion_depth_limit(
+        self, mock_fd_proto_class, mock_stub_class
+    ):
+        """
+        Test `get_all_file_descriptors_by_filename()` raises RecursionError when depth exceeds limit
+        Starts at deps=999 and verifies it fails when processing a dependency (depth becomes 1000)
+        """
+        # Create mock channel
+        mock_channel = Mock()
+        filename = "deep.proto"
+
+        # Create mock file descriptor with one dependency
+        mock_fd = Mock()
+        mock_fd.name = filename
+        mock_fd.dependency = ["dependency.proto"]  # This will cause depth to increase to 1000
+        mock_fd_proto_class.return_value = mock_fd
+
+        # Create mock response
+        mock_fd_bytes = b"mock_fd_bytes"
+        mock_response = Mock()
+        mock_response.file_descriptor_response.file_descriptor_proto = [mock_fd_bytes]
+
+        # Create mock stub
+        mock_stub = Mock()
+        mock_stub.ServerReflectionInfo.return_value = [mock_response]
+        mock_stub_class.return_value = mock_stub
+
+        # Call with deps=999, which should process fine initially,
+        # but fail when trying to process the dependency at depth 1000
+        with self.assertRaises(RecursionError) as context:
+            list(get_all_file_descriptors_by_filename(
+                mock_channel, filename, deps=999
+            ))
+
+        # Verify the error message
+        self.assertIn(
+            "Maximum recursion depth exceeded",
+            str(context.exception)
+        )
