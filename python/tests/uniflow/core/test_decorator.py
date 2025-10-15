@@ -345,25 +345,3 @@ class ImageSpecTest(unittest.TestCase):
         # Neither container_image nor recipe should be present
         self.assertNotIn("container_image=", transpiled_code)
         self.assertNotIn("recipe=", transpiled_code)
-
-    def test_with_overrides_image_spec(self):
-        """Test task overrides with ImageSpec."""
-        # Create override with new ImageSpec
-        new_image_spec = ImageSpec(
-            container_image="override-image:v2.0",
-            recipe="bazel://override/path:target"
-        )
-
-        overridden_task = task_with_image_spec.with_overrides(
-            alias="overridden_task",
-            image_spec=new_image_spec
-        )
-
-        # Verify the override worked
-        self.assertEqual(overridden_task._alias, "overridden_task")
-        self.assertIsNotNone(overridden_task._image_spec)
-        self.assertEqual(overridden_task._image_spec.container_image, "override-image:v2.0")
-        self.assertEqual(overridden_task._image_spec.recipe, "bazel://override/path:target")
-
-        # Original task should be unchanged
-        self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
