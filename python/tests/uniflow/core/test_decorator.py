@@ -104,11 +104,11 @@ def _echo_task(x):
     config=TaskA(cpu=1),
     image_spec=ImageSpec(
         container_image="test-image:latest",
-        receipt="bazel://test/path:target"
+        recipe="bazel://test/path:target"
     )
 )
 def task_with_image_spec():
-    """Task that uses ImageSpec with both container_image and receipt."""
+    """Task that uses ImageSpec with both container_image and recipe."""
     return "task_with_image_spec_result"
 
 
@@ -117,7 +117,7 @@ def task_with_image_spec():
     image_spec=ImageSpec(container_image="registry-image:v1.0")
 )
 def task_with_registry_image():
-    """Task that uses ImageSpec with only container_image (no receipt)."""
+    """Task that uses ImageSpec with only container_image (no recipe)."""
     return "task_with_registry_image_result"
 
 
@@ -285,7 +285,7 @@ class ImageSpecTest(unittest.TestCase):
         self.assertIsInstance(task_with_image_spec, TaskFunction)
         self.assertIsNotNone(task_with_image_spec._image_spec)
         self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
-        self.assertEqual(task_with_image_spec._image_spec.receipt, "bazel://test/path:target")
+        self.assertEqual(task_with_image_spec._image_spec.recipe, "bazel://test/path:target")
 
     def test_task_without_image_spec(self):
         """Test that tasks without ImageSpec have None for image_spec."""
@@ -307,23 +307,23 @@ class ImageSpecTest(unittest.TestCase):
         self.assertEqual(result2, "task_with_registry_image_result")
 
     def test_task_transpile_with_image_spec(self):
-        """Test AST transpilation includes ImageSpec container_image and receipt."""
+        """Test AST transpilation includes ImageSpec container_image and recipe."""
         self.assertIsInstance(task_with_image_spec, TaskFunction)
 
         deps = Dependencies()
         exp = task_with_image_spec._transpile(deps)
 
-        # Check that container_image and receipt are included in transpiled AST
+        # Check that container_image and recipe are included in transpiled AST
         transpiled_code = ast.unparse(exp)
         self.assertIn("container_image='test-image:latest'", transpiled_code)
-        self.assertIn("receipt='bazel://test/path:target'", transpiled_code)
+        self.assertIn("recipe='bazel://test/path:target'", transpiled_code)
 
         # Verify basic task parameters are still present
         self.assertIn("cpu=1", transpiled_code)
         self.assertIn("cache_enabled=False", transpiled_code)
 
     def test_task_transpile_with_registry_image_only(self):
-        """Test AST transpilation with only container_image (no receipt)."""
+        """Test AST transpilation with only container_image (no recipe)."""
         self.assertIsInstance(task_with_registry_image, TaskFunction)
 
         deps = Dependencies()
@@ -331,8 +331,8 @@ class ImageSpecTest(unittest.TestCase):
 
         transpiled_code = ast.unparse(exp)
         self.assertIn("container_image='registry-image:v1.0'", transpiled_code)
-        # Receipt should not be present since it's None
-        self.assertNotIn("receipt=", transpiled_code)
+        # recipe should not be present since it's None
+        self.assertNotIn("recipe=", transpiled_code)
 
     def test_task_transpile_without_image_spec(self):
         """Test AST transpilation without ImageSpec doesn't include image parameters."""
@@ -342,16 +342,16 @@ class ImageSpecTest(unittest.TestCase):
         exp = task_without_image_spec._transpile(deps)
 
         transpiled_code = ast.unparse(exp)
-        # Neither container_image nor receipt should be present
+        # Neither container_image nor recipe should be present
         self.assertNotIn("container_image=", transpiled_code)
-        self.assertNotIn("receipt=", transpiled_code)
+        self.assertNotIn("recipe=", transpiled_code)
 
     def test_with_overrides_image_spec(self):
         """Test task overrides with ImageSpec."""
         # Create override with new ImageSpec
         new_image_spec = ImageSpec(
             container_image="override-image:v2.0",
-            receipt="bazel://override/path:target"
+            recipe="bazel://override/path:target"
         )
 
         overridden_task = task_with_image_spec.with_overrides(
@@ -363,7 +363,7 @@ class ImageSpecTest(unittest.TestCase):
         self.assertEqual(overridden_task._alias, "overridden_task")
         self.assertIsNotNone(overridden_task._image_spec)
         self.assertEqual(overridden_task._image_spec.container_image, "override-image:v2.0")
-        self.assertEqual(overridden_task._image_spec.receipt, "bazel://override/path:target")
+        self.assertEqual(overridden_task._image_spec.recipe, "bazel://override/path:target")
 
         # Original task should be unchanged
         self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
