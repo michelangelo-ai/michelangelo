@@ -120,7 +120,6 @@ class TaskFunction(Generic[P, R]):
         alias: Optional[str] = None,
         config: Optional[TaskConfig] = None,
         retry_attempts: Optional[int] = None,
-        image_spec: Optional[ImageSpec] = None,
     ) -> "TaskFunction[P, R]":
         """
         Creates a new TaskFunction instance with overridden alias and/or config.
@@ -136,11 +135,7 @@ class TaskFunction(Generic[P, R]):
                                            For example, if the original configuration specifies a head_cpu = 4, head_memory = 16GB,
                                            and the new configuration specifies a CPU count of 8,
                                            the resulting configuration will have a head_cpu = 8 and a head_memory = 16GB.
-            retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries).
-            image_spec (Optional[ImageSpec]): An optional ImageSpec object. This object will be merged the original image spec in the decorator.
-                                             For example, if the original image spec specifies a container image = "docker.io/library/examples:latest",
-                                             and the new image spec specifies a container image = "docker.io/library/examples:latest",
-                                             the resulting image spec will have a container image = "docker.io/library/examples:latest".
+            retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries)..
         Returns:
             TaskFunction[P, R]: A new TaskFunction instance with the specified overrides.
         """
@@ -152,7 +147,6 @@ class TaskFunction(Generic[P, R]):
             cache_enabled=self._cache_enabled,
             cache_version=self._cache_version,
             retry_attempts=retry_attempts or self._retry_attempts,
-            image_spec=image_spec or self._image_spec,
         )
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
@@ -207,9 +201,9 @@ class TaskFunction(Generic[P, R]):
                         ast.Constant(self._image_spec.container_image),
                     )
                 )
-            if self._image_spec.receipt:
+            if self._image_spec.recipe:
                 keywords.append(
-                    ast.keyword("receipt", ast.Constant(self._image_spec.receipt))
+                    ast.keyword("recipe", ast.Constant(self._image_spec.recipe))
                 )
 
         # Construct and return AST Call node that calls the Task Factory Function with the keywords.
@@ -241,7 +235,7 @@ def task(
             config=RayTask(cpu=1),
             image_spec=ImageSpec(
                 container_image="my-image:latest",
-                receipt="bazel://path/to:target"
+                recipe="bazel://path/to:target"
             )
         )
         def task_with_custom_image():
