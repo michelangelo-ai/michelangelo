@@ -105,7 +105,7 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 	triggerContext := Object{
 		"DS":            logicalTs.Format("2006-01-02"),
 		"StartedAt":     workflow.Now(ctx),
-		"TriggeredRuns": map[string]Object{},
+		"TriggeredRuns": []parameter.TriggeredRun{},
 	}
 	ctx = workflow.WithValue(ctx, contextKeyTriggerContext, triggerContext)
 	// setup query handler for runHistory
@@ -223,13 +223,10 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
 
-	// Get the appropriate handler for this parameter type
-	handler := param.GetHandler()
-
-	// Use handler to get parameter ID and execution timestamp
+	// Get parameter ID and execution timestamp directly from param methods
 	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
-	paramID := handler.GetParameterID(param)
-	executionTimestamp := handler.GetExecutionTimestamp(param, logicalTs)
+	paramID := param.GetParameterID()
+	executionTimestamp := param.GetExecutionTimestamp(logicalTs)
 
 	// Generate pipeline run request
 	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp)
@@ -256,10 +253,11 @@ func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parame
 		zap.Any("param", param),
 		zap.String("pipeline_run_name", pr.Name))
 
-	// Update trigger context using handler
+	// Update trigger context with run information
 	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
 	createdTimestamp := workflow.Now(ctx)
-	handler.UpdateTriggerContext(triggerContext, param, pr.Name, createdTimestamp)
+	info := param.GetTriggeredRun(pr.Name, executionTimestamp, createdTimestamp)
+	triggerContext["TriggeredRuns"] = append(triggerContext["TriggeredRuns"].([]parameter.TriggeredRun), info)
 
 	// Run sensor if needed
 	if !sensor {

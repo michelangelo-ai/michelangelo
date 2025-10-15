@@ -19,19 +19,6 @@ type activities struct {
 	pipelineRunService v2pb.PipelineRunServiceYARPCClient
 }
 
-// Parameter handler factory function
-func getParameterHandler(triggerType string) parameter.ParameterHandler {
-	switch triggerType {
-	case triggerrun.TriggerTypeCron, triggerrun.TriggerTypeInterval:
-		return &parameter.CronParameterHandler{}
-	case triggerrun.TriggerTypeBackfill:
-		return &parameter.BackfillParameterHandler{}
-	// TODO: Add other parameter handlers here, such as batch rerun
-	default:
-		return &parameter.CronParameterHandler{}
-	}
-}
-
 // CreatePipelineRun creates a new pipeline run using the provided request parameters.
 //
 // This method is executed as part of a Starlark worker activity.
@@ -83,11 +70,11 @@ func (r *activities) GenerateBatchRunParams(ctx context.Context, triggerRun *v2p
 		zap.String("trigger_run", triggerRun.Name),
 		zap.String("trigger_type", triggerType))
 
-	// Get trigger type and appropriate parameter handler
-	handler := getParameterHandler(triggerType)
+	// Get appropriate parameter generator for this trigger type
+	generator := parameter.GetParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
-	batches, err := handler.GenerateBatchParams(triggerRun)
+	batches, err := generator.GenerateBatchParams(triggerRun)
 	if err != nil {
 		logger.Error("failed to generate batch params",
 			zap.String("operation", "generate_batch_params"),
@@ -122,11 +109,11 @@ func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun
 		zap.String("trigger_run", triggerRun.Name),
 		zap.String("trigger_type", triggerType))
 
-	// Get trigger type and appropriate parameter handler
-	handler := getParameterHandler(triggerType)
+	// Get appropriate parameter generator for this trigger type
+	generator := parameter.GetParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
-	params, err := handler.GenerateConcurrentParams(triggerRun)
+	params, err := generator.GenerateConcurrentParams(triggerRun)
 	if err != nil {
 		logger.Error("failed to generate concurrent params",
 			zap.String("operation", "generate_concurrent_params"),

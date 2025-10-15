@@ -2,7 +2,6 @@ package parameter
 
 import (
 	"fmt"
-	"sort"
 	"time"
 
 	pbtypes "github.com/gogo/protobuf/types"
@@ -10,7 +9,7 @@ import (
 	"github.com/robfig/cron"
 )
 
-type BackfillParameterHandler struct{}
+type BackfillParameterGenerator struct{}
 
 // BackfillParam is a struct to store backfill execution metadata
 // for backfill trigger, it is initialized with execution timestamp and parameter id when batch created
@@ -22,8 +21,26 @@ type BackfillParam struct {
 	CreatedAt          *time.Time
 }
 
-// GenerateBatchParams generates batch parameters for backfill trigger
-func (h *BackfillParameterHandler) GenerateBatchParams(triggerRun *v2pb.TriggerRun) ([][]Params, error) {
+// GenerateBatchParams generates batch parameters for backfill trigger.
+//
+// Backfill triggers execute pipeline runs for past time periods based on a cron/interval schedule.
+// For example, if you have a daily pipeline that should have run from 2024-01-01 to 2024-01-31,
+// backfill will generate timestamps for each day and execute the pipeline for each timestamp.
+//
+// This method creates a Cartesian product of:
+//   - Execution timestamps (calculated from startTimestamp to endTimestamp based on cron/interval)
+//   - Parameter sets (from trigger.ParametersMap)
+//
+// Example:
+//
+//	3 timestamps (t1, t2, t3) × 2 params (p1, p2)
+//	= 6 total runs: [(t1,p1), (t1,p2), (t2,p1), (t2,p2), (t3,p1), (t3,p2)]
+//
+// These 6 runs are then split into batches based on BatchPolicy.BatchSize.
+// If BatchSize=2, returns: [[(t1,p1), (t1,p2)], [(t2,p1), (t2,p2)], [(t3,p1), (t3,p2)]]
+//
+// The batches are executed sequentially with a wait period between them (BatchPolicy.WaitSeconds).
+func (g *BackfillParameterGenerator) GenerateBatchParams(triggerRun *v2pb.TriggerRun) ([][]Params, error) {
 	backfillRunTimestamps, err := calculateBackfillRunTimestamps(triggerRun)
 	if err != nil {
 		return nil, err
@@ -60,7 +77,7 @@ func (h *BackfillParameterHandler) GenerateBatchParams(triggerRun *v2pb.TriggerR
 			})
 		}
 	}
-	h.SortParams(keys)
+	sortParams(keys)
 	for i := 0; i < len(keys); i = i + batchSize {
 		if i+batchSize <= len(keys) {
 			batchedTriggeredRuns[i/batchSize] = keys[i : i+batchSize]
@@ -71,8 +88,25 @@ func (h *BackfillParameterHandler) GenerateBatchParams(triggerRun *v2pb.TriggerR
 	return batchedTriggeredRuns, nil
 }
 
-// GenerateConcurrentParams generates concurrent parameters for backfill trigger
-func (h *BackfillParameterHandler) GenerateConcurrentParams(triggerRun *v2pb.TriggerRun) ([]Params, error) {
+// GenerateConcurrentParams generates concurrent parameters for backfill trigger.
+//
+// Similar to GenerateBatchParams, this creates a Cartesian product of timestamps × parameters,
+// but returns them as a flat list to be executed with controlled concurrency using a worker pool pattern.
+//
+// Example with 6 runs and MaxConcurrency=2:
+//
+//	6 runs: [(t1,p1), (t1,p2), (t2,p1), (t2,p2), (t3,p1), (t3,p2)]
+//
+// Execution flow (with MaxConcurrency=2):
+//   - Start: (t1,p1) and (t1,p2) running (queue: [(t2,p1), (t2,p2), (t3,p1), (t3,p2)])
+//   - (t1,p1) finishes → immediately start (t2,p1)
+//   - (t1,p2) finishes → immediately start (t2,p2)
+//   - (t2,p1) finishes → immediately start (t3,p1)
+//   - ... and so on
+//
+// This maintains exactly MaxConcurrency runs executing at any time,
+// useful for rate limiting or resource management.
+func (g *BackfillParameterGenerator) GenerateConcurrentParams(triggerRun *v2pb.TriggerRun) ([]Params, error) {
 	backfillRunTimestamps, err := calculateBackfillRunTimestamps(triggerRun)
 	if err != nil {
 		return nil, err
@@ -90,41 +124,26 @@ func (h *BackfillParameterHandler) GenerateConcurrentParams(triggerRun *v2pb.Tri
 			i++
 		}
 	}
-	h.SortParams(params)
+	sortParams(params)
 	return params, nil
 }
 
-// SortParams sorts the parameters alphabetically and chronologically
-func (h *BackfillParameterHandler) SortParams(params []Params) {
-	sort.Slice(params, func(i, j int) bool {
-		if (*params[i].Backfill.ExecutionTimestamp).Equal(*params[j].Backfill.ExecutionTimestamp) {
-			return params[i].Backfill.ParamID < params[j].Backfill.ParamID
-		}
-		return (*params[i].Backfill.ExecutionTimestamp).Before(*params[j].Backfill.ExecutionTimestamp)
-	})
-}
-
-// GetParameterID returns the parameter ID for backfill trigger
-func (h *BackfillParameterHandler) GetParameterID(param Params) string {
-	return param.Backfill.ParamID
-}
-
-// GetExecutionTimestamp returns the execution timestamp for backfill trigger
-func (h *BackfillParameterHandler) GetExecutionTimestamp(param Params, logicalTs time.Time) time.Time {
-	return *param.Backfill.ExecutionTimestamp
-}
-
-// UpdateTriggerContext updates the trigger context for backfill trigger
-func (h *BackfillParameterHandler) UpdateTriggerContext(triggerContext Object, param Params, pipelineRunName string, createdTimestamp time.Time) {
-	backfillParam := BackfillParam{
-		ParamID:            param.Backfill.ParamID,
-		PipelineRunName:    pipelineRunName,
-		ExecutionTimestamp: param.Backfill.ExecutionTimestamp,
-		CreatedAt:          &createdTimestamp,
-	}
-	triggerContext["TriggeredRuns"] = append(triggerContext["TriggeredRuns"].([]BackfillParam), backfillParam)
-}
-
+// calculateBackfillRunTimestamps generates execution timestamps for backfill based on the cron/interval schedule.
+//
+// Given a time range [startTimestamp, endTimestamp] and a schedule (cron or interval),
+// this function calculates all the timestamps when the pipeline should have executed.
+//
+// Example with daily cron "0 8 * * *" (8 AM daily):
+//
+//	Start: 2024-01-01 00:00:00
+//	End:   2024-01-03 23:59:59
+//	Returns: [2024-01-01 08:00:00, 2024-01-02 08:00:00, 2024-01-03 08:00:00]
+//
+// Example with interval schedule (every 6 hours):
+//
+//	Start: 2024-01-01 00:00:00
+//	End:   2024-01-01 18:00:00
+//	Returns: [2024-01-01 00:00:00, 2024-01-01 06:00:00, 2024-01-01 12:00:00, 2024-01-01 18:00:00]
 func calculateBackfillRunTimestamps(triggerRun *v2pb.TriggerRun) ([]time.Time, error) {
 	startTimestamp, err := pbtypes.TimestampFromProto(triggerRun.Spec.StartTimestamp)
 	if err != nil {

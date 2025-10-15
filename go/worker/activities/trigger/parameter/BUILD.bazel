@@ -5,11 +5,12 @@ go_library(
     srcs = [
         "backfill_trigger.go",
         "cron_trigger.go",
-        "parameter_handler.go",
+        "params.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/components/triggerrun:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_gogo_protobuf//types:go_default_library",
         "@com_github_robfig_cron//:go_default_library",

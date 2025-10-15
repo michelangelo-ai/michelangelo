@@ -41,8 +41,12 @@ func TestRunBackfill(t *testing.T) {
 					}, nil)
 				return mockClient
 			},
-			expectedStatus: v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING},
-			expectError:    false,
+			expectedStatus: v2pb.TriggerRunStatus{
+				State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+				ExecutionWorkflowId: _runID,
+				LogUrl:              _logURL,
+			},
+			expectError: false,
 		},
 		{
 			name: "list open workflow failed and start succeeded",

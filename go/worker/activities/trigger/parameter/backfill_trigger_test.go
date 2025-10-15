@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBackfillParameterHandler_GenerateBatchParams(t *testing.T) {
-	handler := &BackfillParameterHandler{}
+func TestBackfillParameterGenerator_GenerateBatchParams(t *testing.T) {
+	handler := &BackfillParameterGenerator{}
 
 	// Create test timestamps - 2 days apart
 	startTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -175,8 +175,8 @@ func TestBackfillParameterHandler_GenerateBatchParams(t *testing.T) {
 	}
 }
 
-func TestBackfillParameterHandler_GenerateConcurrentParams(t *testing.T) {
-	handler := &BackfillParameterHandler{}
+func TestBackfillParameterGenerator_GenerateConcurrentParams(t *testing.T) {
+	handler := &BackfillParameterGenerator{}
 
 	// Create test timestamps
 	startTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -278,9 +278,7 @@ func TestBackfillParameterHandler_GenerateConcurrentParams(t *testing.T) {
 	}
 }
 
-func TestBackfillParameterHandler_SortParams(t *testing.T) {
-	handler := &BackfillParameterHandler{}
-
+func TestBackfillParameterGenerator_sortParams(t *testing.T) {
 	time1 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	time2 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 	time3 := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
@@ -322,7 +320,7 @@ func TestBackfillParameterHandler_SortParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler.SortParams(tt.params)
+			sortParams(tt.params)
 
 			for i := range tt.params {
 				assert.Equal(t, tt.expected[i].Backfill.ParamID, tt.params[i].Backfill.ParamID)
@@ -332,22 +330,18 @@ func TestBackfillParameterHandler_SortParams(t *testing.T) {
 	}
 }
 
-func TestBackfillParameterHandler_GetParameterID(t *testing.T) {
-	handler := &BackfillParameterHandler{}
-
+func TestBackfillParameterGenerator_GetParameterID(t *testing.T) {
 	param := Params{
 		Backfill: BackfillParam{
 			ParamID: "test-param-id",
 		},
 	}
 
-	result := handler.GetParameterID(param)
+	result := param.GetParameterID()
 	assert.Equal(t, "test-param-id", result)
 }
 
-func TestBackfillParameterHandler_GetExecutionTimestamp(t *testing.T) {
-	handler := &BackfillParameterHandler{}
-
+func TestBackfillParameterGenerator_GetExecutionTimestamp(t *testing.T) {
 	testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
 	logicalTime := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC) // Different time
 
@@ -357,14 +351,12 @@ func TestBackfillParameterHandler_GetExecutionTimestamp(t *testing.T) {
 		},
 	}
 
-	result := handler.GetExecutionTimestamp(param, logicalTime)
+	result := param.GetExecutionTimestamp(logicalTime)
 	// Should return the execution timestamp from BackfillParam, not the logicalTs
 	assert.Equal(t, testTime, result)
 }
 
-func TestBackfillParameterHandler_UpdateTriggerContext(t *testing.T) {
-	handler := &BackfillParameterHandler{}
-
+func TestBackfillParameterGenerator_GetTriggeredRun(t *testing.T) {
 	execTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	createdTime := time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC)
 
@@ -373,14 +365,14 @@ func TestBackfillParameterHandler_UpdateTriggerContext(t *testing.T) {
 		initialContext Object
 		param          Params
 		pipelineRun    string
+		executionTs    time.Time
 		createdAt      time.Time
-		expectedLen    int
-		expectedLast   BackfillParam
+		expectedList   []TriggeredRun
 	}{
 		{
 			name: "append to empty list",
 			initialContext: Object{
-				"TriggeredRuns": []BackfillParam{},
+				"TriggeredRuns": []TriggeredRun{},
 			},
 			param: Params{
 				Backfill: BackfillParam{
@@ -389,22 +381,26 @@ func TestBackfillParameterHandler_UpdateTriggerContext(t *testing.T) {
 				},
 			},
 			pipelineRun: "pipeline-run-1",
+			executionTs: execTime,
 			createdAt:   createdTime,
-			expectedLen: 1,
-			expectedLast: BackfillParam{
-				ParamID:            "param1",
-				PipelineRunName:    "pipeline-run-1",
-				ExecutionTimestamp: &execTime,
-				CreatedAt:          &createdTime,
+			expectedList: []TriggeredRun{
+				{
+					ParamID:            "param1",
+					PipelineRunName:    "pipeline-run-1",
+					ExecutionTimestamp: execTime,
+					CreatedAt:          createdTime,
+					TriggerType:        "backfill",
+				},
 			},
 		},
 		{
 			name: "append to existing list",
 			initialContext: Object{
-				"TriggeredRuns": []BackfillParam{
+				"TriggeredRuns": []TriggeredRun{
 					{
 						ParamID:         "param1",
 						PipelineRunName: "pipeline-run-1",
+						TriggerType:     "backfill",
 					},
 				},
 			},
@@ -415,29 +411,33 @@ func TestBackfillParameterHandler_UpdateTriggerContext(t *testing.T) {
 				},
 			},
 			pipelineRun: "pipeline-run-2",
+			executionTs: execTime,
 			createdAt:   createdTime,
-			expectedLen: 2,
-			expectedLast: BackfillParam{
-				ParamID:            "param2",
-				PipelineRunName:    "pipeline-run-2",
-				ExecutionTimestamp: &execTime,
-				CreatedAt:          &createdTime,
+			expectedList: []TriggeredRun{
+				{
+					ParamID:         "param1",
+					PipelineRunName: "pipeline-run-1",
+					TriggerType:     "backfill",
+				},
+				{
+					ParamID:            "param2",
+					PipelineRunName:    "pipeline-run-2",
+					ExecutionTimestamp: execTime,
+					CreatedAt:          createdTime,
+					TriggerType:        "backfill",
+				},
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			handler.UpdateTriggerContext(tt.initialContext, tt.param, tt.pipelineRun, tt.createdAt)
+			// Get triggered run and append to list
+			info := tt.param.GetTriggeredRun(tt.pipelineRun, tt.executionTs, tt.createdAt)
+			tt.initialContext["TriggeredRuns"] = append(tt.initialContext["TriggeredRuns"].([]TriggeredRun), info)
 
-			runs := tt.initialContext["TriggeredRuns"].([]BackfillParam)
-			require.Len(t, runs, tt.expectedLen)
-
-			lastRun := runs[tt.expectedLen-1]
-			assert.Equal(t, tt.expectedLast.ParamID, lastRun.ParamID)
-			assert.Equal(t, tt.expectedLast.PipelineRunName, lastRun.PipelineRunName)
-			assert.Equal(t, *tt.expectedLast.ExecutionTimestamp, *lastRun.ExecutionTimestamp)
-			assert.Equal(t, *tt.expectedLast.CreatedAt, *lastRun.CreatedAt)
+			runs := tt.initialContext["TriggeredRuns"].([]TriggeredRun)
+			assert.Equal(t, tt.expectedList, runs)
 		})
 	}
 }

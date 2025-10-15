@@ -40,6 +40,10 @@ func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) 
 	domain := r.WorkflowClient.GetDomain()
 	rid, err := getWorkflowOpenRunID(ctx, wid, r.WorkflowClient, domain)
 	if err != nil {
+		// Don't return error - continue to attempt StartWorkflow.
+		// If workflow is already running, StartWorkflow will fail (handled below).
+		// If workflow is not running, StartWorkflow will succeed.
+		// The workflow ID prevents duplicate workflows from being created.
 		log.Error(err, "failed to get open workflow execution",
 			"operation", "get_workflow_runid",
 			"namespace", triggerRun.Namespace,
@@ -53,7 +57,11 @@ func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) 
 			"name", triggerRun.Name,
 			"workflowId", wid,
 			"runId", *rid)
-		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
+		return v2pb.TriggerRunStatus{
+			State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+			ExecutionWorkflowId: *rid,
+			LogUrl:              getWorkflowURL(wid, r.WorkflowClient.GetProvider()),
+		}, nil
 	}
 	log.Info("starting backfill workflow",
 		"operation", "start_workflow",
