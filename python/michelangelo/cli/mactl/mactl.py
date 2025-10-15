@@ -301,52 +301,18 @@ class CRD:
             _file = get_single_arg(bound_args.arguments, "file")
 
             _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
+            message_instance = _self.get(_namespace, _name)
+            _LOG.info("Retrieved message instance: %r", message_instance)
+            request_input = self.read_yaml_and_update_crd_request(
+                input_class, _file, message_instance
+            )
 
-            # Initialize variables outside try/except to avoid scope issues
-            request_input = None
-            method_fullname = None
-            use_input_class = None
-            use_output_class = None
-
-            # Try to get existing resource, fall back to create if not found
-            try:
-                message_instance = _self.get(_namespace, _name)
-                _LOG.info("Retrieved existing message instance: %r", message_instance)
-                # Resource exists - use Update method
-                request_input = self.read_yaml_and_update_crd_request(
-                    input_class, _file, message_instance
-                )
-                method_fullname = f"/{_self.full_name}/{method_name}"
-                use_input_class = input_class
-                use_output_class = output_class
-                _LOG.info("Using Update method for existing resource")
-            except Exception as e:
-                # Check if this is a NOT_FOUND error
-                if hasattr(e, 'code') and e.code() == grpc.StatusCode.NOT_FOUND:
-                    _LOG.info("Resource not found, creating new resource")
-                    # Resource doesn't exist - use Create method
-                    create_method_name, create_input_class, create_output_class = self._extract_method_info(
-                        channel, self.full_name, "Create"
-                    )
-                    request_input = read_yaml_to_crd_request(
-                        create_input_class,
-                        _self.name,
-                        _file,
-                        _self.func_crd_metadata_converter,
-                    )
-                    method_fullname = f"/{_self.full_name}/{create_method_name}"
-                    use_input_class = create_input_class
-                    use_output_class = create_output_class
-                    _LOG.info("Using Create method for new resource")
-                else:
-                    # Re-raise other errors
-                    raise e
-
+            method_fullname = f"/{_self.full_name}/{method_name}"
             _LOG.info("Method fullname for gRPC call: %s", method_fullname)
             stub_method = channel.unary_unary(
                 method_fullname,
-                request_serializer=use_input_class.SerializeToString,
-                response_deserializer=use_output_class.FromString,
+                request_serializer=input_class.SerializeToString,
+                response_deserializer=output_class.FromString,
             )
             response = stub_method(
                 request_input,
