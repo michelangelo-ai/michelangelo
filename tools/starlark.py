@@ -209,7 +209,7 @@ class StarlarkRunner:
                     "--tasklist",
                     os.getenv("UFC_CADENCE_TASK_LIST", "default"),
                     "--workflow_type",
-                    "starlark-worklow",
+                    "starlark-workflow",
                     "--execution_timeout",
                     "3600",
                     "--input_file",
@@ -262,7 +262,7 @@ class StarlarkRunner:
                     "--task-queue",
                     os.getenv("UFC_TEMPORAL_TASK_QUEUE", "default"),
                     "--type",
-                    os.getenv("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-worklow"),
+                    os.getenv("UFC_TEMPORAL_WORKFLOW_TYPE", "starlark-workflow"),
                     "--execution-timeout",
                     "3600s",
                     "--input",
@@ -353,7 +353,7 @@ Environment Variables:
     UFC_TEMPORAL_NAMESPACE     Namespace (default: "default")
     UFC_TEMPORAL_ENV           Environment
     UFC_TEMPORAL_TASK_QUEUE    Task queue (default: "default")
-    UFC_TEMPORAL_WORKFLOW_TYPE Workflow type (default: "starlark-worklow")
+    UFC_TEMPORAL_WORKFLOW_TYPE Workflow type (default: "starlark-workflow")
         """,
     )
 
