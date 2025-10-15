@@ -327,4 +327,3 @@ func TestCronParameterGenerator_GetTriggeredRun(t *testing.T) {
 		})
 	}
 }
-
