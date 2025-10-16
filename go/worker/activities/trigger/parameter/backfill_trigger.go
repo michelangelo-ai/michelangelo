@@ -159,9 +159,6 @@ func calculateBackfillRunTimestamps(triggerRun *v2pb.TriggerRun) ([]time.Time, e
 	)
 	if triggerRun.Spec.Trigger.GetCronSchedule() != nil {
 		cronExp = triggerRun.Spec.Trigger.GetCronSchedule().Cron
-	} else if triggerRun.Spec.Trigger.GetIntervalSchedule() != nil {
-		interval := triggerRun.Spec.Trigger.GetIntervalSchedule().Interval.GetSeconds()
-		cronExp = fmt.Sprintf("@every %ds", interval)
 	} else {
 		return nil, fmt.Errorf("cron and interval schedule cannot be empty")
 	}

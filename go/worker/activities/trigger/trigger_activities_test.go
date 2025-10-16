@@ -344,24 +344,25 @@ func (r *Suite) TestCreatePipelineRun() {
 func (r *Suite) TestPipelineRunSensor() {
 	tests := []struct {
 		name          string
-		pipelineRun   *v2pb.PipelineRun
+		request       *v2pb.GetPipelineRunRequest
 		mockResponse  *v2pb.GetPipelineRunResponse
 		mockError     error
 		expectedError bool
 	}{
 		{
 			name: "success - get pipeline run",
-			pipelineRun: &v2pb.PipelineRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pipeline-run",
-					Namespace: "test-namespace",
-				},
+			request: &v2pb.GetPipelineRunRequest{
+				Name:      "test-pipeline-run",
+				Namespace: "test-namespace",
 			},
 			mockResponse: &v2pb.GetPipelineRunResponse{
 				PipelineRun: &v2pb.PipelineRun{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-pipeline-run",
 						Namespace: "test-namespace",
+					},
+					Status: v2pb.PipelineRunStatus{
+						State: v2pb.PIPELINE_RUN_STATE_SUCCEEDED,
 					},
 				},
 			},
@@ -370,28 +371,41 @@ func (r *Suite) TestPipelineRunSensor() {
 		},
 		{
 			name: "error - service returns error",
-			pipelineRun: &v2pb.PipelineRun{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-pipeline-run",
-					Namespace: "test-namespace",
-				},
+			request: &v2pb.GetPipelineRunRequest{
+				Name:      "test-pipeline-run",
+				Namespace: "test-namespace",
 			},
 			mockResponse:  nil,
 			mockError:     assert.AnError,
+			expectedError: true,
+		},
+		{
+			name: "error - pipeline run in running state",
+			request: &v2pb.GetPipelineRunRequest{
+				Name:      "test-pipeline-run",
+				Namespace: "test-namespace",
+			},
+			mockResponse: &v2pb.GetPipelineRunResponse{
+				PipelineRun: &v2pb.PipelineRun{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline-run",
+						Namespace: "test-namespace",
+					},
+					Status: v2pb.PipelineRunStatus{
+						State: v2pb.PIPELINE_RUN_STATE_RUNNING,
+					},
+				},
+			},
+			mockError:     nil,
 			expectedError: true,
 		},
 	}
 
 	for _, tt := range tests {
 		r.Run(tt.name, func() {
-			request := &v2pb.GetPipelineRunRequest{
-				Namespace: tt.pipelineRun.Namespace,
-				Name:      tt.pipelineRun.Name,
-			}
+			r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), tt.request).Return(tt.mockResponse, tt.mockError)
 
-			r.mockPipelineRunService.EXPECT().GetPipelineRun(gomock.Any(), request).Return(tt.mockResponse, tt.mockError)
-
-			res, err := r.activitySuite.ExecuteActivity(Activities.PipelineRunSensor, tt.pipelineRun)
+			res, err := r.activitySuite.ExecuteActivity(Activities.PipelineRunSensor, tt.request)
 
 			if tt.expectedError {
 				assert.Error(r.T(), err)
@@ -404,7 +418,7 @@ func (r *Suite) TestPipelineRunSensor() {
 			var resp *v2pb.PipelineRun
 			res.Get(&resp)
 			assert.NotNil(r.T(), resp)
-			assert.Equal(r.T(), tt.pipelineRun.Name, resp.Name)
+			assert.Equal(r.T(), tt.request.Name, resp.Name)
 		})
 	}
 }

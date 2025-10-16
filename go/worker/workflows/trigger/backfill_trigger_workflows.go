@@ -21,7 +21,7 @@ func (r *workflows) BackfillTrigger(ctx workflow.Context, req triggerrun.CreateT
 	triggerContext := Object{
 		"DS":            logicalTs.Format("2006-01-02"),
 		"StartedAt":     workflow.Now(ctx),
-		"TriggeredRuns": []parameter.BackfillParam{},
+		"TriggeredRuns": []parameter.TriggeredRun{},
 	}
 	ctx = workflow.WithValue(ctx, contextKeyTriggerContext, triggerContext)
 	// setup query handler for runHistory
