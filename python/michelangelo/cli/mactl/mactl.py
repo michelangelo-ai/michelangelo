@@ -769,7 +769,7 @@ def get_service_descriptors(channel, service_name) -> list[FileDescriptorProto]:
     )
     stub = reflection_pb2_grpc.ServerReflectionStub(channel)
 
-    # 1. Get FileDescriptor containing the service
+    # Get FileDescriptor containing the service
     request = reflection_pb2.ServerReflectionRequest(
         file_containing_symbol=service_name, host=""
     )
