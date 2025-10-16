@@ -386,6 +386,80 @@ class CRD:
         _LOG.info("Generate DEV RUN method for %r / %r", self.name, self.full_name)
         pass
 
+    def generate_kill(self, channel: Channel):
+        """
+        Generate kill function of this class.
+        """
+        # Ensure get method is available for retrieving current resource
+        self.generate_get(channel)
+
+        _LOG.info("Generate KILL method for %r / %r", self.name, self.full_name)
+        method_name, input_class, output_class = self._extract_method_info(
+            channel, self.full_name, "Update"
+        )
+
+        kill_func_signature = Signature(
+            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+            + [
+                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
+                for name in ["namespace", "name"]
+            ]
+        )
+
+        @bind_signature(kill_func_signature)
+        def kill_func(bound_args: Signature) -> Message:
+            _LOG.info("Start kill_func for %r", self.full_name)
+            _LOG.info("Bound arguments: %r", bound_args.arguments)
+            _self: CRD = bound_args.arguments["self"]
+            _name = get_single_arg(bound_args.arguments, "name")
+            _namespace = get_single_arg(bound_args.arguments, "namespace")
+
+            # Get current resource
+            current_resource = _self.get(_namespace, _name)
+            _LOG.info("Retrieved resource for kill: %r", current_resource)
+
+            # Create update request with kill flag set
+            current_dict = MessageToDict(current_resource, preserving_proto_field_name=True)
+
+            # Set kill flag in spec
+            resource_name = _self.name
+            if resource_name in current_dict and "spec" in current_dict[resource_name]:
+                current_dict[resource_name]["spec"]["kill"] = True
+            else:
+                _LOG.error("Invalid resource structure for kill operation")
+                raise ValueError(f"Cannot set kill flag on {resource_name}")
+
+            # Convert back to protobuf message for update
+            request_input = input_class()
+            ParseDict(current_dict, request_input, ignore_unknown_fields=True)
+
+            _LOG.info(
+                "KILL Request input (%r) ready: %r",
+                type(request_input),
+                request_input,
+            )
+
+            method_fullname = f"/{_self.full_name}/{method_name}"
+            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+
+            stub_method = channel.unary_unary(
+                method_fullname,
+                request_serializer=input_class.SerializeToString,
+                response_deserializer=output_class.FromString,
+            )
+
+            response = stub_method(
+                request_input,
+                metadata=METADATA_STUB,
+                timeout=30,
+            )
+
+            _LOG.info("Kill operation completed (%r): %r", type(response), response)
+            return response
+
+        kill_func.__signature__ = kill_func_signature  # type: ignore[attr-defined]
+        self.kill = MethodType(kill_func, self)
+
     def generate_list(self, channel: Channel):
         """
         Generate list function of this class.
@@ -819,6 +893,7 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
         "list",
         "run",
         "dev-run",
+        "kill",
     ]
 
     # For file-based actions, validate file parameter exists (preserving original validation)
