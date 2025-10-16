@@ -9,7 +9,7 @@ workflowClient:
   host: localhost:7833
   transport: grpc
   domain: default
-  taskList: test123
+  taskList: default
     
 k8s:
   qps: 300
