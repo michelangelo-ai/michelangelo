@@ -118,7 +118,7 @@ message ProjectSpec {
   ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
 
   // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
+  google.protobuf.Any ext = 999 [(michelangelo.api.validation) = {optional: true}];
 }
 
 // Describes the state of a project resource.

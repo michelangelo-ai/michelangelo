@@ -476,6 +476,7 @@ class CRD:
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
 
         original_crd_dict[self.name]["spec"].update(yaml_dict["spec"])
+        original_crd_dict[self.name]["metadata"].update(yaml_dict["metadata"])
         original_crd_dict[self.name]["metadata"]["generation"] = str(
             int(original_crd_dict[self.name]["metadata"]["generation"]) + 1
         )

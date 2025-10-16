@@ -3,10 +3,12 @@ kind: Project
 metadata:
   name: ma-dev-test
   namespace: ma-dev-test
+  annotations:
+    michelangelo/worker_queue: default
 spec:
   description: My ML Project
   owner:
-    owningTeam: "michelangelo"
+    owningTeam: "d4580776-3af1-4347-ac74-0a5936bed11c"
     owners:
       - craig.marker
   tier: 4

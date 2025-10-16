@@ -21,6 +21,7 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -119,17 +120,33 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	if pipelineRun.Status.WorkflowRunId == "" || pipelineRun.Status.WorkflowId == "" {
 		logger.Info("Workflow run ID is empty, starting workflow")
 
-		// Get taskList from config
-		workflowConfig, err := config.GetWorkflowClientConfig(a.configProvider)
+		// Attempt to retrieve taskList from project.annotations[michelangelo/worker_queue]
+		project := &v2.Project{}
+		// Try cluster-scoped first (projects might be cluster-scoped resources)
+		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
+		var taskList string
+
 		if err != nil {
-			logger.Error("failed to get workflow client config", zap.Error(err))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("get workflow client config: %w", err)
+			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
+		} else if project.Annotations != nil {
+			if workerQueue, exists := project.Annotations["michelangelo/worker_queue"]; exists && workerQueue != "" {
+				taskList = workerQueue
+				logger.Info("using worker queue from project annotations", zap.String("taskList", taskList))
+			}
 		}
 
-		taskList := workflowConfig.TaskList
+		// If project CR does not have worker_queue specified, as a fallback, retrieve taskList from config
+		if taskList == "" {
+			workflowConfig, getWorkflowClientConfigErr := config.GetWorkflowClientConfig(a.configProvider)
+			if getWorkflowClientConfigErr != nil {
+				logger.Error("failed to get workflow client config", zap.Error(getWorkflowClientConfigErr))
+				return &apipb.Condition{
+					Type:   ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+				}, fmt.Errorf("get workflow client config: %w", getWorkflowClientConfigErr)
+			}
+			taskList = workflowConfig.TaskList
+		}
 		if taskList == "" {
 			logger.Error("WorkflowClient TaskList is empty")
 			return &apipb.Condition{
