@@ -419,7 +419,9 @@ class CRD:
             _LOG.info("Retrieved resource for kill: %r", current_resource)
 
             # Create update request with kill flag set
-            current_dict = MessageToDict(current_resource, preserving_proto_field_name=True)
+            current_dict = MessageToDict(
+                current_resource, preserving_proto_field_name=True
+            )
 
             # Set kill flag in spec
             resource_name = _self.name
