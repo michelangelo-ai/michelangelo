@@ -10,7 +10,7 @@ import (
 )
 
 func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
-	handler := &CronParameterGenerator{}
+	generator := &CronParameterGenerator{}
 
 	tests := []struct {
 		name           string
@@ -89,7 +89,7 @@ func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := handler.GenerateBatchParams(tt.triggerRun)
+			result, err := generator.GenerateBatchParams(tt.triggerRun)
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -111,7 +111,7 @@ func TestCronParameterGenerator_GenerateBatchParams(t *testing.T) {
 }
 
 func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
-	handler := &CronParameterGenerator{}
+	generator := &CronParameterGenerator{}
 
 	tests := []struct {
 		name              string
@@ -156,7 +156,7 @@ func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := handler.GenerateConcurrentParams(tt.triggerRun)
+			result, err := generator.GenerateConcurrentParams(tt.triggerRun)
 
 			if tt.expectedError {
 				require.Error(t, err)
@@ -175,7 +175,7 @@ func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
 	}
 }
 
-func TestCronParameterGenerator_sortParams(t *testing.T) {
+func TestCronParameterGenerator_SortParams(t *testing.T) {
 	tests := []struct {
 		name     string
 		params   []Params
