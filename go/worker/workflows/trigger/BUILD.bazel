@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "backfill_trigger_workflows.go",
         "cron_trigger_workflows.go",
         "module.go",
     ],

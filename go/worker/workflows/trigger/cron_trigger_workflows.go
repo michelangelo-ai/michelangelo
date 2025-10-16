@@ -74,12 +74,12 @@ var (
 
 	// NonRetriableErrorReasonsDefault defines errors that should not be retried
 	NonRetriableErrorReasonsDefault = []string{
-		"400",                           // Bad Request
-		"404",                           // Not Found
-		"500",                           // Internal Server Error
-		"cadenceInternal:Panic",         // Panic error
-		"cadenceInternal:CanceledError", // Canceled error
-		"no-retry",                      // No retry error
+		"400",           // Bad Request
+		"404",           // Not Found
+		"500",           // Internal Server Error
+		"Panic",         // Panic error
+		"CanceledError", // Canceled error
+		"no-retry",      // No retry error
 	}
 
 	// SensorRetryPolicyDefault is the default retry policy for the sensor activity
@@ -105,7 +105,7 @@ func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTrigg
 	triggerContext := Object{
 		"DS":            logicalTs.Format("2006-01-02"),
 		"StartedAt":     workflow.Now(ctx),
-		"TriggeredRuns": map[string]Object{},
+		"TriggeredRuns": []parameter.TriggeredRun{},
 	}
 	ctx = workflow.WithValue(ctx, contextKeyTriggerContext, triggerContext)
 	// setup query handler for runHistory
@@ -222,39 +222,44 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 func runPipeline(ctx workflow.Context, triggerRun *v2pb.TriggerRun, param parameter.Params, sensor bool) error {
 	log := workflow.GetLogger(ctx)
 	name := generatePipelineRunName(workflow.Now(ctx))
-	var (
-		createRequest v2pb.CreatePipelineRunRequest
-		err           error
-		pr            *v2pb.PipelineRun
-	)
-	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
+
+	// Get parameter ID and execution timestamp directly from param methods
 	logicalTs := ctx.Value(contextKeylogicalTs).(time.Time)
-	createRequest, err = generatePipelineRunRequest(triggerRun, param.ParamID, name, logicalTs)
+	paramID := param.GetParameterID()
+	executionTimestamp := param.GetExecutionTimestamp(logicalTs)
+
+	// Generate pipeline run request
+	createRequest, err := generatePipelineRunRequest(triggerRun, paramID, name, executionTimestamp)
 	if err != nil {
 		log.Error("failed to generate pipeline run request",
 			zap.String("operation", "run_pipeline"),
-			zap.String("param_id", param.ParamID),
+			zap.Any("param", param),
 			zap.Error(err))
 		return err
 	}
+
+	// Create pipeline run
+	var pr *v2pb.PipelineRun
 	if err = workflow.ExecuteActivity(ctx, trigger.Activities.CreatePipelineRun, createRequest).Get(ctx, &pr); err != nil {
 		log.Error("failed to create pipeline run",
 			zap.String("operation", "run_pipeline"),
-			zap.String("param_id", param.ParamID),
+			zap.Any("param", param),
 			zap.String("pipeline_run_name", name),
 			zap.Error(err))
 		return err
 	}
 	log.Info("pipeline run created successfully",
 		zap.String("operation", "run_pipeline"),
-		zap.String("param_id", param.ParamID),
+		zap.Any("param", param),
 		zap.String("pipeline_run_name", pr.Name))
+
+	// Update trigger context with run information
+	triggerContext := ctx.Value(contextKeyTriggerContext).(Object)
 	createdTimestamp := workflow.Now(ctx)
-	// TriggeredRuns is a map[parameter_id -> run_information]
-	triggerContext["TriggeredRuns"].(map[string]Object)[param.ParamID] = Object{
-		"PipelineRunName": pr.Name,
-		"CreatedAt":       createdTimestamp,
-	}
+	info := param.GetTriggeredRun(pr.Name, executionTimestamp, createdTimestamp)
+	triggerContext["TriggeredRuns"] = append(triggerContext["TriggeredRuns"].([]parameter.TriggeredRun), info)
+
+	// Run sensor if needed
 	if !sensor {
 		return nil
 	}

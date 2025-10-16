@@ -10,6 +10,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/trigger/parameter"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var Activities = (*activities)(nil)
@@ -17,17 +18,6 @@ var Activities = (*activities)(nil)
 // activities struct encapsulates the YARPC clients for pipeline run services.
 type activities struct {
 	pipelineRunService v2pb.PipelineRunServiceYARPCClient
-}
-
-// Parameter generator factory function
-func getParameterGenerator(triggerType string) parameter.ParameterGenerator {
-	switch triggerType {
-	case triggerrun.TriggerTypeCron, triggerrun.TriggerTypeInterval:
-		return &parameter.CronParameterGenerator{}
-	// TODO: Add other parameter generators here, such as backfill and batch rerun
-	default:
-		return &parameter.CronParameterGenerator{}
-	}
 }
 
 // CreatePipelineRun creates a new pipeline run using the provided request parameters.
@@ -81,8 +71,8 @@ func (r *activities) GenerateBatchRunParams(ctx context.Context, triggerRun *v2p
 		zap.String("trigger_run", triggerRun.Name),
 		zap.String("trigger_type", triggerType))
 
-	// Get trigger type and appropriate parameter generator
-	generator := getParameterGenerator(triggerType)
+	// Get appropriate parameter generator for this trigger type
+	generator := parameter.GetParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
 	batches, err := generator.GenerateBatchParams(triggerRun)
@@ -120,8 +110,8 @@ func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun
 		zap.String("trigger_run", triggerRun.Name),
 		zap.String("trigger_type", triggerType))
 
-	// Get trigger type and appropriate parameter generator
-	generator := getParameterGenerator(triggerType)
+	// Get appropriate parameter generator for this trigger type
+	generator := parameter.GetParameterGenerator(triggerType)
 
 	// Use interface method to generate parameters
 	params, err := generator.GenerateConcurrentParams(triggerRun)
@@ -146,36 +136,23 @@ func (r *activities) GenerateConcurrentRunParams(ctx context.Context, triggerRun
 //
 // Params:
 // - ctx: The context for the operation.
-// - pipelineRun: The pipeline run to monitor.
+// - request: The request containing the pipeline run name and namespace.
 //
 // Returns:
 // - *v2pb.PipelineRun: The updated pipeline run status.
 // - error: Error information if the operation fails.
-func (r *activities) PipelineRunSensor(ctx context.Context, pipelineRun *v2pb.PipelineRun) (*v2pb.PipelineRun, error) {
+func (r *activities) PipelineRunSensor(ctx context.Context, request *v2pb.GetPipelineRunRequest) (*v2pb.PipelineRun, error) {
 	logger := activity.GetLogger(ctx)
 	logger.Info("pipeline run sensor activity started",
 		zap.String("operation", "pipeline_run_sensor"),
-		zap.String("pipeline_run", pipelineRun.Name),
-		zap.String("namespace", pipelineRun.Namespace))
+		zap.String("pipeline_run", request.Name),
+		zap.String("namespace", request.Namespace))
 
-	if pipelineRun == nil {
-		err := fmt.Errorf("pipeline run is nil")
-		logger.Error("invalid input for pipeline run sensor",
-			zap.String("operation", "pipeline_run_sensor"),
-			zap.Error(err))
-		return nil, workflow.NewCustomError(ctx, "InvalidInput", err.Error())
-	}
-
-	getRequest := &v2pb.GetPipelineRunRequest{
-		Namespace: pipelineRun.Namespace,
-		Name:      pipelineRun.Name,
-	}
-
-	response, err := r.pipelineRunService.GetPipelineRun(ctx, getRequest)
+	response, err := r.pipelineRunService.GetPipelineRun(ctx, request)
 	if err != nil {
 		logger.Error("failed to get pipeline run status",
 			zap.String("operation", "pipeline_run_sensor"),
-			zap.String("pipeline_run", pipelineRun.Name),
+			zap.String("pipeline_run", request.Name),
 			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "GetPipelineRun", err.Error())
 	}
@@ -184,14 +161,74 @@ func (r *activities) PipelineRunSensor(ctx context.Context, pipelineRun *v2pb.Pi
 		err := fmt.Errorf("empty response from pipeline run service")
 		logger.Error("empty response from pipeline run service",
 			zap.String("operation", "pipeline_run_sensor"),
-			zap.String("pipeline_run", pipelineRun.Name),
+			zap.String("pipeline_run", request.Name),
 			zap.Error(err))
 		return nil, workflow.NewCustomError(ctx, "EmptyResponse", err.Error())
 	}
-
 	logger.Info("pipeline run status retrieved successfully",
 		zap.String("operation", "pipeline_run_sensor"),
-		zap.String("pipeline_run", pipelineRun.Name),
+		zap.String("pipeline_run", request.Name),
 		zap.String("state", response.PipelineRun.Status.State.String()))
+	response.PipelineRun = cropPipelineRun(response.PipelineRun)
+	switch response.PipelineRun.Status.State {
+	case v2pb.PIPELINE_RUN_STATE_INVALID, v2pb.PIPELINE_RUN_STATE_PENDING, v2pb.PIPELINE_RUN_STATE_RUNNING:
+		logger.Error("pipeline run is in the non-terminal status",
+			zap.String("operation", "pipeline_run_sensor"),
+			zap.String("pipeline_run", request.Name),
+			zap.String("state", response.PipelineRun.Status.State.String()))
+		return nil, workflow.NewCustomError(ctx, "PipelineRunNotReady", fmt.Sprintf("PipelineRun is in the non-terminal status: %v", response.PipelineRun.Status.State.String()))
+	}
 	return response.PipelineRun, nil
+}
+
+// cropPipelineRun reduces the size of a PipelineRun object to prevent workflow response size limit errors.
+//
+// Cadence/Temporal workflows have a maximum response size limit (typically 2MB). When monitoring
+// pipeline runs with large input data or extensive status information, the full PipelineRun object
+// can exceed this limit and cause workflow failures.
+//
+// This function creates a trimmed copy that includes only the essential fields needed for trigger
+// workflow logic:
+//
+// Preserved fields:
+//   - TypeMeta: API version and kind information
+//   - ObjectMeta: Namespace, name, labels, annotations (for identification and metadata)
+//   - Spec: Pipeline specification (with input data removed)
+//   - Status: Essential status fields (state, log URL, error message, code, end time)
+//
+// Removed fields:
+//   - Spec.Input: Large input parameters that may contain datasets or configuration blobs
+//   - Status fields: Detailed execution history, metrics, and other verbose status information
+//     (only keeps State, LogUrl, ErrorMessage, Code, and EndTime)
+//
+// Params:
+//   - pr: The original PipelineRun object to crop
+//
+// Returns:
+//   - *v2pb.PipelineRun: A cropped copy with reduced size, or nil if input is nil
+func cropPipelineRun(pr *v2pb.PipelineRun) *v2pb.PipelineRun {
+	if pr == nil {
+		return nil
+	}
+	status := pr.Status
+	res := &v2pb.PipelineRun{
+		TypeMeta: pr.TypeMeta,
+		ObjectMeta: v1.ObjectMeta{
+			Namespace:   pr.Namespace,
+			Name:        pr.Name,
+			Labels:      pr.Labels,
+			Annotations: pr.Annotations,
+		},
+		Spec: pr.Spec,
+		Status: v2pb.PipelineRunStatus{
+			State:        status.State,
+			LogUrl:       status.LogUrl,
+			ErrorMessage: status.ErrorMessage,
+			Code:         status.Code,
+			EndTime:      status.EndTime,
+		},
+	}
+	// Remove input data to reduce size
+	res.Spec.Input = nil
+	return res
 }

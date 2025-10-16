@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "backfill_trigger.go",
         "controller.go",
         "cron_trigger.go",
         "module.go",
@@ -32,6 +33,7 @@ go_library(
 go_test(
     name = "go_default_test",
     srcs = [
+        "backfill_trigger_test.go",
         "controller_test.go",
         "cron_trigger_test.go",
         "util_test.go",

@@ -225,7 +225,7 @@ func TestKillWorkflow(t *testing.T) {
 	}
 }
 
-func TestGetWorkflowStatus(t *testing.T) {
+func TestGetRecurringRunWorkflowStatus(t *testing.T) {
 	tests := []struct {
 		name                  string
 		triggerRun            *v2pb.TriggerRun
@@ -463,7 +463,258 @@ func TestGetWorkflowStatus(t *testing.T) {
 			logger := zapr.NewLogger(zaptest.NewLogger(t))
 
 			// Execute the function
-			result, err := getWorkflowStatus(context.Background(), tt.triggerRun, logger, mockClient, "test-domain")
+			result, err := getRecurringRunWorkflowStatus(context.Background(), tt.triggerRun, logger, mockClient, "test-domain")
+
+			// Verify results
+			if tt.expectError {
+				assert.Error(t, err)
+				if tt.expectedErrorContains != "" {
+					assert.Contains(t, err.Error(), tt.expectedErrorContains)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+
+			assert.Equal(t, tt.expectedState, result.State)
+		})
+	}
+}
+
+func TestGetAdhocRunWorkflowStatus(t *testing.T) {
+	tests := []struct {
+		name                  string
+		triggerRun            *v2pb.TriggerRun
+		setupMock             func(mockClient *interfaceMock.MockWorkflowClient)
+		expectedState         v2pb.TriggerRunState
+		expectError           bool
+		expectedErrorContains string
+	}{
+		{
+			name: "empty execution workflow ID",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "", // Empty workflow ID
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				// No mock calls expected since we error out early
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "execution workflow id is empty",
+		},
+		{
+			name: "running workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusRunning,
+				}, nil)
+			},
+			expectedState: v2pb.TRIGGER_RUN_STATE_RUNNING,
+			expectError:   false,
+		},
+		{
+			name: "completed workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusCompleted,
+				}, nil)
+			},
+			expectedState: v2pb.TRIGGER_RUN_STATE_SUCCEEDED,
+			expectError:   false,
+		},
+		{
+			name: "failed workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusFailed,
+				}, nil)
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "workflow is terminated with state:",
+		},
+		{
+			name: "timed out workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusTimedOut,
+				}, nil)
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "workflow is terminated with state:",
+		},
+		{
+			name: "canceled workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusCanceled,
+				}, nil)
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "workflow is terminated with state:",
+		},
+		{
+			name: "terminated workflow",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatusTerminated,
+				}, nil)
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "workflow is terminated with state:",
+		},
+		{
+			name: "unknown workflow status",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(&clientInterface.WorkflowExecutionInfo{
+					Execution: &clientInterface.WorkflowExecution{
+						ID:    "test-workflow-id",
+						RunID: "test-run-id",
+					},
+					Status: clientInterface.WorkflowExecutionStatus(999), // Unknown status
+				}, nil)
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "workflow is terminated with unknown state:",
+		},
+		{
+			name: "error getting workflow execution info",
+			triggerRun: &v2pb.TriggerRun{
+				ObjectMeta: metav1.ObjectMeta{
+					Namespace: "test-namespace",
+					Name:      "test-triggerrun",
+				},
+				Status: v2pb.TriggerRunStatus{
+					State:               v2pb.TRIGGER_RUN_STATE_RUNNING,
+					ExecutionWorkflowId: "test-workflow-id",
+				},
+			},
+			setupMock: func(mockClient *interfaceMock.MockWorkflowClient) {
+				mockClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "").Return(nil, fmt.Errorf("failed to get workflow execution info"))
+			},
+			expectedState:         v2pb.TRIGGER_RUN_STATE_FAILED,
+			expectError:           true,
+			expectedErrorContains: "failed to get workflow execution info",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create mock client
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockClient := interfaceMock.NewMockWorkflowClient(ctrl)
+			tt.setupMock(mockClient)
+
+			// Create logger
+			logger := zapr.NewLogger(zaptest.NewLogger(t))
+
+			// Execute the function
+			result, err := getAdhocRunWorkflowStatus(context.Background(), tt.triggerRun, logger, mockClient, "test-domain")
 
 			// Verify results
 			if tt.expectError {

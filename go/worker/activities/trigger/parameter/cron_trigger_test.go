@@ -2,6 +2,7 @@ package parameter
 
 import (
 	"testing"
+	"time"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
@@ -170,6 +171,159 @@ func TestCronParameterGenerator_GenerateConcurrentParams(t *testing.T) {
 			if len(tt.expectedParams) > 0 {
 				assert.ElementsMatch(t, tt.expectedParams, result, "Params should match exactly")
 			}
+		})
+	}
+}
+
+func TestCronParameterGenerator_SortParams(t *testing.T) {
+	tests := []struct {
+		name     string
+		params   []Params
+		expected []Params
+	}{
+		{
+			name: "sort by parameter ID alphabetically",
+			params: []Params{
+				{ParamID: "param3"},
+				{ParamID: "param1"},
+				{ParamID: "param2"},
+			},
+			expected: []Params{
+				{ParamID: "param1"},
+				{ParamID: "param2"},
+				{ParamID: "param3"},
+			},
+		},
+		{
+			name: "already sorted",
+			params: []Params{
+				{ParamID: "a"},
+				{ParamID: "b"},
+				{ParamID: "c"},
+			},
+			expected: []Params{
+				{ParamID: "a"},
+				{ParamID: "b"},
+				{ParamID: "c"},
+			},
+		},
+		{
+			name:     "empty params",
+			params:   []Params{},
+			expected: []Params{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sortParams(tt.params)
+			assert.Equal(t, tt.expected, tt.params)
+		})
+	}
+}
+
+func TestCronParameterGenerator_GetParameterID(t *testing.T) {
+	param := Params{
+		ParamID: "test-param-id",
+	}
+
+	result := param.GetParameterID()
+	assert.Equal(t, "test-param-id", result)
+}
+
+func TestCronParameterGenerator_GetExecutionTimestamp(t *testing.T) {
+	testTime := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+	logicalTime := time.Date(2024, 2, 1, 12, 0, 0, 0, time.UTC)
+
+	param := Params{
+		ParamID: "test-param",
+	}
+
+	result := param.GetExecutionTimestamp(logicalTime)
+	// For cron trigger, should return the logical timestamp
+	assert.Equal(t, logicalTime, result)
+	assert.NotEqual(t, testTime, result)
+}
+func TestCronParameterGenerator_GetTriggeredRun(t *testing.T) {
+	createdTime := time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC)
+	executionTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name           string
+		initialContext Object
+		param          Params
+		pipelineRun    string
+		executionTs    time.Time
+		createdAt      time.Time
+		expectedList   []TriggeredRun
+	}{
+		{
+			name: "append to empty list",
+			initialContext: Object{
+				"TriggeredRuns": []TriggeredRun{},
+			},
+			param: Params{
+				ParamID: "param1",
+			},
+			pipelineRun: "pipeline-run-1",
+			executionTs: executionTime,
+			createdAt:   createdTime,
+			expectedList: []TriggeredRun{
+				{
+					ParamID:            "param1",
+					PipelineRunName:    "pipeline-run-1",
+					ExecutionTimestamp: executionTime,
+					CreatedAt:          createdTime,
+					TriggerType:        "cron",
+				},
+			},
+		},
+		{
+			name: "append to existing list",
+			initialContext: Object{
+				"TriggeredRuns": []TriggeredRun{
+					{
+						ParamID:            "param1",
+						PipelineRunName:    "pipeline-run-1",
+						ExecutionTimestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+						CreatedAt:          time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+						TriggerType:        "cron",
+					},
+				},
+			},
+			param: Params{
+				ParamID: "param2",
+			},
+			pipelineRun: "pipeline-run-2",
+			executionTs: executionTime,
+			createdAt:   createdTime,
+			expectedList: []TriggeredRun{
+				{
+					ParamID:            "param1",
+					PipelineRunName:    "pipeline-run-1",
+					ExecutionTimestamp: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					CreatedAt:          time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					TriggerType:        "cron",
+				},
+				{
+					ParamID:            "param2",
+					PipelineRunName:    "pipeline-run-2",
+					ExecutionTimestamp: executionTime,
+					CreatedAt:          createdTime,
+					TriggerType:        "cron",
+				},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Get triggered run and append to list
+			info := tt.param.GetTriggeredRun(tt.pipelineRun, tt.executionTs, tt.createdAt)
+			tt.initialContext["TriggeredRuns"] = append(tt.initialContext["TriggeredRuns"].([]TriggeredRun), info)
+
+			triggeredRuns := tt.initialContext["TriggeredRuns"].([]TriggeredRun)
+			assert.Equal(t, tt.expectedList, triggeredRuns)
 		})
 	}
 }

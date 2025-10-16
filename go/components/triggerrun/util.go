@@ -61,12 +61,12 @@ func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Log
 	return triggerRun.Status, nil
 }
 
-// util function to get workflow execution status for cron trigger
-func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+// util function to get workflow execution status for recurring run trigger
+func getRecurringRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
 	wid := generateWorkflowID(triggerRun)
 	execInfo, err := getWorkflowOpenExecution(ctx, wid, workflowClient, domain)
 	if err != nil {
-		log.Error(err, "failed to list open workflow for scheduled run",
+		log.Error(err, "failed to list open workflow for recurring run",
 			"operation", "list_open_workflow",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
@@ -79,7 +79,7 @@ func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log log
 	}
 	if execInfo != nil && !execInfo.ExecutionTime.IsZero() {
 		execTs := execInfo.ExecutionTime
-		log.Info("current scheduled execution time", "execution_ts", execTs)
+		log.Info("current recurring run execution time", "execution_ts", execTs)
 		status := execInfo.Status
 		// Terminated and Canceled are user-initiated actions, treat as KILLED
 		if status == clientInterface.WorkflowExecutionStatusTerminated ||
@@ -112,6 +112,58 @@ func getWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log log
 		}
 	}
 	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
+}
+
+// util function to get workflow execution status for adhoc run trigger
+func getAdhocRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
+	var (
+		execResponse *clientInterface.WorkflowExecutionInfo
+		err          error
+	)
+	wid := triggerRun.Status.ExecutionWorkflowId
+	if wid == "" {
+		err = fmt.Errorf("execution workflow id is empty")
+		log.Error(err, "failed to get workflow status",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name)
+		return v2pb.TriggerRunStatus{
+			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			ErrorMessage: "failed to get workflow status: " + err.Error(),
+		}, err
+	}
+	execResponse, err = workflowClient.GetWorkflowExecutionInfo(ctx, wid, "")
+	if err != nil {
+		log.Error(err, "failed to describe workflow execution",
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name,
+			"workflowId", wid)
+		return v2pb.TriggerRunStatus{
+			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			ErrorMessage: "failed to describe workflow execution: " + err.Error(),
+		}, err
+	}
+	status := execResponse.Status
+	switch status {
+	case clientInterface.WorkflowExecutionStatusFailed,
+		clientInterface.WorkflowExecutionStatusTimedOut,
+		clientInterface.WorkflowExecutionStatusCanceled,
+		clientInterface.WorkflowExecutionStatusTerminated:
+		err := fmt.Errorf("workflow is terminated with state: %v", status)
+		return v2pb.TriggerRunStatus{
+			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			ErrorMessage: err.Error(),
+		}, err
+	case clientInterface.WorkflowExecutionStatusCompleted:
+		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_SUCCEEDED}, nil
+	case clientInterface.WorkflowExecutionStatusRunning:
+		return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
+	default:
+		err := fmt.Errorf("workflow is terminated with unknown state: %v", status)
+		return v2pb.TriggerRunStatus{
+			State:        v2pb.TRIGGER_RUN_STATE_FAILED,
+			ErrorMessage: err.Error(),
+		}, err
+	}
 }
 
 // util function to get workflow open execution runID
@@ -192,23 +244,17 @@ func isTerminateState(tr *v2pb.TriggerRun) bool {
 
 // GetTriggerType returns the trigger type for a given triggerRun
 func GetTriggerType(tr *v2pb.TriggerRun) string {
-	if tr == nil || tr.Spec.Trigger == nil {
-		return TriggerTypeUnknown
-	}
-
-	trigger := tr.Spec.Trigger
-	if trigger.GetCronSchedule() != nil {
-		return TriggerTypeCron
-	}
-	if trigger.GetIntervalSchedule() != nil {
-		return TriggerTypeInterval
-	}
-	if trigger.GetBatchRerun() != nil {
+	if tr.Spec.Trigger.GetBatchRerun() != nil {
 		return TriggerTypeBatchRerun
 	}
 	if tr.Spec.StartTimestamp != nil && tr.Spec.EndTimestamp != nil {
 		return TriggerTypeBackfill
 	}
-
+	if tr.Spec.Trigger.GetIntervalSchedule() != nil {
+		return TriggerTypeInterval
+	}
+	if tr.Spec.Trigger.GetCronSchedule() != nil {
+		return TriggerTypeCron
+	}
 	return TriggerTypeUnknown
 }
