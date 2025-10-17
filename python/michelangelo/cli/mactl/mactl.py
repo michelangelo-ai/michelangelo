@@ -388,7 +388,11 @@ class CRD:
 
     def generate_kill(self, channel: Channel):
         """
-        Generate kill function of this class.
+        Generate kill function that terminates resources by setting spec.kill=true.
+        Prompts for confirmation unless --yes flag is provided.
+
+        Examples: mactl trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger
+                 mactl pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251016-210000-0523962d --yes
         """
         # Ensure get method is available for retrieving current resource
         self.generate_get(channel)
@@ -404,6 +408,7 @@ class CRD:
                 Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
                 for name in ["namespace", "name"]
             ]
+            + [Parameter("yes", Parameter.POSITIONAL_OR_KEYWORD, default=[])]
         )
 
         @bind_signature(kill_func_signature)
@@ -413,6 +418,15 @@ class CRD:
             _self: CRD = bound_args.arguments["self"]
             _name = get_single_arg(bound_args.arguments, "name")
             _namespace = get_single_arg(bound_args.arguments, "namespace")
+            _yes = bound_args.arguments.get("yes", [])
+
+            # Confirmation logic
+            if not _yes:
+                resource_type = _self.name.replace("_", " ")
+                confirmation = input(f" > kill '{_name}' {resource_type}? [y/N] ")
+                if confirmation.lower() not in ['y', 'yes']:
+                    print("Kill operation cancelled.")
+                    return None
 
             # Get current resource
             current_resource = _self.get(_namespace, _name)
@@ -428,7 +442,7 @@ class CRD:
             if resource_name in current_dict and "spec" in current_dict[resource_name]:
                 current_dict[resource_name]["spec"]["kill"] = True
             else:
-                _LOG.error("Invalid resource structure for kill operation")
+                _LOG.error("Missing required spec field in the resource structure")
                 raise ValueError(f"Cannot set kill flag on {resource_name}")
 
             # Convert back to protobuf message for update
@@ -455,6 +469,17 @@ class CRD:
                 metadata=METADATA_STUB,
                 timeout=30,
             )
+
+            # Assert kill operation is successful by checking response spec
+            response_dict = MessageToDict(response, preserving_proto_field_name=True)
+            resource_name = _self.name
+            if (resource_name in response_dict and
+                "spec" in response_dict[resource_name] and
+                response_dict[resource_name]["spec"].get("kill") is True):
+                _LOG.info("Kill operation successfully set spec.kill=true")
+            else:
+                _LOG.error("Kill operation failed: spec.kill not set to true in response")
+                raise RuntimeError(f"Kill operation failed for {resource_name}: spec.kill not properly set")
 
             _LOG.info("Kill operation completed (%r): %r", type(response), response)
             return response
@@ -874,6 +899,10 @@ def parse_args() -> tuple[list[str], dict[str, list[str]]]:
             key, value = arg.split("=", 1)
             key = key.lstrip("-")
             kwargs[key].append(value)
+        elif arg.startswith("--"):
+            # Handle boolean flags like --yes
+            key = arg.lstrip("-")
+            kwargs[key].append(True)
         else:
             args.append(arg)
     _LOG.info("Parsed arguments: %r  /  %r", args, kwargs)
