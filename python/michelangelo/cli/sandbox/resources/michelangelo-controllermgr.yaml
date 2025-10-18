@@ -58,9 +58,15 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-    
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833
       transport: grpc
       domain: default
+
+    webhook:
+      host: 127.0.0.1
+      port: 9443
+      certDir: /tmp/k8s-webhook-server/serving-certs
+      url: https://127.0.0.1:9443/convert

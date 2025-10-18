@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 
+	apiwebhook "github.com/michelangelo-ai/michelangelo/go/api/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore/minio"
@@ -18,18 +20,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 )
 
-var (
-	// Module provides and starts the Kubernetes Controller Manager as configured by the Config.
-	// It uses Fx for dependency injection to initialize configurations, create the manager,
-	// and set up the lifecycle hooks for the application.
-	Module = fx.Options(
-		blobstore.Module,
-		minio.Module,
-		fx.Provide(newConfig),
-		fx.Provide(create),
-		fx.Invoke(start),
-		fx.Invoke(initializeMetrics),
-	)
+// Module provides and starts the Kubernetes Controller Manager as configured by the Config.
+// It uses Fx for dependency injection to initialize configurations, create the manager,
+// and set up the lifecycle hooks for the application.
+var Module = fx.Options(
+	blobstore.Module,
+	minio.Module,
+	apiwebhook.Module,
+	fx.Provide(newConfig),
+	fx.Provide(create),
+	fx.Invoke(start),
+	fx.Invoke(initializeMetrics),
 )
 
 type (
@@ -58,7 +59,6 @@ type (
 //	result: Struct containing the initialized Manager and Client.
 //	error: Error if the manager creation fails.
 func create(p params) (result, error) {
-
 	restConf, err := ctrl.GetConfig()
 	if err != nil {
 		return result{}, err
@@ -70,6 +70,13 @@ func create(p params) (result, error) {
 		HealthProbeBindAddress: p.Config.HealthProbeBindAddress,
 		LeaderElection:         p.Config.LeaderElection,
 		LeaderElectionID:       p.Config.LeaderElectionID,
+		WebhookServer: webhook.NewServer(
+			webhook.Options{
+				Host:    "127.0.0.1",
+				Port:    9443,
+				CertDir: "/tmp/k8s-webhook-server/serving-certs",
+			},
+		),
 	})
 	if err != nil {
 		return result{}, err

@@ -15,15 +15,16 @@
 
 syntax = "proto3";
 
-package michelangelo.api.v2;
+package michelangelo.api.v2alpha1;
 
-option go_package = "v2";
+option go_package = "v2alpha1";
 
 import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
-import "michelangelo/api/v2/git.proto";
+import "michelangelo/api/v2alpha1/git.proto";
+import "michelangelo/api/v2/project.proto";  // Import hub version
 
 // Defines the owner information for a project.
 message OwnerInfo {
@@ -86,21 +87,22 @@ message ProjectTypeInfo {
 // default job configurations, etc.
 message ProjectSpec {
   option (michelangelo.api.no_default) = true;
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
 
   // Description of the project.
-  string description = 1;
+  string purpose = 1 [(michelangelo.api.field_rename_to) = "description"];
 
   // Owner information of the project.
-  OwnerInfo owner = 2;
+  OwnerInfo author = 2 [(michelangelo.api.field_rename_to) = "owner"];
 
   // The tier of the project.
   int32 tier = 3 [(michelangelo.api.validation) = {min: "1", max: "4"}];
 
   // GIT repo where the project artifacts are checked in
-  string git_repo = 4;
+  string code_repository = 4 [(michelangelo.api.field_rename_to) = "git_repo"];
 
   // Project root directory in the GIT repo such as `ml-code`
-  string root_dir = 5;
+  string code_root_dir = 5 [(michelangelo.api.field_rename_to) = "root_dir"];
 
   // Default job specs for Spark and Ray.
   // JobSpecs job_defaults = 6 [(michelangelo.api.validation) = {optional: true}];
@@ -118,7 +120,7 @@ message ProjectSpec {
   ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
 
   // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
+  google.protobuf.Any ext = 999 [(michelangelo.api.ignore_unmapped) = true];
 }
 
 // Describes the state of a project resource.
@@ -168,6 +170,9 @@ enum ProjectPhase {
 
 // Defines the status of a ML project
 message ProjectStatus {
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "last_update_time";
+
   // project state
   ProjectState state = 1;
 
@@ -178,16 +183,16 @@ message ProjectStatus {
   string error_message = 3;
 
   // timestamp of last status update
-  google.protobuf.Timestamp last_update_time = 4;
+  google.protobuf.Timestamp last_update_time = 4 [(michelangelo.api.ignore_unmapped) = true];
 
   // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
+  google.protobuf.Any ext = 999 [(michelangelo.api.ignore_unmapped) = true];
 }
 
 // Defines a ML Project for a specific ML use case.
 message Project {
   option (michelangelo.api.resource) = {
-    conversion: true;
+    conversion: True;
   };
 
   // index fields

@@ -1,14 +1,19 @@
 package main
 
 import (
+	"fmt"
+	"os"
+
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	webhookcert "github.com/michelangelo-ai/michelangelo/go/api/webhook/cert"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
@@ -22,6 +27,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1"
 	"github.com/uber-go/tally"
 )
 
@@ -41,6 +47,9 @@ func scheme() (*runtime.Scheme, error) {
 		return nil, err
 	}
 	if err := v2pb.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	if err := v2alpha1pb.AddToScheme(scheme); err != nil {
 		return nil, err
 	}
 	return scheme, nil
@@ -98,6 +107,10 @@ func options() fx.Option {
 // and starts the application lifecycle. The application's lifecycle will continue to run until
 // an interrupt signal is received, at which point it will cleanly shut down all managed components.
 func main() {
+	if err := webhookcert.EnsureWebhookCertOnDisk("127.0.0.1"); err != nil {
+		fmt.Printf("unable to generate self-signed cert: %v", err)
+		os.Exit(1)
+	}
 
 	fx.New(options()).Run()
 }

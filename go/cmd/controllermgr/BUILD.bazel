@@ -9,6 +9,7 @@ go_library(
     visibility = ["//visibility:private"],
     deps = [
         "//go/api/handler:go_default_library",
+        "//go/api/webhook/cert:go_default_library",
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
         "//go/base/workflowclient/cadenceclient:go_default_library",
@@ -22,6 +23,7 @@ go_library(
         "//go/controllermgr:go_default_library",
         "//go/kubeproto/metrics:go_default_library",
         "//proto/api/v2:go_default_library",
+        "//proto/api/v2alpha1:go_default_library",
         "@com_github_go_logr_zapr//:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
