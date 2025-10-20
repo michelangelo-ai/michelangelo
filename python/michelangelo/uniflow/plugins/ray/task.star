@@ -292,7 +292,7 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
         retry_attempt_id = retry_attempt_id,
     )
 
-    cluster = ray.create_cluster(cluster, timeout_seconds=DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
+    cluster = ray.create_cluster(cluster, timeout_seconds = DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS)
     cluster_url = cluster["status"].get("jobUrl", "UAPI did not report RayJob URL")
     cluster_name = cluster["metadata"]["name"]
     cluster_namespace = cluster["metadata"]["namespace"]
