@@ -18,6 +18,7 @@ go_library(
         "//proto/api/v2:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//plugin:go_default_library",
         "@com_github_cadence_workflow_starlark_worker//service:go_default_library",
+        "@org_golang_google_grpc//credentials:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_yarpc//:go_default_library",
@@ -25,6 +26,5 @@ go_library(
         "@org_uber_go_yarpc//peer:go_default_library",
         "@org_uber_go_yarpc//peer/hostport:go_default_library",
         "@org_uber_go_yarpc//transport/grpc:go_default_library",
-        "@org_golang_google_grpc//credentials:go_default_library",
     ],
 )
