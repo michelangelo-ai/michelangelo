@@ -23,7 +23,10 @@ proto_library(
 
 go_proto_library(
     name = "v2alpha1_go_proto",
-    compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
+    compilers = [
+        "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_validation",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1",
     proto = ":v2alpha1_proto",
     visibility = ["//visibility:public"],
