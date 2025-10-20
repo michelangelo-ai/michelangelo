@@ -49,10 +49,15 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
+	var timeout int64 = 0
+
 	var spec *starlark.Dict
-	if err := starlark.UnpackArgs("create_cluster", args, kwargs, "spec", &spec); err != nil {
+	if err := starlark.UnpackArgs("create_cluster", args, kwargs, "spec", &spec, "timeout_seconds?", &timeout); err != nil {
 		logger.Error("error", zap.Error(err))
 		return nil, err
+	}
+	if timeout == 0 {
+		timeout = int64(utils.CadenceLongTimeout.Seconds())
 	}
 
 	var cluster v2pb.RayCluster
@@ -73,6 +78,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	cluster = *response.RayCluster
 
 	srp := utils.CadenceDefaultSensorRetryPolicy
+	srp.ExpirationInterval = time.Second * time.Duration(timeout)
 	srp.InitialInterval = time.Second * time.Duration(poll)
 	sensorCtx := workflow.WithRetryPolicy(ctx, srp)
 
