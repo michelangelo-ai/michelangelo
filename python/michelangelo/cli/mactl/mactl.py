@@ -20,7 +20,7 @@ from google.protobuf.descriptor_pb2 import (
 from google.protobuf.descriptor_pool import DescriptorPool
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
-from grpc import Channel, insecure_channel
+from grpc import Channel, insecure_channel, secure_channel, ssl_channel_credentials
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 from yaml import YAMLError, safe_load as yaml_safe_load
 
@@ -47,7 +47,9 @@ METADATA = [
 # Allow overriding the API server address via environment variable
 # This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
 ADDRESS = getenv("MACTL_ADDRESS", ADDRESS)
-
+# Allow overriding TLS usage via environment variable
+# Set to "true" to force TLS, "false" to force insecure, or leave unset for auto-detection
+USE_TLS = getenv("MACTL_USE_TLS", "true").lower()
 
 METADATA_STUB = METADATA + [("ttl", "600")]
 
@@ -891,5 +893,20 @@ def main(channel: Channel):
 
 
 if __name__ == "__main__":
-    with insecure_channel(ADDRESS) as channel:
-        main(channel)
+    if USE_TLS == "true":
+        # Force TLS
+        should_use_tls = True
+        print(f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {ADDRESS}")
+    else:
+        should_use_tls = False
+        print(f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {ADDRESS}")
+
+    if should_use_tls:
+        # Use secure TLS connection
+        credentials = ssl_channel_credentials()
+        with secure_channel(ADDRESS, credentials) as channel:
+            main(channel)
+    else:
+        # Use insecure connection for local development
+        with insecure_channel(ADDRESS) as channel:
+            main(channel)
