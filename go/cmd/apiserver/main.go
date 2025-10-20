@@ -10,6 +10,7 @@ import (
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"
@@ -55,6 +56,7 @@ func opts() fx.Option {
 		v2pb.DeploymentSvcModule,
 		crd.Module,
 		crd.SyncCRDs(v2pb.GroupVersion.Group, v2pb.YamlSchemas),
+		crd.SyncCRDs(v2alpha1pb.GroupVersion.Group, v2alpha1pb.YamlSchemas),
 		fx.Invoke(registerProcedures),
 		fx.Invoke(startYARPCServer),
 	)
@@ -70,6 +72,9 @@ func getTallyScope() (tally.Scope, error) {
 func getScheme() (*runtime.Scheme, error) {
 	s := scheme.Scheme
 	if err := v2pb.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := v2alpha1pb.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	return s, nil

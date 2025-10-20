@@ -1,0 +1,14 @@
+apiVersion: michelangelo.api/v2alpha1
+kind: Project
+metadata:
+  name: ma-dev-test
+  namespace: ma-dev-test
+spec:
+  description: My ML Project
+  owner:
+    owningTeam: "michelangelo"
+    owners:
+      - craig.marker
+  tier: 4
+  gitRepo: https://github.com/uber/michelangelo
+  rootDir: python/michelangelo/cli/sandbox/crds
