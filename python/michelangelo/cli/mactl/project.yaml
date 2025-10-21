@@ -1,0 +1,18 @@
+metadata:
+  annotations:
+    test-annotation: "test"
+  labels:
+    michelangelo/ml-flavor-coreml: "true"
+  name: ma-dev-test
+  namespace: ma-dev-test
+spec:
+  description: Michelangelo project for internal developer testing
+  owner:
+    owner_groups:
+      - michelangelo
+    owners:
+      - hwamin
+    owning_team: d6190288-07ae-445b-91e6-2cfd6894fd0c
+  root_dir: "python/michelangelo/"
+  git_repo: git@github.com:michelangelo-ai/michelangelo.git
+  tier: 3

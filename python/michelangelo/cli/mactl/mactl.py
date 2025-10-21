@@ -136,6 +136,7 @@ class CRD:
         self.name = name
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
+        self.method_info: dict = {}
 
     def __repr__(self):
         return f"CRD(name={self.name}, full_name={self.full_name})"
@@ -587,11 +588,11 @@ def convert_crd_metadata(
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
     res["metadata"] = {
-        "generateName": "",
+        # TODO: this generation field should be hanlded by server side
         "generation": "0",
+        "resourceVersion": "0",
         "name": yaml_dict["metadata"]["name"],
         "namespace": yaml_dict["metadata"]["namespace"],
-        "resourceVersion": "0",
         "uid": str(uuid4()),
     }
     _LOG.debug("Converted CRD metadata: %r", res)
@@ -824,7 +825,7 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
 
     # For file-based actions, validate file parameter exists (preserving original validation)
     if user_command_action in ["apply", "create", "dev-run"]:
-        assert len(kwargs["file"]) == 1, "exactly one yaml file is required"
+        assert len(kwargs["file"]) == 1, f"exactly one yaml file is required! {kwargs}"
 
     user_command_action = kebab_to_snake(user_command_action)
 
