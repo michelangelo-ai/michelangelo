@@ -125,31 +125,21 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		// Try cluster-scoped first (projects might be cluster-scoped resources)
 		logger.Info("deciding worker queue...")
 		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
-		var taskList string
 
 		if err != nil {
 			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
-		} else if project.GetMetadata().GetAnnotations() != nil {
-			if workerQueue, exists := project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]; exists && workerQueue != "" {
-				taskList = workerQueue
-				logger.Info("using worker queue from project annotations", zap.String("taskList", taskList))
-			}
-		} else {
-			logger.Info("project annotations", zap.String("annotation", project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]))
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("failed to fetch project %v", err)
 		}
-		logger.Info("task list", zap.String("taskList", taskList))
 
-		// If project CR does not have worker_queue specified, as a fallback, retrieve taskList from config
-		if taskList == "" {
-			workflowConfig, getWorkflowClientConfigErr := config.GetWorkflowClientConfig(a.configProvider)
-			if getWorkflowClientConfigErr != nil {
-				logger.Error("failed to get workflow client config", zap.Error(getWorkflowClientConfigErr))
-				return &apipb.Condition{
-					Type:   ExecuteWorkflowType,
-					Status: apipb.CONDITION_STATUS_FALSE,
-				}, fmt.Errorf("get workflow client config: %w", getWorkflowClientConfigErr)
-			}
-			taskList = workflowConfig.TaskList
+		taskList, taskListErr := a.getTaskList(project, pipelineRun)
+		if taskListErr != nil {
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, fmt.Errorf("get workflow client config: %w", taskListErr)
 		}
 		if taskList == "" {
 			logger.Error("WorkflowClient TaskList is empty")
@@ -646,4 +636,29 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	}
 
 	return stepInfo
+}
+
+func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.PipelineRun) (string, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+	var taskList string
+	if project.GetMetadata().GetAnnotations() != nil {
+		if workerQueue, exists := project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]; exists && workerQueue != "" {
+			taskList = workerQueue
+			logger.Info("using worker queue from project annotations", zap.String("taskList", taskList))
+		}
+	} else {
+		logger.Info("project annotations", zap.String("annotation", project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]))
+	}
+	logger.Info("task list", zap.String("taskList", taskList))
+
+	// If project CR does not have worker_queue specified, as a fallback, retrieve taskList from config
+	if taskList == "" {
+		workflowConfig, getWorkflowClientConfigErr := config.GetWorkflowClientConfig(a.configProvider)
+		if getWorkflowClientConfigErr != nil {
+			logger.Error("failed to get workflow client config", zap.Error(getWorkflowClientConfigErr))
+			return "", getWorkflowClientConfigErr
+		}
+		taskList = workflowConfig.TaskList
+	}
+	return taskList, nil
 }
