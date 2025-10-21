@@ -1,4 +1,7 @@
+from collections import defaultdict
 from copy import deepcopy
+from dataclasses import dataclass
+from functools import partial
 from importlib.util import spec_from_file_location, module_from_spec
 from inspect import Signature, Parameter
 from logging import basicConfig, getLogger, WARNING
@@ -7,7 +10,6 @@ from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Union
 from uuid import uuid4
-from collections import defaultdict
 import logging
 import re
 import sys
@@ -87,7 +89,7 @@ def kebab_to_snake(name: str) -> str:
 def bind_signature(signature):
     def decorator(func):
         def wrapper(*args, **kwargs):
-            _LOG.debug("Binding signature for function %r", func.__name__)
+            _LOG.debug("Binding signature for function %r", func)
             bound_args = signature.bind(*args, **kwargs)
             bound_args.apply_defaults()
             return func(bound_args)
@@ -127,6 +129,92 @@ def get_single_arg(arguments: dict, key: str) -> str:
         )
 
 
+@dataclass
+class CrdMethodInfo:
+    """
+    Method information to run CRD member method with grpc reflection
+    """
+
+    channel: Channel
+    method_name: str
+    input_class: type[Message]
+    output_class: type[Message]
+
+
+def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """
+    Common CRD member method implementation for GET method.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+    _self: CRD = bound_args.arguments["self"]
+    _LOG.info("Start get_func for %r", _self.full_name)
+
+    _name = get_single_arg(bound_args.arguments, "name")
+    _namespace = get_single_arg(bound_args.arguments, "namespace")
+
+    request_input = crd_method_info.input_class(
+        namespace=_namespace,
+        name=_name,
+    )
+    _LOG.info(
+        "GET Request input (%r) ready: %r",
+        type(request_input),
+        request_input,
+    )
+
+    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
+    _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+    stub_method = crd_method_info.channel.unary_unary(
+        method_fullname,
+        request_serializer=crd_method_info.input_class.SerializeToString,
+        response_deserializer=crd_method_info.output_class.FromString,
+    )
+    response = stub_method(
+        request_input,
+        metadata=METADATA_STUB,
+        timeout=30,
+    )
+    _LOG.info("Stub method completed (%r): %r", type(response), response)
+    return response
+
+
+def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """
+    Common CRD member method implementation for DELETE method.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+    _self: CRD = bound_args.arguments["self"]
+    _LOG.info("Start delete_func for %r", _self.full_name)
+
+    _namespace = get_single_arg(bound_args.arguments, "namespace")
+    _name = get_single_arg(bound_args.arguments, "name")
+
+    request_input = crd_method_info.input_class(
+        namespace=_namespace,
+        name=_name,
+    )
+    _LOG.info(
+        "DELETE Request input (%r) ready: %r",
+        type(request_input),
+        request_input,
+    )
+
+    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
+    _LOG.info("Method fullname for gRPC call: %s", method_fullname)
+    stub_method = channel.unary_unary(
+        method_fullname,
+        request_serializer=crd_method_info.input_class.SerializeToString,
+        response_deserializer=crd_method_info.output_class.FromString,
+    )
+    response = stub_method(
+        request_input,
+        metadata=METADATA_STUB,
+        timeout=30,
+    )
+    _LOG.info("Stub method completed (%r): %r", type(response), response)
+    return response
+
+
 class CRD:
     """
     Representation of each CRD with its service methods
@@ -143,7 +231,7 @@ class CRD:
 
     def _extract_method_info(
         self, channel: Channel, full_name: str, function_name: str
-    ):
+    ) -> tuple[str, type[Message], type[Message]]:
         """
         Extract method information and their input/output types
         """
@@ -169,9 +257,12 @@ class CRD:
         _LOG.debug("%r method output type: %r", function_name, method.output_type)
         input_class = get_message_class_by_name(method_pool, method.input_type[1:])
         output_class = get_message_class_by_name(method_pool, method.output_type[1:])
-        _LOG.debug("Retrieved method input class: %r", input_class)
-        _LOG.debug("Retrieved method output class: %r", output_class)
-
+        _LOG.debug(
+            "Retrieved method input class: (%r) %r", type(input_class), input_class
+        )
+        _LOG.debug(
+            "Retrieved method output class: (%r) %r", type(input_class), output_class
+        )
         return method_name, input_class, output_class
 
     def generate_delete(self, channel: Channel):
@@ -179,8 +270,8 @@ class CRD:
         Generate delete function of this class.
         """
         _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
-        method_name, input_class, output_class = self._extract_method_info(
-            channel, self.full_name, "Delete"
+        method_info = CrdMethodInfo(
+            channel, *self._extract_method_info(channel, self.full_name, "Delete")
         )
         delete_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -190,50 +281,18 @@ class CRD:
             ]
         )
 
-        @bind_signature(delete_func_signature)
-        def delete_func(bound_args: Signature) -> Message:
-            _LOG.info("Start delete_func for %r", self.full_name)
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
-            _self: CRD = bound_args.arguments["self"]
-
-            _namespace = get_single_arg(bound_args.arguments, "namespace")
-            _name = get_single_arg(bound_args.arguments, "name")
-
-            request_input = input_class(
-                namespace=_namespace,
-                name=_name,
-            )
-            _LOG.info(
-                "DELETE Request input (%r) ready: %r",
-                type(request_input),
-                request_input,
-            )
-
-            method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-            stub_method = channel.unary_unary(
-                method_fullname,
-                request_serializer=input_class.SerializeToString,
-                response_deserializer=output_class.FromString,
-            )
-            response = stub_method(
-                request_input,
-                metadata=METADATA_STUB,
-                timeout=30,
-            )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
-            return response
-
-        delete_func.__signature__ = delete_func_signature  # type: ignore[attr-defined]
-        self.delete = MethodType(delete_func, self)
+        bound_func = partial(delete_func_impl, method_info)
+        bound_func = bind_signature(delete_func_signature)(bound_func)
+        self.delete = MethodType(bound_func, self)
+        _LOG.debug("Generated DELETE injected well: %r", self.delete)
 
     def generate_get(self, channel: Channel):
         """
         Generate get function of this class.
         """
         _LOG.info("Generate GET method for %r / %r", self.name, self.full_name)
-        method_name, input_class, output_class = self._extract_method_info(
-            channel, self.full_name, "Get"
+        method_info = CrdMethodInfo(
+            channel, *self._extract_method_info(channel, self.full_name, "Get")
         )
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -243,42 +302,10 @@ class CRD:
             ]
         )
 
-        @bind_signature(get_func_signature)
-        def get_func(bound_args: Signature) -> Message:
-            _LOG.info("Start get_func for %r", self.full_name)
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
-            _self: CRD = bound_args.arguments["self"]
-
-            _name = get_single_arg(bound_args.arguments, "name")
-            _namespace = get_single_arg(bound_args.arguments, "namespace")
-
-            request_input = input_class(
-                namespace=_namespace,
-                name=_name,
-            )
-            _LOG.info(
-                "GET Request input (%r) ready: %r",
-                type(request_input),
-                request_input,
-            )
-
-            method_fullname = f"/{_self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-            stub_method = channel.unary_unary(
-                method_fullname,
-                request_serializer=input_class.SerializeToString,
-                response_deserializer=output_class.FromString,
-            )
-            response = stub_method(
-                request_input,
-                metadata=METADATA_STUB,
-                timeout=30,
-            )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
-            return response
-
-        get_func.__signature__ = get_func_signature  # type: ignore[attr-defined]
-        self.get = MethodType(get_func, self)
+        bound_func = partial(get_func_impl, method_info)
+        bound_func = bind_signature(get_func_signature)(bound_func)
+        self.get = MethodType(bound_func, self)
+        _LOG.debug("Generated GET injected well: %r", self.get)
 
     def generate_apply(self, channel: Channel):
         """
