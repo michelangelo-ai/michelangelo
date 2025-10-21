@@ -65,6 +65,7 @@ go_proto_library(
         "//bazel/rules/proto:go_kubeproto",
         "//bazel/rules/proto:go_yarpc",
         "//bazel/rules/proto:go_kubeyarpc",
+        "//bazel/rules/proto:go_kubeconversion",
         "//bazel/rules/proto:go_validation",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2",

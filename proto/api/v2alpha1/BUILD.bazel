@@ -8,6 +8,7 @@ proto_library(
         "git.proto",
         "groupversion_info.proto",
         "project.proto",
+        "project_svc.proto",
     ],
     import_prefix = "michelangelo",
     strip_import_prefix = "/proto",
@@ -25,6 +26,9 @@ go_proto_library(
     name = "v2alpha1_go_proto",
     compilers = [
         "//bazel/rules/proto:go_kubeproto",
+        "//bazel/rules/proto:go_yarpc",
+        "//bazel/rules/proto:go_kubeyarpc",
+        "//bazel/rules/proto:go_kubeconversion",
         "//bazel/rules/proto:go_validation",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1",

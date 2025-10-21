@@ -44,6 +44,7 @@ func opts() fx.Option {
 		fx.Provide(getScheme),
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		v2pb.ProjectSvcModule,
+		v2alpha1pb.ProjectSvcModule,
 		v2pb.PipelineSvcModule,
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
@@ -55,8 +56,7 @@ func opts() fx.Option {
 		v2pb.TriggerRunSvcModule,
 		v2pb.DeploymentSvcModule,
 		crd.Module,
-		crd.SyncCRDs(v2pb.GroupVersion.Group, v2pb.YamlSchemas),
-		crd.SyncCRDs(v2alpha1pb.GroupVersion.Group, v2alpha1pb.YamlSchemas),
+		crd.SyncCRDs(v2pb.GroupVersion.Group, v2pb.YamlSchemas, v2alpha1pb.YamlSchemas),
 		fx.Invoke(registerProcedures),
 		fx.Invoke(startYARPCServer),
 	)

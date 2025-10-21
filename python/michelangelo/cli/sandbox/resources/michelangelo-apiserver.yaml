@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
     - name: michelangelo-apiserver
-      image: ghcr.io/michelangelo-ai/apiserver:main
+      image: ghcr.io/michelangelo-ai/apiserver:baoquan-webhook-version-conversion
       ports:
         - containerPort: 14566
       volumeMounts:
@@ -53,4 +53,9 @@ data:
         enableMetadataStorage: false
       crdSync:
         enableCRDUpdate: true
-        enableIncompatibleUpdate: false
+        enableIncompatibleUpdate: true
+        enableCRDDeletion: false
+        crdVersions:
+          project:
+            versions: [v2, v2alpha1]
+            storageVersion: v2
