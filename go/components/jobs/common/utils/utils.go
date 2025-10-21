@@ -128,6 +128,8 @@ func UpdateStatusWithRetries(ctx context.Context, handler api.Handler, job clien
 		switch job.(type) {
 		case *v2pb.RayJob:
 			latestJob = &v2pb.RayJob{}
+		case *v2pb.RayCluster:
+			latestJob = &v2pb.RayCluster{}
 		case *v2pb.SparkJob:
 			latestJob = &v2pb.SparkJob{}
 		default:

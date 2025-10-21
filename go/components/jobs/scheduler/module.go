@@ -1,8 +1,8 @@
 package scheduler
 
 import (
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/scheduler"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/scheduler/framework"
+	commonscheduler "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/scheduler"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework"
 	"go.uber.org/fx"
 )
 
@@ -10,11 +10,10 @@ import (
 var Module = fx.Options(
 	fx.Provide(
 		fx.Annotate(
-			NewController,
+			NewScheduler,
 			fx.As(new(JobQueue)),
-			fx.As(new(ResourcePoolSelector)),
 		),
 	),
-	scheduler.Module,
+	commonscheduler.Module,
 	framework.Module,
 )

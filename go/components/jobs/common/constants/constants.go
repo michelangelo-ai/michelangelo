@@ -140,6 +140,12 @@ const (
 	ResourceNvidiaGPU corev1.ResourceName = "nvidia.com/gpu"
 )
 
+// Scheduler default resource SKU constants (OSS)
+const (
+	// DefaultCPU is the default resource SKU key for CPU-only jobs
+	DefaultCPU string = "defaultCPU"
+)
+
 // secret related constants
 const (
 	SecretNamePrefix string = "ma-job-secret-"
@@ -269,4 +275,16 @@ const (
 	JobStatusSucceeded SparkJobStatus = "Succeeded"
 	// JobStatusFailed indicates that the job has failed.
 	JobStatusFailed SparkJobStatus = "Failed"
+)
+
+// Affinity labels
+const (
+	ClusterAffinityLabelKey string = "ma/affinity-cluster"
+)
+
+// Assignment reasons
+const (
+	AssignmentReasonClusterMatchedByAffinity string = "cluster_matched_by_affinity"
+	AssignmentReasonClusterDefaultSelected   string = "cluster_default_selected"
+	AssignmentReasonNoClustersFound          string = "no_clusters_found"
 )

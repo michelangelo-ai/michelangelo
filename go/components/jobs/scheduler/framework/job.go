@@ -1,14 +1,17 @@
 package framework
 
 import (
-	computecommonconstants "code.uber.internal/infra/compute/compute-common/constants"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/constants"
-	matypes "code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/types"
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/common/utils"
-	sharedConstants "code.uber.internal/uberai/michelangelo/shared/constants"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	quotav1 "k8s.io/apiserver/pkg/quota/v1"
-	v2beta1 "michelangelo/api/v2beta1"
+
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/utils"
+
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -17,11 +20,11 @@ type BatchJob interface {
 	// SchedulableJob returns basic job information
 	matypes.SchedulableJob
 	// GetAffinity returns the job affinity
-	GetAffinity() *v2beta1.Affinity
+	GetAffinity() *v2pb.Affinity
 	// GetConditions returns the job conditions
-	GetConditions() *[]*v2beta1.Condition
+	GetConditions() *[]*apipb.Condition
 	// GetAssignmentInfo returns the assigment info
-	GetAssignmentInfo() *v2beta1.AssignmentInfo
+	GetAssignmentInfo() *v2pb.AssignmentInfo
 	// GetObject returns the underlying client.Object
 	GetObject() client.Object
 	// GetLabels returns all Labels which attached to job.
@@ -33,109 +36,149 @@ type BatchJob interface {
 	// GetUserName returns the username of the user who submitted the job.
 	GetUserName() string
 	// GetTerminationSpec returns the termination spec
-	GetTerminationSpec() *v2beta1.TerminationSpec
+	GetTerminationSpec() *v2pb.TerminationSpec
 	// IsPreemptibleJob returns true in case of Scheduling Preemptible.
 	IsPreemptibleJob() bool
-	// GetEnvironmentLabel returns sharedConstants.EnvironmentLabel tag value.
-	GetEnvironmentLabel() string
 }
 
-// BatchRayJob is the internal type for the global RayJob
-type BatchRayJob struct {
-	*v2beta1.RayJob
+// BatchRayCluster is the internal type for the global RayJob
+type BatchRayCluster struct {
+	*v2pb.RayCluster
 }
 
-var _ BatchJob = BatchRayJob{}
+var _ BatchJob = BatchRayCluster{}
 
 // GetAffinity returns the job affinity
-func (r BatchRayJob) GetAffinity() *v2beta1.Affinity {
-	return r.Spec.GetAffinity()
+func (r BatchRayCluster) GetAffinity() *v2pb.Affinity {
+	// TODO(#611): Add affinity to RayCluster as part of SKU management
+	return nil
 }
 
 // GetConditions returns the job conditions
-func (r BatchRayJob) GetConditions() *[]*v2beta1.Condition {
+func (r BatchRayCluster) GetConditions() *[]*apipb.Condition {
 	return &r.Status.StatusConditions
 }
 
 // GetAssignmentInfo returns the assigment info
-func (r BatchRayJob) GetAssignmentInfo() *v2beta1.AssignmentInfo {
+func (r BatchRayCluster) GetAssignmentInfo() *v2pb.AssignmentInfo {
 	if r.Status.Assignment == nil {
-		r.Status.Assignment = &v2beta1.AssignmentInfo{}
+		r.Status.Assignment = &v2pb.AssignmentInfo{}
 	}
 	return r.Status.Assignment
 }
 
 // GetGeneration returns the job generation
-func (r BatchRayJob) GetGeneration() int64 {
+func (r BatchRayCluster) GetGeneration() int64 {
 	return r.Generation
 }
 
 // GetNamespace returns the namespace of the job.
-func (r BatchRayJob) GetNamespace() string {
+func (r BatchRayCluster) GetNamespace() string {
 	return r.Namespace
 }
 
 // GetName returns the name of the job.
-func (r BatchRayJob) GetName() string {
+func (r BatchRayCluster) GetName() string {
 	return r.Name
 }
 
 // GetObject returns the underlying client.Object
-func (r BatchRayJob) GetObject() client.Object {
-	return r.RayJob
+func (r BatchRayCluster) GetObject() client.Object {
+	return r.RayCluster
 }
 
-// GetLabels returns all labels which attached to the job.
-func (r BatchRayJob) GetLabels() map[string]string {
+// GetLabels returns all labels which attached to the cluster.
+func (r BatchRayCluster) GetLabels() map[string]string {
 	return r.Labels
 }
 
 // GetAnnotations returns all the annotations which attached to the job.
-func (r BatchRayJob) GetAnnotations() map[string]string {
+func (r BatchRayCluster) GetAnnotations() map[string]string {
 	return r.Annotations
 }
 
-// addResourcesByResourceSKU adds resources for a pod spec with instances to the aggregated map.
-// It determines the appropriate resource SKU based on GPU SKU or defaults to CPU-only.
-// The function scales the resources by the number of instances and aggregates them into the provided map.
-func addResourcesByResourceSKU(aggregated map[string]v1.ResourceList, podSpec *v2beta1.PodSpec, instances int64) error {
-	resourceSKU := computecommonconstants.DefaultCPU
-	if podSpec.GetResource() != nil {
-		if sku := podSpec.GetResource().GetGpuSku(); sku != "" {
-			resourceSKU = sku
-		} else if podSpec.GetResource().GetGpu() > 0 {
-			// For v1 compatibility: GPU jobs without SKU default to RTX5000
-			// TODO: Remove once migration to FedV2 is complete
-			resourceSKU = string(sharedConstants.RTX5000)
+// getResourceRequestsFromPodSpec sums container resource requests from a core k8s PodSpec.
+// If a resource is not requested, it falls back to limits for that resource.
+func getResourceRequestsFromPodSpec(podSpec *v1.PodSpec) v1.ResourceList {
+	// Start with an empty map; only include resources that are explicitly requested/limited
+	summed := v1.ResourceList{
+		v1.ResourceCPU:              resource.MustParse("0"),
+		v1.ResourceMemory:           resource.MustParse("0"),
+		v1.ResourceEphemeralStorage: resource.MustParse("0"),
+		constants.ResourceNvidiaGPU: resource.MustParse("0"),
+	}
+
+	for _, c := range podSpec.Containers {
+		// Prefer requests; fallback to limits per resource
+		// CPU
+		if qty, ok := c.Resources.Requests[v1.ResourceCPU]; ok {
+			addQty(summed, v1.ResourceCPU, qty)
+		} else if qty, ok := c.Resources.Limits[v1.ResourceCPU]; ok {
+			addQty(summed, v1.ResourceCPU, qty)
+		}
+		// GPU
+		// TODO(#612): Add GPU SKU management
+		if qty, ok := c.Resources.Requests[constants.ResourceNvidiaGPU]; ok {
+			addQty(summed, constants.ResourceNvidiaGPU, qty)
+		} else if qty, ok := c.Resources.Limits[constants.ResourceNvidiaGPU]; ok {
+			addQty(summed, constants.ResourceNvidiaGPU, qty)
+		}
+		// Memory
+		if qty, ok := c.Resources.Requests[v1.ResourceMemory]; ok {
+			addQty(summed, v1.ResourceMemory, qty)
+		} else if qty, ok := c.Resources.Limits[v1.ResourceMemory]; ok {
+			addQty(summed, v1.ResourceMemory, qty)
+		}
+		// Ephemeral storage
+		if qty, ok := c.Resources.Requests[v1.ResourceEphemeralStorage]; ok {
+			addQty(summed, v1.ResourceEphemeralStorage, qty)
+		} else if qty, ok := c.Resources.Limits[v1.ResourceEphemeralStorage]; ok {
+			addQty(summed, v1.ResourceEphemeralStorage, qty)
 		}
 	}
+	return summed
+}
 
-	resourceList, err := utils.ConvertToResourceList(podSpec.GetResource())
+func addQty(resourceList v1.ResourceList, resourceName v1.ResourceName, quantity resource.Quantity) {
+	q := resourceList[resourceName]
+	q.Add(quantity)
+	resourceList[resourceName] = q
+}
+
+// TODO(#612): Placeholder for resource-class key derivation.
+// Future: derive from node selectors, tolerations, requests/limits,
+// and extended resources (e.g., GPU SKU) to drive resource-aware placement.
+func getResourceClassKeyFromPodSpec(_ *v1.PodSpec) string {
+	return constants.DefaultCPU
+}
+
+func addResourcesByResourceSKU(aggregated map[string]v1.ResourceList, podSpec *v1.PodSpec, instances int64) error {
+	if podSpec == nil || instances <= 0 {
+		return nil
+	}
+
+	bucketKey := getResourceClassKeyFromPodSpec(podSpec)
+
+	// Sum container requests/limits for this PodSpec
+	base := getResourceRequestsFromPodSpec(podSpec)
+
+	// Scale using known resource scaler for correctness
+	scaled, err := utils.ScaleKnownResources(base, instances)
 	if err != nil {
 		return err
 	}
 
-	// Scale by instance count
-	scaledResourceList, err := utils.ScaleKnownResources(resourceList, instances)
-	if err != nil {
-		return err
-	}
-	resourceList = scaledResourceList
-
-	// Initialize aggregated requirements for this resource SKU if not exists
-	if _, exists := aggregated[resourceSKU]; !exists {
-		aggregated[resourceSKU] = make(v1.ResourceList)
+	if _, exists := aggregated[bucketKey]; !exists {
+		aggregated[bucketKey] = make(v1.ResourceList)
 	}
 
-	// Add SKU requirements to aggregated totals
-	for resourceName, quantity := range resourceList {
-		if existing, exists := aggregated[resourceSKU][resourceName]; exists {
-			// Create a copy to avoid modifying the original
+	for resourceName, quantity := range scaled {
+		if existing, exists := aggregated[bucketKey][resourceName]; exists {
 			newQuantity := existing.DeepCopy()
 			newQuantity.Add(quantity)
-			aggregated[resourceSKU][resourceName] = newQuantity
+			aggregated[bucketKey][resourceName] = newQuantity
 		} else {
-			aggregated[resourceSKU][resourceName] = quantity.DeepCopy()
+			aggregated[bucketKey][resourceName] = quantity.DeepCopy()
 		}
 	}
 
@@ -143,29 +186,24 @@ func addResourcesByResourceSKU(aggregated map[string]v1.ResourceList, podSpec *v
 }
 
 // GetResourceRequirement returns the resource requirements bucketed by ResourceSKU for the ray job
-func (r BatchRayJob) GetResourceRequirement() (map[string]v1.ResourceList, error) {
+func (r BatchRayCluster) GetResourceRequirement() (map[string]v1.ResourceList, error) {
 	aggregated := make(map[string]v1.ResourceList)
 
-	if r.RayJob == nil {
+	if r.RayCluster == nil {
 		return aggregated, nil
 	}
 
-	// Handle head
-	if err := addResourcesByResourceSKU(aggregated, r.Spec.GetHead().GetPod(), 1); err != nil {
+	// Handle head (1 instance)
+	if err := addResourcesByResourceSKU(aggregated, &r.Spec.Head.Pod.Spec, 1); err != nil {
 		return nil, err
 	}
 
 	// Handle workers
 	if len(r.Spec.GetWorkers()) > 0 {
 		for _, worker := range r.Spec.GetWorkers() {
-			if err := addResourcesByResourceSKU(aggregated, worker.GetPod(), int64(worker.GetMinInstances())); err != nil {
+			if err := addResourcesByResourceSKU(aggregated, &worker.GetPod().Spec, int64(worker.GetMinInstances())); err != nil {
 				return nil, err
 			}
-		}
-	} else if r.Spec.GetWorker() != nil {
-		// Handle single worker
-		if err := addResourcesByResourceSKU(aggregated, r.Spec.GetWorker().GetPod(), int64(r.Spec.GetWorker().GetMinInstances())); err != nil {
-			return nil, err
 		}
 	}
 
@@ -173,51 +211,46 @@ func (r BatchRayJob) GetResourceRequirement() (map[string]v1.ResourceList, error
 }
 
 // GetUserName returns the username of the user who submitted the job.
-func (r BatchRayJob) GetUserName() string {
+func (r BatchRayCluster) GetUserName() string {
 	return r.Spec.GetUser().GetName()
 }
 
 // GetTerminationSpec returns the termination spec
-func (r BatchRayJob) GetTerminationSpec() *v2beta1.TerminationSpec {
+func (r BatchRayCluster) GetTerminationSpec() *v2pb.TerminationSpec {
 	return r.Spec.Termination
 }
 
 // IsPreemptibleJob returns true in case of Scheduling Preemptible.
-func (r BatchRayJob) IsPreemptibleJob() bool {
+func (r BatchRayCluster) IsPreemptibleJob() bool {
 	return r.Spec.GetScheduling().GetPreemptible()
 }
 
-// GetEnvironmentLabel returns sharedConstants.EnvironmentLabel tag value.
-func (r BatchRayJob) GetEnvironmentLabel() string {
-	return findEnvironmentLabel(r.GetLabels())
-}
-
 // GetJobType return the type of the job
-func (r BatchRayJob) GetJobType() matypes.JobType {
-	return matypes.RayJob
+func (r BatchRayCluster) GetJobType() matypes.JobType {
+	return matypes.RayCluster
 }
 
 // BatchSparkJob is the internal type for the global SparkJob
 type BatchSparkJob struct {
-	*v2beta1.SparkJob
+	*v2pb.SparkJob
 }
 
 var _ BatchJob = BatchSparkJob{}
 
 // GetAffinity returns the job affinity
-func (s BatchSparkJob) GetAffinity() *v2beta1.Affinity {
+func (s BatchSparkJob) GetAffinity() *v2pb.Affinity {
 	return s.Spec.GetAffinity()
 }
 
 // GetConditions returns the job conditions
-func (s BatchSparkJob) GetConditions() *[]*v2beta1.Condition {
+func (s BatchSparkJob) GetConditions() *[]*apipb.Condition {
 	return &s.Status.StatusConditions
 }
 
 // GetAssignmentInfo returns the assigment info
-func (s BatchSparkJob) GetAssignmentInfo() *v2beta1.AssignmentInfo {
+func (s BatchSparkJob) GetAssignmentInfo() *v2pb.AssignmentInfo {
 	if s.Status.Assignment == nil {
-		s.Status.Assignment = &v2beta1.AssignmentInfo{}
+		s.Status.Assignment = &v2pb.AssignmentInfo{}
 	}
 	return s.Status.Assignment
 }
@@ -255,7 +288,6 @@ func (s BatchSparkJob) GetAnnotations() map[string]string {
 // GetResourceRequirement returns the resource requirement for the spark job by adding up the driver and executor(s)
 // resources, returned as a map with a single key (DefaultCPU)
 func (s BatchSparkJob) GetResourceRequirement() (map[string]v1.ResourceList, error) {
-
 	driverResources, err := utils.ConvertToResourceList(s.Spec.GetDriver().GetPod().GetResource())
 	if err != nil {
 		return nil, err
@@ -275,9 +307,7 @@ func (s BatchSparkJob) GetResourceRequirement() (map[string]v1.ResourceList, err
 	total := quotav1.Add(driverResources, scaledWorkerRequirements)
 
 	// Return as a map with a single key since Spark jobs don't have heterogeneous resource requirements
-	return map[string]v1.ResourceList{
-		computecommonconstants.DefaultCPU: total,
-	}, nil
+	return map[string]v1.ResourceList{constants.DefaultCPU: total}, nil
 }
 
 // GetUserName returns the username of the user who submitted the job.
@@ -286,7 +316,7 @@ func (s BatchSparkJob) GetUserName() string {
 }
 
 // GetTerminationSpec returns the termination spec
-func (s BatchSparkJob) GetTerminationSpec() *v2beta1.TerminationSpec {
+func (s BatchSparkJob) GetTerminationSpec() *v2pb.TerminationSpec {
 	return s.Spec.Termination
 }
 
@@ -295,28 +325,7 @@ func (s BatchSparkJob) IsPreemptibleJob() bool {
 	return s.Spec.GetScheduling().GetPreemptible()
 }
 
-// GetEnvironmentLabel returns sharedConstants.EnvironmentLabel tag value.
-func (s BatchSparkJob) GetEnvironmentLabel() string {
-	return findEnvironmentLabel(s.GetLabels())
-}
-
 // GetJobType return the type of the job
 func (s BatchSparkJob) GetJobType() matypes.JobType {
 	return matypes.SparkJob
-}
-
-func findEnvironmentLabel(labels map[string]string) string {
-	if val, ok := labels[sharedConstants.EnvironmentLabel]; ok {
-		if val == constants.Production {
-			return v2beta1.ENV_TYPE_PRODUCTION.String()
-		}
-		if val == constants.Development {
-			return v2beta1.ENV_TYPE_DEVELOPMENT.String()
-		}
-		if val == constants.Testing {
-			return v2beta1.ENV_TYPE_TESTING.String()
-		}
-		return labels[sharedConstants.EnvironmentLabel]
-	}
-	return ""
 }

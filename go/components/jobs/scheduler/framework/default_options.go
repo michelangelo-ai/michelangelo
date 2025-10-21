@@ -1,19 +1,19 @@
 package framework
 
 import (
-	v2beta1pb "michelangelo/api/v2beta1"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 
-	"code.uber.internal/uberai/michelangelo/controllermgr/pkg/controllers/jobs/cluster"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 )
 
 type noOpClusterCache struct{}
 
 var _ cluster.RegisteredClustersCache = noOpClusterCache{}
 
-func (c noOpClusterCache) GetClusters(_ cluster.FilterType) []*v2beta1pb.Cluster {
+func (c noOpClusterCache) GetClusters(_ cluster.FilterType) []*v2pb.Cluster {
 	return nil
 }
 
-func (c noOpClusterCache) GetCluster(_ string) *v2beta1pb.Cluster {
+func (c noOpClusterCache) GetCluster(_ string) *v2pb.Cluster {
 	return nil
 }
