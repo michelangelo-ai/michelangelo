@@ -1,10 +1,17 @@
 package worker
 
 import (
+	"crypto/tls"
+	"strings"
+
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/yarpc"
+	"go.uber.org/yarpc/api/transport"
+	"go.uber.org/yarpc/peer"
+	"go.uber.org/yarpc/peer/hostport"
 	"go.uber.org/yarpc/transport/grpc"
+	"google.golang.org/grpc/credentials"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -15,6 +22,7 @@ const configKey = "worker"
 type Config struct {
 	MaAPIServiceName string `yaml:"maApiServiceName"`
 	Address          string `yaml:"address"`
+	UseTLS           bool   `yaml:"useTLS"`
 }
 
 // Params provides dependencies for YARPC dispatcher.
@@ -41,7 +49,32 @@ func NewConfig(provider config.Provider) (Config, error) {
 
 // NewYARPCDispatcher creates and starts a new YARPC dispatcher.
 func NewYARPCDispatcher(p Params) (*yarpc.Dispatcher, error) {
-	tran := grpc.NewTransport().NewSingleOutbound(p.Config.Address)
+	var tran transport.UnaryOutbound
+
+	// Check config to determine if we should use TLS
+	if p.Config.UseTLS {
+		// Configure TLS for secure connections (e.g., ingress endpoints)
+		tlsConfig := &tls.Config{
+			ServerName: extractServerName(p.Config.Address),
+		}
+		creds := credentials.NewTLS(tlsConfig)
+
+		// Create a dialer with TLS credentials
+		dialer := grpc.NewTransport().NewDialer(grpc.DialerCredentials(creds))
+
+		// Create a peer chooser with the TLS-enabled dialer
+		chooser := peer.NewSingle(
+			hostport.Identify(p.Config.Address),
+			dialer,
+		)
+
+		// Create outbound with the chooser
+		tran = grpc.NewTransport().NewOutbound(chooser)
+	} else {
+		// Use insecure connection for local development
+		tran = grpc.NewTransport().NewSingleOutbound(p.Config.Address)
+	}
+
 	dispatcher := yarpc.NewDispatcher(yarpc.Config{
 		Name:      p.Config.MaAPIServiceName,
 		Outbounds: yarpc.Outbounds{p.Config.MaAPIServiceName: {Unary: tran}},
@@ -87,4 +120,13 @@ func NewModelServiceClient(p ClientParams) v2pb.ModelServiceYARPCClient {
 // NewDeploymentServiceClient creates a DeploymentService YARPC client.
 func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClient {
 	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
+}
+
+// extractServerName extracts the server name from an address for TLS SNI
+func extractServerName(address string) string {
+	// Extract hostname from "hostname:port" format
+	if idx := strings.LastIndex(address, ":"); idx >= 0 {
+		return address[:idx]
+	}
+	return address
 }

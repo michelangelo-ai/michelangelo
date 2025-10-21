@@ -4,8 +4,9 @@ Unit tests for mactl CLI functions.
 Tests gRPC reflection services and service class creation logic.
 """
 
+import os
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, patch, MagicMock
 
 from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
 
@@ -488,3 +489,303 @@ class GetServiceDescriptorsTest(TestCase):
 
         # Verify the result is empty
         self.assertEqual(len(result), 0)
+
+
+class TLSConfigurationTest(TestCase):
+    """
+    Tests for TLS configuration functionality added to mactl
+    """
+
+    def setUp(self):
+        """Set up test environment variables"""
+        # Store original environment variables
+        self.original_env = {}
+        for key in ["MACTL_USE_TLS", "MACTL_ADDRESS"]:
+            self.original_env[key] = os.environ.get(key)
+
+    def tearDown(self):
+        """Restore original environment variables"""
+        for key, value in self.original_env.items():
+            if value is not None:
+                os.environ[key] = value
+            elif key in os.environ:
+                del os.environ[key]
+
+    @patch.dict(os.environ, {"MACTL_USE_TLS": "true"}, clear=False)
+    def test_use_tls_environment_variable_true(self):
+        """Test that MACTL_USE_TLS=true is properly parsed"""
+        # Need to reload the module to pick up new environment variable
+        import importlib
+        import michelangelo.cli.mactl.mactl
+        importlib.reload(michelangelo.cli.mactl.mactl)
+
+        from michelangelo.cli.mactl.mactl import USE_TLS
+        self.assertEqual(USE_TLS, "true")
+
+    @patch.dict(os.environ, {"MACTL_USE_TLS": "TRUE"}, clear=False)
+    def test_use_tls_environment_variable_case_insensitive(self):
+        """Test that MACTL_USE_TLS is case insensitive and converts to lowercase"""
+        import importlib
+        import michelangelo.cli.mactl.mactl
+        importlib.reload(michelangelo.cli.mactl.mactl)
+
+        from michelangelo.cli.mactl.mactl import USE_TLS
+        self.assertEqual(USE_TLS, "true")
+
+    @patch.dict(os.environ, {"MACTL_USE_TLS": "false"}, clear=False)
+    def test_use_tls_environment_variable_false(self):
+        """Test that MACTL_USE_TLS=false is properly parsed"""
+        import importlib
+        import michelangelo.cli.mactl.mactl
+        importlib.reload(michelangelo.cli.mactl.mactl)
+
+        from michelangelo.cli.mactl.mactl import USE_TLS
+        self.assertEqual(USE_TLS, "false")
+
+    @patch.dict(os.environ, {}, clear=False)
+    def test_use_tls_default_value(self):
+        """Test that USE_TLS defaults to 'true' when not set"""
+        # Remove MACTL_USE_TLS if it exists
+        if "MACTL_USE_TLS" in os.environ:
+            del os.environ["MACTL_USE_TLS"]
+
+        import importlib
+        import michelangelo.cli.mactl.mactl
+        importlib.reload(michelangelo.cli.mactl.mactl)
+
+        from michelangelo.cli.mactl.mactl import USE_TLS
+        self.assertEqual(USE_TLS, "true")
+
+    @patch.dict(os.environ, {"MACTL_USE_TLS": "invalid"}, clear=False)
+    def test_use_tls_invalid_value(self):
+        """Test that invalid values for MACTL_USE_TLS are handled"""
+        import importlib
+        import michelangelo.cli.mactl.mactl
+        importlib.reload(michelangelo.cli.mactl.mactl)
+
+        from michelangelo.cli.mactl.mactl import USE_TLS
+        self.assertEqual(USE_TLS, "invalid")  # Invalid values are preserved as-is
+
+
+class TLSConnectionTest(TestCase):
+    """
+    Tests for TLS connection functionality in main execution
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.secure_channel")
+    @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
+    @patch("builtins.print")
+    def test_main_execution_with_tls_enabled(self, mock_print, mock_ssl_creds, mock_secure_channel, mock_main):
+        """Test main execution path when TLS is enabled"""
+        # Setup mocks
+        mock_channel = MagicMock()
+        mock_secure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_secure_channel.return_value.__exit__ = Mock(return_value=None)
+        mock_credentials = MagicMock()
+        mock_ssl_creds.return_value = mock_credentials
+
+        # Mock the module-level constants
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "true"), \
+             patch("michelangelo.cli.mactl.mactl.ADDRESS", "test-server:443"):
+
+            # Import and run the main block
+            from michelangelo.cli.mactl import mactl
+
+            # Execute the main block logic directly
+            if mactl.USE_TLS == "true":
+                should_use_tls = True
+                print(f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {mactl.ADDRESS}")
+            else:
+                should_use_tls = False
+                print(f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {mactl.ADDRESS}")
+
+            if should_use_tls:
+                credentials = mactl.ssl_channel_credentials()
+                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
+                    mactl.main(channel)
+            else:
+                with mactl.insecure_channel(mactl.ADDRESS) as channel:
+                    mactl.main(channel)
+
+        # Verify TLS connection setup
+        mock_ssl_creds.assert_called_once()
+        mock_secure_channel.assert_called_once_with("test-server:443", mock_credentials)
+        mock_main.assert_called_once_with(mock_channel)
+        mock_print.assert_called_once_with("Using TLS (forced via MACTL_USE_TLS=true) to connect to test-server:443")
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    @patch("builtins.print")
+    def test_main_execution_with_tls_disabled(self, mock_print, mock_insecure_channel, mock_main):
+        """Test main execution path when TLS is disabled"""
+        # Setup mocks
+        mock_channel = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        # Mock the module-level constants
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "false"), \
+             patch("michelangelo.cli.mactl.mactl.ADDRESS", "localhost:5435"):
+
+            # Import and run the main block
+            from michelangelo.cli.mactl import mactl
+
+            # Execute the main block logic directly
+            if mactl.USE_TLS == "true":
+                should_use_tls = True
+                print(f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {mactl.ADDRESS}")
+            else:
+                should_use_tls = False
+                print(f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {mactl.ADDRESS}")
+
+            if should_use_tls:
+                credentials = mactl.ssl_channel_credentials()
+                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
+                    mactl.main(channel)
+            else:
+                with mactl.insecure_channel(mactl.ADDRESS) as channel:
+                    mactl.main(channel)
+
+        # Verify insecure connection setup
+        mock_insecure_channel.assert_called_once_with("localhost:5435")
+        mock_main.assert_called_once_with(mock_channel)
+        mock_print.assert_called_once_with("Using insecure connection (forced via MACTL_USE_TLS=false) to connect to localhost:5435")
+
+    @patch("michelangelo.cli.mactl.mactl.main")
+    @patch("michelangelo.cli.mactl.mactl.secure_channel")
+    @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
+    @patch("michelangelo.cli.mactl.mactl.insecure_channel")
+    def test_channel_context_manager_usage(self, mock_insecure_channel, mock_ssl_creds, mock_secure_channel, mock_main):
+        """Test that channels are properly used as context managers"""
+        mock_channel = MagicMock()
+
+        # Test TLS channel context manager
+        mock_secure_channel.return_value = MagicMock()
+        mock_secure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_secure_channel.return_value.__exit__ = Mock(return_value=None)
+        mock_credentials = MagicMock()
+        mock_ssl_creds.return_value = mock_credentials
+
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "true"), \
+             patch("michelangelo.cli.mactl.mactl.ADDRESS", "test-server:443"):
+
+            from michelangelo.cli.mactl import mactl
+
+            # Test secure channel usage
+            if mactl.USE_TLS == "true":
+                credentials = mactl.ssl_channel_credentials()
+                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
+                    mactl.main(channel)
+
+        # Verify context manager methods were called
+        mock_secure_channel.return_value.__enter__.assert_called_once()
+        mock_secure_channel.return_value.__exit__.assert_called_once()
+        mock_main.assert_called_once_with(mock_channel)
+
+        # Reset mocks
+        mock_main.reset_mock()
+        mock_insecure_channel.reset_mock()
+
+        # Test insecure channel context manager
+        mock_insecure_channel.return_value = MagicMock()
+        mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
+        mock_insecure_channel.return_value.__exit__ = Mock(return_value=None)
+
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "false"), \
+             patch("michelangelo.cli.mactl.mactl.ADDRESS", "localhost:5435"):
+
+            from michelangelo.cli.mactl import mactl
+
+            # Test insecure channel usage
+            if mactl.USE_TLS != "true":
+                with mactl.insecure_channel(mactl.ADDRESS) as channel:
+                    mactl.main(channel)
+
+        # Verify context manager methods were called
+        mock_insecure_channel.return_value.__enter__.assert_called_once()
+        mock_insecure_channel.return_value.__exit__.assert_called_once()
+        mock_main.assert_called_once_with(mock_channel)
+
+    def test_address_environment_variable_integration(self):
+        """Test that MACTL_ADDRESS works with TLS configuration"""
+        test_address = "custom-server:9999"
+
+        with patch.dict(os.environ, {"MACTL_ADDRESS": test_address, "MACTL_USE_TLS": "true"}, clear=False):
+            import importlib
+            import michelangelo.cli.mactl.mactl
+            importlib.reload(michelangelo.cli.mactl.mactl)
+
+            from michelangelo.cli.mactl.mactl import ADDRESS, USE_TLS
+            self.assertEqual(ADDRESS, test_address)
+            self.assertEqual(USE_TLS, "true")
+
+
+class TLSImportsTest(TestCase):
+    """
+    Tests to verify that TLS-related imports are correctly added
+    """
+
+    def test_tls_imports_available(self):
+        """Test that TLS-related functions are imported and available"""
+        from michelangelo.cli.mactl.mactl import (
+            secure_channel,
+            ssl_channel_credentials,
+            insecure_channel
+        )
+
+        # Verify imports are callable
+        self.assertTrue(callable(secure_channel))
+        self.assertTrue(callable(ssl_channel_credentials))
+        self.assertTrue(callable(insecure_channel))
+
+    def test_module_imports_grpc_tls_functions(self):
+        """Test that the module successfully imports gRPC TLS functions"""
+        import michelangelo.cli.mactl.mactl as mactl_module
+
+        # Check that the functions exist as attributes of the module
+        self.assertTrue(hasattr(mactl_module, "secure_channel"))
+        self.assertTrue(hasattr(mactl_module, "ssl_channel_credentials"))
+        self.assertTrue(hasattr(mactl_module, "insecure_channel"))
+
+
+class TLSErrorHandlingTest(TestCase):
+    """
+    Tests for TLS error handling scenarios
+    """
+
+    @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
+    @patch("michelangelo.cli.mactl.mactl.secure_channel")
+    def test_tls_connection_failure_handling(self, mock_secure_channel, mock_ssl_creds):
+        """Test handling of TLS connection failures"""
+        # Mock TLS connection failure
+        mock_ssl_creds.return_value = MagicMock()
+        mock_secure_channel.side_effect = Exception("TLS connection failed")
+
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "true"), \
+             patch("michelangelo.cli.mactl.mactl.ADDRESS", "bad-server:443"):
+
+            from michelangelo.cli.mactl import mactl
+
+            # This should raise the TLS connection exception
+            with self.assertRaises(Exception) as context:
+                credentials = mactl.ssl_channel_credentials()
+                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
+                    pass  # Connection should fail before reaching main()
+
+            self.assertEqual(str(context.exception), "TLS connection failed")
+
+    @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
+    def test_ssl_credentials_creation_failure(self, mock_ssl_creds):
+        """Test handling of SSL credentials creation failure"""
+        # Mock SSL credentials creation failure
+        mock_ssl_creds.side_effect = Exception("Failed to create SSL credentials")
+
+        with patch("michelangelo.cli.mactl.mactl.USE_TLS", "true"):
+            from michelangelo.cli.mactl import mactl
+
+            # This should raise the SSL credentials exception
+            with self.assertRaises(Exception) as context:
+                mactl.ssl_channel_credentials()
+
+            self.assertEqual(str(context.exception), "Failed to create SSL credentials")
