@@ -476,7 +476,6 @@ class CRD:
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
 
         original_crd_dict[self.name]["spec"].update(yaml_dict["spec"])
-        original_crd_dict[self.name]["metadata"].update(yaml_dict["metadata"])
         original_crd_dict[self.name]["metadata"]["generation"] = str(
             int(original_crd_dict[self.name]["metadata"]["generation"]) + 1
         )
@@ -588,6 +587,7 @@ def convert_crd_metadata(
 
     res = {"spec": deepcopy(yaml_dict["spec"])}
     res["metadata"] = {
+        "clusterName": "",
         "generateName": "",
         "generation": "0",
         "name": yaml_dict["metadata"]["name"],
@@ -883,8 +883,8 @@ def main(channel: Channel):
     #   some missing proto message info causing error.
     """
     json_output = MessageToJson(
-        result, 
-        always_print_fields_with_no_presence=True, 
+        result,
+        always_print_fields_with_no_presence=True,
         preserving_proto_field_name=True
     )
     print(json_output)

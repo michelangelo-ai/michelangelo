@@ -123,17 +123,21 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		// Attempt to retrieve taskList from project.annotations[michelangelo/worker_queue]
 		project := &v2.Project{}
 		// Try cluster-scoped first (projects might be cluster-scoped resources)
+		logger.Info("deciding worker queue...")
 		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
 		var taskList string
 
 		if err != nil {
 			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
-		} else if project.Annotations != nil {
-			if workerQueue, exists := project.Annotations["michelangelo/worker_queue"]; exists && workerQueue != "" {
+		} else if project.GetMetadata().GetAnnotations() != nil {
+			if workerQueue, exists := project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]; exists && workerQueue != "" {
 				taskList = workerQueue
 				logger.Info("using worker queue from project annotations", zap.String("taskList", taskList))
 			}
+		} else {
+			logger.Info("project annotations", zap.String("annotation", project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]))
 		}
+		logger.Info("task list", zap.String("taskList", taskList))
 
 		// If project CR does not have worker_queue specified, as a fallback, retrieve taskList from config
 		if taskList == "" {

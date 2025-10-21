@@ -195,6 +195,7 @@ def convert_crd_metadata_pipeline_create(
 
     res["metadata"] = {
         "annotations": yaml_dict["metadata"].get("annotations", {}),
+        "clusterName": "",
         "generateName": "",
         "generation": "0",
         "name": pipeline,
