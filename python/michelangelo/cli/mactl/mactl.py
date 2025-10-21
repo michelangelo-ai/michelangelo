@@ -931,7 +931,9 @@ if __name__ == "__main__":
         print(f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {ADDRESS}")
     else:
         should_use_tls = False
-        print(f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {ADDRESS}")
+        print(
+            f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {ADDRESS}"
+        )
 
     if should_use_tls:
         # Use secure TLS connection
