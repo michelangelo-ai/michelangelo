@@ -23,10 +23,9 @@ const (
 
 // Configuration crd register configuration
 type Configuration struct {
-	EnableCRDUpdate          bool                     `yaml:"enableCRDUpdate"`
-	EnableIncompatibleUpdate bool                     `yaml:"enableIncompatibleUpdate"`
-	EnableCRDDeletion        bool                     `yaml:"enableCRDDeletion"`
-	CRDVersions              map[string]VersionConfig `yaml:"crdVersions"`
+	EnableCRDUpdate   bool                     `yaml:"enableCRDUpdate"`
+	EnableCRDDeletion bool                     `yaml:"enableCRDDeletion"`
+	CRDVersions       map[string]VersionConfig `yaml:"crdVersions"`
 }
 
 // VersionConfig defines how the versions of a CRD will be handled.

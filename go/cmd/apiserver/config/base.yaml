@@ -4,7 +4,6 @@ apiserver:
     port: 14566
   crdSync:
     enableCRDUpdate: true
-    enableIncompatibleUpdate: false
     enableCRDDeletion: true
     crdVersions:
       project:

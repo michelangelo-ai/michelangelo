@@ -92,7 +92,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          false,
-				EnableIncompatibleUpdate: false,
 			}
 		}),
 		SyncCRDs("test", []string{}, map[string]string{
@@ -115,7 +114,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          true,
-				EnableIncompatibleUpdate: false,
 			}
 		}),
 		SyncCRDs("test", []string{}, map[string]string{
@@ -144,7 +142,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          true,
-				EnableIncompatibleUpdate: false,
 				EnableCRDDeletion:        true,
 			}
 		}),
@@ -177,7 +174,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          true,
-				EnableIncompatibleUpdate: false,
 				EnableCRDDeletion:        false,
 			}
 		}),
@@ -206,7 +202,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          true,
-				EnableIncompatibleUpdate: false,
 				EnableCRDDeletion:        true,
 			}
 		}),
@@ -233,7 +228,6 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Provide(func() *Configuration {
 			return &Configuration{
 				EnableCRDUpdate:          true,
-				EnableIncompatibleUpdate: false,
 				EnableCRDDeletion:        true,
 			}
 		}),
@@ -267,12 +261,17 @@ func TestSyncCRDs(t *testing.T) {
 		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err)
 
-	// incompatible change
+	// incompatible change - should be blocked with empty allowlist
 	crdYaml, err = os.ReadFile(testCRDManifestDir + "/project_delete_props.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
 		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD projects.test")
+
+	// same incompatible change - should be allowed when CRD is in allowlist
+	err = syncCRDs(context.Background(), logger, "test",
+		true, &crdGateway, nil, []string{"projects.test"}, map[string]string{"Project": string(crdYaml)})
+	assert.NoError(t, err, "incompatible update should be allowed when CRD is in allowlist")
 
 	// fail to list existing CRDs
 	mockGateway := crdmocks.NewMockGateway(gomock.NewController(t))
@@ -292,7 +291,6 @@ func TestParseConfig(t *testing.T) {
 apiserver:
   crdSync:
     enableCRDUpdate: true
-    enableIncompatibleUpdate: false
 `
 	provider, err := config.NewYAML(config.Source(strings.NewReader(yamlConfStr)))
 	assert.NoError(t, err)
@@ -300,14 +298,12 @@ apiserver:
 	conf, err := ParseConfig(provider)
 	assert.NoError(t, err)
 	assert.True(t, conf.EnableCRDUpdate)
-	assert.False(t, conf.EnableIncompatibleUpdate)
 
 	// Parse configuration with CRD versions
 	yamlConfStr2 := `
 apiserver:
   crdSync:
     enableCRDUpdate: true
-    enableIncompatibleUpdate: true
     crdVersions:
       project:
         versions: [v1, v2]
@@ -319,7 +315,6 @@ apiserver:
 	conf2, err := ParseConfig(provider2)
 	assert.NoError(t, err)
 	assert.True(t, conf2.EnableCRDUpdate)
-	assert.True(t, conf2.EnableIncompatibleUpdate)
 	assert.Equal(t, conf2.CRDVersions, map[string]VersionConfig{
 		"project": {
 			Versions:       []string{"v1", "v2"},
