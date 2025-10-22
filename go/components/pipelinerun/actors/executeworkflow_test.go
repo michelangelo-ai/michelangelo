@@ -44,18 +44,18 @@ func TestExecuteWorkflowActor(t *testing.T) {
 				"michelangelo/worker_queue": "test-task-list",
 			},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
 	// Create a test project without worker queue annotation (for fallback testing)
 	testProjectNoQueue := &v2.Project{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "no-queue",
-			Namespace: "no-queue",
+			Name:        "no-queue",
+			Namespace:   "no-queue",
 			Annotations: map[string]string{},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
@@ -1029,18 +1029,18 @@ func TestResumeFromPipelineRun(t *testing.T) {
 				"michelangelo/worker_queue": "test-task-list",
 			},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
 	// Create a test project without worker queue annotation (for fallback testing)
 	testProjectNoQueue := &v2.Project{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "no-queue",
-			Namespace: "no-queue",
+			Name:        "no-queue",
+			Namespace:   "no-queue",
 			Annotations: map[string]string{},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
@@ -1503,27 +1503,27 @@ func TestGetTaskList(t *testing.T) {
 				"michelangelo/worker_queue": "custom-task-list",
 			},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
 	// Create a test project without worker queue annotation
 	testProjectNoQueue := &v2.Project{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      "project-no-queue",
-			Namespace: "default",
+			Name:        "project-no-queue",
+			Namespace:   "default",
 			Annotations: map[string]string{},
 		},
-		Spec: v2.ProjectSpec{},
+		Spec:   v2.ProjectSpec{},
 		Status: v2.ProjectStatus{},
 	}
 
 	testCases := []struct {
-		name           string
-		project        *v2.Project
-		pipelineRun    *v2.PipelineRun
+		name             string
+		project          *v2.Project
+		pipelineRun      *v2.PipelineRun
 		expectedTaskList string
-		expectError    bool
+		expectError      bool
 	}{
 		{
 			name:    "Project with worker queue annotation",
