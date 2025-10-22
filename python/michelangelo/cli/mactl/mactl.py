@@ -141,20 +141,15 @@ class CrdMethodInfo:
     output_class: type[Message]
 
 
-def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+def get_crd(crd_method_info, full_name: str, namespace: str, name: str) -> Message:
     """
-    Common CRD member method implementation for GET method.
+    Run CRD.GET method with grpc reflection
     """
-    _LOG.info("Bound arguments: %r", bound_args.arguments)
-    _self: CRD = bound_args.arguments["self"]
-    _LOG.info("Start get_func for %r", _self.full_name)
-
-    _name = get_single_arg(bound_args.arguments, "name")
-    _namespace = get_single_arg(bound_args.arguments, "namespace")
+    _LOG.debug("CRD method info: %r", crd_method_info)
 
     request_input = crd_method_info.input_class(
-        namespace=_namespace,
-        name=_name,
+        namespace=namespace,
+        name=name,
     )
     _LOG.info(
         "GET Request input (%r) ready: %r",
@@ -162,7 +157,7 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         request_input,
     )
 
-    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
+    method_fullname = f"/{full_name}/{crd_method_info.method_name}"
     _LOG.info("Method fullname for gRPC call: %s", method_fullname)
     stub_method = crd_method_info.channel.unary_unary(
         method_fullname,
@@ -176,6 +171,20 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     )
     _LOG.info("Stub method completed (%r): %r", type(response), response)
     return response
+
+
+def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """
+    Common CRD member method implementation for GET method.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+    _self: CRD = bound_args.arguments["self"]
+    _LOG.info("Start get_func for %r", _self.full_name)
+
+    _name = get_single_arg(bound_args.arguments, "name")
+    _namespace = get_single_arg(bound_args.arguments, "namespace")
+
+    return get_crd(crd_method_info, _self.full_name, _namespace, _name)
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
