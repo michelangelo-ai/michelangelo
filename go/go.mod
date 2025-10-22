@@ -3,7 +3,7 @@ module github.com/michelangelo-ai/michelangelo/go
 go 1.23.2
 
 require (
-	github.com/cadence-workflow/starlark-worker v1.0.13
+	github.com/cadence-workflow/starlark-worker v1.0.14
 	github.com/cenkalti/backoff v2.2.1+incompatible
 	github.com/dave/dst v0.27.3
 	github.com/go-logr/logr v1.4.2
@@ -31,7 +31,7 @@ require (
 	go.temporal.io/api v1.46.0
 	go.temporal.io/sdk v1.33.0
 	go.temporal.io/sdk/contrib/tally v0.2.0
-	go.uber.org/cadence v1.3.0
+	go.uber.org/cadence v1.3.1-rc.11
 	go.uber.org/config v1.4.0
 	go.uber.org/fx v1.22.0
 	go.uber.org/yarpc v1.80.0
