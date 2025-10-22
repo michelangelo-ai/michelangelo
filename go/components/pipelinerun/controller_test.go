@@ -173,6 +173,16 @@ func TestReconcile(t *testing.T) {
 						},
 					},
 				},
+				&v2.Project{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-namespace",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"michelangelo/worker_queue": "test-task-list",
+						},
+					},
+					Spec: v2.ProjectSpec{},
+				},
 			},
 			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
 				mockBlobStorageClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte("test-content"), nil)
