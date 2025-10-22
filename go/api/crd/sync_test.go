@@ -33,7 +33,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
 		assert.NoError(t, err)
 	})
 
@@ -48,7 +48,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
 		assert.NoError(t, err)
 	})
 
@@ -61,7 +61,7 @@ func TestUpsertCRDs(t *testing.T) {
 		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
 		assert.NotNil(t, crd)
 		assert.NoError(t, err)
-		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, false)
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, []string{})
 		assert.Error(t, err)
 	})
 }
@@ -95,7 +95,7 @@ func TestSyncCRDsFx(t *testing.T) {
 				EnableIncompatibleUpdate: false,
 			}
 		}),
-		SyncCRDs("test", map[string]string{
+		SyncCRDs("test", []string{}, map[string]string{
 			"Project": string(crdYaml),
 		}),
 	),
@@ -118,7 +118,7 @@ func TestSyncCRDsFx(t *testing.T) {
 				EnableIncompatibleUpdate: false,
 			}
 		}),
-		SyncCRDs("test", map[string]string{
+		SyncCRDs("test", []string{}, map[string]string{
 			"Project": string(crdYaml),
 		}),
 	),
@@ -148,7 +148,7 @@ func TestSyncCRDsFx(t *testing.T) {
 				EnableCRDDeletion:        true,
 			}
 		}),
-		SyncCRDs("test", map[string]string{
+		SyncCRDs("test", []string{}, map[string]string{
 			"Project": string(crdYaml),
 		}),
 	),
@@ -184,7 +184,7 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Invoke(func() error {
 			return nil
 		}),
-		SyncCRDs("test", map[string]string{}),
+		SyncCRDs("test", []string{}, map[string]string{}),
 	),
 	)
 	assert.NoError(t, app.Err())
@@ -213,7 +213,7 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Invoke(func() error {
 			return nil
 		}),
-		SyncCRDs("test", map[string]string{}),
+		SyncCRDs("test", []string{}, map[string]string{}),
 	),
 	)
 	assert.NoError(t, app.Err())
@@ -240,7 +240,7 @@ func TestSyncCRDsFx(t *testing.T) {
 		fx.Invoke(func() error {
 			return nil
 		}),
-		SyncCRDs("test", map[string]string{}),
+		SyncCRDs("test", []string{}, map[string]string{}),
 	),
 	)
 	assert.NoError(t, app.Err())
@@ -264,26 +264,26 @@ func TestSyncCRDs(t *testing.T) {
 	crdYaml, err := os.ReadFile(testCRDManifestDir + "/project.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		false, true, &crdGateway, nil, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err)
 
 	// incompatible change
 	crdYaml, err = os.ReadFile(testCRDManifestDir + "/project_delete_props.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		false, true, &crdGateway, nil, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD projects.test")
 
 	// fail to list existing CRDs
 	mockGateway := crdmocks.NewMockGateway(gomock.NewController(t))
 	mockGateway.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("test error"))
 	err = syncCRDs(context.Background(), logger, "test",
-		false, true, mockGateway, nil, map[string]string{"Project": string(crdYaml)})
+		true, mockGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to list existing CRDs: test error")
 
 	// do not update CRDs that are not in the specified groups
 	err = syncCRDs(context.Background(), logger, "test1",
-		false, true, &crdGateway, nil, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "CRD projects.test is not in the specified group test1")
 }
 
@@ -617,5 +617,93 @@ func TestMergeCRDVersions(t *testing.T) {
 				assert.Equal(t, apiextv1.NoneConverter, crd.Spec.Conversion.Strategy)
 			}
 		}
+	})
+}
+
+func TestIsInAllowList(t *testing.T) {
+	t.Run("CRD in allowlist", func(t *testing.T) {
+		allowList := []string{"deployments.michelangelo.api", "agents.michelangelo.api"}
+		result := isInAllowList("deployments.michelangelo.api", allowList)
+		assert.True(t, result)
+	})
+
+	t.Run("CRD not in allowlist", func(t *testing.T) {
+		allowList := []string{"deployments.michelangelo.api", "agents.michelangelo.api"}
+		result := isInAllowList("projects.michelangelo.api", allowList)
+		assert.False(t, result)
+	})
+
+	t.Run("Empty allowlist", func(t *testing.T) {
+		allowList := []string{}
+		result := isInAllowList("deployments.michelangelo.api", allowList)
+		assert.False(t, result)
+	})
+
+	t.Run("Nil allowlist", func(t *testing.T) {
+		var allowList []string
+		result := isInAllowList("deployments.michelangelo.api", allowList)
+		assert.False(t, result)
+	})
+}
+
+func TestUpsertCRDsWithAllowList(t *testing.T) {
+	logger, err := zap.NewDevelopment()
+	assert.NoError(t, err)
+
+	t.Run("CRD in allowlist enables incompatible updates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		crdGatewayMock := crdmocks.NewMockGateway(ctrl)
+
+		// Expect ConditionalUpsert to be called with enableIncompatibleUpdate=true
+		crdGatewayMock.EXPECT().ConditionalUpsert(gomock.Any(), gomock.Any(), true).Return(nil).Times(1)
+
+		ctx := context.Background()
+		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
+		assert.NotNil(t, crd)
+		assert.NoError(t, err)
+
+		// Set the CRD name to match our allowlist
+		crd.Name = "deployments.michelangelo.api"
+
+		allowList := []string{"deployments.michelangelo.api"}
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		assert.NoError(t, err)
+	})
+
+	t.Run("CRD not in allowlist disables incompatible updates", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		crdGatewayMock := crdmocks.NewMockGateway(ctrl)
+
+		// Expect ConditionalUpsert to be called with enableIncompatibleUpdate=false
+		crdGatewayMock.EXPECT().ConditionalUpsert(gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+
+		ctx := context.Background()
+		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
+		assert.NotNil(t, crd)
+		assert.NoError(t, err)
+
+		// Set the CRD name to NOT match our allowlist
+		crd.Name = "projects.michelangelo.api"
+
+		allowList := []string{"deployments.michelangelo.api"}
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Empty allowlist disables incompatible updates for all CRDs", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		crdGatewayMock := crdmocks.NewMockGateway(ctrl)
+
+		// Expect ConditionalUpsert to be called with enableIncompatibleUpdate=false
+		crdGatewayMock.EXPECT().ConditionalUpsert(gomock.Any(), gomock.Any(), false).Return(nil).Times(1)
+
+		ctx := context.Background()
+		crd, err := readCRDFromFile(testCRDManifestDir + "/project.pb.yaml")
+		assert.NotNil(t, crd)
+		assert.NoError(t, err)
+
+		allowList := []string{}
+		err = upsertCRDs(ctx, logger, crdGatewayMock, []*apiextv1.CustomResourceDefinition{crd}, allowList)
+		assert.NoError(t, err)
 	})
 }

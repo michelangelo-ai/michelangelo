@@ -76,15 +76,15 @@ type SyncCRDsParams struct {
 //     Otherwise, it will return an error
 //  7. If a CRD version in the cluster does not have a corresponding entry in yamlSchemas, an error will be returned,
 //     as we don't currently support removing versions of CRDs in the cluster.
-func SyncCRDs(group string, yamlSchemas ...map[string]string) fx.Option {
+func SyncCRDs(group string, incompatibleUpdateAllowList []string, yamlSchemas ...map[string]string) fx.Option {
 	return fx.Invoke(func(p SyncCRDsParams) error {
 		logger := p.Logger.With(zap.String("module", moduleName))
 		logger.Info("CRD sync config", zap.Any("config", p.Config))
 		if p.Config.EnableCRDUpdate {
 			p.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
-					return syncCRDs(ctx, logger, group, p.Config.EnableIncompatibleUpdate, p.Config.EnableCRDDeletion,
-						p.Gateway, p.Config.CRDVersions, yamlSchemas...)
+					return syncCRDs(ctx, logger, group, p.Config.EnableCRDDeletion,
+						p.Gateway, p.Config.CRDVersions, incompatibleUpdateAllowList, yamlSchemas...)
 				},
 				OnStop: nil,
 			})
@@ -97,10 +97,10 @@ func SyncCRDs(group string, yamlSchemas ...map[string]string) fx.Option {
 func syncCRDs(ctx context.Context,
 	logger *zap.Logger,
 	group string,
-	enableIncompatibleUpdate bool,
 	enableCRDDeletion bool,
 	gateway Gateway,
 	crdVersions map[string]VersionConfig,
+	incompatibleUpdateAllowList []string,
 	yamlSchemas ...map[string]string) error {
 
 	// decode CRD yaml schemas into CRD objects
@@ -162,7 +162,7 @@ func syncCRDs(ctx context.Context,
 	}
 
 	// upsert CRDs
-	if err = upsertCRDs(ctx, logger, gateway, mergedCRDList, enableIncompatibleUpdate); err != nil {
+	if err = upsertCRDs(ctx, logger, gateway, mergedCRDList, incompatibleUpdateAllowList); err != nil {
 		logger.Error("Failed to upsert CRDs", zap.Error(err))
 		return err
 	}
@@ -171,9 +171,12 @@ func syncCRDs(ctx context.Context,
 
 // upsertCRDs upsert CRD onto k8s cluster, also handle OCC conflict with retry
 func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
-	crds []*apiextv1.CustomResourceDefinition, enableIncompatibleUpdate bool) error {
+	crds []*apiextv1.CustomResourceDefinition, allowList []string) error {
 	logger.Info("Compare CRD in cluster with new CRD definition, and conditionally update CRDs")
 	for _, crd := range crds {
+		// Per-CRD decision: only allowlist matters
+		enableIncompatibleUpdate := isInAllowList(crd.Name, allowList)
+
 		err := backoff.Retry(func() error {
 			err := gateway.ConditionalUpsert(ctx, crd, enableIncompatibleUpdate)
 			if err != nil {
@@ -298,4 +301,14 @@ func mergeCRDVersions(
 		result = append(result, mergedCRD)
 	}
 	return result, nil
+}
+
+// isInAllowList checks if the given CRD name is in the incompatible update allowlist
+func isInAllowList(crdName string, allowList []string) bool {
+	for _, allowed := range allowList {
+		if crdName == allowed {
+			return true
+		}
+	}
+	return false
 }
