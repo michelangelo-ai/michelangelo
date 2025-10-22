@@ -91,7 +91,7 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          false,
+				EnableCRDUpdate: false,
 			}
 		}),
 		SyncCRDs("test", []string{}, map[string]string{
@@ -113,7 +113,7 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          true,
+				EnableCRDUpdate: true,
 			}
 		}),
 		SyncCRDs("test", []string{}, map[string]string{
@@ -141,8 +141,8 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          true,
-				EnableCRDDeletion:        true,
+				EnableCRDUpdate:   true,
+				EnableCRDDeletion: true,
 			}
 		}),
 		SyncCRDs("test", []string{}, map[string]string{
@@ -173,8 +173,8 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          true,
-				EnableCRDDeletion:        false,
+				EnableCRDUpdate:   true,
+				EnableCRDDeletion: false,
 			}
 		}),
 		fx.Invoke(func() error {
@@ -201,8 +201,8 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          true,
-				EnableCRDDeletion:        true,
+				EnableCRDUpdate:   true,
+				EnableCRDDeletion: true,
 			}
 		}),
 		fx.Invoke(func() error {
@@ -227,8 +227,8 @@ func TestSyncCRDsFx(t *testing.T) {
 		}),
 		fx.Provide(func() *Configuration {
 			return &Configuration{
-				EnableCRDUpdate:          true,
-				EnableCRDDeletion:        true,
+				EnableCRDUpdate:   true,
+				EnableCRDDeletion: true,
 			}
 		}),
 		fx.Invoke(func() error {
