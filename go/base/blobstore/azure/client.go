@@ -33,8 +33,9 @@ var _ blobstore.BlobStoreClient = (*azureBlobClient)(nil)
 //   - No need for storage account keys or Azure AD authentication
 //
 // Example Usage:
-//   client := newAzureBlobClient("myaccount", "sv=2022-11-02&ss=b...", "", "azure-prod")
-//   data, err := client.Get(ctx, "abfss://mycontainer@myaccount.blob.core.windows.net/data/file.json")
+//
+//	client := newAzureBlobClient("myaccount", "sv=2022-11-02&ss=b...", "", "azure-prod")
+//	data, err := client.Get(ctx, "abfss://mycontainer@myaccount.blob.core.windows.net/data/file.json")
 //
 // Thread Safety:
 //   - Safe for concurrent use across multiple goroutines
@@ -85,14 +86,15 @@ type azureBlobClient struct {
 //   - Custom endpoints support Azure Stack, Government Cloud, or private deployments
 //
 // Example Usage:
-//   // Standard Azure Cloud
-//   client := newAzureBlobClient("myaccount", "sv=2022-11-02&ss=b...", "", "azure-prod")
 //
-//   // Azure Government Cloud
-//   client := newAzureBlobClient("myaccount", "sv=...", "https://myaccount.blob.core.usgovcloudapi.net", "azure-gov")
+//	// Standard Azure Cloud
+//	client := newAzureBlobClient("myaccount", "sv=2022-11-02&ss=b...", "", "azure-prod")
 //
-//   // Azure Stack
-//   client := newAzureBlobClient("myaccount", "sv=...", "https://myaccount.blob.local.azurestack.external", "azure-stack")
+//	// Azure Government Cloud
+//	client := newAzureBlobClient("myaccount", "sv=...", "https://myaccount.blob.core.usgovcloudapi.net", "azure-gov")
+//
+//	// Azure Stack
+//	client := newAzureBlobClient("myaccount", "sv=...", "https://myaccount.blob.local.azurestack.external", "azure-stack")
 //
 // Security Considerations:
 //   - SAS tokens should have minimal required permissions (read-only for blob retrieval)
@@ -109,7 +111,7 @@ func newAzureBlobClient(storageAccount, sasToken, endpoint, providerKey string) 
 		sasToken:       sasToken,
 		endpoint:       endpoint,
 		httpClient:     &http.Client{}, // TODO: Consider adding timeouts and retry configuration
-		scheme:         "abfss",         // Support ABFSS scheme for Azure Data Lake Storage Gen2
+		scheme:         "abfss",        // Support ABFSS scheme for Azure Data Lake Storage Gen2
 		providerKey:    providerKey,
 	}
 }
@@ -139,15 +141,16 @@ func newAzureBlobClient(storageAccount, sasToken, endpoint, providerKey string) 
 //   - Network errors preserve underlying cause for upstream retry logic
 //
 // Example Usage:
-//   data, err := client.Get(ctx, "abfss://mycontainer@myaccount.blob.core.windows.net/data/model.json")
-//   if err != nil {
-//       // Handle error with full context
-//       log.Printf("Failed to get blob: %v", err)
-//       return
-//   }
-//   // Process blob data
-//   var model MyModel
-//   json.Unmarshal(data, &model)
+//
+//	data, err := client.Get(ctx, "abfss://mycontainer@myaccount.blob.core.windows.net/data/model.json")
+//	if err != nil {
+//	    // Handle error with full context
+//	    log.Printf("Failed to get blob: %v", err)
+//	    return
+//	}
+//	// Process blob data
+//	var model MyModel
+//	json.Unmarshal(data, &model)
 //
 // Performance Considerations:
 //   - Large blobs are loaded entirely into memory
@@ -196,20 +199,20 @@ func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, erro
 //
 // Supported URL Formats:
 //
-//   1. Standard ABFSS with userinfo:
-//      "abfss://container@storageaccount.blob.core.windows.net/folder/file.json"
-//      - Container: "container"
-//      - Path: "folder/file.json"
+//  1. Standard ABFSS with userinfo:
+//     "abfss://container@storageaccount.blob.core.windows.net/folder/file.json"
+//     - Container: "container"
+//     - Path: "folder/file.json"
 //
-//   2. Alternative @ parsing (if URL parser handles @ differently):
-//      "abfss://container@storageaccount.blob.core.windows.net/file.json"
-//      - Container: "container"
-//      - Path: "file.json"
+//  2. Alternative @ parsing (if URL parser handles @ differently):
+//     "abfss://container@storageaccount.blob.core.windows.net/file.json"
+//     - Container: "container"
+//     - Path: "file.json"
 //
-//   3. Simplified format (no @ symbol):
-//      "abfss://container/folder/file.json"
-//      - Container: "container"
-//      - Path: "folder/file.json"
+//  3. Simplified format (no @ symbol):
+//     "abfss://container/folder/file.json"
+//     - Container: "container"
+//     - Path: "folder/file.json"
 //
 // URL Parsing Details:
 //   - The @ symbol in ABFSS URLs is treated as userinfo by Go's url.Parse()
@@ -218,10 +221,11 @@ func (c *azureBlobClient) Get(ctx context.Context, blobURI string) ([]byte, erro
 //   - Path contains the blob path with leading slash (removed by this function)
 //
 // Example Usage:
-//   parsedURL, _ := url.Parse("abfss://mycontainer@myaccount.blob.core.windows.net/data/file.json")
-//   container, path := client.parseABFSSURL(parsedURL)
-//   // container = "mycontainer"
-//   // path = "data/file.json"
+//
+//	parsedURL, _ := url.Parse("abfss://mycontainer@myaccount.blob.core.windows.net/data/file.json")
+//	container, path := client.parseABFSSURL(parsedURL)
+//	// container = "mycontainer"
+//	// path = "data/file.json"
 func (c *azureBlobClient) parseABFSSURL(parsedURL *url.URL) (container, blobPath string) {
 	// Method 1: Standard ABFSS parsing using userinfo
 	// URL: abfss://container@storageaccount.blob.core.windows.net/path
@@ -263,17 +267,19 @@ func (c *azureBlobClient) parseABFSSURL(parsedURL *url.URL) (container, blobPath
 //   - string: Complete URL for Azure Blob Storage REST API request
 //
 // URL Format:
-//   https://{endpoint}/{container}/{blobPath}?{sasToken}
+//
+//	https://{endpoint}/{container}/{blobPath}?{sasToken}
 //
 // Example:
-//   Input:
-//     - endpoint: "https://myaccount.blob.core.windows.net"
-//     - container: "mycontainer"
-//     - blobPath: "folder/data.json"
-//     - sasToken: "sv=2022-11-02&ss=b&srt=sco&sp=r&se=2024-12-31T23:59:59Z&sig=..."
 //
-//   Output:
-//     "https://myaccount.blob.core.windows.net/mycontainer/folder/data.json?sv=2022-11-02&ss=b&srt=sco&sp=r&se=2024-12-31T23:59:59Z&sig=..."
+//	Input:
+//	  - endpoint: "https://myaccount.blob.core.windows.net"
+//	  - container: "mycontainer"
+//	  - blobPath: "folder/data.json"
+//	  - sasToken: "sv=2022-11-02&ss=b&srt=sco&sp=r&se=2024-12-31T23:59:59Z&sig=..."
+//
+//	Output:
+//	  "https://myaccount.blob.core.windows.net/mycontainer/folder/data.json?sv=2022-11-02&ss=b&srt=sco&sp=r&se=2024-12-31T23:59:59Z&sig=..."
 //
 // Security Notes:
 //   - The returned URL contains the SAS token in the query string
@@ -305,11 +311,11 @@ func (c *azureBlobClient) buildBlobURL(container, blobPath string) string {
 //   - error: Any error that occurred during HTTP communication or data reading
 //
 // HTTP Flow:
-//   1. Create GET request with context for cancellation support
-//   2. Execute request using configured HTTP client
-//   3. Validate HTTP status code (200 OK expected)
-//   4. Read entire response body into memory
-//   5. Return blob data or detailed error information
+//  1. Create GET request with context for cancellation support
+//  2. Execute request using configured HTTP client
+//  3. Validate HTTP status code (200 OK expected)
+//  4. Read entire response body into memory
+//  5. Return blob data or detailed error information
 //
 // Error Handling:
 //   - Request creation errors (malformed URLs, context issues)
@@ -382,9 +388,10 @@ func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL
 //   - string: The URL scheme supported by this client ("abfss")
 //
 // Usage in Routing:
-//   The blobstore system uses this method to match URLs to appropriate clients:
-//   - "s3://bucket/file" -> routed to S3/MinIO client
-//   - "abfss://container/file" -> routed to Azure client
+//
+//	The blobstore system uses this method to match URLs to appropriate clients:
+//	- "s3://bucket/file" -> routed to S3/MinIO client
+//	- "abfss://container/file" -> routed to Azure client
 //
 // ABFSS Scheme:
 //   - ABFSS stands for "Azure Blob File System"
@@ -393,10 +400,11 @@ func (c *azureBlobClient) downloadBlob(ctx context.Context, originalURI, blobURL
 //   - Compatible with Hadoop Distributed File System (HDFS) APIs
 //
 // Example Usage:
-//   if client.Scheme() == "abfss" {
-//       // This client can handle ABFSS URLs
-//       data, err := client.Get(ctx, "abfss://container/file.json")
-//   }
+//
+//	if client.Scheme() == "abfss" {
+//	    // This client can handle ABFSS URLs
+//	    data, err := client.Get(ctx, "abfss://container/file.json")
+//	}
 func (c *azureBlobClient) Scheme() string {
 	return c.scheme
 }
@@ -422,19 +430,21 @@ func (c *azureBlobClient) Scheme() string {
 //   - "azure-ml-team": Team-specific Azure storage account
 //
 // Example Configuration:
-//   # Project configuration
-//   apiVersion: v1
-//   kind: Project
-//   metadata:
-//     name: ml-training-project
-//   spec:
-//     storageProviderKey: "azure-prod"  # References this client's provider key
+//
+//	# Project configuration
+//	apiVersion: v1
+//	kind: Project
+//	metadata:
+//	  name: ml-training-project
+//	spec:
+//	  storageProviderKey: "azure-prod"  # References this client's provider key
 //
 // Example Usage:
-//   if client.ProviderKey() == "azure-prod" {
-//       // This is the production Azure client
-//       // May have different SLA requirements, monitoring, etc.
-//   }
+//
+//	if client.ProviderKey() == "azure-prod" {
+//	    // This is the production Azure client
+//	    // May have different SLA requirements, monitoring, etc.
+//	}
 func (c *azureBlobClient) ProviderKey() string {
 	return c.providerKey
 }

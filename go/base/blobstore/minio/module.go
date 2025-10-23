@@ -19,10 +19,11 @@ import (
 // be injected as a slice into dependent components.
 //
 // Example usage in consuming component:
-//   type BlobStoreClientIn struct {
-//       fx.In
-//       Clients []blobstore.BlobStoreClient `group:"blobstore_clients"`
-//   }
+//
+//	type BlobStoreClientIn struct {
+//	    fx.In
+//	    Clients []blobstore.BlobStoreClient `group:"blobstore_clients"`
+//	}
 //
 // This enables the blobstore routing system to have access to all configured storage clients.
 type BlobStoreClientOut struct {
@@ -44,11 +45,12 @@ type BlobStoreClientOut struct {
 // - Each BlobStoreClientOut gets collected into the "blobstore_clients" group
 //
 // Example integration:
-//   app := fx.New(
-//       minio.Module,           // Register MinIO providers
-//       azure.Module,           // Register Azure providers (if using both)
-//       fx.Invoke(startServer), // Start application with all storage clients available
-//   )
+//
+//	app := fx.New(
+//	    minio.Module,           // Register MinIO providers
+//	    azure.Module,           // Register Azure providers (if using both)
+//	    fx.Invoke(startServer), // Start application with all storage clients available
+//	)
 var Module = fx.Options(
 	fx.Provide(newConfig),
 	fx.Provide(newClient),
@@ -85,10 +87,10 @@ var Module = fx.Options(
 //   - Malformed endpoint URLs or unsupported authentication methods
 //
 // Example configurations handled:
-//   1. Default (empty config): Creates aws-sandbox client with env credentials
-//   2. Multiple AWS regions: Creates separate clients for different regions
-//   3. Mixed environments: Creates clients for prod, dev, staging with different auth
-//   4. Local MinIO: Creates clients pointing to local MinIO instances
+//  1. Default (empty config): Creates aws-sandbox client with env credentials
+//  2. Multiple AWS regions: Creates separate clients for different regions
+//  3. Mixed environments: Creates clients for prod, dev, staging with different auth
+//  4. Local MinIO: Creates clients pointing to local MinIO instances
 //
 // Error Handling:
 //   - Follows domain layer pattern: returns wrapped errors without logging
@@ -145,11 +147,12 @@ func newClient(config Config) ([]BlobStoreClientOut, error) {
 //   - Region: Handled by AWS SDK default region detection
 //
 // Authentication Requirements:
-//   The following environment variables must be set for authentication:
-//   - AWS_ACCESS_KEY_ID: AWS access key identifier
-//   - AWS_SECRET_ACCESS_KEY: AWS secret access key
-//   - AWS_SESSION_TOKEN: (Optional) Session token for temporary credentials
-//   - AWS_REGION: (Optional) Default region for operations
+//
+//	The following environment variables must be set for authentication:
+//	- AWS_ACCESS_KEY_ID: AWS access key identifier
+//	- AWS_SECRET_ACCESS_KEY: AWS secret access key
+//	- AWS_SESSION_TOKEN: (Optional) Session token for temporary credentials
+//	- AWS_REGION: (Optional) Default region for operations
 //
 // Use Cases:
 //   - Legacy deployments migrating to multi-provider configuration
@@ -201,17 +204,17 @@ func newDefaultS3Client() (BlobStoreClientOut, error) {
 //
 // Authentication Methods Supported:
 //
-//   1. Environment Variables (config.UseEnvAws = true):
-//      - Reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
-//      - Recommended for development and containerized environments
+//  1. Environment Variables (config.UseEnvAws = true):
+//     - Reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
+//     - Recommended for development and containerized environments
 //
-//   2. IAM Roles (config.UseIAM = true):
-//      - Uses AWS SDK credential chain (EC2 instance profiles, EKS service accounts)
-//      - Recommended for production deployments on AWS infrastructure
+//  2. IAM Roles (config.UseIAM = true):
+//     - Uses AWS SDK credential chain (EC2 instance profiles, EKS service accounts)
+//     - Recommended for production deployments on AWS infrastructure
 //
-//   3. Static Credentials (neither UseEnvAws nor UseIAM):
-//      - Uses config.AwsAccessKeyId and config.AwsSecretAccessKey
-//      - Only recommended for local development and legacy systems
+//  3. Static Credentials (neither UseEnvAws nor UseIAM):
+//     - Uses config.AwsAccessKeyId and config.AwsSecretAccessKey
+//     - Only recommended for local development and legacy systems
 //
 // Endpoint Configuration:
 //   - AWS S3: Leave AwsEndpointUrl empty or set to "s3.amazonaws.com"
@@ -220,22 +223,22 @@ func newDefaultS3Client() (BlobStoreClientOut, error) {
 //
 // Example Provider Configurations:
 //
-//   Production AWS S3 with IAM:
-//     providerKey: "aws-prod"
-//     config: {Type: "s3", AwsRegion: "us-east-1", UseIAM: true}
+//	Production AWS S3 with IAM:
+//	  providerKey: "aws-prod"
+//	  config: {Type: "s3", AwsRegion: "us-east-1", UseIAM: true}
 //
-//   Development AWS S3 with env credentials:
-//     providerKey: "aws-dev"
-//     config: {Type: "s3", AwsRegion: "us-west-2", UseEnvAws: true}
+//	Development AWS S3 with env credentials:
+//	  providerKey: "aws-dev"
+//	  config: {Type: "s3", AwsRegion: "us-west-2", UseEnvAws: true}
 //
-//   Local MinIO with static credentials:
-//     providerKey: "minio-local"
-//     config: {
-//         Type: "s3",
-//         AwsAccessKeyId: "minioadmin",
-//         AwsSecretAccessKey: "minioadmin",
-//         AwsEndpointUrl: "localhost:9000"
-//     }
+//	Local MinIO with static credentials:
+//	  providerKey: "minio-local"
+//	  config: {
+//	      Type: "s3",
+//	      AwsAccessKeyId: "minioadmin",
+//	      AwsSecretAccessKey: "minioadmin",
+//	      AwsEndpointUrl: "localhost:9000"
+//	  }
 //
 // Security Considerations:
 //   - Always uses TLS/HTTPS (Secure: true)

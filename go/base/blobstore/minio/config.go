@@ -2,24 +2,25 @@
 // This package supports multiple S3-compatible storage provider configurations with different authentication methods.
 //
 // Usage Example:
-//   # YAML configuration for multiple MinIO/S3 providers
-//   minio:
-//     storageProviders:
-//       aws-sandbox:
-//         type: "s3"
-//         awsRegion: "us-west-2"
-//         useEnvAws: true                               # Use AWS credentials from environment
-//       aws-prod:
-//         type: "s3"
-//         awsRegion: "us-east-1"
-//         useIam: true                                  # Use IAM role-based authentication
-//       minio-local:
-//         type: "s3"
-//         awsRegion: "us-east-1"
-//         awsAccessKeyId: "minioadmin"                  # Static credentials for local MinIO
-//         awsSecretAccessKey: "minioadmin"
-//         awsEndpointUrl: "localhost:9000"              # Custom MinIO endpoint
-//     defaultProvider: "aws-sandbox"
+//
+//	# YAML configuration for multiple MinIO/S3 providers
+//	minio:
+//	  storageProviders:
+//	    aws-sandbox:
+//	      type: "s3"
+//	      awsRegion: "us-west-2"
+//	      useEnvAws: true                               # Use AWS credentials from environment
+//	    aws-prod:
+//	      type: "s3"
+//	      awsRegion: "us-east-1"
+//	      useIam: true                                  # Use IAM role-based authentication
+//	    minio-local:
+//	      type: "s3"
+//	      awsRegion: "us-east-1"
+//	      awsAccessKeyId: "minioadmin"                  # Static credentials for local MinIO
+//	      awsSecretAccessKey: "minioadmin"
+//	      awsEndpointUrl: "localhost:9000"              # Custom MinIO endpoint
+//	  defaultProvider: "aws-sandbox"
 //
 // URL Format Supported:
 //   - Standard S3: "s3://bucket-name/path/to/file.json"
@@ -235,15 +236,16 @@ type (
 //   - Does not log errors (follows domain layer pattern - logging handled at service boundaries)
 //
 // Example usage:
-//   provider, err := config.NewYAMLProviderFromFile("config.yaml")
-//   if err != nil {
-//       return fmt.Errorf("create config provider: %w", err)
-//   }
 //
-//   minioConfig, err := newConfig(provider)
-//   if err != nil {
-//       return fmt.Errorf("parse minio config: %w", err)
-//   }
+//	provider, err := config.NewYAMLProviderFromFile("config.yaml")
+//	if err != nil {
+//	    return fmt.Errorf("create config provider: %w", err)
+//	}
+//
+//	minioConfig, err := newConfig(provider)
+//	if err != nil {
+//	    return fmt.Errorf("parse minio config: %w", err)
+//	}
 //
 // Configuration Validation:
 //   - Empty configuration is valid (will create default AWS S3 client)

@@ -2,19 +2,20 @@
 // This package supports multiple Azure storage provider configurations with different authentication methods.
 //
 // Usage Example:
-//   # YAML configuration for multiple Azure providers
-//   azure:
-//     storageProviders:
-//       azure-prod:
-//         type: "azure"
-//         azureStorageAccount: "prodstorageacct"
-//         azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
-//       azure-dev:
-//         type: "azure"
-//         azureStorageAccount: "devstorageacct"
-//         azureSASToken: "sv=..."
-//         azureEndpoint: "https://custom.endpoint.net"  # Optional custom endpoint
-//     defaultProvider: "azure-prod"
+//
+//	# YAML configuration for multiple Azure providers
+//	azure:
+//	  storageProviders:
+//	    azure-prod:
+//	      type: "azure"
+//	      azureStorageAccount: "prodstorageacct"
+//	      azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
+//	    azure-dev:
+//	      type: "azure"
+//	      azureStorageAccount: "devstorageacct"
+//	      azureSASToken: "sv=..."
+//	      azureEndpoint: "https://custom.endpoint.net"  # Optional custom endpoint
+//	  defaultProvider: "azure-prod"
 //
 // URL Format Supported:
 //   - Standard ABFSS: "abfss://container@storageaccount.blob.core.windows.net/path/file.json"
@@ -152,15 +153,16 @@ type (
 //   - Does not log errors (follows domain layer pattern - logging handled at service boundaries)
 //
 // Example usage:
-//   provider, err := config.NewYAMLProviderFromFile("config.yaml")
-//   if err != nil {
-//       return fmt.Errorf("create config provider: %w", err)
-//   }
 //
-//   azureConfig, err := newConfig(provider)
-//   if err != nil {
-//       return fmt.Errorf("parse azure config: %w", err)
-//   }
+//	provider, err := config.NewYAMLProviderFromFile("config.yaml")
+//	if err != nil {
+//	    return fmt.Errorf("create config provider: %w", err)
+//	}
+//
+//	azureConfig, err := newConfig(provider)
+//	if err != nil {
+//	    return fmt.Errorf("parse azure config: %w", err)
+//	}
 //
 // Configuration Validation:
 //   - Empty configuration is valid (will result in no Azure providers)
