@@ -1,6 +1,8 @@
 package minio
 
 import (
+	"fmt"
+
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"go.uber.org/fx"
@@ -20,18 +22,110 @@ var Module = fx.Options(
 	fx.Provide(newClient),
 )
 
-// newClient initializes a new minioClient using the provided configuration.
-// It creates an underlying S3 client with static credentials.
-// Returns a pointer to minioClient or an error if initialization fails.
-func newClient(config Config) (BlobStoreClientOut, error) {
-	s3Client, err := minio.New(config.AwsEndpointUrl, &minio.Options{
-		Creds:  credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, ""),
-		Secure: false,
+// newClient initializes new storage clients using the provided configuration.
+// It creates clients for multiple storage providers based on the configuration map.
+// Returns multiple BlobStoreClientOut instances or an error if initialization fails.
+func newClient(config Config) ([]BlobStoreClientOut, error) {
+	var clients []BlobStoreClientOut
+
+	// If no storage providers configured, create default AWS S3 client
+	if len(config.StorageProviders) == 0 {
+		defaultClient, err := newDefaultS3Client()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create default S3 client: %w", err)
+		}
+		return []BlobStoreClientOut{defaultClient}, nil
+	}
+
+	// Create clients for each configured storage provider
+	for providerKey, providerConfig := range config.StorageProviders {
+		switch providerConfig.Type {
+		case "s3":
+			client, err := newS3ClientWithKey(providerKey, providerConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create S3 client for provider %s: %w", providerKey, err)
+			}
+			clients = append(clients, client)
+		case "azure":
+			client, err := newAzureClientWithKey(providerKey, providerConfig)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create Azure client for provider %s: %w", providerKey, err)
+			}
+			clients = append(clients, client)
+		default:
+			return nil, fmt.Errorf("unsupported storage provider type: %s for provider %s", providerConfig.Type, providerKey)
+		}
+	}
+
+	return clients, nil
+}
+
+// newDefaultS3Client creates a default S3 client when no providers are configured
+func newDefaultS3Client() (BlobStoreClientOut, error) {
+	// Use environment-based credentials for default client
+	creds := credentials.NewEnvAWS()
+
+	s3Client, err := minio.New("s3.amazonaws.com", &minio.Options{
+		Creds:  creds,
+		Secure: true,
 	})
 	if err != nil {
 		return BlobStoreClientOut{}, err
 	}
+
 	return BlobStoreClientOut{
-		BlobStoreClient: &minioClient{s3Client: s3Client, scheme: "s3"},
+		BlobStoreClient: &minioClient{
+			s3Client:    s3Client,
+			scheme:      "s3",
+			providerKey: "aws-sandbox", // Default provider key
+		},
+	}, nil
+}
+
+// newS3ClientWithKey creates a new S3/MinIO client with provider key
+func newS3ClientWithKey(providerKey string, config StorageProvider) (BlobStoreClientOut, error) {
+	var creds *credentials.Credentials
+	if config.UseEnvAws {
+		creds = credentials.NewEnvAWS()
+	} else if config.UseIAM {
+		creds = credentials.NewIAM("")
+	} else {
+		creds = credentials.NewStaticV4(config.AwsAccessKeyId, config.AwsSecretAccessKey, "")
+	}
+
+	endpoint := config.AwsEndpointUrl
+	if endpoint == "" {
+		endpoint = "s3.amazonaws.com"
+	}
+
+	s3Client, err := minio.New(endpoint, &minio.Options{
+		Creds:  creds,
+		Secure: true,
+	})
+	if err != nil {
+		return BlobStoreClientOut{}, err
+	}
+
+	return BlobStoreClientOut{
+		BlobStoreClient: &minioClient{
+			s3Client:    s3Client,
+			scheme:      "s3",
+			providerKey: providerKey,
+		},
+	}, nil
+}
+
+// newAzureClientWithKey creates a new Azure Blob Storage client with provider key
+func newAzureClientWithKey(providerKey string, config StorageProvider) (BlobStoreClientOut, error) {
+	if config.AzureStorageAccount == "" {
+		return BlobStoreClientOut{}, fmt.Errorf("azure storage account is required for provider %s", providerKey)
+	}
+	if config.AzureSASToken == "" {
+		return BlobStoreClientOut{}, fmt.Errorf("azure SAS token is required for provider %s", providerKey)
+	}
+
+	azureClient := newAzureBlobClient(config.AzureStorageAccount, config.AzureSASToken, config.AzureEndpoint, providerKey)
+	return BlobStoreClientOut{
+		BlobStoreClient: azureClient,
 	}, nil
 }

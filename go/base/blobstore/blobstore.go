@@ -17,10 +17,18 @@ type BlobStoreClient interface {
 	Scheme() string
 }
 
+// ProviderClient extends BlobStoreClient with provider key support
+type ProviderClient interface {
+	BlobStoreClient
+	// ProviderKey returns the provider key for this client
+	ProviderKey() string
+}
+
 // BlobStore is a wrapper around a map of BlobStoreClient implementations.
 type BlobStore struct {
-	Logger  *zap.Logger
-	Clients map[string]BlobStoreClient
+	Logger          *zap.Logger
+	Clients         map[string]BlobStoreClient // scheme -> client
+	ProviderClients map[string]BlobStoreClient // provider_key -> client
 }
 
 // Get retrieves the content of a blob from the blob store.
@@ -50,5 +58,38 @@ func (b *BlobStore) RegisterClient(client BlobStoreClient) {
 	if b.Clients == nil {
 		b.Clients = make(map[string]BlobStoreClient)
 	}
+	if b.ProviderClients == nil {
+		b.ProviderClients = make(map[string]BlobStoreClient)
+	}
+
+	// Register by scheme (existing functionality)
 	b.Clients[client.Scheme()] = client
+
+	// Register by provider key if client supports it
+	if providerClient, ok := client.(ProviderClient); ok {
+		b.ProviderClients[providerClient.ProviderKey()] = client
+	}
+}
+
+// GetClientByProvider retrieves a client by provider key
+func (b *BlobStore) GetClientByProvider(providerKey string) (BlobStoreClient, error) {
+	client, ok := b.ProviderClients[providerKey]
+	if !ok {
+		return nil, fmt.Errorf("provider %s is not configured", providerKey)
+	}
+	return client, nil
+}
+
+// GetWithProvider retrieves blob content using a specific provider
+func (b *BlobStore) GetWithProvider(ctx context.Context, blobURI string, providerKey string) ([]byte, error) {
+	if providerKey != "" {
+		client, err := b.GetClientByProvider(providerKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client for provider %s: %w", providerKey, err)
+		}
+		return client.Get(ctx, blobURI)
+	}
+
+	// Fallback to scheme-based routing
+	return b.Get(ctx, blobURI)
 }
