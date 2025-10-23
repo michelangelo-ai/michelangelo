@@ -10,6 +10,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 )
@@ -31,6 +32,7 @@ type PluginParams struct {
 	ApiHandler     api.Handler
 	WorkflowClient clientInterfaces.WorkflowClient
 	BlobStore      *blobstore.BlobStore
+	ConfigProvider uberconfig.Provider
 	Logger         *zap.Logger
 }
 
@@ -40,7 +42,7 @@ func NewPlugin(params PluginParams) *Plugin {
 		Actors: []conditionsInterfaces.ConditionActor[*v2.PipelineRun]{
 			actors.NewSourcePipelineActor(params.ApiHandler, logger),
 			actors.NewImageBuildActor(logger),
-			actors.NewExecuteWorkflowActor(logger, params.WorkflowClient, params.BlobStore, params.ApiHandler),
+			actors.NewExecuteWorkflowActor(logger, params.WorkflowClient, params.BlobStore, params.ApiHandler, params.ConfigProvider),
 		},
 		Logger: logger,
 	}

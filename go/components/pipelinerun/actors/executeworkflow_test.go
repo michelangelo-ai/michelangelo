@@ -20,6 +20,7 @@ import (
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -32,6 +33,30 @@ func TestExecuteWorkflowActor(t *testing.T) {
 	pipelineManifestContet := &pbtypes.Any{
 		Value:   contentStr,
 		TypeUrl: "type.googleapis.com/michelangelo.api.TypedStruct",
+	}
+
+	// Create a test project with worker queue annotation
+	testProject := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"michelangelo/worker_queue": "test-task-list",
+			},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
+	}
+
+	// Create a test project without worker queue annotation (for fallback testing)
+	testProjectNoQueue := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:        "no-queue",
+			Namespace:   "no-queue",
+			Annotations: map[string]string{},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
 	}
 
 	// Create previous successful pipeline runs with cached outputs for resume tests
@@ -160,6 +185,10 @@ func TestExecuteWorkflowActor(t *testing.T) {
 		{
 			name: "Workflow run ID is empty, starting workflow",
 			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
 				Status: v2.PipelineRunStatus{
 					SourcePipeline: &v2.SourcePipeline{
 						Pipeline: &v2.Pipeline{
@@ -209,10 +238,16 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
 				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
-				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(&clientInterfaces.WorkflowExecution{
-					ID:    "456",
-					RunID: "123",
-				}, nil)
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+						// Verify that the task list from project annotation is used
+						require.Equal(t, "test-task-list", options.TaskList)
+						return &clientInterfaces.WorkflowExecution{
+							ID:    "456",
+							RunID: "123",
+						}, nil
+					},
+				)
 			},
 			expectedCondition: &apipb.Condition{
 				Type:   ExecuteWorkflowType,
@@ -654,6 +689,138 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			expectedWorkflowID:    "789",
 			errMsg:                "",
 		},
+		{
+			name: "Project not found - should fail",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "nonexistent",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContet,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				// No mocks needed since it should fail on project fetch
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+				StartTime:   pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "",
+			expectedWorkflowID:    "",
+			errMsg:                "failed to fetch project",
+		},
+		{
+			name: "Project without worker queue annotation - should use config fallback",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "no-queue",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									UniflowTar: "mock://test-uniflow-tar",
+									Content:    pipelineManifestContet,
+								},
+							},
+						},
+					},
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ImageBuildStepName,
+							DisplayName: pipelinerunutils.ImageBuildStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+							EndTime:     pbtypes.TimestampNow(),
+							StartTime:   pbtypes.TimestampNow(),
+							Output: &pbtypes.Struct{
+								Fields: map[string]*pbtypes.Value{
+									pipelinerunutils.ImageBuildOutputKey: {
+										Kind: &pbtypes.Value_StringValue{
+											StringValue: "test-image-id",
+										},
+									},
+								},
+							},
+						},
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+							StartTime:   pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ImageBuildType,
+							Status: apipb.CONDITION_STATUS_TRUE,
+						},
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_UNKNOWN,
+						},
+					},
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				blobStoreClient.EXPECT().Get(gomock.Any(), gomock.Any()).Return([]byte(""), nil)
+				workflowClient.EXPECT().StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+					func(ctx context.Context, options clientInterfaces.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterfaces.WorkflowExecution, error) {
+						// Verify that the task list falls back to config "default"
+						require.Equal(t, "default", options.TaskList)
+						return &clientInterfaces.WorkflowExecution{
+							ID:    "456",
+							RunID: "123",
+						}, nil
+					},
+				)
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_UNKNOWN,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+				StartTime:   pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "123",
+			expectedWorkflowID:    "456",
+			errMsg:                "",
+		},
 	}
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
@@ -664,7 +831,7 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			scheme := runtime.NewScheme()
 			err := v2.AddToScheme(scheme)
 			require.NoError(t, err)
-			k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2).Build()
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2, testProject, testProjectNoQueue).Build()
 			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
 			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
 			previousCondition := conditionUtils.GetCondition(pipelinerunutils.ExecuteWorkflowStepName, testCase.pipelineRun.Status.Conditions)
@@ -834,7 +1001,15 @@ func setUpExecuteWorkflowActor(t *testing.T, workflowClient *workflowclientMock.
 			"mock": blobStoreClient,
 		},
 	}
-	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler)
+	// Create a mock config provider for testing
+	configProvider, err := uberconfig.NewYAML(uberconfig.Static(map[string]interface{}{
+		"workflowClient": map[string]interface{}{
+			"taskList": "default",
+		},
+	}))
+	require.NoError(t, err)
+
+	return NewExecuteWorkflowActor(logger, workflowClient, &blobStore, apiHandler, configProvider)
 }
 
 func TestResumeFromPipelineRun(t *testing.T) {
@@ -843,6 +1018,30 @@ func TestResumeFromPipelineRun(t *testing.T) {
 	pipelineManifestContent := &pbtypes.Any{
 		Value:   contentStr,
 		TypeUrl: "type.googleapis.com/michelangelo.api.TypedStruct",
+	}
+
+	// Create a test project with worker queue annotation
+	testProject := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "default",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"michelangelo/worker_queue": "test-task-list",
+			},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
+	}
+
+	// Create a test project without worker queue annotation (for fallback testing)
+	testProjectNoQueue := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:        "no-queue",
+			Namespace:   "no-queue",
+			Annotations: map[string]string{},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
 	}
 
 	// Create previous successful pipeline runs with cached outputs
@@ -1264,7 +1463,7 @@ func TestResumeFromPipelineRun(t *testing.T) {
 
 			k8sClient := fake.NewClientBuilder().
 				WithScheme(scheme).
-				WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2).
+				WithRuntimeObjects(previousPipelineRun1, previousPipelineRun2, testProject, testProjectNoQueue).
 				Build()
 
 			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
@@ -1290,6 +1489,96 @@ func TestResumeFromPipelineRun(t *testing.T) {
 			require.Equal(t, v2.PIPELINE_RUN_STEP_STATE_RUNNING, executeWorkflowStep.State)
 			require.NotEmpty(t, testCase.pipelineRun.Status.WorkflowId)
 			require.NotEmpty(t, testCase.pipelineRun.Status.WorkflowRunId)
+		})
+	}
+}
+
+func TestGetTaskList(t *testing.T) {
+	// Create a test project with worker queue annotation
+	testProjectWithQueue := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      "project-with-queue",
+			Namespace: "default",
+			Annotations: map[string]string{
+				"michelangelo/worker_queue": "custom-task-list",
+			},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
+	}
+
+	// Create a test project without worker queue annotation
+	testProjectNoQueue := &v2.Project{
+		ObjectMeta: v1.ObjectMeta{
+			Name:        "project-no-queue",
+			Namespace:   "default",
+			Annotations: map[string]string{},
+		},
+		Spec:   v2.ProjectSpec{},
+		Status: v2.ProjectStatus{},
+	}
+
+	testCases := []struct {
+		name             string
+		project          *v2.Project
+		pipelineRun      *v2.PipelineRun
+		expectedTaskList string
+		expectError      bool
+	}{
+		{
+			name:    "Project with worker queue annotation",
+			project: testProjectWithQueue,
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test-pipeline-run",
+				},
+			},
+			expectedTaskList: "custom-task-list",
+			expectError:      false,
+		},
+		{
+			name:    "Project without worker queue annotation - should fallback to config",
+			project: testProjectNoQueue,
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Namespace: "default",
+					Name:      "test-pipeline-run",
+				},
+			},
+			expectedTaskList: "default",
+			expectError:      false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+
+			k8sClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(testCase.project).
+				Build()
+
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+
+			taskList, err := actor.getTaskList(testCase.project, testCase.pipelineRun)
+
+			if testCase.expectError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, testCase.expectedTaskList, taskList)
+			}
 		})
 	}
 }

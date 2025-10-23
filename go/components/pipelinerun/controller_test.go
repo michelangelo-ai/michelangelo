@@ -25,6 +25,7 @@ import (
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
 	"go.uber.org/zap/zaptest"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -171,6 +172,16 @@ func TestReconcile(t *testing.T) {
 							UniflowTar: "mock://test-uniflow-tar",
 						},
 					},
+				},
+				&v2.Project{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-namespace",
+						Namespace: "test-namespace",
+						Annotations: map[string]string{
+							"michelangelo/worker_queue": "test-task-list",
+						},
+					},
+					Spec: v2.ProjectSpec{},
 				},
 			},
 			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
@@ -462,7 +473,8 @@ func setUpReconciler(
 			Logger:  logger,
 			Clients: map[string]blobstore.BlobStoreClient{"mock": mockBlobStorageClient},
 		},
-		ApiHandler: handler,
+		ApiHandler:     handler,
+		ConfigProvider: createMockConfigProvider(),
 	})
 	reconciler := &Reconciler{
 		Handler: handler,
@@ -472,4 +484,19 @@ func setUpReconciler(
 	}
 
 	return reconciler
+}
+
+func createMockConfigProvider() uberconfig.Provider {
+	configMap := map[string]interface{}{
+		"workflowClient": map[string]interface{}{
+			"service":   "cadence-frontend",
+			"host":      "localhost:7933",
+			"transport": "grpc",
+			"domain":    "default",
+			"taskList":  "default",
+		},
+	}
+
+	provider, _ := uberconfig.NewStaticProvider(configMap)
+	return provider
 }

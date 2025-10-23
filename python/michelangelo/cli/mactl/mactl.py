@@ -882,8 +882,8 @@ def main(channel: Channel):
     #   some missing proto message info causing error.
     """
     json_output = MessageToJson(
-        result, 
-        always_print_fields_with_no_presence=True, 
+        result,
+        always_print_fields_with_no_presence=True,
         preserving_proto_field_name=True
     )
     print(json_output)
