@@ -19,10 +19,13 @@ minio:
       awsAccessKeyId: "testAccessKey"
       awsSecretAccessKey: "testSecretKey"
       awsEndpointUrl: "http://localhost:9000"
-    azure-dev:
-      type: "azure"
-      azureStorageAccount: "testaccount"
-      azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2023-12-31T23:59:59Z"
+    aws-prod:
+      type: "s3"
+      awsRegion: "us-east-1"
+      awsAccessKeyId: "prodAccessKey"
+      awsSecretAccessKey: "prodSecretKey"
+      awsEndpointUrl: "s3.amazonaws.com"
+      useIam: true
   defaultProvider: "aws-sandbox"
 `
 
@@ -43,7 +46,7 @@ minio:
 		t.Errorf("expected 2 storage providers, got %d", len(conf.StorageProviders))
 	}
 
-	// Check AWS provider
+	// Check AWS sandbox provider
 	awsProvider, exists := conf.StorageProviders["aws-sandbox"]
 	if !exists {
 		t.Errorf("expected aws-sandbox provider to exist")
@@ -58,16 +61,19 @@ minio:
 		t.Errorf("expected AwsAccessKeyId 'testAccessKey', got %q", awsProvider.AwsAccessKeyId)
 	}
 
-	// Check Azure provider
-	azureProvider, exists := conf.StorageProviders["azure-dev"]
+	// Check AWS prod provider
+	awsProdProvider, exists := conf.StorageProviders["aws-prod"]
 	if !exists {
-		t.Errorf("expected azure-dev provider to exist")
+		t.Errorf("expected aws-prod provider to exist")
 	}
-	if azureProvider.Type != "azure" {
-		t.Errorf("expected Type 'azure', got %q", azureProvider.Type)
+	if awsProdProvider.Type != "s3" {
+		t.Errorf("expected Type 's3', got %q", awsProdProvider.Type)
 	}
-	if azureProvider.AzureStorageAccount != "testaccount" {
-		t.Errorf("expected AzureStorageAccount 'testaccount', got %q", azureProvider.AzureStorageAccount)
+	if awsProdProvider.AwsRegion != "us-east-1" {
+		t.Errorf("expected AwsRegion 'us-east-1', got %q", awsProdProvider.AwsRegion)
+	}
+	if awsProdProvider.UseIAM != true {
+		t.Errorf("expected UseIAM 'true', got %v", awsProdProvider.UseIAM)
 	}
 
 	// Check default provider

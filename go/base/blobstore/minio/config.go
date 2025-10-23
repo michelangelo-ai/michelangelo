@@ -7,9 +7,9 @@ const (
 )
 
 type (
-	// StorageProvider defines configuration for a single storage provider
+	// StorageProvider defines configuration for a single S3/MinIO storage provider
 	StorageProvider struct {
-		// Provider type: "s3", "azure", "gcp"
+		// Provider type: should be "s3"
 		Type string `yaml:"type"`
 
 		// S3/MinIO specific configuration
@@ -19,16 +19,11 @@ type (
 		AwsEndpointUrl     string `yaml:"awsEndpointUrl,omitempty"`
 		UseEnvAws          bool   `yaml:"useEnvAws,omitempty"`
 		UseIAM             bool   `yaml:"useIam,omitempty"`
-
-		// Azure Blob Storage configuration
-		AzureStorageAccount string `yaml:"azureStorageAccount,omitempty"`
-		AzureSASToken       string `yaml:"azureSASToken,omitempty"`
-		AzureEndpoint       string `yaml:"azureEndpoint,omitempty"`
 	}
 
 	// Config defines customization parameters for the Module
 	Config struct {
-		// Map of storage providers with keys like "aws", "azure", "aws-2", etc.
+		// Map of storage providers with keys like "aws-sandbox", "aws-prod", "aws-dev", etc.
 		StorageProviders map[string]StorageProvider `yaml:"storageProviders"`
 
 		// Default provider key to use when none specified

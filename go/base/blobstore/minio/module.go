@@ -22,8 +22,8 @@ var Module = fx.Options(
 	fx.Provide(newClient),
 )
 
-// newClient initializes new storage clients using the provided configuration.
-// It creates clients for multiple storage providers based on the configuration map.
+// newClient initializes new S3/MinIO storage clients using the provided configuration.
+// It creates clients for multiple S3/MinIO storage providers based on the configuration map.
 // Returns multiple BlobStoreClientOut instances or an error if initialization fails.
 func newClient(config Config) ([]BlobStoreClientOut, error) {
 	var clients []BlobStoreClientOut
@@ -37,24 +37,17 @@ func newClient(config Config) ([]BlobStoreClientOut, error) {
 		return []BlobStoreClientOut{defaultClient}, nil
 	}
 
-	// Create clients for each configured storage provider
+	// Create clients for each configured S3 storage provider
 	for providerKey, providerConfig := range config.StorageProviders {
-		switch providerConfig.Type {
-		case "s3":
-			client, err := newS3ClientWithKey(providerKey, providerConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create S3 client for provider %s: %w", providerKey, err)
-			}
-			clients = append(clients, client)
-		case "azure":
-			client, err := newAzureClientWithKey(providerKey, providerConfig)
-			if err != nil {
-				return nil, fmt.Errorf("failed to create Azure client for provider %s: %w", providerKey, err)
-			}
-			clients = append(clients, client)
-		default:
-			return nil, fmt.Errorf("unsupported storage provider type: %s for provider %s", providerConfig.Type, providerKey)
+		if providerConfig.Type != "s3" {
+			continue // Skip non-S3 providers
 		}
+
+		client, err := newS3ClientWithKey(providerKey, providerConfig)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create S3 client for provider %s: %w", providerKey, err)
+		}
+		clients = append(clients, client)
 	}
 
 	return clients, nil
@@ -112,20 +105,5 @@ func newS3ClientWithKey(providerKey string, config StorageProvider) (BlobStoreCl
 			scheme:      "s3",
 			providerKey: providerKey,
 		},
-	}, nil
-}
-
-// newAzureClientWithKey creates a new Azure Blob Storage client with provider key
-func newAzureClientWithKey(providerKey string, config StorageProvider) (BlobStoreClientOut, error) {
-	if config.AzureStorageAccount == "" {
-		return BlobStoreClientOut{}, fmt.Errorf("azure storage account is required for provider %s", providerKey)
-	}
-	if config.AzureSASToken == "" {
-		return BlobStoreClientOut{}, fmt.Errorf("azure SAS token is required for provider %s", providerKey)
-	}
-
-	azureClient := newAzureBlobClient(config.AzureStorageAccount, config.AzureSASToken, config.AzureEndpoint, providerKey)
-	return BlobStoreClientOut{
-		BlobStoreClient: azureClient,
 	}, nil
 }
