@@ -54,25 +54,56 @@ class UniflowDevRunFileBuilder(ABC):
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
         commit_sha = self.get_git_sha()
-        result = subprocess.run(
-            ["git", "diff", "--name-only", commit_sha],
+        
+        # Get the Git root directory
+        git_root_result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
             cwd=os.getcwd(),
             capture_output=True,
             text=True,
             check=True,
         )
+        git_root = git_root_result.stdout.strip()
+        log.info(f"Git root: {git_root}, Current dir: {os.getcwd()}")
+        
+        # Get modified files
+        result = subprocess.run(
+            ["git", "diff", "--name-only", commit_sha],
+            cwd=git_root,  # Use git root instead of current dir
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         changed_files = result.stdout.strip().splitlines()
-        if not changed_files:
+        
+        # Also get untracked files (new files not in Git)
+        untracked_result = subprocess.run(
+            ["git", "ls-files", "--others", "--exclude-standard"],
+            cwd=git_root,  # Use git root instead of current dir
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        untracked_files = untracked_result.stdout.strip().splitlines()
+        
+        # Combine both lists
+        all_changed_files = list(set(changed_files + untracked_files))
+        
+        if not all_changed_files:
             log.info("No changed files found.")
             return None
 
-        log.info(f"Changed files: {changed_files}")
+        log.info(f"Changed files: {all_changed_files}")
         bb = io.BytesIO()
         with tarfile.open(fileobj=bb, mode="w:gz", dereference=True) as tar:
-            for file_path in changed_files:
-                path = Path(file_path)
+            for file_path in all_changed_files:
+                path = Path(git_root) / file_path  # Make path relative to git root
                 if path.exists():
-                    tar.add(path, arcname=path)
+                    # Strip 'python/' prefix if present since Dockerfile copies python/ to /app
+                    arcname = file_path
+                    if arcname.startswith("python/"):
+                        arcname = arcname[7:]  # Remove 'python/' prefix
+                    tar.add(path, arcname=arcname)
         return bb.getvalue()
 
     def create_and_upload_tarball(self) -> str:
