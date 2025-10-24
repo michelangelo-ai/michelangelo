@@ -159,6 +159,11 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         action="store_true",
         help="Automatically answer yes to confirmation prompts.",
     )
+    p.add_argument(
+        "--apply-local-changes",
+        action="store_true",
+        help="Apply local code changes from the current git repository to the remote run.",
+    )
 
     if environ:
         p.add_argument(
@@ -180,6 +185,7 @@ def _remote_run(
     image: str = "",
     yes: bool = False,
     workflow: str = cadence,
+    apply_local_changes: bool = False,
 ):
     """
     Execute a given workflow function in Remote Mode.
@@ -222,4 +228,5 @@ def _remote_run(
     rr.execution_timeout_seconds = execution_timeout_seconds
     rr.cron = cron
     rr.yes = yes
+    rr.apply_local_changes = apply_local_changes
     rr.run()
