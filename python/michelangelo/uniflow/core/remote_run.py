@@ -13,6 +13,7 @@ from typing import Callable, Optional
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.utils import dot_path
+from michelangelo.uniflow.core.apply_local_changes import UniflowDevRunFileBuilderOSS
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,8 @@ class RemoteRun:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
+    apply_local_changes: Optional[bool] = False
+    pipeline: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
@@ -61,6 +64,24 @@ class RemoteRun:
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 
+        if self.apply_local_changes:
+            dev_run_remote_file_path = UniflowDevRunFileBuilderOSS(
+                project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+                pipeline=self.pipeline,
+                docker_image=self.image
+            ).create_and_upload_tarball()
+            if dev_run_remote_file_path:
+                log.info(f"Setting DEV_RUN_REMOTE_FILE_PATH to {dev_run_remote_file_path}")
+                environ["DEV_RUN_REMOTE_FILE_PATH"] = dev_run_remote_file_path
+                # Add sitecustomize.py directory to PYTHONPATH
+                # We append the uniflow/core directory so Python can auto-import sitecustomize.py
+                existing_pythonpath = environ.get("PYTHONPATH", "/app")
+                environ["PYTHONPATH"] = f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
+                # Enable debug logging for sitecustomize
+                environ["UNIFLOW_DEBUG_SITECUSTOMIZE"] = "1"
+                log.info(f"Environment variables set: PYTHONPATH={environ.get('PYTHONPATH')}, DEV_RUN_REMOTE_FILE_PATH={environ.get('DEV_RUN_REMOTE_FILE_PATH')}, UNIFLOW_DEBUG_SITECUSTOMIZE={environ.get('UNIFLOW_DEBUG_SITECUSTOMIZE')}")
+
+        # Log environment variables after apply_local_changes
         for k, v in environ.items():
             log.info("environ: %s: %s", k, v)
 
@@ -167,6 +188,8 @@ class RemoteRunTemporal:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
+    apply_local_changes: Optional[bool] = False
+    pipeline: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
@@ -223,6 +246,23 @@ class RemoteRunTemporal:
         log.debug("input: %s", input_list)
         log.info("input: total bytes: %d", len(input_list))
 
+        if self.apply_local_changes:
+            dev_run_remote_file_path = UniflowDevRunFileBuilderOSS(
+                project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+                pipeline=self.pipeline,
+                docker_image=self.image
+            ).create_and_upload_tarball()
+            if dev_run_remote_file_path:
+                log.info(f"Setting DEV_RUN_REMOTE_FILE_PATH to {dev_run_remote_file_path}")
+                environ["DEV_RUN_REMOTE_FILE_PATH"] = dev_run_remote_file_path
+                # Add sitecustomize.py directory to PYTHONPATH
+                # The Dockerfile copies python/ to /app, so paths become /app/michelangelo/...
+                # We append the uniflow/core directory so Python can auto-import sitecustomize.py
+                existing_pythonpath = environ.get("PYTHONPATH", "/app")
+                environ["PYTHONPATH"] = f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
+                # Enable debug logging for sitecustomize
+                environ["UNIFLOW_DEBUG_SITECUSTOMIZE"] = "1"
+            
         cmd = ["temporal", "workflow", "start"]
 
         # Set environment-based configurations

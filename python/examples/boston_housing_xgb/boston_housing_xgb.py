@@ -3,6 +3,7 @@ from dataclasses import dataclass
 import datasets
 import fsspec
 import logging
+import os
 from typing import Optional
 import pandas as pd
 import numpy as np
@@ -49,13 +50,19 @@ class TrainResult:
         worker_instances=0,
         # breakpoint=True,
     ),
-    cache_enabled=True,
+    cache_enabled=False,
 )
 def feature_prep(
     columns: list[str],
     test_size: float = 0.25,
     seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
+    # 🎯 LOCAL CHANGES APPLIED! Verify sitecustomize.py downloaded this code
+    log.info("=" * 80)
+    log.info("✅ FEATURE_PREP STARTED - Local changes successfully applied!")
+    log.info("📦 sitecustomize.py with FsspecDownloader is working!")
+    log.info("=" * 80)
+    
     data_url = "http://lib.stat.cmu.edu/datasets/boston"
     raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
     X = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])
@@ -130,10 +137,10 @@ def preprocess(
     config=RayTask(
         head_cpu=1,
         head_gpu=0,
-        head_memory="12Gi",
+        head_memory="2Gi",  # Reduced from 12Gi
         worker_cpu=2,
         worker_gpu=0,
-        worker_memory="12Gi",
+        worker_memory="2Gi",  # Reduced from 12Gi
         worker_instances=1,
         runtime_env={
             "env_vars": {
@@ -146,11 +153,21 @@ def train(
     pr: PreprocessResult,
     params: dict,
 ) -> TrainResult:
+    # 🎯 LOCAL CHANGES APPLIED! This log message verifies sitecustomize.py is working
+    log.info("=" * 80)
+    log.info("🚀 TRAINING STARTED - Local changes applied via sitecustomize.py!")
+    log.info("Storage path from environment: %s", os.environ.get("UF_STORAGE_URL", "NOT SET"))
+    log.info("=" * 80)
+    
     pr.train_data.load_ray_dataset()
     train_data: ray.data.Dataset = pr.train_data.value
+    log.info("Train dataset schema: %s", train_data.schema())
+    log.info("Train dataset sample: %s", train_data.take(1))
 
     pr.validation_data.load_ray_dataset()
     validation_data: ray.data.Dataset = pr.validation_data.value
+    log.info("Validation dataset schema: %s", validation_data.schema())
+    log.info("Validation dataset sample: %s", validation_data.take(1))
 
     # Drop problematic columns
     for col in ["uuid", "datestr"]:
@@ -236,16 +253,20 @@ def train(
 
     scaling_config = create_scaling_config(
         trainer_cpu=None,
-        cpu_per_worker=4,
+        cpu_per_worker=1,  # Reduced from 4 to fit in k3d cluster
     )
     log.info("scaling_config: %r", scaling_config)
 
+    # Configure Ray Train to use S3 storage for checkpoints (required for distributed training)
+    # Use the same S3 storage as Uniflow for consistency
+    storage_path = os.environ.get("UF_STORAGE_URL", "s3://default")
     run_config = RunConfig(
+        storage_path=storage_path,  # Use S3 instead of local /root/ray_results
         checkpoint_config=CheckpointConfig(
             checkpoint_at_end=True,
         ),
     )
-    log.info("run_config: %r", run_config)
+    log.info("run_config: %r (storage_path: %s)", run_config, storage_path)
 
     data_schema = train_data.schema()
     assert data_schema
