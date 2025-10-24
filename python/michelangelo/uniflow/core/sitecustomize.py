@@ -140,6 +140,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
                     # Copy file with metadata preservation
                     shutil.copy2(file_path, target_file)
                     file_count += 1
+                    logger.info(f"  ✓ Applied: {rel_path}")
 
             logger.info(f"Applied {file_count} file(s) successfully")
             return True
