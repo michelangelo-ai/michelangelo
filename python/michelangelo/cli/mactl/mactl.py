@@ -740,6 +740,11 @@ def get_all_file_descriptors_by_filename(
         len(visited) if visited is not None else None,
     )
 
+    if deps > 1000:
+        raise RecursionError(
+            "Maximum recursion depth exceeded in get_all_file_descriptors_by_filename"
+        )
+
     if visited is None:
         visited = set()
     elif filename in visited:
