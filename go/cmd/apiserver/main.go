@@ -54,7 +54,9 @@ func opts() fx.Option {
 		v2pb.TriggerRunSvcModule,
 		v2pb.DeploymentSvcModule,
 		crd.Module,
-		crd.SyncCRDs(v2pb.GroupVersion.Group, v2pb.YamlSchemas),
+		crd.SyncCRDs(v2pb.GroupVersion.Group,
+			[]string{},
+			v2pb.YamlSchemas),
 		fx.Invoke(registerProcedures),
 		fx.Invoke(startYARPCServer),
 	)

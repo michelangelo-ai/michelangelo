@@ -53,4 +53,3 @@ data:
         enableMetadataStorage: false
       crdSync:
         enableCRDUpdate: true
-        enableIncompatibleUpdate: false
