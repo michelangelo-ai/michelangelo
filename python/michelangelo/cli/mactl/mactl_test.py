@@ -17,10 +17,7 @@ from michelangelo.cli.mactl.mactl import (
     create_serivce_classes,
     get_all_file_descriptors_by_filename,
     get_service_descriptors,
-    insecure_channel,
     list_services,
-    secure_channel,
-    ssl_channel_credentials,
 )
 
 
