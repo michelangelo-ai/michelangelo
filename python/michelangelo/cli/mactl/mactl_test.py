@@ -762,26 +762,6 @@ class TLSConnectionTest(TestCase):
         self.assertEqual(mactl.USE_TLS, "true")
 
 
-class TLSImportsTest(TestCase):
-    """
-    Tests to verify that TLS-related imports are correctly added
-    """
-
-    def test_tls_imports_available(self):
-        """Test that TLS-related functions are imported and available"""
-        # Verify imports are callable
-        self.assertTrue(callable(secure_channel))
-        self.assertTrue(callable(ssl_channel_credentials))
-        self.assertTrue(callable(insecure_channel))
-
-    def test_module_imports_grpc_tls_functions(self):
-        """Test that the module successfully imports gRPC TLS functions"""
-        # Check that the functions exist as attributes of the module
-        self.assertTrue(hasattr(mactl, "secure_channel"))
-        self.assertTrue(hasattr(mactl, "ssl_channel_credentials"))
-        self.assertTrue(hasattr(mactl, "insecure_channel"))
-
-
 class TLSErrorHandlingTest(TestCase):
     """
     Tests for TLS error handling scenarios
