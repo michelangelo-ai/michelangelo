@@ -5,25 +5,24 @@ metadata:
   namespace: default
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
+# ClusterRole for Spark/Ray jobs across namespaces; one federated client uses a single ServiceAccount secret to create jobs in multiple namespaces.
+kind: ClusterRole
 metadata:
   name: ray-manager
-  namespace: default
 rules:
 - apiGroups: ["ray.io"]
   resources: ["rayclusters", "rayjobs"]
   verbs: ["create","get","list","watch","update","patch","delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
+kind: ClusterRoleBinding
 metadata:
   name: ray-manager-binding
-  namespace: default
 subjects:
 - kind: ServiceAccount
   name: ray-manager
   namespace: default
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: ray-manager
