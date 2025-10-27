@@ -136,28 +136,31 @@ class CrdMethodInfo:
     """
 
     channel: Channel
+    crd_full_name: str
     method_name: str
     input_class: type[Message]
     output_class: type[Message]
 
 
-def get_crd(crd_method_info, full_name: str, namespace: str, name: str) -> Message:
+def get_crd(crd_method_info, namespace: str, name: str) -> Message:
     """
     Run CRD.GET method with grpc reflection
     """
-    _LOG.debug("CRD method info: %r", crd_method_info)
-
     request_input = crd_method_info.input_class(
         namespace=namespace,
         name=name,
     )
-    _LOG.info(
-        "GET Request input (%r) ready: %r",
-        type(request_input),
-        request_input,
-    )
+    return crd_method_call(crd_method_info, request_input)
 
-    method_fullname = f"/{full_name}/{crd_method_info.method_name}"
+
+def crd_method_call(crd_method_info, request_input: Message) -> Message:
+    """
+    Call member method call of a CRD with grpc reflection
+    """
+    _LOG.debug("CRD method info: %r", crd_method_info)
+    _LOG.debug("Request input (%r): %r", type(request_input), request_input)
+
+    method_fullname = f"/{crd_method_info.crd_full_name}/{crd_method_info.method_name}"
     _LOG.info("Method fullname for gRPC call: %s", method_fullname)
     stub_method = crd_method_info.channel.unary_unary(
         method_fullname,
@@ -178,13 +181,11 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     Default common CRD member method implementation for GET method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
-    _self: CRD = bound_args.arguments["self"]
-    _LOG.info("Start get_func for %r", _self.full_name)
 
     _name = get_single_arg(bound_args.arguments, "name")
     _namespace = get_single_arg(bound_args.arguments, "namespace")
 
-    return get_crd(crd_method_info, _self.full_name, _namespace, _name)
+    return get_crd(crd_method_info, _namespace, _name)
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -192,8 +193,6 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     Default common CRD member method implementation for DELETE method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
-    _self: CRD = bound_args.arguments["self"]
-    _LOG.info("Start delete_func for %r", _self.full_name)
 
     _namespace = get_single_arg(bound_args.arguments, "namespace")
     _name = get_single_arg(bound_args.arguments, "name")
@@ -202,26 +201,7 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
         namespace=_namespace,
         name=_name,
     )
-    _LOG.info(
-        "DELETE Request input (%r) ready: %r",
-        type(request_input),
-        request_input,
-    )
-
-    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
-    _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-    stub_method = channel.unary_unary(
-        method_fullname,
-        request_serializer=crd_method_info.input_class.SerializeToString,
-        response_deserializer=crd_method_info.output_class.FromString,
-    )
-    response = stub_method(
-        request_input,
-        metadata=METADATA_STUB,
-        timeout=30,
-    )
-    _LOG.info("Stub method completed (%r): %r", type(response), response)
-    return response
+    return crd_method_call(crd_method_info, request_input)
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -241,20 +221,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
         crd_method_info.input_class, _file, message_instance
     )
 
-    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
-    _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-    stub_method = channel.unary_unary(
-        method_fullname,
-        request_serializer=crd_method_info.input_class.SerializeToString,
-        response_deserializer=crd_method_info.output_class.FromString,
-    )
-    response = stub_method(
-        request_input,
-        metadata=METADATA_STUB,
-        timeout=30,
-    )
-    _LOG.info("Stub method completed (%r): %r", type(response), response)
-    return response
+    return crd_method_call(crd_method_info, request_input)
 
 
 def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -274,20 +241,7 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
         _self.func_crd_metadata_converter,
     )
 
-    method_fullname = f"/{_self.full_name}/{crd_method_info.method_name}"
-    _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-    stub_method = channel.unary_unary(
-        method_fullname,
-        request_serializer=crd_method_info.input_class.SerializeToString,
-        response_deserializer=crd_method_info.output_class.FromString,
-    )
-    response = stub_method(
-        request_input,
-        metadata=METADATA_STUB,
-        timeout=30,
-    )
-    _LOG.info("Stub method completed (%r): %r", type(response), response)
-    return response
+    return crd_method_call(crd_method_info, request_input)
 
 
 class CRD:
@@ -346,7 +300,9 @@ class CRD:
         """
         _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
-            channel, *self._extract_method_info(channel, self.full_name, "Delete")
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "Delete"),
         )
         delete_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -367,7 +323,9 @@ class CRD:
         """
         _LOG.info("Generate GET method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
-            channel, *self._extract_method_info(channel, self.full_name, "Get")
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "Get"),
         )
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -390,7 +348,9 @@ class CRD:
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
-            channel, *self._extract_method_info(channel, self.full_name, "Update")
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "Update"),
         )
         apply_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -409,7 +369,9 @@ class CRD:
         _LOG.info("Generate CREATE method for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
-            channel, *self._extract_method_info(channel, self.full_name, "Create")
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "Create"),
         )
         create_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
