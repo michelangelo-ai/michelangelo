@@ -4,22 +4,23 @@ import (
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
 )
 
-var (
-	// Module FX
-	Module = fx.Options(
-		fx.Provide(newConfig),
-		fx.Invoke(register),
-	)
+// Module FX
+var Module = fx.Options(
+	fx.Provide(newConfig),
+	fx.Invoke(register),
 )
 
 func register(
 	conf Config,
 	env env.Context,
 	mgr manager.Manager,
+	jobQueue scheduler.JobQueue,
 ) error {
 	restConfig := mgr.GetConfig()
 	restConfig.QPS = conf.QPS
@@ -32,5 +33,6 @@ func register(
 		Client:         mgr.GetClient(),
 		env:            env,
 		RayV1Interface: rayClient,
+		jobQueue:       jobQueue,
 	}).Register(mgr)
 }

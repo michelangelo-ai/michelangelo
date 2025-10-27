@@ -19,6 +19,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -32,6 +33,7 @@ type Reconciler struct {
 	client.Client                    // Kubernetes API client for managing resources
 	rayv1.RayV1Interface             // Ray-specific Kubernetes client
 	env                  env.Context // Environment context for configuration
+	jobQueue             scheduler.JobQueue
 }
 
 // Reconcile ensures the desired state of the Ray Cluster matches the actual state in the cluster.
