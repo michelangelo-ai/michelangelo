@@ -828,9 +828,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
-    def test_no_dependencies(
-        self, mock_fd_proto_class, mock_stub_class
-    ):
+    def test_no_dependencies(self, mock_fd_proto_class, mock_stub_class):
         """
         Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies
         """
@@ -873,9 +871,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
-    def test_with_dependencies(
-        self, mock_fd_proto_class, mock_stub_class
-    ):
+    def test_with_dependencies(self, mock_fd_proto_class, mock_stub_class):
         """
         Test `get_all_file_descriptors_by_filename()` with recursive dependencies
         Mimics the actual behavior from the log where:
@@ -1079,9 +1075,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
-    def test_recursion_depth_limit(
-        self, mock_fd_proto_class, mock_stub_class
-    ):
+    def test_recursion_depth_limit(self, mock_fd_proto_class, mock_stub_class):
         """
         Test `get_all_file_descriptors_by_filename()` raises RecursionError when depth exceeds limit
         Starts at deps=999 and verifies it fails when processing a dependency (depth becomes 1000)
@@ -1093,7 +1087,9 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
         # Create mock file descriptor with one dependency
         mock_fd = Mock()
         mock_fd.name = filename
-        mock_fd.dependency = ["dependency.proto"]  # This will cause depth to increase to 1000
+        mock_fd.dependency = [
+            "dependency.proto"
+        ]  # This will cause depth to increase to 1000
         mock_fd_proto_class.return_value = mock_fd
 
         # Create mock response
@@ -1109,12 +1105,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
         # Call with deps=999, which should process fine initially,
         # but fail when trying to process the dependency at depth 1000
         with self.assertRaises(RecursionError) as context:
-            list(get_all_file_descriptors_by_filename(
-                mock_channel, filename, deps=999
-            ))
+            list(get_all_file_descriptors_by_filename(mock_channel, filename, deps=999))
 
         # Verify the error message
-        self.assertIn(
-            "Maximum recursion depth exceeded",
-            str(context.exception)
-        )
+        self.assertIn("Maximum recursion depth exceeded", str(context.exception))
