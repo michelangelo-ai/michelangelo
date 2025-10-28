@@ -15,8 +15,9 @@ var _ blobstore.BlobStoreClient = (*minioClient)(nil)
 // minioClient is a wrapper around the MinIO S3 client.
 // It provides methods to interact with S3-compatible storage.
 type minioClient struct {
-	s3Client *minio.Client
-	scheme   string
+	s3Client    *minio.Client
+	scheme      string
+	providerKey string
 }
 
 // Get retrieves an object from S3 storage, reads its content,
@@ -56,4 +57,9 @@ func (a *minioClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
 // Scheme returns the scheme identifier used by this client.
 func (a *minioClient) Scheme() string {
 	return a.scheme
+}
+
+// ProviderKey returns the provider key for this client.
+func (a *minioClient) ProviderKey() string {
+	return a.providerKey
 }
