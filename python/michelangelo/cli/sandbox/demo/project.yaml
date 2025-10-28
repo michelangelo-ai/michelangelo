@@ -8,7 +8,7 @@ metadata:
 spec:
   description: My ML Project
   owner:
-    owningTeam: "michelangelo"
+    owningTeam: "60eb5b33-03a3-4bc8-a24e-7a4ae4d8513a"
     owners:
       - craig.marker
   tier: 4

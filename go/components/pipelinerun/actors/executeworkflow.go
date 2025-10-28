@@ -244,7 +244,9 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+	invalidURL := "s3://test-invalid-bucket/non-existent.tar"
+	//tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+	tarContent, err := a.blobStore.Get(ctx, invalidURL)
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
