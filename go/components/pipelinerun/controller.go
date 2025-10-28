@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"reflect"
 
+	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
+	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +53,33 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			zap.String("operation", "run_engine"),
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
-		returnErr = fmt.Errorf("run engine for pipeline run %q: %w", req.NamespacedName, err)
+		logger.Info("UPDATED CONTROLLER: Setting pipeline to FAILED after retry exhaustion")
+		// When engine returns error after exhausting retries, set pipeline to FAILED
+		pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
+
+		// Update execute workflow step with failure information
+		executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+		if executeWorkflowStep != nil {
+			executeWorkflowStep.State = v2pb.PIPELINE_RUN_STEP_STATE_FAILED
+			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+			executeWorkflowStep.Message = fmt.Sprintf("Failed after 3 retry attempts: %v", err)
+		}
+
+		// Set a terminal condition for ExecuteWorkflow actor so it stops retrying
+		r.plugin.PutCondition(pipelineRun, &apipb.Condition{
+			Type:   "Execute Workflow",
+			Status: apipb.CONDITION_STATUS_FALSE,
+			Reason: "retry_exhausted",
+			Message: fmt.Sprintf("Failed after 3 retry attempts: %v", err),
+		})
+
+		logger.Info("UPDATED CONTROLLER: Pipeline state set to FAILED, not requeuing",
+			zap.String("state", string(pipelineRun.Status.State)))
+
+		// Set result to not requeue since this is a terminal state
+		result = ctrl.Result{Requeue: false, RequeueAfter: 0}
+		// Don't return the engine error - we've handled it by setting state to FAILED
+		returnErr = nil
 	} else {
 		if conditionResult.IsKilled {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
@@ -63,10 +92,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		}
 	}
 	if err = r.updatePipelineRunStatus(ctx, pipelineRun, originalPipelineRun); err != nil {
-		if returnErr != nil {
-			logger.Error("Failed to update pipeline run status", zap.Error(err))
-			return result, fmt.Errorf("update pipeline run status for %q: %w (previous error: %v)", req.NamespacedName, err, returnErr)
-		}
 		logger.Error("Failed to update pipeline run status",
 			zap.Error(err),
 			zap.String("operation", "update_status"),
