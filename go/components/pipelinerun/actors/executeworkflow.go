@@ -128,18 +128,12 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 
 		if err != nil {
 			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to fetch project %v", err)
+			return nil, fmt.Errorf("failed to fetch project %v", err)
 		}
 
 		taskList, taskListErr := a.getTaskList(project, pipelineRun)
 		if taskListErr != nil {
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("get workflow client config: %w", taskListErr)
+			return nil, fmt.Errorf("get workflow client config: %w", taskListErr)
 		}
 		if taskList == "" {
 			logger.Error("WorkflowClient TaskList is empty")
@@ -156,10 +150,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 				zap.String("operation", "start_workflow"),
 				zap.String("namespace", pipelineRun.Namespace),
 				zap.String("name", pipelineRun.Name))
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("start workflow for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
+			return nil, fmt.Errorf("start workflow for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
 		executeWorkflowStep.StartTime = pbtypes.TimestampNow()
@@ -245,9 +236,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to add task cache env: %v", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	invalidURL := "s3://test-invalid-bucket/non-existent.tar"
-	//tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
-	tarContent, err := a.blobStore.Get(ctx, invalidURL)
+	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
