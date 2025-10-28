@@ -17,7 +17,6 @@ import traceback
 import logging
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 def _get_logger(context="uniflow_task_pre_run"):
@@ -58,9 +57,6 @@ class FsspecDownloader(StorageDownloader):
 
         try:
             logger.info(f"Downloading from: {remote_path}")
-            
-            # Download using fsspec.open() - consistent with upload in uniflow_tar_impl.py
-            # This automatically handles S3 credentials from environment (AWS_ACCESS_KEY_ID, etc.)
             with fsspec.open(remote_path, "rb") as remote_file:
                 with open(local_path, "wb") as local_file:
                     local_file.write(remote_file.read())
@@ -69,12 +65,10 @@ class FsspecDownloader(StorageDownloader):
             return True
         except Exception as e:
             logger.error(f"fsspec download failed: {e}")
-            if logger.isEnabledFor(logging.DEBUG):
-                logger.debug(f"Traceback: {traceback.format_exc()}")
             return False
 
 
-def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None, debug=False):
+def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None):
     """
     Download and extract development files from remote storage with following steps:
     1. Check for DEV_RUN_REMOTE_FILE_PATH environment variable
@@ -84,7 +78,6 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
 
     Args:
         logger: Optional logger instance (will create one if not provided)
-        debug: Whether to enable debug logging
         downloader: Optional StorageDownloader instance (auto-detected if not provided)
 
     Returns:
@@ -96,14 +89,10 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
     # Check for the required environment variable
     remote_file_path = os.environ.get("DEV_RUN_REMOTE_FILE_PATH")
     if not remote_file_path:
-        if debug:
-            logger.info("DEV_RUN_REMOTE_FILE_PATH not set, skipping file sync")
+        logger.info("DEV_RUN_REMOTE_FILE_PATH not set, skipping file sync")
         return False
-
     logger.info(f"Downloading development files from: {remote_file_path}")
-    if downloader is None:
-        logger.error("downloader is required")
-        return False
+    
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tarball_path = Path(tmp_dir) / "dev_run.tar.gz"
@@ -147,8 +136,6 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
 
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
-        if debug:
-            logger.error(f"Traceback: {traceback.format_exc()}")
         return False
 
 
@@ -159,41 +146,32 @@ def auto_run_if_enabled():
     This is the entry point used by sitecustomize.py for automatic execution.
     It includes additional safety checks and logging for the container environment.
     """
-    debug = bool(os.environ.get("UNIFLOW_DEBUG_SITECUSTOMIZE"))
     logger = _get_logger("sitecustomize")
 
     if os.environ.get("DEV_RUN_REMOTE_FILE_PATH"):
         logger.info("Development file sync starting...")
-        success = download_and_extract_dev_files(downloader=FsspecDownloader(), logger=logger, debug=debug)
+        success = download_and_extract_dev_files(downloader=FsspecDownloader(), logger=logger)
         if success:
             logger.info("Development file sync completed")
         else:
             logger.warning("Development file sync failed (check logs above)")
-    elif debug:
-        logger.info("No development files to sync")
+    else:
+        logger.info("No development files to sync (DEV_RUN_REMOTE_FILE_PATH not set)")
 
 # Run the pre-run functionality automatically when this module is imported
 # (but not when executed directly as a script)
 if __name__ != "__main__":
-    # Only run if debug mode is enabled to avoid log spam
-    import os
-
-    debug = bool(os.environ.get("UNIFLOW_DEBUG_SITECUSTOMIZE"))
-
-    if debug:
-        import sys
-
-        print(f"[sitecustomize] Python executable: {sys.executable}")
-        print(f"[sitecustomize] Working directory: {os.getcwd()}")
-        print(f"[sitecustomize] DEV_RUN_REMOTE_FILE_PATH: {os.environ.get('DEV_RUN_REMOTE_FILE_PATH', 'NOT SET')}")
+    import sys
+    print(f"[sitecustomize] Python executable: {sys.executable}")
+    print(f"[sitecustomize] Working directory: {os.getcwd()}")
+    print(f"[sitecustomize] DEV_RUN_REMOTE_FILE_PATH: {os.environ.get('DEV_RUN_REMOTE_FILE_PATH', 'NOT SET')}")
 
     try:
         auto_run_if_enabled()
     except Exception as e:
         # Never let sitecustomize errors break Python startup
-        if debug:
-            import traceback
+        import traceback
 
-            print(f"[sitecustomize] Error: {e}")
-            print(f"[sitecustomize] Traceback: {traceback.format_exc()}")
-        # Silent failure in production to avoid breaking containers
+        print(f"[sitecustomize] Error: {e}")
+        print(f"[sitecustomize] Traceback: {traceback.format_exc()}")
+        # Continue despite errors to avoid breaking containers
