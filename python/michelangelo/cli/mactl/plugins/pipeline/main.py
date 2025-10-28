@@ -22,6 +22,8 @@ def apply_plugins(
     Apply plugins to the crd.
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
+    _LOG.debug("Available CRDs: %r", crds)
+    _LOG.debug("gRPC Channel: %r", channel)
     if target_command == "apply":
         generate_apply(crd, channel)
     if target_command == "create":

@@ -613,15 +613,8 @@ def convert_crd_metadata(
         _LOG.error("Expected a dictionary, got: %r", type(yaml_dict))
         raise ValueError("Expected a dictionary for CRD metadata")
 
-    res = {"spec": deepcopy(yaml_dict["spec"])}
-    res["metadata"] = {
-        # TODO: this generation field should be hanlded by server side
-        "generation": "0",
-        "resourceVersion": "0",
-        "name": yaml_dict["metadata"]["name"],
-        "namespace": yaml_dict["metadata"]["namespace"],
-        "uid": str(uuid4()),
-    }
+    _LOG.debug("Raw yaml dict: metadata: %r", yaml_dict)
+    res = deepcopy(yaml_dict)
     _LOG.debug("Converted CRD metadata: %r", res)
     return res
 
