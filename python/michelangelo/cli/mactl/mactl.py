@@ -523,6 +523,8 @@ class CRD:
         _LOG.debug("Original CRD dict: %r", original_crd_dict)
 
         yaml_dict = yaml_to_dict(yaml_path_string)
+        yaml_dict.pop('apiVersion', None)
+        yaml_dict.pop('kind', None)
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
 
         deep_update(original_crd_dict[self.name], yaml_dict)
