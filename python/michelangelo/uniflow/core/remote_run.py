@@ -77,9 +77,7 @@ class RemoteRun:
                 # We append the uniflow/core directory so Python can auto-import sitecustomize.py
                 existing_pythonpath = environ.get("PYTHONPATH", "/app")
                 environ["PYTHONPATH"] = f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
-                # Enable debug logging for sitecustomize
-                environ["UNIFLOW_DEBUG_SITECUSTOMIZE"] = "1"
-                log.info(f"Environment variables set: PYTHONPATH={environ.get('PYTHONPATH')}, DEV_RUN_REMOTE_FILE_PATH={environ.get('DEV_RUN_REMOTE_FILE_PATH')}, UNIFLOW_DEBUG_SITECUSTOMIZE={environ.get('UNIFLOW_DEBUG_SITECUSTOMIZE')}")
+                log.info(f"Environment variables set: PYTHONPATH={environ.get('PYTHONPATH')}, DEV_RUN_REMOTE_FILE_PATH={environ.get('DEV_RUN_REMOTE_FILE_PATH')}")
 
         # Log environment variables after apply_local_changes
         for k, v in environ.items():
@@ -260,8 +258,6 @@ class RemoteRunTemporal:
                 # We append the uniflow/core directory so Python can auto-import sitecustomize.py
                 existing_pythonpath = environ.get("PYTHONPATH", "/app")
                 environ["PYTHONPATH"] = f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
-                # Enable debug logging for sitecustomize
-                environ["UNIFLOW_DEBUG_SITECUSTOMIZE"] = "1"
             
         cmd = ["temporal", "workflow", "start"]
 
