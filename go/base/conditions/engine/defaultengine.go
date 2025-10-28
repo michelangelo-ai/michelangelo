@@ -23,7 +23,6 @@ const (
 	maxRetryAttempts                      = 3
 )
 
-
 var _ conditionInterfaces.Engine[client.Object] = &DefaultEngine[client.Object]{}
 
 type DefaultEngine[T client.Object] struct {
@@ -185,11 +184,11 @@ func (e *DefaultEngine[T]) createRetryCondition(actorType string, attempts int32
 	metadata, _ := pbtypes.MarshalAny(retryStruct)
 
 	return &api.Condition{
-		Type:   actorType,
-		Status: api.CONDITION_STATUS_UNKNOWN,
-		Reason: fmt.Sprintf("retry_attempt_%d", attempts),
-		Message: fmt.Sprintf("Actor failed on attempt %d/%d: %s", attempts, maxRetryAttempts, errorMsg),
-		Metadata: metadata,
+		Type:                 actorType,
+		Status:               api.CONDITION_STATUS_UNKNOWN,
+		Reason:               fmt.Sprintf("retry_attempt_%d", attempts),
+		Message:              fmt.Sprintf("Actor failed on attempt %d/%d: %s", attempts, maxRetryAttempts, errorMsg),
+		Metadata:             metadata,
 		LastUpdatedTimestamp: time.Now().UnixMilli(),
 	}
 }
