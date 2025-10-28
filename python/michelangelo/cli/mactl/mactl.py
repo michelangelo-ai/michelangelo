@@ -519,7 +519,9 @@ def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[M
     return MessageClass
 
 
-def read_plugins(crd: CRD, user_command_action: str, crds: dict[str, CRD], channel: Channel) -> None:
+def read_plugins(
+    crd: CRD, user_command_action: str, crds: dict[str, CRD], channel: Channel
+) -> None:
     """
     Read and apply plugins for a given crd.
     """

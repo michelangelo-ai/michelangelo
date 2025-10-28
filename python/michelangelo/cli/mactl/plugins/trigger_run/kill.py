@@ -45,16 +45,14 @@ def generate_kill(crd: CRD, channel: Channel):
         if not _yes:
             resource_type = _self.name.replace("_", " ")
             confirmation = input(f" > kill '{_name}' {resource_type}? [y/N] ")
-            if confirmation.lower() not in ['y', 'yes']:
+            if confirmation.lower() not in ["y", "yes"]:
                 print("Kill operation cancelled.")
                 return None
 
         current_resource = _self.get(_namespace, _name)
         _LOG.info("Retrieved resource for kill: %r", current_resource)
 
-        current_dict = MessageToDict(
-            current_resource, preserving_proto_field_name=True
-        )
+        current_dict = MessageToDict(current_resource, preserving_proto_field_name=True)
 
         resource_name = _self.name
         if resource_name in current_dict and "spec" in current_dict[resource_name]:
@@ -89,13 +87,17 @@ def generate_kill(crd: CRD, channel: Channel):
 
         response_dict = MessageToDict(response, preserving_proto_field_name=True)
         resource_name = _self.name
-        if (resource_name in response_dict and
-            "spec" in response_dict[resource_name] and
-            response_dict[resource_name]["spec"].get("kill") is True):
+        if (
+            resource_name in response_dict
+            and "spec" in response_dict[resource_name]
+            and response_dict[resource_name]["spec"].get("kill") is True
+        ):
             _LOG.info("Kill operation successfully set spec.kill=true")
         else:
             _LOG.error("Kill operation failed: spec.kill not set to true in response")
-            raise RuntimeError(f"Kill operation failed for {resource_name}: spec.kill not properly set")
+            raise RuntimeError(
+                f"Kill operation failed for {resource_name}: spec.kill not properly set"
+            )
 
         _LOG.info("Kill operation completed (%r): %r", type(response), response)
         return response

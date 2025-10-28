@@ -171,11 +171,15 @@ def convert_crd_metadata_pipeline_dev_run(
     # Extract resume_from parameter if present
     resume_from = yaml_dict.get("resume_from")
 
-    pipeline_dev_run_cr = generate_pipeline_dev_run_object(yaml_dict, pipeline_spec, resume_from)
+    pipeline_dev_run_cr = generate_pipeline_dev_run_object(
+        yaml_dict, pipeline_spec, resume_from
+    )
     return {"pipeline_run": pipeline_dev_run_cr}
 
 
-def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict, resume_from: str = None) -> dict:
+def generate_pipeline_dev_run_object(
+    yaml_dict: dict, pipeline_spec: dict, resume_from: str = None
+) -> dict:
     """
     Generate Pipeline Dev Run CR as dictionary.
 
@@ -190,7 +194,10 @@ def generate_pipeline_dev_run_object(yaml_dict: dict, pipeline_spec: dict, resum
     pipeline_run_name = generate_pipeline_run_name()
 
     pipeline_run_obj = generate_pipeline_run_object(
-        run_name=pipeline_run_name, pipeline_name=pipeline_name, namespace=namespace, resume_from=resume_from
+        run_name=pipeline_run_name,
+        pipeline_name=pipeline_name,
+        namespace=namespace,
+        resume_from=resume_from,
     )
 
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})

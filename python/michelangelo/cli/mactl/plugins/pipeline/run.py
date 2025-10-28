@@ -133,7 +133,10 @@ def convert_crd_metadata_pipeline_run(
     )
 
     pipeline_run = generate_pipeline_run_object(
-        run_name=run_name, pipeline_name=pipeline_name, namespace=namespace, resume_from=resume_from
+        run_name=run_name,
+        pipeline_name=pipeline_name,
+        namespace=namespace,
+        resume_from=resume_from,
     )
 
     return {"pipeline_run": pipeline_run}
@@ -200,7 +203,10 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
         dict: Resume spec dictionary matching the Resume proto message
     """
     if not resume_from:
-        _LOG.error("Invalid resume_from format. Expected 'pipeline_run_name' or 'pipeline_run_name:step_name', got: %r", resume_from)
+        _LOG.error(
+            "Invalid resume_from format. Expected 'pipeline_run_name' or 'pipeline_run_name:step_name', got: %r",
+            resume_from,
+        )
         return None
 
     # Check if step name is provided
@@ -216,7 +222,7 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
             "name": pipeline_run_name,
             "namespace": namespace,
         },
-        "resumeFrom": resume_from_list
+        "resumeFrom": resume_from_list,
     }
 
     _LOG.info("Parsed resume_from '%s' to resume spec: %r", resume_from, resume_spec)
