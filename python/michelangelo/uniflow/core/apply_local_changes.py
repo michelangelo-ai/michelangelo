@@ -30,17 +30,35 @@ class UniflowDevRunFileBuilder(ABC):
         pass
 
     def get_random_file_name(self) -> str:
+        """
+        Get a random file name for the tarball.
+        
+        Returns:
+            The random file name, or None if the random file name is not set
+        """
         date_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
         random_suffix = uuid.uuid4().hex[:8]
         prefix = self._pipeline if self._pipeline else "uniflow"
         return f"{prefix}-{date_str}-{random_suffix}.tar.gz"
 
     def get_file_name(self) -> str:
+        """
+        Get the file name for the tarball.
+        
+        Returns:
+            The file name, or None if the file name is not set
+        """
         if self._file_name is None:
             self._file_name = self.get_random_file_name()
         return self._file_name
 
     def get_remote_file_path(self) -> str:
+        """
+        Get the remote file path for the tarball.
+        
+        Returns:
+            The remote file path, or None if the remote file path is not set
+        """
         base_path = os.environ.get("UF_BASE_PROJECTS_PATH") or _DEFAULT_BASE_PROJECTS_PATH
         if self._remote_file_path is None:
             if self._project:
@@ -53,6 +71,12 @@ class UniflowDevRunFileBuilder(ABC):
         return self._remote_file_path
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
+        """
+        Create a tarball of the changed files in the Git repository.
+
+        Returns:
+            The tarball as bytes, or None if no changed files are found
+        """
         commit_sha = self.get_git_sha()
         
         # Get the Git root directory
@@ -107,6 +131,12 @@ class UniflowDevRunFileBuilder(ABC):
         return bb.getvalue()
 
     def create_and_upload_tarball(self) -> str:
+        """
+        Create a tarball of the changed files in the Git repository and upload it to the remote storage.
+        
+        Returns:
+            The remote file path, or None if the remote file path is not set
+        """
         with tempfile.TemporaryDirectory() as tmp_dir:
             local_path = os.path.join(tmp_dir, self.get_file_name())
             tarball = self.create_diff_tarball_bytes()
@@ -126,6 +156,19 @@ class UniflowDevRunFileBuilderOSS(UniflowDevRunFileBuilder):
         self._docker_image = docker_image
 
     def get_git_sha(self) -> str:
+        """
+        Get the Git SHA from the Docker image.
+
+        Args:
+            docker_image: Docker image to get the Git SHA from
+        
+        Returns:
+            The Git SHA
+        
+        Raises:
+            ValueError: If the Git SHA is not found in the image labels or environment variables
+            Exception: If the Docker image is not found
+        """
         # Lazy import docker to avoid dependency issues in containers
         import docker
         
