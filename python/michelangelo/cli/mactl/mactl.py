@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import partial
@@ -9,7 +10,6 @@ from os import getenv, environ
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Union
-from uuid import uuid4
 import logging
 import re
 import sys
@@ -97,6 +97,27 @@ def bind_signature(signature):
         return wrapper
 
     return decorator
+
+
+def deep_update(d: MutableMapping, u: MutableMapping):
+    """
+    Update dict-like object in deep way.
+
+    ```py
+    d1 = {'a': {'a1': 1, 'a2': 2}}
+    d2 = {'a': {'a1': 7, 'a3': 9}}
+
+    deep_update(d1, d2)
+    print(d1)
+    # {'a': {'a1': 7, 'a2': 2, 'a3': 9}}
+    ```
+    """
+    for k, v in u.items():
+        if isinstance(v, MutableMapping) and isinstance(d.get(k), MutableMapping):
+            deep_update(d[k], v)
+        else:
+            d[k] = v
+    return d
 
 
 def get_single_arg(arguments: dict, key: str) -> str:
@@ -493,9 +514,10 @@ class CRD:
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
     ) -> Message:
-        """ """
-
-        original_crd_dict = MessageToDict(
+        """
+        Read a YAML file and update the original CRD request instance.
+        """
+        original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
         )
         _LOG.debug("Original CRD dict: %r", original_crd_dict)
@@ -503,10 +525,8 @@ class CRD:
         yaml_dict = yaml_to_dict(yaml_path_string)
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
 
-        original_crd_dict[self.name]["spec"].update(yaml_dict["spec"])
-        original_crd_dict[self.name]["metadata"]["generation"] = str(
-            int(original_crd_dict[self.name]["metadata"]["generation"]) + 1
-        )
+        deep_update(original_crd_dict[self.name], yaml_dict)
+        _LOG.debug("Updated CRD config dict: %r", original_crd_dict)
 
         res = input_class()
         ParseDict(original_crd_dict, res)
