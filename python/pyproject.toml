@@ -65,6 +65,9 @@ example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs"
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
+[tool.poetry.group.dev.dependencies]
+docker = "^7.1.0"
+
 [tool.pytest.ini_options]
 pythonpath = [
   "."

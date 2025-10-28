@@ -14,6 +14,7 @@ import io
 # Concrete implementation for testing abstract base class
 class _TestableFileBuilder(UniflowDevRunFileBuilder):
     """Concrete implementation for testing abstract base class"""
+
     def get_git_sha(self):
         return "0241feca9a6a681c917c3bb712dcb62918522aed"
 
@@ -64,7 +65,7 @@ class TestApplyLocalChanges(unittest.TestCase):
         """Test fallback to _DEFAULT_BASE_PROJECTS_PATH when env var is not set"""
         if "UF_BASE_PROJECTS_PATH" in os.environ:
             del os.environ["UF_BASE_PROJECTS_PATH"]
-        
+
         # Create a new builder without the env var set
         builder = _TestableFileBuilder(
             project="my_project",
@@ -80,7 +81,7 @@ class TestApplyLocalChanges(unittest.TestCase):
             tmp_dir_path = Path(tmp_dir)
             git_dir = tmp_dir_path / ".git"
             git_dir.mkdir()
-            
+
             python_dir = tmp_dir_path / "python"
             python_dir.mkdir()
             test_file = python_dir / "test.py"
@@ -92,24 +93,24 @@ class TestApplyLocalChanges(unittest.TestCase):
             ):
                 # Mock git rev-parse to return repo root
                 def run_side_effect(*args, **kwargs):
-                    cmd = args[0] if args else kwargs.get('args', [])
-                    if 'rev-parse --show-toplevel' in ' '.join(cmd):
+                    cmd = args[0] if args else kwargs.get("args", [])
+                    if "rev-parse --show-toplevel" in " ".join(cmd):
                         return MagicMock(stdout=str(tmp_dir_path), returncode=0)
-                    elif 'diff --name-only' in ' '.join(cmd):
+                    elif "diff --name-only" in " ".join(cmd):
                         return MagicMock(stdout="python/test.py", returncode=0)
-                    elif 'ls-files --others' in ' '.join(cmd):
+                    elif "ls-files --others" in " ".join(cmd):
                         return MagicMock(stdout="", returncode=0)
                     return MagicMock(stdout="", returncode=0)
 
                 mock_run.side_effect = run_side_effect
-                
+
                 self.builder.get_git_sha = MagicMock(return_value="abc123")
                 tarball_bytes = self.builder.create_diff_tarball_bytes()
-                
+
                 # Verify tarball contains file without python/ prefix
                 if tarball_bytes:
                     tar_io = io.BytesIO(tarball_bytes)
-                    with tarfile.open(fileobj=tar_io, mode='r:gz') as tar:
+                    with tarfile.open(fileobj=tar_io, mode="r:gz") as tar:
                         names = tar.getnames()
                         # Should have "test.py" not "python/test.py"
                         self.assertTrue(any("test.py" in name for name in names))
@@ -150,7 +151,7 @@ class TestApplyLocalChanges(unittest.TestCase):
             self.assertEqual(result, "")
             mock_tarball.assert_called_once()
             mock_upload.assert_not_called()
-    
+
     def test_get_git_sha(self):
         self.builder.get_git_sha = MagicMock(
             return_value="0241feca9a6a681c917c3bb712dcb62918522aed"
@@ -166,7 +167,7 @@ class TestUniflowDevRunFileBuilderOSS(unittest.TestCase):
         self.builder = UniflowDevRunFileBuilderOSS(
             project="test_project",
             pipeline="test_pipeline",
-            docker_image="examples:latest"
+            docker_image="examples:latest",
         )
 
     def test_init(self):
@@ -178,124 +179,129 @@ class TestUniflowDevRunFileBuilderOSS(unittest.TestCase):
     def test_get_git_sha_from_label_git_commit_actual(self):
         """Test getting Git SHA from git.commit label (actual implementation)"""
         # Patch docker inside the method where it's imported
-        with patch('docker.from_env') as mock_from_env:
+        with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
-            mock_image.labels = {'git.commit': 'abc123def456'}
+            mock_image.labels = {"git.commit": "abc123def456"}
             mock_client.images.get.return_value = mock_image
             mock_from_env.return_value = mock_client
 
             git_sha = self.builder.get_git_sha()
-            
-            self.assertEqual(git_sha, 'abc123def456')
+
+            self.assertEqual(git_sha, "abc123def456")
             mock_client.images.get.assert_called_once_with("examples:latest")
 
     def test_get_git_sha_from_label_git_sha(self):
         """Test getting Git SHA from git.sha label"""
-        with patch('docker.from_env') as mock_from_env:
+        with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
-            mock_image.labels = {'git.sha': 'xyz789abc123'}
+            mock_image.labels = {"git.sha": "xyz789abc123"}
             mock_client.images.get.return_value = mock_image
             mock_from_env.return_value = mock_client
 
             git_sha = self.builder.get_git_sha()
-            
-            self.assertEqual(git_sha, 'xyz789abc123')
+
+            self.assertEqual(git_sha, "xyz789abc123")
 
     def test_get_git_sha_from_env_var(self):
         """Test getting Git SHA from GIT_SHA environment variable"""
-        with patch('docker.from_env') as mock_from_env:
+        with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
             mock_image.labels = {}
             mock_image.attrs = {
-                'Config': {
-                    'Env': ['PATH=/usr/bin', 'GIT_SHA=env123sha456', 'HOME=/root']
+                "Config": {
+                    "Env": ["PATH=/usr/bin", "GIT_SHA=env123sha456", "HOME=/root"]
                 }
             }
             mock_client.images.get.return_value = mock_image
             mock_from_env.return_value = mock_client
 
             git_sha = self.builder.get_git_sha()
-            
-            self.assertEqual(git_sha, 'env123sha456')
+
+            self.assertEqual(git_sha, "env123sha456")
 
     def test_get_git_sha_not_found(self):
         """Test error when Git SHA is not found"""
-        with patch('docker.from_env') as mock_from_env:
+        with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_image = MagicMock()
             mock_image.labels = {}
-            mock_image.attrs = {'Config': {'Env': ['PATH=/usr/bin']}}
+            mock_image.attrs = {"Config": {"Env": ["PATH=/usr/bin"]}}
             mock_client.images.get.return_value = mock_image
             mock_from_env.return_value = mock_client
 
             with self.assertRaises(ValueError) as ctx:
                 self.builder.get_git_sha()
-            
-            self.assertIn("Git SHA not found in image labels or environment variables", str(ctx.exception))
+
+            self.assertIn(
+                "Git SHA not found in image labels or environment variables",
+                str(ctx.exception),
+            )
 
     def test_get_git_sha_docker_error(self):
         """Test error when Docker fails"""
-        with patch('docker.from_env') as mock_from_env:
+        with patch("docker.from_env") as mock_from_env:
             mock_client = MagicMock()
             mock_client.images.get.side_effect = Exception("Docker daemon not running")
             mock_from_env.return_value = mock_client
 
             with self.assertRaises(ValueError) as ctx:
                 self.builder.get_git_sha()
-            
+
             self.assertIn("Failed to get Git SHA from image", str(ctx.exception))
             self.assertIn("Docker daemon not running", str(ctx.exception))
 
-    @patch('builtins.open', new_callable=mock_open, read_data=b'tarball content')
-    @patch('michelangelo.uniflow.core.apply_local_changes.fsspec.open')
+    @patch("builtins.open", new_callable=mock_open, read_data=b"tarball content")
+    @patch("michelangelo.uniflow.core.apply_local_changes.fsspec.open")
     def test_upload_tarball_success(self, mock_fsspec_open, mock_builtin_open):
         """Test successful tarball upload"""
         mock_remote_file = MagicMock()
         mock_fsspec_open.return_value.__enter__.return_value = mock_remote_file
 
         self.builder.upload_tarball(
-            local_path="/tmp/test.tar.gz",
-            remote_path="s3://bucket/test.tar.gz"
+            local_path="/tmp/test.tar.gz", remote_path="s3://bucket/test.tar.gz"
         )
 
-        mock_builtin_open.assert_called_once_with("/tmp/test.tar.gz", 'rb')
+        mock_builtin_open.assert_called_once_with("/tmp/test.tar.gz", "rb")
         mock_fsspec_open.assert_called_once_with("s3://bucket/test.tar.gz", "wb")
-        mock_remote_file.write.assert_called_once_with(b'tarball content')
+        mock_remote_file.write.assert_called_once_with(b"tarball content")
 
-    @patch('builtins.open', new_callable=mock_open, read_data=b'tarball content')
-    @patch('michelangelo.uniflow.core.apply_local_changes.fsspec.open')
+    @patch("builtins.open", new_callable=mock_open, read_data=b"tarball content")
+    @patch("michelangelo.uniflow.core.apply_local_changes.fsspec.open")
     def test_upload_tarball_failure(self, mock_fsspec_open, mock_builtin_open):
         """Test tarball upload failure"""
         mock_fsspec_open.side_effect = Exception("S3 connection failed")
 
         with self.assertRaises(Exception) as ctx:
             self.builder.upload_tarball(
-                local_path="/tmp/test.tar.gz",
-                remote_path="s3://bucket/test.tar.gz"
+                local_path="/tmp/test.tar.gz", remote_path="s3://bucket/test.tar.gz"
             )
-        
+
         self.assertIn("S3 connection failed", str(ctx.exception))
 
     def test_build_and_upload_tarball_integration(self):
         """Test create_and_upload_tarball integration"""
         with (
-            patch('docker.from_env') as mock_from_env,
-            patch('michelangelo.uniflow.core.apply_local_changes.UniflowDevRunFileBuilder.create_diff_tarball_bytes') as mock_create_tarball,
-            patch('builtins.open', new_callable=mock_open),
-            patch('michelangelo.uniflow.core.apply_local_changes.fsspec.open') as mock_fsspec_open,
+            patch("docker.from_env") as mock_from_env,
+            patch(
+                "michelangelo.uniflow.core.apply_local_changes.UniflowDevRunFileBuilder.create_diff_tarball_bytes"
+            ) as mock_create_tarball,
+            patch("builtins.open", new_callable=mock_open),
+            patch(
+                "michelangelo.uniflow.core.apply_local_changes.fsspec.open"
+            ) as mock_fsspec_open,
         ):
             # Mock Docker client
             mock_client = MagicMock()
             mock_image = MagicMock()
-            mock_image.labels = {'git.commit': 'abc123'}
+            mock_image.labels = {"git.commit": "abc123"}
             mock_client.images.get.return_value = mock_image
             mock_from_env.return_value = mock_client
 
             # Mock tarball creation
-            mock_create_tarball.return_value = b'fake tarball bytes'
+            mock_create_tarball.return_value = b"fake tarball bytes"
 
             # Mock fsspec upload
             mock_remote_file = MagicMock()
@@ -306,6 +312,6 @@ class TestUniflowDevRunFileBuilderOSS(unittest.TestCase):
             # Verify result is a remote path
             self.assertTrue(result.startswith("s3://") or result.startswith("/"))
             self.assertTrue(result.endswith(".tar.gz"))
-            
+
             # Verify create_diff_tarball_bytes was called
             mock_create_tarball.assert_called_once()

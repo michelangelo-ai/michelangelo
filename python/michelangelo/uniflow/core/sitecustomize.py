@@ -29,7 +29,9 @@ class StorageDownloader(ABC):
     """Abstract interface for downloading files from remote storage."""
 
     @abstractmethod
-    def download(self, remote_path: str, local_path: Path, logger: logging.Logger) -> bool:
+    def download(
+        self, remote_path: str, local_path: Path, logger: logging.Logger
+    ) -> bool:
         """
         Download a file from remote storage to local path.
 
@@ -47,7 +49,9 @@ class StorageDownloader(ABC):
 class FsspecDownloader(StorageDownloader):
     """Downloader using fsspec for OSS S3-compatible storage."""
 
-    def download(self, remote_path: str, local_path: Path, logger: logging.Logger) -> bool:
+    def download(
+        self, remote_path: str, local_path: Path, logger: logging.Logger
+    ) -> bool:
         """Download using fsspec (works with S3, MinIO, etc)."""
         try:
             import fsspec
@@ -60,7 +64,7 @@ class FsspecDownloader(StorageDownloader):
             with fsspec.open(remote_path, "rb") as remote_file:
                 with open(local_path, "wb") as local_file:
                     local_file.write(remote_file.read())
-            
+
             logger.info(f"Successfully downloaded to: {local_path}")
             return True
         except Exception as e:
@@ -92,7 +96,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
         logger.info("DEV_RUN_REMOTE_FILE_PATH not set, skipping file sync")
         return False
     logger.info(f"Downloading development files from: {remote_file_path}")
-    
+
     try:
         with tempfile.TemporaryDirectory() as tmp_dir:
             tarball_path = Path(tmp_dir) / "dev_run.tar.gz"
@@ -150,7 +154,9 @@ def auto_run_if_enabled():
 
     if os.environ.get("DEV_RUN_REMOTE_FILE_PATH"):
         logger.info("Development file sync starting...")
-        success = download_and_extract_dev_files(downloader=FsspecDownloader(), logger=logger)
+        success = download_and_extract_dev_files(
+            downloader=FsspecDownloader(), logger=logger
+        )
         if success:
             logger.info("Development file sync completed")
         else:
@@ -158,13 +164,17 @@ def auto_run_if_enabled():
     else:
         logger.info("No development files to sync (DEV_RUN_REMOTE_FILE_PATH not set)")
 
+
 # Run the pre-run functionality automatically when this module is imported
 # (but not when executed directly as a script)
 if __name__ != "__main__":
     import sys
+
     print(f"[sitecustomize] Python executable: {sys.executable}")
     print(f"[sitecustomize] Working directory: {os.getcwd()}")
-    print(f"[sitecustomize] DEV_RUN_REMOTE_FILE_PATH: {os.environ.get('DEV_RUN_REMOTE_FILE_PATH', 'NOT SET')}")
+    print(
+        f"[sitecustomize] DEV_RUN_REMOTE_FILE_PATH: {os.environ.get('DEV_RUN_REMOTE_FILE_PATH', 'NOT SET')}"
+    )
 
     try:
         auto_run_if_enabled()
