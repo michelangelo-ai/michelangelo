@@ -22,7 +22,14 @@ from google.protobuf.descriptor_pb2 import (
 from google.protobuf.descriptor_pool import DescriptorPool
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
-from grpc import Channel, insecure_channel, secure_channel, ssl_channel_credentials
+from grpc import (
+    Channel,
+    RpcError,
+    StatusCode,
+    insecure_channel,
+    secure_channel,
+    ssl_channel_credentials,
+)
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 from yaml import YAMLError, safe_load as yaml_safe_load
 
@@ -215,12 +222,25 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     _file = get_single_arg(bound_args.arguments, "file")
 
     _namespace, _name = get_crd_namespace_and_name_from_yaml(_file)
-    message_instance = _self.get(_namespace, _name)
+
+    message_instance = None
+    try:
+        message_instance = _self.get(_namespace, _name)
+    except RpcError as err:
+        _LOG.debug("CRD %r / %r does not exist: %r", _namespace, _name, err)
+        if err.code() != StatusCode.NOT_FOUND:
+            raise
+
+    if message_instance is None:
+        # Create new CRD
+        _LOG.info("Create a new CRD")
+        return _self.create(_file)
+
+    # Update existing CRD
     _LOG.info("Retrieved message instance: %r", message_instance)
     request_input = _self.read_yaml_and_update_crd_request(
         crd_method_info.input_class, _file, message_instance
     )
-
     return crd_method_call(crd_method_info, request_input)
 
 
@@ -240,7 +260,6 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
         _file,
         _self.func_crd_metadata_converter,
     )
-
     return crd_method_call(crd_method_info, request_input)
 
 
@@ -345,6 +364,7 @@ class CRD:
         Generate apply function of this class.
         """
         self.generate_get(channel)
+        self.generate_create(channel)
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
