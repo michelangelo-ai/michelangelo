@@ -10,6 +10,7 @@ jobs:
   ruff:
     name: Python Run Ruff on Changed Files
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       pull-requests: write   # For commenting on PRs
       contents: read
@@ -111,23 +112,51 @@ jobs:
             const formatOutput = process.env.RUFF_FORMAT_OUTPUT.trim();
             const lintOutput = process.env.RUFF_LINT_OUTPUT.trim();
             const pr_number = context.payload.pull_request.number;
+
+            // Check if outputs have meaningful content (more than 1 line)
+            const formatLines = formatOutput.split('\n').length;
+            const lintLines = lintOutput.split('\n').length;
+            const hasFormatIssues = formatLines > 1;
+            const hasLintIssues = lintLines > 1;
+
             let body = "### 🛠 Ruff Check & Format Results\n";
 
-            if (formatOutput) {
+            if (hasFormatIssues) {
               body += "\n#### ⚠️ Format Issues Detected\n```\n" + formatOutput + "\n```\n";
               body += "📌 Please run `poetry run ruff format .` locally to fix formatting issues.\n\n";
             }
 
-            if (lintOutput) {
+            if (hasLintIssues) {
               body += "\n#### 🚨 Lint Issues Detected\n```\n" + lintOutput + "\n```\n";
             }
 
-            if (formatOutput || lintOutput) {
+            if (hasFormatIssues || hasLintIssues) {
               body += "\n🛠 Run `poetry install -E dev` to set up pre-commit hooks and apply fixes locally. (or run `poetry run pre-commit` before run git commit)";
-              github.rest.issues.createComment({
-                issue_number: pr_number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
+            } else {
+              body += "\n✅ No formatting or linting issues detected!";
             }
+
+            github.rest.issues.createComment({
+              issue_number: pr_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail if ruff format issues detected
+        if: env.CHANGED_FILES != ''
+        run: |
+          line_count=$(wc -l < ruff_format_output.txt)
+          if [ "$line_count" -gt 1 ]; then
+            echo "Error: Ruff format detected formatting issues (output has $line_count lines)"
+            exit 1
+          fi
+
+      - name: Fail if ruff lint issues detected
+        if: env.CHANGED_FILES != ''
+        run: |
+          line_count=$(wc -l < ruff_lint_output.txt)
+          if [ "$line_count" -gt 1 ]; then
+            echo "Error: Ruff lint detected issues (output has $line_count lines)"
+            exit 1
+          fi
