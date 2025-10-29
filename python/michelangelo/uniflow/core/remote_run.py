@@ -13,7 +13,7 @@ from typing import Callable, Optional
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.utils import dot_path
-from michelangelo.uniflow.core.apply_local_changes import UniflowDevRunFileBuilderOSS
+from michelangelo.uniflow.core.file_sync import UniflowFileSyncBuilderOSS
 
 log = logging.getLogger(__name__)
 
@@ -32,7 +32,7 @@ class RemoteRun:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
-    apply_local_changes: Optional[bool] = False
+    file_sync: Optional[bool] = False
     pipeline: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
@@ -64,10 +64,9 @@ class RemoteRun:
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 
-        if self.apply_local_changes:
-            dev_run_remote_file_path = UniflowDevRunFileBuilderOSS(
+        if self.file_sync:
+            dev_run_remote_file_path = UniflowFileSyncBuilderOSS(
                 project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
-                pipeline=self.pipeline,
                 docker_image=self.image,
             ).create_and_upload_tarball()
             if dev_run_remote_file_path:
@@ -85,7 +84,7 @@ class RemoteRun:
                     f"Environment variables set: PYTHONPATH={environ.get('PYTHONPATH')}, DEV_RUN_REMOTE_FILE_PATH={environ.get('DEV_RUN_REMOTE_FILE_PATH')}"
                 )
 
-        # Log environment variables after apply_local_changes
+        # Log environment variables after file_sync
         for k, v in environ.items():
             log.info("environ: %s: %s", k, v)
 
@@ -192,7 +191,7 @@ class RemoteRunTemporal:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
-    apply_local_changes: Optional[bool] = False
+    file_sync: Optional[bool] = False
     pipeline: Optional[str] = None
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
@@ -250,10 +249,9 @@ class RemoteRunTemporal:
         log.debug("input: %s", input_list)
         log.info("input: total bytes: %d", len(input_list))
 
-        if self.apply_local_changes:
-            dev_run_remote_file_path = UniflowDevRunFileBuilderOSS(
+        if self.file_sync:
+            dev_run_remote_file_path = UniflowFileSyncBuilderOSS(
                 project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
-                pipeline=self.pipeline,
                 docker_image=self.image,
             ).create_and_upload_tarball()
             if dev_run_remote_file_path:
