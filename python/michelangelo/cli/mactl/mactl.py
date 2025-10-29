@@ -63,7 +63,7 @@ METADATA = [
 ADDRESS = getenv("MACTL_ADDRESS", ADDRESS)
 # Allow overriding TLS usage via environment variable
 # Set to "true" to force TLS, "false" to force insecure, or leave unset for auto-detection
-USE_TLS = getenv("MACTL_USE_TLS", "true").lower()
+USE_TLS: bool = getenv("MACTL_USE_TLS", False).lower() in ("true", "1", "yes", "y")
 
 METADATA_STUB = METADATA + [("ttl", "600")]
 
@@ -948,22 +948,22 @@ def main(channel: Channel):
 
 
 if __name__ == "__main__":
-    if USE_TLS == "true":
-        # Force TLS
-        should_use_tls = True
-        print(f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {ADDRESS}")
-    else:
-        should_use_tls = False
-        print(
-            f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {ADDRESS}"
+    if USE_TLS:
+        _LOG.info(
+            "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+            USE_TLS,
+            ADDRESS,
         )
-
-    if should_use_tls:
         # Use secure TLS connection
-        credentials = ssl_channel_credentials()
-        with secure_channel(ADDRESS, credentials) as channel:
+        with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
             main(channel)
     else:
+        _LOG.info(
+            "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+            USE_TLS,
+            ADDRESS,
+        )
+        # Use secure TLS connection
         # Use insecure connection for local development
         with insecure_channel(ADDRESS) as channel:
             main(channel)
