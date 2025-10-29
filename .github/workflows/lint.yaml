@@ -10,6 +10,7 @@ jobs:
   ruff:
     name: Python Run Ruff on Changed Files
     runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       pull-requests: write   # For commenting on PRs
       contents: read
@@ -131,3 +132,21 @@ jobs:
                 body: body
               });
             }
+
+      - name: Fail if ruff format issues detected
+        if: env.CHANGED_FILES != ''
+        run: |
+          line_count=$(wc -l < ruff_format_output.txt)
+          if [ "$line_count" -gt 1 ]; then
+            echo "Error: Ruff format detected formatting issues (output has $line_count lines)"
+            exit 1
+          fi
+
+      - name: Fail if ruff lint issues detected
+        if: env.CHANGED_FILES != ''
+        run: |
+          line_count=$(wc -l < ruff_lint_output.txt)
+          if [ "$line_count" -gt 1 ]; then
+            echo "Error: Ruff lint detected issues (output has $line_count lines)"
+            exit 1
+          fi
