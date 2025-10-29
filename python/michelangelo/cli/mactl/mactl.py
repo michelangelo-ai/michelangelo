@@ -123,10 +123,11 @@ def get_single_arg(arguments: dict, key: str) -> str:
         The value of the single argument.
 
     Raises:
-        ValueError: If the argument is not in the dictionary or is not a string or a list with one element.
+        ValueError: If the argument is not a string or a list with one element.
+        KeyError: If the argument is missing.
     """
     if key not in arguments:
-        raise ValueError(f'argument "{key}" is required')
+        raise KeyError(f'argument "{key}" is required')
     value = arguments[key]
     if isinstance(value, str):
         return value
@@ -154,14 +155,17 @@ class CrdMethodInfo:
     output_class: type[Message]
 
 
-def get_crd(crd_method_info, namespace: str, name: str) -> Message:
+def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
     """
-    Run CRD.GET method with grpc reflection
+    Run CRD.method with grpc reflection with custom kwargs
+    (for input_class)
+
+    Please make sure crd method input_class can be constructed
+    with given kwargs.
     """
-    request_input = crd_method_info.input_class(
-        namespace=namespace,
-        name=name,
-    )
+    _LOG.debug("Prepare CRD method call (%r) with kwargs: %r", crd_method_call, kwargs)
+    # TODO (Hwamin): Add validation for kwargs keys/values
+    request_input = crd_method_info.input_class(**kwargs)
     return crd_method_call(crd_method_info, request_input)
 
 
@@ -194,10 +198,25 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    _name = get_single_arg(bound_args.arguments, "name")
-    _namespace = get_single_arg(bound_args.arguments, "namespace")
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "name": get_single_arg(bound_args.arguments, "name"),
+        },
+    )
 
-    return get_crd(crd_method_info, _namespace, _name)
+
+def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """
+    Default common CRD member method implementation for LIST method.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
+    )
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -206,14 +225,13 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    _namespace = get_single_arg(bound_args.arguments, "namespace")
-    _name = get_single_arg(bound_args.arguments, "name")
-
-    request_input = crd_method_info.input_class(
-        namespace=_namespace,
-        name=_name,
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "name": get_single_arg(bound_args.arguments, "name"),
+        },
     )
-    return crd_method_call(crd_method_info, request_input)
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -438,30 +456,11 @@ class CRD:
         """
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
-        methods, method_pool = get_methods_from_service(channel, self.full_name)
-        method_name = "List" + snake_to_camel(self.name)
-
-        _LOG.info("List intput/output of method %r", method_name)
-        try:
-            method_list = methods[method_name]
-        except KeyError:
-            _LOG.warning(
-                "Method %r not found in service %r",
-                method_name,
-                self.full_name,
-            )
-            _LOG.info("Method details: %r", methods)
-            return
-
-        _LOG.info("Create method input type: %r", method_list.input_type)
-        _LOG.info("Create method output type: %r", method_list.output_type)
-        input_class = get_message_class_by_name(method_pool, method_list.input_type[1:])
-        output_class = get_message_class_by_name(
-            method_pool, method_list.output_type[1:]
+        method_info = CrdMethodInfo(
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "List"),
         )
-        _LOG.info("Retrieved method input class: %r", input_class)
-        _LOG.info("Retrieved method output class: %r", output_class)
-
         list_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
             + [
@@ -470,41 +469,10 @@ class CRD:
             ]
         )
 
-        # TODO: Need to handle `StatusCode.RESOURCE_EXHAUSTED` issue (max size)
-        def list_func(*args, **kwargs):
-            _LOG.info("Start list_func for %r", self.full_name)
-            bound_args = list_func_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
-
-            _namespace = get_single_arg(bound_args.arguments, "namespace")
-
-            request_input = input_class(
-                namespace=_namespace,
-            )
-            _LOG.info(
-                "LIST Request input (%r) ready: %r",
-                type(request_input),
-                request_input,
-            )
-
-            method_fullname = f"/{self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-            stub_method = channel.unary_unary(
-                method_fullname,
-                request_serializer=input_class.SerializeToString,
-                response_deserializer=output_class.FromString,
-            )
-            response = stub_method(
-                request_input,
-                metadata=METADATA_STUB,
-                timeout=30,
-            )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
-            return response
-
-        list_func.__signature__ = list_func_signature  # type: ignore[attr-defined]
-        self.list = MethodType(list_func, self)
+        bound_func = partial(list_func_impl, method_info)
+        bound_func = bind_signature(list_func_signature)(bound_func)
+        self.list = MethodType(bound_func, self)
+        _LOG.debug("Generated LIST injected well: %r", self.list)
 
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
