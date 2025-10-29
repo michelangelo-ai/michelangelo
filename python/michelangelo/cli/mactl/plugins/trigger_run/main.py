@@ -1,4 +1,5 @@
 from logging import getLogger
+from types import MethodType
 
 from grpc import Channel
 
@@ -17,5 +18,5 @@ def apply_plugins(
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     if target_command == "kill":
-        generate_kill(crd, channel)
+        crd.generate_kill = MethodType(lambda self, ch: generate_kill(self, ch), crd)
     _LOG.info("Plugins applied successfully to crd: %s", crd)

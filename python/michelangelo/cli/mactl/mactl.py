@@ -408,30 +408,6 @@ class CRD:
         self.create = MethodType(bound_func, self)
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
-    def generate_run(self, channel: Channel):
-        """
-        Generate run function - delegated to plugins.
-        This is a placeholder that plugins will override.
-        """
-        _LOG.info("Generate RUN method for %r / %r", self.name, self.full_name)
-        pass
-
-    def generate_dev_run(self, channel: Channel):
-        """
-        Generate dev run function - delegated to plugins.
-        This is a placeholder that plugins will override.
-        """
-        _LOG.info("Generate DEV RUN method for %r / %r", self.name, self.full_name)
-        pass
-
-    def generate_kill(self, channel: Channel):
-        """
-        Generate kill function - delegated to plugins.
-        This is a placeholder that plugins will override.
-        """
-        _LOG.info("Generate KILL method for %r / %r", self.name, self.full_name)
-        pass
-
     def generate_list(self, channel: Channel):
         """
         Generate list function of this class.
@@ -915,6 +891,7 @@ def main(channel: Channel):
     _LOG.info("Got %d services: %r", len(services), services)
 
     crds = create_serivce_classes(services)
+    read_plugins(crds[user_command_crd], user_command_action, crds, channel)
 
     assert user_command_crd in crds, (
         f"Command {user_command_crd} not found in services: {list(crds)}"
@@ -927,7 +904,6 @@ def main(channel: Channel):
         crds[user_command_crd], f"generate_{user_command_action}"
     )
     func_action_generator(channel)
-    read_plugins(crds[user_command_crd], user_command_action, crds, channel)
 
     assert hasattr(crds[user_command_crd], user_command_action)
     func_action = getattr(crds[user_command_crd], user_command_action)
