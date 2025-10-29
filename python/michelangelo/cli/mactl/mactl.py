@@ -2,6 +2,7 @@
 MaCTL - Michelangelo Command Line Tool
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
+
 from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass
