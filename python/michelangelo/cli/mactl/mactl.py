@@ -419,6 +419,14 @@ class CRD:
         _LOG.info("Generate DEV RUN method for %r / %r", self.name, self.full_name)
         pass
 
+    def generate_kill(self, channel: Channel):
+        """
+        Generate kill function - delegated to plugins.
+        This is a placeholder that plugins will override.
+        """
+        _LOG.info("Generate KILL method for %r / %r", self.name, self.full_name)
+        pass
+
     def generate_list(self, channel: Channel):
         """
         Generate list function of this class.
@@ -544,7 +552,9 @@ def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[M
     return MessageClass
 
 
-def read_plugins(crd: CRD, user_command_action: str, crds: dict[str, CRD]) -> None:
+def read_plugins(
+    crd: CRD, user_command_action: str, crds: dict[str, CRD], channel: Channel
+) -> None:
     """
     Read and apply plugins for a given crd.
     """
@@ -835,6 +845,10 @@ def parse_args() -> tuple[list[str], dict[str, list[str]]]:
             key, value = arg.split("=", 1)
             key = key.lstrip("-")
             kwargs[key].append(value)
+        elif arg.startswith("--"):
+            # Handle boolean flags like --yes
+            key = arg.lstrip("-")
+            kwargs[key].append(True)
         else:
             args.append(arg)
     _LOG.info("Parsed arguments: %r  /  %r", args, kwargs)
@@ -856,6 +870,7 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
         "list",
         "run",
         "dev-run",
+        "kill",
     ]
 
     # For file-based actions, validate file parameter exists (preserving original validation)
@@ -907,7 +922,7 @@ def main(channel: Channel):
         crds[user_command_crd], f"generate_{user_command_action}"
     )
     func_action_generator(channel)
-    read_plugins(crds[user_command_crd], user_command_action, crds)
+    read_plugins(crds[user_command_crd], user_command_action, crds, channel)
 
     assert hasattr(crds[user_command_crd], user_command_action)
     func_action = getattr(crds[user_command_crd], user_command_action)
