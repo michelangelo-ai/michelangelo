@@ -843,17 +843,6 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
     user_command_crd = args[0]
     user_command_action = args[1]
 
-    assert user_command_action in [
-        "get",
-        "create",
-        "apply",
-        "delete",
-        "list",
-        "run",
-        "dev-run",
-        "kill",
-    ]
-
     # For file-based actions, validate file parameter exists (preserving original validation)
     if user_command_action in ["apply", "create", "dev-run"]:
         assert len(kwargs["file"]) == 1, f"exactly one yaml file is required! {kwargs}"
@@ -896,10 +885,13 @@ def main(channel: Channel):
     assert user_command_crd in crds, (
         f"Command {user_command_crd} not found in services: {list(crds)}"
     )
-    assert hasattr(crds[user_command_crd], f"generate_{user_command_action}"), (
-        f"Command '{crds[user_command_crd]}' does not have generator"
-        f" for '{user_command_action}' action."
-    )
+    if not hasattr(crds[user_command_crd], f"generate_{user_command_action}"):
+        raise ValueError(
+            f"Command '{user_command_crd}' does not support"
+            f" '{user_command_action}' action."
+        )
+
+    # Generate and run
     func_action_generator = getattr(
         crds[user_command_crd], f"generate_{user_command_action}"
     )
