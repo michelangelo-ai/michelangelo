@@ -287,3 +287,8 @@ MODULE.bazel.lock
 # Claude specific
 **/.claude/settings.local.json
 CLAUDE.local.md
+
+# MaCTL user configuration
+# .mactlrc.example is committed as documentation/template
+# Users create ~/.mactlrc for their personal configuration
+.mactlrc

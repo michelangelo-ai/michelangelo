@@ -1,0 +1,23 @@
+# MaCTL Configuration File Example
+# Copy this file to ~/.mactlrc and customize for your environment
+#
+# Usage:
+#   cp .mactlrc.example ~/.mactlrc
+#   vim ~/.mactlrc  # Edit with your settings
+
+address: "127.0.0.1:14566"  # API server address
+# use_tls: false            # Use TLS for secure connection (default: true)
+
+# Advanced: Custom gRPC metadata
+# WARNING: Setting metadata COMPLETELY REPLACES all default headers
+# Built-in defaults: rpc-caller: "grpcurl", rpc-service: "ma-apiserver", rpc-encoding: "proto"
+# Only uncomment if you need custom headers AND know what you're doing
+# metadata:
+#   rpc-caller: "grpcurl"
+#   rpc-service: "ma-apiserver"
+#   rpc-encoding: "proto"
+
+# Configuration priority (highest to lowest):
+# 1. Environment variables (MACTL_ADDRESS, MACTL_USE_TLS)
+# 2. This file (~/.mactlrc)
+# 3. Built-in defaults
