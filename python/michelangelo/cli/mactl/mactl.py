@@ -198,6 +198,12 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
+    if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
+        _LOG.debug("No name argument passed. List CRD in the namespace.")
+        _self: CRD = bound_args.arguments["self"]
+        _self.generate_list(channel)
+        return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
+
     return crd_method_call_kwargs(
         crd_method_info,
         **{
@@ -257,6 +263,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     if message_instance is None:
         # Create new CRD
         _LOG.info("Create a new CRD")
+        _self.generate_create(channel)
         return _self.create(_file)
 
     # Update existing CRD
@@ -371,10 +378,8 @@ class CRD:
         )
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-                for name in ["namespace", "name"]
-            ]
+            + [Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD)]
+            + [Parameter("name", Parameter.POSITIONAL_OR_KEYWORD, default="")]
         )
 
         bound_func = partial(get_func_impl, method_info)
@@ -387,7 +392,6 @@ class CRD:
         Generate apply function of this class.
         """
         self.generate_get(channel)
-        self.generate_create(channel)
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
