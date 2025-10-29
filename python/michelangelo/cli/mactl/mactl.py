@@ -63,7 +63,7 @@ METADATA = [
 ADDRESS = getenv("MACTL_ADDRESS", ADDRESS)
 # Allow overriding TLS usage via environment variable
 # Set to "true" to force TLS, "false" to force insecure, or leave unset for auto-detection
-USE_TLS: bool = getenv("MACTL_USE_TLS", False).lower() in ("true", "1", "yes", "y")
+USE_TLS: bool = getenv("MACTL_USE_TLS", "false").lower() in ("true", "1", "yes", "y")
 
 METADATA_STUB = METADATA + [("ttl", "600")]
 
