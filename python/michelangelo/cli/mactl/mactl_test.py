@@ -520,38 +520,20 @@ class TLSConfigurationTest(TestCase):
     def test_use_tls_environment_variable_true(self):
         """Test that MACTL_USE_TLS=true is properly parsed"""
         # Need to reload the module to pick up new environment variable
-        import importlib
-        import michelangelo.cli.mactl.mactl
-
-        importlib.reload(michelangelo.cli.mactl.mactl)
-
-        from michelangelo.cli.mactl.mactl import USE_TLS
-
-        self.assertEqual(USE_TLS, "true")
+        reload(mactl)
+        self.assertEqual(mactl.USE_TLS, True)
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "TRUE"}, clear=False)
     def test_use_tls_environment_variable_case_insensitive(self):
         """Test that MACTL_USE_TLS is case insensitive and converts to lowercase"""
-        import importlib
-        import michelangelo.cli.mactl.mactl
-
-        importlib.reload(michelangelo.cli.mactl.mactl)
-
-        from michelangelo.cli.mactl.mactl import USE_TLS
-
-        self.assertEqual(USE_TLS, "true")
+        reload(mactl)
+        self.assertEqual(mactl.USE_TLS, True)
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "false"}, clear=False)
     def test_use_tls_environment_variable_false(self):
         """Test that MACTL_USE_TLS=false is properly parsed"""
-        import importlib
-        import michelangelo.cli.mactl.mactl
-
-        importlib.reload(michelangelo.cli.mactl.mactl)
-
-        from michelangelo.cli.mactl.mactl import USE_TLS
-
-        self.assertEqual(USE_TLS, "false")
+        reload(mactl)
+        self.assertEqual(mactl.USE_TLS, False)
 
     @patch.dict(os.environ, {}, clear=False)
     def test_use_tls_default_value(self):
@@ -559,27 +541,14 @@ class TLSConfigurationTest(TestCase):
         # Remove MACTL_USE_TLS if it exists
         if "MACTL_USE_TLS" in os.environ:
             del os.environ["MACTL_USE_TLS"]
-
-        import importlib
-        import michelangelo.cli.mactl.mactl
-
-        importlib.reload(michelangelo.cli.mactl.mactl)
-
-        from michelangelo.cli.mactl.mactl import USE_TLS
-
-        self.assertEqual(USE_TLS, "true")
+        reload(mactl)
+        self.assertEqual(mactl.USE_TLS, False)
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "invalid"}, clear=False)
     def test_use_tls_invalid_value(self):
         """Test that invalid values for MACTL_USE_TLS are handled"""
-        import importlib
-        import michelangelo.cli.mactl.mactl
-
-        importlib.reload(michelangelo.cli.mactl.mactl)
-
-        from michelangelo.cli.mactl.mactl import USE_TLS
-
-        self.assertEqual(USE_TLS, "invalid")  # Invalid values are preserved as-is
+        reload(mactl)
+        self.assertEqual(mactl.USE_TLS, False)
 
 
 class TLSConnectionTest(TestCase):
@@ -756,7 +725,7 @@ class TLSConnectionTest(TestCase):
             reload(mactl)
 
         self.assertEqual(mactl.ADDRESS, test_address)
-        self.assertEqual(mactl.USE_TLS, "true")
+        self.assertEqual(mactl.USE_TLS, True)
 
 
 class TLSErrorHandlingTest(TestCase):
