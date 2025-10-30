@@ -7,7 +7,7 @@
 
 [mactl]
 address = 127.0.0.1:14566
-use_tls = true
+use_tls = false
 
 # Advanced: Custom gRPC metadata
 # WARNING: Setting metadata COMPLETELY REPLACES all default headers
