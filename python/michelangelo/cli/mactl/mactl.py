@@ -89,10 +89,17 @@ METADATA = [
 _rc_config = _load_rc_config()
 
 # Apply configuration priority: env vars (highest) > RC file > defaults (lowest)
+# Allow overriding the API server address via environment variable
+# This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
 ADDRESS = getenv("MACTL_ADDRESS", _rc_config.get("address", ADDRESS))
 # Allow overriding TLS usage via environment variable
 # Set to "true" to force TLS, "false" to force insecure, or leave unset for auto-detection
-USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lower() in ("true", "1", "yes", "y")
+USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lower() in (
+    "true",
+    "1",
+    "yes",
+    "y",
+)
 if "metadata" in _rc_config:
     METADATA = list(_rc_config["metadata"].items())
 
