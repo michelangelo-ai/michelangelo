@@ -50,20 +50,21 @@ def _load_rc_config() -> dict:
 
     try:
         config.read(rc_file)
-        rc_config = {}
-
-        if "mactl" in config:
-            if "address" in config["mactl"]:
-                rc_config["address"] = config["mactl"]["address"]
-            if "use_tls" in config["mactl"]:
-                rc_config["use_tls"] = config["mactl"]["use_tls"]
-
-        if "metadata" in config:
-            rc_config["metadata"] = dict(config["metadata"])
-
-        return rc_config
     except Exception:
         return {}
+
+    rc_config = {}
+
+    if "mactl" in config:
+        if "address" in config["mactl"]:
+            rc_config["address"] = config["mactl"]["address"]
+        if "use_tls" in config["mactl"]:
+            rc_config["use_tls"] = config["mactl"]["use_tls"]
+
+    if "metadata" in config:
+        rc_config["metadata"] = dict(config["metadata"])
+
+    return rc_config
 
 
 ### For Uber-internal server ###
