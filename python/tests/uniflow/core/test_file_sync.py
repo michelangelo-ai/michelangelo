@@ -229,7 +229,7 @@ class TestUniflowFileSyncBuilderOSS(unittest.TestCase):
             mock_from_env.return_value = mock_client
 
             git_sha = self.builder.get_git_sha()
-            
+
             # Should return None instead of raising an exception
             self.assertIsNone(git_sha)
 
@@ -241,7 +241,7 @@ class TestUniflowFileSyncBuilderOSS(unittest.TestCase):
             mock_from_env.return_value = mock_client
 
             git_sha = self.builder.get_git_sha()
-            
+
             # Should return None instead of raising an exception
             self.assertIsNone(git_sha)
 
