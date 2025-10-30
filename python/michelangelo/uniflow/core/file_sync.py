@@ -33,7 +33,7 @@ class UniflowFileSyncBuilder(ABC):
     def get_random_file_name(self) -> str:
         """
         Get a random file name for the tarball.
-        
+
         Uses "uniflow" as the prefix for all file sync tarballs.
 
         Returns:
@@ -61,9 +61,7 @@ class UniflowFileSyncBuilder(ABC):
         Returns:
             The remote file path, or None if the remote file path is not set
         """
-        base_path = (
-            os.environ.get("UF_BASE_PROJECTS_PATH") or _DEFAULT_S3_PATH
-        )
+        base_path = os.environ.get("UF_BASE_PROJECTS_PATH") or _DEFAULT_S3_PATH
         if self._remote_file_path is None:
             if self._project:
                 self._remote_file_path = (
@@ -213,7 +211,7 @@ class UniflowFileSyncBuilderOSS(UniflowFileSyncBuilder):
                     git_sha = env.split("=", 1)[1]
                     log.info(f"Found Git SHA in environment variable: {git_sha}")
                     return git_sha
-            
+
             log.info(
                 f"Git SHA not found in Docker image '{docker_image}' labels or environment variables. "
                 "Will create tarball with all uncommitted changes."
