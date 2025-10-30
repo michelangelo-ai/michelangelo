@@ -4,7 +4,7 @@ from michelangelo.uniflow.core.file_sync import (
     UniflowFileSyncBuilderOSS,
 )
 from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open, call
+from unittest.mock import patch, MagicMock, mock_open
 import tempfile
 import os
 import tarfile
