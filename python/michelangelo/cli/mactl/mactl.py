@@ -926,5 +926,6 @@ def run():
     with insecure_channel(ADDRESS) as channel:
         return main(channel)
 
+
 if __name__ == "__main__":
     run()
