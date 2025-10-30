@@ -1,24 +1,12 @@
 from copy import deepcopy
 from logging import getLogger
-from os import getenv
 from pathlib import Path
-from uuid import uuid4
 
 from git import Repo
 from google.protobuf.message import Message
-from grpc import Channel
-
-from mactl import CRD, PWD
 
 
 _LOG = getLogger(__name__)
-
-
-def generate_apply(crd: CRD, channel: Channel):
-    _LOG.info("Generating `pipeline apply` crd for: %s", crd)
-
-    crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
-    crd.generate_apply(channel)
 
 
 def convert_crd_metadata_pipeline_apply(
@@ -35,7 +23,9 @@ def convert_crd_metadata_pipeline_apply(
     repo = Repo(".", search_parent_directories=True)
     _LOG.info("Current git repository info: %r", repo)
 
+    # TODO: update path retrieval logic
     res = {"spec": deepcopy(yaml_dict["spec"])}
+    """
     res["metadata"] = {
         "generateName": "",
         "generation": "0",
@@ -48,7 +38,7 @@ def convert_crd_metadata_pipeline_apply(
         "branch": repo.active_branch.name,
         "git_ref": repo.head.commit.hexsha,
     }
-    assert yaml_path.resolve().is_relative_to(PWD)
+    # assert yaml_path.resolve().is_relative_to(PWD)
     # "path": str(yaml_path.relative_to(PWD)),
     # TODO: retrieve path from Project.
     res["spec"]["manifest"] = {
@@ -58,4 +48,5 @@ def convert_crd_metadata_pipeline_apply(
     }
     res["spec"]["owner"] = {"name": getenv("UBER_LDAP_UID")}
     _LOG.debug("Converted CRD metadata: %r", res)
+    """
     return res

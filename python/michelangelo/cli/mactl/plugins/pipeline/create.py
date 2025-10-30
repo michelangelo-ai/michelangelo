@@ -1,18 +1,16 @@
-import json
-import tempfile
 from copy import deepcopy
 from logging import getLogger
 from os import getenv
 from pathlib import Path
 from uuid import uuid4
+import json
+import tempfile
 
 from git import Repo
 from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
 from google.protobuf.any_pb2 import Any
-from grpc import Channel
 
-from mactl import CRD
 from michelangelo.cli.mactl.utils import (
     run_subprocess_registration,
     read_subprocess_outputs,
@@ -153,13 +151,6 @@ def get_pipeline_config_and_tar(
             _LOG.warning("Could not read workflow function name file")
 
         return workflow_inputs, uniflow_tar_path, workflow_function_name
-
-
-def generate_create(crd: CRD, channel: Channel):
-    _LOG.info("Generating `pipeline create` crd for: %s", crd)
-
-    crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
-    crd.generate_create(channel)
 
 
 def convert_crd_metadata_pipeline_create(

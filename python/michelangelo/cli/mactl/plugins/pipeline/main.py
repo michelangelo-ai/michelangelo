@@ -1,10 +1,11 @@
 from logging import getLogger
+from types import MethodType
 
 from grpc import Channel
 
 from mactl import CRD
-from plugins.pipeline.apply import generate_apply
-from plugins.pipeline.create import generate_create
+from plugins.pipeline.apply import convert_crd_metadata_pipeline_apply
+from plugins.pipeline.create import convert_crd_metadata_pipeline_create
 from plugins.pipeline.run import generate_run, convert_crd_metadata_pipeline_run
 from plugins.pipeline.dev_run import (
     generate_dev_run,
@@ -23,13 +24,15 @@ def apply_plugins(
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     if target_command == "apply":
-        generate_apply(crd, channel)
+        crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
     if target_command == "create":
-        generate_create(crd, channel)
+        crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
-        generate_run(crd, channel)
+        crd.generate_run = MethodType(lambda self, ch: generate_run(self, ch), crd)
     if target_command == "dev_run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_dev_run
-        generate_dev_run(crd, channel)
+        crd.generate_dev_run = MethodType(
+            lambda self, ch: generate_dev_run(self, ch), crd
+        )
     _LOG.info("Plugins applied successfully to crd: %s", crd)
