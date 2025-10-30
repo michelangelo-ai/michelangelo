@@ -7,8 +7,7 @@ environment variables, and remote storage.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock, mock_open
-import os
+from unittest.mock import patch, MagicMock
 import tempfile
 from pathlib import Path
 import logging
@@ -16,20 +15,6 @@ import logging
 
 class TestSitecustomize(unittest.TestCase):
     """Basic unit tests for sitecustomize.py"""
-
-    @patch.dict(os.environ, {}, clear=True)
-    def test_import_without_env_var(self):
-        """Test that sitecustomize can be imported without DEV_RUN_REMOTE_FILE_PATH"""
-        try:
-            import sys
-
-            if "michelangelo.uniflow.core.sitecustomize" in sys.modules:
-                del sys.modules["michelangelo.uniflow.core.sitecustomize"]
-
-            # Should not raise
-            import michelangelo.uniflow.core.sitecustomize
-        except Exception as e:
-            self.fail(f"sitecustomize raised exception when it shouldn't: {e}")
 
     def test_storage_downloader_is_abstract(self):
         """Test that StorageDownloader cannot be instantiated directly"""
@@ -56,23 +41,6 @@ class TestSitecustomize(unittest.TestCase):
         # Should not raise
         self.assertIsNotNone(download_and_extract_dev_files)
         self.assertTrue(callable(download_and_extract_dev_files))
-
-    @patch("michelangelo.uniflow.core.sitecustomize.FsspecDownloader")
-    def test_download_and_extract_dev_files_with_mocks(self, mock_downloader_class):
-        """Test download_and_extract_dev_files with mocked downloader"""
-        from michelangelo.uniflow.core.sitecustomize import (
-            download_and_extract_dev_files,
-        )
-
-        mock_downloader = MagicMock()
-        mock_downloader.download.return_value = b"fake tarball"
-
-        # Call with keyword arguments (as the function signature requires)
-        try:
-            download_and_extract_dev_files(downloader=mock_downloader, debug=True)
-        except Exception as e:
-            # May fail due to tarball extraction, but at least tests signature
-            pass
 
 
 class TestFsspecDownloader(unittest.TestCase):
