@@ -19,14 +19,16 @@ func TestNewClient_EmptyConfig_ReturnsEmptyList(t *testing.T) {
 
 func TestNewClient_MultipleAzureProviders_CreatesMultipleClients(t *testing.T) {
 	config := Config{
-		StorageProviders: map[string]StorageProvider{
-			"azure-dev": {
-				Type:                "azure",
+		{
+			Name: "azure-dev",
+			StorageProvider: StorageProvider{
 				AzureStorageAccount: "devaccount",
 				AzureSASToken:       "devtoken",
 			},
-			"azure-prod": {
-				Type:                "azure",
+		},
+		{
+			Name: "azure-prod",
+			StorageProvider: StorageProvider{
 				AzureStorageAccount: "prodaccount",
 				AzureSASToken:       "prodtoken",
 				AzureEndpoint:       "https://custom.endpoint.net",
@@ -75,14 +77,11 @@ func TestNewClient_MultipleAzureProviders_CreatesMultipleClients(t *testing.T) {
 
 func TestNewClient_NonAzureProviders_SkipsNonAzure(t *testing.T) {
 	config := Config{
-		StorageProviders: map[string]StorageProvider{
-			"azure-dev": {
-				Type:                "azure",
+		{
+			Name: "azure-dev",
+			StorageProvider: StorageProvider{
 				AzureStorageAccount: "devaccount",
 				AzureSASToken:       "devtoken",
-			},
-			"s3-prod": {
-				Type: "s3", // Non-Azure provider should be skipped
 			},
 		},
 	}
@@ -105,7 +104,6 @@ func TestNewClient_NonAzureProviders_SkipsNonAzure(t *testing.T) {
 
 func TestNewAzureClientWithKey_Success(t *testing.T) {
 	config := StorageProvider{
-		Type:                "azure",
 		AzureStorageAccount: "testaccount",
 		AzureSASToken:       "testtoken",
 	}
@@ -131,7 +129,6 @@ func TestNewAzureClientWithKey_Success(t *testing.T) {
 
 func TestNewAzureClientWithKey_MissingStorageAccount(t *testing.T) {
 	config := StorageProvider{
-		Type:          "azure",
 		AzureSASToken: "testtoken",
 		// Missing AzureStorageAccount
 	}
@@ -149,7 +146,6 @@ func TestNewAzureClientWithKey_MissingStorageAccount(t *testing.T) {
 
 func TestNewAzureClientWithKey_MissingSASToken(t *testing.T) {
 	config := StorageProvider{
-		Type:                "azure",
 		AzureStorageAccount: "testaccount",
 		// Missing AzureSASToken
 	}

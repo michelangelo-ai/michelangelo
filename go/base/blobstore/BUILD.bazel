@@ -4,6 +4,7 @@ go_library(
     name = "go_default_library",
     srcs = [
         "blobstore.go",
+        "context_aware.go",
         "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/base/blobstore",
@@ -16,6 +17,9 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["blobstore_test.go"],
+    srcs = [
+        "blobstore_test.go",
+        "context_aware_test.go",
+    ],
     embed = [":go_default_library"],
 )

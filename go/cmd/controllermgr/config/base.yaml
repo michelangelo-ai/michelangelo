@@ -1,6 +1,6 @@
 controllermgr:
-  metricsBindAddress: ${METRICS_ADDRESS::8091}
-  healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
+  metricsBindAddress: ${METRICS_ADDRESS::8082}
+  healthProbeBindAddress: ${HEALTH_ADDRESS::8083}
   leaderElection: false
   leaderElectionID: decaf1259.michelangelo.uber.com
 
@@ -22,53 +22,53 @@ controllers:
     k8sBurst: 600
 
 # Multi-provider storage configuration
-# Uncomment and configure the providers you need
+# Each storage type (minio, azure, gcp) directly contains an array of providers
+# This enables clean separation and type-specific client initialization
+
+# MinIO/S3-compatible storage providers
 minio:
-  storageProviders:
-    # Local MinIO instance for development
-    minio-local:
-      type: "s3"
-      awsRegion: "us-east-1"
-      awsAccessKeyId: "minioadmin"
-      awsSecretAccessKey: "minioadmin"
-      awsEndpointUrl: "minio:9091"
+  - name: "minio-local"
+    awsRegion: "us-east-1"
+    awsAccessKeyId: "minioadmin"
+    awsSecretAccessKey: "minioadmin"
+    awsEndpointUrl: "minio:9091"
+    default: true
 
-    # AWS Sandbox Environment with environment credentials
-    # aws-sandbox:
-    #   type: "s3"
-    #   awsRegion: "us-west-2"
-    #   useEnvAws: true
+  - name: "aws-sharezone"
+    awsRegion: "us-west-2"
+    useEnvAws: true
 
-    # AWS Production Environment with IAM role authentication
-    # aws-prod:
-    #   type: "s3"
-    #   awsRegion: "us-east-1"
-    #   useIam: true
+  - name: "aws-company1"
+    awsRegion: "us-east-1"
+    useIam: true
 
-    # AWS Development Environment with static credentials
-    # aws-dev:
-    #   type: "s3"
-    #   awsRegion: "eu-west-1"
-    #   awsAccessKeyId: "AKIA..."
-    #   awsSecretAccessKey: "SECRET..."
+  - name: "aws-company2"
+    awsRegion: "eu-west-1"
+    awsAccessKeyId: "AKIA..."
+    awsSecretAccessKey: "SECRET..."
 
-  # Default provider - change to your preferred provider
-  defaultProvider: "minio-local"
+# Azure Blob Storage providers
+azure:
+  - name: "azure-sharezone"
+    azureStorageAccount: "sharedstorage"
+    azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
+    default: true
 
-# Azure Blob Storage configuration (uncomment if needed)
-# azure:
-#   storageProviders:
-#     # Azure Production Environment
-#     azure-prod:
-#       type: "azure"
-#       azureStorageAccount: "prodstorageacct"
-#       azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
+  - name: "azure-company1"
+    azureStorageAccount: "company1storage"
+    azureSASToken: "sv=..."
+
+  - name: "azure-company2"
+    azureStorageAccount: "company2storage"
+    azureSASToken: "sv=..."
+
+# Google Cloud Storage providers (future expansion)
+# gcp:
+#   - name: "gcp-sharezone"
+#     serviceAccountKey: "/path/to/key.json"
+#     projectId: "shared-project"
+#     default: true
 #
-#     # Azure Development Environment
-#     azure-dev:
-#       type: "azure"
-#       azureStorageAccount: "devstorageacct"
-#       azureSASToken: "sv=..."
-#
-#   # Default Azure provider
-#   defaultProvider: "azure-prod"
+#   - name: "gcp-company1"
+#     serviceAccountKey: "/path/to/company1-key.json"
+#     projectId: "company1-project"

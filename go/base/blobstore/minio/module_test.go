@@ -33,16 +33,18 @@ func TestNewClient_EmptyConfig_CreatesDefaultClient(t *testing.T) {
 
 func TestNewClient_MultipleProviders_CreatesMultipleClients(t *testing.T) {
 	config := Config{
-		StorageProviders: map[string]StorageProvider{
-			"aws-prod": {
-				Type:               "s3",
+		{
+			Name: "aws-prod",
+			StorageProvider: StorageProvider{
 				AwsRegion:          "us-west-2",
 				AwsAccessKeyId:     "testkey",
 				AwsSecretAccessKey: "testsecret",
 				AwsEndpointUrl:     "s3.amazonaws.com",
 			},
-			"aws-dev": {
-				Type:               "s3",
+		},
+		{
+			Name: "aws-dev",
+			StorageProvider: StorageProvider{
 				AwsRegion:          "us-east-1",
 				AwsAccessKeyId:     "devkey",
 				AwsSecretAccessKey: "devsecret",
@@ -92,7 +94,6 @@ func TestNewClient_MultipleProviders_CreatesMultipleClients(t *testing.T) {
 
 func TestNewS3ClientWithKey_UseEnvAws(t *testing.T) {
 	config := StorageProvider{
-		Type:      "s3",
 		UseEnvAws: true,
 	}
 
@@ -117,7 +118,6 @@ func TestNewS3ClientWithKey_UseEnvAws(t *testing.T) {
 
 func TestNewS3ClientWithKey_StaticCredentials(t *testing.T) {
 	config := StorageProvider{
-		Type:               "s3",
 		AwsAccessKeyId:     "testkey",
 		AwsSecretAccessKey: "testsecret",
 		AwsEndpointUrl:     "localhost:9000",
@@ -134,16 +134,13 @@ func TestNewS3ClientWithKey_StaticCredentials(t *testing.T) {
 	}
 }
 
-func TestNewClient_NonS3Providers_SkipsNonS3(t *testing.T) {
+func TestNewClient_SingleProvider_CreatesOneClient(t *testing.T) {
 	config := Config{
-		StorageProviders: map[string]StorageProvider{
-			"aws-dev": {
-				Type:               "s3",
+		{
+			Name: "aws-dev",
+			StorageProvider: StorageProvider{
 				AwsAccessKeyId:     "devkey",
 				AwsSecretAccessKey: "devsecret",
-			},
-			"azure-prod": {
-				Type: "azure", // Non-S3 provider should be skipped
 			},
 		},
 	}
@@ -153,7 +150,7 @@ func TestNewClient_NonS3Providers_SkipsNonS3(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Should only create 1 S3 client, skipping the Azure provider
+	// Should create 1 S3 client
 	if len(clients) != 1 {
 		t.Fatalf("expected 1 S3 client, got %d", len(clients))
 	}

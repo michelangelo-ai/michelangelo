@@ -18,9 +18,9 @@ import (
 var Activities = (*activities)(nil)
 
 // activities holds implementations for different storage protocols.
-// The map keys represent protocol names, and the values are Storage implementations.
+// Uses context-aware blob store for transparent multi-tenant routing.
 type activities struct {
-	blobStore *blobstore.BlobStore
+	blobStore *blobstore.ContextAwareBlobStore
 }
 
 // Read attempts to read data from the specified path using the given protocol.
@@ -54,3 +54,5 @@ func (a *activities) Read(ctx context.Context, url string) (any, error) {
 	// Return the successful result.
 	return result, nil
 }
+
+// Note: ReadWithProvider method removed - provider routing is now transparent via context

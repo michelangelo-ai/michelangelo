@@ -102,7 +102,7 @@ func newClient(config Config) ([]BlobStoreClientOut, error) {
 
 	// Handle empty configuration by creating default AWS S3 client
 	// This ensures backward compatibility and provides sensible defaults
-	if len(config.StorageProviders) == 0 {
+	if len(config) == 0 {
 		defaultClient, err := newDefaultS3Client()
 		if err != nil {
 			// Follow error handling guidelines: wrap with operation context
@@ -112,16 +112,12 @@ func newClient(config Config) ([]BlobStoreClientOut, error) {
 	}
 
 	// Create clients for each configured S3 storage provider
-	// Skip non-S3 providers to allow mixed storage configurations (S3 + Azure)
-	for providerKey, providerConfig := range config.StorageProviders {
-		if providerConfig.Type != "s3" {
-			continue // Skip non-S3 providers (e.g., Azure providers in mixed config)
-		}
-
-		client, err := newS3ClientWithKey(providerKey, providerConfig)
+	// Process all providers in the array - the "minio" key indicates S3-compatible storage
+	for _, providerConfig := range config {
+		client, err := newS3ClientWithKey(providerConfig.Name, providerConfig.StorageProvider)
 		if err != nil {
-			// Include provider key in error for debugging multi-provider scenarios
-			return nil, fmt.Errorf("create S3 client for provider %q: %w", providerKey, err)
+			// Include provider name in error for debugging multi-provider scenarios
+			return nil, fmt.Errorf("create S3 client for provider %q: %w", providerConfig.Name, err)
 		}
 		clients = append(clients, client)
 	}

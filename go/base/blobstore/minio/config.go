@@ -3,24 +3,20 @@
 //
 // Usage Example:
 //
-//	# YAML configuration for multiple MinIO/S3 providers
+//	# YAML configuration for multiple MinIO/S3 providers (simplified array structure)
 //	minio:
-//	  storageProviders:
-//	    aws-sandbox:
-//	      type: "s3"
-//	      awsRegion: "us-west-2"
-//	      useEnvAws: true                               # Use AWS credentials from environment
-//	    aws-prod:
-//	      type: "s3"
-//	      awsRegion: "us-east-1"
-//	      useIam: true                                  # Use IAM role-based authentication
-//	    minio-local:
-//	      type: "s3"
-//	      awsRegion: "us-east-1"
-//	      awsAccessKeyId: "minioadmin"                  # Static credentials for local MinIO
-//	      awsSecretAccessKey: "minioadmin"
-//	      awsEndpointUrl: "localhost:9000"              # Custom MinIO endpoint
-//	  defaultProvider: "aws-sandbox"
+//	  - name: "aws-sandbox"
+//	    awsRegion: "us-west-2"
+//	    useEnvAws: true                               # Use AWS credentials from environment
+//	    default: true                                 # Use as default provider
+//	  - name: "aws-prod"
+//	    awsRegion: "us-east-1"
+//	    useIam: true                                  # Use IAM role-based authentication
+//	  - name: "minio-local"
+//	    awsRegion: "us-east-1"
+//	    awsAccessKeyId: "minioadmin"                  # Static credentials for local MinIO
+//	    awsSecretAccessKey: "minioadmin"
+//	    awsEndpointUrl: "localhost:9000"              # Custom MinIO endpoint
 //
 // URL Format Supported:
 //   - Standard S3: "s3://bucket-name/path/to/file.json"
@@ -52,17 +48,14 @@ const (
 type (
 	// StorageProvider defines configuration for a single S3-compatible storage provider.
 	// Each provider represents a specific S3 service (AWS S3, MinIO, etc.) with its authentication method.
+	// Since this is in the MinIO module, all providers are implicitly S3-compatible.
 	//
 	// Example configuration:
-	//   aws-prod:
-	//     type: "s3"                              # Must be "s3" for S3-compatible providers
+	//   - name: "aws-prod"
 	//     awsRegion: "us-east-1"                  # AWS region for the S3 service
 	//     useIam: true                            # Use IAM role authentication
 	//     awsEndpointUrl: "s3.amazonaws.com"      # Optional custom endpoint
 	StorageProvider struct {
-		// Type specifies the storage provider type. Must be "s3" for S3-compatible storage.
-		// This field is used by the factory to determine which client implementation to create.
-		Type string `yaml:"type"`
 
 		// AwsRegion specifies the AWS region for S3 operations.
 		// Used for both AWS S3 and S3-compatible services that support regions.
@@ -161,62 +154,39 @@ type (
 		UseIAM bool `yaml:"useIam,omitempty"`
 	}
 
-	// Config defines the top-level configuration structure for MinIO/S3 storage providers.
-	// This allows configuration of multiple S3-compatible storage providers with different
-	// endpoints, regions, or authentication methods that can be selected per-project.
+	// Config represents the direct array of S3-compatible storage provider configurations.
+	// The "minio" YAML key maps directly to this array, eliminating intermediate nesting.
 	//
-	// Example configuration:
+	// Simplified structure example:
 	//   minio:
-	//     storageProviders:
-	//       aws-prod:
-	//         type: "s3"
-	//         awsRegion: "us-east-1"
-	//         useIam: true
-	//       aws-sandbox:
-	//         type: "s3"
-	//         awsRegion: "us-west-2"
-	//         useEnvAws: true
-	//       minio-local:
-	//         type: "s3"
-	//         awsAccessKeyId: "minioadmin"
-	//         awsSecretAccessKey: "minioadmin"
-	//         awsEndpointUrl: "localhost:9000"
-	//     defaultProvider: "aws-sandbox"
-	Config struct {
-		// StorageProviders is a map of S3-compatible storage provider configurations.
-		// The key is used as the provider identifier (e.g., "aws-prod", "minio-local")
-		// and will be referenced in project configurations to specify which storage to use.
-		//
-		// Provider Key Naming Conventions:
-		// - Use descriptive names that indicate environment: "aws-prod", "aws-dev", "aws-staging"
-		// - Include service type for clarity: "minio-local", "aws-s3", "digitalocean-spaces"
-		// - Consider team or region identifiers: "aws-eu-west", "minio-ml-team"
-		// - Be consistent across your organization
-		//
-		// Example provider configurations:
-		//   "aws-prod": Production AWS S3 with IAM role authentication
-		//   "aws-sandbox": Development AWS S3 with environment credentials
-		//   "minio-local": Local MinIO instance for testing
-		//   "digitalocean-spaces": DigitalOcean Spaces for cost optimization
-		//   "wasabi-backup": Wasabi for long-term archival storage
-		StorageProviders map[string]StorageProvider `yaml:"storageProviders"`
+	//     - name: "aws-prod"
+	//       awsRegion: "us-east-1"
+	//       useIam: true
+	//     - name: "aws-sandbox"
+	//       awsRegion: "us-west-2"
+	//       useEnvAws: true
+	//       default: true
+	//     - name: "minio-local"
+	//       awsAccessKeyId: "minioadmin"
+	//       awsSecretAccessKey: "minioadmin"
+	//       awsEndpointUrl: "localhost:9000"
+	Config []ProviderConfig
 
-		// DefaultProvider specifies which provider key to use when no specific provider is requested.
-		// This should typically be your main production storage provider.
-		//
-		// Required: No (but recommended for fallback behavior)
-		// Example: "aws-sandbox" (safe default for development)
-		//
-		// Usage scenarios:
-		// - Legacy code that doesn't specify provider keys
-		// - Default storage for new projects before explicit configuration
-		// - Fallback when requested provider is not available
-		//
-		// Considerations:
-		// - Choose a stable, reliable provider as default
-		// - Consider using development/sandbox provider as default for safety
-		// - Document the default choice for team awareness
-		DefaultProvider string `yaml:"defaultProvider,omitempty"`
+	// ProviderConfig combines the provider name with the storage configuration.
+	// This structure enables clean configuration where each provider has both
+	// a name and its specific configuration details.
+	ProviderConfig struct {
+		// Name is the unique identifier for this provider (e.g., "aws-prod", "minio-local").
+		// This name will be referenced in project configurations to specify which storage to use.
+		Name string `yaml:"name"`
+
+		// Default indicates if this provider should be used as the fallback when no specific
+		// provider is requested. Only one provider in the array should have default: true.
+		Default bool `yaml:"default,omitempty"`
+
+		// StorageProvider embeds all the storage configuration details.
+		// This includes authentication, endpoints, regions, etc.
+		StorageProvider `yaml:",inline"`
 	}
 )
 

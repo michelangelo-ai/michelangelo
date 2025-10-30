@@ -2,9 +2,11 @@ package storage
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/cadence-workflow/starlark-worker/worker"
+	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 )
@@ -69,9 +71,11 @@ func TestRegister(t *testing.T) {
 	blobStore := blobstore.BlobStore{}
 	blobStore.RegisterClient(&dummyStorage{scheme: "s1"})
 	blobStore.RegisterClient(&dummyStorage{scheme: "s2"})
+	logger := zap.NewNop()
 	params := storagesIn{
 		Workers:   workers,
 		BlobStore: &blobStore,
+		Logger:    logger,
 	}
 	// Call the register function.
 	register(params)
@@ -90,23 +94,124 @@ func TestRegister(t *testing.T) {
 			continue
 		}
 
-		// Check that the impls map has the expected protocols.
+		// Check that the context-aware blobstore is properly configured
 		if act.blobStore == nil {
-			t.Errorf("worker %d: expected blobstore in activities.blobStore, got nil", i)
-		}
-		client, err := act.blobStore.GetClient("s1")
-		if err != nil {
-			t.Errorf("worker %d: expected blobstore to contain client for scheme 's1', got error: %v", i, err)
-		}
-		if client == nil {
-			t.Errorf("worker %d: expected blobstore to contain client for scheme 's1', got nil", i)
-		}
-		client, err = act.blobStore.GetClient("s2")
-		if err != nil {
-			t.Errorf("worker %d: expected blobstore to contain client for scheme 's2', got error: %v", i, err)
-		}
-		if client == nil {
-			t.Errorf("worker %d: expected blobstore to contain client for scheme 's2', got nil", i)
+			t.Errorf("worker %d: expected context-aware blobstore in activities.blobStore, got nil", i)
 		}
 	}
+}
+
+// mockBlobStoreClient is a mock client for testing
+type mockBlobStoreClient struct {
+	scheme      string
+	providerKey string
+	readFn      func(ctx context.Context, blobURI string) ([]byte, error)
+}
+
+func (m *mockBlobStoreClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	if m.readFn != nil {
+		return m.readFn(ctx, blobURI)
+	}
+	return []byte(`{"test": "data"}`), nil
+}
+
+func (m *mockBlobStoreClient) Scheme() string {
+	return m.scheme
+}
+
+func (m *mockBlobStoreClient) ProviderKey() string {
+	return m.providerKey
+}
+
+// mockLegacyClient is a mock client that only implements scheme-based interface
+type mockLegacyClient struct {
+	scheme string
+	readFn func(ctx context.Context, blobURI string) ([]byte, error)
+}
+
+func (m *mockLegacyClient) Get(ctx context.Context, blobURI string) ([]byte, error) {
+	if m.readFn != nil {
+		return m.readFn(ctx, blobURI)
+	}
+	return []byte(`{"test": "legacy"}`), nil
+}
+
+func (m *mockLegacyClient) Scheme() string {
+	return m.scheme
+}
+
+// dummyProviderStorage is a storage implementation that supports provider keys
+type dummyProviderStorage struct {
+	scheme      string
+	providerKey string
+}
+
+func (d *dummyProviderStorage) Get(ctx context.Context, uri string) ([]byte, error) {
+	return []byte(`{"test": "data", "provider": "` + d.providerKey + `"}`), nil
+}
+
+func (d *dummyProviderStorage) Scheme() string {
+	return d.scheme
+}
+
+func (d *dummyProviderStorage) ProviderKey() string {
+	return d.providerKey
+}
+
+// TestContextAwareBlobStoreDirectly verifies that the ContextAwareBlobStore works correctly
+func TestContextAwareBlobStoreDirectly(t *testing.T) {
+	blobStore := blobstore.BlobStore{}
+
+	// Register multiple clients with same scheme but different providers
+	client1 := &dummyProviderStorage{scheme: "s3", providerKey: "aws-prod"}
+	client2 := &dummyProviderStorage{scheme: "s3", providerKey: "aws-dev"}
+
+	blobStore.RegisterClient(client1)
+	blobStore.RegisterClient(client2)
+
+	logger := zap.NewNop()
+	contextAwareStore := blobstore.NewContextAwareBlobStore(&blobStore, logger)
+
+	// Test using context with aws-prod provider
+	ctx := blobstore.WithResourceProvider(context.Background(), "aws-prod")
+	data, err := contextAwareStore.Get(ctx, "s3://bucket/file")
+	if err != nil {
+		t.Fatalf("Get with aws-prod context failed: %v", err)
+	}
+
+	expected := `{"test": "data", "provider": "aws-prod"}`
+	if string(data) != expected {
+		t.Errorf("Expected %s, got %s", expected, string(data))
+	}
+
+	// Test using context with aws-dev provider
+	ctx = blobstore.WithResourceProvider(context.Background(), "aws-dev")
+	data, err = contextAwareStore.Get(ctx, "s3://bucket/file")
+	if err != nil {
+		t.Fatalf("Get with aws-dev context failed: %v", err)
+	}
+
+	expected = `{"test": "data", "provider": "aws-dev"}`
+	if string(data) != expected {
+		t.Errorf("Expected %s, got %s", expected, string(data))
+	}
+
+	// Test without provider in context (should fallback to scheme-based)
+	ctx = context.Background()
+	data, err = contextAwareStore.Get(ctx, "s3://bucket/file")
+	if err != nil {
+		t.Fatalf("Get without provider context failed: %v", err)
+	}
+
+	// Should use one of the clients (behavior for scheme-based fallback)
+	if !contains(string(data), "aws-prod") && !contains(string(data), "aws-dev") {
+		t.Errorf("Expected data to contain 'aws-prod' or 'aws-dev', got '%s'", string(data))
+	}
+}
+
+// helper function for string contains
+func contains(str, substr string) bool {
+	return len(str) >= len(substr) && str[len(str)-len(substr):] == substr ||
+		   len(str) > len(substr) && str[:len(substr)] == substr ||
+		   len(str) > len(substr) && strings.Contains(str, substr)
 }

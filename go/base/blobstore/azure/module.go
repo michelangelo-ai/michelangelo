@@ -21,25 +21,22 @@ var Module = fx.Options(
 )
 
 // newClient initializes new Azure storage clients using the provided configuration.
-// It creates clients for multiple Azure storage providers based on the configuration map.
+// It creates clients for multiple Azure storage providers based on the configuration array.
 // Returns multiple BlobStoreClientOut instances or an error if initialization fails.
 func newClient(config Config) ([]BlobStoreClientOut, error) {
 	var clients []BlobStoreClientOut
 
 	// If no storage providers configured, return empty list (no default Azure client)
-	if len(config.StorageProviders) == 0 {
+	if len(config) == 0 {
 		return clients, nil
 	}
 
 	// Create clients for each configured Azure storage provider
-	for providerKey, providerConfig := range config.StorageProviders {
-		if providerConfig.Type != "azure" {
-			continue // Skip non-Azure providers
-		}
-
-		client, err := newAzureClientWithKey(providerKey, providerConfig)
+	// Process all providers in the array - the "azure" key indicates Azure Blob Storage
+	for _, providerConfig := range config {
+		client, err := newAzureClientWithKey(providerConfig.Name, providerConfig.StorageProvider)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create Azure client for provider %s: %w", providerKey, err)
+			return nil, fmt.Errorf("failed to create Azure client for provider %s: %w", providerConfig.Name, err)
 		}
 		clients = append(clients, client)
 	}

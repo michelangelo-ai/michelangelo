@@ -9,20 +9,17 @@ import (
 // TestNewConfig_Success verifies that newConfig correctly populates the Config struct
 // when valid YAML configuration data is provided.
 func TestNewConfig_Success(t *testing.T) {
-	// YAML content with the "azure" key and its multi-provider configuration.
+	// YAML content with the "azure" key and its array-based configuration.
 	const yamlContent = `
 azure:
-  storageProviders:
-    azure-dev:
-      type: "azure"
-      azureStorageAccount: "testaccount"
-      azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2023-12-31T23:59:59Z"
-    azure-prod:
-      type: "azure"
-      azureStorageAccount: "prodaccount"
-      azureSASToken: "sv=2023-01-01&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z"
-      azureEndpoint: "https://custom.endpoint.net"
-  defaultProvider: "azure-dev"
+  - name: "azure-dev"
+    azureStorageAccount: "testaccount"
+    azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2023-12-31T23:59:59Z"
+    default: true
+  - name: "azure-prod"
+    azureStorageAccount: "prodaccount"
+    azureSASToken: "sv=2023-01-01&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z"
+    azureEndpoint: "https://custom.endpoint.net"
 `
 
 	// Create a new YAML provider using the YAML configuration.
@@ -38,40 +35,35 @@ azure:
 	}
 
 	// Validate that the configuration values are correctly populated.
-	if len(conf.StorageProviders) != 2 {
-		t.Errorf("expected 2 storage providers, got %d", len(conf.StorageProviders))
+	if len(conf) != 2 {
+		t.Errorf("expected 2 storage providers, got %d", len(conf))
 	}
 
-	// Check azure-dev provider
-	azureDevProvider, exists := conf.StorageProviders["azure-dev"]
-	if !exists {
-		t.Errorf("expected azure-dev provider to exist")
+	// Check azure-dev provider (first in array)
+	azureDevProvider := conf[0]
+	if azureDevProvider.Name != "azure-dev" {
+		t.Errorf("expected first provider name to be 'azure-dev', got '%s'", azureDevProvider.Name)
 	}
-	if azureDevProvider.Type != "azure" {
-		t.Errorf("expected Type 'azure', got %q", azureDevProvider.Type)
+	if !azureDevProvider.Default {
+		t.Errorf("expected azure-dev to be default provider, got %v", azureDevProvider.Default)
 	}
 	if azureDevProvider.AzureStorageAccount != "testaccount" {
 		t.Errorf("expected AzureStorageAccount 'testaccount', got %q", azureDevProvider.AzureStorageAccount)
 	}
 
-	// Check azure-prod provider
-	azureProdProvider, exists := conf.StorageProviders["azure-prod"]
-	if !exists {
-		t.Errorf("expected azure-prod provider to exist")
+	// Check azure-prod provider (second in array)
+	azureProdProvider := conf[1]
+	if azureProdProvider.Name != "azure-prod" {
+		t.Errorf("expected second provider name to be 'azure-prod', got '%s'", azureProdProvider.Name)
 	}
-	if azureProdProvider.Type != "azure" {
-		t.Errorf("expected Type 'azure', got %q", azureProdProvider.Type)
+	if azureProdProvider.Default {
+		t.Errorf("expected azure-prod to not be default provider, got %v", azureProdProvider.Default)
 	}
 	if azureProdProvider.AzureStorageAccount != "prodaccount" {
 		t.Errorf("expected AzureStorageAccount 'prodaccount', got %q", azureProdProvider.AzureStorageAccount)
 	}
 	if azureProdProvider.AzureEndpoint != "https://custom.endpoint.net" {
 		t.Errorf("expected AzureEndpoint 'https://custom.endpoint.net', got %q", azureProdProvider.AzureEndpoint)
-	}
-
-	// Check default provider
-	if conf.DefaultProvider != "azure-dev" {
-		t.Errorf("expected DefaultProvider 'azure-dev', got %q", conf.DefaultProvider)
 	}
 }
 
@@ -94,11 +86,8 @@ notazure:
 		t.Fatalf("newConfig returned error: %v", err)
 	}
 
-	// Since the "azure" key is missing, StorageProviders should be empty.
-	if len(conf.StorageProviders) != 0 {
-		t.Errorf("expected empty StorageProviders when key is missing, got %+v", conf.StorageProviders)
-	}
-	if conf.DefaultProvider != "" {
-		t.Errorf("expected empty DefaultProvider when key is missing, got %q", conf.DefaultProvider)
+	// Since the "azure" key is missing, the array should be empty.
+	if len(conf) != 0 {
+		t.Errorf("expected empty array when key is missing, got %+v", conf)
 	}
 }

@@ -54,3 +54,8 @@ data:
       crdSync:
         enableCRDUpdate: true
         enableIncompatibleUpdate: false
+        enableCRDDeletion: true
+        crdVersions:
+          project:
+            versions: [v2]
+            storageVersion: v2

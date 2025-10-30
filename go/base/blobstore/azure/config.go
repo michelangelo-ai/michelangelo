@@ -3,19 +3,16 @@
 //
 // Usage Example:
 //
-//	# YAML configuration for multiple Azure providers
+//	# YAML configuration for multiple Azure providers (simplified array structure)
 //	azure:
-//	  storageProviders:
-//	    azure-prod:
-//	      type: "azure"
-//	      azureStorageAccount: "prodstorageacct"
-//	      azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
-//	    azure-dev:
-//	      type: "azure"
-//	      azureStorageAccount: "devstorageacct"
-//	      azureSASToken: "sv=..."
-//	      azureEndpoint: "https://custom.endpoint.net"  # Optional custom endpoint
-//	  defaultProvider: "azure-prod"
+//	  - name: "azure-prod"
+//	    azureStorageAccount: "prodstorageacct"
+//	    azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
+//	    default: true
+//	  - name: "azure-dev"
+//	    azureStorageAccount: "devstorageacct"
+//	    azureSASToken: "sv=..."
+//	    azureEndpoint: "https://custom.endpoint.net"  # Optional custom endpoint
 //
 // URL Format Supported:
 //   - Standard ABFSS: "abfss://container@storageaccount.blob.core.windows.net/path/file.json"
@@ -42,17 +39,14 @@ const (
 type (
 	// StorageProvider defines configuration for a single Azure Blob Storage provider.
 	// Each provider represents a specific Azure Storage Account with its authentication method.
+	// Since this is in the Azure module, all providers are implicitly Azure Blob Storage.
 	//
 	// Example configuration:
-	//   azure-prod:
-	//     type: "azure"                              # Must be "azure" for Azure providers
+	//   - name: "azure-prod"
 	//     azureStorageAccount: "mlprodstorageacct"   # Azure Storage Account name
 	//     azureSASToken: "sv=2022-11-02&ss=b..."     # SAS token for authentication
 	//     azureEndpoint: ""                          # Optional custom endpoint
 	StorageProvider struct {
-		// Type specifies the storage provider type. Must be "azure" for Azure Blob Storage.
-		// This field is used by the factory to determine which client implementation to create.
-		Type string `yaml:"type"`
 
 		// AzureStorageAccount is the name of the Azure Storage Account to connect to.
 		// This is used to construct the default endpoint URL and identify the storage account.
@@ -93,47 +87,35 @@ type (
 		AzureEndpoint string `yaml:"azureEndpoint,omitempty"`
 	}
 
-	// Config defines the top-level configuration structure for Azure storage providers.
-	// This allows configuration of multiple Azure storage providers with different accounts,
-	// regions, or authentication methods that can be selected per-project.
+	// Config represents the direct array of Azure Blob Storage provider configurations.
+	// The "azure" YAML key maps directly to this array, eliminating intermediate nesting.
 	//
-	// Example configuration:
+	// Simplified structure example:
 	//   azure:
-	//     storageProviders:
-	//       azure-prod:
-	//         type: "azure"
-	//         azureStorageAccount: "prodstorageacct"
-	//         azureSASToken: "sv=..."
-	//       azure-dev:
-	//         type: "azure"
-	//         azureStorageAccount: "devstorageacct"
-	//         azureSASToken: "sv=..."
-	//     defaultProvider: "azure-prod"
-	Config struct {
-		// StorageProviders is a map of Azure storage provider configurations.
-		// The key is used as the provider identifier (e.g., "azure-prod", "azure-dev")
-		// and will be referenced in project configurations to specify which storage to use.
-		//
-		// Provider Key Naming Conventions:
-		// - Use descriptive names that indicate environment: "azure-prod", "azure-dev", "azure-staging"
-		// - Include team or project identifiers: "azure-ml-team", "azure-analytics"
-		// - Be consistent across your organization
-		//
-		// Example:
-		//   "azure-prod": Production Azure storage with high availability SLA
-		//   "azure-dev": Development Azure storage for testing
-		//   "azure-eu": European region storage for GDPR compliance
-		StorageProviders map[string]StorageProvider `yaml:"storageProviders"`
+	//     - name: "azure-prod"
+	//       azureStorageAccount: "prodstorageacct"
+	//       azureSASToken: "sv=..."
+	//       default: true
+	//     - name: "azure-dev"
+	//       azureStorageAccount: "devstorageacct"
+	//       azureSASToken: "sv=..."
+	Config []ProviderConfig
 
-		// DefaultProvider specifies which provider key to use when no specific provider is requested.
-		// This should typically be your main production storage provider.
-		//
-		// Required: No (but recommended for fallback behavior)
-		// Example: "azure-prod"
-		//
-		// Usage: When a request doesn't specify a provider key, the system will use this default.
-		// This ensures backward compatibility and provides sensible fallback behavior.
-		DefaultProvider string `yaml:"defaultProvider,omitempty"`
+	// ProviderConfig combines the provider name with the Azure storage configuration.
+	// This structure enables clean configuration where each provider has both
+	// a name and its specific configuration details.
+	ProviderConfig struct {
+		// Name is the unique identifier for this provider (e.g., "azure-prod", "azure-dev").
+		// This name will be referenced in project configurations to specify which storage to use.
+		Name string `yaml:"name"`
+
+		// Default indicates if this provider should be used as the fallback when no specific
+		// provider is requested. Only one provider in the array should have default: true.
+		Default bool `yaml:"default,omitempty"`
+
+		// StorageProvider embeds all the Azure storage configuration details.
+		// This includes authentication, endpoints, storage accounts, etc.
+		StorageProvider `yaml:",inline"`
 	}
 )
 

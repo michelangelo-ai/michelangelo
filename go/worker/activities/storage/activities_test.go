@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
@@ -43,8 +44,10 @@ func (r *Suite) SetupSuite() {
 	}
 	blobStore := blobstore.BlobStore{}
 	blobStore.RegisterClient(fake)
+	logger := zap.NewNop()
+	contextAwareBlobStore := blobstore.NewContextAwareBlobStore(&blobStore, logger)
 	act = &activities{
-		blobStore: &blobStore,
+		blobStore: contextAwareBlobStore,
 	}
 	r.activitySuite.RegisterActivity(act)
 }
