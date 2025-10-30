@@ -37,18 +37,33 @@ from grpc import (
 )
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 from yaml import YAMLError, safe_load as yaml_safe_load
+import configparser
 
 
 def _load_rc_config() -> dict:
     """Load configuration from ~/.mactlrc file."""
+    config = configparser.ConfigParser()
     rc_file = Path.home() / ".mactlrc"
-    if rc_file.exists():
-        try:
-            with open(rc_file, "r") as f:
-                return yaml_safe_load(f) or {}
-        except Exception:
-            pass
-    return {}
+
+    if not rc_file.exists():
+        return {}
+
+    try:
+        config.read(rc_file)
+        rc_config = {}
+
+        if "mactl" in config:
+            if "address" in config["mactl"]:
+                rc_config["address"] = config["mactl"]["address"]
+            if "use_tls" in config["mactl"]:
+                rc_config["use_tls"] = config["mactl"]["use_tls"]
+
+        if "metadata" in config:
+            rc_config["metadata"] = dict(config["metadata"])
+
+        return rc_config
+    except Exception:
+        return {}
 
 
 ### For Uber-internal server ###
