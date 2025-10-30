@@ -19,7 +19,6 @@ def main():
     p.add_argument("--result-url", required=True, type=str)
     p.add_argument("--overrides", type=decoder.decode)
     p.add_argument("--file-sync", action="store_true")
-    p.add_argument("--pipeline", required=False, type=str)
     ns = p.parse_args()
 
     assert isinstance(ns.args, list), (

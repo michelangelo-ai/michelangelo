@@ -15,6 +15,7 @@ import tarfile
 import shutil
 import traceback
 import logging
+import fsspec
 from pathlib import Path
 from abc import ABC, abstractmethod
 
@@ -54,12 +55,6 @@ class FsspecDownloader(StorageDownloader):
     ) -> bool:
         """Download using fsspec (works with S3, MinIO, etc)."""
         try:
-            import fsspec
-        except ImportError:
-            logger.error("fsspec not installed. Install with: pip install fsspec s3fs")
-            return False
-
-        try:
             logger.info(f"Downloading from: {remote_path}")
             with fsspec.open(remote_path, "rb") as remote_file:
                 with open(local_path, "wb") as local_file:
@@ -75,7 +70,7 @@ class FsspecDownloader(StorageDownloader):
 def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None):
     """
     Download and extract development files from remote storage with following steps:
-    1. Check for DEV_RUN_REMOTE_FILE_PATH environment variable
+    1. Check for FILE_SYNC_REMOTE_FILE_PATH environment variable
     2. Download tarball using appropriate downloader (tb-cli or fsspec)
     3. Extract and replace files in current working directory
     4. Clean up temporary files
@@ -91,9 +86,9 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
         logger = _get_logger()
 
     # Check for the required environment variable
-    remote_file_path = os.environ.get("DEV_RUN_REMOTE_FILE_PATH")
+    remote_file_path = os.environ.get("FILE_SYNC_REMOTE_FILE_PATH")
     if not remote_file_path:
-        logger.info("DEV_RUN_REMOTE_FILE_PATH not set, skipping file sync")
+        logger.info("FILE_SYNC_REMOTE_FILE_PATH not set, skipping file sync")
         return False
     logger.info(f"Downloading development files from: {remote_file_path}")
 
@@ -143,7 +138,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
         return False
 
 
-def auto_run_if_enabled():
+def file_sync_pre_run():
     """
     Automatically run the pre-run script if environment conditions are met.
 
@@ -152,7 +147,7 @@ def auto_run_if_enabled():
     """
     logger = _get_logger("sitecustomize")
 
-    if os.environ.get("DEV_RUN_REMOTE_FILE_PATH"):
+    if os.environ.get("FILE_SYNC_REMOTE_FILE_PATH"):
         logger.info("Development file sync starting...")
         success = download_and_extract_dev_files(
             downloader=FsspecDownloader(), logger=logger
@@ -162,22 +157,21 @@ def auto_run_if_enabled():
         else:
             logger.warning("Development file sync failed (check logs above)")
     else:
-        logger.info("No development files to sync (DEV_RUN_REMOTE_FILE_PATH not set)")
+        logger.info("No development files to sync (FILE_SYNC_REMOTE_FILE_PATH not set)")
 
 
-# Run the pre-run functionality automatically when this module is imported
-# (but not when executed directly as a script)
+# Run the file sync pre-run functionality automatically when this module is imported
 if __name__ != "__main__":
     import sys
 
     print(f"[sitecustomize] Python executable: {sys.executable}")
     print(f"[sitecustomize] Working directory: {os.getcwd()}")
     print(
-        f"[sitecustomize] DEV_RUN_REMOTE_FILE_PATH: {os.environ.get('DEV_RUN_REMOTE_FILE_PATH', 'NOT SET')}"
+        f"[sitecustomize] FILE_SYNC_REMOTE_FILE_PATH: {os.environ.get('FILE_SYNC_REMOTE_FILE_PATH', 'NOT SET')}"
     )
 
     try:
-        auto_run_if_enabled()
+        file_sync_pre_run()
     except Exception as e:
         # Never let sitecustomize errors break Python startup
         import traceback

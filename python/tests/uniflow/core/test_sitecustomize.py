@@ -106,36 +106,6 @@ class TestFsspecDownloader(unittest.TestCase):
             # File should not exist
             self.assertFalse(local_path.exists())
 
-    def test_download_fsspec_not_installed(self):
-        """Test download failure when fsspec is not installed"""
-        # Temporarily hide fsspec module
-        import sys
-
-        fsspec_module = sys.modules.get("fsspec")
-        if "fsspec" in sys.modules:
-            del sys.modules["fsspec"]
-
-        try:
-            # Mock the import to fail
-            with patch(
-                "builtins.__import__",
-                side_effect=ImportError("No module named 'fsspec'"),
-            ):
-                with tempfile.TemporaryDirectory() as tmp_dir:
-                    local_path = Path(tmp_dir) / "test.tar.gz"
-
-                    # Call download - should handle ImportError gracefully
-                    result = self.downloader.download(
-                        "s3://bucket/path/file.tar.gz", local_path, self.logger
-                    )
-
-                    # Verify failure
-                    self.assertFalse(result)
-        finally:
-            # Restore fsspec module if it was there
-            if fsspec_module:
-                sys.modules["fsspec"] = fsspec_module
-
     @patch("fsspec.open")
     def test_download_with_different_protocols(self, mock_fsspec_open):
         """Test download with different storage protocols (S3, MinIO, etc.)"""
