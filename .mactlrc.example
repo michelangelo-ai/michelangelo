@@ -11,8 +11,7 @@ use_tls = true
 
 # Advanced: Custom gRPC metadata
 # WARNING: Setting metadata COMPLETELY REPLACES all default headers
-# Built-in defaults: rpc-caller=grpcurl, rpc-service=ma-apiserver, rpc-encoding=proto
-# Only uncomment if you need custom headers AND know what you're doing
+# Only uncomment if you need custom headers
 # [metadata]
 # rpc-caller = grpcurl
 # rpc-service = ma-apiserver
