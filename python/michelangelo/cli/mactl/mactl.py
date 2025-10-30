@@ -902,7 +902,10 @@ def main(channel: Channel):
     print(result)
 
 
-if __name__ == "__main__":
+def run():
+    """
+    Entry point for mactl
+    """
     if USE_TLS:
         _LOG.info(
             "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
@@ -911,14 +914,17 @@ if __name__ == "__main__":
         )
         # Use secure TLS connection
         with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
-            main(channel)
-    else:
-        _LOG.info(
-            "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
-            USE_TLS,
-            ADDRESS,
-        )
-        # Use secure TLS connection
-        # Use insecure connection for local development
-        with insecure_channel(ADDRESS) as channel:
-            main(channel)
+            return main(channel)
+
+    _LOG.info(
+        "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+        USE_TLS,
+        ADDRESS,
+    )
+    # Use secure TLS connection
+    # Use insecure connection for local development
+    with insecure_channel(ADDRESS) as channel:
+        return main(channel)
+
+if __name__ == "__main__":
+    run()
