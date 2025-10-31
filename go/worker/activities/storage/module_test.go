@@ -94,9 +94,9 @@ func TestRegister(t *testing.T) {
 			continue
 		}
 
-		// Check that the context-aware blobstore is properly configured
+		// Check that the blobstore is properly configured
 		if act.blobStore == nil {
-			t.Errorf("worker %d: expected context-aware blobstore in activities.blobStore, got nil", i)
+			t.Errorf("worker %d: expected blobstore in activities.blobStore, got nil", i)
 		}
 	}
 }
@@ -173,7 +173,7 @@ func TestContextAwareBlobStoreDirectly(t *testing.T) {
 	contextAwareStore := blobstore.NewContextAwareBlobStore(&blobStore, logger)
 
 	// Test using context with aws-prod provider
-	ctx := blobstore.WithResourceProvider(context.Background(), "aws-prod")
+	ctx := blobstore.WithStorageProvider(context.Background(), "aws-prod")
 	data, err := contextAwareStore.Get(ctx, "s3://bucket/file")
 	if err != nil {
 		t.Fatalf("Get with aws-prod context failed: %v", err)
@@ -185,7 +185,7 @@ func TestContextAwareBlobStoreDirectly(t *testing.T) {
 	}
 
 	// Test using context with aws-dev provider
-	ctx = blobstore.WithResourceProvider(context.Background(), "aws-dev")
+	ctx = blobstore.WithStorageProvider(context.Background(), "aws-dev")
 	data, err = contextAwareStore.Get(ctx, "s3://bucket/file")
 	if err != nil {
 		t.Fatalf("Get with aws-dev context failed: %v", err)
@@ -208,6 +208,7 @@ func TestContextAwareBlobStoreDirectly(t *testing.T) {
 		t.Errorf("Expected data to contain 'aws-prod' or 'aws-dev', got '%s'", string(data))
 	}
 }
+
 
 // helper function for string contains
 func contains(str, substr string) bool {

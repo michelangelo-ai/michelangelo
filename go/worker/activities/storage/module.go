@@ -24,11 +24,10 @@ var Module = fx.Options(
 // register maps Storage implementations by protocol and registers
 // the resulting activities with each Cadence worker.
 func register(in storagesIn) {
-	// Create context-aware blob store for transparent multi-tenant routing
-	contextAwareBlobStore := blobstore.NewContextAwareBlobStore(in.BlobStore, in.Logger)
-
+	// Use regular blob store with explicit provider parameters
 	a := &activities{
-		blobStore: contextAwareBlobStore,
+		blobStore: in.BlobStore,
+		logger:    in.Logger,
 	}
 
 	for _, w := range in.Workers {

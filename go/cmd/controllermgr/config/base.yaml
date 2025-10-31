@@ -34,33 +34,33 @@ minio:
     awsEndpointUrl: "minio:9091"
     default: true
 
-  - name: "aws-sharezone"
-    awsRegion: "us-west-2"
-    useEnvAws: true
+#  - name: "aws-sharezone"
+#    awsRegion: "us-west-2"
+#    useEnvAws: true
+#
+#  - name: "aws-company1"
+#    awsRegion: "us-east-1"
+#    useIam: true
+#
+#  - name: "aws-company2"
+#    awsRegion: "eu-west-1"
+#    awsAccessKeyId: "AKIA..."
+#    awsSecretAccessKey: "SECRET..."
 
-  - name: "aws-company1"
-    awsRegion: "us-east-1"
-    useIam: true
-
-  - name: "aws-company2"
-    awsRegion: "eu-west-1"
-    awsAccessKeyId: "AKIA..."
-    awsSecretAccessKey: "SECRET..."
-
-# Azure Blob Storage providers
-azure:
-  - name: "azure-sharezone"
-    azureStorageAccount: "sharedstorage"
-    azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
-    default: true
-
-  - name: "azure-company1"
-    azureStorageAccount: "company1storage"
-    azureSASToken: "sv=..."
-
-  - name: "azure-company2"
-    azureStorageAccount: "company2storage"
-    azureSASToken: "sv=..."
+## Azure Blob Storage providers
+#azure:
+#  - name: "azure-sharezone"
+#    azureStorageAccount: "sharedstorage"
+#    azureSASToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z..."
+#    default: true
+#
+#  - name: "azure-company1"
+#    azureStorageAccount: "company1storage"
+#    azureSASToken: "sv=..."
+#
+#  - name: "azure-company2"
+#    azureStorageAccount: "company2storage"
+#    azureSASToken: "sv=..."
 
 # Google Cloud Storage providers (future expansion)
 # gcp:

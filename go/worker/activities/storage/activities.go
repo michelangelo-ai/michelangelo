@@ -18,21 +18,23 @@ import (
 var Activities = (*activities)(nil)
 
 // activities holds implementations for different storage protocols.
-// Uses context-aware blob store for transparent multi-tenant routing.
+// Uses explicit storage provider parameters for multi-tenant routing.
 type activities struct {
-	blobStore *blobstore.ContextAwareBlobStore
+	blobStore *blobstore.BlobStore
+	logger    *zap.Logger
 }
 
 // Read attempts to read data from the specified path using the given protocol.
 // It logs the start of the activity, checks for a valid protocol implementation,
 // and wraps any errors using Cadence's CustomError for consistent error handling.
-func (a *activities) Read(ctx context.Context, url string) (any, error) {
-	// Retrieve logger from context and log the start of the read activity.
+// storageProvider parameter specifies which storage provider to use for multi-tenant routing.
+func (a *activities) Read(ctx context.Context, url string, storageProvider string) (any, error) {
+	// Retrieve logger from context or use fallback logger
 	logger := activity.GetLogger(ctx)
 	logger.Info("activity-start", zap.Any("url", url))
 
 	// Check if there is an implementation available for the requested protocol.
-	data, err := a.blobStore.Get(ctx, url)
+	data, err := a.blobStore.GetWithProvider(ctx, url, storageProvider)
 	if err != nil {
 		// Wrap the error in a Cadence CustomError using YARPC error codes.
 		return nil, workflow.NewCustomError(

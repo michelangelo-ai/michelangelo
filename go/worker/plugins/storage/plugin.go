@@ -61,15 +61,17 @@ func (m *module) read(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tup
 	logger := workflow.GetLogger(ctx)
 
 	var url string
-	if err := starlark.UnpackArgs("execute", args, kwargs,
+	var storageProvider string
+	if err := starlark.UnpackArgs("read", args, kwargs,
 		"url", &url,
+		"storage_provider", &storageProvider,
 	); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}
 
 	var res any
-	if err := workflow.ExecuteActivity(ctx, storage.Activities.Read, url).Get(ctx, &res); err != nil {
+	if err := workflow.ExecuteActivity(ctx, storage.Activities.Read, url, storageProvider).Get(ctx, &res); err != nil {
 		logger.Error("builtin-error", ext.ZapError(err)...)
 		return nil, err
 	}

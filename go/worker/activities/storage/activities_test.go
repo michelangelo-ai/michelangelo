@@ -45,9 +45,9 @@ func (r *Suite) SetupSuite() {
 	blobStore := blobstore.BlobStore{}
 	blobStore.RegisterClient(fake)
 	logger := zap.NewNop()
-	contextAwareBlobStore := blobstore.NewContextAwareBlobStore(&blobStore, logger)
 	act = &activities{
-		blobStore: contextAwareBlobStore,
+		blobStore: &blobStore,
+		logger:    logger,
 	}
 	r.activitySuite.RegisterActivity(act)
 }
@@ -80,7 +80,7 @@ func (r *Suite) TestActivities_Read_Success() {
 	fake.readFn = func(ctx context.Context, path string) ([]byte, error) {
 		return jsoniter.Marshal(expected)
 	}
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath", "")
 
 	r.Require().NoError(err)
 
@@ -96,7 +96,7 @@ func (r *Suite) TestActivities_Read_Error() {
 	fake.readFn = func(ctx context.Context, path string) ([]byte, error) {
 		return nil, expectedErr
 	}
-	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath")
+	_, err := r.activitySuite.ExecuteActivity(Activities.Read, "test://dummyPath", "")
 
 	// Verify that the returned error message contains the original error message.
 	r.Require().Error(err)
@@ -111,7 +111,7 @@ func (r *Suite) TestActivities_Read_Error() {
 // TestActivities_Read_UnsupportedProtocol verifies that activities.Read returns an error
 // when an unsupported protocol is provided.
 func (r *Suite) TestActivities_Read_UnsupportedProtocol() {
-	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test2://dummyPath")
+	result, err := r.activitySuite.ExecuteActivity(Activities.Read, "test2://dummyPath", "")
 	if result != nil {
 		r.Require().Fail(fmt.Sprintf("expected nil result for unsupported protocol, got %s", result))
 	}

@@ -36,7 +36,8 @@ def get_result_url():
 
 # The url is expected to be in format of scheme://host/path
 def io_read_json(url):
-    return storage.read(url)
+    storage_provider = get_storage_provider()
+    return storage.read(url, storage_provider=storage_provider)
 
 # Get the task image for the task.
 # Args:
@@ -50,6 +51,13 @@ def get_task_image(task_name):
     if task_image == "":
         fail("failed to get task image:", task_name)
     return task_image
+
+# Get the storage provider for multi-tenant routing.
+# Returns:
+#    storage_provider: the storage provider for the current execution
+def get_storage_provider():
+    storage_provider = os.environ.get("UF_STORAGE_PROVIDER", "")
+    return storage_provider
 
 # Get the task name for the task.
 # Args:

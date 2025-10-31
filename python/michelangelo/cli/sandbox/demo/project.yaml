@@ -12,4 +12,4 @@ spec:
   tier: 4
   gitRepo: https://github.com/uber/michelangelo
   rootDir: python/michelangelo/cli/sandbox/crds
-  storageProvider: aws-dev
+  storageProvider: minio-local

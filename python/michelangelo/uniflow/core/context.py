@@ -147,6 +147,10 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         help="Container image to use for running workflow tasks.",
     )
     p.add_argument(
+        "--storage-provider",
+        help="Storage provider for multi-tenant routing (e.g., aws-prod, minio-local).",
+    )
+    p.add_argument(
         "--execution-timeout-seconds",
         default=DEFAULT_EXECUTION_TIMEOUT_SECONDS,
         type=int,
@@ -178,6 +182,7 @@ def _remote_run(
     cron: Optional[str] = None,
     storage_url: str = "",
     image: str = "",
+    storage_provider: Optional[str] = None,
     yes: bool = False,
     workflow: str = cadence,
 ):
@@ -193,7 +198,9 @@ def _remote_run(
         cron: Cron expression for scheduling periodic workflow runs.
         storage_url: Persistent storage URL for saving and loading workflow checkpoints.
         image: Container image to use for running workflow tasks.
+        storage_provider: Storage provider for multi-tenant routing (e.g., aws-prod, minio-local).
         yes: Automatically answer yes to confirmation prompts.
+        workflow: The workflow engine to use (cadence or temporal).
     """
     assert storage_url
     assert image
@@ -203,6 +210,10 @@ def _remote_run(
     kwargs = kwargs or {}
 
     assert isinstance(environ, dict)
+
+    # Set storage provider environment variable if provided
+    if storage_provider:
+        environ["UF_STORAGE_PROVIDER"] = storage_provider
 
     if workflow == cadence:
         rr = RemoteRun(
