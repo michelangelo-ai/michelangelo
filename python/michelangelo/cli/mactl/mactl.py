@@ -355,34 +355,20 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     return crd_method_call(crd_method_info, request_input)
 
 
-def configure_get_parser(parser: ArgumentParser) -> None:
+def configure_parser(parser: ArgumentParser, arguments: list[dict]) -> None:
     """
-    Configure argparse parser for GET action.
-    Adds --namespace and --name arguments.
+    Configure argparse parser for action.
+    Detailed arguments would be defined by `arguments`.
 
     Args:
         parser: ArgumentParser to configure
+        arguments: list of args and kwargs to add to the parser
     """
-    parser.add_argument(
-        "name",
-        nargs="?",
-        type=str,
-        help="Name of the resource (can be configured with --name)",
-    )
-    parser.add_argument(
-        "-n",
-        "--namespace",
-        type=str,
-        required=True,
-        help="Namespace of the resource",
-    )
-    parser.add_argument(
-        "--name",
-        dest="name",
-        type=str,
-        required=False,
-        help="Name of the resource",
-    )
+    _LOG.debug("Start to configure parser with args: %r", arguments)
+    for arg_def in arguments:
+        args = arg_def.get("args", [])
+        kwargs = arg_def.get("kwargs", {})
+        parser.add_argument(*args, **kwargs)
 
 
 class CRD:
@@ -395,6 +381,43 @@ class CRD:
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
         self.method_info: dict = {}
+        self.func_signature: dict = {
+            "get": [
+                {
+                    "args": ["name"],
+                    "kwargs": {
+                        "nargs": "?",
+                        "type": str,
+                        "help": "Name of the resource (can be configured with --name)",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                    ),
+                    "args": ["-n", "--namespace"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Namespace of the resource",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "name",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default="",
+                    ),
+                    "args": ["--name"],
+                    "kwargs": {
+                        "dest": "name",
+                        "type": str,
+                        "required": False,
+                        "help": "Name of the resource",
+                    },
+                },
+            ],
+        }
 
     def __repr__(self):
         return f"CRD(name={self.name}, full_name={self.full_name})"
@@ -477,13 +500,17 @@ class CRD:
         # Configure argparse if parser provided
         if parser is not None:
             _LOG.info("Configuring argparse for GET action")
-            configure_get_parser(parser)
+            configure_parser(parser, self.func_signature["get"])
 
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter("name", Parameter.POSITIONAL_OR_KEYWORD, default="")]
+            + [
+                arg["func_signature"]
+                for arg in self.func_signature["get"]
+                if "func_signature" in arg
+            ]
         )
+        _LOG.debug("GET func signature: %r", get_func_signature)
 
         bound_func = partial(get_func_impl, method_info)
         bound_func = bind_signature(get_func_signature)(bound_func)
