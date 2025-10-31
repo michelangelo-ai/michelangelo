@@ -201,7 +201,7 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
         _LOG.debug("No name argument passed. List CRD in the namespace.")
         _self: CRD = bound_args.arguments["self"]
-        _self.generate_list(channel)
+        _self.generate_list(crd_method_info.channel)
         return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
 
     return crd_method_call_kwargs(
@@ -263,7 +263,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     if message_instance is None:
         # Create new CRD
         _LOG.info("Create a new CRD")
-        _self.generate_create(channel)
+        _self.generate_create(crd_method_info.channel)
         return _self.create(_file)
 
     # Update existing CRD
