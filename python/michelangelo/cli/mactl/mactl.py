@@ -3,6 +3,7 @@ MaCTL - Michelangelo Command Line Tool
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
+from argparse import ArgumentParser
 from collections import defaultdict
 from collections.abc import MutableMapping
 from copy import deepcopy
@@ -14,7 +15,7 @@ from logging import basicConfig, getLogger, WARNING
 from os import getenv, environ
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 import logging
 import re
 import sys
@@ -354,6 +355,36 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     return crd_method_call(crd_method_info, request_input)
 
 
+def configure_get_parser(parser: ArgumentParser) -> None:
+    """
+    Configure argparse parser for GET action.
+    Adds --namespace and --name arguments.
+
+    Args:
+        parser: ArgumentParser to configure
+    """
+    parser.add_argument(
+        "name",
+        nargs="?",
+        type=str,
+        help="Name of the resource (can be configured with --name)",
+    )
+    parser.add_argument(
+        "-n",
+        "--namespace",
+        type=str,
+        required=True,
+        help="Namespace of the resource",
+    )
+    parser.add_argument(
+        "--name",
+        dest="name",
+        type=str,
+        required=False,
+        help="Name of the resource",
+    )
+
+
 class CRD:
     """
     Representation of each CRD with its service methods
@@ -427,9 +458,14 @@ class CRD:
         self.delete = MethodType(bound_func, self)
         _LOG.debug("Generated DELETE injected well: %r", self.delete)
 
-    def generate_get(self, channel: Channel):
+    def generate_get(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """
         Generate get function of this class.
+        Optionally configure argparse parser with arguments.
+
+        Args:
+            channel: gRPC channel
+            parser: Optional ArgumentParser to configure with --namespace and --name
         """
         _LOG.info("Generate GET method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
@@ -437,6 +473,12 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "Get"),
         )
+
+        # Configure argparse if parser provided
+        if parser is not None:
+            _LOG.info("Configuring argparse for GET action")
+            configure_get_parser(parser)
+
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
             + [Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -929,15 +971,29 @@ def main(channel: Channel):
             f" '{user_command_action}' action."
         )
 
-    # Generate and run
-    func_action_generator = getattr(
-        crds[user_command_crd], f"generate_{user_command_action}"
-    )
-    func_action_generator(channel)
+    # For 'get' action, use dynamic argparse
+    if user_command_action == "get":
+        action_parser = ArgumentParser(
+            prog=f"mactl {user_command_crd} get",
+            description=f"Get {user_command_crd} resource",
+        )
+        func_action_generator = getattr(
+            crds[user_command_crd], f"generate_{user_command_action}"
+        )
+        func_action_generator(channel, action_parser)
 
-    assert hasattr(crds[user_command_crd], user_command_action)
-    func_action = getattr(crds[user_command_crd], user_command_action)
-    result = func_action(**kwargs)
+        # Parse args from sys.argv[3:] and execute
+        args = action_parser.parse_args(sys.argv[3:])
+        func_action = getattr(crds[user_command_crd], user_command_action)
+        result = func_action(**vars(args))
+    else:
+        func_action_generator = getattr(
+            crds[user_command_crd], f"generate_{user_command_action}"
+        )
+        func_action_generator(channel)
+
+        func_action = getattr(crds[user_command_crd], user_command_action)
+        result = func_action(**kwargs)
 
     # Convert to JSON and pretty print
     # temporary disable json converting due to issue:
