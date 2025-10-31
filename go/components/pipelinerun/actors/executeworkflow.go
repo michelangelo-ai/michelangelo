@@ -19,6 +19,7 @@ import (
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -211,10 +212,37 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to add task cache env: %v", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+
+	// Get project to determine storage provider for multi-tenant routing
+	project := &v2.Project{}
+	err = a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get project %s: %w", pipelineRun.Namespace, err)
+	}
+
+	// Add storage provider to workflow environment for plugins to use
+	if project.Spec.StorageProvider != "" {
+		envs["UF_STORAGE_PROVIDER"] = project.Spec.StorageProvider
+		a.logger.Debug("Adding storage provider to workflow environment",
+			zap.String("storage_provider", project.Spec.StorageProvider))
+	}
+
+	// Get tar content using explicit storage provider
+	var tarContent []byte
+	if project.Spec.StorageProvider != "" {
+		a.logger.Debug("Using storage provider for tar content retrieval",
+			zap.String("storage_provider", project.Spec.StorageProvider),
+			zap.String("tar_uri", pipeline.Spec.Manifest.UniflowTar))
+		tarContent, err = a.blobStore.GetWithProvider(ctx, pipeline.Spec.Manifest.UniflowTar, project.Spec.StorageProvider)
+	} else {
+		a.logger.Debug("Using scheme-based routing for tar content retrieval (no storage provider)",
+			zap.String("tar_uri", pipeline.Spec.Manifest.UniflowTar))
+		tarContent, err = a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
 	}
+
 
 	workflowExecution, err := a.workflowClient.StartWorkflow(
 		ctx,
@@ -382,6 +410,7 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }
+
 
 // propagateTerminalStateToSubsteps updates substep states when the parent workflow reaches a terminal state
 // This ensures no substeps remain in RUNNING or PENDING state when the workflow has ended

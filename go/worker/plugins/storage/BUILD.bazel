@@ -19,7 +19,7 @@ go_library(
 
 go_test(
     name = "go_default_test",
-    srcs = ["starlark_module_test.go"],
+    srcs = ["plugin_test.go"],
     data = glob(["testdata/**"]),
     embed = [":go_default_library"],
     deps = [
