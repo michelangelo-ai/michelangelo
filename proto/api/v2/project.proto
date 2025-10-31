@@ -122,11 +122,7 @@ message ProjectSpec {
   // Examples: "aws-sharezone", "aws-company1", "azure-sharezone"
   string storage_provider = 11 [(michelangelo.api.validation) = {optional: true}];
 
-  // Future: Batch job provider key for multi-tenant compute isolation.
-  // Will specify which compute provider configuration to use for training jobs.
-  // string batch_job_provider = 12 [(michelangelo.api.validation) = {optional: true}];
-
-  // Extension field for additional custom data
+  // Extension field for additional project specification data
   google.protobuf.Any ext = 999;
 }
 
