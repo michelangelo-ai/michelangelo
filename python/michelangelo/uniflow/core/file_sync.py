@@ -93,8 +93,8 @@ class UniflowFileSyncBuilder(ABC):
         log.info(f"Git root: {git_root}, Current dir: {os.getcwd()}")
 
         # Get modified files
-        if commit_sha:
-            # If we have a Git SHA from the Docker image, compare against it
+        if commit_sha and commit_sha.lower() not in ["unknown", "none"]:
+            # If we have a valid Git SHA from the Docker image, compare against it
             log.info(f"Comparing against commit SHA: {commit_sha}")
             result = subprocess.run(
                 ["git", "diff", "--name-only", commit_sha],
