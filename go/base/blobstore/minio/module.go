@@ -36,12 +36,12 @@ type BlobStoreClientOut struct {
 // Module sets up dependency injection for MinIO/S3 storage clients.
 //
 // This fx.Module configuration registers the necessary providers for:
-// 1. Configuration parsing (newConfig) - reads YAML configuration and creates Config struct
-// 2. Client creation (newClient) - creates multiple S3 clients based on configuration
+// 1. Configuration parsing (NewConfig) - reads YAML configuration and creates Config struct
+// 2. Client creation (NewClient) - creates multiple S3 clients based on configuration
 //
 // The module follows the dependency injection pattern where:
-// - newConfig reads configuration from YAML and provides a Config struct
-// - newClient consumes the Config and produces multiple BlobStoreClientOut instances
+// - NewConfig reads configuration from YAML and provides a Config struct
+// - NewClient consumes the Config and produces multiple BlobStoreClientOut instances
 // - Each BlobStoreClientOut gets collected into the "blobstore_clients" group
 //
 // Example integration:
@@ -52,11 +52,11 @@ type BlobStoreClientOut struct {
 //	    fx.Invoke(startServer), // Start application with all storage clients available
 //	)
 var Module = fx.Options(
-	fx.Provide(newConfig),
-	fx.Provide(newClient),
+	fx.Provide(NewConfig),
+	fx.Provide(NewClient),
 )
 
-// newClient initializes S3/MinIO storage clients using the provided configuration.
+// NewClient initializes S3/MinIO storage clients using the provided configuration.
 //
 // This function creates multiple S3-compatible storage clients based on the configuration map.
 // It supports various S3-compatible services including AWS S3, MinIO, DigitalOcean Spaces,
@@ -97,19 +97,8 @@ var Module = fx.Options(
 //   - Preserves original errors for upstream handling and retry logic
 //   - Includes provider context in error messages for debugging
 //   - Service boundary logging will be handled by consuming components
-func newClient(config Config) ([]BlobStoreClientOut, error) {
+func NewClient(config Config) ([]BlobStoreClientOut, error) {
 	var clients []BlobStoreClientOut
-
-	// Handle empty configuration by creating default AWS S3 client
-	// This ensures backward compatibility and provides sensible defaults
-	if len(config) == 0 {
-		defaultClient, err := newDefaultS3Client()
-		if err != nil {
-			// Follow error handling guidelines: wrap with operation context
-			return nil, fmt.Errorf("create default S3 client: %w", err)
-		}
-		return []BlobStoreClientOut{defaultClient}, nil
-	}
 
 	// Create clients for each configured S3 storage provider
 	// Process all providers in the array - the "minio" key indicates S3-compatible storage
@@ -123,66 +112,6 @@ func newClient(config Config) ([]BlobStoreClientOut, error) {
 	}
 
 	return clients, nil
-}
-
-// newDefaultS3Client creates a default S3 client when no providers are explicitly configured.
-//
-// This function provides backward compatibility and sensible defaults for deployments that
-// haven't explicitly configured storage providers. It creates a standard AWS S3 client
-// using environment-based credentials.
-//
-// Returns:
-//   - BlobStoreClientOut: Default S3 client ready for dependency injection
-//   - error: Any error that occurred during client creation
-//
-// Default Configuration:
-//   - Endpoint: "s3.amazonaws.com" (AWS S3 service)
-//   - Credentials: Environment variables (AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN)
-//   - Provider Key: "aws-sandbox" (indicates default/development usage)
-//   - Security: TLS enabled (Secure: true)
-//   - Region: Handled by AWS SDK default region detection
-//
-// Authentication Requirements:
-//
-//	The following environment variables must be set for authentication:
-//	- AWS_ACCESS_KEY_ID: AWS access key identifier
-//	- AWS_SECRET_ACCESS_KEY: AWS secret access key
-//	- AWS_SESSION_TOKEN: (Optional) Session token for temporary credentials
-//	- AWS_REGION: (Optional) Default region for operations
-//
-// Use Cases:
-//   - Legacy deployments migrating to multi-provider configuration
-//   - Simple single-provider deployments that don't need multiple storage accounts
-//   - Development environments using developer AWS credentials
-//   - CI/CD pipelines with injected AWS credentials
-//
-// Error Handling:
-//   - MinIO SDK errors (invalid endpoints, credential issues)
-//   - Network connectivity problems during client initialization
-//   - Missing or invalid environment variables
-//   - Returns unwrapped errors since context is obvious from function name
-func newDefaultS3Client() (BlobStoreClientOut, error) {
-	// Use environment-based credentials for default client
-	// This reads AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN
-	creds := credentials.NewEnvAWS()
-
-	// Create MinIO client configured for AWS S3
-	s3Client, err := minio.New("s3.amazonaws.com", &minio.Options{
-		Creds:  creds,
-		Secure: true, // Always use HTTPS for security
-	})
-	if err != nil {
-		// Return direct error since context is clear (default S3 client creation)
-		return BlobStoreClientOut{}, err
-	}
-
-	return BlobStoreClientOut{
-		BlobStoreClient: &minioClient{
-			s3Client:    s3Client,
-			scheme:      "s3",
-			providerKey: "aws-sandbox", // Default provider key for identification
-		},
-	}, nil
 }
 
 // newS3ClientWithKey creates a new S3/MinIO client for a specific provider configuration.

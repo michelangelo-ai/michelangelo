@@ -6,7 +6,7 @@ import (
 	"go.uber.org/config"
 )
 
-// TestNewConfig_Success verifies that newConfig correctly populates the Config struct
+// TestNewConfig_Success verifies that NewConfig correctly populates the Config struct
 // when valid YAML configuration data is provided.
 func TestNewConfig_Success(t *testing.T) {
 	// YAML content with the "minio" key and its array-based configuration.
@@ -32,10 +32,10 @@ minio:
 		t.Fatalf("failed to create YAML provider: %v", err)
 	}
 
-	// Call newConfig with the provider.
-	conf, err := newConfig(provider)
+	// Call NewConfig with the provider.
+	conf, err := NewConfig(provider)
 	if err != nil {
-		t.Fatalf("newConfig returned error: %v", err)
+		t.Fatalf("NewConfig returned error: %v", err)
 	}
 
 	// Validate that the configuration values are correctly populated.
@@ -74,7 +74,7 @@ minio:
 	}
 }
 
-// TestNewConfig_MissingKey verifies that newConfig returns an empty Config struct
+// TestNewConfig_MissingKey verifies that NewConfig returns an empty Config struct
 // when the required "minio" key is missing from the YAML configuration.
 func TestNewConfig_MissingKey(t *testing.T) {
 	// YAML content without the "minio" key.
@@ -88,9 +88,9 @@ notminio:
 		t.Fatalf("failed to create YAML provider: %v", err)
 	}
 
-	conf, err := newConfig(provider)
+	conf, err := NewConfig(provider)
 	if err != nil {
-		t.Fatalf("newConfig returned error: %v", err)
+		t.Fatalf("NewConfig returned error: %v", err)
 	}
 
 	// Since the "minio" key is missing, the array should be empty.

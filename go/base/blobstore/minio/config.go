@@ -190,7 +190,7 @@ type (
 	}
 )
 
-// newConfig creates a new MinIO/S3 storage configuration from the provided config provider.
+// NewConfig creates a new MinIO/S3 storage configuration from the provided config provider.
 // It reads the configuration from the YAML key specified by configKey ("minio").
 //
 // Parameters:
@@ -212,7 +212,7 @@ type (
 //	    return fmt.Errorf("create config provider: %w", err)
 //	}
 //
-//	minioConfig, err := newConfig(provider)
+//	minioConfig, err := NewConfig(provider)
 //	if err != nil {
 //	    return fmt.Errorf("parse minio config: %w", err)
 //	}
@@ -227,7 +227,7 @@ type (
 //   - If no providers are configured, a default AWS S3 client is created
 //   - Default client uses environment-based credentials
 //   - Default provider key is "aws-sandbox"
-func newConfig(provider config.Provider) (Config, error) {
+func NewConfig(provider config.Provider) (Config, error) {
 	conf := Config{}
 	err := provider.Get(configKey).Populate(&conf)
 	if err != nil {

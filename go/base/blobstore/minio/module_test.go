@@ -7,7 +7,7 @@ import (
 func TestNewClient_EmptyConfig_CreatesDefaultClient(t *testing.T) {
 	config := Config{}
 
-	clients, err := newClient(config)
+	clients, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -53,7 +53,7 @@ func TestNewClient_MultipleProviders_CreatesMultipleClients(t *testing.T) {
 		},
 	}
 
-	clients, err := newClient(config)
+	clients, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -145,7 +145,7 @@ func TestNewClient_SingleProvider_CreatesOneClient(t *testing.T) {
 		},
 	}
 
-	clients, err := newClient(config)
+	clients, err := NewClient(config)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

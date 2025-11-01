@@ -10,6 +10,7 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/blobstore:go_default_library",
+        "//go/base/blobstore/azure:go_default_library",
         "//go/base/blobstore/minio:go_default_library",
         "//go/worker/activities:go_default_library",
         "//go/worker/starlark:go_default_library",
