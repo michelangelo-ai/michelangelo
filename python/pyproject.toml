@@ -53,6 +53,11 @@ grpcio-reflection = { version = ">=1.66.1", optional = true }
 PyYAML = { version = "6.0.2", optional = true }
 GitPython = { version = ">=3.1.44", optional = true }
 
+# For Chronon integration
+chronon-ai = { version = "0.0.109", optional = true }
+thrift = { version = "0.13.0", optional = true }
+sqlglot = { version = "^27.29.0", optional = true }
+
 
 [tool.poetry.scripts]
 ma = 'michelangelo.cli.cli:main'
@@ -62,6 +67,7 @@ ma = 'michelangelo.cli.cli:main'
 dev = ["pytest", "ruff", "jinja2", "pre-commit", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray"]
+chronon = ["chronon-ai", "thrift", "sqlglot", "pyspark", "ray"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
