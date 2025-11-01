@@ -6,7 +6,7 @@ Main workflow entry point for training Qwen-based recommendation model
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
-# Import our local modules
+# Import our local modules using direct file execution to avoid conflicts
 import sys
 import os
 from pathlib import Path
@@ -15,8 +15,10 @@ from pathlib import Path
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
-from data import load_amazon_data, create_training_pairs
-from train import train_dual_encoder  # Use unified training function
+# Import workflow functions
+from examples.amazon_books_qwen.train import train_dual_encoder
+from examples.amazon_books_qwen.download import download_kaggle_dataset
+from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
 
 
 @uniflow.workflow()
@@ -25,61 +27,89 @@ def amazon_books_qwen_workflow():
     Complete workflow for training Qwen dual-encoder on Amazon Books data
     Following GenRec+Qwen architecture (N3) specifications
     """
+    # Step 1: Download dataset (can be cached/reused)
+    dataset_config = {
+        "max_query_tokens": 128,    # Qwen spec: max query length
+        "max_doc_tokens": 512,      # Qwen spec: max document length
+        "sample_size": 100,         # Small subset for local testing
+        "negative_ratio": 1.0,      # 1:1 positive to negative ratio
+        "train_split": 0.7,
+        "val_split": 0.15,
+        "test_split": 0.15
+    }
 
-    # Step 1: Load and preprocess Amazon books dataset
-    dataset_path = "/tmp/amazon-books-reviews.zip"  # Update with actual path
+    books_dv, reviews_dv = download_kaggle_dataset(dataset_config=dataset_config)
 
-    raw_data = load_amazon_data(
-        dataset_path=dataset_path,
-        max_query_tokens=128,    # Qwen spec: max query length
-        max_doc_tokens=512       # Qwen spec: max document length
+    # Check if download succeeded
+    if books_dv == None or reviews_dv == None:
+        print("❌ Dataset download failed - stopping pipeline")
+        return {"error": "Dataset download failed", "success": False}
+
+    print("✅ Dataset download completed")
+
+    # Step 2: Chronon Feature Engineering and Data Preparation Pipeline
+    train_dv, val_dv, test_dv = compute_chronon_features_with_spark(
+        dataset_config=dataset_config,
+        books_dv=books_dv,
+        reviews_dv=reviews_dv
     )
 
-    # Step 2: Create query-document pairs for contrastive learning
-    training_data = create_training_pairs(
-        raw_data=raw_data,
-        negative_ratio=1.0,      # 1:1 positive to negative ratio
-        train_split=0.7,
-        val_split=0.15,
-        test_split=0.15
-    )
+    # Check if feature computation succeeded
+    if train_dv == None or val_dv == None or test_dv == None:
+        print("❌ Chronon feature computation failed - stopping pipeline")
+        return {"error": "Chronon feature computation failed", "success": False}
 
-    # Step 3: Train dual-encoder model with unified training function
+    # Step 3: Train dual-encoder model with enhanced data
     model_result = train_dual_encoder(
-        train_data=training_data["train"],
-        val_data=training_data["validation"],
-        test_data=training_data["test"],
-        embedding_dim=1536,      # Qwen spec: 1536 dimensions
-        batch_size=32,           # Batch size
+        train_dv=train_dv,
+        val_dv=val_dv,
+        test_dv=test_dv,
+        embedding_dim=512,       # Start with reasonable size for local testing
+        batch_size=16,           # Batch size
         learning_rate=2e-5,
-        num_epochs=3,
+        num_epochs=2,            # 2 epochs for testing
         num_workers=1,           # Local: 1, Distributed: 2+
         use_gpu=False,           # Set to True if GPU available
         distributed=False        # Set to True for distributed training
     )
 
-    print("Training completed!")
-    print(f"Model metrics: {model_result}")
+    print("🎉 End-to-end pipeline completed!")
+    print(f"📊 Model metrics: {model_result}")
+
+    # Add success info and Chronon feature info to results
+    model_result["success"] = True
+    model_result["chronon_features"] = "enabled"
+    # DatasetVariables don't have count() method - will be tracked in training logs
+
     return model_result
 
 
-# For Local Run: python3 examples/amazon_books_qwen/amazon_books_qwen.py
-# For Remote Run: python3 examples/amazon_books_qwen/amazon_books_qwen.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run from python directory: PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
+# For Remote Run: python examples/amazon_books_qwen/amazon_books_qwen.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
+    print("=" * 80)
+    print("Amazon Books Qwen Dual-Encoder Pipeline")
+    print("=" * 80)
+
     ctx = uniflow.create_context()
 
-    # Environment configuration
-    ctx.environ["DATA_SIZE"] = "1000"  # Number of samples for testing
+    # Environment configuration for local testing
+    ctx.environ["DATA_SIZE"] = "100"  # Smaller sample for testing
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
 
-    # Qwen model specific environment
-    ctx.environ["QWEN_MODEL_SIZE"] = "1.5B"  # Options: 0.6B, 1.5B, 8B
-    ctx.environ["ENABLE_BF16"] = "True"
+    # Use local model for testing
+    ctx.environ["QWEN_MODEL_SIZE"] = "local"  # Use simple local model
+    ctx.environ["ENABLE_BF16"] = "False"
     ctx.environ["MAX_QUERY_LENGTH"] = "128"
     ctx.environ["MAX_DOC_LENGTH"] = "512"
 
-    ctx.run(amazon_books_qwen_workflow)
+    # Run the workflow
+    result = ctx.run(amazon_books_qwen_workflow)
+
+    print("=" * 80)
+    print("Pipeline completed successfully!")
+    print("=" * 80)

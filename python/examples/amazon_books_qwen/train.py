@@ -5,6 +5,7 @@ Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 
 import logging
 import os
+import glob
 from typing import Dict, Any
 import torch
 import torch.nn as nn
@@ -21,6 +22,7 @@ from ray.air.config import ScalingConfig
 
 from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
 
 log = logging.getLogger(__name__)
 
@@ -272,6 +274,23 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _convert_spark_to_ray_dataset(spark_df):
+    """Convert Spark DataFrame to Ray Dataset"""
+    try:
+        # Convert Spark DataFrame to Pandas DataFrame first
+        pandas_df = spark_df.toPandas()
+        log.info(f"Converted Spark DataFrame to Pandas: {len(pandas_df)} rows")
+
+        # Convert Pandas DataFrame to Ray Dataset
+        ray_dataset = ray.data.from_pandas(pandas_df)
+        log.info(f"Converted Pandas DataFrame to Ray Dataset: {ray_dataset.count()} rows")
+
+        return ray_dataset
+    except Exception as e:
+        log.error(f"Failed to convert Spark DataFrame to Ray Dataset: {e}")
+        raise
+
+
 @uniflow.task(
     config=RayTask(
         head_cpu=4,
@@ -280,12 +299,13 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
         worker_memory="32Gi",
         worker_instances=1,  # Default to 1 for local, can be increased for distributed
         # worker_gpu=1,  # Uncomment for GPU training
+        runtime_env={"pip": ["transformers", "torch", "scikit-learn", "numpy", "pandas"]}
     )
 )
 def train_dual_encoder(
-    train_data: Dataset,
-    val_data: Dataset,
-    test_data: Dataset,
+    train_dv: DatasetVariable,
+    val_dv: DatasetVariable,
+    test_dv: DatasetVariable,
     embedding_dim: int = 1536,
     batch_size: int = 32,
     learning_rate: float = 2e-5,
@@ -300,9 +320,9 @@ def train_dual_encoder(
     Supports both local and distributed training with optional GPU support
 
     Args:
-        train_data: Training Ray dataset
-        val_data: Validation Ray dataset
-        test_data: Test Ray dataset
+        train_dv: Training DatasetVariable
+        val_dv: Validation DatasetVariable
+        test_dv: Test DatasetVariable
         embedding_dim: Output embedding dimension (Qwen spec: 1536)
         batch_size: Training batch size (per worker for distributed)
         learning_rate: Learning rate
@@ -316,6 +336,30 @@ def train_dual_encoder(
         Dictionary with training metrics and model info
     """
     log.info(f"Starting Qwen dual encoder training - Distributed: {distributed}, GPU: {use_gpu}, Workers: {num_workers}")
+
+    # Load DatasetVariables as Ray Datasets following boston_housing pattern
+    log.info("Loading DatasetVariables as Ray Datasets...")
+
+    # Load datasets with parquet file filtering to avoid .crc files
+    def load_ray_dataset_from_path(dataset_path):
+        """Load Ray dataset from path, filtering out Spark metadata files"""
+        # Find actual parquet files, excluding .crc and _SUCCESS files
+        parquet_files = glob.glob(os.path.join(dataset_path, "*.parquet"))
+        if not parquet_files:
+            # Try .snappy.parquet extension
+            parquet_files = glob.glob(os.path.join(dataset_path, "*.snappy.parquet"))
+
+        if parquet_files:
+            log.info(f"Found {len(parquet_files)} parquet files in {dataset_path}")
+            return ray.data.read_parquet(parquet_files)
+        else:
+            raise FileNotFoundError(f"No parquet files found in {dataset_path}")
+
+    train_data = load_ray_dataset_from_path(train_dv.path)
+    val_data = load_ray_dataset_from_path(val_dv.path)
+    test_data = load_ray_dataset_from_path(test_dv.path)
+
+    log.info("✅ All datasets loaded and ready for training")
 
     # Get model configuration
     qwen_model_size = os.environ.get("QWEN_MODEL_SIZE", "1.5B")
