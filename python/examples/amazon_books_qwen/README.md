@@ -58,27 +58,92 @@ source .venv/bin/activate
 ### 2. Dependencies
 
 The pipeline requires these key dependencies (included in `pyproject.toml`):
-- `chronon-ai==0.0.109` - Chronon SDK
+- `chronon-ai==0.0.109` - Chronon SDK for temporal features
+- `kaggle` - Kaggle API for dataset download
 - `pyspark==3.5.5` - Spark for data processing
 - `ray[default]==2.41.0` - Ray for distributed training
 - `transformers==4.48.2` - Hugging Face models
 - `torch==2.6.0` - PyTorch
 
-### 3. Kaggle Dataset
+**Note**: Kaggle API is automatically available in the poetry environment, but you must set up credentials manually.
 
-The pipeline automatically downloads the Amazon Books dataset using Kaggle API:
-- Requires Kaggle credentials in `~/.kaggle/kaggle.json`
-- Downloads to `/tmp/kaggle/` automatically
-- Processes 50 books and 414 reviews for local testing
+### 3. Kaggle Dataset Setup
+
+The pipeline automatically downloads the [Amazon Books Reviews dataset](https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews) using Kaggle API.
+
+#### **Install Kaggle API**:
+```bash
+pip install kaggle
+# or if using poetry:
+poetry add kaggle
+```
+
+#### **Set up Kaggle API credentials**:
+
+1. **Create Kaggle API Token**:
+   - Go to https://www.kaggle.com/account
+   - Click "Create New API Token"
+   - Download the `kaggle.json` file
+
+2. **Install credentials**:
+   ```bash
+   # Create kaggle directory
+   mkdir -p ~/.kaggle
+
+   # Copy your downloaded kaggle.json file
+   cp ~/Downloads/kaggle.json ~/.kaggle/kaggle.json
+
+   # Set correct permissions
+   chmod 600 ~/.kaggle/kaggle.json
+   ```
+
+3. **Accept dataset terms** (Required):
+   - Visit: https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews
+   - Click "Download" to accept the dataset terms
+   - You must accept terms before API download will work
+
+4. **Verify setup**:
+   ```bash
+   kaggle datasets list -s amazon
+   # Should show available datasets including amazon-books-reviews
+
+   # Test download (optional - pipeline does this automatically)
+   kaggle datasets download -d mohamedbakhet/amazon-books-reviews
+   ```
+
+#### **Dataset Details**:
+- **Source**: [Amazon Books Reviews on Kaggle](https://www.kaggle.com/datasets/mohamedbakhet/amazon-books-reviews)
+- **Size**: 3 million reviews on 212,404 books (May 1996 - July 2014)
+- **Auto-download**: Pipeline downloads to `/tmp/kaggle/` automatically
+- **Local testing**: Processes 50 books and 414 reviews for development
 
 ## 🚀 Usage
 
 ### Quick Start
 
+#### **1. Pre-flight Check** (Recommended):
 ```bash
 # Navigate to python directory
 cd /Users/weric/works/uber/michelangelo_ai/michelangelo/python
 
+# Activate virtual environment
+source .venv/bin/activate
+
+# Verify Kaggle API setup
+kaggle datasets list -s amazon-books-reviews
+# Should show: mohamedbakhet/amazon-books-reviews
+
+# Check Python path and imports
+PYTHONPATH=. python -c "
+import kaggle
+import pyspark
+from ai.chronon.api.ttypes import StagingQuery
+print('✅ All dependencies available')
+"
+```
+
+#### **2. Run Pipeline**:
+```bash
 # Activate virtual environment and run pipeline
 source .venv/bin/activate && PYTHONPATH=. python examples/amazon_books_qwen/amazon_books_qwen.py
 ```
@@ -182,6 +247,14 @@ examples/amazon_books_qwen/
         └── amazon_books/
             └── book_features.py   # GroupBy feature definitions
 ```
+
+### 🧹 **Cleaned Up Architecture**
+
+The pipeline now uses **integrated Chronon management**:
+- ✅ **No external tools** - Everything handled in Python
+- ✅ **Automatic JAR download** - No manual Chronon setup required
+- ✅ **On-demand compilation** - No pre-compilation steps needed
+- ✅ **Self-contained** - Single command execution
 
 ## 🔧 Technical Details
 
@@ -305,23 +378,45 @@ The pipeline provides comprehensive logging:
 
 ### Common Issues
 
-1. **Chronon JAR Download**:
+1. **Chronon Runtime Engine**:
    ```bash
    # JAR automatically downloaded to /tmp/chronon/chronon-spark.jar
    # If download fails, check internet connectivity
+   # Pipeline fails fast if Chronon doesn't work - no fallback logic
    ```
 
-2. **Kaggle API**:
+2. **Kaggle API Issues**:
    ```bash
-   # Ensure credentials are set up
-   ls ~/.kaggle/kaggle.json
+   # Check if credentials file exists and has correct permissions
+   ls -la ~/.kaggle/kaggle.json
+   # Should show: -rw------- (permissions 600)
+
+   # Test Kaggle API connection
+   kaggle datasets list -s amazon-books-reviews
+   # Should show the dataset without errors
+
+   # Common fixes:
+   chmod 600 ~/.kaggle/kaggle.json  # Fix permissions
+   pip install --upgrade kaggle      # Update Kaggle API
    ```
+
+   **Common Kaggle Errors**:
+   - `401 Unauthorized`: Check if `kaggle.json` exists and has valid credentials
+   - `403 Forbidden`: Ensure you've accepted the dataset's terms on Kaggle website
+   - `Connection timeout`: Check internet connection and firewall settings
 
 3. **Virtual Environment**:
    ```bash
    # Verify you're in the correct directory and venv
    pwd  # Should be: /Users/weric/works/uber/michelangelo_ai/michelangelo/python
    which python  # Should point to .venv/bin/python
+   ```
+
+4. **Import Path Issues**:
+   ```bash
+   # Ensure PYTHONPATH is set correctly
+   echo $PYTHONPATH  # Should include current directory (.)
+   # Use: PYTHONPATH=. python examples/amazon_books_qwen/amazon_books_qwen.py
    ```
 
 ### Debug Mode
