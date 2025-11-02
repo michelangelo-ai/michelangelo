@@ -16,9 +16,15 @@ current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
 
 # Import workflow functions
-from examples.amazon_books_qwen.train import train_dual_encoder
-from examples.amazon_books_qwen.download import download_kaggle_dataset
-from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+try:
+    from examples.amazon_books_qwen.train import train_dual_encoder
+    from examples.amazon_books_qwen.download import download_kaggle_dataset
+    from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+except ModuleNotFoundError:
+    # Use relative imports if the module path doesn't work
+    from train import train_dual_encoder
+    from download import download_kaggle_dataset
+    from chronon_tasks import compute_chronon_features_with_spark
 
 
 @uniflow.workflow()
