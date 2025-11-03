@@ -294,9 +294,9 @@ def _convert_spark_to_ray_dataset(spark_df):
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_memory="12Gi",
-        worker_cpu=2,
-        worker_memory="12Gi",
+        head_memory="8Gi",
+        worker_cpu=1,
+        worker_memory="8Gi",
         worker_instances=1,  # Default to 1 for local, can be increased for distributed
         # worker_gpu=1,  # Uncomment for GPU training
         runtime_env={"pip": ["transformers", "torch", "scikit-learn", "numpy", "pandas"]}
