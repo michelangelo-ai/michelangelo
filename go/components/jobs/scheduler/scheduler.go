@@ -331,11 +331,11 @@ func (c *Scheduler) assignJob(ctx context.Context, job framework.BatchJob) error
 	}
 
 	if !found {
-		// Didn't find any clusters in the cache
-		c.log.Info("No clusters found in the cluster cache")
+		// Didn't find any clusters for assignment
+		c.log.Info("No clusters found for assignment")
 		c.updateIfChanged(scheduledCondition, utils.ConditionUpdateParams{
 			Status:     apipb.CONDITION_STATUS_FALSE,
-			Reason:     "NoClustersFoundInCache",
+			Reason:     "NoClustersFoundForAssignment",
 			Generation: job.GetGeneration(),
 		})
 	} else {

@@ -17,6 +17,7 @@ go_library(
         "//go/components/ray/kuberay:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
+        "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/labels:go_default_library",

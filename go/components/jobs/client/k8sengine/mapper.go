@@ -68,10 +68,13 @@ func (m Mapper) MapGlobalJobClusterToLocal(jobClusterObject runtime.Object, clus
 // GetLocalName gets the namespaced name of the local crd. This is used by methods that only require the
 // namespaced name to perform operations like Delete or Get APIs.
 func (m Mapper) GetLocalName(obj runtime.Object) (namespace, name string) {
-	switch job := obj.(type) {
+	switch o := obj.(type) {
 	case *v2pb.RayJob:
 		namespace = RayLocalNamespace
-		name = job.Name
+		name = o.Name
+	case *v2pb.RayCluster:
+		namespace = RayLocalNamespace
+		name = o.Name
 	case *v2pb.SparkJob:
 		// Not implemented yet; return empty
 		return "", ""
