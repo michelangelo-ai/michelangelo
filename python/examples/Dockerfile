@@ -100,9 +100,9 @@ ENV PYTHONPATH=/app
 COPY . .
 
 # Copy Kaggle credentials
-RUN mkdir -p /root/.kaggle
-COPY kaggle.json /root/.kaggle/kaggle.json
-RUN chmod 600 /root/.kaggle/kaggle.json
+#RUN mkdir -p /root/.kaggle
+#COPY kaggle.json /root/.kaggle/kaggle.json
+#RUN chmod 600 /root/.kaggle/kaggle.json
 
 # Install python dependencies
 RUN ls -alF ./

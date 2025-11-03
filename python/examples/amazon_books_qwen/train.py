@@ -293,10 +293,10 @@ def _convert_spark_to_ray_dataset(spark_df):
 
 @uniflow.task(
     config=RayTask(
-        head_cpu=4,
-        head_memory="32Gi",
-        worker_cpu=4,
-        worker_memory="32Gi",
+        head_cpu=1,
+        head_memory="12Gi",
+        worker_cpu=2,
+        worker_memory="12Gi",
         worker_instances=1,  # Default to 1 for local, can be increased for distributed
         # worker_gpu=1,  # Uncomment for GPU training
         runtime_env={"pip": ["transformers", "torch", "scikit-learn", "numpy", "pandas"]}
@@ -340,24 +340,14 @@ def train_dual_encoder(
     # Load DatasetVariables as Ray Datasets following boston_housing pattern
     log.info("Loading DatasetVariables as Ray Datasets...")
 
-    # Load datasets with parquet file filtering to avoid .crc files
-    def load_ray_dataset_from_path(dataset_path):
-        """Load Ray dataset from path, filtering out Spark metadata files"""
-        # Find actual parquet files, excluding .crc and _SUCCESS files
-        parquet_files = glob.glob(os.path.join(dataset_path, "*.parquet"))
-        if not parquet_files:
-            # Try .snappy.parquet extension
-            parquet_files = glob.glob(os.path.join(dataset_path, "*.snappy.parquet"))
+    train_dv.load_ray_dataset()
+    train_data: ray.data.Dataset = train_dv.value
 
-        if parquet_files:
-            log.info(f"Found {len(parquet_files)} parquet files in {dataset_path}")
-            return ray.data.read_parquet(parquet_files)
-        else:
-            raise FileNotFoundError(f"No parquet files found in {dataset_path}")
+    val_dv.load_ray_dataset()
+    val_data: ray.data.Dataset = val_dv.value
 
-    train_data = load_ray_dataset_from_path(train_dv.path)
-    val_data = load_ray_dataset_from_path(val_dv.path)
-    test_data = load_ray_dataset_from_path(test_dv.path)
+    test_dv.load_ray_dataset()
+    test_data: ray.data.Dataset = test_dv.value
 
     log.info("✅ All datasets loaded and ready for training")
 

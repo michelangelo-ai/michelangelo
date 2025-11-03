@@ -11,20 +11,10 @@ import sys
 import os
 from pathlib import Path
 
-# Add current directory to path for local imports
-current_dir = Path(__file__).parent
-sys.path.insert(0, str(current_dir))
-
 # Import workflow functions
-try:
-    from examples.amazon_books_qwen.train import train_dual_encoder
-    from examples.amazon_books_qwen.download import download_kaggle_dataset
-    from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
-except ModuleNotFoundError:
-    # Use relative imports if the module path doesn't work
-    from train import train_dual_encoder
-    from download import download_kaggle_dataset
-    from chronon_tasks import compute_chronon_features_with_spark
+from examples.amazon_books_qwen.train import train_dual_encoder
+from examples.amazon_books_qwen.download import download_kaggle_dataset
+from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
 
 
 @uniflow.workflow()
@@ -46,24 +36,12 @@ def amazon_books_qwen_workflow():
 
     books_dv, reviews_dv = download_kaggle_dataset(dataset_config=dataset_config)
 
-    # Check if download succeeded
-    if books_dv == None or reviews_dv == None:
-        print("❌ Dataset download failed - stopping pipeline")
-        return {"error": "Dataset download failed", "success": False}
-
-    print("✅ Dataset download completed")
-
     # Step 2: Chronon Feature Engineering and Data Preparation Pipeline
     train_dv, val_dv, test_dv = compute_chronon_features_with_spark(
         dataset_config=dataset_config,
         books_dv=books_dv,
         reviews_dv=reviews_dv
     )
-
-    # Check if feature computation succeeded
-    if train_dv == None or val_dv == None or test_dv == None:
-        print("❌ Chronon feature computation failed - stopping pipeline")
-        return {"error": "Chronon feature computation failed", "success": False}
 
     # Step 3: Train dual-encoder model with enhanced data
     model_result = train_dual_encoder(
@@ -78,14 +56,6 @@ def amazon_books_qwen_workflow():
         use_gpu=False,           # Set to True if GPU available
         distributed=False        # Set to True for distributed training
     )
-
-    print("🎉 End-to-end pipeline completed!")
-    print(f"📊 Model metrics: {model_result}")
-
-    # Add success info and Chronon feature info to results
-    model_result["success"] = True
-    model_result["chronon_features"] = "enabled"
-    # DatasetVariables don't have count() method - will be tracked in training logs
 
     return model_result
 
