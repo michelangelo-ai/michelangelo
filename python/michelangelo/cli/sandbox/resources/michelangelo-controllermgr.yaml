@@ -44,7 +44,7 @@ data:
   base.yaml: |
     controllermgr:
       metricsBindAddress: ${METRICS_ADDRESS::8091}
-      healthProbeBindAddress: ${HEALTH_ADDRESS::8081}
+      healthProbeBindAddress: ${HEALTH_ADDRESS::8082}
       leaderElection: false
       leaderElectionID: decaf1259.michelangelo.uber.com
 
@@ -60,7 +60,7 @@ data:
       awsEndpointUrl: minio:9091
     
     workflowClient:
-      service: cadence-frontend
-      host: cadence:7833
+      service: temporaltest-frontend
+      host: temporaltest-frontend:7233
       transport: grpc
       domain: default
