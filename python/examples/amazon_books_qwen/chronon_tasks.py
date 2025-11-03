@@ -26,8 +26,13 @@ from ai.chronon.repo.compile import thrift_simple_json_protected
 from ai.chronon.api.ttypes import StagingQuery, GroupBy, Join
 
 # Chronon definitions (moved to top level)
-from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import base_table
-from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import book_popularity, book_velocity
+try:
+    from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import base_table
+    from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import book_popularity, book_velocity
+except ModuleNotFoundError:
+    # Use relative imports
+    from data.staging_queries.amazon_books.books_reviews import base_table
+    from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
 
 
 def _setup_chronon_environment():
@@ -36,16 +41,41 @@ def _setup_chronon_environment():
     """
     print("🔧 Setting up Chronon environment...")
 
-    # Check if JAR exists
-    jar_path = "/tmp/chronon/chronon-spark.jar"
-    if not os.path.exists(jar_path):
-        print(f"❌ Chronon JAR not found at {jar_path}")
-        # Try to download it
-        os.makedirs("/tmp/chronon", exist_ok=True)
-        jar_url = "https://repo1.maven.org/maven2/ai/chronon/spark_uber_2.12/0.0.23/spark_uber_2.12-0.0.23-assembly.jar"
-        print(f"📥 Downloading Chronon JAR from {jar_url}")
-        urllib.request.urlretrieve(jar_url, jar_path)
-        print(f"✅ Downloaded to {jar_path}")
+    # First try to find JAR in data/ folder
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    local_jar_path = os.path.join(script_dir, "data", "chronon-spark.jar")
+
+    if os.path.exists(local_jar_path):
+        print(f"✅ Found local Chronon JAR at {local_jar_path}")
+        jar_path = local_jar_path
+    else:
+        # Fallback to download
+        jar_path = "/tmp/chronon/chronon-spark.jar"
+        if not os.path.exists(jar_path):
+            print(f"❌ Chronon JAR not found at {jar_path}")
+            # Try to download it
+            os.makedirs("/tmp/chronon", exist_ok=True)
+            jar_url = "https://repo1.maven.org/maven2/ai/chronon/spark_uber_2.12/0.0.23/spark_uber_2.12-0.0.23-assembly.jar"
+            print(f"📥 Downloading Chronon JAR from {jar_url}")
+            urllib.request.urlretrieve(jar_url, jar_path)
+            print(f"✅ Downloaded to {jar_path}")
+
+    # Set up S3 dependencies
+    print("🔧 Setting up S3 dependencies...")
+    s3_deps_dir = "/tmp/spark-s3-deps"
+    os.makedirs(s3_deps_dir, exist_ok=True)
+
+    hadoop_aws_jar = f"{s3_deps_dir}/hadoop-aws-3.3.4.jar"
+    aws_sdk_jar = f"{s3_deps_dir}/aws-java-sdk-bundle-1.12.367.jar"
+
+    # Download S3 JARs if not present
+    if not os.path.exists(hadoop_aws_jar):
+        print("📥 Downloading Hadoop AWS JAR...")
+        urllib.request.urlretrieve("https://repo1.maven.org/maven2/org/apache/hadoop/hadoop-aws/3.3.4/hadoop-aws-3.3.4.jar", hadoop_aws_jar)
+
+    if not os.path.exists(aws_sdk_jar):
+        print("📥 Downloading AWS SDK JAR...")
+        urllib.request.urlretrieve("https://repo1.maven.org/maven2/com/amazonaws/aws-java-sdk-bundle/1.12.367/aws-java-sdk-bundle-1.12.367.jar", aws_sdk_jar)
 
     # Set up environment directories
     os.makedirs("/tmp/spark", exist_ok=True)
@@ -53,6 +83,7 @@ def _setup_chronon_environment():
     os.makedirs("/tmp/chronon_features", exist_ok=True)
 
     print(f"✅ Chronon environment ready")
+    print(f"✅ S3 dependencies ready")
     return jar_path
 
 
@@ -97,17 +128,58 @@ def compute_chronon_features_with_spark(
     print("✅ Chronon definitions compiled successfully")
 
     # Get Spark session from SparkTask framework and configure for Chronon
-    spark = SparkSession.getActiveSession()
-    if spark == None:
-        # Create Spark session with Chronon JAR
+    # Stop any existing session to ensure our configurations take effect
+    existing_spark = SparkSession.getActiveSession()
+    if existing_spark:
+        existing_spark.stop()
+
+    spark = None
+    if True:  # Always create new session with correct configurations
+        # Create Spark session with Chronon JAR + S3 support
+        # Include S3 JARs for proper S3 connectivity
+        hadoop_aws_jar = "/tmp/spark-s3-deps/hadoop-aws-3.3.4.jar"
+        aws_sdk_jar = "/tmp/spark-s3-deps/aws-java-sdk-bundle-1.12.367.jar"
+        all_jars = f"{jar_path},{hadoop_aws_jar},{aws_sdk_jar}"
+
         spark = SparkSession.builder \
             .appName("ChronoAmazonBooks") \
-            .config("spark.jars", jar_path) \
-            .config("spark.sql.extensions", "ai.chronon.spark.Extensions") \
+            .config("spark.jars", all_jars) \
+            .config("spark.sql.sources.commitProtocolClass", "org.apache.spark.sql.execution.datasources.SQLHadoopMapReduceCommitProtocol") \
+            .config("spark.sql.parquet.output.committer.class", "org.apache.parquet.hadoop.ParquetOutputCommitter") \
+            .config("spark.sql.adaptive.enabled", "true") \
+            .config("spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false") \
+            .config("spark.hadoop.dfs.client.write.checksum", "false") \
+            .config("spark.hadoop.dfs.namenode.fs-limits.min-block-size", "1048576") \
+            .config("spark.hadoop.dfs.checksum", "false") \
+            .config("spark.hadoop.dfs.client.read.checksum", "false") \
+            .config("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem") \
+            .config("spark.hadoop.fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.RawLocalFs") \
+            .config("spark.sql.execution.arrow.pyspark.enabled", "false") \
+            .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+            .config("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
+            .config("spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", "minioadmin")) \
+            .config("spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin")) \
+            .config("spark.hadoop.fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", "http://localhost:9091")) \
+            .config("spark.hadoop.fs.s3a.path.style.access", "true") \
+            .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+            .config("spark.hadoop.fs.s3a.aws.credentials.provider", "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider") \
             .getOrCreate()
     else:
-        # Add Chronon JAR to existing session
+        # Add Chronon JAR to existing session and configure to disable metadata files
         spark.sparkContext.addPyFile(jar_path)
+        spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false")
+        spark.conf.set("spark.hadoop.dfs.client.write.checksum", "false")
+        spark.conf.set("spark.hadoop.dfs.checksum", "false")
+        spark.conf.set("spark.hadoop.dfs.client.read.checksum", "false")
+        spark.conf.set("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem")
+        spark.conf.set("spark.hadoop.fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.RawLocalFs")
+        spark.conf.set("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        spark.conf.set("spark.hadoop.fs.s3.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem")
+        spark.conf.set("spark.hadoop.fs.s3a.access.key", os.getenv("AWS_ACCESS_KEY_ID", "minioadmin"))
+        spark.conf.set("spark.hadoop.fs.s3a.secret.key", os.getenv("AWS_SECRET_ACCESS_KEY", "minioadmin"))
+        spark.conf.set("spark.hadoop.fs.s3a.endpoint", os.getenv("AWS_ENDPOINT_URL", "http://minio:9000"))
+        spark.conf.set("spark.hadoop.fs.s3a.path.style.access", "true")
+        spark.conf.set("spark.hadoop.fs.s3a.connection.ssl.enabled", "false")
 
     print(f"✅ Using Spark session: {spark.version} with Chronon JAR: {jar_path}")
 
@@ -124,12 +196,6 @@ def compute_chronon_features_with_spark(
     }
 
     print(f"📋 Chronon runner configuration: {runner_args}")
-
-    # Load DatasetVariables as Spark DataFrames
-    if books_dv == None or reviews_dv == None:
-        print("❌ No DatasetVariables provided - download task failed")
-        print("💡 Check Kaggle download task output")
-        return None, None, None
 
     books_dv.load_spark_dataframe()
     books_df = books_dv.value
