@@ -77,6 +77,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
 			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
 			StartTime:   pbtypes.TimestampNow(),
+			LogUrl:      fmt.Sprintf("http://localhost:8200/namespaces/default/workflows/%s", pipelineRun.Name),
 		})
 		return &apipb.Condition{
 			Type:   ExecuteWorkflowType,

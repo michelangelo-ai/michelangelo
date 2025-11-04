@@ -338,6 +338,8 @@ def _create_spark_operator(helm_existing_repos):
         "spark-operator",
         "--create-namespace",
         "--wait",
+        "--set",
+        "controller.namespaces=",  # Empty string means watch all namespaces
     )
 
 

@@ -120,7 +120,45 @@ def generate_dev_run(crd: CRD, channel: Channel):
             timeout=30,
         )
         _LOG.info("Stub method completed (%r): %r", type(response), response)
-        return response
+
+        # Extract the pipeline run name and namespace from the response
+        if hasattr(response, 'pipeline_run') and hasattr(response.pipeline_run, 'metadata'):
+            run_name = response.pipeline_run.metadata.name
+            namespace = response.pipeline_run.metadata.namespace
+            pipeline_name = response.pipeline_run.spec.pipeline.name if hasattr(response.pipeline_run.spec, 'pipeline') else 'unknown'
+        else:
+            # Fallback: try to extract from the request input
+            if hasattr(request_input, 'pipeline_run') and hasattr(request_input.pipeline_run, 'metadata'):
+                run_name = request_input.pipeline_run.metadata.name
+                namespace = request_input.pipeline_run.metadata.namespace
+                pipeline_name = request_input.pipeline_run.spec.pipeline.name if hasattr(request_input.pipeline_run.spec, 'pipeline') else 'unknown'
+            else:
+                # Last fallback: use unknown values
+                run_name = 'unknown'
+                namespace = 'default'
+                pipeline_name = 'unknown'
+
+        # Print concise success message with essential info
+        print(f"✅ Pipeline run created successfully!")
+        print(f"   📋 Pipeline: {pipeline_name}")
+        print(f"   🏃 Run Name: {run_name}")
+        print(f"   📍 Namespace: {namespace}")
+
+        # Print the Temporal UI URL
+        temporal_url = f"http://localhost:8090/{namespace}/train/runs/{run_name}"
+        print(f"   🌐 Temporal UI: {temporal_url}")
+
+        # Create a simple success response instead of returning the full pipeline run
+        class SimpleResponse:
+            def __init__(self, success=True, run_name=None, namespace=None):
+                self.success = success
+                self.run_name = run_name
+                self.namespace = namespace
+
+            def __str__(self):
+                return ""  # Return empty string to suppress verbose output
+
+        return SimpleResponse(success=True, run_name=run_name, namespace=namespace)
 
     dev_run_func.__signature__ = dev_run_func_signature
     crd.dev_run = MethodType(dev_run_func, crd)

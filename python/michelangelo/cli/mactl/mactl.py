@@ -899,7 +899,7 @@ def main(channel: Channel):
     )
     print(json_output)
     """
-    print(result)
+    # print(result)
 
 
 if __name__ == "__main__":
