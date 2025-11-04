@@ -261,24 +261,24 @@ func (d *schemaObjectDiff) compatible() bool {
 	return true
 }
 
-// compareResult is the result of compareCRDSchemas function,
+// CompareResult is the result of CompareCRDSchemas function,
 // indicating whether there is a change and whether the change is compatible
-type compareResult struct {
-	hasChange  bool
-	compatible bool
+type CompareResult struct {
+	HasChange  bool
+	Compatible bool
 }
 
-// compareCRDSchemas compare two CRD schemas
+// CompareCRDSchemas compares two CRD schemas
 // This function compares if the schema of the two CRDs has changed.
 // If the CRD schema has changed, it will check if the schemas of the same version are backward compatible.
 // For example, if both oldCRD and newCRD have a version named "v1", it will check the compatibility of
 // the two "v1" schemas in oldCRD and newCRD.
-func compareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (*compareResult, error) {
+func CompareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (*CompareResult, error) {
 	schemaHasChange := hasChange(oldCRD, newCRD)
 	if !schemaHasChange {
-		return &compareResult{
-			hasChange:  false,
-			compatible: true,
+		return &CompareResult{
+			HasChange:  false,
+			Compatible: true,
 		}, nil
 	}
 
@@ -287,9 +287,9 @@ func compareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiext
 		return nil, err
 	}
 
-	return &compareResult{
-		hasChange:  true,
-		compatible: changeCompatible,
+	return &CompareResult{
+		HasChange:  true,
+		Compatible: changeCompatible,
 	}, nil
 }
 

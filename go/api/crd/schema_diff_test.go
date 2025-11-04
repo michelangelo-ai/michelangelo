@@ -38,11 +38,11 @@ func TestSchemaDiff(t *testing.T) {
 		newCrd, err := readCRDFromFile(testCRDManifestDir + test.NewCRDFile)
 		assertion.NoError(t, err, test.Name)
 
-		diff, err := compareCRDSchemas(oldCrd, newCrd)
+		diff, err := CompareCRDSchemas(oldCrd, newCrd)
 		assertion.NoError(t, err, test.Name)
 		assertion.NotNil(t, diff, test.Name)
-		assertion.Equal(t, test.HasChange, diff.hasChange, test.Name)
-		assertion.Equal(t, test.Compatible, diff.compatible, test.Name)
+		assertion.Equal(t, test.HasChange, diff.HasChange, test.Name)
+		assertion.Equal(t, test.Compatible, diff.Compatible, test.Name)
 	}
 }
 
