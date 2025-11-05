@@ -508,7 +508,7 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 }
 
 // getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
-func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.ClusterStatus, error) {
+func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
 	// Use the federated client to get the status from the remote cluster
 	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
 	if err != nil {
@@ -526,7 +526,7 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
 func (r *Reconciler) applyRayClusterStatus(
 	rayCluster *v2pb.RayCluster,
-	clusterStatus *matypes.ClusterStatus,
+	clusterStatus *matypes.JobClusterStatus,
 	logger logr.Logger,
 	res *ctrl.Result,
 ) error {
