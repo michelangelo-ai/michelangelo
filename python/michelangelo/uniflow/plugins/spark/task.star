@@ -34,7 +34,7 @@ def spark_task(
         task_name = get_task_name(task_path, alias)
         namespace = os.environ.get("MA_NAMESPACE", "default")
         start_time_seconds = time.time()
-        start_time_formated_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
+        start_time_formatted_str = time.utc_format_seconds(TIME_FOMART, start_time_seconds)
         final_cache_enabled = get_cache_enabled(cache_enabled, task_name)
         if final_cache_enabled:  # Check if the result is cached
             cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_GET)
@@ -50,7 +50,7 @@ def spark_task(
                         task_log = "",
                         task_message = "Spark Task skipped due to Cache Hit",
                         task_state = TASK_STATE_SKIPPED,
-                        start_time = start_time_formated_str,
+                        start_time = start_time_formatted_str,
                         end_time = end_time_formated_str,
                         output = cached_output.get("metadata", {}).get("name", ""),
                         retry_attempt_id = "",
@@ -114,7 +114,7 @@ def spark_task(
                 task_name=task_name,
                 task_path=task_path,
                 spark_job=spark_job,
-                start_time_formated_str=start_time_formated_str,
+                start_time_formatted_str=start_time_formatted_str,
                 retry_attempt_id=retry_attempt_id,
                 total_retry_attempt=total_retry_attempt,
             )
@@ -129,7 +129,7 @@ def spark_task(
                 cache_version,
                 namespace,
                 result_url,
-                start_time_formated_str,
+                start_time_formatted_str,
                 retry_attempt_id,
                 total_retry_attempt,
             )
@@ -163,7 +163,7 @@ def spark_task(
     callable.with_overrides = with_overrides
     return callable
 
-def process_terminated_spark_job(job_state, terminated_job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+def process_terminated_spark_job(job_state, terminated_job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formatted_str, retry_attempt_id, total_retry_attempt):
 
     retryable = False
 
@@ -192,7 +192,7 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
             task_log = driver_log_url,
             task_message = "Spark job succeeded",
             task_state = TASK_STATE_SUCCEEDED,
-            start_time = start_time_formated_str,
+            start_time = start_time_formatted_str,
             end_time = end_time_formated_str,
             output = created_cached_output.get("metadata", {}).get("name", ""),
             retry_attempt_id = retry_attempt_id,
@@ -205,7 +205,7 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     # If job failed or was killed, check if we have retries left
     elif job_state == TASK_STATE_FAILED:
-        print("Spark job failed, attemp (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") failed")
+        print("Spark job failed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") failed")
         if retry_attempt_id < total_retry_attempt:
             retryable = True
         else:
@@ -214,7 +214,7 @@ def process_terminated_spark_job(job_state, terminated_job, task_name, task_path
 
     return retryable
 
-def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formated_str, retry_attempt_id, total_retry_attempt):
+def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_formatted_str, retry_attempt_id, total_retry_attempt):
 
     print("Spark job running, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ")")
     
@@ -234,7 +234,7 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
         task_log = driver_log_url,
         task_message = "Spark job has been submitted",
         task_state = TASK_STATE_PENDING,
-        start_time = start_time_formated_str,
+        start_time = start_time_formatted_str,
         end_time = "",
         output = "",
         retry_attempt_id = retry_attempt_id,
@@ -242,7 +242,7 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
 
     # register the check_spark_job function to be called at the end of the workflow.
     # this is to ensure that the task state is reported correctly even if the workflow is killed
-    atexit.register(check_spark_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
+    atexit.register(check_spark_job_final_state_at_workflow_exit, created_spark_job, task_name, task_path, start_time_formatted_str, retry_attempt_id)
 
     # senosr spark job until it is running and driver log url is available
     running_job = spark.sensor_job(job = created_spark_job, assert_condition_type = spark.running_condition_type)
@@ -255,7 +255,7 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
         task_name = task_name,
         task_path = task_path,
         task_state = TASK_STATE_RUNNING,
-        start_time = start_time_formated_str,
+        start_time = start_time_formatted_str,
         task_message = "Spark job is running",
         task_log = driver_log_url,
         retry_attempt_id = retry_attempt_id,
@@ -265,21 +265,21 @@ def execute_spark_task(namespace, task_name, task_path, spark_job, start_time_fo
     print("spark | sensor job until terminated. ns:", namespace, "task_name:", task_name)
     terminated_job = spark.sensor_job(job = created_spark_job)
     print("spark | job terminated. ns:", namespace, "task_name:", task_name)
-    job_state = report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formated_str, retry_attempt_id)
+    job_state = report_spark_job_terminated(terminated_job, task_name, task_path, start_time_formatted_str, retry_attempt_id)
     if job_state == TASK_STATE_SUCCEEDED:
         atexit.unregister(check_spark_job_final_state_at_workflow_exit)
 
     return (job_state, terminated_job)
 
-def check_spark_job_final_state_at_workflow_exit(created_spark_job, task_name, task_path, start_time_formated_str, retry_attempt_id):
+def check_spark_job_final_state_at_workflow_exit(created_spark_job, task_name, task_path, start_time_formatted_str, retry_attempt_id):
     """
     Check the final state of the spark job
     """
     final_job = spark.sensor_job(job = created_spark_job)
-    report_spark_job_terminated(final_job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=True)
+    report_spark_job_terminated(final_job, task_name, task_path, start_time_formatted_str, retry_attempt_id, unexpected_exit=True)
     return
 
-def report_spark_job_terminated(job, task_name, task_path, start_time_formated_str, retry_attempt_id, unexpected_exit=False):
+def report_spark_job_terminated(job, task_name, task_path, start_time_formatted_str, retry_attempt_id, unexpected_exit=False):
     """
     Report task progress based on the succeeded condition of the spark job
 
@@ -287,7 +287,7 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
         job: the spark job crd
         task_name: the task name
         task_path: the task path
-        start_time_formated_str: the UTC formated string of the task start time
+        start_time_formatted_str: the UTC formatted string of the task start time
         retry_attempt_id: the attempt id
         unexpected_exit: whether the job failed unexpectedly
     Returns:
@@ -322,7 +322,7 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
                    task_name = task_name,
                    task_path = task_path,
                    task_state = TASK_STATE_KILLED,
-                   start_time = start_time_formated_str,
+                   start_time = start_time_formatted_str,
                    end_time = end_time_formated_str,
                    task_message = "{}: {}".format(killed_condition.get("message", "Spark job killed"), killed_condition.get("reason", "unknown reason")),
                    task_log = driver_log_url,
@@ -337,7 +337,7 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
                    task_name = task_name,
                    task_path = task_path,
                    task_state = TASK_STATE_SUCCEEDED,
-                   start_time = start_time_formated_str,
+                   start_time = start_time_formatted_str,
                    end_time = end_time_formated_str,
                    task_message = "Spark job succeeded",
                    task_log = driver_log_url,
@@ -352,7 +352,7 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formated_s
                    task_name = task_name,
                    task_path = task_path,
                    task_state = TASK_STATE_FAILED,
-                   start_time = start_time_formated_str,
+                   start_time = start_time_formatted_str,
                    end_time = end_time_formated_str,
                    task_message = "{}:{}".format(reason, message),
                    task_log = driver_log_url,

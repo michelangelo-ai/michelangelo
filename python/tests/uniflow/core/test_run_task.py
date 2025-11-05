@@ -94,7 +94,7 @@ class Test(unittest.TestCase):
         )
 
     def test_result_not_json(self):
-        result_url = "memory://result.txt"  # Not a *.json file extention
+        result_url = "memory://result.txt"  # Not a *.json file extension
         test_args = [
             "test",
             "--task",
