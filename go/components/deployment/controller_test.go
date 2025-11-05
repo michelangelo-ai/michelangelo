@@ -6,11 +6,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/api"
-	"github.com/michelangelo-ai/michelangelo/go/api/handler"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,6 +15,14 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	"github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 func TestReconciler_Reconcile(t *testing.T) {
@@ -60,17 +63,18 @@ func TestReconciler_Reconcile(t *testing.T) {
 		handler: handler.NewFakeAPIHandler(fakeClient),
 	}
 
-	// Create reconciler
-	reconciler := NewReconciler(mockFactory)
+	// Create registrar and register the plugin
+	registrar := pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard())
+	noOpPlugin := noop.NewNoOpPlugin()
+	registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin)
+
+	// Create reconciler with registrar
+	reconciler := NewReconciler(mockFactory, registrar)
 	reconciler.Log = logr.Discard()
 	reconciler.Recorder = &record.FakeRecorder{}
 
 	// Set up with fake manager data
 	reconciler.Handler = mockFactory.handler
-
-	// Register the plugin manually since we're not using SetupWithManager
-	noOpPlugin := noop.NewNoOpPlugin()
-	reconciler.Registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin)
 
 	// Test reconcile
 	req := ctrl.Request{

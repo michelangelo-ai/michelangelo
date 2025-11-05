@@ -5,13 +5,14 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // TrafficRoutingActor handles HTTPRoute management for deployment traffic routing
@@ -45,7 +46,6 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 		Name:      deploymentRouteName,
 		Namespace: resource.Namespace,
 	}, &httpRoute)
-
 	if err != nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -147,7 +147,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": fmt.Sprintf("/%s", resource.Name),
+										"replacePrefixMatch": "/",
 									},
 								},
 							},

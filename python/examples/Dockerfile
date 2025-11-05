@@ -101,6 +101,7 @@ COPY . .
 RUN ls -alF ./
 
 RUN poetry config virtualenvs.create false
+RUN poetry lock
 RUN poetry install -E example
 
 # Activate Poetry's virtual environment by default

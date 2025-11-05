@@ -14,7 +14,6 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	tallyv4 "github.com/uber-go/tally/v4"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/uber-go/tally"
 	tempclient "go.temporal.io/sdk/client"
 	temptally "go.temporal.io/sdk/contrib/tally"
@@ -27,6 +26,8 @@ import (
 	"go.uber.org/yarpc/transport/grpc"
 	"go.uber.org/yarpc/transport/tchannel"
 	"go.uber.org/zap"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/config"
 )
 
 // Module provides workers and clients for Cadence.
@@ -99,6 +100,8 @@ func provide(in In) (Out, error) {
 			return out, err
 		}
 		out.Workflow = temporal.NewWorkflow()
+	} else {
+		return out, fmt.Errorf("unsupported workflow provider: %s (must be either '%s' or '%s')", conf.Provider, ProviderCadence, ProviderTemporal)
 	}
 	return out, nil
 }

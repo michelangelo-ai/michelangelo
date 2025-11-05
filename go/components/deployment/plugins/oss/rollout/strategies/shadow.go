@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // GetShadowActors returns actors for shadow rollout strategy (canary with analysis)
@@ -49,7 +50,7 @@ func (a *ShadowDeploymentActor) GetLogger() logr.Logger {
 	return a.logger
 }
 
-func (a *ShadowDeploymentActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ShadowDeploymentActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if shadow deployment is complete
 	if resource.Status.CurrentRevision != nil &&
 		resource.Spec.DesiredRevision != nil &&
@@ -138,7 +139,7 @@ func (a *ShadowAnalysisActor) GetLogger() logr.Logger {
 	return a.logger
 }
 
-func (a *ShadowAnalysisActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ShadowAnalysisActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_FALSE,
@@ -185,7 +186,7 @@ func (a *ShadowPromotionActor) GetLogger() logr.Logger {
 	return a.logger
 }
 
-func (a *ShadowPromotionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ShadowPromotionActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_FALSE,

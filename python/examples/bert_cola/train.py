@@ -30,7 +30,7 @@ def create_model(
         worker_instances=1,
         breakpoint=False,
     ),
-    cache_enabled=True,
+    cache_enabled=False,
 )
 def train(
     train_data: Dataset,

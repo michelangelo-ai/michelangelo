@@ -22,5 +22,5 @@ spec:
     - '*'
     port:
       name: triton-http
-      number: 8888
+      number: 8889
       protocol: HTTP

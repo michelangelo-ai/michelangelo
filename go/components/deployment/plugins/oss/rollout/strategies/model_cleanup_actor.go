@@ -6,10 +6,11 @@ import (
 	"net/http"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ModelCleanupActor handles cleanup of old models after successful deployment
@@ -201,7 +202,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 // unloadModelFromTriton directly calls Triton API to unload model (following Uber's pattern)
 func (a *ModelCleanupActor) unloadModelFromTriton(ctx context.Context, modelName, inferenceServerName string) error {
 	// Construct Triton unload API endpoint
-	unloadURL := fmt.Sprintf("http://localhost:8888/%s/v2/repository/models/%s/unload", inferenceServerName, modelName)
+	unloadURL := fmt.Sprintf("http://localhost:8889/%s/v2/repository/models/%s/unload", inferenceServerName, modelName)
 
 	a.Logger.Info("Calling Triton unload API", "url", unloadURL, "model", modelName)
 

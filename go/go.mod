@@ -136,5 +136,3 @@ require (
 )
 
 replace github.com/michelangelo-ai/michelangelo/proto => ../proto
-
-replace github.com/cadence-workflow/starlark-worker => /Users/weric/works/uber/starlark-worker

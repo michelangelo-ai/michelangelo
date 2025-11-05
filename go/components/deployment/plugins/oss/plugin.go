@@ -4,6 +4,8 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
@@ -11,7 +13,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Subtype the subtype that the plugin represents.
@@ -90,7 +91,6 @@ func (p *Plugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deploym
 
 // ParseStage goes through all the conditions and determines the current deployment stage
 func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
-
 	// Check if we need to trigger a new rollout despite having conditions
 	// This happens when desired != candidate, which means a new rollout should start
 	if deployment.Spec.DesiredRevision != nil && deployment.Status.CandidateRevision != nil {
@@ -278,6 +278,10 @@ type ActorWrapper struct {
 func (w *ActorWrapper) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	// Call the underlying actor's Run method (new signature: returns (*apipb.Condition, error))
 	return w.actor.Run(ctx, resource, previousCondition)
+}
+
+func (w *ActorWrapper) Retrieve(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	return w.actor.Retrieve(ctx, resource, previousCondition)
 }
 
 // GetType returns the actor type

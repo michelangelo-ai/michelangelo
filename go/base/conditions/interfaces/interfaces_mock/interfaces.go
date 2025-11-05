@@ -9,9 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	client "sigs.k8s.io/controller-runtime/pkg/client"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
-	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // MockEngine is a mock of Engine interface.

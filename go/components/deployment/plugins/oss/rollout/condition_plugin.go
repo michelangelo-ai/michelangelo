@@ -5,13 +5,14 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ plugins.ConditionsPlugin = &conditionPlugin{}
@@ -109,7 +110,7 @@ func (a *ValidationActor) GetType() string {
 	return common.ActorTypeValidation
 }
 
-func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Validate deployment configuration
 	if resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{
@@ -157,17 +158,22 @@ func (a *ValidationActor) Retrieve(ctx context.Context, runtimeCtx plugins.Reque
 	}, nil
 }
 
-func (a *ValidationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running validation for deployment", "deployment", resource.Name)
+func (a *ValidationActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running validation for deployment", "deployment", deployment.Name)
 
 	// Update deployment status to show validation is in progress
-	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+	deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
 
-	if resource.Spec.DesiredRevision != nil {
-		runtimeCtx.Logger.Info("Validation completed successfully", "model", resource.Spec.DesiredRevision.Name)
+	if deployment.Spec.DesiredRevision != nil {
+		a.logger.Info("Validation completed successfully", "model", deployment.Spec.DesiredRevision.Name)
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "ValidationComplete",
+		Message: "Deployment validation completed",
+	}, nil
 }
 
 // AssetPreparationActor handles asset preparation following Uber patterns
@@ -181,7 +187,7 @@ func (a *AssetPreparationActor) GetType() string {
 	return common.ActorTypeAssetPreparation
 }
 
-func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *AssetPreparationActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -211,19 +217,24 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, runtimeCtx plugins
 	}, nil
 }
 
-func (a *AssetPreparationActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running asset preparation for deployment", "deployment", resource.Name)
+func (a *AssetPreparationActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running asset preparation for deployment", "deployment", deployment.Name)
 
-	if resource.Spec.DesiredRevision != nil {
-		modelName := resource.Spec.DesiredRevision.Name
-		runtimeCtx.Logger.Info("Preparing assets for model", "model", modelName)
+	if deployment.Spec.DesiredRevision != nil {
+		modelName := deployment.Spec.DesiredRevision.Name
+		a.logger.Info("Preparing assets for model", "model", modelName)
 
 		// For OSS, asset preparation involves validating model accessibility
 		// In Uber's implementation, this downloads from S3, compiles, and uploads to TerraBob
-		runtimeCtx.Logger.Info("Asset preparation completed", "model", modelName)
+		a.logger.Info("Asset preparation completed", "model", modelName)
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "AssetsReady",
+		Message: "Model assets prepared successfully",
+	}, nil
 }
 
 // ResourceAcquisitionActor handles resource acquisition
@@ -236,7 +247,7 @@ func (a *ResourceAcquisitionActor) GetType() string {
 	return common.ActorTypeResourceAcquisition
 }
 
-func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if resource.Spec.GetInferenceServer() != nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -254,15 +265,20 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, runtimeCtx plug
 	}, nil
 }
 
-func (a *ResourceAcquisitionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running resource acquisition for deployment", "deployment", resource.Name)
+func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running resource acquisition for deployment", "deployment", resource.Name)
 
 	if resource.Spec.GetInferenceServer() != nil {
-		runtimeCtx.Logger.Info("Resources acquired successfully",
+		a.logger.Info("Resources acquired successfully",
 			"inference_server", resource.Spec.GetInferenceServer().Name)
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "ResourcesAcquired",
+		Message: "Deployment resources acquired successfully",
+	}, nil
 }
 
 // RolloutCompletionActor handles post-rollout completion tasks
@@ -275,7 +291,7 @@ func (a *RolloutCompletionActor) GetType() string {
 	return common.ActorTypeRolloutCompletion
 }
 
-func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *RolloutCompletionActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE &&
 		resource.Status.State == v2pb.DEPLOYMENT_STATE_HEALTHY {
 		return &apipb.Condition{
@@ -294,8 +310,8 @@ func (a *RolloutCompletionActor) Retrieve(ctx context.Context, runtimeCtx plugin
 	}, nil
 }
 
-func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
+func (a *RolloutCompletionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running rollout completion tasks for deployment", "deployment", resource.Name)
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
@@ -311,8 +327,13 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, runtimeCtx plugins.Req
 			delete(resource.Annotations, "rollout.michelangelo.ai/start-time")
 		}
 
-		runtimeCtx.Logger.Info("Rollout completion tasks finished successfully", "model", modelName)
+		a.logger.Info("Rollout completion tasks finished successfully", "model", modelName)
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "CompletionTasksFinished",
+		Message: "All rollout completion tasks have been successfully executed",
+	}, nil
 }

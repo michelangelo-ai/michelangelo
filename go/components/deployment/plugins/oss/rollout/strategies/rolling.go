@@ -4,12 +4,12 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Note: ModelSyncActor is now defined in actors.go with the correct interface
@@ -29,7 +29,7 @@ func (a *RollingRolloutActor) GetLogger() logr.Logger {
 	return a.logger
 }
 
-func (a *RollingRolloutActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *RollingRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if rolling rollout is complete
 	if resource.Status.CurrentRevision != nil &&
 		resource.Spec.DesiredRevision != nil &&

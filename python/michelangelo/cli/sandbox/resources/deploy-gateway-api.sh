@@ -56,7 +56,7 @@ echo "🌐 Gateway IP: $GATEWAY_IP"
 # Test endpoints if gateway IP is available
 if [ ! -z "$GATEWAY_IP" ]; then
     echo "🧪 Testing health endpoint..."
-    if curl -s --max-time 5 "http://$GATEWAY_IP:8888/v2/health" > /dev/null; then
+    if curl -s --max-time 5 "http://$GATEWAY_IP:8889/v2/health" > /dev/null; then
         echo "✅ Health endpoint is accessible"
     else
         echo "⚠️  Health endpoint test failed (this is expected if services aren't running)"
@@ -75,7 +75,7 @@ echo "3. Remove legacy Istio Gateway/VirtualService resources when ready"
 echo ""
 echo "🔗 Available endpoints:"
 echo "  - HTTP: http://$GATEWAY_IP:80"
-echo "  - Triton: http://$GATEWAY_IP:8888"
-echo "  - Health: http://$GATEWAY_IP:8888/v2/health"
+echo "  - Triton: http://$GATEWAY_IP:8889"
+echo "  - Health: http://$GATEWAY_IP:8889/v2/health"
 echo ""
 echo "📚 For traffic splitting examples, see bert-cola-httproute.yaml"

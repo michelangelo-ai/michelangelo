@@ -23,7 +23,7 @@ log = logging.getLogger(__name__)
         worker_instances=1,
         # breakpoint=True,
     ),
-    cache_enabled=True,
+    cache_enabled=False,
 )
 def load_data(
     path: str,
