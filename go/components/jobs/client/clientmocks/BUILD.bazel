@@ -10,7 +10,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/components/jobs/client:go_default_library",
-        "//go/components/jobs/common/constants:go_default_library",
         "//go/components/jobs/common/types:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_golang_mock//gomock:go_default_library",

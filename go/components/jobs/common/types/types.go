@@ -100,9 +100,9 @@ type MTLSHandler interface {
 	EnableMTLSRuntimeClass(projectName string) (bool, error)
 }
 
-// ClusterStatus represents the status of a job cluster (Ray, Spark, etc.)
+// JobClusterStatus represents the status of a job cluster (Ray, Spark, etc.)
 // It wraps the concrete status types from different runtimes.
-type ClusterStatus struct {
+type JobClusterStatus struct {
 	// Ray holds the status for Ray clusters
 	Ray *v2pb.RayClusterStatus
 
@@ -111,4 +111,14 @@ type ClusterStatus struct {
 
 	// Spark holds the status for Spark clusters (future support)
 	// Spark *v2pb.SparkClusterStatus
+}
+
+// JobStatus represents the status of a job (Ray, Spark, etc.)
+// It wraps the concrete status types from different runtimes.
+type JobStatus struct {
+	// Ray holds the status for Ray jobs
+	Ray *v2pb.RayJobStatus
+
+	// Spark holds the status for Spark jobs (future support)
+	// Spark *v2pb.SparkJobStatus
 }

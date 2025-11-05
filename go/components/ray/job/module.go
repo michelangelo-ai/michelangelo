@@ -5,32 +5,31 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	jobsclient "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
+	jobsCluster "github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/cluster"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
 )
 
-var (
-	// Module FX
-	Module = fx.Options(
-		fx.Invoke(register),
-	)
+// Module FX
+var Module = fx.Options(
+	fx.Invoke(register),
 )
 
 func register(
 	conf cluster.Config,
 	env env.Context,
 	mgr manager.Manager,
+	federatedClient jobsclient.FederatedClient,
+	clusterCache jobsCluster.RegisteredClustersCache,
 ) error {
 	restConfig := mgr.GetConfig()
 	restConfig.QPS = conf.QPS
 	restConfig.Burst = conf.Burst
-	rayClient, err := rayv1.NewForConfig(restConfig)
-	if err != nil {
-		return err
-	}
+
 	return (&Reconciler{
-		Client:         mgr.GetClient(),
-		env:            env,
-		RayV1Interface: rayClient,
+		Client:          mgr.GetClient(),
+		env:             env,
+		federatedClient: federatedClient,
+		clusterCache:    clusterCache,
 	}).Register(mgr)
 }

@@ -483,7 +483,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					},
 				})
 				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.ClusterStatus{
+					&matypes.JobClusterStatus{
 						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
 					}, nil)
 			},
@@ -537,7 +537,7 @@ func TestReconcilerReconcile(t *testing.T) {
 					},
 				})
 				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
-					&matypes.ClusterStatus{
+					&matypes.JobClusterStatus{
 						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_FAILED},
 					}, nil)
 			},

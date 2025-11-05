@@ -20,6 +20,10 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 		return nil, fmt.Errorf("expected *v2pb.RayCluster, got %T", jobClusterObject)
 	}
 	pod := rayCluster.GetSpec().Head.GetPod()
+	submitterPod := k8sptr.Deref(pod, corev1.PodTemplateSpec{})
+	// Kubernetes Jobs require restartPolicy to be either "OnFailure" or "Never"
+	submitterPod.Spec.RestartPolicy = corev1.RestartPolicyNever
+
 	kubeRayJob := &rayv1.RayJob{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       RayJobKind,
@@ -37,8 +41,8 @@ func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, clu
 			Entrypoint: rayJob.Spec.Entrypoint,
 			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
 			// We need to allow user to configure the submitter pod template via ray task configuration
-			// NOTE: add support for v1.2.2 kuberay once we upgrade to newer version
-			SubmitterPodTemplate: pod,
+			// Note: Add support for v1.2.2 kuberay once we upgrade to newer version
+			SubmitterPodTemplate: &submitterPod,
 		},
 	}
 
@@ -127,4 +131,42 @@ func convertRayV1ClusterStatusToV2(rayV1Cluster *rayv1.RayCluster) *v2pb.RayClus
 	}
 
 	return status
+}
+
+// convertRayV1JobStatusToGlobal converts a KubeRay v1 RayJob status to our internal v2pb.RayJobStatus
+func convertRayV1JobStatusToGlobal(rayV1Job *rayv1.RayJob) *v2pb.RayJobStatus {
+	if rayV1Job == nil {
+		return &v2pb.RayJobStatus{
+			JobStatus: "UNKNOWN",
+		}
+	}
+
+	globalJobStatus := &v2pb.RayJobStatus{}
+
+	globalJobStatus.JobStatus = string(rayV1Job.Status.JobStatus)
+	globalJobStatus.JobDeploymentStatus = string(rayV1Job.Status.JobDeploymentStatus)
+	globalJobStatus.State = mapV1RayJobStatusToMAState(rayV1Job.Status.JobStatus, rayV1Job.Status.JobDeploymentStatus)
+	globalJobStatus.Message = rayV1Job.Status.Message
+
+	return globalJobStatus
+}
+
+func mapV1RayJobStatusToMAState(status rayv1.JobStatus, deploymentStatus rayv1.JobDeploymentStatus) v2pb.RayJobState {
+	switch status {
+	case rayv1.JobStatusSucceeded:
+		return v2pb.RAY_JOB_STATE_SUCCEEDED
+	case rayv1.JobStatusFailed:
+		return v2pb.RAY_JOB_STATE_FAILED
+	case rayv1.JobStatusStopped:
+		return v2pb.RAY_JOB_STATE_KILLED
+	case rayv1.JobStatusRunning:
+		return v2pb.RAY_JOB_STATE_RUNNING
+	}
+
+	switch deploymentStatus {
+	case rayv1.JobDeploymentStatusWaitForK8sJob, rayv1.JobDeploymentStatusWaitForDashboardReady, rayv1.JobDeploymentStatusWaitForDashboard, rayv1.JobDeploymentStatusInitializing:
+		return v2pb.RAY_JOB_STATE_INITIALIZING
+	}
+
+	return v2pb.RAY_JOB_STATE_INVALID
 }

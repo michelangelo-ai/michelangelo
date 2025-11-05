@@ -12,15 +12,17 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
 	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/cache"
+
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ClusterConditions Reasons
@@ -122,8 +124,8 @@ type FederatedClient interface {
 	// DeleteSecret deletes the secret from the specified cluster
 	DeleteSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
 
-	// GetJobStatus gets the job status from the specified cluster
-	GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (constants.SparkJobStatus, error)
+	// GetJobStatus gets the Ray job status from the specified cluster
+	GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (*matypes.JobStatus, error)
 
 	// DeleteJob deletes a batch job from the specified cluster
 	DeleteJob(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
@@ -138,7 +140,7 @@ type FederatedClient interface {
 	DeleteJobCluster(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
 
 	// GetJobClusterStatus gets the job cluster status from the specified cluster
-	GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (*matypes.ClusterStatus, error)
+	GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (*matypes.JobClusterStatus, error)
 
 	// Watcher creates resource watchers on the specified cluster
 	Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) ([]*ResourceWatcher, error)
@@ -309,15 +311,55 @@ func (c *Client) DeleteSecret(
 	return c.helper.DeleteResource(ctx, cs.CoreV1, string(corev1.ResourceSecrets), localNamespace, secrets.GetKubeSecretName(localName), opts)
 }
 
-// GetJobStatus gets the job status from the cluster
-func (c *Client) GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (constants.SparkJobStatus, error) {
+// GetJobStatus retrieves the status of a Ray job from a remote cluster
+func (c *Client) GetJobStatus(
+	ctx context.Context,
+	jobObject runtime.Object,
+	kubeCluster *v2pb.Cluster,
+) (*matypes.JobStatus, error) {
 	switch jobObject.(type) {
 	case *v2pb.RayJob:
-		return "", fmt.Errorf("GetStatus of RayJob is not supported")
+		cs, err := c.factory.GetClientSetForCluster(kubeCluster)
+		if err != nil {
+			return nil, fmt.Errorf("get client for cluster err:%v", err)
+		}
+
+		localNamespace, localName := c.mapper.GetLocalName(jobObject)
+
+		// Get the KubeRay RayJob resource
+		rayV1Job := &rayv1.RayJob{}
+		err = c.helper.GetResource(
+			ctx,
+			cs.Ray,
+			constants.KubeRayJobResource,
+			localNamespace,
+			localName,
+			rayV1Job,
+		)
+		if err != nil {
+			// If resource is not found, return a Failed JobStatus with "Job not found in compute cluster" message
+			if apierrors.IsNotFound(err) {
+				return &matypes.JobStatus{
+					Ray: &v2pb.RayJobStatus{
+						JobStatus: "Unknown",
+						State:     v2pb.RAY_JOB_STATE_UNKNOWN,
+						Message:   "Resource not found in compute cluster",
+					},
+				}, nil
+			}
+			return nil, fmt.Errorf("get ray job %q status: %w", localName, err)
+		}
+
+		jobStatus, err := c.mapper.MapLocalJobStatusToGlobal(rayV1Job)
+		if err != nil {
+			return nil, fmt.Errorf("map job status: %w", err)
+		}
+		return jobStatus, nil
 	case *v2pb.SparkJob:
-		return "", fmt.Errorf("GetStatus of SparkJob is not supported")
+		// TODO(#616): Implement Spark job status
+		return nil, fmt.Errorf("Spark job status not implemented")
 	}
-	return "", fmt.Errorf("the object must be a RayJob or a SparkJob, got:%T", jobObject)
+	return nil, fmt.Errorf("unsupported job type")
 }
 
 // DeleteJob deletes a batch job from the local cluster
@@ -430,7 +472,7 @@ func (c *Client) GetJobClusterStatus(
 	ctx context.Context,
 	jobClusterObject runtime.Object,
 	kubeCluster *v2pb.Cluster,
-) (*matypes.ClusterStatus, error) {
+) (*matypes.JobClusterStatus, error) {
 	switch jobClusterObject.(type) {
 	case *v2pb.RayCluster:
 		cs, err := c.factory.GetClientSetForCluster(kubeCluster)

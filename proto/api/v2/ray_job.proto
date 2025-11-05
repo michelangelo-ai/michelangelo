@@ -23,6 +23,7 @@ option go_package = "v2";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "google/protobuf/any.proto";
 import "michelangelo/api/options.proto";
+import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/user.proto";
 
 // Specification for a Ray job
@@ -79,6 +80,9 @@ enum RayJobState {
 
   // The job was terminated or killed
   RAY_JOB_STATE_KILLED = 5;
+
+  // The Job state is unknown
+  RAY_JOB_STATE_UNKNOWN = 6;
 }
 
 // Defines the status of a Ray job
@@ -121,6 +125,9 @@ message RayJobStatus {
 
   // Name of the Ray cluster running the job
   string ray_cluster_name = 8;
+
+  // Conditions that describe the states.
+  repeated Condition status_conditions = 9;
 
   // Extension field for additional custom data
   google.protobuf.Any ext = 999;
