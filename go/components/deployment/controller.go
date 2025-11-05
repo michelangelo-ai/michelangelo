@@ -409,7 +409,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			// Log emergency rollout for audit purposes
 			log.Info("Emergency rollout detected",
 				"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
-				"jira_link", deployment.Spec.Strategy.GetBlast().GetJiraLink(),
+				"issue_link", deployment.Spec.Strategy.GetBlast().GetIssueLink(),
 				"with_rollback_alerts", deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger())
 		}
 

@@ -27,11 +27,11 @@ message Condition {
   // of this property is the end user of the platform, so the purpose of this property is to inform, not debug.
   string message = 4;
 
-  // Optional: The time the condition was last changed in UNIX Epoch time. This referes to the number of elapsed
+  // Optional: The time the condition was last changed in UNIX Epoch time. This refers to the number of elapsed
   // milliseconds from  00:00:00 UTC on 1 January 1970.
   int64 last_updated_timestamp = 5;
 
-  // Condition and plugin specific information that can be stored in between condition evluations.
+  // Condition and plugin specific information that can be stored in between condition evaluations.
   google.protobuf.Any metadata = 6;
 
   // ObservedGeneration represents the .metadata.generation that the condition was set based upon.
