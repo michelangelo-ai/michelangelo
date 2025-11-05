@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"go.uber.org/fx"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/fx"
 )
 
 // NoOpPlugin is a plugin that always succeeds and does nothing
@@ -194,9 +195,22 @@ func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, pr
 func (a *CompletingActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
 	// Return a progressing condition based on current stage
 	now := time.Now().UnixMilli()
+
+	// If already complete, return TRUE so Run() won't be called
+	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
+		return &api.Condition{
+			Type:                 "DeploymentProgressing",
+			Status:               api.CONDITION_STATUS_TRUE,
+			Reason:               "Complete",
+			Message:              "Deployment is complete",
+			LastUpdatedTimestamp: now,
+		}, nil
+	}
+
+	// Otherwise return UNKNOWN so Run() will be called to advance the stage
 	return &api.Condition{
 		Type:                 "DeploymentProgressing",
-		Status:               api.CONDITION_STATUS_TRUE,
+		Status:               api.CONDITION_STATUS_UNKNOWN,
 		Reason:               "Progressing",
 		Message:              "Deployment is progressing through stage: " + resource.Status.Stage.String(),
 		LastUpdatedTimestamp: now,

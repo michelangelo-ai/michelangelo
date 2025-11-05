@@ -88,8 +88,3 @@ func NewModelServiceClient(p ClientParams) v2pb.ModelServiceYARPCClient {
 func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClient {
 	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
 }
-
-// NewDeploymentServiceClient creates a DeploymentService YARPC client.
-func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClient {
-	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
-}

@@ -4,10 +4,11 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
 // Plugin is the interface that all Deployment plugins must implement. The deployment controller will
@@ -56,6 +57,10 @@ type ConditionsPlugin interface {
 type ConditionActor interface {
 	// Run runs the action that will attempt to move the condition status in the positive direction
 	Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error)
+
+	// Retrieve retrieves the current state/status of the condition without performing any action.
+	// This is used to check if the condition is satisfied before attempting to run the action.
+	Retrieve(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error)
 
 	// GetType gets the type of the ConditionActor
 	GetType() string

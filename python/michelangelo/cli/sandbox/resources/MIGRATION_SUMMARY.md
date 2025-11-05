@@ -12,14 +12,14 @@
 5. **`MIGRATION_SUMMARY.md`** - This summary
 
 #### Updated Files:
-1. **`istio-gateway.yaml`** - Marked as legacy, added port 8888 support
+1. **`istio-gateway.yaml`** - Marked as legacy, added port 8889 support
 2. **`bert-cola-virtual-service.yaml`** - Marked as legacy for backward compatibility
 
 ### 🌐 Port Configuration
 
 Your new Gateway exposes:
 - **Port 80**: Standard HTTP traffic
-- **Port 8888**: Triton Inference Server ✅
+- **Port 8889**: Triton Inference Server ✅
 - **Port 8088**: Cadence Web UI  
 - **Port 8081**: Envoy Admin
 
@@ -42,7 +42,7 @@ Istio automatically created:
 ```bash
 $ kubectl get svc ma-gateway-istio -n default
 NAME               TYPE           CLUSTER-IP     EXTERNAL-IP   PORT(S)
-ma-gateway-istio   LoadBalancer   10.43.30.244   <pending>     15021:30178/TCP,80:31022/TCP,8888:32300/TCP,8088:32231/TCP,8081:31350/TCP
+ma-gateway-istio   LoadBalancer   10.43.30.244   <pending>     15021:30178/TCP,80:31022/TCP,8889:32300/TCP,8088:32231/TCP,8081:31350/TCP
 ```
 
 ### ✅ Verification
@@ -51,7 +51,7 @@ ma-gateway-istio   LoadBalancer   10.43.30.244   <pending>     15021:30178/TCP,8
 2. **GatewayClass**: ✅ Created (`istio`)
 3. **Gateway**: ✅ Created (`ma-gateway`)
 4. **HTTPRoutes**: ✅ Created (3 routes)
-5. **Port 8888**: ✅ Exposed for Triton
+5. **Port 8889**: ✅ Exposed for Triton
 6. **Service Creation**: ✅ `ma-gateway-istio` service auto-created
 7. **Route Attachment**: ✅ All listeners have attached routes
 
@@ -82,19 +82,19 @@ matches:
 ✅ **Standardization** - Using official Kubernetes Gateway API  
 ✅ **Traffic Splitting** - Built-in canary deployment support  
 ✅ **Header Routing** - Advanced traffic management  
-✅ **Port 8888** - Triton inference server accessible  
+✅ **Port 8889** - Triton inference server accessible  
 ✅ **Backward Compatibility** - Legacy resources still work  
 
 ### 🔧 Usage
 
-#### Access Triton on Port 8888:
+#### Access Triton on Port 8889:
 ```bash
 # Get gateway IP
 GATEWAY_IP=$(kubectl get svc ma-gateway-istio -n default -o jsonpath='{.spec.clusterIP}')
 
 # Test Triton endpoints
-curl http://$GATEWAY_IP:8888/v2/health
-curl http://$GATEWAY_IP:8888/v2/models
+curl http://$GATEWAY_IP:8889/v2/health
+curl http://$GATEWAY_IP:8889/v2/models
 ```
 
 #### Deploy with script:

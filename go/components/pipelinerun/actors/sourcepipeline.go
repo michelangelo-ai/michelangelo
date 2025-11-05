@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -44,7 +45,7 @@ func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.Pipelin
 	}
 
 	// Check if this is a DevRun with inline pipeline_spec
-	if resource.GetSpec().GetPipelineSpec() != nil {
+	if resource.Spec.GetPipelineSpec() != nil {
 		logger.Info("dev run detected with inline pipeline_spec")
 		return &apipb.Condition{
 			Type:   SourcePipelineType,
@@ -53,7 +54,7 @@ func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.Pipelin
 	}
 
 	// Check if regular pipeline run has pipeline reference
-	if resource.GetSpec().GetPipeline() == nil {
+	if resource.Spec.GetPipeline() == nil {
 		logger.Info("pipeline run has no pipeline resource ID")
 		return &apipb.Condition{
 			Type:   SourcePipelineType,
@@ -63,7 +64,7 @@ func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.Pipelin
 
 	// Try to fetch the pipeline to verify it exists
 	pipeline := &v2.Pipeline{}
-	pipelineResourceID := resource.GetSpec().GetPipeline()
+	pipelineResourceID := resource.Spec.Pipeline
 	err := a.apiHandler.Get(ctx, resource.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
 	if err != nil {
 		logger.Error("failed to retrieve pipeline", zap.Error(err))

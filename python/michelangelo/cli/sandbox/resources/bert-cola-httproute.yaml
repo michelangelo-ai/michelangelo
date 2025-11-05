@@ -70,7 +70,7 @@ spec:
     #   weight: 10  # 10% traffic to canary
 
 ---
-# HTTPRoute for Triton Inference Server (port 8888)
+# HTTPRoute for Triton Inference Server (port 8889)
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -83,7 +83,7 @@ spec:
   parentRefs:
   - name: ma-gateway
     namespace: default
-    sectionName: triton-http  # Targets the 8888 port listener
+    sectionName: triton-http  # Targets the 8889 port listener
   
   rules:
   # Health check endpoint

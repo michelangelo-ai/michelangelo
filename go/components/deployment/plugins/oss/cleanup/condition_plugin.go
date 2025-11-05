@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ plugins.ConditionsPlugin = &conditionPlugin{}
@@ -75,7 +76,7 @@ func (a *CleanupActor) GetType() string {
 	return common.ActorTypeCleanup
 }
 
-func (a *CleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if cleanup is complete when deletion timestamp is set
 	if !resource.ObjectMeta.DeletionTimestamp.IsZero() {
 		return &apipb.Condition{
@@ -94,8 +95,8 @@ func (a *CleanupActor) Retrieve(ctx context.Context, runtimeCtx plugins.RequestC
 	}, nil
 }
 
-func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContext, resource *v2pb.Deployment, condition *apipb.Condition) error {
-	runtimeCtx.Logger.Info("Running cleanup for deployment", "deployment", resource.Name)
+func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running cleanup for deployment", "deployment", resource.Name)
 
 	// Update deployment status to indicate cleanup is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
@@ -113,12 +114,17 @@ func (a *CleanupActor) Run(ctx context.Context, runtimeCtx plugins.RequestContex
 		// - Clean up temporary resources
 		// - Update inference server configurations
 
-		runtimeCtx.Logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
+		a.logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
 
 		// Mark cleanup as complete
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-		runtimeCtx.Logger.Info("Cleanup completed for OSS deployment")
+		a.logger.Info("Cleanup completed for OSS deployment")
 	}
 
-	return nil
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_TRUE,
+		Reason:  "CleanupCompleted",
+		Message: "Cleanup completed successfully",
+	}, nil
 }

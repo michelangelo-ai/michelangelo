@@ -41,10 +41,10 @@ export KUBECONFIG=/path/to/your/kubeconfig.yaml
 GATEWAY_IP=$(kubectl get svc istio-ingressgateway -n istio-system -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
 
 # Test Triton health endpoint
-curl http://$GATEWAY_IP:8888/v2/health
+curl http://$GATEWAY_IP:8889/v2/health
 
 # Test model endpoints  
-curl http://$GATEWAY_IP:8888/v2/models
+curl http://$GATEWAY_IP:8889/v2/models
 ```
 
 ## 📋 File Structure
@@ -56,7 +56,7 @@ curl http://$GATEWAY_IP:8888/v2/models
 - `GATEWAY_API_MIGRATION.md` - This guide
 
 ### Updated Files  
-- `istio-gateway.yaml` - Marked as legacy, includes port 8888
+- `istio-gateway.yaml` - Marked as legacy, includes port 8889
 - `bert-cola-virtual-service.yaml` - Marked as legacy
 
 ## 🌐 Port Configuration
@@ -66,7 +66,7 @@ The new Gateway exposes multiple ports:
 | Port | Purpose | Listener Name |
 |------|---------|---------------|
 | 80   | Standard HTTP | `http` |
-| 8888 | Triton Inference | `triton-http` |
+| 8889 | Triton Inference | `triton-http` |
 | 8088 | Cadence Web UI | `cadence-web` |
 | 8081 | Envoy Admin | `envoy-admin` |
 

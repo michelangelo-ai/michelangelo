@@ -32,7 +32,7 @@ spec:
         from: All
   # Triton inference server port
   - name: triton-http
-    port: 8888
+    port: 8889
     protocol: HTTP
     allowedRoutes:
       namespaces:

@@ -10,12 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/golang/mock/gomock"
+	"go.uber.org/zap"
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	mockConditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces/interfaces_mock"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestRun(t *testing.T) {
@@ -38,11 +39,15 @@ func TestRun(t *testing.T) {
 					},
 				})
 				mockEngine.EXPECT().PutCondition(gomock.Any(), gomock.Any())
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
+				mockActor.EXPECT().Retrieve(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
+					Status: api.CONDITION_STATUS_FALSE,
+					Type:   "test",
+				}, nil)
 				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
 					Status: api.CONDITION_STATUS_TRUE,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: false, RequeueAfter: 0},
@@ -63,11 +68,15 @@ func TestRun(t *testing.T) {
 					},
 				})
 				mockEngine.EXPECT().PutCondition(gomock.Any(), gomock.Any())
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
+				mockActor.EXPECT().Retrieve(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
+					Status: api.CONDITION_STATUS_FALSE,
+					Type:   "test",
+				}, nil)
 				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
 					Status: api.CONDITION_STATUS_FALSE,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: false, RequeueAfter: 0},
@@ -88,11 +97,15 @@ func TestRun(t *testing.T) {
 					},
 				})
 				mockEngine.EXPECT().PutCondition(gomock.Any(), gomock.Any())
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
+				mockActor.EXPECT().Retrieve(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
+					Status: api.CONDITION_STATUS_FALSE,
+					Type:   "test",
+				}, nil)
 				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
 					Status: api.CONDITION_STATUS_UNKNOWN,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: true, RequeueAfter: defaultInactiveRequeuePeriodInSeconds * time.Second},
@@ -112,8 +125,12 @@ func TestRun(t *testing.T) {
 						Status: api.CONDITION_STATUS_UNKNOWN,
 					},
 				})
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
+				mockActor.EXPECT().Retrieve(context.Background(), gomock.Any(), gomock.Any()).Return(&api.Condition{
+					Status: api.CONDITION_STATUS_FALSE,
+					Type:   "test",
+				}, nil)
 				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test error"))
-				mockActor.EXPECT().GetType().Return("test")
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: true, RequeueAfter: defaultInactiveRequeuePeriodInSeconds * time.Second},

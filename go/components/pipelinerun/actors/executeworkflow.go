@@ -10,6 +10,8 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	"go.uber.org/zap"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
@@ -18,7 +20,6 @@ import (
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
 )
 
 const (
@@ -201,7 +202,6 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun) (*clientInterfaces.WorkflowExecution, error) {
-
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
 		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
@@ -240,7 +240,6 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 }
 
 func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{}, map[string]interface{}, error) {
-
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
 	if err != nil {
@@ -633,7 +632,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 
 	if taskProgress.RetryAttemptID != "" {
 		stepInfo.Resources = []*v2.PipelineRunResource{
-			&v2.PipelineRunResource{
+			{
 				Resource: &v2.PipelineRunResource_ExternalResource{
 					ExternalResource: &v2.ExternalResource{
 						Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),

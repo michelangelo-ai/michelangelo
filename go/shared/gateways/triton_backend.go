@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -19,6 +18,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Triton Infrastructure Management
@@ -640,7 +641,7 @@ func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, reque
 	// Call Triton /v2/repository/models/{model}/load endpoint
 	// Use localhost when running outside cluster (via bazel run)
 	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
-	serviceURL := "http://localhost:8888"
+	serviceURL := "http://localhost:8889"
 	loadURL := fmt.Sprintf("%s/%s/v2/repository/models/%s/load", serviceURL, request.InferenceServer, request.ModelName)
 
 	// Create HTTP client with timeout
@@ -683,7 +684,7 @@ func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger
 	// Call Triton /v2/models/{model}/ready endpoint with deployment-specific routing
 	// Use localhost when running outside cluster (via bazel run)
 	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
-	serviceURL := "http://localhost:8888"
+	serviceURL := "http://localhost:8889"
 
 	// Include deployment name in URL path for deployment-specific routing
 	var readyURL string
@@ -739,7 +740,7 @@ func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, 
 	// Check if model exists in repository
 	// Use localhost when running outside cluster (via bazel run)
 	// serviceURL := fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", request.InferenceServer, request.Namespace)
-	serviceURL := "http://localhost:8888"
+	serviceURL := "http://localhost:8889"
 	modelURL := fmt.Sprintf("%s/%s/v2/models/%s", serviceURL, request.InferenceServer, request.ModelName)
 
 	client := &http.Client{Timeout: 10 * time.Second}
