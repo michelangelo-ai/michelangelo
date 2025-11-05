@@ -6,13 +6,6 @@
 # Use a base image with Python installed
 FROM nvidia/cuda:12.8.0-base-ubuntu22.04
 
-# Capture Git SHA build argument
-ARG GIT_SHA=unknown
-LABEL git.commit=${GIT_SHA}
-LABEL git.sha=${GIT_SHA}
-LABEL org.opencontainers.image.revision=${GIT_SHA}
-ENV GIT_SHA=${GIT_SHA}
-
 # Install dependencies required for building Python
 RUN apt-get update && apt-get install -y \
     curl \
