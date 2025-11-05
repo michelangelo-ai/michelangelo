@@ -370,12 +370,12 @@ func TestReconcile(t *testing.T) {
 			},
 			mockFunc: func(mockWorkflowClient *workflowClientMock.MockWorkflowClient, mockBlobStorageClient *blobStorageClientMock.MockBlobStoreClient) {
 				mockWorkflowClient.EXPECT().GetWorkflowExecutionInfo(gomock.Any(), "test-workflow-id", "test-run-id").Return(
-					nil, fmt.Errorf("test error"))
+					nil, fmt.Errorf("test error")).Times(3)
 			},
-			errMsg: "test error",
+			errMsg: "",
 			expectedResult: ctrl.Result{
-				Requeue:      true,
-				RequeueAfter: 10 * time.Second,
+				Requeue:      false,
+				RequeueAfter: 0,
 			},
 			expectedConditions: []*apipb.Condition{
 				{
@@ -387,12 +387,14 @@ func TestReconcile(t *testing.T) {
 					Status: apipb.CONDITION_STATUS_TRUE,
 				},
 				{
-					Type:   actors.ExecuteWorkflowType,
-					Status: apipb.CONDITION_STATUS_UNKNOWN,
+					Type:    actors.ExecuteWorkflowType,
+					Status:  apipb.CONDITION_STATUS_FALSE,
+					Reason:  "retry_exhausted",
+					Message: "Failed after 3 retry attempts: get workflow execution info for pipeline run test-namespace/test-pipeline-run (workflow test-workflow-id, run test-run-id): test error",
 				},
 			},
 			expectedPipelineRunStatus: v2.PipelineRunStatus{
-				State:         v2.PIPELINE_RUN_STATE_RUNNING,
+				State:         v2.PIPELINE_RUN_STATE_FAILED,
 				WorkflowId:    "test-workflow-id",
 				WorkflowRunId: "test-run-id",
 			},
@@ -403,7 +405,7 @@ func TestReconcile(t *testing.T) {
 				},
 				{
 					Name:  pipelinerunutils.ExecuteWorkflowStepName,
-					State: v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+					State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
 				},
 			},
 		},

@@ -42,7 +42,7 @@ func TestRun(t *testing.T) {
 					Status: api.CONDITION_STATUS_TRUE,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: false, RequeueAfter: 0},
@@ -67,7 +67,7 @@ func TestRun(t *testing.T) {
 					Status: api.CONDITION_STATUS_FALSE,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: false, RequeueAfter: 0},
@@ -92,7 +92,7 @@ func TestRun(t *testing.T) {
 					Status: api.CONDITION_STATUS_UNKNOWN,
 					Type:   "test",
 				}, nil)
-				mockActor.EXPECT().GetType().Return("test")
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: true, RequeueAfter: defaultInactiveRequeuePeriodInSeconds * time.Second},
@@ -112,8 +112,11 @@ func TestRun(t *testing.T) {
 						Status: api.CONDITION_STATUS_UNKNOWN,
 					},
 				})
-				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test error"))
-				mockActor.EXPECT().GetType().Return("test")
+				// Actor will be retried 3 times, so expect 3 calls to Run and GetType
+				mockActor.EXPECT().Run(context.Background(), gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("test error")).Times(3)
+				mockActor.EXPECT().GetType().Return("test").AnyTimes()
+				// PutCondition will not be called since runActorWithRetry returns an error
+				// No PutCondition expectation for error case
 			},
 			expected: conditionInterfaces.Result{
 				Result:       ctrl.Result{Requeue: true, RequeueAfter: defaultInactiveRequeuePeriodInSeconds * time.Second},
