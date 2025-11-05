@@ -94,6 +94,11 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		Type:   ExecuteWorkflowType,
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
 	}
+	if metadata := previousCondition.GetMetadata(); metadata != nil {
+		if attemptsValue, exists := metadata.Value["attempts"]; exists && attemptsValue == "3" {
+			// Handle the case where attempts == "3"
+		}
+	}
 
 	if pipelineRun.Spec.Kill {
 		err, workflowTerminated := a.processJobTermination(ctx, pipelineRun)
