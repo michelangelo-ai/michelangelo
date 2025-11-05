@@ -168,8 +168,8 @@ message BlastUpdate {
   // If we should check for alerts and rollback during deployment. For a new deployment this is potentially
   // useful. However for updating an existing deployment, this may be be desired.
   bool with_rollback_trigger = 1;
-  // The Jira ticket link reqquired to justifying an emergency deployment.
-  string jira_link = 2;
+  // The issue link required to justifying an emergency deployment.
+  string issue_link = 2;
 }
 
 // This is the placeholder for true red black rollout.

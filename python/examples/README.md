@@ -28,7 +28,7 @@ There are two environments that are provided for examples. Choose the one that s
 
 Install dependencies depending on your environment:
 * For `example` environment, run `poetry install -E example`
-* For `vllm` enviroment, run `poetry install -E vllm`   
+* For `vllm` environment, run `poetry install -E vllm`   
 
 **Run workflows locally**
 

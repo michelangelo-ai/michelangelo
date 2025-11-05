@@ -17,9 +17,9 @@ func (vd *valueDiff) compatible() bool {
 	return vd == nil || *vd == valueDiff{}
 }
 
-// schemaDiff checks compatability of two k8s CRD schemas
+// schemaDiff checks compatibility of two k8s CRD schemas
 // k8s use OpenAPI schema for CRD definition [https://kubernetes.io/docs/tasks/extend-kubernetes/custom-resources/custom-resource-definitions/#specifying-a-structural-schema]
-// When checking compatability, we ignore following OPENAPI props:
+// When checking compatibility, we ignore following OPENAPI props:
 // 1) OPENAPI props only used for documentation
 //   - ExternalDocs
 //   - Example
