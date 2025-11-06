@@ -487,6 +487,10 @@ class CRD:
         _LOG.debug("Original CRD dict: %r", original_crd_dict)
 
         yaml_dict = yaml_to_dict(yaml_path_string)
+        _LOG.debug(
+            "Remove top-level apiVersion/kind from YAML dict,"
+            " since we don't allow to change typemeta"
+        )
         yaml_dict.pop("apiVersion", None)
         yaml_dict.pop("kind", None)
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
@@ -595,14 +599,21 @@ def convert_crd_metadata(
 ) -> dict:
     """
     Convert CRD metadata for a given class.
+
+    Since Michelangelo yaml format is putting `apiVersion` and `kind`
+    at the top level, we need to move them inside of the `typemeta` field.
     """
     _LOG.info("Convert CRD metadata for class %r from %r", crd_class, yaml_path)
     if not isinstance(yaml_dict, dict):
         _LOG.error("Expected a dictionary, got: %r", type(yaml_dict))
         raise ValueError("Expected a dictionary for CRD metadata")
-
     _LOG.debug("Raw yaml dict: metadata: %r", yaml_dict)
+
     res = deepcopy(yaml_dict)
+    if "apiVersion" in res:
+        res.setdefault("typeMeta", {})["apiVersion"] = res.pop("apiVersion")
+    if "kind" in res:
+        res.setdefault("typeMeta", {})["kind"] = res.pop("kind")
     _LOG.debug("Converted CRD metadata: %r", res)
     return res
 
