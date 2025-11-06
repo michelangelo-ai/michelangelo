@@ -1,3 +1,5 @@
+apiVersion: michelangelo.api/v2
+kind: Project
 metadata:
   annotations:
     test-annotation: "test"

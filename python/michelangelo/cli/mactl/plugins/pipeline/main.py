@@ -4,7 +4,6 @@ from types import MethodType
 from grpc import Channel
 
 from mactl import CRD
-from plugins.pipeline.apply import convert_crd_metadata_pipeline_apply
 from plugins.pipeline.create import convert_crd_metadata_pipeline_create
 from plugins.pipeline.run import generate_run, convert_crd_metadata_pipeline_run
 from plugins.pipeline.dev_run import (
@@ -25,8 +24,6 @@ def apply_plugins(
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     _LOG.debug("Available CRDs: %r", crds)
     _LOG.debug("gRPC Channel: %r", channel)
-    if target_command == "apply":
-        crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_apply
     if target_command == "create":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "run":
