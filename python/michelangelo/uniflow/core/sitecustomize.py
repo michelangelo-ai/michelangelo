@@ -70,7 +70,7 @@ class FsspecDownloader(StorageDownloader):
 def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None):
     """
     Download and extract development files from remote storage with following steps:
-    1. Check for FILE_SYNC_REMOTE_FILE_PATH environment variable
+    1. Check for UF_FILE_SYNC_TARBALL_URL environment variable
     2. Download tarball using appropriate downloader (tb-cli or fsspec)
     3. Extract and replace files in current working directory
     4. Clean up temporary files
@@ -86,9 +86,9 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
         logger = _get_logger()
 
     # Check for the required environment variable
-    remote_file_path = os.environ.get("FILE_SYNC_REMOTE_FILE_PATH")
+    remote_file_path = os.environ.get("UF_FILE_SYNC_TARBALL_URL")
     if not remote_file_path:
-        logger.info("FILE_SYNC_REMOTE_FILE_PATH not set, skipping file sync")
+        logger.info("UF_FILE_SYNC_TARBALL_URL not set, skipping file sync")
         return False
     logger.info(f"Downloading development files from: {remote_file_path}")
 
@@ -147,7 +147,7 @@ def file_sync_pre_run():
     """
     logger = _get_logger("sitecustomize")
 
-    if os.environ.get("FILE_SYNC_REMOTE_FILE_PATH"):
+    if os.environ.get("UF_FILE_SYNC_TARBALL_URL"):
         logger.info("Development file sync starting...")
         success = download_and_extract_dev_files(
             downloader=FsspecDownloader(), logger=logger
@@ -157,7 +157,7 @@ def file_sync_pre_run():
         else:
             logger.warning("Development file sync failed (check logs above)")
     else:
-        logger.info("No development files to sync (FILE_SYNC_REMOTE_FILE_PATH not set)")
+        logger.info("No development files to sync (UF_FILE_SYNC_TARBALL_URL not set)")
 
 
 # Run the file sync pre-run functionality automatically when this module is imported
@@ -167,7 +167,7 @@ if __name__ != "__main__":
     print(f"[sitecustomize] Python executable: {sys.executable}")
     print(f"[sitecustomize] Working directory: {os.getcwd()}")
     print(
-        f"[sitecustomize] FILE_SYNC_REMOTE_FILE_PATH: {os.environ.get('FILE_SYNC_REMOTE_FILE_PATH', 'NOT SET')}"
+        f"[sitecustomize] UF_FILE_SYNC_TARBALL_URL: {os.environ.get('UF_FILE_SYNC_TARBALL_URL', 'NOT SET')}"
     )
 
     try:
