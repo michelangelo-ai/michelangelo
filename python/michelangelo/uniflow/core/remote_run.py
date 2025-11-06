@@ -68,9 +68,7 @@ class RemoteRun:
                 docker_image=self.image,
             ).create_and_upload_tarball()
             if file_sync_tarball_url:
-                log.info(
-                    f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}"
-                )
+                log.info(f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}")
                 environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         for k, v in environ.items():
@@ -241,9 +239,7 @@ class RemoteRunTemporal:
                 docker_image=self.image,
             ).create_and_upload_tarball()
             if file_sync_tarball_url:
-                log.info(
-                    f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}"
-                )
+                log.info(f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}")
                 environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         cmd = ["temporal", "workflow", "start"]

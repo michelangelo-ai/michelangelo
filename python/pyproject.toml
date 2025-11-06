@@ -32,6 +32,7 @@ pytest = { version = "^8.3.4", optional = true }
 ruff = { version = "^0.9.1", optional = true }
 jinja2 = { version = "^3.1.2", optional = true }
 pre-commit = {version = "^4.2.0", optional = true}
+docker = { version = "^7.1.0", optional = true }
 
 # For example run
 accelerate = { version = "0.34.2", optional = true }
@@ -64,7 +65,7 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "ruff", "jinja2", "pre-commit", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
+dev = ["pytest", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]

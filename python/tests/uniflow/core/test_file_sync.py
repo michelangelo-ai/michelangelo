@@ -237,7 +237,9 @@ class TestDefaultFileSync(unittest.TestCase):
     def test_get_git_sha_docker_not_installed(self):
         """Test that None is returned when docker package is not available"""
         # Mock the import to raise ImportError
-        with patch("builtins.__import__", side_effect=ImportError("No module named 'docker'")):
+        with patch(
+            "builtins.__import__", side_effect=ImportError("No module named 'docker'")
+        ):
             git_sha = self.builder.get_git_sha()
             # Should return None when docker package is not available
             self.assertIsNone(git_sha)

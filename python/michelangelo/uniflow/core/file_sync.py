@@ -58,9 +58,7 @@ class FileSync(ABC):
         """
         base_path = os.environ.get("UF_FILE_SYNC_STORAGE_URL", "s3://default/uniflow")
         if self._remote_file_path is None:
-            self._remote_file_path = (
-                f"{base_path}/{self.get_file_name()}"
-            )
+            self._remote_file_path = f"{base_path}/{self.get_file_name()}"
         return self._remote_file_path
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
@@ -180,7 +178,9 @@ class DefaultFileSync(FileSync):
         try:
             import docker
         except ImportError:
-            log.warning("Docker package not available, skipping Git SHA extraction from image")
+            log.warning(
+                "Docker package not available, skipping Git SHA extraction from image"
+            )
             return None
 
         docker_image = self._docker_image
