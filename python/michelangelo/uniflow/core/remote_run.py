@@ -73,7 +73,6 @@ class RemoteRun:
                 )
                 environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
-        # Log environment variables after file_sync
         for k, v in environ.items():
             log.info("environ: %s: %s", k, v)
 
