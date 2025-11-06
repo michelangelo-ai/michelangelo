@@ -95,47 +95,7 @@ def generate_run(crd: CRD, channel: Channel):
             timeout=30,
         )
         _LOG.info("Stub method completed (%r): %r", type(response), response)
-
-        # Extract the pipeline run name and namespace from the response
-        if hasattr(response, 'pipeline_run') and hasattr(response.pipeline_run, 'metadata'):
-            run_name = response.pipeline_run.metadata.name
-            run_namespace = response.pipeline_run.metadata.namespace
-            pipeline_name = response.pipeline_run.spec.pipeline.name if hasattr(response.pipeline_run.spec, 'pipeline') else 'unknown'
-        elif hasattr(response, 'metadata') and hasattr(response.metadata, 'name'):
-            run_name = response.metadata.name
-            run_namespace = response.metadata.namespace if hasattr(response.metadata, 'namespace') else _namespace
-            pipeline_name = _name
-        else:
-            # Fallback: extract from the generated pipeline run dict
-            pipeline_run_dict = _self.func_crd_metadata_converter(
-                run_kwargs, input_class, None
-            )
-            pipeline_run_obj = pipeline_run_dict.get('pipeline_run', {})
-            run_name = pipeline_run_obj.get('metadata', {}).get('name', 'unknown')
-            run_namespace = pipeline_run_obj.get('metadata', {}).get('namespace', _namespace)
-            pipeline_name = _name
-
-        # Print concise success message with essential info
-        print(f"✅ Pipeline run created successfully!")
-        print(f"   📋 Pipeline: {pipeline_name}")
-        print(f"   🏃 Run Name: {run_name}")
-        print(f"   📍 Namespace: {run_namespace}")
-
-        # Print the Temporal UI URL
-        temporal_url = f"http://localhost:8090/namespaces/{run_namespace}/workflows/{run_name}"
-        print(f"   🌐 Temporal UI: {temporal_url}")
-
-        # Create a simple success response instead of returning the full pipeline run
-        class SimpleResponse:
-            def __init__(self, success=True, run_name=None, namespace=None):
-                self.success = success
-                self.run_name = run_name
-                self.namespace = namespace
-
-            def __str__(self):
-                return ""  # Return empty string to suppress verbose output
-
-        return SimpleResponse(success=True, run_name=run_name, namespace=run_namespace)
+        return response
 
     run_func.__signature__ = run_func_signature  # type: ignore[attr-defined]
     crd.run = MethodType(run_func, crd)

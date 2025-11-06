@@ -1,7 +1,0 @@
-metadata:
-  namespace: 'ma-customer-sandbox'
-  name: 'boston-housing-retrain'
-  annotations:
-    orchestration-version: 'v2'
-spec:
-  type: 'PIPELINE_TYPE_RETRAIN'
