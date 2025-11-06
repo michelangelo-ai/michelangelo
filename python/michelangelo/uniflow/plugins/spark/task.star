@@ -4,6 +4,10 @@ load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CAC
 SPARK_ENV = {
 }
 
+if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
+    existing_pythonpath = os.environ.get("PYTHONPATH", "/app")
+    SPARK_ENV["PYTHONPATH"] = existing_pythonpath + ":/app/michelangelo/uniflow/core"
+
 SPARK_DEFAULT_DRIVER_CPU = os.environ.get("SPARK_DEFAULT_DRIVER_CPU", "4")
 SPARK_DEFAULT_DRIVER_MEMORY = os.environ.get("SPARK_DEFAULT_DRIVER_MEMORY", "16G")
 SPARK_DEFAULT_DRIVER_DISK = os.environ.get("SPARK_DEFAULT_DRIVER_DISK", "512G")

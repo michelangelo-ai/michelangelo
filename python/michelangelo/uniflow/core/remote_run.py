@@ -13,7 +13,7 @@ from typing import Callable, Optional
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.utils import dot_path
-from michelangelo.uniflow.core.file_sync import UniflowFileSyncBuilderOSS
+from michelangelo.uniflow.core.file_sync import DefaultFileSync
 
 log = logging.getLogger(__name__)
 
@@ -64,24 +64,14 @@ class RemoteRun:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
 
         if self.file_sync:
-            file_sync_remote_file_path = UniflowFileSyncBuilderOSS(
-                project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+            file_sync_tarball_url = DefaultFileSync(
                 docker_image=self.image,
             ).create_and_upload_tarball()
-            if file_sync_remote_file_path:
+            if file_sync_tarball_url:
                 log.info(
-                    f"Setting FILE_SYNC_REMOTE_FILE_PATH to {file_sync_remote_file_path}"
+                    f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}"
                 )
-                environ["FILE_SYNC_REMOTE_FILE_PATH"] = file_sync_remote_file_path
-                # Add sitecustomize.py directory to PYTHONPATH
-                # We append the uniflow/core directory so Python can auto-import sitecustomize.py
-                existing_pythonpath = environ.get("PYTHONPATH", "/app")
-                environ["PYTHONPATH"] = (
-                    f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
-                )
-                log.info(
-                    f"Environment variables set: PYTHONPATH={environ.get('PYTHONPATH')}, FILE_SYNC_REMOTE_FILE_PATH={environ.get('FILE_SYNC_REMOTE_FILE_PATH')}"
-                )
+                environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         # Log environment variables after file_sync
         for k, v in environ.items():
@@ -248,22 +238,14 @@ class RemoteRunTemporal:
         log.info("input: total bytes: %d", len(input_list))
 
         if self.file_sync:
-            file_sync_remote_file_path = UniflowFileSyncBuilderOSS(
-                project=os.environ.get("UFC_TEMPORAL_NAMESPACE", "default"),
+            file_sync_tarball_url = DefaultFileSync(
                 docker_image=self.image,
             ).create_and_upload_tarball()
-            if file_sync_remote_file_path:
+            if file_sync_tarball_url:
                 log.info(
-                    f"Setting FILE_SYNC_REMOTE_FILE_PATH to {file_sync_remote_file_path}"
+                    f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}"
                 )
-                environ["FILE_SYNC_REMOTE_FILE_PATH"] = file_sync_remote_file_path
-                # Add sitecustomize.py directory to PYTHONPATH
-                # The Dockerfile copies python/ to /app, so paths become /app/michelangelo/...
-                # We append the uniflow/core directory so Python can auto-import sitecustomize.py
-                existing_pythonpath = environ.get("PYTHONPATH", "/app")
-                environ["PYTHONPATH"] = (
-                    f"{existing_pythonpath}:/app/michelangelo/uniflow/core"
-                )
+                environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         cmd = ["temporal", "workflow", "start"]
 

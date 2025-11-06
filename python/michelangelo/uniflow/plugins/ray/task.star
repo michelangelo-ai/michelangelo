@@ -12,6 +12,10 @@ RAY_ENV = {
     # Calculate RAY_NUM_REDIS_GET_RETRIES to allow workers approximately DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS to connect to the GCS, assuming 7 seconds per retry.
     "RAY_NUM_REDIS_GET_RETRIES": str((DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS // 7) + 1),
 }
+
+if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
+    existing_pythonpath = os.environ.get("PYTHONPATH", "/app")
+    RAY_ENV["PYTHONPATH"] = existing_pythonpath + ":/app/michelangelo/uniflow/core"
 RAY_DEFAULT_HEAD_CPU = os.environ.get("RAY_DEFAULT_HEAD_CPU", "8")
 RAY_DEFAULT_HEAD_MEMORY = os.environ.get("RAY_DEFAULT_HEAD_MEMORY", "32Gi")
 RAY_DEFAULT_HEAD_DISK = os.environ.get("RAY_DEFAULT_HEAD_DISK", "512Gi")

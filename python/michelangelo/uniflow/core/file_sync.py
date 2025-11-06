@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from pathlib import Path
-from datetime import datetime
 from typing import Optional
 import uuid
 import tempfile
@@ -11,14 +10,12 @@ import logging
 import subprocess
 import fsspec
 
-from michelangelo.uniflow.registration.uniflow_tar import _DEFAULT_S3_PATH
 
 log = logging.getLogger(__name__)
 
 
-class UniflowFileSyncBuilder(ABC):
-    def __init__(self, project: Optional[str] = None):
-        self._project = project
+class FileSync(ABC):
+    def __init__(self):
         self._file_name = None
         self._remote_file_path = None
 
@@ -34,14 +31,12 @@ class UniflowFileSyncBuilder(ABC):
         """
         Get a random file name for the tarball.
 
-        Uses "uniflow" as the prefix for all file sync tarballs.
+        Uses "file-sync" as the prefix for all file sync tarballs.
 
         Returns:
-            The random file name in format: uniflow-{timestamp}-{random}.tar.gz
+            The random file name in format: file-sync-{uuid}.tar.gz
         """
-        date_str = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        random_suffix = uuid.uuid4().hex[:8]
-        return f"uniflow-{date_str}-{random_suffix}.tar.gz"
+        return f"file-sync-{uuid.uuid4().hex}.tar.gz"
 
     def get_file_name(self) -> str:
         """
@@ -61,15 +56,11 @@ class UniflowFileSyncBuilder(ABC):
         Returns:
             The remote file path, or None if the remote file path is not set
         """
-        base_path = os.environ.get("UF_BASE_PROJECTS_PATH") or _DEFAULT_S3_PATH
+        base_path = os.environ.get("UF_FILE_SYNC_STORAGE_URL", "s3://default/uniflow")
         if self._remote_file_path is None:
-            if self._project:
-                self._remote_file_path = (
-                    f"{base_path}/{self._project}/{self.get_file_name()}"
-                )
-            else:
-                tmp_path = os.path.join(base_path, "../tmp", uuid.uuid4().hex[:8])
-                self._remote_file_path = f"{tmp_path}/{self.get_file_name()}"
+            self._remote_file_path = (
+                f"{base_path}/{self.get_file_name()}"
+            )
         return self._remote_file_path
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
@@ -166,9 +157,9 @@ class UniflowFileSyncBuilder(ABC):
         return self.get_remote_file_path()
 
 
-class UniflowFileSyncBuilderOSS(UniflowFileSyncBuilder):
-    def __init__(self, project: str, docker_image: str):
-        super().__init__(project)
+class DefaultFileSync(FileSync):
+    def __init__(self, docker_image: Optional[str] = None):
+        super().__init__()
         self._docker_image = docker_image
 
     def get_git_sha(self) -> Optional[str]:
@@ -185,8 +176,12 @@ class UniflowFileSyncBuilderOSS(UniflowFileSyncBuilder):
         Returns:
             The Git SHA if found, None otherwise
         """
-        # Lazy import docker to avoid dependency issues in containers
-        import docker
+        # Check if docker package is available
+        try:
+            import docker
+        except ImportError:
+            log.warning("Docker package not available, skipping Git SHA extraction from image")
+            return None
 
         docker_image = self._docker_image
         try:
