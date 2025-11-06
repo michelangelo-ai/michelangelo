@@ -159,11 +159,6 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         action="store_true",
         help="Automatically answer yes to confirmation prompts.",
     )
-    p.add_argument(
-        "--file-sync",
-        action="store_true",
-        help="Sync local code changes from the current git repository to the remote run.",
-    )
 
     if environ:
         p.add_argument(
@@ -185,7 +180,6 @@ def _remote_run(
     image: str = "",
     yes: bool = False,
     workflow: str = cadence,
-    file_sync: bool = False,
 ):
     """
     Execute a given workflow function in Remote Mode.
@@ -200,7 +194,6 @@ def _remote_run(
         storage_url: Persistent storage URL for saving and loading workflow checkpoints.
         image: Container image to use for running workflow tasks.
         yes: Automatically answer yes to confirmation prompts.
-        file_sync: Sync local code changes to the remote run.
     """
     assert storage_url
     assert image
@@ -229,5 +222,4 @@ def _remote_run(
     rr.execution_timeout_seconds = execution_timeout_seconds
     rr.cron = cron
     rr.yes = yes
-    rr.file_sync = file_sync
     rr.run()
