@@ -1,7 +1,7 @@
 import unittest
 from michelangelo.uniflow.core.file_sync import (
-    UniflowFileSyncBuilder,
-    UniflowFileSyncBuilderOSS,
+    FileSync,
+    DefaultFileSync,
 )
 from pathlib import Path
 from unittest.mock import patch, MagicMock, mock_open
@@ -11,8 +11,7 @@ import tarfile
 import io
 
 
-# Concrete implementation for testing abstract base class
-class _TestableFileBuilder(UniflowFileSyncBuilder):
+class _TestableFileBuilder(FileSync):
     """Concrete implementation for testing abstract base class"""
 
     def get_git_sha(self):
@@ -24,9 +23,7 @@ class _TestableFileBuilder(UniflowFileSyncBuilder):
 
 class TestFileSync(unittest.TestCase):
     def setUp(self):
-        self.builder = _TestableFileBuilder(
-            project="my_project",
-        )
+        self.builder = _TestableFileBuilder()
         os.environ["UF_BASE_PROJECTS_PATH"] = (
             "/prod/michelangelo/uniflow/uniflow_dev_run/projects"
         )
@@ -34,43 +31,37 @@ class TestFileSync(unittest.TestCase):
     def test_get_random_file_name(self):
         file_name = self.builder.get_random_file_name()
         self.assertIsNotNone(file_name)
-        self.assertTrue(file_name.startswith("uniflow-"))
+        self.assertTrue(file_name.startswith("file-sync-"))
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_random_file_name_with_none_pipeline(self):
-        """Test that filename always uses 'uniflow' prefix"""
-        builder = _TestableFileBuilder(
-            project="my_project",
-        )
+        """Test that filename always uses 'file-sync' prefix"""
+        builder = _TestableFileBuilder()
         file_name = builder.get_random_file_name()
-        self.assertIn("uniflow", file_name)
+        self.assertIn("file-sync", file_name)
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_file_name(self):
         file_name = self.builder.get_file_name()
-        self.assertTrue(file_name.startswith("uniflow"))
+        self.assertTrue(file_name.startswith("file-sync"))
         self.assertTrue(file_name.endswith(".tar.gz"))
 
     def test_get_remote_file_path(self):
+        os.environ["UF_FILE_SYNC_STORAGE_URL"] = "s3://test-bucket/file-sync"
         remote_file_path = self.builder.get_remote_file_path()
-        self.assertTrue(
-            remote_file_path.startswith(
-                "/prod/michelangelo/uniflow/uniflow_dev_run/projects/my_project/"
-            )
-        )
+        self.assertTrue(remote_file_path.startswith("s3://test-bucket/file-sync/"))
         self.assertTrue(remote_file_path.endswith(".tar.gz"))
 
     def test_get_remote_file_path_with_fallback(self):
-        """Test fallback to _DEFAULT_S3_PATH when env var is not set"""
-        if "UF_BASE_PROJECTS_PATH" in os.environ:
-            del os.environ["UF_BASE_PROJECTS_PATH"]
+        """Test fallback to default when env var is not set"""
+        if "UF_FILE_SYNC_STORAGE_URL" in os.environ:
+            del os.environ["UF_FILE_SYNC_STORAGE_URL"]
 
         # Create a new builder without the env var set
-        builder = _TestableFileBuilder(
-            project="my_project",
-        )
+        builder = _TestableFileBuilder()
         remote_file_path = builder.get_remote_file_path()
         # Should use the default path from file_sync.py
+        self.assertTrue(remote_file_path.startswith("s3://default/uniflow/"))
         self.assertTrue(remote_file_path.endswith(".tar.gz"))
 
     def test_create_diff_tarball_bytes_strips_python_prefix(self):
@@ -116,15 +107,15 @@ class TestFileSync(unittest.TestCase):
     def test_create_and_upload_tarball_success(self):
         with (
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.create_diff_tarball_bytes",
+                "michelangelo.uniflow.core.file_sync.FileSync.create_diff_tarball_bytes",
                 return_value=b"fake-bytes",
             ) as mock_tarball,
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.get_file_name",
+                "michelangelo.uniflow.core.file_sync.FileSync.get_file_name",
                 return_value="fake.tar.gz",
             ) as mock_filename,
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.get_remote_file_path",
+                "michelangelo.uniflow.core.file_sync.FileSync.get_remote_file_path",
                 return_value="/remote/path/fake.tar.gz",
             ) as mock_path,
         ):
@@ -138,11 +129,11 @@ class TestFileSync(unittest.TestCase):
     def test_create_and_upload_tarball_no_tarball(self):
         with (
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.create_diff_tarball_bytes",
+                "michelangelo.uniflow.core.file_sync.FileSync.create_diff_tarball_bytes",
                 return_value=None,
             ) as mock_tarball,
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.upload_tarball"
+                "michelangelo.uniflow.core.file_sync.FileSync.upload_tarball"
             ) as mock_upload,
         ):
             result = self.builder.create_and_upload_tarball()
@@ -158,18 +149,16 @@ class TestFileSync(unittest.TestCase):
         self.assertEqual(git_sha, "0241feca9a6a681c917c3bb712dcb62918522aed")
 
 
-class TestUniflowFileSyncBuilderOSS(unittest.TestCase):
-    """Unit tests for UniflowFileSyncBuilderOSS"""
+class TestDefaultFileSync(unittest.TestCase):
+    """Unit tests for DefaultFileSync"""
 
     def setUp(self):
-        self.builder = UniflowFileSyncBuilderOSS(
-            project="test_project",
+        self.builder = DefaultFileSync(
             docker_image="examples:latest",
         )
 
     def test_init(self):
         """Test initialization"""
-        self.assertEqual(self.builder._project, "test_project")
         self.assertEqual(self.builder._docker_image, "examples:latest")
 
     def test_get_git_sha_from_label_git_commit_actual(self):
@@ -245,6 +234,14 @@ class TestUniflowFileSyncBuilderOSS(unittest.TestCase):
             # Should return None instead of raising an exception
             self.assertIsNone(git_sha)
 
+    def test_get_git_sha_docker_not_installed(self):
+        """Test that None is returned when docker package is not available"""
+        # Mock the import to raise ImportError
+        with patch("builtins.__import__", side_effect=ImportError("No module named 'docker'")):
+            git_sha = self.builder.get_git_sha()
+            # Should return None when docker package is not available
+            self.assertIsNone(git_sha)
+
     @patch("builtins.open", new_callable=mock_open, read_data=b"tarball content")
     @patch("michelangelo.uniflow.core.file_sync.fsspec.open")
     def test_upload_tarball_success(self, mock_fsspec_open, mock_builtin_open):
@@ -278,7 +275,7 @@ class TestUniflowFileSyncBuilderOSS(unittest.TestCase):
         with (
             patch("docker.from_env") as mock_from_env,
             patch(
-                "michelangelo.uniflow.core.file_sync.UniflowFileSyncBuilder.create_diff_tarball_bytes"
+                "michelangelo.uniflow.core.file_sync.FileSync.create_diff_tarball_bytes"
             ) as mock_create_tarball,
             patch("builtins.open", new_callable=mock_open),
             patch(
