@@ -2,20 +2,26 @@ load("@plugin", "atexit", "json", "os", "ray", "time")
 load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
-RAY_ENV = {
-    "RAY_DEDUP_LOGS": "0",
-    # RAY_NUM_REDIS_GET_RETRIES controls the number of retries for a worker node to connect to the GCS (Global Control Service) at startup.
-    # Source: https://github.com/ray-project/ray/blob/releases/2.9.2/python/ray/_private/node.py#L688
-    # The default value is 20, giving a worker about 140 seconds to connect to the GCS (7 seconds per retry).
-    # We need to provide workers more time to connect because the Job Controller doesn't support gang scheduling of nodes.
-    # As a result, a worker node might start significantly earlier than the head node.
-    # Calculate RAY_NUM_REDIS_GET_RETRIES to allow workers approximately DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS to connect to the GCS, assuming 7 seconds per retry.
-    "RAY_NUM_REDIS_GET_RETRIES": str((DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS // 7) + 1),
-}
 
-if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
-    existing_pythonpath = os.environ.get("PYTHONPATH", "/app")
-    RAY_ENV["PYTHONPATH"] = existing_pythonpath + ":/app/michelangelo/uniflow/core"
+def _get_ray_env():
+    """Get Ray environment variables, including PYTHONPATH for file sync if enabled."""
+    env = {
+        "RAY_DEDUP_LOGS": "0",
+        # RAY_NUM_REDIS_GET_RETRIES controls the number of retries for a worker node to connect to the GCS (Global Control Service) at startup.
+        # Source: https://github.com/ray-project/ray/blob/releases/2.9.2/python/ray/_private/node.py#L688
+        # The default value is 20, giving a worker about 140 seconds to connect to the GCS (7 seconds per retry).
+        # We need to provide workers more time to connect because the Job Controller doesn't support gang scheduling of nodes.
+        # As a result, a worker node might start significantly earlier than the head node.
+        # Calculate RAY_NUM_REDIS_GET_RETRIES to allow workers approximately DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS to connect to the GCS, assuming 7 seconds per retry.
+        "RAY_NUM_REDIS_GET_RETRIES": str((DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS // 7) + 1),
+    }
+    # Configure PYTHONPATH for file sync (sitecustomize.py)
+    if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
+        existing_pythonpath = os.environ.get("PYTHONPATH", "/app")
+        env["PYTHONPATH"] = existing_pythonpath + ":/app/michelangelo/uniflow/core"
+    return env
+
+RAY_ENV = _get_ray_env()
 RAY_DEFAULT_HEAD_CPU = os.environ.get("RAY_DEFAULT_HEAD_CPU", "8")
 RAY_DEFAULT_HEAD_MEMORY = os.environ.get("RAY_DEFAULT_HEAD_MEMORY", "32Gi")
 RAY_DEFAULT_HEAD_DISK = os.environ.get("RAY_DEFAULT_HEAD_DISK", "512Gi")
