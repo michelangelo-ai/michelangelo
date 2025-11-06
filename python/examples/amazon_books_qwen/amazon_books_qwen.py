@@ -18,7 +18,7 @@ from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_wi
 
 
 @uniflow.workflow()
-def amazon_books_qwen_workflow():
+def amazon_books_qwen_workflow(sample_size=100):
     """
     Complete workflow for training Qwen dual-encoder on Amazon Books data
     Following GenRec+Qwen architecture (N3) specifications
@@ -27,7 +27,7 @@ def amazon_books_qwen_workflow():
     dataset_config = {
         "max_query_tokens": 128,    # Qwen spec: max query length
         "max_doc_tokens": 512,      # Qwen spec: max document length
-        "sample_size": 100,         # Small subset for local testing
+        "sample_size": sample_size,         # Small subset for local testing
         "negative_ratio": 1.0,      # 1:1 positive to negative ratio
         "train_split": 0.7,
         "val_split": 0.15,
@@ -83,9 +83,12 @@ if __name__ == "__main__":
     ctx.environ["MAX_QUERY_LENGTH"] = "128"
     ctx.environ["MAX_DOC_LENGTH"] = "512"
 
-    # Run the workflow
-    result = ctx.run(amazon_books_qwen_workflow)
+    sample_size = 1000
+    if ctx.is_local_run():
+        print("=" * 80)
+        print("Using smaller dataset")
+        print("=" * 80)
+        sample_size = 100
 
-    print("=" * 80)
-    print("Pipeline completed successfully!")
-    print("=" * 80)
+    # Run the workflow
+    result = ctx.run(amazon_books_qwen_workflow, sample_size)
