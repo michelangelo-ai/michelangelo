@@ -4,7 +4,6 @@ from types import MethodType
 from grpc import Channel
 
 from mactl import CRD
-from plugins.pipeline.apply import convert_crd_metadata_pipeline_apply
 from plugins.pipeline.create import convert_crd_metadata_pipeline_create
 from plugins.pipeline.run import generate_run, convert_crd_metadata_pipeline_run
 from plugins.pipeline.dev_run import (
