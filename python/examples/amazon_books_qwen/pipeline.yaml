@@ -1,0 +1,15 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  namespace: "ma-dev-test"
+  name: "amazon-books-qwen"
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  type: "PIPELINE_TYPE_TRAIN"
+  manifest:
+    filePath: examples.amazon_books_qwen.amazon_books_qwen
+    uniflowTar: s3://default/uniflow/ma-dev-test_amazon-books-qwen_d20f43fa.tar.gz
+  commit:
+    gitRef: "main"
+    branch: "main"
