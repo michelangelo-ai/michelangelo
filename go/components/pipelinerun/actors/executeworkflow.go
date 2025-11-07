@@ -331,7 +331,10 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 		return nil, fmt.Errorf("unmarshal pipeline manifest content to typed struct: %w", err)
 	}
 	marshaler := &jsonpb.Marshaler{}
-	pipelineConfigStr, _ := marshaler.MarshalToString(pbStruct.Value)
+	pipelineConfigStr, err := marshaler.MarshalToString(pbStruct.Value)
+	if err != nil {
+		return nil, fmt.Errorf("marshal pipeline manifest to JSON string: %w", err)
+	}
 	pipelineConfig := make(map[string]interface{})
 	err = json.Unmarshal([]byte(pipelineConfigStr), &pipelineConfig)
 	if err != nil {
