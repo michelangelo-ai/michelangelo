@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
@@ -63,9 +65,12 @@ func opts() fx.Option {
 }
 
 func getTallyScope() (tally.Scope, error) {
-	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
+	s, err := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tally scope: %w", err)
+	}
 	return s, nil
 }
 

@@ -233,7 +233,11 @@ func getWorkflowURL(wid string, provider string) string {
 		logURL = "http://localhost:8088"
 		urlPath = fmt.Sprintf("/domains/%s/workflows/%s", domain, wid)
 	}
-	path, _ := url.PathUnescape(urlPath)
+	path, err := url.PathUnescape(urlPath)
+	if err != nil {
+		// If unescape fails, use the original path
+		path = urlPath
+	}
 	return logURL + path
 }
 

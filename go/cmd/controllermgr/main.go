@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -48,9 +50,12 @@ func scheme() (*runtime.Scheme, error) {
 
 func getTallyScope() (tally.Scope, error) {
 	// Create basic tally scope with console output for now
-	s, _ := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
+	s, err := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create tally scope: %w", err)
+	}
 
 	// Register Prometheus metrics with controller-runtime
 	metrics.RegisterMetrics()

@@ -162,9 +162,10 @@ func newCadenceClient(conf Config) (workflowserviceclient.Interface, error) {
 
 // newTemporalWorker creates a new Temporal worker.
 func newTemporalWorker(factory TemporalClientFactory, conf Config, log *zap.Logger) ([]sworker.Worker, error) {
-	scope, _ := tallyv4.NewRootScope(tallyv4.ScopeOptions{
+	scope, closer := tallyv4.NewRootScope(tallyv4.ScopeOptions{
 		Prefix: "temporal",
 	}, time.Second)
+	defer closer.Close()
 	// Create Temporal client
 	c, err := factory.NewTemporalClient(tempclient.Options{
 		HostPort:       conf.Host,

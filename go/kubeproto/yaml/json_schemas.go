@@ -27,9 +27,16 @@ func loadSchemas(packageName string, embedFS embed.FS) {
 		if file.IsDir() {
 			return nil
 		}
-		yamlSchema, _ := embedFS.ReadFile(path)
+		yamlSchema, readErr := embedFS.ReadFile(path)
+		if readErr != nil {
+			// Skip files that cannot be read
+			return nil
+		}
 		schema := apiext.JSONSchemaProps{}
-		k8syaml.Unmarshal(yamlSchema, &schema)
+		if unmarshalErr := k8syaml.Unmarshal(yamlSchema, &schema); unmarshalErr != nil {
+			// Skip files that cannot be unmarshaled
+			return nil
+		}
 		typeName := generator.CamelCase(strings.TrimSuffix(file.Name(), ".yaml"))
 		jsonSchemas[packageName+"."+typeName] = &schema
 		return nil
