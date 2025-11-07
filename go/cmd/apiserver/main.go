@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
@@ -64,14 +64,16 @@ func opts() fx.Option {
 	)
 }
 
-func getTallyScope() (tally.Scope, error) {
-	s, err := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
+func getTallyScope(lc fx.Lifecycle) tally.Scope {
+	s, closer := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tally scope: %w", err)
-	}
-	return s, nil
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			return closer.Close()
+		},
+	})
+	return s
 }
 
 func getScheme() (*runtime.Scheme, error) {

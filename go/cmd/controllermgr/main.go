@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/go-logr/zapr"
 	"go.uber.org/fx"
@@ -48,19 +48,21 @@ func scheme() (*runtime.Scheme, error) {
 	return scheme, nil
 }
 
-func getTallyScope() (tally.Scope, error) {
+func getTallyScope(lc fx.Lifecycle) tally.Scope {
 	// Create basic tally scope with console output for now
-	s, err := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
+	s, closer := tally.NewRootScopeWithDefaultInterval(tally.ScopeOptions{
 		Prefix: serverName,
 	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create tally scope: %w", err)
-	}
+	lc.Append(fx.Hook{
+		OnStop: func(ctx context.Context) error {
+			return closer.Close()
+		},
+	})
 
 	// Register Prometheus metrics with controller-runtime
 	metrics.RegisterMetrics()
 
-	return s, nil
+	return s
 }
 
 // options provides the FX modules and configurations used by the application.

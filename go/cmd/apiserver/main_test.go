@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/uber-go/tally"
 	"go.uber.org/fx"
 )
 
@@ -12,8 +13,12 @@ func TestDependenciesAreSatisfied(t *testing.T) {
 }
 
 func TestGetTallyScope(t *testing.T) {
-	scope, err := getTallyScope()
-	assert.NoError(t, err)
+	var scope tally.Scope
+	app := fx.New(
+		fx.Provide(getTallyScope),
+		fx.Populate(&scope),
+	)
+	assert.NoError(t, app.Err())
 	assert.NotNil(t, scope)
 }
 
