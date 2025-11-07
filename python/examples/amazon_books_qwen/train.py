@@ -5,17 +5,14 @@ Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 
 import logging
 import os
-import glob
 from typing import Dict, Any
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 from transformers import AutoModel, AutoTokenizer
 import numpy as np
 from ray.data import Dataset
 import ray
-import ray.train as train
 from ray.train import Checkpoint
 from ray.train.torch import TorchTrainer
 from ray.air.config import ScalingConfig
@@ -176,10 +173,7 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
     This function runs on each Ray worker for distributed training
     """
     import torch
-    import torch.nn as nn
-    from torch.utils.data import DataLoader, IterableDataset
     import ray.train
-    from ray.train import Checkpoint
 
     # Get training configuration
     model_config = config.get("model_config", {})
@@ -481,7 +475,7 @@ def _train_distributed(
     model_save_path = "/tmp/qwen_dual_encoder_distributed.pt"
     torch.save(checkpoint_data, model_save_path)
 
-    log.info(f"Distributed training completed!")
+    log.info("Distributed training completed!")
     log.info(f"Final checkpoint saved to: {model_save_path}")
 
     return {

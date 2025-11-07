@@ -127,6 +127,7 @@ class TestJSONData(TestCase):
     def test__type_errors(self):
         # Test various type validation errors
         with self.assertRaises(TypeError):
+
             class A:
                 a: int
 
@@ -134,6 +135,7 @@ class TestJSONData(TestCase):
                 a: A
 
         with self.assertRaises(TypeError):
+
             class A1:
                 a: int
 
@@ -141,10 +143,12 @@ class TestJSONData(TestCase):
                 x: int
 
         with self.assertRaises(TypeError):
+
             class Test2(JSONData):
                 x: typing.Union[int, str]
 
         with self.assertRaises(TypeError):
+
             class IntEnum(int, Enum):
                 a = 1
                 b = 2
@@ -162,4 +166,4 @@ class TestJSONData(TestCase):
 
         # Test JSON serialization
         json_str = json.dumps(data)
-        self.assertIn('"num5": 100', json_str) 
+        self.assertIn('"num5": 100', json_str)

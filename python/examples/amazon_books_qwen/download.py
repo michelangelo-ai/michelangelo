@@ -39,7 +39,6 @@ def download_kaggle_dataset(
     dataset_name = "mohamedbakhet/amazon-books-reviews"
 
     # Set environment variables to disable checksum creation BEFORE Spark session starts
-    import os
 
     os.environ[
         "SPARK_CONF_spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs"
@@ -61,7 +60,7 @@ def download_kaggle_dataset(
 
     # Get Spark session from SparkTask framework
     spark = SparkSession.getActiveSession()
-    if spark == None:
+    if spark is None:
         spark = (
             SparkSession.builder.appName("AmazonBooksDownload")
             .config(

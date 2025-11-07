@@ -29,11 +29,10 @@ from pyspark.sql.functions import (
 )
 
 # Ray for dataset conversion
-import ray
 
 # Chronon SDK
 from ai.chronon.repo.compile import thrift_simple_json_protected
-from ai.chronon.api.ttypes import StagingQuery, GroupBy, Join
+from ai.chronon.api.ttypes import StagingQuery, GroupBy
 
 # Chronon definitions (moved to top level)
 try:
@@ -103,8 +102,8 @@ def _setup_chronon_environment():
     os.makedirs("/tmp/chronon_data", exist_ok=True)
     os.makedirs("/tmp/chronon_features", exist_ok=True)
 
-    print(f"✅ Chronon environment ready")
-    print(f"✅ S3 dependencies ready")
+    print("✅ Chronon environment ready")
+    print("✅ S3 dependencies ready")
     return jar_path
 
 
@@ -287,7 +286,6 @@ def compute_chronon_features_with_spark(
     # Execute using the REAL Chronon Runtime Engine
     try:
         from ai.chronon.repo.run import Runner
-        import argparse
 
         print("🔧 Setting up Chronon Runtime Engine...")
 
@@ -318,7 +316,7 @@ def compute_chronon_features_with_spark(
 
         # Initialize Chronon Runner
         chronon_args = ChronosArgs()
-        chronon_runner = Runner(chronon_args, jar_path)
+        _ = Runner(chronon_args, jar_path)  # Initialize runner but don't store it
 
         print("✅ Chronon Runtime Engine initialized")
 
