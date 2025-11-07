@@ -160,12 +160,9 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest).Get(ctx, &getSparkJobResponse); err != nil {
 			if workflow.IsCanceledError(ctx, err) {
 				// killing spark job in cadence once workflow is cancelled
-				var dcErr error
-				ctx, dcErr = workflow.NewDisconnectedContext(ctx)
-				if dcErr != nil {
-					logger.Error("failed to create disconnected context for cleanup", ext.ZapError(dcErr)...)
-					return nil, dcErr
-				}
+				var cancel func()
+				ctx, cancel = workflow.NewDisconnectedContext(ctx)
+				defer cancel()
 				terminateRequest := spark.TerminateSparkJobRequest{
 					Name:      sparkJob.Name,
 					Namespace: sparkJob.Namespace,

@@ -94,12 +94,9 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 			logger.Error("builtin-error", ext.ZapError(err)...)
 			reason := err.Error()
 			if workflow.IsCanceledError(ctx, err) {
-				var dcErr error
-				ctx, dcErr = workflow.NewDisconnectedContext(ctx)
-				if dcErr != nil {
-					logger.Error("failed to create disconnected context for cleanup", ext.ZapError(dcErr)...)
-					return nil, dcErr
-				}
+				var cancel func()
+				ctx, cancel = workflow.NewDisconnectedContext(ctx)
+				defer cancel()
 				reason = "Canceled"
 			}
 			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
