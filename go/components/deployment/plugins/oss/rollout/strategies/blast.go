@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
@@ -29,14 +29,14 @@ func GetBlastActors(params Params, deployment *v2pb.Deployment) []plugins.Condit
 type BlastRolloutActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *BlastRolloutActor) GetType() string {
 	return common.ActorTypeBlastRollout
 }
 
-func (a *BlastRolloutActor) GetLogger() logr.Logger {
+func (a *BlastRolloutActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -64,7 +64,7 @@ func (a *BlastRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 }
 
 func (a *BlastRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running blast rollout for deployment", "deployment", resource.Name)
+	a.logger.Info("Running blast rollout for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment to placement stage
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -75,8 +75,8 @@ func (a *BlastRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting blast rollout",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// Perform immediate 100% rollout - update all replicas at once
 		updateRequest := gateways.ModelConfigUpdateRequest{
@@ -92,7 +92,7 @@ func (a *BlastRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		}
 
 		if err := a.gateway.UpdateModelConfig(ctx, a.logger, updateRequest); err != nil {
-			a.logger.Error(err, "Failed to update model config for blast rollout")
+			a.logger.Error("Failed to update model config for blast rollout", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -105,7 +105,7 @@ func (a *BlastRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Blast rollout completed successfully", "model", modelName)
+		a.logger.Info("Blast rollout completed successfully", zap.String("model", modelName))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil

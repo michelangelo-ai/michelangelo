@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -18,14 +19,14 @@ import (
 type ModelCleanupActor struct {
 	Client  client.Client
 	Gateway gateways.Gateway
-	Logger  logr.Logger
+	Logger  *zap.Logger
 }
 
 func (a *ModelCleanupActor) GetType() string {
-	return "ModelCleaned"
+	return common.ActorTypeCleanup
 }
 
-func (a *ModelCleanupActor) GetLogger() logr.Logger {
+func (a *ModelCleanupActor) GetLogger() *zap.Logger {
 	return a.Logger
 }
 
@@ -55,9 +56,9 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 
 	inferenceServerName := resource.Spec.GetInferenceServer().Name
 	a.Logger.Info("Checking if old model cleanup is needed",
-		"current_model", currentModel,
-		"desired_model", desiredModel,
-		"inference_server", inferenceServerName)
+		zap.String("current_model", currentModel),
+		zap.String("desired_model", desiredModel),
+		zap.String("inference_server", inferenceServerName))
 
 	// Check if old model still exists in Triton (following Uber's verification pattern)
 	if a.Gateway != nil {
@@ -72,7 +73,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)
 		if err != nil {
 			// If we can't check status, assume cleanup is needed
-			a.Logger.Info("Cannot verify old model status, cleanup may be needed", "error", err)
+			a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -102,7 +103,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 }
 
 func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.Logger.Info("Running model cleanup for deployment", "deployment", resource.Name)
+	a.Logger.Info("Running model cleanup for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Status.CurrentRevision == nil || resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{
@@ -128,14 +129,14 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	}
 
 	a.Logger.Info("Starting model cleanup",
-		"old_model", currentModel,
-		"new_model", desiredModel,
-		"inference_server", inferenceServerName)
+		zap.String("old_model", currentModel),
+		zap.String("new_model", desiredModel),
+		zap.String("inference_server", inferenceServerName))
 
 	// PHASE 1: Update ConfigMap to remove old model (following Uber's UCS pattern)
 	if a.Gateway != nil {
 		// Get current ConfigMap and remove old model from it
-		a.Logger.Info("Phase 1: Removing old model from ConfigMap", "old_model", currentModel)
+		a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 		// Create update request to remove old model from ConfigMap
 		updateRequest := gateways.ModelConfigUpdateRequest{
@@ -151,7 +152,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		}
 
 		if err := a.Gateway.UpdateModelConfig(ctx, a.Logger, updateRequest); err != nil {
-			a.Logger.Error(err, "Failed to update ConfigMap during cleanup")
+			a.Logger.Error("Failed to update ConfigMap during cleanup", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -161,16 +162,16 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		}
 
 		// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
-		a.Logger.Info("Phase 2: Unloading old model from Triton", "old_model", currentModel)
+		a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))
 
 		if err := a.unloadModelFromTriton(ctx, currentModel, inferenceServerName); err != nil {
-			a.Logger.Error(err, "Failed to unload old model from Triton", "model", currentModel)
+			a.Logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
 			// Don't fail the deployment if direct unload fails - ConfigMap update should handle it
 			a.Logger.Info("ConfigMap update should eventually unload the model automatically")
 		}
 
 		// PHASE 3: Verify cleanup completed
-		a.Logger.Info("Phase 3: Verifying old model is unloaded", "old_model", currentModel)
+		a.Logger.Info("Phase 3: Verifying old model is unloaded", zap.String("old_model", currentModel))
 
 		statusRequest := gateways.ModelStatusRequest{
 			ModelName:       currentModel,
@@ -181,15 +182,15 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 
 		ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)
 		if err == nil && ready {
-			a.Logger.Info("Old model still loaded, but ConfigMap update should unload it eventually", "model", currentModel)
+			a.Logger.Info("Old model still loaded, but ConfigMap update should unload it eventually", zap.String("model", currentModel))
 		} else {
-			a.Logger.Info("Old model successfully unloaded", "model", currentModel)
+			a.Logger.Info("Old model successfully unloaded", zap.String("model", currentModel))
 		}
 	}
 
 	a.Logger.Info("Model cleanup completed successfully",
-		"old_model", currentModel,
-		"new_model", desiredModel)
+		zap.String("old_model", currentModel),
+		zap.String("new_model", desiredModel))
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -204,7 +205,7 @@ func (a *ModelCleanupActor) unloadModelFromTriton(ctx context.Context, modelName
 	// Construct Triton unload API endpoint
 	unloadURL := fmt.Sprintf("http://localhost:8889/%s/v2/repository/models/%s/unload", inferenceServerName, modelName)
 
-	a.Logger.Info("Calling Triton unload API", "url", unloadURL, "model", modelName)
+	a.Logger.Info("Calling Triton unload API", zap.String("url", unloadURL), zap.String("model", modelName))
 
 	// Create HTTP request to unload model
 	req, err := http.NewRequestWithContext(ctx, "POST", unloadURL, nil)
@@ -226,6 +227,6 @@ func (a *ModelCleanupActor) unloadModelFromTriton(ctx context.Context, modelName
 		return fmt.Errorf("Triton unload API returned status %d", resp.StatusCode)
 	}
 
-	a.Logger.Info("Successfully called Triton unload API", "model", modelName, "status", resp.StatusCode)
+	a.Logger.Info("Successfully called Triton unload API", zap.String("model", modelName), zap.Int("status", resp.StatusCode))
 	return nil
 }

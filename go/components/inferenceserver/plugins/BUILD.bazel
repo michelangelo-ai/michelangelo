@@ -12,6 +12,6 @@ go_library(
     deps = [
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
-        "@com_github_go_logr_logr//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ],
 )

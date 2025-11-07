@@ -36,20 +36,8 @@ type Plugin interface {
 	// deployment is rolled back or fails to roll out.
 	PopulateMessage(ctx context.Context, runtimeContext RequestContext, modelDeployment *v2pb.Deployment)
 
-	// HandleCleanup handles cleanup when a deployment is being deleted, including ConfigMaps and other resources
-	HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error
-}
-
-// ConditionsPlugin is the simplified OSS version of the conditions plugin interface
-type ConditionsPlugin interface {
-	// GetActors gets the list of ConditionActors for a particular plugin
-	GetActors() []ConditionActor
-
-	// GetConditions get the conditions for a particular deployment
-	GetConditions(resource *v2pb.Deployment) []*apipb.Condition
-
-	// PutCondition puts a condition for a particular deployment
-	PutCondition(resource *v2pb.Deployment, condition *apipb.Condition)
+	// // HandleCleanup handles cleanup when a deployment is being deleted, including ConfigMaps and other resources
+	// HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error
 }
 
 // ConditionActor refers to an implementation to collect and act upon a condition
@@ -82,12 +70,6 @@ type PluginResult struct {
 type ObservabilityContext struct {
 	Logger logr.Logger
 	Scope  interface{} // tally.Scope but avoiding import cycle
-}
-
-// Engine interface for executing condition plugins
-type Engine interface {
-	// Run runs a plugin against a particular deployment
-	Run(ctx context.Context, runtimeCtx RequestContext, plugin ConditionsPlugin, resource *v2pb.Deployment) (Result, error)
 }
 
 // Result is the struct that's returned from an engine run

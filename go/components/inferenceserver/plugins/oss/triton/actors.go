@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -24,7 +25,7 @@ func (a *ValidationActor) GetType() string {
 	return "TritonValidation"
 }
 
-func (a *ValidationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+func (a *ValidationActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton validation condition")
 
 	// Validate Triton-specific requirements
@@ -45,7 +46,7 @@ func (a *ValidationActor) Retrieve(ctx context.Context, logger logr.Logger, reso
 	}, nil
 }
 
-func (a *ValidationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+func (a *ValidationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton validation action")
 
 	// For validation, there's no corrective action - just update condition status
@@ -75,7 +76,7 @@ func (a *ResourceCreationActor) GetType() string {
 	return "TritonResourceCreation"
 }
 
-func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton infrastructure condition")
 
 	// Check if infrastructure exists
@@ -84,7 +85,6 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
 	})
-
 	if err != nil {
 		return apipb.Condition{
 			Type:    a.GetType(),
@@ -117,7 +117,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger logr.Logger
 	}, nil
 }
 
-func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+func (a *ResourceCreationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton infrastructure creation")
 
 	// Convert proto ResourceSpec to gateway ResourceSpec
@@ -139,7 +139,6 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger logr.Logger, res
 		Namespace:       resource.Namespace,
 		Resources:       resources,
 	})
-
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
 		condition.Reason = "InfrastructureCreationFailed"
@@ -166,7 +165,7 @@ func (a *HealthCheckActor) GetType() string {
 	return "TritonHealthCheck"
 }
 
-func (a *HealthCheckActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+func (a *HealthCheckActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton health condition")
 
 	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
@@ -191,13 +190,12 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, logger logr.Logger, res
 	}, nil
 }
 
-func (a *HealthCheckActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+func (a *HealthCheckActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton health check action")
 
 	// For health checks, there's typically no corrective action
 	// Just update the condition based on current health status
 	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
-
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
 		condition.Reason = "HealthCheckError"
@@ -232,7 +230,7 @@ func (a *ProxyConfigurationActor) GetType() string {
 	return "TritonProxyConfiguration"
 }
 
-func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton proxy configuration condition")
 
 	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, gateways.ProxyStatusRequest{
@@ -260,7 +258,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger logr.Logg
 	}, nil
 }
 
-func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton proxy configuration")
 
 	err := a.gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
@@ -269,7 +267,6 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger logr.Logger, r
 		ModelName:       resource.Name,
 		BackendType:     resource.Spec.BackendType,
 	})
-
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
 		condition.Reason = "ProxyConfigurationFailed"
@@ -296,7 +293,7 @@ func (a *CleanupActor) GetType() string {
 	return "TritonCleanup"
 }
 
-func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
+func (a *CleanupActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton cleanup condition")
 
 	// Check if infrastructure still exists
@@ -324,41 +321,40 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger logr.Logger, resourc
 	}, nil
 }
 
-func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
+func (a *CleanupActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton infrastructure cleanup with ConfigMap and HTTPRoute cleanup")
 
 	// STEP 1: Delete ConfigMaps first (following UCS cleanup pattern)
-	logger.Info("Cleaning up ConfigMaps for inference server", "inferenceServer", resource.Name)
+	logger.Info("Cleaning up ConfigMaps for inference server", zap.String("inferenceServer", resource.Name))
 
 	// Clean up model-config ConfigMap
 	modelConfigMapName := fmt.Sprintf("%s-model-config", resource.Name)
 	if err := a.gateway.DeleteConfigMap(ctx, logger, modelConfigMapName, resource.Namespace); err != nil {
-		logger.Error(err, "Failed to delete model ConfigMap", "configMap", modelConfigMapName)
+		logger.Error("Failed to delete model ConfigMap", zap.String("configMap", modelConfigMapName), zap.Error(err))
 		// Don't fail the whole cleanup for ConfigMap errors, but log them
 	} else {
-		logger.Info("Successfully deleted model ConfigMap", "configMap", modelConfigMapName)
+		logger.Info("Successfully deleted model ConfigMap", zap.String("configMap", modelConfigMapName))
 	}
 
 	// Note: No longer using deployment-registry ConfigMap, using only shared model-config ConfigMap
 
 	// STEP 2: Delete HTTPRoute for the inference server
-	logger.Info("Cleaning up HTTPRoute for inference server", "inferenceServer", resource.Name)
+	logger.Info("Cleaning up HTTPRoute for inference server", zap.String("inferenceServer", resource.Name))
 	httpRouteName := fmt.Sprintf("%s-httproute", resource.Name)
 	if err := a.gateway.DeleteHTTPRoute(ctx, logger, httpRouteName, resource.Namespace); err != nil {
-		logger.Error(err, "Failed to delete HTTPRoute", "httpRoute", httpRouteName)
+		logger.Error("Failed to delete HTTPRoute", zap.String("httpRoute", httpRouteName), zap.Error(err))
 		// Don't fail the whole cleanup for HTTPRoute errors, but log them
 	} else {
-		logger.Info("Successfully deleted HTTPRoute", "httpRoute", httpRouteName)
+		logger.Info("Successfully deleted HTTPRoute", zap.String("httpRoute", httpRouteName))
 	}
 
 	// STEP 3: Delete infrastructure (Kubernetes resources like Deployment, Service, etc.)
-	logger.Info("Cleaning up Kubernetes infrastructure", "inferenceServer", resource.Name)
+	logger.Info("Cleaning up Kubernetes infrastructure", zap.String("inferenceServer", resource.Name))
 	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.InfrastructureDeleteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
 	})
-
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
 		condition.Reason = "InfrastructureCleanupFailed"
@@ -369,6 +365,6 @@ func (a *CleanupActor) Run(ctx context.Context, logger logr.Logger, resource *v2
 	condition.Status = apipb.CONDITION_STATUS_TRUE
 	condition.Reason = "CleanupInitiated"
 	condition.Message = "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully"
-	logger.Info("Triton infrastructure cleanup completed successfully", "inferenceServer", resource.Name)
+	logger.Info("Triton infrastructure cleanup completed successfully", zap.String("inferenceServer", resource.Name))
 	return nil
 }

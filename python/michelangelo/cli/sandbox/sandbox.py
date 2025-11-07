@@ -547,14 +547,23 @@ def _create_demo_crs(_: argparse.Namespace):
             "-o",
             "wide",
         )
+    else:
+        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}, exiting...")
 
     # 2. Create secrets and configmaps for model storage
     print("✅ Creating storage configuration...")
-    _kube_create(_dir / "resources" / "demo-secrets-configmaps.yaml")
+    secrets_configmaps_path = _dir / "resources" / "secret.yaml"
+    if secrets_configmaps_path.exists():
+        _kube_create(secrets_configmaps_path)
+    else:
+        _err_exit(f"❌ Secrets and configmaps not found at {secrets_configmaps_path}, exiting...")
 
     # 3. Create project first. Project CRD is essentially the "parent" of other CRDs. Under
     # normal circumstances, users must create a project before creating other CRDs.
-    _kube_create(project_yaml_path)
+    if project_yaml_path.exists():
+        _kube_create(project_yaml_path)
+    else:
+        _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
     # 4. Create inference server
     inference_server_path = _dir / "resources" / "inferenceserver.yaml"
@@ -580,22 +589,26 @@ def _create_demo_crs(_: argparse.Namespace):
                 f"inferenceservers.michelangelo.api/{inference_server_name}",
                 "-n",
                 inference_server_namespace,
-                "--timeout=600s",
+                "--timeout=720s",
                 raise_error=True,
             )
             print("✅ Inference server is ready!")
         except subprocess.CalledProcessError:
             _err_exit(
-                f"Inference server '{inference_server_name}' failed to become ready after 600s.\n"
+                f"Inference server '{inference_server_name}' failed to become ready after 720s.\n"
                 f"Check status with: kubectl get inferenceservers.michelangelo.api {inference_server_name} -n {inference_server_namespace} -o yaml\n"
                 f"Check logs with: kubectl logs -l app=inference-server -n {inference_server_namespace}"
             )
+    else:
+        _err_exit(f"❌ Inference server not found at {inference_server_path}, exiting...")
 
     # 6. Create deployment (this will trigger model deployment workflow)
     deployment_path = _dir / "resources" / "deployment.yaml"
     if deployment_path.exists():
         print("  ✅ Creating model deployment...")
         _kube_create(deployment_path)
+    else:
+        _err_exit(f"❌ Deployment CR not found at {deployment_path}, exiting...")
 
     # 7. Create all other YAML files in the demo directory (training pipelines, etc.)
     for yaml_file in demo_dir.glob("*.yaml"):

@@ -7,9 +7,6 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/components/inferenceserver/plugins:go_default_library",
-        "//go/components/inferenceserver/plugins/oss/dynamo:go_default_library",
-        "//go/components/inferenceserver/plugins/oss/llmd:go_default_library",
-        "//go/components/inferenceserver/plugins/oss/torchserve:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton:go_default_library",
         "//go/shared/gateways:go_default_library",
         "//proto/api/v2:go_default_library",

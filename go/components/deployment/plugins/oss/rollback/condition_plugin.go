@@ -2,49 +2,42 @@ package rollback
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ plugins.ConditionsPlugin = &conditionPlugin{}
+var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
 type conditionPlugin struct {
-	actors []plugins.ConditionActor
+	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
 // Params contains dependencies for rollback plugin
 type Params struct {
 	Client  client.Client
 	Gateway gateways.Gateway
-	Logger  logr.Logger
+	Logger  *zap.Logger
 }
 
 // NewRollbackPlugin creates a new rollback plugin following Uber patterns
-func NewRollbackPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment) (plugins.ConditionsPlugin, error) {
-	logger := p.Logger.WithValues("deployment", fmt.Sprintf("%s/%s", deployment.GetNamespace(), deployment.GetName()))
-
-	actors := []plugins.ConditionActor{
+func NewRollbackPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
+	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollbackActor{
-			client:  p.Client,
-			gateway: p.Gateway,
-			logger:  logger,
+			client: p.Client,
+			logger: p.Logger,
 		},
-	}
-
-	return &conditionPlugin{
-		actors: actors,
-	}, nil
+	}}
 }
 
 // GetActors returns all actors for this plugin
-func (p *conditionPlugin) GetActors() []plugins.ConditionActor {
+func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
@@ -66,9 +59,8 @@ func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *api
 
 // RollbackActor handles rollback operations following Uber patterns
 type RollbackActor struct {
-	client  client.Client
-	gateway gateways.Gateway
-	logger  logr.Logger
+	client client.Client
+	logger *zap.Logger
 }
 
 func (a *RollbackActor) GetType() string {
@@ -95,7 +87,7 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 }
 
 func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running rollback for deployment", "deployment", resource.Name)
+	a.logger.Info("Running rollback for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment status to indicate rollback is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
@@ -121,8 +113,8 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 
 		a.logger.Info("Rolled back to previous revision",
-			"from", failedRevision.Name,
-			"to", resource.Status.CurrentRevision.Name)
+			zap.String("from", failedRevision.Name),
+			zap.String("to", resource.Status.CurrentRevision.Name))
 	} else {
 		a.logger.Info("No previous revision available for rollback")
 	}

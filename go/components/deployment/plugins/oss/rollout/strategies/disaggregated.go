@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
@@ -49,14 +49,14 @@ func GetDisaggregatedActors(params Params, deployment *v2pb.Deployment) []plugin
 type DisaggregatedRolloutActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *DisaggregatedRolloutActor) GetType() string {
 	return common.ActorTypeDisaggregatedRollout
 }
 
-func (a *DisaggregatedRolloutActor) GetLogger() logr.Logger {
+func (a *DisaggregatedRolloutActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -84,7 +84,7 @@ func (a *DisaggregatedRolloutActor) Retrieve(ctx context.Context, resource *v2pb
 }
 
 func (a *DisaggregatedRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running disaggregated rollout for deployment", "deployment", resource.Name)
+	a.logger.Info("Running disaggregated rollout for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment to placement stage
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -95,17 +95,17 @@ func (a *DisaggregatedRolloutActor) Run(ctx context.Context, resource *v2pb.Depl
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting disaggregated rollout",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// Define deployment steps - in real implementation, this would come from deployment spec
 		steps := a.getDeploymentSteps(resource)
 
 		for i, step := range steps {
-			a.logger.Info("Executing deployment step", "step", i+1, "name", step.Name, "environment", step.Environment)
+			a.logger.Info("Executing deployment step", zap.Int("step", i+1), zap.String("name", step.Name), zap.String("environment", step.Environment))
 
 			if err := a.executeStep(ctx, resource, step); err != nil {
-				a.logger.Error(err, "Failed deployment step", "step", step.Name)
+				a.logger.Error("Failed deployment step", zap.String("step", step.Name), zap.Error(err))
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
@@ -116,7 +116,7 @@ func (a *DisaggregatedRolloutActor) Run(ctx context.Context, resource *v2pb.Depl
 
 			// Wait for soak time between steps (simplified for OSS)
 			if step.SoakTime > 0 && i < len(steps)-1 {
-				a.logger.Info("Soaking between steps", "duration", step.SoakTime, "step", step.Name)
+				a.logger.Info("Soaking between steps", zap.Duration("duration", step.SoakTime), zap.String("step", step.Name))
 				// In real implementation, this would be handled by the controller's reconcile loop
 				// For OSS, we skip the soak time to simplify
 			}
@@ -126,7 +126,7 @@ func (a *DisaggregatedRolloutActor) Run(ctx context.Context, resource *v2pb.Depl
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Disaggregated rollout completed successfully", "model", modelName, "totalSteps", len(steps))
+		a.logger.Info("Disaggregated rollout completed successfully", zap.String("model", modelName), zap.Int("totalSteps", len(steps)))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
@@ -161,7 +161,7 @@ func (a *DisaggregatedRolloutActor) getDeploymentSteps(deployment *v2pb.Deployme
 }
 
 func (a *DisaggregatedRolloutActor) executeStep(ctx context.Context, deployment *v2pb.Deployment, step DisaggregatedStep) error {
-	a.logger.Info("Executing deployment step", "step", step.Name, "strategy", step.Strategy, "percentage", step.Percentage)
+	a.logger.Info("Executing deployment step", zap.String("step", step.Name), zap.String("strategy", step.Strategy), zap.Int32("percentage", step.Percentage))
 
 	modelName := deployment.Spec.DesiredRevision.Name
 	if modelName == "" {
@@ -217,12 +217,12 @@ func (a *DisaggregatedRolloutActor) validateModel(ctx context.Context, deploymen
 		return fmt.Errorf("model %s is not ready for predictions", modelName)
 	}
 
-	a.logger.Info("Model validation completed", "model", modelName)
+	a.logger.Info("Model validation completed", zap.String("model", modelName))
 	return nil
 }
 
 func (a *DisaggregatedRolloutActor) executeZonalStep(ctx context.Context, deployment *v2pb.Deployment, step DisaggregatedStep, modelName string) error {
-	a.logger.Info("Executing zonal step", "step", step.Name, "percentage", step.Percentage)
+	a.logger.Info("Executing zonal step", zap.String("step", step.Name), zap.Int32("percentage", step.Percentage))
 
 	// Get subset of zones based on percentage
 	zones, err := a.getTargetZones(ctx, deployment)
@@ -242,7 +242,7 @@ func (a *DisaggregatedRolloutActor) executeZonalStep(ctx context.Context, deploy
 }
 
 func (a *DisaggregatedRolloutActor) executeRollingStep(ctx context.Context, deployment *v2pb.Deployment, step DisaggregatedStep, modelName string) error {
-	a.logger.Info("Executing rolling step", "step", step.Name, "percentage", step.Percentage)
+	a.logger.Info("Executing rolling step", zap.String("step", step.Name), zap.Int32("percentage", step.Percentage))
 
 	// Update model config with percentage-based rollout
 	updateRequest := gateways.ModelConfigUpdateRequest{
@@ -261,7 +261,7 @@ func (a *DisaggregatedRolloutActor) executeRollingStep(ctx context.Context, depl
 }
 
 func (a *DisaggregatedRolloutActor) executeBlastStep(ctx context.Context, deployment *v2pb.Deployment, step DisaggregatedStep, modelName string) error {
-	a.logger.Info("Executing blast step", "step", step.Name)
+	a.logger.Info("Executing blast step", zap.String("step", step.Name))
 
 	// Full deployment to all remaining infrastructure
 	updateRequest := gateways.ModelConfigUpdateRequest{

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -19,14 +19,14 @@ import (
 type TrafficRoutingActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *TrafficRoutingActor) GetType() string {
 	return common.ActorTypeTrafficRouting
 }
 
-func (a *TrafficRoutingActor) GetLogger() logr.Logger {
+func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -85,7 +85,7 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 }
 
 func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running traffic routing configuration for deployment", "deployment", resource.Name)
+	a.logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Spec.GetInferenceServer() == nil {
 		return &apipb.Condition{
@@ -182,9 +182,9 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 			}, nil
 		}
 		a.logger.Info("Created HTTPRoute for deployment",
-			"httproute", deploymentRouteName,
-			"deployment", resource.Name,
-			"path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
+			zap.String("httproute", deploymentRouteName),
+			zap.String("deployment", resource.Name),
+			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name)))
 	} else {
 		// Update existing HTTPRoute spec
 		existingRoute.Object["spec"] = httpRoute.Object["spec"]
@@ -197,9 +197,10 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 			}, nil
 		}
 		a.logger.Info("Updated HTTPRoute for deployment",
-			"httproute", deploymentRouteName,
-			"deployment", resource.Name,
-			"path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name))
+			zap.String("httproute", deploymentRouteName),
+			zap.String("deployment", resource.Name),
+			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name)),
+		)
 	}
 
 	return &apipb.Condition{

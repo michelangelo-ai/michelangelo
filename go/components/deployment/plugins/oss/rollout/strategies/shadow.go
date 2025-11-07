@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
@@ -39,14 +39,14 @@ func GetShadowActors(params Params, deployment *v2pb.Deployment) []plugins.Condi
 type ShadowDeploymentActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *ShadowDeploymentActor) GetType() string {
 	return common.ActorTypeShadowDeployment
 }
 
-func (a *ShadowDeploymentActor) GetLogger() logr.Logger {
+func (a *ShadowDeploymentActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -73,15 +73,15 @@ func (a *ShadowDeploymentActor) Retrieve(ctx context.Context, resource *v2pb.Dep
 }
 
 func (a *ShadowDeploymentActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running shadow deployment for deployment", "deployment", resource.Name)
+	a.logger.Info("Running shadow deployment for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting shadow deployment",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// Deploy shadow version with traffic splitting
 		// In OSS implementation, use Istio VirtualService with weighted routing
@@ -105,7 +105,7 @@ func (a *ShadowDeploymentActor) Run(ctx context.Context, resource *v2pb.Deployme
 		}
 
 		if err := a.gateway.ConfigureProxy(ctx, a.logger, shadowRequest); err != nil {
-			a.logger.Error(err, "Failed to configure shadow routing")
+			a.logger.Error("Failed to configure shadow routing", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -118,7 +118,7 @@ func (a *ShadowDeploymentActor) Run(ctx context.Context, resource *v2pb.Deployme
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Shadow deployment completed", "model", modelName, "trafficSplit", "10%")
+		a.logger.Info("Shadow deployment completed", zap.String("model", modelName), zap.String("trafficSplit", "10%"))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
@@ -128,14 +128,14 @@ func (a *ShadowDeploymentActor) Run(ctx context.Context, resource *v2pb.Deployme
 type ShadowAnalysisActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *ShadowAnalysisActor) GetType() string {
 	return common.ActorTypeShadowAnalysis
 }
 
-func (a *ShadowAnalysisActor) GetLogger() logr.Logger {
+func (a *ShadowAnalysisActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -149,19 +149,19 @@ func (a *ShadowAnalysisActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 }
 
 func (a *ShadowAnalysisActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running shadow analysis for deployment", "deployment", resource.Name)
+	a.logger.Info("Running shadow analysis for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting shadow analysis",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// For OSS, simulate successful analysis
 		// In Uber's implementation, this would integrate with DPQS for sophisticated analysis
-		a.logger.Info("Shadow analysis completed successfully", "model", modelName)
+		a.logger.Info("Shadow analysis completed successfully", zap.String("model", modelName))
 
 		// Simulate analysis completion
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
@@ -175,14 +175,14 @@ func (a *ShadowAnalysisActor) Run(ctx context.Context, resource *v2pb.Deployment
 type ShadowPromotionActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *ShadowPromotionActor) GetType() string {
 	return common.ActorTypeShadowPromotion
 }
 
-func (a *ShadowPromotionActor) GetLogger() logr.Logger {
+func (a *ShadowPromotionActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -196,15 +196,15 @@ func (a *ShadowPromotionActor) Retrieve(ctx context.Context, resource *v2pb.Depl
 }
 
 func (a *ShadowPromotionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running shadow promotion for deployment", "deployment", resource.Name)
+	a.logger.Info("Running shadow promotion for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting shadow promotion",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// Promote shadow to production (100% traffic)
 		promotionRequest := gateways.ModelConfigUpdateRequest{
@@ -220,7 +220,7 @@ func (a *ShadowPromotionActor) Run(ctx context.Context, resource *v2pb.Deploymen
 		}
 
 		if err := a.gateway.UpdateModelConfig(ctx, a.logger, promotionRequest); err != nil {
-			a.logger.Error(err, "Failed to promote shadow to production")
+			a.logger.Error("Failed to promote shadow to production", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -233,7 +233,7 @@ func (a *ShadowPromotionActor) Run(ctx context.Context, resource *v2pb.Deploymen
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Shadow promotion completed", "model", modelName)
+		a.logger.Info("Shadow promotion completed", zap.String("model", modelName))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil

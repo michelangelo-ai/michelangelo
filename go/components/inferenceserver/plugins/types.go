@@ -3,7 +3,8 @@ package plugins
 import (
 	"context"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
+
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -45,7 +46,7 @@ type ConditionActor interface {
 	//
 	// If there is a failure to perform any action, the plugin must set the appropriate properties in the provided
 	// condition. Any errors that are returned are used only for logging purposes.
-	Run(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error
+	Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error
 
 	// Retrieve retrieves a condition based on the previous apipb.Condition. The passed in apipb.Condition
 	// can contain information saved from previous iterations of Retrieve and Run, which can be used to construct a
@@ -53,7 +54,7 @@ type ConditionActor interface {
 	//
 	// If there is a failure to retrieve the condition, the plugin must return a apipb.Condition with the
 	// properties fulfilled. Any errors that are returned are used only for logging purposes.
-	Retrieve(ctx context.Context, logger logr.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error)
+	Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error)
 
 	// GetType gets the type of the ConditionActor. This is used to determine apipb.Condition accountability.
 	GetType() string
@@ -73,5 +74,5 @@ type PluginRegistry interface {
 type Engine interface {
 	// Run executes the plugin by running through the list of actors from the plugin and executing Retrieve and Run
 	// for each actor. Only the first failing condition will have its Run method executed per engine execution.
-	Run(ctx context.Context, logger logr.Logger, plugin Plugin, resource *v2pb.InferenceServer) (*apipb.Condition, error)
+	Run(ctx context.Context, logger *zap.Logger, plugin Plugin, resource *v2pb.InferenceServer) (*apipb.Condition, error)
 }

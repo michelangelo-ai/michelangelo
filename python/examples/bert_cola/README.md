@@ -1,5 +1,14 @@
 ## Steps
 
+### Start Sandbox
+  ma sandbox create --exclude apiserver controllermgr worker
+  bazel run apiserver
+  bazel run controllermgr
+  bazel run worker
+  ma sandbox demo
+
+  Perform Port Foward
+
 ### Create folder in Minio
 create those buckets in Minio
 ```
@@ -16,12 +25,6 @@ mysql> CREATE DATABASE mlflow_db;
 ```
 
 ## Remote Run
-  ma sandbox create --exclude apiserver controllermgr worker
-  bazel run apiserver
-  bazel run controllermgr
-  bazel run worker
-  ma sandbox demo
-  
   docker build -t examples:latest -f ./examples/Dockerfile .
   k3d image import examples:latest -c michelangelo-sandbox
   PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes

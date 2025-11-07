@@ -2,50 +2,43 @@ package cleanup
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-var _ plugins.ConditionsPlugin = &conditionPlugin{}
+var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
 type conditionPlugin struct {
-	actors []plugins.ConditionActor
+	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
 // Params contains dependencies for cleanup plugin
 type Params struct {
 	Client  client.Client
 	Gateway gateways.Gateway
-	Logger  logr.Logger
+	Logger  *zap.Logger
 }
 
 // NewCleanupPlugin creates a new cleanup plugin following Uber patterns
-func NewCleanupPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment) (plugins.ConditionsPlugin, error) {
-	logger := p.Logger.WithValues("deployment", fmt.Sprintf("%s/%s", deployment.GetNamespace(), deployment.GetName()))
-
-	actors := []plugins.ConditionActor{
+func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
+	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
 			client:  p.Client,
 			gateway: p.Gateway,
-			logger:  logger,
+			logger:  p.Logger,
 		},
-	}
-
-	return &conditionPlugin{
-		actors: actors,
-	}, nil
+	}}
 }
 
 // GetActors returns all actors for this plugin
-func (p *conditionPlugin) GetActors() []plugins.ConditionActor {
+func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
@@ -69,7 +62,7 @@ func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *api
 type CleanupActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *CleanupActor) GetType() string {
@@ -96,7 +89,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, 
 }
 
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running cleanup for deployment", "deployment", resource.Name)
+	a.logger.Info("Running cleanup for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment status to indicate cleanup is in progress
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
@@ -114,7 +107,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		// - Clean up temporary resources
 		// - Update inference server configurations
 
-		a.logger.Info("Cleaning up model artifacts and ConfigMaps", "deployment", resource.Name)
+		a.logger.Info("Cleaning up model artifacts and ConfigMaps", zap.String("deployment", resource.Name))
 
 		// Mark cleanup as complete
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE

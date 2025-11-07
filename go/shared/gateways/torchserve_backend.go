@@ -5,20 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TorchServe Infrastructure Management
 
-func (g *gateway) createTorchServeInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
-	logger.Info("Creating TorchServe infrastructure", "server", request.InferenceServer.Name)
+func (g *gateway) createTorchServeInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
+	logger.Info("Creating TorchServe infrastructure", zap.String("server", request.InferenceServer.Name))
 
 	// Create ConfigMap for model configuration
 	if err := g.createTorchServeConfigMap(ctx, logger, request); err != nil {
@@ -48,8 +49,8 @@ func (g *gateway) createTorchServeInfrastructure(ctx context.Context, logger log
 	}, nil
 }
 
-func (g *gateway) getTorchServeInfrastructureStatus(ctx context.Context, logger logr.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
-	logger.Info("Getting TorchServe infrastructure status", "server", request.InferenceServer)
+func (g *gateway) getTorchServeInfrastructureStatus(ctx context.Context, logger *zap.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
+	logger.Info("Getting TorchServe infrastructure status", zap.String("server", request.InferenceServer))
 
 	// Check deployment status
 	deployment := &appsv1.Deployment{}
@@ -81,8 +82,8 @@ func (g *gateway) getTorchServeInfrastructureStatus(ctx context.Context, logger 
 	}, nil
 }
 
-func (g *gateway) deleteTorchServeInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
-	logger.Info("Deleting TorchServe infrastructure", "server", request.InferenceServer)
+func (g *gateway) deleteTorchServeInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureDeleteRequest) error {
+	logger.Info("Deleting TorchServe infrastructure", zap.String("server", request.InferenceServer))
 
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
@@ -92,7 +93,7 @@ func (g *gateway) deleteTorchServeInfrastructure(ctx context.Context, logger log
 		},
 	}
 	if err := g.kubeClient.Delete(ctx, deployment); err != nil {
-		logger.Error(err, "Failed to delete TorchServe deployment")
+		logger.Error("Failed to delete TorchServe deployment", zap.String("server", request.InferenceServer), zap.Error(err))
 	}
 
 	// Delete Service
@@ -103,7 +104,7 @@ func (g *gateway) deleteTorchServeInfrastructure(ctx context.Context, logger log
 		},
 	}
 	if err := g.kubeClient.Delete(ctx, service); err != nil {
-		logger.Error(err, "Failed to delete TorchServe service")
+		logger.Error("Failed to delete TorchServe service", zap.String("server", request.InferenceServer), zap.Error(err))
 	}
 
 	// Delete ConfigMap
@@ -114,14 +115,14 @@ func (g *gateway) deleteTorchServeInfrastructure(ctx context.Context, logger log
 		},
 	}
 	if err := g.kubeClient.Delete(ctx, configMap); err != nil {
-		logger.Error(err, "Failed to delete TorchServe ConfigMap")
+		logger.Error("Failed to delete TorchServe ConfigMap", zap.String("server", request.InferenceServer), zap.Error(err))
 	}
 
 	return nil
 }
 
-func (g *gateway) createTorchServeDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	logger.Info("Creating TorchServe deployment", "name", request.InferenceServer.Name)
+func (g *gateway) createTorchServeDeployment(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
+	logger.Info("Creating TorchServe deployment", zap.String("name", request.InferenceServer.Name))
 
 	// TorchServe container configuration
 	container := corev1.Container{
@@ -274,8 +275,8 @@ func (g *gateway) createTorchServeDeployment(ctx context.Context, logger logr.Lo
 	return g.kubeClient.Create(ctx, deployment)
 }
 
-func (g *gateway) createTorchServeService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	logger.Info("Creating TorchServe service", "name", request.InferenceServer.Name)
+func (g *gateway) createTorchServeService(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
+	logger.Info("Creating TorchServe service", zap.String("name", request.InferenceServer.Name))
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -316,8 +317,8 @@ func (g *gateway) createTorchServeService(ctx context.Context, logger logr.Logge
 	return g.kubeClient.Create(ctx, service)
 }
 
-func (g *gateway) createTorchServeConfigMap(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
-	logger.Info("Creating TorchServe ConfigMap", "name", request.InferenceServer.Name)
+func (g *gateway) createTorchServeConfigMap(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
+	logger.Info("Creating TorchServe ConfigMap", zap.String("name", request.InferenceServer.Name))
 
 	// TorchServe configuration
 	configProperties := `
@@ -364,8 +365,8 @@ model_snapshot={"name":"startup.cfg","modelCount":0,"models":{}}
 
 // TorchServe Model Management
 
-func (g *gateway) loadTorchServeModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error {
-	logger.Info("Loading TorchServe model", "model", request.ModelName, "server", request.InferenceServer)
+func (g *gateway) loadTorchServeModel(ctx context.Context, logger *zap.Logger, request ModelLoadRequest) error {
+	logger.Info("Loading TorchServe model", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// Update ConfigMap with new model configuration
 	updateRequest := ModelConfigUpdateRequest{
@@ -380,8 +381,8 @@ func (g *gateway) loadTorchServeModel(ctx context.Context, logger logr.Logger, r
 	return g.UpdateModelConfig(ctx, logger, updateRequest)
 }
 
-func (g *gateway) updateTorchServeModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error {
-	logger.Info("Updating TorchServe model configuration", "server", request.InferenceServer)
+func (g *gateway) updateTorchServeModelConfig(ctx context.Context, logger *zap.Logger, request ModelConfigUpdateRequest) error {
+	logger.Info("Updating TorchServe model configuration", zap.String("server", request.InferenceServer))
 
 	// Get existing ConfigMap
 	configMap := &corev1.ConfigMap{}
@@ -403,7 +404,7 @@ func (g *gateway) updateTorchServeModelConfig(ctx context.Context, logger logr.L
 	var existingModelList []ModelConfigEntry
 	if data, exists := configMap.Data["model-list.json"]; exists && data != "" {
 		if parseErr := json.Unmarshal([]byte(data), &existingModelList); parseErr != nil {
-			logger.Error(parseErr, "Failed to parse existing TorchServe model list, starting fresh")
+			logger.Error("Failed to parse existing TorchServe model list, starting fresh", zap.Error(parseErr))
 			existingModelList = []ModelConfigEntry{}
 		}
 	}
@@ -432,12 +433,12 @@ func (g *gateway) updateTorchServeModelConfig(ctx context.Context, logger logr.L
 		return fmt.Errorf("failed to update TorchServe ConfigMap: %w", err)
 	}
 
-	logger.Info("TorchServe model ConfigMap updated successfully", "configMap", configMapKey.Name, "modelCount", len(updatedModelList))
+	logger.Info("TorchServe model ConfigMap updated successfully", zap.String("configMap", configMapKey.Name), zap.Int("modelCount", len(updatedModelList)))
 	return nil
 }
 
-func (g *gateway) getTorchServeModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {
-	logger.Info("Getting TorchServe model status", "model", request.ModelName, "server", request.InferenceServer)
+func (g *gateway) getTorchServeModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (*ModelStatus, error) {
+	logger.Info("Getting TorchServe model status", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// For TorchServe, we can check model status via management API
 	// For now, return a simple status based on deployment readiness
@@ -467,8 +468,8 @@ func (g *gateway) getTorchServeModelStatus(ctx context.Context, logger logr.Logg
 	}, nil
 }
 
-func (g *gateway) isTorchServeHealthy(ctx context.Context, logger logr.Logger, request HealthCheckRequest) (*HealthStatus, error) {
-	logger.Info("Checking TorchServe health", "server", request.InferenceServer)
+func (g *gateway) isTorchServeHealthy(ctx context.Context, logger *zap.Logger, request HealthCheckRequest) (*HealthStatus, error) {
+	logger.Info("Checking TorchServe health", zap.String("server", request.InferenceServer))
 
 	// Check if deployment is ready
 	infraStatus, err := g.getTorchServeInfrastructureStatus(ctx, logger, InfrastructureStatusRequest{

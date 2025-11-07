@@ -1,15 +1,14 @@
 package inferenceserver
 
 import (
-	"context"
 	"fmt"
 
 	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
@@ -25,7 +24,7 @@ var Module = fx.Module("inferenceserver",
 )
 
 // NewInferenceServerGateway creates a new inference server gateway with clients
-func NewInferenceServerGateway(kubeClient client.Client) gateways.Gateway {
+func NewInferenceServerGateway(kubeClient client.Client, logger *zap.Logger) gateways.Gateway {
 	// Create dynamic client from the same config as kube client
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
@@ -37,7 +36,6 @@ func NewInferenceServerGateway(kubeClient client.Client) gateways.Gateway {
 		panic(fmt.Errorf("failed to create dynamic client: %w", err))
 	}
 
-	logger := log.FromContext(context.TODO())
 	return gateways.NewGatewayWithClients(kubeClient, dynamicClient, logger)
 }
 
@@ -49,13 +47,15 @@ func NewPluginRegistry(gateway gateways.Gateway) plugins.PluginRegistry {
 }
 
 // NewReconciler creates a new inference server reconciler
-func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, pluginRegistry plugins.PluginRegistry) *Reconciler {
+func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, pluginRegistry plugins.PluginRegistry, logger *zap.Logger) *Reconciler {
+	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   scheme,
 		Recorder: mgr.GetEventRecorderFor(ControllerName),
 		Gateway:  gateway,
 		Plugins:  pluginRegistry,
+		logger:   logger,
 	}
 }
 

@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,12 +13,14 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Dynamo Infrastructure Management
 
-func (g *gateway) createDynamoInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
-	logger.Info("Creating Dynamo infrastructure", "server", request.InferenceServer.Name)
+func (g *gateway) createDynamoInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
+	logger.Info("Creating Dynamo infrastructure", zap.String("server", request.InferenceServer.Name))
 
 	// Create VirtualService first for fixed endpoint routing
 	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
@@ -126,7 +128,7 @@ func (g *gateway) deleteDynamoInfrastructure(ctx context.Context, logger logr.Lo
 	return nil
 }
 
-func (g *gateway) ensureDynamoPlatformDependencies(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) ensureDynamoPlatformDependencies(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	logger.Info("Ensuring Dynamo platform dependencies")
 
 	// Check if NATS is available
@@ -142,7 +144,7 @@ func (g *gateway) ensureDynamoPlatformDependencies(ctx context.Context, logger l
 	return nil
 }
 
-func (g *gateway) ensureNATSDeployment(ctx context.Context, logger logr.Logger, namespace string) error {
+func (g *gateway) ensureNATSDeployment(ctx context.Context, logger *zap.Logger, namespace string) error {
 	// Check if NATS deployment exists
 	deployment := &appsv1.Deployment{}
 	deploymentKey := client.ObjectKey{Name: "dynamo-platform-nats", Namespace: namespace}
@@ -156,7 +158,7 @@ func (g *gateway) ensureNATSDeployment(ctx context.Context, logger logr.Logger, 
 	return nil
 }
 
-func (g *gateway) ensureETCDDeployment(ctx context.Context, logger logr.Logger, namespace string) error {
+func (g *gateway) ensureETCDDeployment(ctx context.Context, logger *zap.Logger, namespace string) error {
 	// Check if ETCD deployment exists
 	deployment := &appsv1.Deployment{}
 	deploymentKey := client.ObjectKey{Name: "dynamo-platform-etcd", Namespace: namespace}
@@ -170,7 +172,7 @@ func (g *gateway) ensureETCDDeployment(ctx context.Context, logger logr.Logger, 
 	return nil
 }
 
-func (g *gateway) createNATSDeployment(ctx context.Context, logger logr.Logger, namespace string) error {
+func (g *gateway) createNATSDeployment(ctx context.Context, logger *zap.Logger, namespace string) error {
 	replicas := int32(1)
 
 	deployment := &appsv1.Deployment{
@@ -242,7 +244,7 @@ func (g *gateway) createNATSDeployment(ctx context.Context, logger logr.Logger, 
 	return g.kubeClient.Create(ctx, service)
 }
 
-func (g *gateway) createETCDDeployment(ctx context.Context, logger logr.Logger, namespace string) error {
+func (g *gateway) createETCDDeployment(ctx context.Context, logger *zap.Logger, namespace string) error {
 	replicas := int32(1)
 
 	deployment := &appsv1.Deployment{
@@ -317,7 +319,7 @@ func (g *gateway) createETCDDeployment(ctx context.Context, logger logr.Logger, 
 	return g.kubeClient.Create(ctx, service)
 }
 
-func (g *gateway) createDynamoGraphDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createDynamoGraphDeployment(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	modelName := getDynamoModelFromConfig(request)
 	if modelName == "" {
 		modelName = "deepseek-ai/DeepSeek-R1-Distill-Llama-8B" // Default model
@@ -384,7 +386,7 @@ func (g *gateway) createDynamoGraphDeployment(ctx context.Context, logger logr.L
 	return err
 }
 
-func (g *gateway) createDynamoService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createDynamoService(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-service", request.InferenceServer.Name),

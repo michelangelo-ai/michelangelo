@@ -4,14 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/opentracing/opentracing-go/log"
+
+	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ConfigProvider manages model configurations and HTTP routes for deployments
@@ -24,11 +27,11 @@ type ConfigProvider struct {
 }
 
 // UpdateModelConfig updates the model configuration ConfigMap to point to the new model version
-func (c *ConfigProvider) UpdateModelConfig(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error {
+func (c *ConfigProvider) UpdateModelConfig(ctx context.Context, logger *zap.Logger, deployment *v2pb.Deployment) error {
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	modelName := deployment.Spec.DesiredRevision.Name
 
-	log.Info("Updating model configuration", "inferenceServer", inferenceServerName, "modelName", modelName)
+	logger.Info("Updating model configuration", zap.String("inferenceServer", inferenceServerName), zap.String("modelName", modelName))
 
 	if c.Gateway == nil {
 		return fmt.Errorf("gateway not configured")
@@ -54,23 +57,23 @@ func (c *ConfigProvider) UpdateModelConfig(ctx context.Context, log logr.Logger,
 		},
 	}
 
-	err := c.Gateway.UpdateModelConfigMap(ctx, log, request)
+	err := c.Gateway.UpdateModelConfigMap(ctx, logger, request)
 	if err != nil {
 		return fmt.Errorf("failed to update model config via gateway: %w", err)
 	}
 
-	log.Info("Model configuration updated successfully", "inferenceServer", inferenceServerName, "modelName", modelName, "modelPath", modelPath)
+	logger.Info("Model configuration updated successfully", zap.String("inferenceServer", inferenceServerName), zap.String("modelName", modelName), zap.String("modelPath", modelPath))
 	// Note: Model loading will be triggered by the inference server when it detects config changes
 	return nil
 }
 
 // UpdateHTTPRoute updates the HTTPRoute to route traffic to the new model version
-func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) error {
+func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, logger *zap.Logger, deployment *v2pb.Deployment) error {
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	httpRouteName := fmt.Sprintf("%s-http-route", inferenceServerName)
 	modelName := deployment.Spec.DesiredRevision.Name
 
-	log.Info("Updating HTTPRoute for deployment", "httpRoute", httpRouteName, "modelName", modelName)
+	logger.Info("Updating HTTPRoute for deployment", zap.String("httpRoute", httpRouteName), zap.String("modelName", modelName))
 
 	// Try HTTPRoute first (Gateway API)
 	httpRouteGvr := schema.GroupVersionResource{
@@ -82,16 +85,16 @@ func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, log logr.Logger, d
 	httpRoute, err := c.DynamicClient.Resource(httpRouteGvr).Namespace(deployment.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err == nil {
 		// HTTPRoute found, update it
-		err = c.updateHTTPRouteForModel(ctx, log, httpRoute, inferenceServerName, deployment.Name, deployment.Namespace, modelName)
+		err = c.updateHTTPRouteForModel(ctx, logger, httpRoute, inferenceServerName, deployment.Name, deployment.Namespace, modelName)
 		if err != nil {
 			return fmt.Errorf("failed to update HTTPRoute: %w", err)
 		}
-		log.Info("HTTPRoute updated successfully", "httpRoute", httpRouteName, "modelName", modelName)
+		logger.Info("HTTPRoute updated successfully", zap.String("httpRoute", httpRouteName), zap.String("modelName", modelName))
 		return nil
 	}
 
 	// Fallback to VirtualService (Istio)
-	log.Info("HTTPRoute not found, falling back to VirtualService", "error", err)
+	logger.Info("HTTPRoute not found, falling back to VirtualService", zap.Error(err))
 
 	virtualServiceGvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
@@ -106,17 +109,17 @@ func (c *ConfigProvider) UpdateHTTPRoute(ctx context.Context, log logr.Logger, d
 	}
 
 	// Update the VirtualService
-	err = c.updateVirtualServiceForModel(ctx, log, vs, inferenceServerName, deployment.Name, deployment.Namespace, modelName)
+	err = c.updateVirtualServiceForModel(ctx, logger, vs, inferenceServerName, deployment.Name, deployment.Namespace, modelName)
 	if err != nil {
 		return fmt.Errorf("failed to update VirtualService: %w", err)
 	}
 
-	log.Info("VirtualService updated successfully", "virtualService", virtualServiceName, "modelName", modelName)
+	logger.Info("VirtualService updated successfully", zap.String("virtualService", virtualServiceName), zap.String("modelName", modelName))
 	return nil
 }
 
 // updateHTTPRouteForModel updates HTTPRoute rules to route to the specific model
-func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.Logger, httpRoute *unstructured.Unstructured, inferenceServerName, deploymentName, namespace, modelName string) error {
+func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, inferenceServerName, deploymentName, namespace, modelName string) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		return fmt.Errorf("rules not found in HTTPRoute")
@@ -133,7 +136,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 		}
 
 		if c.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPrefix) {
-			log.Info("Updating existing HTTPRoute deployment route", "modelName", modelName, "prefix", deploymentPrefix)
+			logger.Info("Updating existing HTTPRoute deployment route", zap.String("modelName", modelName), zap.String("prefix", deploymentPrefix))
 
 			// Update URLRewrite filter to route to specific model
 			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
@@ -147,7 +150,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
 						newPath := fmt.Sprintf("/v2/models/%s", modelName)
 						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
-							log.Error(err, "Failed to set URLRewrite replacePrefixMatch")
+							logger.Error("Failed to set URLRewrite replacePrefixMatch", zap.Error(err))
 							return err
 						}
 						break
@@ -155,7 +158,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 				}
 
 				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
-					log.Error(err, "Failed to update filters in HTTPRoute rule")
+					logger.Error("Failed to update filters in HTTPRoute rule", zap.Error(err))
 					return err
 				}
 			}
@@ -167,7 +170,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 
 	if !updated {
 		// Deployment route not found, add it
-		log.Info("Deployment route not found in HTTPRoute, adding new route", "modelName", modelName, "prefix", deploymentPrefix)
+		logger.Info("Deployment route not found in HTTPRoute, adding new route", zap.String("modelName", modelName), zap.String("prefix", deploymentPrefix))
 		deploymentRule := map[string]interface{}{
 			"matches": []map[string]interface{}{
 				{
@@ -220,7 +223,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 
 	_, err = c.DynamicClient.Resource(gvr).Namespace(namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
 	if err != nil {
-		log.Error(err, "Failed to update HTTPRoute")
+		logger.Error("Failed to update HTTPRoute", zap.Error(err))
 		return err
 	}
 
@@ -228,7 +231,7 @@ func (c *ConfigProvider) updateHTTPRouteForModel(ctx context.Context, log logr.L
 }
 
 // updateVirtualServiceForModel updates VirtualService rules to route to the specific model
-func (c *ConfigProvider) updateVirtualServiceForModel(ctx context.Context, log logr.Logger, vs *unstructured.Unstructured, inferenceServerName, deploymentName, namespace, modelName string) error {
+func (c *ConfigProvider) updateVirtualServiceForModel(ctx context.Context, logger *zap.Logger, vs *unstructured.Unstructured, inferenceServerName, deploymentName, namespace, modelName string) error {
 	httpRoutes, found, err := unstructured.NestedSlice(vs.Object, "spec", "http")
 	if err != nil || !found {
 		return fmt.Errorf("http routes not found in VirtualService")
@@ -279,7 +282,7 @@ func (c *ConfigProvider) updateVirtualServiceForModel(ctx context.Context, log l
 
 	if !updated {
 		// Deployment route not found, add it
-		log.Info("Deployment route not found in VirtualService, adding new route", "modelName", modelName, "prefix", deploymentPrefix)
+		logger.Info("Deployment route not found in VirtualService, adding new route", zap.String("modelName", modelName), zap.String("prefix", deploymentPrefix))
 		deploymentRoute := map[string]interface{}{
 			"match": []interface{}{
 				map[string]interface{}{
@@ -359,7 +362,7 @@ func (c *ConfigProvider) hasMatchingHTTPRoutePrefix(ruleMap map[string]interface
 }
 
 // GetCurrentModelName retrieves the current model name from the route configuration
-func (c *ConfigProvider) GetCurrentModelName(ctx context.Context, log logr.Logger, deployment *v2pb.Deployment) (string, error) {
+func (c *ConfigProvider) GetCurrentModelName(ctx context.Context, logger *zap.Logger, deployment *v2pb.Deployment) (string, error) {
 	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 	deploymentPrefix := fmt.Sprintf("/%s-endpoint/%s", inferenceServerName, deployment.Name)
 

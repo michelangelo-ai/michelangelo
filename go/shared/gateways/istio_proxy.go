@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -13,8 +13,8 @@ import (
 
 // Gateway API Proxy Management using HTTPRoute
 
-func (g *gateway) configureIstioProxy(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
-	logger.Info("Configuring proxy with Gateway API HTTPRoute", "server", request.InferenceServer, "model", request.ModelName)
+func (g *gateway) configureIstioProxy(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error {
+	logger.Info("Configuring proxy with Gateway API HTTPRoute", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
 
 	// Create or get HTTPRoute
 	httpRoute, err := g.getOrCreateHTTPRoute(ctx, logger, request)
@@ -32,8 +32,8 @@ func (g *gateway) configureIstioProxy(ctx context.Context, logger logr.Logger, r
 	return nil
 }
 
-func (g *gateway) getIstioProxyStatus(ctx context.Context, logger logr.Logger, request ProxyStatusRequest) (*ProxyStatus, error) {
-	logger.Info("Getting proxy status from HTTPRoute", "server", request.InferenceServer)
+func (g *gateway) getIstioProxyStatus(ctx context.Context, logger *zap.Logger, request ProxyStatusRequest) (*ProxyStatus, error) {
+	logger.Info("Getting proxy status from HTTPRoute", zap.String("server", request.InferenceServer))
 
 	httpRouteGvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",
@@ -66,7 +66,7 @@ func (g *gateway) getIstioProxyStatus(ctx context.Context, logger logr.Logger, r
 	}, nil
 }
 
-func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) (*unstructured.Unstructured, error) {
+func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) (*unstructured.Unstructured, error) {
 	gvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",
 		Version:  "v1",
@@ -82,7 +82,7 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 	}
 
 	// Create new HTTPRoute if it doesn't exist
-	logger.Info("Creating new HTTPRoute with baseline routing", "name", httpRouteName)
+	logger.Info("Creating new HTTPRoute with baseline routing", zap.String("name", httpRouteName))
 
 	// Extract environment from namespace or use default
 	environment := g.extractEnvironment(request.Namespace)
@@ -151,7 +151,7 @@ func (g *gateway) getOrCreateHTTPRoute(ctx context.Context, logger logr.Logger, 
 }
 
 // addDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
-func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
+func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",
 		Version:  "v1",
@@ -181,7 +181,7 @@ func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger logr.Lo
 
 		if g.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPath) {
 			logger.Info("Deployment-specific route already exists, updating",
-				"deploymentPath", deploymentPath, "modelName", request.ModelName)
+				zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
 
 			// Update existing route to point to new model
 			return g.updateExistingDeploymentRoute(ctx, logger, httpRoute, request, deploymentPath)
@@ -190,7 +190,7 @@ func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger logr.Lo
 
 	// Add new deployment-specific route
 	logger.Info("Adding new deployment-specific route",
-		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
 
 	newRule := map[string]interface{}{
 		"matches": []map[string]interface{}{
@@ -242,12 +242,12 @@ func (g *gateway) addDeploymentSpecificRoute(ctx context.Context, logger logr.Lo
 	}
 
 	logger.Info("Deployment-specific route added successfully",
-		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
 	return nil
 }
 
 // updateExistingDeploymentRoute updates an existing deployment-specific route
-func (g *gateway) updateExistingDeploymentRoute(ctx context.Context, logger logr.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest, deploymentPath string) error {
+func (g *gateway) updateExistingDeploymentRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest, deploymentPath string) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		return fmt.Errorf("rules not found in HTTPRoute")
@@ -303,11 +303,11 @@ func (g *gateway) updateExistingDeploymentRoute(ctx context.Context, logger logr
 	}
 
 	logger.Info("Deployment-specific route updated successfully",
-		"deploymentPath", deploymentPath, "modelName", request.ModelName)
+		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
 	return nil
 }
 
-func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger logr.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest) error {
+func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request ProxyConfigRequest) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		return fmt.Errorf("rules not found in HTTPRoute")
@@ -324,7 +324,7 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 		}
 
 		if g.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPrefix) {
-			logger.Info("Updating existing HTTPRoute production route", "modelName", request.ModelName)
+			logger.Info("Updating existing HTTPRoute production route", zap.String("modelName", request.ModelName))
 
 			// Update URLRewrite filter to route to specific model
 			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
@@ -338,7 +338,7 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
 						newPath := fmt.Sprintf("/v2/models/%s", request.ModelName)
 						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
-							logger.Error(err, "Failed to set URLRewrite replacePrefixMatch")
+							logger.Error("Failed to set URLRewrite replacePrefixMatch", zap.Error(err))
 							return err
 						}
 						break
@@ -346,7 +346,7 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 				}
 
 				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
-					logger.Error(err, "Failed to update filters in HTTPRoute rule")
+					logger.Error("Failed to update filters in HTTPRoute rule", zap.Error(err))
 					return err
 				}
 			}
@@ -358,12 +358,12 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 
 	if !updated {
 		logger.Info("Production route not found, checking if HTTPRoute already points to desired model",
-			"inferenceServer", request.InferenceServer, "desiredModel", request.ModelName)
+			zap.String("inferenceServer", request.InferenceServer), zap.String("desiredModel", request.ModelName))
 
 		// Check if the production route already points to the desired model
 		if g.isHTTPRouteAlreadyConfiguredForModel(httpRoute, request) {
 			logger.Info("HTTPRoute already configured for desired model, skipping update",
-				"modelName", request.ModelName)
+				zap.String("modelName", request.ModelName))
 			return nil
 		}
 
@@ -372,7 +372,7 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 
 	// Update the HTTPRoute
 	if err = unstructured.SetNestedSlice(httpRoute.Object, rules, "spec", "rules"); err != nil {
-		logger.Error(err, "Failed to update rules in HTTPRoute")
+		logger.Error("Failed to update rules in HTTPRoute", zap.Error(err))
 		return err
 	}
 
@@ -384,11 +384,11 @@ func (g *gateway) updateHTTPRouteProductionRoute(ctx context.Context, logger log
 
 	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
 	if err != nil {
-		logger.Error(err, "Failed to update HTTPRoute")
+		logger.Error("Failed to update HTTPRoute", zap.Error(err))
 		return err
 	}
 
-	logger.Info("HTTPRoute production route updated successfully", "modelName", request.ModelName, "inferenceServer", request.InferenceServer)
+	logger.Info("HTTPRoute production route updated successfully", zap.String("modelName", request.ModelName), zap.String("inferenceServer", request.InferenceServer))
 	return nil
 }
 

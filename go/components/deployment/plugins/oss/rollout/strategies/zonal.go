@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -31,14 +31,14 @@ func GetZonalActors(params Params, deployment *v2pb.Deployment) []plugins.Condit
 type ZonalRolloutActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *ZonalRolloutActor) GetType() string {
 	return common.ActorTypeZonalRollout
 }
 
-func (a *ZonalRolloutActor) GetLogger() logr.Logger {
+func (a *ZonalRolloutActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -66,20 +66,20 @@ func (a *ZonalRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 }
 
 func (a *ZonalRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running zonal rollout for deployment", "deployment", resource.Name)
+	a.logger.Info("Running zonal rollout for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting zonal rollout",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// Get zones from deployment replicas/infrastructure
 		zones, err := a.getTargetZones(ctx, resource)
 		if err != nil {
-			a.logger.Error(err, "Failed to get target zones")
+			a.logger.Error("Failed to get target zones", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -90,10 +90,10 @@ func (a *ZonalRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 
 		// Deploy zone by zone
 		for i, zone := range zones {
-			a.logger.Info("Deploying to zone", "zone", zone, "step", i+1, "totalZones", len(zones))
+			a.logger.Info("Deploying to zone", zap.String("zone", zone), zap.Int("step", i+1), zap.Int("totalZones", len(zones)))
 
 			if err := a.deployToZone(ctx, resource, zone, modelName); err != nil {
-				a.logger.Error(err, "Failed to deploy to zone", "zone", zone)
+				a.logger.Error("Failed to deploy to zone", zap.String("zone", zone), zap.Error(err))
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
@@ -103,14 +103,14 @@ func (a *ZonalRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 			}
 
 			// For OSS, skip the wait between zones to simplify
-			a.logger.Info("Zone deployment completed", "zone", zone)
+			a.logger.Info("Zone deployment completed", zap.String("zone", zone))
 		}
 
 		// Simulate zonal rollout completion
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Zonal rollout completed successfully", "zones", len(zones), "model", modelName)
+		a.logger.Info("Zonal rollout completed successfully", zap.Int("zones", len(zones)), zap.String("model", modelName))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
@@ -189,11 +189,11 @@ func (a *ZonalRolloutActor) waitForZoneStability(ctx context.Context, deployment
 			// Check if inference server is healthy
 			healthy, err := a.gateway.IsHealthy(ctx, a.logger, deployment.Spec.GetInferenceServer().Name, v2pb.BACKEND_TYPE_TRITON)
 			if err != nil {
-				a.logger.Info("Health check failed, retrying", "zone", zone, "error", err)
+				a.logger.Info("Health check failed, retrying", zap.String("zone", zone), zap.Error(err))
 				continue
 			}
 			if healthy {
-				a.logger.Info("Zone deployment stabilized", "zone", zone)
+				a.logger.Info("Zone deployment stabilized", zap.String("zone", zone))
 				return nil
 			}
 		}

@@ -6,47 +6,48 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Gateway provides a unified interface for inference server operations across different providers
 type Gateway interface {
 	// Infrastructure Management
-	CreateInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error)
-	GetInfrastructureStatus(ctx context.Context, logger logr.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error)
-	DeleteInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error
+	CreateInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error)
+	GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error)
+	DeleteInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureDeleteRequest) error
 
 	// Proxy/Routing Management
-	ConfigureProxy(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error
-	GetProxyStatus(ctx context.Context, logger logr.Logger, request ProxyStatusRequest) (*ProxyStatus, error)
-	AddDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error
+	ConfigureProxy(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error
+	GetProxyStatus(ctx context.Context, logger *zap.Logger, request ProxyStatusRequest) (*ProxyStatus, error)
+	AddDeploymentSpecificRoute(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error
 
 	// Model Management
-	LoadModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error
-	CheckModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error)
-	GetModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error)
+	LoadModel(ctx context.Context, logger *zap.Logger, request ModelLoadRequest) error
+	CheckModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (bool, error)
+	GetModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (*ModelStatus, error)
 
 	// Health Checking
-	IsHealthy(ctx context.Context, logger logr.Logger, serverName string, backendType v2pb.BackendType) (bool, error)
+	IsHealthy(ctx context.Context, logger *zap.Logger, serverName string, backendType v2pb.BackendType) (bool, error)
 
 	// Model Configuration Updates (for rolling out new models)
-	UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error
+	UpdateModelConfig(ctx context.Context, logger *zap.Logger, request ModelConfigUpdateRequest) error
 
 	// ConfigMap Management
-	CreateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
-	UpdateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error
-	DeleteModelConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) error
-	DeleteConfigMap(ctx context.Context, logger logr.Logger, configMapName, namespace string) error
+	CreateModelConfigMap(ctx context.Context, logger *zap.Logger, request ModelConfigMapRequest) error
+	UpdateModelConfigMap(ctx context.Context, logger *zap.Logger, request ModelConfigMapRequest) error
+	DeleteModelConfigMap(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error
+	DeleteConfigMap(ctx context.Context, logger *zap.Logger, configMapName, namespace string) error
 
 	// HTTPRoute Management
-	DeleteHTTPRoute(ctx context.Context, logger logr.Logger, httpRouteName, namespace string) error
+	DeleteHTTPRoute(ctx context.Context, logger *zap.Logger, httpRouteName, namespace string) error
 }
 
 // ModelLoadRequest contains information needed to load a model
@@ -209,7 +210,7 @@ func NewGateway() Gateway {
 }
 
 // NewGatewayWithClients creates a new inference server gateway with Kubernetes clients
-func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Interface, logger logr.Logger) Gateway {
+func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Interface, logger *zap.Logger) Gateway {
 	return &gateway{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
@@ -221,82 +222,60 @@ func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Inter
 }
 
 // LoadModel dispatches model loading based on backend type
-func (g *gateway) LoadModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error {
-	logger.Info("Loading model", "model", request.ModelName, "backend", request.BackendType)
+func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, request ModelLoadRequest) error {
+	logger.Info("Loading model", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.loadTritonModel(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.loadLLMDModel(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.loadDynamoModel(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.loadTorchServeModel(ctx, logger, request)
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
 // CheckModelStatus dispatches model status checking based on backend type
-func (g *gateway) CheckModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error) {
-	logger.Info("Checking model status", "model", request.ModelName, "backend", request.BackendType)
+func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (bool, error) {
+	logger.Info("Checking model status", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.checkTritonModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.checkLLMDModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.checkDynamoModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		status, err := g.getTorchServeModelStatus(ctx, logger, request)
-		return status != nil && status.State == v2pb.INFERENCE_SERVER_STATE_SERVING, err
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return false, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
 // GetModelStatus dispatches detailed model status retrieval based on backend type
-func (g *gateway) GetModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {
-	logger.Info("Getting model status", "model", request.ModelName, "backend", request.BackendType)
+func (g *gateway) GetModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (*ModelStatus, error) {
+	logger.Info("Getting model status", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.getTritonModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.getLLMDModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.getDynamoModelStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.getTorchServeModelStatus(ctx, logger, request)
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
 // IsHealthy dispatches health checking based on backend type
-func (g *gateway) IsHealthy(ctx context.Context, logger logr.Logger, serverName string, backendType v2pb.BackendType) (bool, error) {
-	logger.Info("Checking server health", "server", serverName, "backend", backendType)
+func (g *gateway) IsHealthy(ctx context.Context, logger *zap.Logger, serverName string, backendType v2pb.BackendType) (bool, error) {
+	logger.Info("Checking server health", zap.String("server", serverName), zap.String("backend", backendType.String()))
 
 	switch backendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.isTritonHealthy(ctx, logger, serverName)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.isLLMDHealthy(ctx, logger, serverName)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.isDynamoHealthy(ctx, logger, serverName)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		healthStatus, err := g.isTorchServeHealthy(ctx, logger, HealthCheckRequest{InferenceServer: serverName})
-		return healthStatus != nil && healthStatus.Healthy, err
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return false, fmt.Errorf("unsupported backend type: %v", backendType)
 	}
 }
 
 // UpdateModelConfig updates model configuration for rolling out new models
-func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, request ModelConfigUpdateRequest) error {
-	logger.Info("Updating model configuration", "server", request.InferenceServer, "backend", request.BackendType, "models", len(request.ModelConfigs))
+func (g *gateway) UpdateModelConfig(ctx context.Context, logger *zap.Logger, request ModelConfigUpdateRequest) error {
+	logger.Info("Updating model configuration", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()), zap.Int("models", len(request.ModelConfigs)))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
@@ -311,14 +290,7 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 			ModelConfigs:    request.ModelConfigs,
 		}
 		return g.configMapProvider.UpdateModelConfigMap(ctx, configMapRequest)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		// TODO: Implement LLMD model config updates
-		return fmt.Errorf("model config updates not yet implemented for LLMD backend")
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		// TODO: Implement Dynamo model config updates
-		return fmt.Errorf("model config updates not yet implemented for Dynamo backend")
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.updateTorchServeModelConfig(ctx, logger, request)
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -327,7 +299,7 @@ func (g *gateway) UpdateModelConfig(ctx context.Context, logger logr.Logger, req
 // ConfigMap Management implementations
 
 // CreateModelConfigMap creates a ConfigMap for model configuration
-func (g *gateway) CreateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error {
+func (g *gateway) CreateModelConfigMap(ctx context.Context, logger *zap.Logger, request ModelConfigMapRequest) error {
 	if g.configMapProvider == nil {
 		return fmt.Errorf("ConfigMap provider not initialized")
 	}
@@ -345,7 +317,7 @@ func (g *gateway) CreateModelConfigMap(ctx context.Context, logger logr.Logger, 
 }
 
 // UpdateModelConfigMap updates a ConfigMap for model configuration
-func (g *gateway) UpdateModelConfigMap(ctx context.Context, logger logr.Logger, request ModelConfigMapRequest) error {
+func (g *gateway) UpdateModelConfigMap(ctx context.Context, _ *zap.Logger, request ModelConfigMapRequest) error {
 	if g.configMapProvider == nil {
 		return fmt.Errorf("ConfigMap provider not initialized")
 	}
@@ -363,7 +335,7 @@ func (g *gateway) UpdateModelConfigMap(ctx context.Context, logger logr.Logger, 
 }
 
 // DeleteModelConfigMap deletes a ConfigMap for model configuration
-func (g *gateway) DeleteModelConfigMap(ctx context.Context, logger logr.Logger, inferenceServerName, namespace string) error {
+func (g *gateway) DeleteModelConfigMap(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
 	if g.configMapProvider == nil {
 		return fmt.Errorf("ConfigMap provider not initialized")
 	}
@@ -386,54 +358,40 @@ func convertToConfigMapEntries(entries []ModelConfigEntry) []ModelConfigEntry {
 // Infrastructure Management Methods
 
 // CreateInfrastructure dispatches infrastructure creation based on backend type
-func (g *gateway) CreateInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
-	logger.Info("Creating infrastructure", "server", request.InferenceServer.Name, "backend", request.BackendType)
+func (g *gateway) CreateInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
+	logger.Info("Creating infrastructure", zap.String("server", request.InferenceServer.Name), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.createTritonInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.createLLMDInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.createDynamoInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.createTorchServeInfrastructure(ctx, logger, request)
+		// TODO: Implement other backend types: LLMD, Dynamo, TorchServ
+
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
 // GetInfrastructureStatus dispatches infrastructure status checking based on backend type
-func (g *gateway) GetInfrastructureStatus(ctx context.Context, logger logr.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
-	logger.Info("Getting infrastructure status", "server", request.InferenceServer, "backend", request.BackendType)
+func (g *gateway) GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
+	logger.Info("Getting infrastructure status", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.getTritonInfrastructureStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.getLLMDInfrastructureStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.getDynamoInfrastructureStatus(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.getTorchServeInfrastructureStatus(ctx, logger, request)
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
 }
 
 // DeleteInfrastructure dispatches infrastructure deletion based on backend type
-func (g *gateway) DeleteInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
-	logger.Info("Deleting infrastructure", "server", request.InferenceServer, "backend", request.BackendType)
+func (g *gateway) DeleteInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureDeleteRequest) error {
+	logger.Info("Deleting infrastructure", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()))
 
 	switch request.BackendType {
 	case v2pb.BACKEND_TYPE_TRITON:
 		return g.deleteTritonInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_LLM_D:
-		return g.deleteLLMDInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_DYNAMO:
-		return g.deleteDynamoInfrastructure(ctx, logger, request)
-	case v2pb.BACKEND_TYPE_TORCHSERVE:
-		return g.deleteTorchServeInfrastructure(ctx, logger, request)
+	// TODO: Implement other backend types: LLMD, Dynamo, TorchServe
 	default:
 		return fmt.Errorf("unsupported backend type: %v", request.BackendType)
 	}
@@ -442,30 +400,30 @@ func (g *gateway) DeleteInfrastructure(ctx context.Context, logger logr.Logger, 
 // Proxy Management Methods
 
 // ConfigureProxy sets up Istio VirtualService routing
-func (g *gateway) ConfigureProxy(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
-	logger.Info("Configuring proxy", "server", request.InferenceServer, "model", request.ModelName)
+func (g *gateway) ConfigureProxy(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error {
+	logger.Info("Configuring proxy", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
 
 	// Use the same Istio logic from the deployment provider
 	return g.configureIstioProxy(ctx, logger, request)
 }
 
 // GetProxyStatus checks the status of Istio VirtualService configuration
-func (g *gateway) GetProxyStatus(ctx context.Context, logger logr.Logger, request ProxyStatusRequest) (*ProxyStatus, error) {
-	logger.Info("Getting proxy status", "server", request.InferenceServer)
+func (g *gateway) GetProxyStatus(ctx context.Context, logger *zap.Logger, request ProxyStatusRequest) (*ProxyStatus, error) {
+	logger.Info("Getting proxy status", zap.String("server", request.InferenceServer))
 
 	return g.getIstioProxyStatus(ctx, logger, request)
 }
 
 // AddDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
-func (g *gateway) AddDeploymentSpecificRoute(ctx context.Context, logger logr.Logger, request ProxyConfigRequest) error {
-	logger.Info("Adding deployment-specific route", "server", request.InferenceServer, "deployment", request.DeploymentName, "model", request.ModelName)
+func (g *gateway) AddDeploymentSpecificRoute(ctx context.Context, logger *zap.Logger, request ProxyConfigRequest) error {
+	logger.Info("Adding deployment-specific route", zap.String("server", request.InferenceServer), zap.String("deployment", request.DeploymentName), zap.String("model", request.ModelName))
 
 	return g.addDeploymentSpecificRoute(ctx, logger, request)
 }
 
 // DeleteConfigMap deletes a ConfigMap by name and namespace
-func (g *gateway) DeleteConfigMap(ctx context.Context, logger logr.Logger, configMapName, namespace string) error {
-	logger.Info("Deleting ConfigMap", "configMap", configMapName, "namespace", namespace)
+func (g *gateway) DeleteConfigMap(ctx context.Context, logger *zap.Logger, configMapName, namespace string) error {
+	logger.Info("Deleting ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	if g.configMapProvider == nil {
 		return fmt.Errorf("ConfigMapProvider not available")
@@ -481,17 +439,17 @@ func (g *gateway) DeleteConfigMap(ctx context.Context, logger logr.Logger, confi
 		if client.IgnoreNotFound(err) != nil {
 			return fmt.Errorf("failed to delete ConfigMap %s in namespace %s: %w", configMapName, namespace, err)
 		}
-		logger.Info("ConfigMap not found, already deleted", "configMap", configMapName)
+		logger.Info("ConfigMap not found, already deleted", zap.String("configMap", configMapName))
 	} else {
-		logger.Info("ConfigMap deleted successfully", "configMap", configMapName, "namespace", namespace)
+		logger.Info("ConfigMap deleted successfully", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 	}
 
 	return nil
 }
 
 // DeleteHTTPRoute deletes an HTTPRoute by name and namespace
-func (g *gateway) DeleteHTTPRoute(ctx context.Context, logger logr.Logger, httpRouteName, namespace string) error {
-	logger.Info("Deleting HTTPRoute", "httpRoute", httpRouteName, "namespace", namespace)
+func (g *gateway) DeleteHTTPRoute(ctx context.Context, logger *zap.Logger, httpRouteName, namespace string) error {
+	logger.Info("Deleting HTTPRoute", zap.String("httpRoute", httpRouteName), zap.String("namespace", namespace))
 
 	if g.dynamicClient == nil {
 		return fmt.Errorf("dynamicClient not available")
@@ -507,12 +465,12 @@ func (g *gateway) DeleteHTTPRoute(ctx context.Context, logger logr.Logger, httpR
 	if err := g.dynamicClient.Resource(gvr).Namespace(namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
 		// Ignore not found errors as the HTTPRoute may already be deleted
 		if errors.IsNotFound(err) {
-			logger.Info("HTTPRoute not found, already deleted", "httpRoute", httpRouteName)
+			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", httpRouteName))
 		} else {
 			return fmt.Errorf("failed to delete HTTPRoute %s in namespace %s: %w", httpRouteName, namespace, err)
 		}
 	} else {
-		logger.Info("HTTPRoute deleted successfully", "httpRoute", httpRouteName, "namespace", namespace)
+		logger.Info("HTTPRoute deleted successfully", zap.String("httpRoute", httpRouteName), zap.String("namespace", namespace))
 	}
 
 	return nil

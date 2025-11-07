@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
+
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -19,7 +20,7 @@ func NewEngine() Engine {
 
 // Run executes the plugin by running through the list of actors from the plugin and executing Retrieve and Run
 // for each actor. Only the first failing condition will have its Run method executed per engine execution.
-func (e *DefaultEngine) Run(ctx context.Context, logger logr.Logger, plugin Plugin, resource *v2pb.InferenceServer) (*apipb.Condition, error) {
+func (e *DefaultEngine) Run(ctx context.Context, logger *zap.Logger, plugin Plugin, resource *v2pb.InferenceServer) (*apipb.Condition, error) {
 	actors := plugin.GetActors()
 	if len(actors) == 0 {
 		logger.Info("No actors found in plugin")
@@ -36,14 +37,14 @@ func (e *DefaultEngine) Run(ctx context.Context, logger logr.Logger, plugin Plug
 		}
 	}
 
-	logger.Info("Running engine with actors", "actorCount", len(actors), "existingConditions", len(conditions))
+	logger.Info("Running engine with actors", zap.Int("actorCount", len(actors)), zap.Int("existingConditions", len(conditions)))
 
 	var firstFailingCondition *apipb.Condition
 
 	// Execute Retrieve for each actor
 	for _, actor := range actors {
 		actorType := actor.GetType()
-		actorLogger := logger.WithValues("actorType", actorType)
+		actorLogger := logger.With(zap.String("actorType", actorType))
 
 		// Get existing condition or create new one
 		existingCondition := &apipb.Condition{
@@ -57,7 +58,7 @@ func (e *DefaultEngine) Run(ctx context.Context, logger logr.Logger, plugin Plug
 		// Execute Retrieve to get current condition state
 		retrievedCondition, err := actor.Retrieve(ctx, actorLogger, resource, *existingCondition)
 		if err != nil {
-			actorLogger.Error(err, "Failed to retrieve condition")
+			actorLogger.Error("Failed to retrieve condition", zap.Error(err))
 			// Create failed condition
 			retrievedCondition = apipb.Condition{
 				Type:    actorType,
@@ -76,20 +77,20 @@ func (e *DefaultEngine) Run(ctx context.Context, logger logr.Logger, plugin Plug
 		}
 
 		actorLogger.Info("Retrieved condition",
-			"status", retrievedCondition.Status.String(),
-			"reason", retrievedCondition.Reason,
-			"message", retrievedCondition.Message)
+			zap.String("status", retrievedCondition.Status.String()),
+			zap.String("reason", retrievedCondition.Reason),
+			zap.String("message", retrievedCondition.Message))
 	}
 
 	// If we found a failing condition, execute Run on its actor
 	if firstFailingCondition != nil {
 		for _, actor := range actors {
 			if actor.GetType() == firstFailingCondition.Type {
-				runLogger := logger.WithValues("actorType", firstFailingCondition.Type)
-				runLogger.Info("Executing Run for first failing condition")
+				runLogger := logger.With(zap.String("actorType", firstFailingCondition.Type))
+				runLogger.Info("Executing Run for first failing condition", zap.String("condition", firstFailingCondition.Type))
 
 				if err := actor.Run(ctx, runLogger, resource, firstFailingCondition); err != nil {
-					runLogger.Error(err, "Failed to execute Run")
+					runLogger.Error("Failed to execute Run", zap.Error(err))
 					firstFailingCondition.Status = apipb.CONDITION_STATUS_FALSE
 					firstFailingCondition.Reason = "RunError"
 					firstFailingCondition.Message = fmt.Sprintf("Failed to execute run: %v", err)

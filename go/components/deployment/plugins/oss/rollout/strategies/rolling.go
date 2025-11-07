@@ -3,29 +3,54 @@ package strategies
 import (
 	"context"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Note: ModelSyncActor is now defined in actors.go with the correct interface
 
+// GetRollingActors returns actors for rolling rollout strategy
+func GetRollingActors(params Params, deployment *v2pb.Deployment) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
+	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
+		&ModelSyncActor{
+			client:            params.Client,
+			gateway:           params.Gateway,
+			logger:            params.Logger,
+			configMapProvider: params.ConfigMapProvider,
+		},
+		&TrafficRoutingActor{
+			client:  params.Client,
+			gateway: params.Gateway,
+			logger:  params.Logger,
+		},
+		&ModelCleanupActor{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
+		},
+		&RollingRolloutActor{
+			client: params.Client,
+			logger: params.Logger,
+		},
+	}
+}
+
 // RollingRolloutActor handles rolling rollout strategy following Uber patterns
 type RollingRolloutActor struct {
-	client  client.Client
-	gateway gateways.Gateway
-	logger  logr.Logger
+	client client.Client
+	logger *zap.Logger
 }
 
 func (a *RollingRolloutActor) GetType() string {
 	return common.ActorTypeRollingRollout
 }
 
-func (a *RollingRolloutActor) GetLogger() logr.Logger {
+func (a *RollingRolloutActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
@@ -34,7 +59,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 	if resource.Status.CurrentRevision != nil &&
 		resource.Spec.DesiredRevision != nil &&
 		resource.Status.CurrentRevision.Name == resource.Spec.DesiredRevision.Name &&
-		resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_PLACEMENT {
+		resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -63,7 +88,7 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 }
 
 func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running rolling rollout for deployment", "deployment", resource.Name)
+	a.logger.Info("Running rolling rollout for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment to placement stage
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -74,8 +99,8 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 		inferenceServerName := resource.Spec.GetInferenceServer().Name
 
 		a.logger.Info("Starting rolling rollout",
-			"model", modelName,
-			"inference_server", inferenceServerName)
+			zap.String("model", modelName),
+			zap.String("inference_server", inferenceServerName))
 
 		// In Uber's implementation, rolling rollout:
 		// 1. Resolves all hosts for the inference server (via UNS)
@@ -92,14 +117,14 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 		// Get rollout increment percentage from annotations or use default
 		incrementPercentage := common.GetRolloutIncrement(resource)
 		a.logger.Info("Rolling rollout configuration",
-			"increment_percentage", incrementPercentage,
-			"strategy", "rolling")
+			zap.Int("increment_percentage", incrementPercentage),
+			zap.String("strategy", "rolling"))
 
 		// Simulate successful rollout completion
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-		a.logger.Info("Rolling rollout completed successfully", "model", modelName)
+		a.logger.Info("Rolling rollout completed successfully", zap.String("model", modelName))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil

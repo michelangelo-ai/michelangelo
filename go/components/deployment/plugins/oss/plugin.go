@@ -3,13 +3,18 @@ package oss
 import (
 	"context"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/cleanup"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -22,71 +27,84 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin is the OSS plugin implementation
 type Plugin struct {
-	client    client.Client
-	gateway   gateways.Gateway
-	blobstore *blobstore.BlobStore
-	logger    logr.Logger
+	client            client.Client
+	gateway           gateways.Gateway
+	blobstore         *blobstore.BlobStore
+	logger            *zap.Logger
+	configMapProvider *gateways.ConfigMapProvider
+
+	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
+	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
+	cleanupPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
+	steadyStatePlugin conditionInterfaces.Plugin[*v2pb.Deployment]
+}
+
+// Params contains dependencies for OSS plugin
+type Params struct {
+	fx.In
+
+	Registrar         pluginmanager.Registrar[plugins.Plugin]
+	Client            client.Client
+	Gateway           gateways.Gateway
+	BlobStore         *blobstore.BlobStore
+	Logger            *zap.Logger
+	ConfigMapProvider *gateways.ConfigMapProvider
 }
 
 // NewPlugin creates a new instance of OSS plugin
-func NewPlugin(client client.Client, gateway gateways.Gateway, blobstore *blobstore.BlobStore, logger logr.Logger) *Plugin {
+func NewPlugin(params Params) *Plugin {
 	return &Plugin{
-		client:    client,
-		gateway:   gateway,
-		blobstore: blobstore,
-		logger:    logger,
+		client:            params.Client,
+		gateway:           params.Gateway,
+		blobstore:         params.BlobStore,
+		logger:            params.Logger,
+		configMapProvider: params.ConfigMapProvider,
+		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
+		}),
+		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
+		}),
+		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
+			Client:  params.Client,
+			Gateway: params.Gateway,
+			Logger:  params.Logger,
+		}),
 	}
 }
 
 // GetRolloutPlugin returns the rollout plugin using the OSS rollout conditions plugin
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
-	// Return the OSS rollout conditions plugin
-	return &OSSRolloutConditionsPlugin{
-		client:     p.client,
-		gateway:    p.gateway,
-		blobstore:  p.blobstore,
-		logger:     p.logger,
-		deployment: deployment,
-	}, nil
+	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
+		Client:            p.client,
+		ConfigMapProvider: p.configMapProvider,
+		Gateway:           p.gateway,
+		Logger:            p.logger,
+	}, deployment)
+	if err != nil {
+		return nil, err
+	}
+	p.rolloutPlugin = rolloutPlugin
+	return rolloutPlugin, nil
 }
 
 // GetRollbackPlugin returns the rollback plugin
 func (p *Plugin) GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
-	// Return a simple conditions plugin using rollback actor
-	return &OSSConditionsPlugin{
-		actors: []plugins.ConditionActor{
-			&RollbackActor{
-				client: p.client,
-				logger: p.logger,
-			},
-		},
-	}
+	return p.rollbackPlugin
 }
 
 // GetCleanupPlugin returns the cleanup plugin
 func (p *Plugin) GetCleanupPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
-	// Return a simple conditions plugin using cleanup actor
-	return &OSSConditionsPlugin{
-		actors: []plugins.ConditionActor{
-			&CleanupActor{
-				client: p.client,
-				logger: p.logger,
-			},
-		},
-	}
+	return p.cleanupPlugin
 }
 
 // GetSteadyStatePlugin returns the steady state plugin
 func (p *Plugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
-	// Return a simple conditions plugin using steady state actor
-	return &OSSConditionsPlugin{
-		actors: []plugins.ConditionActor{
-			&SteadyStateActor{
-				client: p.client,
-				logger: p.logger,
-			},
-		},
-	}
+	return p.steadyStatePlugin
 }
 
 // ParseStage goes through all the conditions and determines the current deployment stage
@@ -192,130 +210,4 @@ func (p *Plugin) PopulateMessage(ctx context.Context, runtimeContext plugins.Req
 	if deployment.Status.Message == "" {
 		deployment.Status.Message = "Deployment processed by OSS plugin"
 	}
-}
-
-// HandleCleanup handles cleanup when a deployment is being deleted, including ConfigMaps and other resources
-func (p *Plugin) HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
-	logger.Info("OSS Plugin: Starting cleanup for deployment", "deployment", deployment.Name)
-
-	// Use the rollout plugin for ConfigMap cleanup since it has the ConfigMapProvider
-	rolloutPlugin, err := p.GetRolloutPlugin(ctx, deployment)
-	if err != nil {
-		logger.Error(err, "Failed to get rollout plugin for cleanup")
-		return err
-	}
-
-	// Cast to RolloutPlugin to access HandleCleanup method
-	if ossRolloutPlugin, ok := rolloutPlugin.(*RolloutPlugin); ok {
-		if err := ossRolloutPlugin.HandleCleanup(ctx, logger, deployment); err != nil {
-			logger.Error(err, "Rollout plugin cleanup failed")
-			return err
-		}
-	}
-
-	// Additional cleanup can be done with other plugins if needed
-	cleanupPlugin := p.GetCleanupPlugin()
-	if ossCleanupPlugin, ok := cleanupPlugin.(*OSSConditionsPlugin); ok {
-		// For now, just log that cleanup plugin was called
-		// In a real implementation, this would handle additional cleanup
-		logger.Info("Cleanup plugin called", "actors", len(ossCleanupPlugin.actors))
-	}
-
-	logger.Info("OSS Plugin: Cleanup completed successfully", "deployment", deployment.Name)
-	return nil
-}
-
-// OSSRolloutConditionsPlugin implements the conditions plugin for OSS rollout using strategies
-type OSSRolloutConditionsPlugin struct {
-	client     client.Client
-	gateway    gateways.Gateway
-	blobstore  *blobstore.BlobStore
-	logger     logr.Logger
-	deployment *v2pb.Deployment
-}
-
-// GetActors returns the OSS rollout actors using the strategies pattern
-func (p *OSSRolloutConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
-	params := strategies.Params{
-		Client:  p.client,
-		Gateway: p.gateway,
-		Logger:  p.logger,
-	}
-
-	actors := strategies.GetRollingActors(params, p.deployment)
-
-	// Convert to the expected interface
-	result := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], len(actors))
-	for i, actor := range actors {
-		result[i] = &ActorWrapper{actor: actor}
-	}
-
-	return result
-}
-
-// GetConditions returns the conditions from the deployment status
-func (p *OSSRolloutConditionsPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {
-	return resource.Status.Conditions
-}
-
-// PutCondition sets a condition in the deployment status
-func (p *OSSRolloutConditionsPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb.Condition) {
-	for i, existing := range resource.Status.Conditions {
-		if existing.Type == condition.Type {
-			resource.Status.Conditions[i] = condition
-			return
-		}
-	}
-	resource.Status.Conditions = append(resource.Status.Conditions, condition)
-}
-
-// ActorWrapper wraps the OSS actor to match the expected interface
-type ActorWrapper struct {
-	actor plugins.ConditionActor
-}
-
-// Run wraps the actor run method to match the expected signature
-func (w *ActorWrapper) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	// Call the underlying actor's Run method (new signature: returns (*apipb.Condition, error))
-	return w.actor.Run(ctx, resource, previousCondition)
-}
-
-func (w *ActorWrapper) Retrieve(ctx context.Context, resource *v2pb.Deployment, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	return w.actor.Retrieve(ctx, resource, previousCondition)
-}
-
-// GetType returns the actor type
-func (w *ActorWrapper) GetType() string {
-	return w.actor.GetType()
-}
-
-// OSSConditionsPlugin is a simple conditions plugin for OSS actors
-type OSSConditionsPlugin struct {
-	actors []plugins.ConditionActor
-}
-
-// GetActors returns the OSS actors
-func (p *OSSConditionsPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
-	// Convert to the expected interface
-	result := make([]conditionInterfaces.ConditionActor[*v2pb.Deployment], len(p.actors))
-	for i, actor := range p.actors {
-		result[i] = &ActorWrapper{actor: actor}
-	}
-	return result
-}
-
-// GetConditions returns the conditions from the deployment status
-func (p *OSSConditionsPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {
-	return resource.Status.Conditions
-}
-
-// PutCondition sets a condition in the deployment status
-func (p *OSSConditionsPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb.Condition) {
-	for i, existing := range resource.Status.Conditions {
-		if existing.Type == condition.Type {
-			resource.Status.Conditions[i] = condition
-			return
-		}
-	}
-	resource.Status.Conditions = append(resource.Status.Conditions, condition)
 }

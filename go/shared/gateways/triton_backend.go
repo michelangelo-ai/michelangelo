@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-logr/logr"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -24,19 +24,19 @@ import (
 
 // Triton Infrastructure Management
 
-func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
-	logger.Info("Creating Triton infrastructure", "server", request.InferenceServer.Name)
+func (g *gateway) createTritonInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
+	logger.Info("Creating Triton infrastructure", zap.String("server", request.InferenceServer.Name))
 
 	// Create routing resource - prefer HTTPRoute (Gateway API) over VirtualService (Istio-specific)
 	// Check if Gateway API is available by trying to create HTTPRoute first
 	if err := g.createInferenceServerHTTPRoute(ctx, logger, request); err != nil {
-		logger.Info("HTTPRoute creation failed, falling back to VirtualService", "error", err)
+		logger.Info("HTTPRoute creation failed, falling back to VirtualService", zap.Error(err))
 		// Fallback to VirtualService if HTTPRoute fails
 		if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
 			return nil, fmt.Errorf("failed to create both HTTPRoute and VirtualService: %w", err)
 		}
 	} else {
-		logger.Info("Successfully created HTTPRoute for inference server", "server", request.InferenceServer.Name)
+		logger.Info("Successfully created HTTPRoute for inference server", zap.String("server", request.InferenceServer.Name))
 	}
 
 	// Create Deployment
@@ -72,8 +72,8 @@ func (g *gateway) createTritonInfrastructure(ctx context.Context, logger logr.Lo
 	}, nil
 }
 
-func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
-	logger.Info("Getting Triton infrastructure status", "server", request.InferenceServer)
+func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger *zap.Logger, request InfrastructureStatusRequest) (*InfrastructureStatus, error) {
+	logger.Info("Getting Triton infrastructure status", zap.String("server", request.InferenceServer))
 
 	// Check deployment status
 	deployment := &appsv1.Deployment{}
@@ -95,7 +95,7 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 
 	if err := g.kubeClient.Get(ctx, configMapKey, configMap); err != nil {
 		// ConfigMap doesn't exist, infrastructure is incomplete
-		logger.Info("ConfigMap not found, infrastructure incomplete", "configMap", configMapName)
+		logger.Info("ConfigMap not found, infrastructure incomplete", zap.String("configMap", configMapName))
 		return &InfrastructureStatus{
 			State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 			Message: fmt.Sprintf("ConfigMap %s not found, infrastructure incomplete", configMapName),
@@ -121,8 +121,8 @@ func (g *gateway) getTritonInfrastructureStatus(ctx context.Context, logger logr
 	}, nil
 }
 
-func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureDeleteRequest) error {
-	logger.Info("Deleting Triton infrastructure", "server", request.InferenceServer)
+func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureDeleteRequest) error {
+	logger.Info("Deleting Triton infrastructure", zap.String("server", request.InferenceServer))
 
 	// Delete HTTPRoute (Gateway API)
 	httpRouteGVR := schema.GroupVersionResource{
@@ -132,9 +132,9 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 	}
 	httpRouteName := fmt.Sprintf("%s-httproute", request.InferenceServer)
 	if err := g.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
-		logger.Info("Failed to delete HTTPRoute (may not exist)", "name", httpRouteName, "error", err)
+		logger.Info("Failed to delete HTTPRoute (may not exist)", zap.String("name", httpRouteName), zap.Error(err))
 	} else {
-		logger.Info("HTTPRoute deleted successfully", "name", httpRouteName)
+		logger.Info("HTTPRoute deleted successfully", zap.String("name", httpRouteName))
 	}
 
 	// Delete VirtualService (fallback/legacy)
@@ -145,9 +145,9 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 	}
 	virtualServiceName := fmt.Sprintf("%s-virtualservice", request.InferenceServer)
 	if err := g.dynamicClient.Resource(virtualServiceGVR).Namespace(request.Namespace).Delete(ctx, virtualServiceName, metav1.DeleteOptions{}); err != nil {
-		logger.Info("Failed to delete VirtualService (may not exist)", "name", virtualServiceName, "error", err)
+		logger.Info("Failed to delete VirtualService (may not exist)", zap.String("name", virtualServiceName), zap.Error(err))
 	} else {
-		logger.Info("VirtualService deleted successfully", "name", virtualServiceName)
+		logger.Info("VirtualService deleted successfully", zap.String("name", virtualServiceName))
 	}
 
 	// Delete Deployment
@@ -158,7 +158,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		},
 	}
 	if err := g.kubeClient.Delete(ctx, deployment); err != nil {
-		logger.Error(err, "Failed to delete deployment")
+		logger.Error("Failed to delete deployment", zap.Error(err))
 	}
 
 	// Delete Service
@@ -169,14 +169,14 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 		},
 	}
 	if err := g.kubeClient.Delete(ctx, service); err != nil {
-		logger.Error(err, "Failed to delete service")
+		logger.Error("Failed to delete service", zap.Error(err))
 	}
 
 	// Delete ConfigMap using the gateway's ConfigMap deletion method
 	if err := g.DeleteModelConfigMap(ctx, logger, request.InferenceServer, request.Namespace); err != nil {
-		logger.Error(err, "Failed to delete ConfigMap")
+		logger.Error("Failed to delete ConfigMap", zap.Error(err))
 	} else {
-		logger.Info("ConfigMap deleted successfully", "name", fmt.Sprintf("%s-model-config", request.InferenceServer))
+		logger.Info("ConfigMap deleted successfully", zap.String("name", fmt.Sprintf("%s-model-config", request.InferenceServer)))
 	}
 
 	return nil
@@ -185,7 +185,7 @@ func (g *gateway) deleteTritonInfrastructure(ctx context.Context, logger logr.Lo
 // createTritonConfigMap has been moved to the ConfigMap provider
 // This backend no longer creates ConfigMaps directly
 
-func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createTritonDeployment(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	deploymentName := fmt.Sprintf("triton-%s", request.InferenceServer.Name)
 
 	// Check if Deployment already exists
@@ -193,7 +193,7 @@ func (g *gateway) createTritonDeployment(ctx context.Context, logger logr.Logger
 	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: request.Namespace}, existing)
 	if err == nil {
 		// Deployment already exists, log and return success
-		logger.Info("Deployment already exists, skipping creation", "name", deploymentName)
+		logger.Info("Deployment already exists, skipping creation", zap.String("name", deploymentName))
 		return nil
 	}
 
@@ -430,7 +430,7 @@ done`,
 	return g.kubeClient.Create(ctx, deployment)
 }
 
-func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createTritonService(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	serviceName := fmt.Sprintf("%s-inference-service", request.InferenceServer.Name)
 
 	// Check if Service already exists
@@ -438,7 +438,7 @@ func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, r
 	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: request.Namespace}, existing)
 	if err == nil {
 		// Service already exists, log and return success
-		logger.Info("Service already exists, skipping creation", "name", serviceName)
+		logger.Info("Service already exists, skipping creation", zap.String("name", serviceName))
 		return nil
 	}
 
@@ -472,7 +472,7 @@ func (g *gateway) createTritonService(ctx context.Context, logger logr.Logger, r
 	return g.kubeClient.Create(ctx, service)
 }
 
-func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "networking.istio.io",
 		Version:  "v1beta1",
@@ -484,7 +484,7 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 	// Check if VirtualService already exists
 	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, virtualServiceName, metav1.GetOptions{})
 	if err == nil {
-		logger.Info("VirtualService already exists, skipping creation", "name", virtualServiceName)
+		logger.Info("VirtualService already exists, skipping creation", zap.String("name", virtualServiceName))
 		return nil
 	}
 
@@ -535,16 +535,16 @@ func (g *gateway) createInferenceServerVirtualService(ctx context.Context, logge
 
 	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, vs, metav1.CreateOptions{})
 	if err != nil {
-		logger.Error(err, "Failed to create VirtualService")
+		logger.Error("Failed to create VirtualService", zap.Error(err))
 		return err
 	}
 
-	logger.Info("VirtualService created successfully", "name", virtualServiceName)
+	logger.Info("VirtualService created successfully", zap.String("name", virtualServiceName))
 	return nil
 }
 
 // createInferenceServerHTTPRoute creates a HTTPRoute for the inference server using generic Gateway API
-func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	gvr := schema.GroupVersionResource{
 		Group:    "gateway.networking.k8s.io",
 		Version:  "v1",
@@ -556,15 +556,15 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 	// Check if HTTPRoute already exists
 	existingHTTPRoute, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err == nil {
-		logger.Info("HTTPRoute already exists, checking if update needed", "name", httpRouteName)
+		logger.Info("HTTPRoute already exists, checking if update needed", zap.String("name", httpRouteName))
 
 		// Check if the existing HTTPRoute has the correct configuration
 		if needsHTTPRouteUpdate(existingHTTPRoute, request) {
-			logger.Info("HTTPRoute configuration outdated, updating", "name", httpRouteName)
+			logger.Info("HTTPRoute configuration outdated, updating", zap.String("name", httpRouteName))
 			return g.updateHTTPRoute(ctx, logger, existingHTTPRoute, request, gvr)
 		}
 
-		logger.Info("HTTPRoute configuration is up-to-date, skipping", "name", httpRouteName)
+		logger.Info("HTTPRoute configuration is up-to-date, skipping", zap.String("name", httpRouteName))
 		return nil
 	}
 
@@ -625,18 +625,18 @@ func (g *gateway) createInferenceServerHTTPRoute(ctx context.Context, logger log
 
 	_, err = g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, hr, metav1.CreateOptions{})
 	if err != nil {
-		logger.Error(err, "Failed to create HTTPRoute")
+		logger.Error("Failed to create HTTPRoute", zap.Error(err))
 		return err
 	}
 
-	logger.Info("HTTPRoute created successfully", "name", httpRouteName)
+	logger.Info("HTTPRoute created successfully", zap.String("name", httpRouteName))
 	return nil
 }
 
 // Triton Model Management
 
-func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, request ModelLoadRequest) error {
-	logger.Info("Loading Triton model explicitly", "model", request.ModelName, "server", request.InferenceServer)
+func (g *gateway) loadTritonModel(ctx context.Context, logger *zap.Logger, request ModelLoadRequest) error {
+	logger.Info("Loading Triton model explicitly", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// Call Triton /v2/repository/models/{model}/load endpoint
 	// Use localhost when running outside cluster (via bazel run)
@@ -674,12 +674,12 @@ func (g *gateway) loadTritonModel(ctx context.Context, logger logr.Logger, reque
 		return fmt.Errorf("Triton load failed with status %d: %s", resp.StatusCode, string(body))
 	}
 
-	logger.Info("Triton model loaded successfully", "model", request.ModelName)
+	logger.Info("Triton model loaded successfully", zap.String("model", request.ModelName))
 	return nil
 }
 
-func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (bool, error) {
-	logger.Info("Checking Triton model status", "model", request.ModelName, "server", request.InferenceServer)
+func (g *gateway) checkTritonModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (bool, error) {
+	logger.Info("Checking Triton model status", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// Call Triton /v2/models/{model}/ready endpoint with deployment-specific routing
 	// Use localhost when running outside cluster (via bazel run)
@@ -688,11 +688,12 @@ func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger
 
 	// Include deployment name in URL path for deployment-specific routing
 	var readyURL string
-	if request.DeploymentName != "" {
-		readyURL = fmt.Sprintf("%s/%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.DeploymentName, request.ModelName)
-	} else {
-		readyURL = fmt.Sprintf("%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.ModelName)
-	}
+	// if request.DeploymentName != "" {
+	// 	readyURL = fmt.Sprintf("%s/%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.DeploymentName, request.ModelName)
+	// } else {
+	// 	readyURL = fmt.Sprintf("%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.ModelName)
+	// }
+	readyURL = fmt.Sprintf("%s/%s/v2/models/%s/ready", serviceURL, request.InferenceServer, request.ModelName)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -712,12 +713,12 @@ func (g *gateway) checkTritonModelStatus(ctx context.Context, logger logr.Logger
 
 	// Model is ready if status is 200
 	ready := resp.StatusCode == http.StatusOK
-	logger.Info("Triton model ready status", "model", request.ModelName, "ready", ready, "statusCode", resp.StatusCode)
+	logger.Info("Triton model ready status", zap.String("model", request.ModelName), zap.Bool("ready", ready), zap.Int("statusCode", resp.StatusCode))
 	return ready, nil
 }
 
-func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, request ModelStatusRequest) (*ModelStatus, error) {
-	logger.Info("Getting Triton model status", "model", request.ModelName, "server", request.InferenceServer)
+func (g *gateway) getTritonModelStatus(ctx context.Context, logger *zap.Logger, request ModelStatusRequest) (*ModelStatus, error) {
+	logger.Info("Getting Triton model status", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// First check if model is ready
 	ready, err := g.checkTritonModelStatus(ctx, logger, request)
@@ -778,8 +779,8 @@ func (g *gateway) getTritonModelStatus(ctx context.Context, logger logr.Logger, 
 	}, nil
 }
 
-func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serverName string) (bool, error) {
-	logger.Info("Checking Triton health via Kubernetes pod status", "server", serverName)
+func (g *gateway) isTritonHealthy(ctx context.Context, logger *zap.Logger, serverName string) (bool, error) {
+	logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", serverName))
 
 	// Following Uber's approach: Check Kubernetes resource status instead of HTTP endpoints
 	// Get the Triton deployment status from Kubernetes
@@ -789,7 +790,7 @@ func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serve
 	deployment := &appsv1.Deployment{}
 	err := g.kubeClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
 	if err != nil {
-		logger.Info("Failed to get Triton deployment", "deployment", deploymentName, "error", err.Error())
+		logger.Info("Failed to get Triton deployment", zap.String("deployment", deploymentName), zap.Error(err))
 		return false, fmt.Errorf("failed to get deployment %s: %w", deploymentName, err)
 	}
 
@@ -797,30 +798,31 @@ func (g *gateway) isTritonHealthy(ctx context.Context, logger logr.Logger, serve
 	for _, condition := range deployment.Status.Conditions {
 		if condition.Type == appsv1.DeploymentAvailable {
 			if condition.Status == corev1.ConditionTrue {
-				logger.Info("Triton deployment is available", "server", serverName)
+				logger.Info("Triton deployment is available", zap.String("server", serverName))
 
 				// Also check if pods are ready (additional safety check)
 				if deployment.Status.ReadyReplicas > 0 && deployment.Status.ReadyReplicas == deployment.Status.Replicas {
-					logger.Info("Triton pods are ready", "server", serverName, "readyReplicas", deployment.Status.ReadyReplicas)
+					logger.Info("Triton pods are ready", zap.String("server", serverName), zap.Int("readyReplicas", int(deployment.Status.ReadyReplicas)))
 					return true, nil
 				} else {
 					logger.Info("Triton deployment available but pods not ready",
-						"server", serverName,
-						"readyReplicas", deployment.Status.ReadyReplicas,
-						"totalReplicas", deployment.Status.Replicas)
+						zap.String("server", serverName),
+						zap.Int("readyReplicas", int(deployment.Status.ReadyReplicas)),
+						zap.Int("totalReplicas", int(deployment.Status.Replicas)),
+					)
 					return false, fmt.Errorf("pods not ready: %d/%d", deployment.Status.ReadyReplicas, deployment.Status.Replicas)
 				}
 			} else {
 				logger.Info("Triton deployment not available",
-					"server", serverName,
-					"reason", condition.Reason,
-					"message", condition.Message)
+					zap.String("server", serverName),
+					zap.String("reason", condition.Reason),
+					zap.String("message", condition.Message))
 				return false, fmt.Errorf("deployment not available: %s", condition.Message)
 			}
 		}
 	}
 
-	logger.Info("Triton deployment status unclear", "server", serverName)
+	logger.Info("Triton deployment status unclear", zap.String("server", serverName))
 	return false, fmt.Errorf("deployment status unclear")
 }
 
@@ -928,12 +930,12 @@ func needsHTTPRouteUpdate(existingHTTPRoute *unstructured.Unstructured, request 
 }
 
 // updateHTTPRoute updates an existing HTTPRoute with the correct configuration
-func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, existingHTTPRoute *unstructured.Unstructured, request InfrastructureRequest, gvr schema.GroupVersionResource) error {
+func (g *gateway) updateHTTPRoute(ctx context.Context, logger *zap.Logger, existingHTTPRoute *unstructured.Unstructured, request InfrastructureRequest, gvr schema.GroupVersionResource) error {
 	// Delete the existing HTTPRoute and create a new one to avoid deep copy issues
-	logger.Info("Deleting existing HTTPRoute to recreate with correct configuration", "name", existingHTTPRoute.GetName())
+	logger.Info("Deleting existing HTTPRoute to recreate with correct configuration", zap.String("name", existingHTTPRoute.GetName()))
 
 	if err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Delete(ctx, existingHTTPRoute.GetName(), metav1.DeleteOptions{}); err != nil {
-		logger.Error(err, "Failed to delete existing HTTPRoute")
+		logger.Error("Failed to delete existing HTTPRoute", zap.Error(err))
 		return err
 	}
 
@@ -941,7 +943,7 @@ func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, exist
 	time.Sleep(100 * time.Millisecond)
 
 	// Create new HTTPRoute with baseline configuration
-	logger.Info("Creating new HTTPRoute with baseline configuration", "name", existingHTTPRoute.GetName())
+	logger.Info("Creating new HTTPRoute with baseline configuration", zap.String("name", existingHTTPRoute.GetName()))
 
 	hr := &unstructured.Unstructured{
 		Object: map[string]interface{}{
@@ -1000,10 +1002,10 @@ func (g *gateway) updateHTTPRoute(ctx context.Context, logger logr.Logger, exist
 
 	_, err := g.dynamicClient.Resource(gvr).Namespace(request.Namespace).Create(ctx, hr, metav1.CreateOptions{})
 	if err != nil {
-		logger.Error(err, "Failed to create new HTTPRoute")
+		logger.Error("Failed to create new HTTPRoute", zap.Error(err))
 		return err
 	}
 
-	logger.Info("HTTPRoute recreated successfully", "name", existingHTTPRoute.GetName())
+	logger.Info("HTTPRoute recreated successfully", zap.String("name", existingHTTPRoute.GetName()))
 	return nil
 }

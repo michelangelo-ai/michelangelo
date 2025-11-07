@@ -5,19 +5,21 @@ import (
 	"fmt"
 
 	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // LLMD Infrastructure Management
 
-func (g *gateway) createLLMDInfrastructure(ctx context.Context, logger logr.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
-	logger.Info("Creating LLMD infrastructure", "server", request.InferenceServer.Name)
+func (g *gateway) createLLMDInfrastructure(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) (*InfrastructureResponse, error) {
+	logger.Info("Creating LLMD infrastructure", zap.String("server", request.InferenceServer.Name))
 
 	// Create VirtualService first for fixed endpoint routing
 	if err := g.createInferenceServerVirtualService(ctx, logger, request); err != nil {
@@ -135,7 +137,7 @@ func (g *gateway) deleteLLMDInfrastructure(ctx context.Context, logger logr.Logg
 	return nil
 }
 
-func (g *gateway) createLLMDConfigMap(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createLLMDConfigMap(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-config", request.InferenceServer.Name),
@@ -149,7 +151,7 @@ func (g *gateway) createLLMDConfigMap(ctx context.Context, logger logr.Logger, r
 	return g.kubeClient.Create(ctx, configMap)
 }
 
-func (g *gateway) createLLMDDeployment(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createLLMDDeployment(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	replicas := request.Resources.Replicas
 	if replicas == 0 {
 		replicas = 1
@@ -221,7 +223,7 @@ func (g *gateway) createLLMDDeployment(ctx context.Context, logger logr.Logger, 
 	return g.kubeClient.Create(ctx, deployment)
 }
 
-func (g *gateway) createLLMDService(ctx context.Context, logger logr.Logger, request InfrastructureRequest) error {
+func (g *gateway) createLLMDService(ctx context.Context, logger *zap.Logger, request InfrastructureRequest) error {
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-service", request.InferenceServer.Name),

@@ -2,49 +2,43 @@ package steadystate
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ plugins.ConditionsPlugin = &conditionPlugin{}
+var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
 type conditionPlugin struct {
-	actors []plugins.ConditionActor
+	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
 // Params contains dependencies for steadystate plugin
 type Params struct {
 	Client  client.Client
 	Gateway gateways.Gateway
-	Logger  logr.Logger
+	Logger  *zap.Logger
 }
 
 // NewSteadyStatePlugin creates a new steady state plugin following Uber patterns
-func NewSteadyStatePlugin(ctx context.Context, p Params, deployment *v2pb.Deployment) (plugins.ConditionsPlugin, error) {
-	logger := p.Logger.WithValues("deployment", fmt.Sprintf("%s/%s", deployment.GetNamespace(), deployment.GetName()))
-
-	actors := []plugins.ConditionActor{
+func NewSteadyStatePlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
+	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&SteadyStateActor{
 			client:  p.Client,
 			gateway: p.Gateway,
-			logger:  logger,
+			logger:  p.Logger,
 		},
-	}
-
-	return &conditionPlugin{
-		actors: actors,
-	}, nil
+	}}
 }
 
 // GetActors returns all actors for this plugin
-func (p *conditionPlugin) GetActors() []plugins.ConditionActor {
+func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
@@ -68,7 +62,7 @@ func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *api
 type SteadyStateActor struct {
 	client  client.Client
 	gateway gateways.Gateway
-	logger  logr.Logger
+	logger  *zap.Logger
 }
 
 func (a *SteadyStateActor) GetType() string {
@@ -96,7 +90,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 }
 
 func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Monitoring steady state for deployment", "deployment", resource.Name)
+	a.logger.Info("Monitoring steady state for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
 		// In Uber's implementation, steady state monitoring involves:
@@ -109,7 +103,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
-			a.logger.Info("Deployment not healthy, investigating", "state", resource.Status.State)
+			a.logger.Info("Deployment not healthy, investigating", zap.String("state", resource.Status.State.String()))
 			// In a real implementation, this would check inference server health
 			// For now, assume we can restore to healthy state
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -119,12 +113,12 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 		if resource.Status.CurrentRevision != nil && resource.Spec.DesiredRevision != nil {
 			if resource.Status.CurrentRevision.Name != resource.Spec.DesiredRevision.Name {
 				a.logger.Info("Revision mismatch detected, needs reconciliation",
-					"current", resource.Status.CurrentRevision.Name,
-					"desired", resource.Spec.DesiredRevision.Name)
+					zap.String("current", resource.Status.CurrentRevision.Name),
+					zap.String("desired", resource.Spec.DesiredRevision.Name))
 			}
 		}
 
-		a.logger.Info("Deployment is in steady state", "deployment", resource.Name)
+		a.logger.Info("Deployment is in steady state", zap.String("deployment", resource.Name))
 	}
 
 	return &apipb.Condition{

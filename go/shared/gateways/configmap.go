@@ -6,21 +6,22 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/go-logr/logr"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/zap"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ConfigMapProvider manages ConfigMaps for inference servers
 type ConfigMapProvider struct {
 	kubeClient client.Client
-	logger     logr.Logger
+	logger     *zap.Logger
 }
 
 // NewConfigMapProvider creates a new ConfigMapProvider instance
-func NewConfigMapProvider(client client.Client, logger logr.Logger) *ConfigMapProvider {
+func NewConfigMapProvider(client client.Client, logger *zap.Logger) *ConfigMapProvider {
 	return &ConfigMapProvider{
 		kubeClient: client,
 		logger:     logger,
@@ -61,13 +62,13 @@ type ConfigMapRequest struct {
 func (p *ConfigMapProvider) CreateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
 	configMapName := fmt.Sprintf("%s-model-config", request.InferenceServer)
 
-	p.logger.Info("Creating model ConfigMap", "configMap", configMapName, "namespace", request.Namespace, "backend", request.BackendType)
+	p.logger.Info("Creating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace), zap.String("backend", request.BackendType.String()))
 
 	// Check if ConfigMap already exists
 	existing := &corev1.ConfigMap{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, existing)
 	if err == nil {
-		p.logger.Info("ConfigMap already exists, skipping creation", "name", configMapName)
+		p.logger.Info("ConfigMap already exists, skipping creation", zap.String("name", configMapName))
 		return nil
 	}
 
@@ -107,7 +108,7 @@ func (p *ConfigMapProvider) CreateModelConfigMap(ctx context.Context, request Co
 		return fmt.Errorf("failed to create ConfigMap: %w", err)
 	}
 
-	p.logger.Info("Model ConfigMap created successfully", "configMap", configMapName, "modelCount", len(request.ModelConfigs))
+	p.logger.Info("Model ConfigMap created successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(request.ModelConfigs)))
 	return nil
 }
 
@@ -116,7 +117,7 @@ func (p *ConfigMapProvider) CreateModelConfigMap(ctx context.Context, request Co
 func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
 	configMapName := fmt.Sprintf("%s-model-config", request.InferenceServer)
 
-	p.logger.Info("Updating model ConfigMap", "configMap", configMapName, "namespace", request.Namespace)
+	p.logger.Info("Updating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
 
 	// Get existing ConfigMap
 	configMap := &corev1.ConfigMap{}
@@ -134,7 +135,7 @@ func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request Co
 	var existingModelList []ModelConfigEntry
 	if data, exists := configMap.Data["model-list.json"]; exists && data != "" {
 		if parseErr := json.Unmarshal([]byte(data), &existingModelList); parseErr != nil {
-			p.logger.Error(parseErr, "Failed to parse existing model list, starting fresh")
+			p.logger.Error("Failed to parse existing model list, starting fresh", zap.Error(parseErr))
 			existingModelList = []ModelConfigEntry{}
 		}
 	}
@@ -176,7 +177,7 @@ func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request Co
 		return fmt.Errorf("failed to update ConfigMap %s: %w", configMapName, err)
 	}
 
-	p.logger.Info("Model ConfigMap updated successfully", "configMap", configMapName, "modelCount", len(updatedModelList))
+	p.logger.Info("Model ConfigMap updated successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(updatedModelList)))
 	return nil
 }
 
@@ -184,7 +185,7 @@ func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request Co
 func (p *ConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServerName, namespace string) error {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
-	p.logger.Info("Deleting model ConfigMap", "configMap", configMapName, "namespace", namespace)
+	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -197,7 +198,7 @@ func (p *ConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceS
 		return fmt.Errorf("failed to delete ConfigMap %s: %w", configMapName, err)
 	}
 
-	p.logger.Info("Model ConfigMap deleted successfully", "configMap", configMapName)
+	p.logger.Info("Model ConfigMap deleted successfully", zap.String("configMap", configMapName))
 	return nil
 }
 
@@ -205,7 +206,7 @@ func (p *ConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceS
 func (p *ConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServerName, namespace string) ([]ModelConfigEntry, error) {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
-	p.logger.Info("Getting model ConfigMap", "configMap", configMapName, "namespace", namespace)
+	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	configMap := &corev1.ConfigMap{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
@@ -215,7 +216,7 @@ func (p *ConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServ
 
 	modelListJSON, exists := configMap.Data["model-list.json"]
 	if !exists {
-		p.logger.Info("No model-list.json found in ConfigMap", "configMap", configMapName)
+		p.logger.Info("No model-list.json found in ConfigMap", zap.String("configMap", configMapName))
 		return []ModelConfigEntry{}, nil
 	}
 
@@ -224,7 +225,7 @@ func (p *ConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServ
 		return nil, fmt.Errorf("failed to parse model-list.json from ConfigMap %s: %w", configMapName, err)
 	}
 
-	p.logger.Info("Model ConfigMap retrieved successfully", "configMap", configMapName, "modelCount", len(modelConfigs))
+	p.logger.Info("Model ConfigMap retrieved successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(modelConfigs)))
 	return modelConfigs, nil
 }
 
@@ -312,20 +313,20 @@ func (p *ConfigMapProvider) RemoveModelFromConfig(ctx context.Context, inference
 // This adds entries directly to the shared model-config ConfigMap (no deployment-registry)
 func (p *ConfigMapProvider) UpdateDeploymentModel(ctx context.Context, inferenceServerName, namespace, deploymentName, modelName string, roleType string) error {
 	p.logger.Info("Updating deployment model directly in shared ConfigMap",
-		"inferenceServer", inferenceServerName,
-		"deployment", deploymentName,
-		"model", modelName,
-		"role", roleType)
+		zap.String("inferenceServer", inferenceServerName),
+		zap.String("deployment", deploymentName),
+		zap.String("model", modelName),
+		zap.String("role", roleType))
 
 	// Simply add the model to the shared ConfigMap
 	if modelName != "" {
 		if err := p.AddModelToConfig(ctx, inferenceServerName, namespace, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName)); err != nil {
-			p.logger.Error(err, "Failed to add model to shared ConfigMap", "model", modelName)
+			p.logger.Error("Failed to add model to shared ConfigMap", zap.String("model", modelName), zap.Error(err))
 			return fmt.Errorf("failed to add model to shared ConfigMap: %w", err)
 		}
 	}
 
-	p.logger.Info("Successfully updated deployment model in shared ConfigMap", "deployment", deploymentName, "model", modelName, "role", roleType)
+	p.logger.Info("Successfully updated deployment model in shared ConfigMap", zap.String("deployment", deploymentName), zap.String("model", modelName), zap.String("role", roleType))
 	return nil
 }
 
@@ -334,8 +335,8 @@ func (p *ConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, in
 	registryName := fmt.Sprintf("%s-deployment-registry", inferenceServerName)
 
 	p.logger.Info("Removing deployment from registry",
-		"registry", registryName,
-		"deployment", deploymentName)
+		zap.String("registry", registryName),
+		zap.String("deployment", deploymentName))
 
 	// Get deployment registry
 	registry, err := p.getDeploymentRegistry(ctx, registryName, namespace)
@@ -343,7 +344,7 @@ func (p *ConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, in
 		// If registry doesn't exist, deployment is already "removed"
 		if client.IgnoreNotFound(err) == nil {
 			p.logger.Info("Deployment registry not found, deployment already removed",
-				"registry", registryName, "deployment", deploymentName)
+				zap.String("registry", registryName), zap.String("deployment", deploymentName))
 			return nil
 		}
 		return fmt.Errorf("failed to get deployment registry: %w", err)
@@ -353,18 +354,18 @@ func (p *ConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, in
 	if registry.Deployments != nil {
 		if _, exists := registry.Deployments[deploymentName]; exists {
 			delete(registry.Deployments, deploymentName)
-			p.logger.Info("Deployment removed from registry", "deployment", deploymentName)
+			p.logger.Info("Deployment removed from registry", zap.String("deployment", deploymentName))
 
 			// Save updated registry back to ConfigMap
 			if err := p.saveDeploymentRegistry(ctx, registryName, namespace, registry); err != nil {
 				return fmt.Errorf("failed to save deployment registry after removal: %w", err)
 			}
 		} else {
-			p.logger.Info("Deployment not found in registry, no removal needed", "deployment", deploymentName)
+			p.logger.Info("Deployment not found in registry, no removal needed", zap.String("deployment", deploymentName))
 		}
 	}
 
-	p.logger.Info("Successfully removed deployment from UCS registry", "deployment", deploymentName)
+	p.logger.Info("Successfully removed deployment from UCS registry", zap.String("deployment", deploymentName))
 	return nil
 }
 
@@ -382,7 +383,7 @@ func (p *ConfigMapProvider) GetActiveModelsForInferenceServer(ctx context.Contex
 	// Collect all unique models across all deployments
 	activeModels := make(map[string]bool)
 	for deploymentName, models := range registry.Deployments {
-		p.logger.Info("Checking deployment models", "deployment", deploymentName, "current", models.Current, "candidate", models.Candidate, "shadow", models.Shadow)
+		p.logger.Info("Checking deployment models", zap.String("deployment", deploymentName), zap.String("current", models.Current), zap.String("candidate", models.Candidate), zap.String("shadow", models.Shadow))
 
 		if models.Current != "" {
 			activeModels[models.Current] = true
@@ -401,14 +402,14 @@ func (p *ConfigMapProvider) GetActiveModelsForInferenceServer(ctx context.Contex
 		result = append(result, model)
 	}
 
-	p.logger.Info("Active models for inference server", "inferenceServer", inferenceServerName, "activeModels", result)
+	p.logger.Info("Active models for inference server", zap.String("inferenceServer", inferenceServerName), zap.Int("activeModels", len(result)))
 	return result, nil
 }
 
 // CleanupUnusedModels removes models from ConfigMap that are not used by any deployment
 // This is the safe cleanup function that mimics Uber's asset lifecycle management
 func (p *ConfigMapProvider) CleanupUnusedModels(ctx context.Context, inferenceServerName, namespace string) error {
-	p.logger.Info("Starting cleanup of unused models", "inferenceServer", inferenceServerName)
+	p.logger.Info("Starting cleanup of unused models", zap.String("inferenceServer", inferenceServerName))
 
 	// Get currently active models across all deployments
 	activeModels, err := p.GetActiveModelsForInferenceServer(ctx, inferenceServerName, namespace)
@@ -443,14 +444,14 @@ func (p *ConfigMapProvider) CleanupUnusedModels(ctx context.Context, inferenceSe
 	}
 
 	if len(removedModels) == 0 {
-		p.logger.Info("No unused models found, cleanup complete", "inferenceServer", inferenceServerName)
+		p.logger.Info("No unused models found, cleanup complete", zap.String("inferenceServer", inferenceServerName))
 		return nil
 	}
 
 	p.logger.Info("Removing unused models from ConfigMap",
-		"inferenceServer", inferenceServerName,
-		"removedModels", removedModels,
-		"activeModels", activeModels)
+		zap.String("inferenceServer", inferenceServerName),
+		zap.Int("removedModels", len(removedModels)),
+		zap.Int("activeModels", len(activeModels)))
 
 	// Update ConfigMap with cleaned model list
 	request := ConfigMapRequest{
@@ -551,19 +552,19 @@ func (p *ConfigMapProvider) saveDeploymentRegistry(ctx context.Context, registry
 // This method merges the deployment registry state with the model config,
 // ensuring the model-config ConfigMap reflects all active models from all deployments
 func (p *ConfigMapProvider) FlushMergedStateToModelConfig(ctx context.Context, inferenceServerName, namespace string) error {
-	p.logger.Info("UCS FLUSH: Merging deployment registry state to model config", "inferenceServer", inferenceServerName)
+	p.logger.Info("UCS FLUSH: Merging deployment registry state to model config", zap.String("inferenceServer", inferenceServerName))
 
 	// Get active models from deployment registry (like Uber's generateTrackedModels)
 	activeModels, err := p.GetActiveModelsForInferenceServer(ctx, inferenceServerName, namespace)
 	if err != nil {
-		p.logger.Error(err, "Failed to get active models from deployment registry")
+		p.logger.Error("Failed to get active models from deployment registry", zap.Error(err))
 		return fmt.Errorf("failed to get active models: %w", err)
 	}
 
 	// Get current model config
 	currentConfigs, err := p.GetModelConfigMap(ctx, inferenceServerName, namespace)
 	if err != nil {
-		p.logger.Error(err, "Failed to get current model config")
+		p.logger.Error("Failed to get current model config", zap.Error(err))
 		return fmt.Errorf("failed to get current model config: %w", err)
 	}
 
@@ -595,10 +596,10 @@ func (p *ConfigMapProvider) FlushMergedStateToModelConfig(ctx context.Context, i
 	}
 
 	p.logger.Info("UCS FLUSH: Merged model configuration",
-		"inferenceServer", inferenceServerName,
-		"activeModels", len(activeModels),
-		"currentConfigs", len(currentConfigs),
-		"mergedConfigs", len(mergedConfigs))
+		zap.String("inferenceServer", inferenceServerName),
+		zap.Int("activeModels", len(activeModels)),
+		zap.Int("currentConfigs", len(currentConfigs)),
+		zap.Int("mergedConfigs", len(mergedConfigs)))
 
 	// Update model config with merged state (like Uber's UCS flush)
 	request := ConfigMapRequest{
@@ -611,6 +612,6 @@ func (p *ConfigMapProvider) FlushMergedStateToModelConfig(ctx context.Context, i
 		return fmt.Errorf("failed to flush merged state to model config: %w", err)
 	}
 
-	p.logger.Info("UCS FLUSH: Successfully flushed merged state to model config", "inferenceServer", inferenceServerName)
+	p.logger.Info("UCS FLUSH: Successfully flushed merged state to model config", zap.String("inferenceServer", inferenceServerName))
 	return nil
 }
