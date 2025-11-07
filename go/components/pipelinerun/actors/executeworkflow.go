@@ -95,8 +95,25 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
 	}
 	if metadata := previousCondition.GetMetadata(); metadata != nil {
-		if attemptsValue, exists := metadata.Value["attempts"]; exists && attemptsValue == "3" {
-			// Handle the case where attempts == "3"
+		// Unmarshal the Any type to a struct that contains the attempts field
+		var metadataStruct pbtypes.Struct
+		if err := pbtypes.UnmarshalAny(metadata, &metadataStruct); err == nil {
+			if attemptsValue, exists := metadataStruct.Fields["attempts"]; exists {
+				// attempts is always stored as NumberValue in the condition engine
+				if numberVal := attemptsValue.GetNumberValue(); int32(numberVal) == 3 {
+					// Handle the case where attempts == 3
+					executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+					executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+					executeWorkflowStep.Message = fmt.Sprintf("Failed after 3 retry attempts: %v", err)
+
+					return &apipb.Condition{
+						Type:    ExecuteWorkflowType,
+						Status:  apipb.CONDITION_STATUS_FALSE,
+						Reason:  "retry_exhausted",
+						Message: fmt.Sprintf("Failed after 3 retry attempts: %v", err),
+					}, nil
+				}
+			}
 		}
 	}
 

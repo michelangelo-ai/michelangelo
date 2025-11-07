@@ -5,11 +5,9 @@ import (
 	"fmt"
 	"reflect"
 
-	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
-	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -56,14 +54,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		logger.Info("Setting pipeline to FAILED after retry exhaustion")
 		// When engine returns error after exhausting retries, set pipeline to FAILED
 		pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
-
-		// Update execute workflow step with failure information
-		executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
-		if executeWorkflowStep != nil {
-			executeWorkflowStep.State = v2pb.PIPELINE_RUN_STEP_STATE_FAILED
-			executeWorkflowStep.EndTime = pbtypes.TimestampNow()
-			executeWorkflowStep.Message = fmt.Sprintf("Failed after 3 retry attempts: %v", err)
-		}
 
 		// Set a terminal condition for ExecuteWorkflow actor so it stops retrying
 		r.plugin.PutCondition(pipelineRun, &apipb.Condition{
