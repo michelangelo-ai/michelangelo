@@ -11,19 +11,20 @@ from ai.chronon.group_by import (
     Operation,
     Window,
     TimeUnit,
-    Accuracy
+    Accuracy,
 )
 from ai.chronon.utils import get_staging_query_output_table_name
-from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import base_table
+from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
+    base_table,
+)
 
 # Source for author-level features
 author_performance_source = Source(
     events=EventSource(
         table=get_staging_query_output_table_name(base_table),
         query=Query(
-            selects=select("book_authors", "review_score", "book_id"),
-            time_column="ts"
-        )
+            selects=select("book_authors", "review_score", "book_id"), time_column="ts"
+        ),
     )
 )
 
@@ -39,8 +40,8 @@ author_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Average rating for author's books
         Aggregation(
@@ -49,8 +50,8 @@ author_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Total reviews for author's books (popularity)
         Aggregation(
@@ -59,11 +60,11 @@ author_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
-        )
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
+        ),
     ],
-    accuracy=Accuracy.TEMPORAL
+    accuracy=Accuracy.TEMPORAL,
 )
 
 # Source for category/genre performance
@@ -72,8 +73,8 @@ category_performance_source = Source(
         table=get_staging_query_output_table_name(base_table),
         query=Query(
             selects=select("book_categories", "review_score", "book_id"),
-            time_column="ts"
-        )
+            time_column="ts",
+        ),
     )
 )
 
@@ -89,8 +90,8 @@ category_features = GroupBy(
             windows=[
                 Window(length=7, timeUnit=TimeUnit.DAYS),
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Average rating for category
         Aggregation(
@@ -99,8 +100,8 @@ category_features = GroupBy(
             windows=[
                 Window(length=7, timeUnit=TimeUnit.DAYS),
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Category engagement (total reviews)
         Aggregation(
@@ -109,8 +110,8 @@ category_features = GroupBy(
             windows=[
                 Window(length=7, timeUnit=TimeUnit.DAYS),
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Category rating variance (controversial vs unanimous)
         Aggregation(
@@ -118,11 +119,11 @@ category_features = GroupBy(
             operation=Operation.VARIANCE,
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
-        )
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
+        ),
     ],
-    accuracy=Accuracy.TEMPORAL
+    accuracy=Accuracy.TEMPORAL,
 )
 
 # Source for publisher performance
@@ -131,8 +132,8 @@ publisher_performance_source = Source(
         table=get_staging_query_output_table_name(base_table),
         query=Query(
             selects=select("book_publisher", "review_score", "book_id"),
-            time_column="ts"
-        )
+            time_column="ts",
+        ),
     )
 )
 
@@ -148,8 +149,8 @@ publisher_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Average rating for publisher's books
         Aggregation(
@@ -158,8 +159,8 @@ publisher_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Publisher popularity (total reviews)
         Aggregation(
@@ -168,9 +169,9 @@ publisher_features = GroupBy(
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
                 Window(length=90, timeUnit=TimeUnit.DAYS),
-                Window(length=365, timeUnit=TimeUnit.DAYS)
-            ]
-        )
+                Window(length=365, timeUnit=TimeUnit.DAYS),
+            ],
+        ),
     ],
-    accuracy=Accuracy.TEMPORAL
+    accuracy=Accuracy.TEMPORAL,
 )

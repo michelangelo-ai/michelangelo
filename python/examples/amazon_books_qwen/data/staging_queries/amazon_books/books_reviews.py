@@ -11,7 +11,7 @@ base_table = StagingQuery(
     metaData=MetaData(
         name="amazon_books.books_reviews",
         team="amazon_books",
-        description="Base table for Amazon Books feature computation"
+        description="Base table for Amazon Books feature computation",
     ),
     query="""
         SELECT
@@ -25,5 +25,5 @@ base_table = StagingQuery(
         WHERE reviews.`review/time` IS NOT NULL
         AND reviews.`review/score` IS NOT NULL
         AND books.Title IS NOT NULL
-    """
+    """,
 )

@@ -46,13 +46,13 @@ def amazon_books_qwen_workflow(sample_size=100):
         train_dv=train_dv,
         val_dv=val_dv,
         test_dv=test_dv,
-        embedding_dim=512,       # Start with reasonable size for local testing
-        batch_size=16,           # Batch size
+        embedding_dim=512,  # Start with reasonable size for local testing
+        batch_size=16,  # Batch size
         learning_rate=2e-5,
-        num_epochs=2,            # 2 epochs for testing
-        num_workers=1,           # Local: 1, Distributed: 2+
-        use_gpu=False,           # Set to True if GPU available
-        distributed=False        # Set to True for distributed training
+        num_epochs=2,  # 2 epochs for testing
+        num_workers=1,  # Local: 1, Distributed: 2+
+        use_gpu=False,  # Set to True if GPU available
+        distributed=False,  # Set to True for distributed training
     )
 
     return model_result

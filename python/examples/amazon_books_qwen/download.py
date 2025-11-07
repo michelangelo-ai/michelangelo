@@ -27,7 +27,7 @@ from pyspark.sql.functions import col
     )
 )
 def download_kaggle_dataset(
-    dataset_config: Dict[str, Any]
+    dataset_config: Dict[str, Any],
 ) -> Tuple[Optional[DatasetVariable], Optional[DatasetVariable]]:
     """
     Download Amazon Books dataset from Kaggle using SparkTask
@@ -40,12 +40,19 @@ def download_kaggle_dataset(
 
     # Set environment variables to disable checksum creation BEFORE Spark session starts
     import os
-    os.environ["SPARK_CONF_spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs"] = "false"
+
+    os.environ[
+        "SPARK_CONF_spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs"
+    ] = "false"
     os.environ["SPARK_CONF_spark.hadoop.dfs.client.write.checksum"] = "false"
     os.environ["SPARK_CONF_spark.hadoop.dfs.checksum"] = "false"
     os.environ["SPARK_CONF_spark.hadoop.dfs.client.read.checksum"] = "false"
-    os.environ["SPARK_CONF_spark.hadoop.fs.file.impl"] = "org.apache.hadoop.fs.RawLocalFileSystem"
-    os.environ["SPARK_CONF_spark.hadoop.fs.AbstractFileSystem.file.impl"] = "org.apache.hadoop.fs.local.RawLocalFs"
+    os.environ["SPARK_CONF_spark.hadoop.fs.file.impl"] = (
+        "org.apache.hadoop.fs.RawLocalFileSystem"
+    )
+    os.environ["SPARK_CONF_spark.hadoop.fs.AbstractFileSystem.file.impl"] = (
+        "org.apache.hadoop.fs.local.RawLocalFs"
+    )
 
     # First, try to use local dataset files
     script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -55,23 +62,38 @@ def download_kaggle_dataset(
     # Get Spark session from SparkTask framework
     spark = SparkSession.getActiveSession()
     if spark == None:
-        spark = SparkSession.builder \
-            .appName("AmazonBooksDownload") \
-            .config("spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false") \
-            .config("spark.hadoop.dfs.client.write.checksum", "false") \
-            .config("spark.hadoop.dfs.checksum", "false") \
-            .config("spark.hadoop.dfs.client.read.checksum", "false") \
-            .config("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem") \
-            .config("spark.hadoop.fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.RawLocalFs") \
+        spark = (
+            SparkSession.builder.appName("AmazonBooksDownload")
+            .config(
+                "spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false"
+            )
+            .config("spark.hadoop.dfs.client.write.checksum", "false")
+            .config("spark.hadoop.dfs.checksum", "false")
+            .config("spark.hadoop.dfs.client.read.checksum", "false")
+            .config(
+                "spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem"
+            )
+            .config(
+                "spark.hadoop.fs.AbstractFileSystem.file.impl",
+                "org.apache.hadoop.fs.local.RawLocalFs",
+            )
             .getOrCreate()
+        )
 
     # Always set the configuration to ensure it's applied
-    spark.conf.set("spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false")
+    spark.conf.set(
+        "spark.hadoop.mapreduce.fileoutputcommitter.marksuccessfuljobs", "false"
+    )
     spark.conf.set("spark.hadoop.dfs.client.write.checksum", "false")
     spark.conf.set("spark.hadoop.dfs.checksum", "false")
     spark.conf.set("spark.hadoop.dfs.client.read.checksum", "false")
-    spark.conf.set("spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem")
-    spark.conf.set("spark.hadoop.fs.AbstractFileSystem.file.impl", "org.apache.hadoop.fs.local.RawLocalFs")
+    spark.conf.set(
+        "spark.hadoop.fs.file.impl", "org.apache.hadoop.fs.RawLocalFileSystem"
+    )
+    spark.conf.set(
+        "spark.hadoop.fs.AbstractFileSystem.file.impl",
+        "org.apache.hadoop.fs.local.RawLocalFs",
+    )
 
     # Check for local datasets first
     local_books_file = os.path.join(local_dataset_path, "books_data.csv")
@@ -87,8 +109,12 @@ def download_kaggle_dataset(
         print("📁 Found local dataset files, using them instead of downloading")
         books_file = local_books_file
         reviews_file = local_reviews_file
-        print(f"📚 Using local books file: {books_file} ({os.path.getsize(books_file)} bytes)")
-        print(f"📝 Using local reviews file: {reviews_file} ({os.path.getsize(reviews_file)} bytes)")
+        print(
+            f"📚 Using local books file: {books_file} ({os.path.getsize(books_file)} bytes)"
+        )
+        print(
+            f"📝 Using local reviews file: {reviews_file} ({os.path.getsize(reviews_file)} bytes)"
+        )
     else:
         print("📁 Local dataset files not found, will download from Kaggle")
 
@@ -115,18 +141,22 @@ def download_kaggle_dataset(
         for attempt in range(max_retries):
             try:
                 # Download without auto-unzip first
-                api.dataset_download_files(dataset_name, path=download_path, unzip=False)
+                api.dataset_download_files(
+                    dataset_name, path=download_path, unzip=False
+                )
 
                 # Find the downloaded zip file
-                zip_files = [f for f in os.listdir(download_path) if f.endswith('.zip')]
+                zip_files = [f for f in os.listdir(download_path) if f.endswith(".zip")]
                 if not zip_files:
                     raise Exception("No zip file found after download")
 
                 zip_path = os.path.join(download_path, zip_files[0])
-                print(f"🔍 Downloaded zip file: {zip_path} ({os.path.getsize(zip_path)} bytes)")
+                print(
+                    f"🔍 Downloaded zip file: {zip_path} ({os.path.getsize(zip_path)} bytes)"
+                )
 
                 # Manually extract the zip file with better error handling
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(download_path)
 
                 # Remove the zip file after extraction
@@ -149,7 +179,9 @@ def download_kaggle_dataset(
         # Verify files were downloaded
         if not (os.path.exists(books_file) and os.path.exists(reviews_file)):
             print(f"❌ Download failed: Expected files not found in {download_path}")
-            print(f"📂 Available files: {os.listdir(download_path) if os.path.exists(download_path) else 'None'}")
+            print(
+                f"📂 Available files: {os.listdir(download_path) if os.path.exists(download_path) else 'None'}"
+            )
             return None, None
     else:
         print("✅ Dataset already exists, skipping download")
@@ -170,7 +202,9 @@ def download_kaggle_dataset(
     book_title_list = [row.Title for row in book_titles]
     reviews_df = reviews_df_full.filter(col("Title").isin(book_title_list)).limit(500)
 
-    print(f"📊 Successfully loaded {books_df.count()} books and {reviews_df.count()} reviews")
+    print(
+        f"📊 Successfully loaded {books_df.count()} books and {reviews_df.count()} reviews"
+    )
 
     # Convert to DatasetVariable following boston_housing pattern
     books_dv = DatasetVariable.create(books_df)

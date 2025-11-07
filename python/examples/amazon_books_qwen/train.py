@@ -33,12 +33,14 @@ class QwenDualEncoder(nn.Module):
     Implements query and document towers with shared/separate Qwen backbones
     """
 
-    def __init__(self,
-                 model_name: str = "Qwen/Qwen2.5-1.5B",
-                 embedding_dim: int = 1536,
-                 max_query_length: int = 128,
-                 max_doc_length: int = 512,
-                 shared_encoder: bool = False):
+    def __init__(
+        self,
+        model_name: str = "Qwen/Qwen2.5-1.5B",
+        embedding_dim: int = 1536,
+        max_query_length: int = 128,
+        max_doc_length: int = 512,
+        shared_encoder: bool = False,
+    ):
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -76,17 +78,21 @@ class QwenDualEncoder(nn.Module):
             max_length=self.max_query_length,
             truncation=True,
             padding=True,
-            return_tensors="pt"
+            return_tensors="pt",
         )
 
         # Pass through query encoder
         query_outputs = self.query_encoder(**query_inputs)
 
         # Sum pooling over all tokens (as per Qwen spec)
-        query_embeddings = query_outputs.last_hidden_state.sum(dim=1)  # [batch_size, hidden_size]
+        query_embeddings = query_outputs.last_hidden_state.sum(
+            dim=1
+        )  # [batch_size, hidden_size]
 
         # Project to target embedding dimension
-        query_embeddings = self.query_projection(query_embeddings)  # [batch_size, embedding_dim]
+        query_embeddings = self.query_projection(
+            query_embeddings
+        )  # [batch_size, embedding_dim]
 
         # Normalize embeddings
         query_embeddings = F.normalize(query_embeddings, p=2, dim=1)
@@ -101,17 +107,21 @@ class QwenDualEncoder(nn.Module):
             max_length=self.max_doc_length,
             truncation=True,
             padding=True,
-            return_tensors="pt"
+            return_tensors="pt",
         )
 
         # Pass through document encoder
         doc_outputs = self.doc_encoder(**doc_inputs)
 
         # Sum pooling over all tokens
-        doc_embeddings = doc_outputs.last_hidden_state.sum(dim=1)  # [batch_size, hidden_size]
+        doc_embeddings = doc_outputs.last_hidden_state.sum(
+            dim=1
+        )  # [batch_size, hidden_size]
 
         # Project to target embedding dimension
-        doc_embeddings = self.doc_projection(doc_embeddings)  # [batch_size, embedding_dim]
+        doc_embeddings = self.doc_projection(
+            doc_embeddings
+        )  # [batch_size, embedding_dim]
 
         # Normalize embeddings
         doc_embeddings = F.normalize(doc_embeddings, p=2, dim=1)
@@ -146,7 +156,9 @@ class InfoNCELoss(nn.Module):
             labels: [batch_size] - 1 for positive pairs, 0 for negative
         """
         # Compute similarity matrix
-        similarities = torch.matmul(query_embeddings, doc_embeddings.T) / self.temperature
+        similarities = (
+            torch.matmul(query_embeddings, doc_embeddings.T) / self.temperature
+        )
 
         # Create targets for positive pairs
         batch_size = similarities.size(0)
@@ -156,7 +168,6 @@ class InfoNCELoss(nn.Module):
         loss = F.cross_entropy(similarities, targets)
 
         return loss
-
 
 
 def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
@@ -179,7 +190,7 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
         model_name=model_config.get("model_name", "Qwen/Qwen2.5-1.5B"),
         embedding_dim=model_config.get("embedding_dim", 1536),
         max_query_length=model_config.get("max_query_length", 128),
-        max_doc_length=model_config.get("max_doc_length", 512)
+        max_doc_length=model_config.get("max_doc_length", 512),
     )
 
     # Wrap model with Ray's distributed data parallel
@@ -188,8 +199,7 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
     # Setup loss and optimizer
     criterion = InfoNCELoss(temperature=training_config.get("temperature", 0.05))
     optimizer = torch.optim.AdamW(
-        model.parameters(),
-        lr=training_config.get("learning_rate", 2e-5)
+        model.parameters(), lr=training_config.get("learning_rate", 2e-5)
     )
 
     # Get Ray datasets
@@ -203,12 +213,16 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
     model.train()
 
     for epoch in range(num_epochs):
-        print(f"Worker {ray.train.get_context().get_world_rank()}: Epoch {epoch + 1}/{num_epochs}")
+        print(
+            f"Worker {ray.train.get_context().get_world_rank()}: Epoch {epoch + 1}/{num_epochs}"
+        )
 
         epoch_losses = []
 
         # Iterate through Ray dataset in batches
-        for batch_idx, batch in enumerate(train_dataset.iter_batches(batch_size=batch_size, batch_format="pandas")):
+        for batch_idx, batch in enumerate(
+            train_dataset.iter_batches(batch_size=batch_size, batch_format="pandas")
+        ):
             # Extract data
             queries = batch["query"].tolist()
             documents = batch["document"].tolist()
@@ -229,7 +243,9 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
 
             # Log progress
             if batch_idx % 10 == 0:
-                print(f"Worker {ray.train.get_context().get_world_rank()}: Batch {batch_idx}, Loss: {loss.item():.4f}")
+                print(
+                    f"Worker {ray.train.get_context().get_world_rank()}: Batch {batch_idx}, Loss: {loss.item():.4f}"
+                )
 
         avg_epoch_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0
 
@@ -238,7 +254,9 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
         val_losses = []
 
         with torch.no_grad():
-            for batch in val_dataset.iter_batches(batch_size=batch_size, batch_format="pandas"):
+            for batch in val_dataset.iter_batches(
+                batch_size=batch_size, batch_format="pandas"
+            ):
                 queries = batch["query"].tolist()
                 documents = batch["document"].tolist()
                 labels = torch.tensor(batch["label"].values, dtype=torch.long)
@@ -250,28 +268,31 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
         avg_val_loss = sum(val_losses) / len(val_losses) if val_losses else 0
 
         # Report metrics to Ray Train
-        ray.train.report({
-            "epoch": epoch + 1,
-            "train_loss": avg_epoch_loss,
-            "val_loss": avg_val_loss,
-        })
+        ray.train.report(
+            {
+                "epoch": epoch + 1,
+                "train_loss": avg_epoch_loss,
+                "val_loss": avg_val_loss,
+            }
+        )
 
         # Save checkpoint
-        checkpoint = Checkpoint.from_dict({
-            "model_state_dict": model.module.state_dict() if hasattr(model, 'module') else model.state_dict(),
-            "optimizer_state_dict": optimizer.state_dict(),
-            "epoch": epoch,
-            "train_loss": avg_epoch_loss,
-            "val_loss": avg_val_loss
-        })
+        checkpoint = Checkpoint.from_dict(
+            {
+                "model_state_dict": model.module.state_dict()
+                if hasattr(model, "module")
+                else model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "epoch": epoch,
+                "train_loss": avg_epoch_loss,
+                "val_loss": avg_val_loss,
+            }
+        )
         ray.train.report({}, checkpoint=checkpoint)
 
         model.train()
 
-    return {
-        "final_train_loss": avg_epoch_loss,
-        "final_val_loss": avg_val_loss
-    }
+    return {"final_train_loss": avg_epoch_loss, "final_val_loss": avg_val_loss}
 
 
 def _convert_spark_to_ray_dataset(spark_df):
@@ -283,7 +304,9 @@ def _convert_spark_to_ray_dataset(spark_df):
 
         # Convert Pandas DataFrame to Ray Dataset
         ray_dataset = ray.data.from_pandas(pandas_df)
-        log.info(f"Converted Pandas DataFrame to Ray Dataset: {ray_dataset.count()} rows")
+        log.info(
+            f"Converted Pandas DataFrame to Ray Dataset: {ray_dataset.count()} rows"
+        )
 
         return ray_dataset
     except Exception as e:
@@ -299,7 +322,9 @@ def _convert_spark_to_ray_dataset(spark_df):
         worker_memory="8Gi",
         worker_instances=1,  # Default to 1 for local, can be increased for distributed
         # worker_gpu=1,  # Uncomment for GPU training
-        runtime_env={"pip": ["transformers", "torch", "scikit-learn", "numpy", "pandas"]}
+        runtime_env={
+            "pip": ["transformers", "torch", "scikit-learn", "numpy", "pandas"]
+        },
     )
 )
 def train_dual_encoder(
@@ -313,7 +338,7 @@ def train_dual_encoder(
     temperature: float = 0.05,
     num_workers: int = 1,  # Default to 1 for local training
     use_gpu: bool = False,  # Default to False, can be set to True if GPU available
-    distributed: bool = False  # Default to False for local training
+    distributed: bool = False,  # Default to False for local training
 ) -> Dict[str, Any]:
     """
     Unified Qwen dual encoder training function
@@ -335,7 +360,9 @@ def train_dual_encoder(
     Returns:
         Dictionary with training metrics and model info
     """
-    log.info(f"Starting Qwen dual encoder training - Distributed: {distributed}, GPU: {use_gpu}, Workers: {num_workers}")
+    log.info(
+        f"Starting Qwen dual encoder training - Distributed: {distributed}, GPU: {use_gpu}, Workers: {num_workers}"
+    )
 
     # Load DatasetVariables as Ray Datasets following boston_housing pattern
     log.info("Loading DatasetVariables as Ray Datasets...")
@@ -357,29 +384,52 @@ def train_dual_encoder(
         "0.6B": "Qwen/Qwen2.5-0.6B",
         "1.5B": "Qwen/Qwen2.5-1.5B",
         "8B": "Qwen/Qwen2.5-8B",
-        "local": "distilbert-base-uncased"  # Lightweight model for local testing
+        "local": "distilbert-base-uncased",  # Lightweight model for local testing
     }
     model_name = model_name_map.get(qwen_model_size, "Qwen/Qwen2.5-1.5B")
 
     # Use distributed training if requested and multiple workers
     if distributed and num_workers > 1:
         return _train_distributed(
-            train_data, val_data, test_data,
-            model_name, embedding_dim, batch_size, learning_rate,
-            num_epochs, temperature, num_workers, use_gpu
+            train_data,
+            val_data,
+            test_data,
+            model_name,
+            embedding_dim,
+            batch_size,
+            learning_rate,
+            num_epochs,
+            temperature,
+            num_workers,
+            use_gpu,
         )
     else:
         return _train_local(
-            train_data, val_data, test_data,
-            model_name, embedding_dim, batch_size, learning_rate,
-            num_epochs, temperature, use_gpu
+            train_data,
+            val_data,
+            test_data,
+            model_name,
+            embedding_dim,
+            batch_size,
+            learning_rate,
+            num_epochs,
+            temperature,
+            use_gpu,
         )
 
 
 def _train_distributed(
-    train_data: Dataset, val_data: Dataset, test_data: Dataset,
-    model_name: str, embedding_dim: int, batch_size: int, learning_rate: float,
-    num_epochs: int, temperature: float, num_workers: int, use_gpu: bool
+    train_data: Dataset,
+    val_data: Dataset,
+    test_data: Dataset,
+    model_name: str,
+    embedding_dim: int,
+    batch_size: int,
+    learning_rate: float,
+    num_epochs: int,
+    temperature: float,
+    num_workers: int,
+    use_gpu: bool,
 ) -> Dict[str, Any]:
     """Distributed training using Ray TorchTrainer"""
     log.info(f"Starting Ray distributed training with {num_workers} workers")
@@ -390,14 +440,14 @@ def _train_distributed(
             "model_name": model_name,
             "embedding_dim": embedding_dim,
             "max_query_length": int(os.environ.get("MAX_QUERY_LENGTH", "128")),
-            "max_doc_length": int(os.environ.get("MAX_DOC_LENGTH", "512"))
+            "max_doc_length": int(os.environ.get("MAX_DOC_LENGTH", "512")),
         },
         "training_config": {
             "batch_size": batch_size,
             "learning_rate": learning_rate,
             "num_epochs": num_epochs,
-            "temperature": temperature
-        }
+            "temperature": temperature,
+        },
     }
 
     # Setup Ray distributed training
@@ -407,8 +457,8 @@ def _train_distributed(
         resources_per_worker={
             "CPU": 4,
             "memory": 16000000000,  # 16GB memory
-            "GPU": 1 if use_gpu else 0
-        }
+            "GPU": 1 if use_gpu else 0,
+        },
     )
 
     # Create TorchTrainer for distributed training
@@ -416,7 +466,7 @@ def _train_distributed(
         train_loop_per_worker=train_func,
         train_loop_config=config,
         scaling_config=scaling_config,
-        datasets={"train": train_data, "validation": val_data}
+        datasets={"train": train_data, "validation": val_data},
     )
 
     # Run distributed training
@@ -441,14 +491,21 @@ def _train_distributed(
         "checkpoint": checkpoint,
         "num_workers": num_workers,
         "model_name": model_name,
-        "training_type": "distributed"
+        "training_type": "distributed",
     }
 
 
 def _train_local(
-    train_data: Dataset, val_data: Dataset, test_data: Dataset,
-    model_name: str, embedding_dim: int, batch_size: int, learning_rate: float,
-    num_epochs: int, temperature: float, use_gpu: bool
+    train_data: Dataset,
+    val_data: Dataset,
+    test_data: Dataset,
+    model_name: str,
+    embedding_dim: int,
+    batch_size: int,
+    learning_rate: float,
+    num_epochs: int,
+    temperature: float,
+    use_gpu: bool,
 ) -> Dict[str, Any]:
     """Local training with single worker"""
     log.info(f"Starting local training with model: {model_name}")
@@ -459,7 +516,7 @@ def _train_local(
             model_name=model_name,
             embedding_dim=embedding_dim,
             max_query_length=int(os.environ.get("MAX_QUERY_LENGTH", "128")),
-            max_doc_length=int(os.environ.get("MAX_DOC_LENGTH", "512"))
+            max_doc_length=int(os.environ.get("MAX_DOC_LENGTH", "512")),
         )
     except Exception as e:
         log.warning(f"Failed to load {model_name}, using simple model: {e}")
@@ -485,14 +542,18 @@ def _train_local(
 
         # Process training data in batches
         try:
-            for batch_idx, batch in enumerate(train_data.iter_batches(batch_size=batch_size, batch_format="pandas")):
+            for batch_idx, batch in enumerate(
+                train_data.iter_batches(batch_size=batch_size, batch_format="pandas")
+            ):
                 if batch_idx >= 20:  # Limit batches for local testing
                     break
 
                 # Extract data
                 queries = batch["query"].tolist()
                 documents = batch["document"].tolist()
-                labels = torch.tensor(batch["label"].values, dtype=torch.long).to(device)
+                labels = torch.tensor(batch["label"].values, dtype=torch.long).to(
+                    device
+                )
 
                 # Handle empty queries/documents
                 queries = [q if q else "empty query" for q in queries]
@@ -500,7 +561,7 @@ def _train_local(
 
                 try:
                     # Forward pass
-                    if hasattr(model, 'forward'):
+                    if hasattr(model, "forward"):
                         query_embeddings, doc_embeddings = model(queries, documents)
                     else:
                         # Fallback for simple model
@@ -539,19 +600,23 @@ def _train_local(
 
     try:
         with torch.no_grad():
-            for batch_idx, batch in enumerate(val_data.iter_batches(batch_size=batch_size, batch_format="pandas")):
+            for batch_idx, batch in enumerate(
+                val_data.iter_batches(batch_size=batch_size, batch_format="pandas")
+            ):
                 if batch_idx >= 5:  # Limit validation batches
                     break
 
                 queries = batch["query"].tolist()
                 documents = batch["document"].tolist()
-                labels = torch.tensor(batch["label"].values, dtype=torch.long).to(device)
+                labels = torch.tensor(batch["label"].values, dtype=torch.long).to(
+                    device
+                )
 
                 queries = [q if q else "empty query" for q in queries]
                 documents = [d if d else "empty document" for d in documents]
 
                 try:
-                    if hasattr(model, 'forward'):
+                    if hasattr(model, "forward"):
                         query_embeddings, doc_embeddings = model(queries, documents)
                     else:
                         query_embeddings = model.encode_queries(queries).to(device)
@@ -570,23 +635,28 @@ def _train_local(
     avg_val_loss = np.mean(val_losses) if val_losses else 0.0
     final_train_loss = training_losses[-1] if training_losses else 0.0
 
-    log.info(f"Training completed! Final train loss: {final_train_loss:.4f}, Val loss: {avg_val_loss:.4f}")
+    log.info(
+        f"Training completed! Final train loss: {final_train_loss:.4f}, Val loss: {avg_val_loss:.4f}"
+    )
 
     # Save model checkpoint
     model_save_path = "/tmp/qwen_dual_encoder_local.pt"
     try:
-        torch.save({
-            'model_state_dict': model.state_dict(),
-            'optimizer_state_dict': optimizer.state_dict(),
-            'training_losses': training_losses,
-            'val_loss': avg_val_loss,
-            'model_config': {
-                'model_name': model_name,
-                'embedding_dim': embedding_dim,
-                'total_batches': total_batches,
-                'device': str(device)
-            }
-        }, model_save_path)
+        torch.save(
+            {
+                "model_state_dict": model.state_dict(),
+                "optimizer_state_dict": optimizer.state_dict(),
+                "training_losses": training_losses,
+                "val_loss": avg_val_loss,
+                "model_config": {
+                    "model_name": model_name,
+                    "embedding_dim": embedding_dim,
+                    "total_batches": total_batches,
+                    "device": str(device),
+                },
+            },
+            model_save_path,
+        )
         log.info(f"Model saved to: {model_save_path}")
     except Exception as e:
         log.warning(f"Could not save model: {e}")
@@ -601,7 +671,7 @@ def _train_local(
         "model_name": model_name,
         "device": str(device),
         "training_type": "local",
-        "status": "completed"
+        "status": "completed",
     }
 
 
@@ -609,6 +679,7 @@ class SimpleLocalDualEncoder(nn.Module):
     """
     Simple dual encoder for local testing when Qwen models fail
     """
+
     def __init__(self, vocab_size=10000, embedding_dim=256):
         super().__init__()
         self.embedding_dim = embedding_dim

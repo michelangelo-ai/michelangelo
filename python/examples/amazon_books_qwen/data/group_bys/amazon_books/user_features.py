@@ -11,10 +11,12 @@ from ai.chronon.group_by import (
     Operation,
     Window,
     TimeUnit,
-    Accuracy
+    Accuracy,
 )
 from ai.chronon.utils import get_staging_query_output_table_name
-from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import base_table
+from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
+    base_table,
+)
 
 # Note: In the current Amazon Books dataset, we don't have explicit user IDs
 # This is a conceptual implementation for when user data becomes available
@@ -27,8 +29,8 @@ user_rating_source = Source(
         query=Query(
             # In real implementation, would use user_id; here using review patterns
             selects=select("review_id", "review_score", "book_categories"),
-            time_column="ts"
-        )
+            time_column="ts",
+        ),
     )
 )
 
@@ -44,8 +46,8 @@ user_reading_patterns = GroupBy(
             windows=[
                 Window(length=7, timeUnit=TimeUnit.DAYS),
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Average rating given by user (user preference indicator)
         Aggregation(
@@ -53,8 +55,8 @@ user_reading_patterns = GroupBy(
             operation=Operation.AVERAGE,
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Rating variance (how selective the user is)
         Aggregation(
@@ -62,11 +64,11 @@ user_reading_patterns = GroupBy(
             operation=Operation.VARIANCE,
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
-        )
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
+        ),
     ],
-    accuracy=Accuracy.TEMPORAL
+    accuracy=Accuracy.TEMPORAL,
 )
 
 # Genre preference tracking (conceptual)
@@ -75,15 +77,18 @@ genre_preference_source = Source(
         table=get_staging_query_output_table_name(base_table),
         query=Query(
             selects=select("review_id", "book_categories", "review_score"),
-            time_column="ts"
-        )
+            time_column="ts",
+        ),
     )
 )
 
 # User genre preferences (would require user segmentation)
 user_genre_preferences = GroupBy(
     sources=[genre_preference_source],
-    keys=["review_id", "book_categories"],  # Would be user_id, genre in real implementation
+    keys=[
+        "review_id",
+        "book_categories",
+    ],  # Would be user_id, genre in real implementation
     aggregations=[
         # Books read per genre
         Aggregation(
@@ -91,8 +96,8 @@ user_genre_preferences = GroupBy(
             operation=Operation.COUNT,
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
         ),
         # Average rating per genre
         Aggregation(
@@ -100,9 +105,9 @@ user_genre_preferences = GroupBy(
             operation=Operation.AVERAGE,
             windows=[
                 Window(length=30, timeUnit=TimeUnit.DAYS),
-                Window(length=90, timeUnit=TimeUnit.DAYS)
-            ]
-        )
+                Window(length=90, timeUnit=TimeUnit.DAYS),
+            ],
+        ),
     ],
-    accuracy=Accuracy.TEMPORAL
+    accuracy=Accuracy.TEMPORAL,
 )
