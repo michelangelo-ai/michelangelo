@@ -3,15 +3,11 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 go_library(
     name = "go_default_library",
     srcs = [
-        "blast.go",
-        "disaggregated.go",
         "interface.go",
         "model_cleanup_actor.go",
         "model_sync_actor.go",
         "rolling.go",
-        "shadow.go",
         "traffic_routing_actor.go",
-        "zonal.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies",
     visibility = ["//visibility:public"],
