@@ -2,7 +2,7 @@ from google.protobuf import json_format
 from typing import Optional
 from unittest import TestCase
 
-from michelangelo.canvas.lib.shared.json_data.field import one_of
+from michelangelo.canvas.lib.shared.json_data.field import field, one_of
 from michelangelo.canvas.lib.shared.json_data.json_data import JSONData
 from michelangelo.canvas.schema.v2alpha1.job_specs import (
     DriverSpec,
@@ -105,10 +105,10 @@ class TestJobSpec(TestCase):
     def test_non_compatiable_job_spec(self):
         class NonCompatibleJobSpec(JSONData):
             _one_of_job_spec = one_of(fields=["spark", "ray"], required=False)
-            spark: Optional[SparkJobSpec]
-            ray: Optional[RayJobSpec]
+            spark: Optional[SparkJobSpec] = field(default=None)
+            ray: Optional[RayJobSpec] = field(default=None)
             # suppose someone add a non-compatible field on Canvas job spec and that field is not in UAPI
-            non_compatiable_field: str
+            non_compatiable_field: str = field(default="test")
 
         invalid_job_spec = NonCompatibleJobSpec()
         json_str = invalid_job_spec.model_dump_json(exclude_defaults=False)
