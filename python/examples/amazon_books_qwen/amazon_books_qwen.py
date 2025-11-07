@@ -25,22 +25,20 @@ def amazon_books_qwen_workflow(sample_size=100):
     """
     # Step 1: Download dataset (can be cached/reused)
     dataset_config = {
-        "max_query_tokens": 128,    # Qwen spec: max query length
-        "max_doc_tokens": 512,      # Qwen spec: max document length
-        "sample_size": sample_size,         # Small subset for local testing
-        "negative_ratio": 1.0,      # 1:1 positive to negative ratio
+        "max_query_tokens": 128,  # Qwen spec: max query length
+        "max_doc_tokens": 512,  # Qwen spec: max document length
+        "sample_size": sample_size,  # Small subset for local testing
+        "negative_ratio": 1.0,  # 1:1 positive to negative ratio
         "train_split": 0.7,
         "val_split": 0.15,
-        "test_split": 0.15
+        "test_split": 0.15,
     }
 
     books_dv, reviews_dv = download_kaggle_dataset(dataset_config=dataset_config)
 
     # Step 2: Chronon Feature Engineering and Data Preparation Pipeline
     train_dv, val_dv, test_dv = compute_chronon_features_with_spark(
-        dataset_config=dataset_config,
-        books_dv=books_dv,
-        reviews_dv=reviews_dv
+        dataset_config=dataset_config, books_dv=books_dv, reviews_dv=reviews_dv
     )
 
     # Step 3: Train dual-encoder model with enhanced data
