@@ -93,18 +93,20 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 		if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayClusterReadiness, sensorRequest).Get(sensorCtx, &sensorResponse); err != nil {
 			logger.Error("builtin-error", ext.ZapError(err)...)
 			reason := err.Error()
+			cleanupCtx := ctx
 			if workflow.IsCanceledError(ctx, err) {
+				// Create a detached context for cleanup that won't be affected by parent cancellation
 				var cancel func()
-				ctx, cancel = workflow.NewDisconnectedContext(ctx)
+				cleanupCtx, cancel = workflow.NewDisconnectedContext(ctx)
 				defer cancel()
 				reason = "Canceled"
 			}
-			if err = workflow.ExecuteActivity(ctx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
+			if err = workflow.ExecuteActivity(cleanupCtx, ray.Activities.TerminateCluster, ray.TerminateClusterRequest{
 				Name:      cluster.Name,
 				Namespace: cluster.Namespace,
 				Type:      v2pb.TERMINATION_TYPE_FAILED.String(),
 				Reason:    reason,
-			}).Get(ctx, nil); err != nil {
+			}).Get(cleanupCtx, nil); err != nil {
 				logger.Error("builtin-error", ext.ZapError(err)...)
 			}
 			return nil, err

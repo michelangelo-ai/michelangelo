@@ -160,9 +160,10 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest).Get(ctx, &getSparkJobResponse); err != nil {
 			if workflow.IsCanceledError(ctx, err) {
 				// killing spark job in cadence once workflow is cancelled
-				var cancel func()
-				ctx, cancel = workflow.NewDisconnectedContext(ctx)
+				// Create a detached context for cleanup that won't be affected by parent cancellation
+				cleanupCtx, cancel := workflow.NewDisconnectedContext(ctx)
 				defer cancel()
+
 				terminateRequest := spark.TerminateSparkJobRequest{
 					Name:      sparkJob.Name,
 					Namespace: sparkJob.Namespace,
@@ -170,13 +171,13 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 					Reason:    _reasonForCancel,
 				}
 				var terminateResponse v2pb.UpdateSparkJobResponse
-				if terminateErr := workflow.ExecuteActivity(ctx, spark.Activities.TerminateSparkJob, terminateRequest).Get(ctx, &terminateResponse); terminateErr != nil {
+				if terminateErr := workflow.ExecuteActivity(cleanupCtx, spark.Activities.TerminateSparkJob, terminateRequest).Get(cleanupCtx, &terminateResponse); terminateErr != nil {
 					logger.Error(_errorReasonTermninateJob, ext.ZapError(terminateErr)...)
 					return nil, terminateErr
 				}
 				var res starlark.Value
 				if convertErr := utils.AsStar(terminateResponse.SparkJob, &res); convertErr != nil {
-					logger.Error(_errorReasonConvertJob, ext.ZapError(err)...)
+					logger.Error(_errorReasonConvertJob, ext.ZapError(convertErr)...)
 					return nil, convertErr
 				}
 				return res, nil
