@@ -15,27 +15,18 @@ spec:
     spec:
       serviceAccountName: "fluent-bit"
       initContainers:
-        # This will no longer be necessary once the plugin is merged with fluent-bit OSS project
-        - name: "download-fluent-bit-plugin"
-          image: "busybox"
-          command: [
-            "sh",
-            "-c",
-            "wget -O /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so https://raw.githubusercontent.com/y-scope/fluent-bit-clp/refs/heads/irv2-beta/pre-built/out_clp_s3_v2_linux_amd64.so"
-          ]
-          volumeMounts:
-            - name: "fluent-bit-plugins-volume"
-              mountPath: "/fluent-bit/plugins"
         - name: "fix-perms"
           image: "busybox"
-          command: ["sh", "-c", "chown -R 1000:1000 /tmp/ray"]
+          command: ["sh", "-c", "mkdir -p /tmp/ray /tmp/spark && chown -R 1000:1000 /tmp/ray /tmp/spark"]
           volumeMounts:
             - name: "ray"
               mountPath: "/tmp/ray"
+            - name: "spark"
+              mountPath: "/tmp/spark"
       containers:
         - name: "fluent-bit"
           image: "fluent/fluent-bit:3.2.7"
-          args: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+          args: ["-c", "/fluent-bit/etc/fluent-bit.conf"]
           env:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
@@ -48,6 +39,14 @@ spec:
               mountPath: "/root/.aws"
             - name: "ray"
               mountPath: "/tmp/ray"
+            - name: "spark"
+              mountPath: "/tmp/spark"
+            - name: "var-log"
+              mountPath: "/var/log"
+              readOnly: true
+            - name: "var-lib-docker"
+              mountPath: "/var/lib/docker/containers"
+              readOnly: true
       volumes:
         - name: "fluent-bit-plugins-volume"
           emptyDir: { }
@@ -60,3 +59,12 @@ spec:
         - name: "ray"
           hostPath:
             path: "/tmp/ray"
+        - name: "spark"
+          hostPath:
+            path: "/tmp/spark"
+        - name: "var-log"
+          hostPath:
+            path: "/var/log"
+        - name: "var-lib-docker"
+          hostPath:
+            path: "/var/lib/docker/containers"

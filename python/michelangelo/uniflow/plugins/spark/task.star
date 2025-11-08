@@ -434,6 +434,21 @@ def get_spark_job(
                             },
                         },
                     ],
+                    "volumeMounts": [
+                        {
+                            "name": "spark-logs",
+                            "mountPath": "/tmp/spark",
+                        },
+                    ],
+                    "volumes": [
+                        {
+                            "name": "spark-logs",
+                            "hostPath": {
+                                "path": "/tmp/spark",
+                                "type": "DirectoryOrCreate",
+                            },
+                        },
+                    ],
                 },
             },
             "executor": {
@@ -451,6 +466,12 @@ def get_spark_job(
                             },
                         },
                     ],
+                    "volumeMounts": [
+                        {
+                            "name": "spark-logs",
+                            "mountPath": "/tmp/spark",
+                        },
+                    ],
                 },
                 "instances": executor_instances,
             },
@@ -463,6 +484,11 @@ def get_spark_job(
                 "spark.sql.adaptive.enabled": "false",
                 "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
                 "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
+                # Enable event logging for fluent-bit collection
+                "spark.eventLog.enabled": "true",
+                "spark.eventLog.dir": "/tmp/spark/eventlogs",
+                "spark.eventLog.compress": "false",
+                "spark.history.fs.logDirectory": "/tmp/spark/eventlogs",
             },
             "mainApplicationFile": main_file,
             "mainArgs": main_args,

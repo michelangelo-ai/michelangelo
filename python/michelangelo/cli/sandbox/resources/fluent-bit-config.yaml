@@ -3,48 +3,43 @@ kind: "ConfigMap"
 metadata:
   name: "fluent-bit-config"
 data:
-  fluent-bit.yaml: |
-    plugins:
-      - "/fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so"
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush 1
+        Log_Level info
+        Daemon off
 
-    service:
-      flush: 1
-      daemon: "off"
-      log_level: "trace"
+    # Ray job logs
+    [INPUT]
+        Name tail
+        Path /tmp/ray/session_*/logs/job*.log
+        Tag raylogs
+        Refresh_Interval 5
+        Read_from_Head true
 
-    pipeline:
-      inputs:
-        # Tails unstructured Ray job logs (driver and worker) and:
-        # 1. Emits log content in the 'message' field of each event, add a verbosity tag if it doesn't exist
-        # 2. Extracts 'session_id' and role (driver or worker) from the log path to create a log-specific tag
-        # 3. Tunes collection settings to efficiently handle potentially very long log messages common in Ray apps
-        - name: "tail"
-          path: "/tmp/ray/session_*/logs/job-*.log"
-          path_key: "file_path"
-          # sample log path /tmp/ray/session_2025-06-10_15-24-04_695651_1530/logs
-          tag_regex: "^\/tmp\/ray\/(?<session_id>[^\/]+)\/logs\/job-(?<role>driver|worker)-.*\\.log$"
-          tag: "<session_id>/<role>.log"
-          # The interval of refreshing the list of watched files in seconds
-          refresh_interval: 5
-          # For new discovered files on start (without a database offset/position),
-          # read the content from the head of the file, not tail.
-          read_from_head: true
-          # When a message is unstructured (no parser applied), it's appended as a string under the key
-          # name log. This option allows defining an alternative name for that key.
-          key: "message"
-          buffer_max_size: "1MB"
-          processors: []
+    # Spark logs
+    [INPUT]
+        Name tail
+        Path /tmp/spark/*.log
+        Tag sparklogs
+        Refresh_Interval 5
+        Read_from_Head true
 
-      filters:
-        # Ensure a log verbosity level is set if absent
-        - name: "modify"
-          match: "*"
-          Add:
-            - "level INFO"
+    # Spark event logs
+    [INPUT]
+        Name tail
+        Path /tmp/spark/eventlogs/*
+        Tag sparkevents
+        Refresh_Interval 5
+        Read_from_Head true
 
-      outputs:
-        # For each unique tag match, append compressed logs to Minio using the filename "<tag>.clp.zst"
-        - name: "out_clp_s3_v2"
-          match: "*/*"
-          log_bucket: "logs"
-          log_level_key: "level"
+    # Output to S3/Minio
+    [OUTPUT]
+        Name s3
+        Match *
+        bucket logs
+        region us-east-1
+        endpoint http://minio:9091
+        use_put_object On
+        s3_key_format /fluent-bit-logs/%Y/%m/%d/%H/%M/%S
+        auto_retry_requests true
