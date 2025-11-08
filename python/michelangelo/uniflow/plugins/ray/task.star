@@ -1,26 +1,7 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
-
-def _get_pythonpath():
-    """
-    Get PYTHONPATH environment variable with file sync support.
-    
-    When file sync is enabled (UF_FILE_SYNC_TARBALL_URL is set), appends the 
-    sitecustomize.py directory to PYTHONPATH. This ensures sitecustomize.py runs 
-    automatically on container startup to apply local code changes before task execution.
-    
-    Returns:
-        PYTHONPATH value, defaulting to "/app" if not set by user.
-        If file sync is enabled, appends ":/app/michelangelo/uniflow/core" to the path.
-    """
-    # Get existing PYTHONPATH from environment, default to /app if not set
-    pythonpath = os.environ.get("PYTHONPATH", "/app")
-    if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
-        # Append sitecustomize.py location to enable automatic file sync on container startup
-        pythonpath = pythonpath + ":/app/michelangelo/uniflow/core"
-    return pythonpath
 RAY_ENV = {
     "RAY_DEDUP_LOGS": "0",
     # RAY_NUM_REDIS_GET_RETRIES controls the number of retries for a worker node to connect to the GCS (Global Control Service) at startup.
@@ -30,7 +11,7 @@ RAY_ENV = {
     # As a result, a worker node might start significantly earlier than the head node.
     # Calculate RAY_NUM_REDIS_GET_RETRIES to allow workers approximately DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS to connect to the GCS, assuming 7 seconds per retry.
     "RAY_NUM_REDIS_GET_RETRIES": str((DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS // 7) + 1),
-    "PYTHONPATH": _get_pythonpath(),
+    "PYTHONPATH": get_pythonpath(),
 }
 RAY_DEFAULT_HEAD_CPU = os.environ.get("RAY_DEFAULT_HEAD_CPU", "8")
 RAY_DEFAULT_HEAD_MEMORY = os.environ.get("RAY_DEFAULT_HEAD_MEMORY", "32Gi")

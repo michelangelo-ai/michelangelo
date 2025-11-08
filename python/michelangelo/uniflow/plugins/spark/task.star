@@ -1,26 +1,8 @@
 load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
-def _get_pythonpath():
-    """
-    Get PYTHONPATH environment variable with file sync support.
-    
-    When file sync is enabled (UF_FILE_SYNC_TARBALL_URL is set), appends the 
-    sitecustomize.py directory to PYTHONPATH. This ensures sitecustomize.py runs 
-    automatically on container startup to apply local code changes before task execution.
-    
-    Returns:
-        PYTHONPATH value, defaulting to "/app" if not set by user.
-        If file sync is enabled, appends ":/app/michelangelo/uniflow/core" to the path.
-    """
-    # Get existing PYTHONPATH from environment, default to /app if not set
-    pythonpath = os.environ.get("PYTHONPATH", "/app")
-    if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
-        # Append sitecustomize.py location to enable automatic file sync on container startup
-        pythonpath = pythonpath + ":/app/michelangelo/uniflow/core"
-    return pythonpath
 SPARK_ENV = {
-    "PYTHONPATH": _get_pythonpath(),
+    "PYTHONPATH": get_pythonpath(),
 }
 
 SPARK_DEFAULT_DRIVER_CPU = os.environ.get("SPARK_DEFAULT_DRIVER_CPU", "4")
