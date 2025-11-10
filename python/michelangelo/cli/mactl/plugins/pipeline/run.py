@@ -1,6 +1,8 @@
 import time
 import uuid
+from argparse import ArgumentParser
 from logging import getLogger
+from typing import Optional
 
 from grpc import Channel
 
@@ -22,11 +24,55 @@ from mactl import (
 _LOG = getLogger(__name__)
 
 
-def generate_run(crd: CRD, channel: Channel):
+def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
     """
     Generate run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
+    crd.func_signature["run"] = [
+        {
+            "func_signature": Parameter(
+                "namespace",
+                Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+            "args": ["-n", "--namespace"],
+            "kwargs": {
+                "type": str,
+                "required": True,
+                "help": "Namespace of the resource",
+            },
+        },
+        {
+            "func_signature": Parameter(
+                "name",
+                Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+            "args": ["--name"],
+            "kwargs": {
+                "type": str,
+                "required": True,
+                "help": "Name of the resource",
+            },
+        },
+        {
+            "func_signature": Parameter(
+                "resume_from",
+                Parameter.POSITIONAL_OR_KEYWORD,
+                default=None,
+            ),
+            "args": ["--resume_from"],
+            "kwargs": {
+                "type": str,
+                "required": False,
+                "default": None,
+                "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+            },
+        },
+    ]
+    _LOG.debug(
+        "Added function signature for action and argparser: %r",
+        crd.func_signature,
+    )
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
     methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
@@ -46,16 +92,10 @@ def generate_run(crd: CRD, channel: Channel):
     input_class = get_message_class_by_name(method_pool, method_create.input_type[1:])
     output_class = get_message_class_by_name(method_pool, method_create.output_type[1:])
 
-    run_func_signature = Signature(
-        [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-        + [
-            Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-            for name in ["namespace", "name"]
-        ]
-        + [Parameter("resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None)]
-    )
+    crd.configure_parser("run", parser)
+    func_signature = crd._read_signatures("run")
 
-    @bind_signature(run_func_signature)
+    @bind_signature(func_signature)
     def run_func(bound_args: Signature) -> Message:
         _LOG.info("Start run_func for pipeline")
         _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -97,7 +137,7 @@ def generate_run(crd: CRD, channel: Channel):
         _LOG.info("Stub method completed (%r): %r", type(response), response)
         return response
 
-    run_func.__signature__ = run_func_signature  # type: ignore[attr-defined]
+    run_func.__signature__ = func_signature  # type: ignore[attr-defined]
     crd.run = MethodType(run_func, crd)
 
 

@@ -1013,6 +1013,8 @@ def main(channel: Channel):
     """
     Main function for mactl
     """
+    _LOG.debug("Starting mactl...")
+
     # Load config and set environment variables
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r") as f:
@@ -1025,7 +1027,6 @@ def main(channel: Channel):
         if not getenv("AWS_ENDPOINT_URL"):
             environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
 
-    print("Starting mactl...")
     # Phase 1: Discover CRDs and create resource subcommands
     services = list_services(channel)
     _LOG.info("Got %d services: %r", len(services), services)
@@ -1074,9 +1075,6 @@ def main(channel: Channel):
         prog=f"mactl {user_command_crd} {user_command_action}"
     )
 
-    func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
-    func_generator(channel, action_parser)  # Now accepts parser!
-
     # Load plugins (may also configure action_parser)
     read_plugins(
         crds[user_command_crd],
@@ -1085,11 +1083,15 @@ def main(channel: Channel):
         channel,
     )
 
+    func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
+    func_generator(channel, action_parser)
+
     # Phase 4: Parse remaining arguments
     args = action_parser.parse_args(remaining[1:])
 
     # Phase 5: Execute
     func_action = getattr(crds[user_command_crd], user_command_action)
+    _LOG.debug("target action function is ready: %r", func_action)
     result = func_action(**vars(args))
 
     # Convert to JSON and pretty print
