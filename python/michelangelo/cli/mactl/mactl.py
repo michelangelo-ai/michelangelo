@@ -520,7 +520,9 @@ class CRD:
         )
         return method_name, input_class, output_class
 
-    def generate_delete(self, channel: Channel, parser: Optional[ArgumentParser] = None):
+    def generate_delete(
+        self, channel: Channel, parser: Optional[ArgumentParser] = None
+    ):
         """
         Generate delete function of this class.
         """
