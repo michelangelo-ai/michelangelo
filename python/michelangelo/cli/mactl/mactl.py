@@ -1064,7 +1064,7 @@ def main(channel: Channel):
 
     if len(remaining) < 1:
         print(f"Usage: mactl {user_command_crd} <action>")
-        print("Available actions: get, create, apply, delete, list")
+        print("Available actions: get, apply, delete")
         print(f"Run 'mactl {user_command_crd} --help' for more information")
         sys.exit(1)
 

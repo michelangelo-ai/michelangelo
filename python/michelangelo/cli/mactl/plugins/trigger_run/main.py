@@ -18,5 +18,7 @@ def apply_plugins(
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     if target_command == "kill":
-        crd.generate_kill = MethodType(lambda self, ch: generate_kill(self, ch), crd)
+        crd.generate_kill = MethodType(
+            lambda self, ch, parser: generate_kill(self, ch, parser), crd
+        )
     _LOG.info("Plugins applied successfully to crd: %s", crd)
