@@ -270,3 +270,22 @@ def get_storage_type(result_json_url):
     else:
         storage_type = "STORAGE_TYPE_INVALID"
     return storage_type
+
+def get_pythonpath():
+    """
+    Get PYTHONPATH environment variable with file sync support.
+    
+    When file sync is enabled (UF_FILE_SYNC_TARBALL_URL is set), appends the 
+    sitecustomize.py directory to PYTHONPATH. This ensures sitecustomize.py runs 
+    automatically on container startup to apply local code changes before task execution.
+    
+    Returns:
+        PYTHONPATH value, defaulting to "/app" if not set by user.
+        If file sync is enabled, appends ":/app/michelangelo/uniflow/core" to the path.
+    """
+    # Get existing PYTHONPATH from environment, default to /app if not set
+    pythonpath = os.environ.get("PYTHONPATH", "/app")
+    if os.environ.get("UF_FILE_SYNC_TARBALL_URL", "") != "":
+        # Append sitecustomize.py location to enable automatic file sync on container startup
+        pythonpath = pythonpath + ":/app/michelangelo/uniflow/core"
+    return pythonpath

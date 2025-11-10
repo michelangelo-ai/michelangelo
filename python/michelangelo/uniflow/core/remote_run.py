@@ -13,6 +13,7 @@ from typing import Callable, Optional
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
 from michelangelo.uniflow.core.utils import dot_path
+from michelangelo.uniflow.core.file_sync import DefaultFileSync
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ class RemoteRun:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
+    file_sync: Optional[bool] = False
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
@@ -60,6 +62,14 @@ class RemoteRun:
         environ["UF_STORAGE_URL"] = self.storage_url
         if self.metadata_storage_url:
             environ["UF_METADATA_STORAGE_URL"] = self.metadata_storage_url
+
+        if self.file_sync:
+            file_sync_tarball_url = DefaultFileSync(
+                docker_image=self.image,
+            ).create_and_upload_tarball()
+            if file_sync_tarball_url:
+                log.info(f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}")
+                environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         for k, v in environ.items():
             log.info("environ: %s: %s", k, v)
@@ -167,6 +177,7 @@ class RemoteRunTemporal:
     image: str
     storage_url: str
     metadata_storage_url: Optional[str] = None
+    file_sync: Optional[bool] = False
     environ: dict[str, str] = field(default_factory=dict)
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
@@ -222,6 +233,14 @@ class RemoteRunTemporal:
 
         log.debug("input: %s", input_list)
         log.info("input: total bytes: %d", len(input_list))
+
+        if self.file_sync:
+            file_sync_tarball_url = DefaultFileSync(
+                docker_image=self.image,
+            ).create_and_upload_tarball()
+            if file_sync_tarball_url:
+                log.info(f"Setting UF_FILE_SYNC_TARBALL_URL to {file_sync_tarball_url}")
+                environ["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
 
         cmd = ["temporal", "workflow", "start"]
 
