@@ -2,6 +2,10 @@ load("@plugin", "atexit", "json", "os", "spark", "time", "workflow")
 load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 SPARK_ENV = {
+    # Ensure event logging is enabled for all SparkContexts
+    "SPARK_EVENTLOG_ENABLED": "true",
+    "SPARK_EVENTLOG_DIR": "/tmp/spark/eventlogs",
+    "SPARK_EVENTLOG_COMPRESS": "true",
 }
 
 SPARK_DEFAULT_DRIVER_CPU = os.environ.get("SPARK_DEFAULT_DRIVER_CPU", "4")
@@ -434,21 +438,6 @@ def get_spark_job(
                             },
                         },
                     ],
-                    "volumeMounts": [
-                        {
-                            "name": "spark-logs",
-                            "mountPath": "/tmp/spark",
-                        },
-                    ],
-                    "volumes": [
-                        {
-                            "name": "spark-logs",
-                            "hostPath": {
-                                "path": "/tmp/spark",
-                                "type": "DirectoryOrCreate",
-                            },
-                        },
-                    ],
                 },
             },
             "executor": {
@@ -466,12 +455,6 @@ def get_spark_job(
                             },
                         },
                     ],
-                    "volumeMounts": [
-                        {
-                            "name": "spark-logs",
-                            "mountPath": "/tmp/spark",
-                        },
-                    ],
                 },
                 "instances": executor_instances,
             },
@@ -482,13 +465,27 @@ def get_spark_job(
                 "spark.peloton.usecrets.enable": "true",
                 "spark.sql.optimizer.excludedRules": "org.apache.spark.sql.catalyst.optimizer.MergeScalarSubqueries",
                 "spark.sql.adaptive.enabled": "false",
-                "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
-                "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true",
-                # Enable event logging for fluent-bit collection
+                "spark.driver.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true -Dspark.eventLog.enabled=true -Dspark.eventLog.dir=/tmp/spark/eventlogs -Dspark.eventLog.compress=true",
+                "spark.executor.extraJavaOptions": "-Dcontainer.log.enableTerraBlobIntegration=true -Dspark.eventLog.enabled=true -Dspark.eventLog.dir=/tmp/spark/eventlogs -Dspark.eventLog.compress=true",
+                # Enable event logging to local directory for DaemonSet collection
                 "spark.eventLog.enabled": "true",
                 "spark.eventLog.dir": "/tmp/spark/eventlogs",
-                "spark.eventLog.compress": "false",
+                "spark.eventLog.compress": "true",
                 "spark.history.fs.logDirectory": "/tmp/spark/eventlogs",
+                # S3A configuration for log upload
+                "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                "spark.hadoop.fs.s3.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+                "spark.hadoop.fs.AbstractFileSystem.s3a.impl": "org.apache.hadoop.fs.s3a.S3A",
+                "spark.hadoop.fs.s3a.path.style.access": "true",
+                "spark.hadoop.fs.s3a.connection.ssl.enabled": "true",
+                "spark.hadoop.fs.s3a.fast.upload": "true",
+                "spark.hadoop.fs.s3a.multipart.size": "67108864",  # 64MB
+                "spark.hadoop.fs.s3a.fast.upload.buffer": "disk",
+                # AWS credentials from environment
+                "spark.hadoop.fs.s3a.access.key": "${AWS_ACCESS_KEY_ID}",
+                "spark.hadoop.fs.s3a.secret.key": "${AWS_SECRET_ACCESS_KEY}",
+                "spark.hadoop.fs.s3a.endpoint": "${AWS_ENDPOINT_URL}",
+                "spark.hadoop.fs.s3a.aws.credentials.provider": "org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider",
             },
             "mainApplicationFile": main_file,
             "mainArgs": main_args,

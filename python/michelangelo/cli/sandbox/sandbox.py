@@ -50,7 +50,7 @@ _default_job_hosting_kube_cluster_name = "michelangelo-jobs-0"
 
 
 def init_arguments(p: argparse.ArgumentParser):
-    sp = p.add_subparsers(dest="action", required=True)
+    sp = p.add_subparsefrs(dest="action", required=True)
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(

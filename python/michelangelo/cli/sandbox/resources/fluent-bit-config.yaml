@@ -5,41 +5,30 @@ metadata:
 data:
   fluent-bit.conf: |
     [SERVICE]
-        Flush 1
-        Log_Level info
-        Daemon off
+        Flush         1
+        Log_Level     info
+        Daemon        false
 
-    # Ray job logs
     [INPUT]
-        Name tail
-        Path /tmp/ray/session_*/logs/job*.log
-        Tag raylogs
-        Refresh_Interval 5
-        Read_from_Head true
+        Name              tail
+        Path              /tmp/spark-logs/*.log
+        Tag               spark-logs
+        Refresh_Interval  5
+        Read_from_Head    true
 
-    # Spark logs
     [INPUT]
-        Name tail
-        Path /tmp/spark/*.log
-        Tag sparklogs
-        Refresh_Interval 5
-        Read_from_Head true
+        Name              tail
+        Path              /tmp/spark/eventlogs/*
+        Tag               spark-events
+        Refresh_Interval  5
+        Read_from_Head    true
 
-    # Spark event logs
-    [INPUT]
-        Name tail
-        Path /tmp/spark/eventlogs/*
-        Tag sparkevents
-        Refresh_Interval 5
-        Read_from_Head true
-
-    # Output to S3/Minio
     [OUTPUT]
-        Name s3
-        Match *
-        bucket logs
-        region us-east-1
-        endpoint http://minio:9091
-        use_put_object On
-        s3_key_format /fluent-bit-logs/%Y/%m/%d/%H/%M/%S
-        auto_retry_requests true
+        Name                  s3
+        Match                 *
+        bucket                logs
+        region                us-east-1
+        endpoint              http://minio:9091
+        use_put_object        true
+        s3_key_format         /${JOB_NAME}/spark.log
+        auto_retry_requests   true

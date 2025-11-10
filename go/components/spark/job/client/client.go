@@ -23,12 +23,29 @@ var _ job.Client = &SparkClient{}
 // CreateJob creates a new Spark job
 func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	spec := job.Spec
-	serviceAcount := "spark-operator-spark"
+	serviceAccount := "spark-operator-spark"
+
+	// Simple hostPath volume for log collection by DaemonSet
+	volumes := []corev1.Volume{
+		{
+			Name: "spark-logs",
+			VolumeSource: corev1.VolumeSource{
+				HostPath: &corev1.HostPathVolumeSource{
+					Path: "/tmp/spark",
+				},
+			},
+		},
+	}
 
 	sparkApplication := &sparkv1beta2.SparkApplication{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      job.Name,
 			Namespace: job.Namespace,
+			Labels: map[string]string{
+				"app":          "spark",
+				"collect-logs": "true",
+				"job-type":     "spark",
+			},
 		},
 		Spec: sparkv1beta2.SparkApplicationSpec{
 			Type:                sparkv1beta2.PythonApplicationType,
@@ -40,11 +57,12 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			MainApplicationFile: &(spec.MainApplicationFile),
 			Arguments:           spec.MainArgs,
 			SparkConf:           spec.SparkConf,
+			Volumes:             volumes,
 			Driver: sparkv1beta2.DriverSpec{
-				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, &serviceAcount),
+				SparkPodSpec: r.toSparkPodSpec(spec.Driver.Pod, &serviceAccount, job.Name),
 			},
 			Executor: sparkv1beta2.ExecutorSpec{
-				SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod, nil),
+				SparkPodSpec: r.toSparkPodSpec(spec.Executor.Pod, nil, job.Name),
 				Instances:    &(spec.Executor.Instances),
 			},
 		},
@@ -57,6 +75,13 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 			PyFiles: spec.Deps.PyFiles,
 		}
 	}
+
+	// Debug log the SparkApplication we're creating
+	log.Info("Creating SparkApplication with DaemonSet log collection",
+		"volumes", len(sparkApplication.Spec.Volumes),
+		"labels", sparkApplication.ObjectMeta.Labels,
+		"driverVolumeMounts", len(sparkApplication.Spec.Driver.VolumeMounts),
+		"executorVolumeMounts", len(sparkApplication.Spec.Executor.VolumeMounts))
 
 	opts := metav1.CreateOptions{}
 	result := &sparkv1beta2.SparkApplication{}
@@ -105,7 +130,7 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 }
 
 // toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec
-func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) sparkv1beta2.SparkPodSpec {
+func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string, jobName string) sparkv1beta2.SparkPodSpec {
 	if pod == nil {
 		return sparkv1beta2.SparkPodSpec{}
 	}
@@ -140,6 +165,14 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 		envFrom = append(envFrom, coreEnvFromSource)
 	}
 
+	// Simple volume mount for DaemonSet log collection
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "spark-logs",
+			MountPath: "/tmp/spark",
+		},
+	}
+
 	return sparkv1beta2.SparkPodSpec{
 		Cores:  &(pod.Resource.Cpu),
 		Memory: &(pod.Resource.Memory),
@@ -147,8 +180,9 @@ func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) s
 			Name:     pod.Resource.GpuSku,
 			Quantity: int64(pod.Resource.Gpu),
 		},
-		Env:            envVars,
-		EnvFrom:        envFrom,
+		Env:          envVars,
+		EnvFrom:      envFrom,
 		ServiceAccount: serviceAccount,
+		VolumeMounts: volumeMounts,
 	}
 }

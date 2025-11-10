@@ -24,7 +24,7 @@ from pyspark.sql.functions import col
         executor_memory="2g",
         executor_cpu=1,
         executor_instances=1,
-    )
+    ),
 )
 def download_kaggle_dataset(
     dataset_config: Dict[str, Any],
@@ -93,6 +93,11 @@ def download_kaggle_dataset(
         "spark.hadoop.fs.AbstractFileSystem.file.impl",
         "org.apache.hadoop.fs.local.RawLocalFs",
     )
+
+    # Enable event logging for DaemonSet collection
+    spark.conf.set("spark.eventLog.enabled", "true")
+    spark.conf.set("spark.eventLog.dir", "/tmp/spark/eventlogs")
+    spark.conf.set("spark.eventLog.compress", "true")
 
     # Check for local datasets first
     local_books_file = os.path.join(local_dataset_path, "books_data.csv")
