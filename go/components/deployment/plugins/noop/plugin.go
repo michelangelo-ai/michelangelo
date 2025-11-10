@@ -116,12 +116,44 @@ func (p *NoOpConditionsPlugin) PutCondition(resource *v2pb.Deployment, condition
 // CompletingActor is an actor that moves deployments through stages to completion
 type CompletingActor struct{}
 
+// Retrieve retrieves the current condition state
+func (a *CompletingActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
+	now := time.Now().UnixMilli()
+	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
+		return &api.Condition{
+			Type:                 "DeploymentProgressing",
+			Status:               api.CONDITION_STATUS_TRUE,
+			Reason:               "AlreadyComplete",
+			Message:              "Deployment is already complete",
+			LastUpdatedTimestamp: now,
+		}, nil
+	}
+	return &api.Condition{
+		Type:                 "DeploymentProgressing",
+		Status:               api.CONDITION_STATUS_FALSE,
+		Reason:               "Progressing",
+		Message:              "Deployment needs to progress through stage: " + resource.Status.Stage.String(),
+		LastUpdatedTimestamp: now,
+	}, nil
+}
+
 // Run moves the deployment to the next stage or completion
 func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
 	now := time.Now().UnixMilli()
 
 	// For no-op implementation, move through stages quickly and always return success
 	switch resource.Status.Stage {
+	case v2pb.DEPLOYMENT_STAGE_INVALID:
+		// Move from invalid to validation stage
+		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+		resource.Status.Message = "Moved to validation stage (no-op)"
+		return &api.Condition{
+			Type:                 "DeploymentProgressing",
+			Status:               api.CONDITION_STATUS_TRUE,
+			Reason:               "MovedToValidation",
+			Message:              "Moved to validation stage",
+			LastUpdatedTimestamp: now,
+		}, nil
 	case v2pb.DEPLOYMENT_STAGE_VALIDATION:
 		// Move to next stage and return success
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
@@ -189,6 +221,19 @@ func (a *CompletingActor) GetType() string {
 
 // NoOpActor is an actor that does nothing and marks as successful
 type NoOpActor struct{}
+
+// Retrieve retrieves the current condition state
+func (a *NoOpActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
+	// Return a successful no-op condition
+	now := time.Now().UnixMilli()
+	return &api.Condition{
+		Type:                 "NoOp",
+		Status:               api.CONDITION_STATUS_TRUE,
+		Reason:               "NoOpComplete",
+		Message:              "No-op operation completed successfully",
+		LastUpdatedTimestamp: now,
+	}, nil
+}
 
 // Run always returns a successful condition
 func (a *NoOpActor) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
