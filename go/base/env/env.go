@@ -10,10 +10,10 @@ import (
 const (
 	configPathKey         = "CONFIG_DIR"
 	runtimeEnvironmentKey = "RUNTIME_ENVIRONMENT"
-	EnvProduction          = "production"
-	EnvStaging             = "staging"
-	EnvTest                = "test"
-	EnvDevelopment         = "development"
+	EnvProduction         = "production"
+	EnvStaging            = "staging"
+	EnvTest               = "test"
+	EnvDevelopment        = "development"
 )
 
 // Module provides a Context, which describes the runtime context of the

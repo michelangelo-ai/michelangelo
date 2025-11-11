@@ -49,7 +49,7 @@ func defaultExpandedFiles(env env.Context) []FileInfo {
 
 	// Always load base configuration and environment-specific configuration.
 	names := []string{
-		baseFile,   // base
+		baseFile,    // base
 		environment, // production
 	}
 
