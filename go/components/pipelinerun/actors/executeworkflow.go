@@ -103,7 +103,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			return &apipb.Condition{
 				Type:   ExecuteWorkflowType,
 				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to terminate workflow: %v", err)
+			}, fmt.Errorf("failed to terminate workflow: %w", err)
 		}
 		// check to see if workflow has been successfully terminated
 		if workflowTerminated {
@@ -131,7 +131,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			return &apipb.Condition{
 				Type:   ExecuteWorkflowType,
 				Status: apipb.CONDITION_STATUS_FALSE,
-			}, fmt.Errorf("failed to fetch project %v", err)
+			}, fmt.Errorf("failed to fetch project %w", err)
 		}
 
 		taskList, taskListErr := a.getTaskList(project, pipelineRun)
@@ -242,7 +242,7 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 	}
 	err = a.addTaskCacheEnv(ctx, pipelineRun, envs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to add task cache env: %v", err)
+		return nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
@@ -362,7 +362,7 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 		err := pipelinerunutils.GetPipelineRun(ctx, resumePipelineRunID, a.apiHandler, resumePipelineRun)
 		if err != nil {
 			logger.Error("failed to get resume pipeline run", zap.Error(err))
-			return fmt.Errorf("failed to get resume pipeline run: %v", err)
+			return fmt.Errorf("failed to get resume pipeline run: %w", err)
 		}
 		getTaskCacheVersionFromResumePipelineRun(taskCacheVersion, resumePipelineRun)
 		if resumePipelineRun.Spec.Resume == nil || resumePipelineRun.Spec.Resume.PipelineRun == nil {
