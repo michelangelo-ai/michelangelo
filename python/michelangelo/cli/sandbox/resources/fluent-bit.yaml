@@ -14,27 +14,32 @@ spec:
         k8s-app: "fluent-bit"
     spec:
       serviceAccountName: "fluent-bit"
-      initContainers:
-        - name: "fix-perms"
-          image: "busybox"
-          command: ["sh", "-c", "chown -R 1000:1000 /tmp/ray"]
-          volumeMounts:
-            - name: "ray"
-              mountPath: "/tmp/ray"
       containers:
         - name: "fluent-bit"
           image: "fluent/fluent-bit:3.2.7"
           args: ["-c", "/fluent-bit/etc/fluent-bit.yaml"]
+          securityContext:
+            runAsUser: 0
           env:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
+            - name: "AWS_ACCESS_KEY_ID"
+              value: "minioadmin"
+            - name: "AWS_SECRET_ACCESS_KEY"
+              value: "minioadmin"
+            - name: "AWS_DEFAULT_REGION"
+              value: "us-east-1"
           volumeMounts:
             - name: "fluent-bit-config-volume"
               mountPath: "/fluent-bit/etc"
             - name: "aws-credentials-volume"
               mountPath: "/root/.aws"
-            - name: "ray"
-              mountPath: "/tmp/ray"
+            - name: "var-log-containers"
+              mountPath: "/var/log/containers"
+              readOnly: true
+            - name: "var-log-pods"
+              mountPath: "/var/log/pods"
+              readOnly: true
       volumes:
         - name: "fluent-bit-config-volume"
           configMap:
@@ -42,6 +47,9 @@ spec:
         - name: "aws-credentials-volume"
           secret:
             secretName: "aws-credentials"
-        - name: "ray"
+        - name: "var-log-containers"
           hostPath:
-            path: "/tmp/ray"
+            path: "/var/log/containers"
+        - name: "var-log-pods"
+          hostPath:
+            path: "/var/log/pods"
