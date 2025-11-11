@@ -343,7 +343,7 @@ func parseRootSchema(msg *protogen.Message) *apiext.JSONSchemaProps {
 	_, foundSpec := schema.Properties["spec"]
 	_, foundStatus := schema.Properties["status"]
 
-	if foundSpec == false || foundStatus == false {
+	if !foundSpec || !foundStatus {
 		logger.Panicf("Failed to parse %v.proto. Make sure both %vSpec and %vStatus are defined.",
 			msg.GoIdent.GoName, msg.GoIdent.GoName, msg.GoIdent.GoName)
 	}

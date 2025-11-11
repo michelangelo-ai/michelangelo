@@ -89,7 +89,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	}
 	var sensorResponse ray.SensorRayClusterReadinessResponse
 	var printJobURL = true
-	for sensorResponse.Ready == false {
+	for !sensorResponse.Ready {
 		if err := workflow.ExecuteActivity(sensorCtx, ray.Activities.SensorRayClusterReadiness, sensorRequest).Get(sensorCtx, &sensorResponse); err != nil {
 			logger.Error("builtin-error", ext.ZapError(err)...)
 			reason := err.Error()
