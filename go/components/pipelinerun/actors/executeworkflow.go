@@ -31,9 +31,9 @@ const (
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"
-	cacheEnabledVarName       = "CACHE_ENABLED"
-	cacheVersionVarName       = "CACHE_VERSION"
-	cacheOperationGet         = "GET"
+	cacheEnabledVarName        = "CACHE_ENABLED"
+	cacheVersionVarName        = "CACHE_VERSION"
+	cacheOperationGet          = "GET"
 )
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
