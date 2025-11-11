@@ -35,11 +35,11 @@ const (
 )
 
 var (
-	// _defaultWaitSeconds is the default wait seconds for the trigger workflow
-	_defaultWaitSeconds = 600
+	// defaultWaitSeconds is the default wait seconds for the trigger workflow
+	defaultWaitSeconds = 600
 
-	// _defaultParameterID is the default parameter id for the trigger workflow
-	_defaultParameterID = "default"
+	// defaultParameterID is the default parameter id for the trigger workflow
+	defaultParameterID = "default"
 
 	// TriggerredByLabel stores the name of the TriggerRun which triggered the pipeline_run
 	TriggerredByLabel = "pipelinerun.michelangelo/triggered-by"
@@ -60,8 +60,8 @@ var (
 	// PipelineManifestTypeLabel is to indicate the manifest type of this pipeline
 	PipelineManifestTypeLabel = "pipeline.michelangelo/PipelineManifestType"
 
-	// _activityOptionsDefault is the default activity options for the trigger workflow
-	_activityOptionsDefault = workflow.ActivityOptions{
+	// activityOptionsDefault is the default activity options for the trigger workflow
+	activityOptionsDefault = workflow.ActivityOptions{
 		ScheduleToStartTimeout: time.Second * 30,
 		StartToCloseTimeout:    time.Second * 30,
 		RetryPolicy: &workflow.RetryPolicy{
@@ -94,7 +94,7 @@ var (
 // CronTrigger workflow with provided trigger run spec
 func (r *workflows) CronTrigger(ctx workflow.Context, req triggerrun.CreateTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithBackend(ctx, r.workflow)
-	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
+	ctx = workflow.WithActivityOptions(ctx, activityOptionsDefault)
 	tr := req.TriggerRun
 	log := workflow.GetLogger(ctx).With(
 		zap.String("trigger_run", tr.Name),
@@ -135,13 +135,13 @@ func batchRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 		zap.String("namespace", tr.Namespace),
 		zap.String("trigger_name", tr.Name),
 	)
-	waitSeconds := _defaultWaitSeconds
+	waitSeconds := defaultWaitSeconds
 	if tr.Spec.Trigger.BatchPolicy != nil && tr.Spec.Trigger.BatchPolicy.Wait != nil {
 		waitSeconds = int(tr.Spec.Trigger.BatchPolicy.Wait.Seconds)
 	}
 	if len(tr.Spec.Trigger.ParametersMap) == 0 {
 		tr.Spec.Trigger.ParametersMap = map[string]*v2pb.PipelineExecutionParameters{
-			_defaultParameterID: {},
+			defaultParameterID: {},
 		}
 	}
 	var (
@@ -172,7 +172,7 @@ func concurrentRun(ctx workflow.Context, tr *v2pb.TriggerRun) error {
 	log := workflow.GetLogger(ctx)
 	if len(tr.Spec.Trigger.ParametersMap) == 0 {
 		tr.Spec.Trigger.ParametersMap = map[string]*v2pb.PipelineExecutionParameters{
-			_defaultParameterID: {},
+			defaultParameterID: {},
 		}
 	}
 	var (
