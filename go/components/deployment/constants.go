@@ -21,5 +21,5 @@ const (
 
 // Metric tags
 const (
-	_namespaceTag = "namespace"
+	namespaceTag = "namespace"
 )
