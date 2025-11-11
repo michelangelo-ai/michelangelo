@@ -39,6 +39,13 @@ func TestMarshalToString(t *testing.T) {
 	}
 }
 
+func TestMarshalToStringError(t *testing.T) {
+	// Test with unmarshalable type (channels cannot be marshaled to JSON)
+	ch := make(chan int)
+	result := MarshalToString(ch)
+	assert.Contains(t, result, "<error marshaling to JSON:", "Should return error message for unmarshalable type")
+}
+
 func TestGetLogrLoggerOrPanic(t *testing.T) {
 	t.Run("successful logger creation", func(t *testing.T) {
 		// This should not panic
