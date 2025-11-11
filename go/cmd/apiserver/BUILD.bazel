@@ -67,6 +67,7 @@ go_test(
     deps = [
         "//proto/api/v2:go_default_library",
         "@com_github_stretchr_testify//assert:go_default_library",
+        "@com_github_uber_go_tally//:go_default_library",
         "@org_uber_go_config//:go_default_library",
         "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_fx//fxtest:go_default_library",
