@@ -2,21 +2,21 @@ package deployment
 
 // Events
 const (
-	_normalType            = "Normal"
-	_stageChangeEvent      = "StageChange"
-	_earlyTerminationEvent = "EarlyTermination"
+	normalType            = "Normal"
+	stageChangeEvent      = "StageChange"
+	earlyTerminationEvent = "EarlyTermination"
 )
 
 // Log keys
 const (
-	_deploymentKey     = "deployment"
-	_targetLoggingKey  = "target"
-	_originalStageKey  = "original-stage"
-	_newStageKey       = "new-stage"
-	_providerStatus    = "provider-status"
-	_desiredModelKey   = "desired-model"
-	_candidateModelKey = "candidate-model"
-	_currentModelKey   = "current-model"
+	deploymentKey     = "deployment"
+	targetLoggingKey  = "target"
+	originalStageKey  = "original-stage"
+	newStageKey       = "new-stage"
+	providerStatus    = "provider-status"
+	desiredModelKey   = "desired-model"
+	candidateModelKey = "candidate-model"
+	currentModelKey   = "current-model"
 )
 
 // Metric tags

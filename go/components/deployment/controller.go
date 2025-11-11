@@ -49,22 +49,22 @@ import (
 )
 
 const (
-	_defaultRequeuePeriod  = 10 * time.Second
-	_reconciliationTimeout = 60 * time.Second
+	defaultRequeuePeriod  = 10 * time.Second
+	reconciliationTimeout = 60 * time.Second
 
-	_deploymentCleanedUpFinalizer = "deployments.michelangelo.uber.com/finalizer"
+	deploymentCleanedUpFinalizer = "deployments.michelangelo.uber.com/finalizer"
 
-	_deploymentRolloutCount = "deployment.rollout.count"
+	deploymentRolloutCount = "deployment.rollout.count"
 
-	_deploymentRollbackReason = "deployment.rollback.reason"
+	deploymentRollbackReason = "deployment.rollback.reason"
 
 	// this is the concurrency reconcile loops for deployment, it can be tuned if needed.
-	_maximumConcurrentReconciles = 10
+	maximumConcurrentReconciles = 10
 
-	_alertFiredMessage          = "Alert fired"
-	_desiredModelChangedMessage = "Desired model changed"
+	alertFiredMessage          = "Alert fired"
+	desiredModelChangedMessage = "Desired model changed"
 
-	_timeFormat = "20060102-121314"
+	timeFormat = "20060102-121314"
 )
 
 // Reconciler reconciles a Deployment object
@@ -104,8 +104,8 @@ func NewReconciler(apiHandlerFactory apiHandler.Factory) *Reconciler {
 // SetupWithManager sets up the controller with the Manager.
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.Log = mgr.GetLogger().
-		WithName(_deploymentKey)
-	r.Recorder = mgr.GetEventRecorderFor(_deploymentKey)
+		WithName(deploymentKey)
+	r.Recorder = mgr.GetEventRecorderFor(deploymentKey)
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
 		return err
@@ -114,7 +114,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Deployment{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
-		WithOptions(controller.Options{MaxConcurrentReconciles: _maximumConcurrentReconciles}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maximumConcurrentReconciles}).
 		Complete(r)
 }
 
@@ -128,8 +128,8 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.7.2/pkg/reconcile
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := r.Log.WithValues(_deploymentKey, req.NamespacedName.String())
-	ctx, cancel := context.WithTimeout(ctx, _reconciliationTimeout)
+	log := r.Log.WithValues(deploymentKey, req.NamespacedName.String())
+	ctx, cancel := context.WithTimeout(ctx, reconciliationTimeout)
 	defer cancel()
 	defer func() {
 		if err := recover(); err != nil {
@@ -157,10 +157,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	sw.Stop()
 
-	log = log.WithValues(_targetLoggingKey, deployment.Spec.GetDefinition().GetType())
-	log = log.WithValues(_desiredModelKey, deployment.Spec.GetDesiredRevision().GetName())
-	log = log.WithValues(_candidateModelKey, deployment.Status.GetCandidateRevision().GetName())
-	log = log.WithValues(_currentModelKey, deployment.Status.GetCurrentRevision().GetName())
+	log = log.WithValues(targetLoggingKey, deployment.Spec.GetDefinition().GetType())
+	log = log.WithValues(desiredModelKey, deployment.Spec.GetDesiredRevision().GetName())
+	log = log.WithValues(candidateModelKey, deployment.Status.GetCandidateRevision().GetName())
+	log = log.WithValues(currentModelKey, deployment.Status.GetCurrentRevision().GetName())
 
 	// Copy by value, not reference, so originalDeployment will never change, even after downstream components change.
 	originalDeployment := deployment.DeepCopy()
@@ -211,15 +211,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *ControllerMetrics, deployment *v2pb.Deployment, originalDeployment *v2pb.Deployment) (ctrl.Result, error) {
 	defaultResult := ctrl.Result{
 		Requeue:      true,
-		RequeueAfter: _defaultRequeuePeriod,
+		RequeueAfter: defaultRequeuePeriod,
 	}
 
 	if deployment.ObjectMeta.DeletionTimestamp.IsZero() {
 		// The object is not being deleted, so if it does not have our finalizer,
 		// then lets add the finalizer and update the object. This is equivalent
 		// registering our finalizer.
-		if !controllerutil.ContainsFinalizer(deployment, _deploymentCleanedUpFinalizer) {
-			controllerutil.AddFinalizer(deployment, _deploymentCleanedUpFinalizer)
+		if !controllerutil.ContainsFinalizer(deployment, deploymentCleanedUpFinalizer) {
+			controllerutil.AddFinalizer(deployment, deploymentCleanedUpFinalizer)
 			if err := r.Update(ctx, deployment, &metav1.UpdateOptions{}); err != nil {
 				return defaultResult, fmt.Errorf("failed to add deployment finalizer: %w", err)
 			}
@@ -236,7 +236,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	result, err := r.processPlugin(ctx, log, metrics, plugin, deployment, originalDeployment)
 
 	// Inject the provider status as a log tag after processing has occurred.
-	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
+	log = log.WithValues(providerStatus, deployment.Status.ProviderStatus)
 	stage := plugin.ParseStage(deployment)
 
 	// Check if we've reached max attempts OR if condition is satisfied but terminal.
@@ -245,7 +245,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
 			"until the resource is updated again. If in cleanup, we will no longer reconcile."
 		log.Info(message)
-		r.Recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
+		r.Recorder.Event(deployment, normalType, earlyTerminationEvent, message)
 		metrics.terminalCounter.Inc(1)
 		newStage, shouldRequeue := getTerminalStage(*deployment)
 		stage = newStage
@@ -257,11 +257,11 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		// Successful terminal condition - allow progression by ensuring requeue
 		result.Result = ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: _defaultRequeuePeriod,
+			RequeueAfter: defaultRequeuePeriod,
 		}
 	}
 
-	log = log.WithValues(_originalStageKey, originalStage).WithValues(_newStageKey, stage)
+	log = log.WithValues(originalStageKey, originalStage).WithValues(newStageKey, stage)
 
 	if originalStage != stage {
 		message := fmt.Sprintf("state transition from %s to %s", originalStage, stage)
@@ -285,7 +285,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 				plugin.PopulateMessage(ctx, deployment)
 			}
 		}
-		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
+		r.Recorder.Event(deployment, normalType, stageChangeEvent, message)
 	}
 
 	// TODO: Make the GetState call return just the deployment state instead of the entire status payload
@@ -307,7 +307,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		// Since we do not expect this resource to be reconciled (until new user action), the finalizer will not be
 		// added again. If there is a new user action, then it is reasonable to avoid deletion. Conversely, if the
 		// resource is deleted before any new user action, that new user action will fail.
-		controllerutil.RemoveFinalizer(deployment, _deploymentCleanedUpFinalizer)
+		controllerutil.RemoveFinalizer(deployment, deploymentCleanedUpFinalizer)
 
 		// We only want to delete all revisions when the deployment is marked for deletion.
 		if !deployment.GetDeletionTimestamp().IsZero() {
@@ -329,7 +329,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	result := conditionInterfaces.Result{
 		Result: ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: _defaultRequeuePeriod,
+			RequeueAfter: defaultRequeuePeriod,
 		},
 	}
 
@@ -403,7 +403,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
 
 		//cleanup rollback reason from previous deployment (if any)
-		delete(deployment.Annotations, _deploymentRollbackReason)
+		delete(deployment.Annotations, deploymentRollbackReason)
 
 		if IsEmergencyRollout(*deployment) {
 			// Log emergency rollout for audit purposes
@@ -465,7 +465,7 @@ func (r *Reconciler) handleStageTransition(
 		return false
 	}
 
-	log := r.Log.WithValues(_deploymentKey, fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name))
+	log := r.Log.WithValues(deploymentKey, fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name))
 
 	switch deployment.Status.Stage {
 	// Terminal stages
@@ -553,18 +553,18 @@ func (r *Reconciler) incrementRolloutCount(deployment *v2pb.Deployment, log logr
 	if deployment.Annotations == nil {
 		deployment.Annotations = make(map[string]string)
 	}
-	countStr, ok := deployment.Annotations[_deploymentRolloutCount]
+	countStr, ok := deployment.Annotations[deploymentRolloutCount]
 	if !ok {
-		deployment.Annotations[_deploymentRolloutCount] = "0"
+		deployment.Annotations[deploymentRolloutCount] = "0"
 	} else {
 		count, err := strconv.Atoi(countStr)
 		if err != nil {
 			log.Error(err, "failed to parse rollout count")
-			deployment.Annotations[_deploymentRolloutCount] = "0"
+			deployment.Annotations[deploymentRolloutCount] = "0"
 			return
 		}
 		newCount := strconv.Itoa(count + 1)
-		deployment.Annotations[_deploymentRolloutCount] = newCount
+		deployment.Annotations[deploymentRolloutCount] = newCount
 	}
 }
 
@@ -574,15 +574,15 @@ func (r *Reconciler) updateRollbackReason(deployment *v2pb.Deployment, isHealthy
 	}
 
 	if !isHealthy {
-		deployment.Annotations[_deploymentRollbackReason] = _alertFiredMessage
+		deployment.Annotations[deploymentRollbackReason] = alertFiredMessage
 	} else {
-		deployment.Annotations[_deploymentRollbackReason] = _desiredModelChangedMessage
+		deployment.Annotations[deploymentRollbackReason] = desiredModelChangedMessage
 	}
 }
 
 func (r *Reconciler) getObservability(log logr.Logger, namespace string) plugins.ObservabilityContext {
 	tags := map[string]string{
-		_namespaceTag: namespace,
+		namespaceTag: namespace,
 	}
 	return plugins.ObservabilityContext{
 		Logger: log,
@@ -626,11 +626,11 @@ func (r *Reconciler) createDeploymentEvent(ctx context.Context, deployment *v2pb
 
 // createDeploymentEventName generates a name for deployment events following Uber internal pattern
 func createDeploymentEventName(deploymentName string) string {
-	return fmt.Sprintf("%s-%s", deploymentName, time.Now().Format(_timeFormat))
+	return fmt.Sprintf("%s-%s", deploymentName, time.Now().Format(timeFormat))
 }
 
 // Deployment utility functions - moved from common package
-var _terminalStages = map[v2pb.DeploymentStage]bool{
+var terminalStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE:  true,
 	v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE: true,
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE: true,
@@ -639,19 +639,19 @@ var _terminalStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
 }
 
-var _rollbackStages = map[v2pb.DeploymentStage]bool{
+var rollbackStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS: true,
 	v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE:    true,
 	v2pb.DEPLOYMENT_STAGE_ROLLBACK_FAILED:      true,
 }
 
-var _cleanUpStages = map[v2pb.DeploymentStage]bool{
+var cleanUpStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS: true,
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE:    true,
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:      true,
 }
 
-var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
+var cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE: true,
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
 }
@@ -701,25 +701,25 @@ func ShouldCleanup(deployment v2pb.Deployment) bool {
 
 // IsTerminalStage checks if the given stage is terminal
 func IsTerminalStage(stage v2pb.DeploymentStage) bool {
-	_, ok := _terminalStages[stage]
+	_, ok := terminalStages[stage]
 	return ok
 }
 
 // IsRollbackStage checks if deployment is in rollback stage
 func IsRollbackStage(stage v2pb.DeploymentStage) bool {
-	_, ok := _rollbackStages[stage]
+	_, ok := rollbackStages[stage]
 	return ok
 }
 
 // IsCleanupStage checks if deployment is in clean up stage
 func IsCleanupStage(stage v2pb.DeploymentStage) bool {
-	_, ok := _cleanUpStages[stage]
+	_, ok := cleanUpStages[stage]
 	return ok
 }
 
 // IsCleanupCompleteStage checks if deployment is in complete stage
 func IsCleanupCompleteStage(stage v2pb.DeploymentStage) bool {
-	_, ok := _cleanUpCompleteStages[stage]
+	_, ok := cleanUpCompleteStages[stage]
 	return ok
 }
 
