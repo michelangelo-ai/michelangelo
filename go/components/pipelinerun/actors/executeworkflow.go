@@ -31,9 +31,9 @@ const (
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"
-	_cacheEnabledVarName       = "CACHE_ENABLED"
-	_cacheVersionVarName       = "CACHE_VERSION"
-	_CacheOperationGet         = "GET"
+	cacheEnabledVarName       = "CACHE_ENABLED"
+	cacheVersionVarName       = "CACHE_VERSION"
+	cacheOperationGet         = "GET"
 )
 
 // TaskProgress is the struct for the task progress queried from Cadence Workflow
@@ -345,14 +345,14 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 
 func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun *v2.PipelineRun, envs map[string]interface{}) error {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	envs[_cacheEnabledVarName] = "false"
-	envs[_cacheVersionVarName] = pipelineRun.Name
+	envs[cacheEnabledVarName] = "false"
+	envs[cacheVersionVarName] = pipelineRun.Name
 	if pipelineRun.Spec.Resume == nil || pipelineRun.Spec.Resume.PipelineRun == nil {
 		return nil
 	}
 
 	// if resume from a previous run, enable cache
-	envs[_cacheEnabledVarName] = "true"
+	envs[cacheEnabledVarName] = "true"
 	resumePipelineRunID := pipelineRun.Spec.Resume.PipelineRun
 	taskCacheVersion := map[string]string{}
 
@@ -373,13 +373,13 @@ func (a *ExecuteWorkflowActor) addTaskCacheEnv(ctx context.Context, pipelineRun 
 	}
 	logger.Info("Final Task Cache Version", zap.Any("taskCacheVersion", taskCacheVersion))
 	for taskName, cacheVersion := range taskCacheVersion {
-		envs[fmt.Sprintf("%s_%s_%s", _cacheVersionVarName, _CacheOperationGet, taskName)] = cacheVersion
+		envs[fmt.Sprintf("%s_%s_%s", cacheVersionVarName, cacheOperationGet, taskName)] = cacheVersion
 	}
 	// Finally, we disable cache for the specified task
 	resumeFromTasks := pipelineRun.Spec.Resume.ResumeFrom
 	if resumeFromTasks != nil && len(resumeFromTasks) > 0 {
 		for _, resumeFromTask := range resumeFromTasks {
-			envs[fmt.Sprintf("%s_%s", _cacheEnabledVarName, resumeFromTask)] = "false"
+			envs[fmt.Sprintf("%s_%s", cacheEnabledVarName, resumeFromTask)] = "false"
 		}
 	}
 	return nil

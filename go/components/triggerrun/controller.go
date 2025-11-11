@@ -21,7 +21,7 @@ import (
 
 const (
 	// this is the concurrency reconcile loops for trigger run, it can be tuned if needed.
-	_maximumConcurrentReconciles = 10
+	maximumConcurrentReconciles = 10
 )
 
 // Params are the params for instantiating the reconciler.
@@ -173,7 +173,7 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.TriggerRun{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: _maximumConcurrentReconciles}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maximumConcurrentReconciles}).
 		Complete(r)
 }
 

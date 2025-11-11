@@ -17,9 +17,9 @@ import (
 )
 
 const (
-	_defaultNamespace         = "default"
-	_integrationTestNamespace = "ma-integration-test"
-	_systemNamespacePrefix    = "kube-"
+	defaultNamespace         = "default"
+	integrationTestNamespace = "ma-integration-test"
+	systemNamespacePrefix    = "kube-"
 )
 
 // RegisterProjectAPIHook returns the API hook for Project
@@ -46,14 +46,14 @@ type apiHook struct {
 // BeforeCreate creates a new namespace of the same name before creating a project
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateProjectRequest) error {
 	// Validate the request
-	if request.Project.Namespace != _integrationTestNamespace && request.Project.Name != request.Project.Namespace {
+	if request.Project.Namespace != integrationTestNamespace && request.Project.Name != request.Project.Namespace {
 		return status.Errorf(codes.InvalidArgument,
 			"project name <%s> is different from namespace name <%s>. Project name must be the same as namespace name.",
 			request.Project.Name,
 			request.Project.Namespace)
 	}
 
-	if request.Project.Namespace == _defaultNamespace || strings.HasPrefix(request.Project.Namespace, _systemNamespacePrefix) {
+	if request.Project.Namespace == defaultNamespace || strings.HasPrefix(request.Project.Namespace, systemNamespacePrefix) {
 		return status.Errorf(codes.PermissionDenied,
 			"namespace <%s> is invalid. Users are forbidden to create projects in default or system namespace",
 			request.Project.Namespace)
