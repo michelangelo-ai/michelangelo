@@ -15,17 +15,6 @@ spec:
     spec:
       serviceAccountName: "fluent-bit"
       initContainers:
-        # This will no longer be necessary once the plugin is merged with fluent-bit OSS project
-        - name: "download-fluent-bit-plugin"
-          image: "busybox"
-          command: [
-            "sh",
-            "-c",
-            "wget -O /fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so https://raw.githubusercontent.com/y-scope/fluent-bit-clp/refs/heads/irv2-beta/pre-built/out_clp_s3_v2_linux_amd64.so"
-          ]
-          volumeMounts:
-            - name: "fluent-bit-plugins-volume"
-              mountPath: "/fluent-bit/plugins"
         - name: "fix-perms"
           image: "busybox"
           command: ["sh", "-c", "chown -R 1000:1000 /tmp/ray"]
@@ -40,8 +29,6 @@ spec:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
           volumeMounts:
-            - name: "fluent-bit-plugins-volume"
-              mountPath: "/fluent-bit/plugins"
             - name: "fluent-bit-config-volume"
               mountPath: "/fluent-bit/etc"
             - name: "aws-credentials-volume"
@@ -49,8 +36,6 @@ spec:
             - name: "ray"
               mountPath: "/tmp/ray"
       volumes:
-        - name: "fluent-bit-plugins-volume"
-          emptyDir: { }
         - name: "fluent-bit-config-volume"
           configMap:
             name: "fluent-bit-config"

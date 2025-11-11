@@ -4,13 +4,10 @@ metadata:
   name: "fluent-bit-config"
 data:
   fluent-bit.yaml: |
-    plugins:
-      - "/fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so"
-
     service:
       flush: 1
       daemon: "off"
-      log_level: "trace"
+      log_level: "info"
 
     pipeline:
       inputs:
@@ -43,8 +40,14 @@ data:
             - "level INFO"
 
       outputs:
-        # For each unique tag match, append compressed logs to Minio using the filename "<tag>.clp.zst"
-        - name: "out_clp_s3_v2"
+        # Send logs to Minio S3 with gzip compression
+        - name: "s3"
           match: "*/*"
-          log_bucket: "logs"
-          log_level_key: "level"
+          bucket: "logs"
+          region: "us-east-1"
+          endpoint: "http://minio:9091"
+          use_put_object: "On"
+          compression: "gzip"
+          s3_key_format: "/%Y/%m/%d/%H/%M/%S-$TAG.log.gz"
+          total_file_size: "10M"
+          upload_timeout: "10m"
