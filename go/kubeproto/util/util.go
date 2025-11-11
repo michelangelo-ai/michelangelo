@@ -60,7 +60,7 @@ func GetPluginAndExtensions(data []byte, overrideGoPackageOpt bool) (*protogen.P
 	req := &pluginpb.CodeGeneratorRequest{}
 	err := proto.Unmarshal(data, req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to unmarshal input from protoc %v", err)
+		return nil, nil, fmt.Errorf("failed to unmarshal input from protoc %w", err)
 	}
 	ReplaceImportPath(req)
 
@@ -75,7 +75,7 @@ func GetPluginAndExtensions(data []byte, overrideGoPackageOpt bool) (*protogen.P
 	// initialize protobuf generator
 	gen, err := protogen.Options{}.New(req)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to initialize golang proto generator %v", err)
+		return nil, nil, fmt.Errorf("failed to initialize golang proto generator %w", err)
 	}
 
 	// Load protobuf extensions from all the imported protobuf files
