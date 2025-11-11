@@ -353,7 +353,7 @@ func genCRDObject(crdName string, gInfo *groupinfo.GroupInfo, crdBuf *bytes.Buff
 
 func genImmutability(crdName string, crdBuf *bytes.Buffer, crdOptions *pboptions.Options) {
 	crdIsImmutable := false
-	if crdOptions.Bool("resource.immutable") == true {
+	if crdOptions.Bool("resource.immutable") {
 		crdIsImmutable = true
 	}
 	typeInfo := struct {
