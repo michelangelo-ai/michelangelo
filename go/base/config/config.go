@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	_configKeySeparator       = ":"
-	_defaultConfigDir         = "config"
-	_k8sConfigKey             = "k8s"
-	_metadataStorageConfigKey = "metadataStorage"
-	_workflowClientConfigKey  = "workflowClient"
+	configKeySeparator       = ":"
+	defaultConfigDir         = "config"
+	k8sConfigKey             = "k8s"
+	metadataStorageConfigKey = "metadataStorage"
+	workflowClientConfigKey  = "workflowClient"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -76,9 +76,9 @@ func New(p Params) (Result, error) {
 func getConfigDirs(env env.Context) []string {
 	// Allow overriding the directory where config is loaded from
 	if env.ConfigPath != "" {
-		return strings.Split(env.ConfigPath, _configKeySeparator)
+		return strings.Split(env.ConfigPath, configKeySeparator)
 	}
-	return []string{_defaultConfigDir}
+	return []string{defaultConfigDir}
 }
 
 // GetK8sConfig parses the configuration file and returns the k8s REST client configuration
@@ -89,7 +89,7 @@ func GetK8sConfig(provider config.Provider) (*rest.Config, error) {
 		return nil, err
 	}
 	k8sConfig := K8sConfig{}
-	err = provider.Get(_k8sConfigKey).Populate(&k8sConfig)
+	err = provider.Get(k8sConfigKey).Populate(&k8sConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -101,13 +101,13 @@ func GetK8sConfig(provider config.Provider) (*rest.Config, error) {
 // GetMetadataStorageConfig parses the configuration file and returns the metadata storage configuration
 func GetMetadataStorageConfig(provider config.Provider) (storage.MetadataStorageConfig, error) {
 	storageConfig := storage.MetadataStorageConfig{}
-	err := provider.Get(_metadataStorageConfigKey).Populate(&storageConfig)
+	err := provider.Get(metadataStorageConfigKey).Populate(&storageConfig)
 	return storageConfig, err
 }
 
 // GetWorkflowClientConfig parses the configuration file and returns the workflow client configuration
 func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, error) {
 	workflowClientConfig := WorkflowClientConfig{}
-	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
+	err := provider.Get(workflowClientConfigKey).Populate(&workflowClientConfig)
 	return workflowClientConfig, err
 }

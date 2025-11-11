@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	_baseFile = "base"
+	baseFile = "base"
 )
 
 func newYAML(env env.Context, lookupFun config.LookupFunc) (config.Provider, error) {
@@ -49,7 +49,7 @@ func defaultExpandedFiles(env env.Context) []FileInfo {
 
 	// Always load base configuration and environment-specific configuration.
 	names := []string{
-		_baseFile,   // base
+		baseFile,   // base
 		environment, // production
 	}
 

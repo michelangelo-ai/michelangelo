@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	_configPathKey         = "CONFIG_DIR"
-	_runtimeEnvironmentKey = "RUNTIME_ENVIRONMENT"
+	configPathKey         = "CONFIG_DIR"
+	runtimeEnvironmentKey = "RUNTIME_ENVIRONMENT"
 	EnvProduction          = "production"
 	EnvStaging             = "staging"
 	EnvTest                = "test"
@@ -35,9 +35,9 @@ type Result struct {
 func New() Result {
 	return Result{
 		Environment: Context{
-			ConfigPath:         os.Getenv(_configPathKey),
+			ConfigPath:         os.Getenv(configPathKey),
 			Hostname:           getHostname(),
-			RuntimeEnvironment: os.Getenv(_runtimeEnvironmentKey),
+			RuntimeEnvironment: os.Getenv(runtimeEnvironmentKey),
 		},
 	}
 }
