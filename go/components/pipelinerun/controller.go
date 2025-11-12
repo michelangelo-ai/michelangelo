@@ -65,7 +65,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err = r.updatePipelineRunStatus(ctx, pipelineRun, originalPipelineRun); err != nil {
 		if returnErr != nil {
 			logger.Error("Failed to update pipeline run status", zap.Error(err))
-			return result, fmt.Errorf("update pipeline run status for %q: %w (previous error: %v)", req.NamespacedName, err, returnErr)
+			return result, fmt.Errorf("update pipeline run status for %q: %w (previous error: %w)", req.NamespacedName, err, returnErr)
 		}
 		logger.Error("Failed to update pipeline run status",
 			zap.Error(err),
