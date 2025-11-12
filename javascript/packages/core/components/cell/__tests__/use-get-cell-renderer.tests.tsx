@@ -67,6 +67,23 @@ describe('useGetCellRenderer', () => {
     expect(link).toHaveTextContent('Click here');
   });
 
+  it('should return link renderer for localhost URLs', () => {
+    const props: CellRendererProps<string> = {
+      column: { id: 'test' },
+      record: {},
+      value: 'http://localhost:3000',
+    };
+
+    render(
+      <TestCellRenderer props={props} />,
+      buildWrapper([getBaseProviderWrapper(), getIconProviderWrapper()])
+    );
+
+    const link = screen.getByRole('link');
+    expect(link).toHaveAttribute('href', 'http://localhost:3000');
+    expect(link).toHaveTextContent('Click here');
+  });
+
   it('should return text cell renderer for URL values without protocol', () => {
     const props: CellRendererProps<string> = {
       column: { id: 'test' },
