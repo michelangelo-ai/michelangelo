@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/gogo/protobuf/jsonpb"
@@ -322,10 +321,6 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 		return map[string]interface{}{}, nil
 	}
 	pbStruct := &apipb.TypedStruct{}
-	fmt.Println(reflect.TypeOf(pbStruct))
-	fmt.Println(proto.MessageName(pbStruct))
-	t := proto.MessageType("michelangelo.api.TypedStruct")
-	fmt.Println(t)
 	err := pbtypes.UnmarshalAny(pipelineSpec.Manifest.Content, pbStruct)
 	if err != nil || pbStruct.Value == nil {
 		return nil, fmt.Errorf("unmarshal pipeline manifest content to typed struct: %w", err)
