@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	_apiActionLatencyMetric = "apiActionLatency"
+	apiActionLatencyMetric = "apiActionLatency"
 )
 
 // NewFakeAPIHandler creates an API handler with the provided k8s client.  This is used for unit test only.
@@ -461,7 +461,7 @@ func emitAPIMetrics(action string, scope tally.Scope, logger logr.Logger, t time
 	tag := map[string]string{"action": action, "kind": kind}
 	// 10 bucket ~= 1 sec
 	// 16 bucket ~= 1 min
-	scope.Tagged(tag).Histogram(_apiActionLatencyMetric, tally.MustMakeExponentialDurationBuckets(time.Millisecond, 2.0,
+	scope.Tagged(tag).Histogram(apiActionLatencyMetric, tally.MustMakeExponentialDurationBuckets(time.Millisecond, 2.0,
 		16)).RecordDuration(took)
 	scope.Tagged(tag).Counter("calls")
 	logger.Info(fmt.Sprintf("API %s took %d milli seconds", action, took.Milliseconds()), "headers", headers)
