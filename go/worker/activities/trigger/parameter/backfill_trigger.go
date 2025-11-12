@@ -164,7 +164,7 @@ func calculateBackfillRunTimestamps(triggerRun *v2pb.TriggerRun) ([]time.Time, e
 	}
 	cronSchedule, err := cron.ParseStandard(cronExp)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse cron schedule in original trigger run: %v", err)
+		return nil, fmt.Errorf("failed to parse cron schedule in original trigger run: %w", err)
 	}
 	nextRunTimestamp := cronSchedule.Next(startTimestamp)
 	previousOneRunTimestamp := nextRunTimestamp.Add(-cronSchedule.Next(nextRunTimestamp).Sub(nextRunTimestamp))

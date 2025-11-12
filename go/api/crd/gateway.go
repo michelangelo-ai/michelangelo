@@ -111,17 +111,17 @@ func (r *gateway) ConditionalUpsert(
 
 	// Compare change, then apply update conditionally
 	r.logger.Info("CRD exists, compare CRD schema", zap.String("name", crd.Name))
-	compareResult, err := compareCRDSchemas(crdOnServer, crd)
+	compareResult, err := CompareCRDSchemas(crdOnServer, crd)
 	if err != nil {
 		return err
 	}
 
-	if !compareResult.hasChange {
+	if !compareResult.HasChange {
 		r.logger.Info("Skip schema update. No change in CRD.", zap.String("name", crd.Name))
 		return nil
 	}
 
-	if !compareResult.compatible && !enableIncompatibleUpdate {
+	if !compareResult.Compatible && !enableIncompatibleUpdate {
 		has, e := r.hasInstances(ctx, crdOnServer)
 		if e != nil {
 			return e

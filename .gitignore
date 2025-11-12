@@ -292,3 +292,38 @@ CLAUDE.local.md
 # .mactlrc.example is committed as documentation/template
 # Users create ~/.mactlrc for their personal configuration
 .mactlrc
+
+# Large files that should not be committed
+*.tgz
+*.tar.gz
+*.tar.bz2
+*.zip
+*.jar
+*.war
+*.ear
+spark-*.tgz
+hadoop-*.tgz
+**/spark-*-bin-*.tgz
+**/hadoop-*-bin-*.tgz
+
+# Large dataset files
+*.parquet
+*.csv.gz
+*.json.gz
+datasets/
+
+# Model files
+*.model
+*.pkl
+*.pickle
+*.h5
+*.pb
+*.onnx
+*.safetensors
+models/
+checkpoints/
+
+# Temporary download directories
+/tmp/
+*/tmp/
+**/tmp/

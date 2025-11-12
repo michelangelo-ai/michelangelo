@@ -560,3 +560,71 @@ func TestUnmarshalJSON_DisallowUnknownFields(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unknown field")
 }
+
+// TestInlineEmbedding tests that CRD types can be embedded inline with additional fields.
+// This is a regression test for the UnmarshalJSON issue where the type alias pattern
+// would cause additional fields to be lost during unmarshaling.
+func TestInlineEmbedding(t *testing.T) {
+	// Define a struct that embeds TestObject inline with additional fields
+	// This simulates how consuming repositories use inline embedding
+	type TestObjectResponse struct {
+		testpb.TestObject `json:",inline"`
+		AdditionalField   string            `json:"additional_field,omitempty"`
+		DebuggingInfo     map[string]string `json:"debugging_info,omitempty"`
+	}
+
+	// Create a complete JSON string with both TestObject and additional fields
+	// We use raw JSON to avoid marshaling issues with oneof fields
+	jsonStr := `{
+		"apiVersion": "test/v1",
+		"kind": "TestObject",
+		"metadata": {
+			"name": "test-object",
+			"namespace": "default"
+		},
+		"spec": {
+			"description": "test description"
+		},
+		"status": {},
+		"additional_field": "extra-value",
+		"debugging_info": {
+			"log_level": "debug",
+			"trace_id": "12345"
+		}
+	}`
+
+	// Unmarshal the JSON
+	var unmarshaled TestObjectResponse
+	err := json.Unmarshal([]byte(jsonStr), &unmarshaled)
+	assert.Nil(t, err, "Failed to unmarshal JSON with inline embedding")
+
+	// Verify embedded TestObject fields are preserved
+	assert.Equal(t, "test/v1", unmarshaled.TypeMeta.APIVersion)
+	assert.Equal(t, "TestObject", unmarshaled.TypeMeta.Kind)
+	assert.Equal(t, "test-object", unmarshaled.ObjectMeta.Name)
+	assert.Equal(t, "default", unmarshaled.ObjectMeta.Namespace)
+	assert.Equal(t, "test description", unmarshaled.Spec.Description)
+
+	// CRITICAL: Verify additional fields are NOT lost
+	// If UnmarshalJSON with type alias pattern is added back to the main CRD type,
+	// these assertions will fail because the type alias consumes the entire JSON
+	// and ignores fields that aren't part of the CRD type itself.
+	assert.Equal(t, "extra-value", unmarshaled.AdditionalField,
+		"Additional fields lost! This indicates UnmarshalJSON on main CRD type breaks inline embedding")
+	assert.NotNil(t, unmarshaled.DebuggingInfo,
+		"DebuggingInfo map lost! This indicates UnmarshalJSON on main CRD type breaks inline embedding")
+	assert.Equal(t, "debug", unmarshaled.DebuggingInfo["log_level"])
+	assert.Equal(t, "12345", unmarshaled.DebuggingInfo["trace_id"])
+
+	// Now test the reverse: Marshal and verify both parts are included
+	remarshaled, err := json.Marshal(unmarshaled)
+	assert.Nil(t, err)
+
+	// Unmarshal into a generic map to verify all fields are present
+	var jsonMap map[string]interface{}
+	err = json.Unmarshal(remarshaled, &jsonMap)
+	assert.Nil(t, err)
+
+	assert.Equal(t, "extra-value", jsonMap["additional_field"])
+	assert.NotNil(t, jsonMap["debugging_info"])
+}

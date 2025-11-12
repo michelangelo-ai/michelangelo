@@ -4,7 +4,7 @@ from pathlib import Path
 import unittest
 from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
 
-# Binding for TaskA. That's how we assosiate TaskConfig Python class with a corresponding Starlark function.
+# Binding for TaskA. That's how we associate TaskConfig Python class with a corresponding Starlark function.
 _task_a_binding = TaskBinding(
     star_file=Path(__file__).parent / "task_a.star",
     function="task_a",

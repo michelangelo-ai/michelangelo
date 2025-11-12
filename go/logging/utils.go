@@ -10,8 +10,12 @@ import (
 )
 
 // MarshalToString marshals the input message into JSON form and convert into string.
+// If marshaling fails, returns an error message string instead of silently ignoring the error.
 func MarshalToString(v interface{}) string {
-	b, _ := json.Marshal(v)
+	b, err := json.Marshal(v)
+	if err != nil {
+		return fmt.Sprintf("<error marshaling to JSON: %v>", err)
+	}
 	return string(b)
 }
 

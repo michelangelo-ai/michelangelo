@@ -4,6 +4,7 @@ A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
 from collections import defaultdict
+from collections.abc import MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import partial
@@ -14,7 +15,6 @@ from os import getenv, environ
 from pathlib import Path
 from types import MethodType
 from typing import Any, Callable, Union
-from uuid import uuid4
 import logging
 import re
 import sys
@@ -151,6 +151,27 @@ def bind_signature(signature):
     return decorator
 
 
+def deep_update(d: MutableMapping, u: MutableMapping):
+    """
+    Update dict-like object in deep way.
+
+    ```py
+    d1 = {'a': {'a1': 1, 'a2': 2}}
+    d2 = {'a': {'a1': 7, 'a3': 9}}
+
+    deep_update(d1, d2)
+    print(d1)
+    # {'a': {'a1': 7, 'a2': 2, 'a3': 9}}
+    ```
+    """
+    for k, v in u.items():
+        if isinstance(v, MutableMapping) and isinstance(d.get(k), MutableMapping):
+            deep_update(d[k], v)
+        else:
+            d[k] = v
+    return d
+
+
 def get_single_arg(arguments: dict, key: str) -> str:
     """
     Get a single argument from the arguments dictionary.
@@ -163,10 +184,11 @@ def get_single_arg(arguments: dict, key: str) -> str:
         The value of the single argument.
 
     Raises:
-        ValueError: If the argument is not in the dictionary or is not a string or a list with one element.
+        ValueError: If the argument is not a string or a list with one element.
+        KeyError: If the argument is missing.
     """
     if key not in arguments:
-        raise ValueError(f'argument "{key}" is required')
+        raise KeyError(f'argument "{key}" is required')
     value = arguments[key]
     if isinstance(value, str):
         return value
@@ -194,14 +216,17 @@ class CrdMethodInfo:
     output_class: type[Message]
 
 
-def get_crd(crd_method_info, namespace: str, name: str) -> Message:
+def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
     """
-    Run CRD.GET method with grpc reflection
+    Run CRD.method with grpc reflection with custom kwargs
+    (for input_class)
+
+    Please make sure crd method input_class can be constructed
+    with given kwargs.
     """
-    request_input = crd_method_info.input_class(
-        namespace=namespace,
-        name=name,
-    )
+    _LOG.debug("Prepare CRD method call (%r) with kwargs: %r", crd_method_call, kwargs)
+    # TODO (Hwamin): Add validation for kwargs keys/values
+    request_input = crd_method_info.input_class(**kwargs)
     return crd_method_call(crd_method_info, request_input)
 
 
@@ -234,10 +259,31 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    _name = get_single_arg(bound_args.arguments, "name")
-    _namespace = get_single_arg(bound_args.arguments, "namespace")
+    if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
+        _LOG.debug("No name argument passed. List CRD in the namespace.")
+        _self: CRD = bound_args.arguments["self"]
+        _self.generate_list(crd_method_info.channel)
+        return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
 
-    return get_crd(crd_method_info, _namespace, _name)
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "name": get_single_arg(bound_args.arguments, "name"),
+        },
+    )
+
+
+def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """
+    Default common CRD member method implementation for LIST method.
+    """
+    _LOG.info("Bound arguments: %r", bound_args.arguments)
+
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
+    )
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -246,14 +292,13 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    _namespace = get_single_arg(bound_args.arguments, "namespace")
-    _name = get_single_arg(bound_args.arguments, "name")
-
-    request_input = crd_method_info.input_class(
-        namespace=_namespace,
-        name=_name,
+    return crd_method_call_kwargs(
+        crd_method_info,
+        **{
+            "namespace": get_single_arg(bound_args.arguments, "namespace"),
+            "name": get_single_arg(bound_args.arguments, "name"),
+        },
     )
-    return crd_method_call(crd_method_info, request_input)
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
@@ -279,6 +324,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     if message_instance is None:
         # Create new CRD
         _LOG.info("Create a new CRD")
+        _self.generate_create(crd_method_info.channel)
         return _self.create(_file)
 
     # Update existing CRD
@@ -393,10 +439,8 @@ class CRD:
         )
         get_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-                for name in ["namespace", "name"]
-            ]
+            + [Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD)]
+            + [Parameter("name", Parameter.POSITIONAL_OR_KEYWORD, default="")]
         )
 
         bound_func = partial(get_func_impl, method_info)
@@ -409,7 +453,6 @@ class CRD:
         Generate apply function of this class.
         """
         self.generate_get(channel)
-        self.generate_create(channel)
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
@@ -454,30 +497,11 @@ class CRD:
         """
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
-        methods, method_pool = get_methods_from_service(channel, self.full_name)
-        method_name = "List" + snake_to_camel(self.name)
-
-        _LOG.info("List intput/output of method %r", method_name)
-        try:
-            method_list = methods[method_name]
-        except KeyError:
-            _LOG.warning(
-                "Method %r not found in service %r",
-                method_name,
-                self.full_name,
-            )
-            _LOG.info("Method details: %r", methods)
-            return
-
-        _LOG.info("Create method input type: %r", method_list.input_type)
-        _LOG.info("Create method output type: %r", method_list.output_type)
-        input_class = get_message_class_by_name(method_pool, method_list.input_type[1:])
-        output_class = get_message_class_by_name(
-            method_pool, method_list.output_type[1:]
+        method_info = CrdMethodInfo(
+            channel,
+            self.full_name,
+            *self._extract_method_info(channel, self.full_name, "List"),
         )
-        _LOG.info("Retrieved method input class: %r", input_class)
-        _LOG.info("Retrieved method output class: %r", output_class)
-
         list_func_signature = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
             + [
@@ -486,59 +510,33 @@ class CRD:
             ]
         )
 
-        # TODO: Need to handle `StatusCode.RESOURCE_EXHAUSTED` issue (max size)
-        def list_func(*args, **kwargs):
-            _LOG.info("Start list_func for %r", self.full_name)
-            bound_args = list_func_signature.bind(*args, **kwargs)
-            bound_args.apply_defaults()
-            _LOG.info("Bound arguments: %r", bound_args.arguments)
-
-            _namespace = get_single_arg(bound_args.arguments, "namespace")
-
-            request_input = input_class(
-                namespace=_namespace,
-            )
-            _LOG.info(
-                "LIST Request input (%r) ready: %r",
-                type(request_input),
-                request_input,
-            )
-
-            method_fullname = f"/{self.full_name}/{method_name}"
-            _LOG.info("Method fullname for gRPC call: %s", method_fullname)
-            stub_method = channel.unary_unary(
-                method_fullname,
-                request_serializer=input_class.SerializeToString,
-                response_deserializer=output_class.FromString,
-            )
-            response = stub_method(
-                request_input,
-                metadata=METADATA_STUB,
-                timeout=30,
-            )
-            _LOG.info("Stub method completed (%r): %r", type(response), response)
-            return response
-
-        list_func.__signature__ = list_func_signature  # type: ignore[attr-defined]
-        self.list = MethodType(list_func, self)
+        bound_func = partial(list_func_impl, method_info)
+        bound_func = bind_signature(list_func_signature)(bound_func)
+        self.list = MethodType(bound_func, self)
+        _LOG.debug("Generated LIST injected well: %r", self.list)
 
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
     ) -> Message:
-        """ """
-
-        original_crd_dict = MessageToDict(
+        """
+        Read a YAML file and update the original CRD request instance.
+        """
+        original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
         )
         _LOG.debug("Original CRD dict: %r", original_crd_dict)
 
         yaml_dict = yaml_to_dict(yaml_path_string)
+        _LOG.debug(
+            "Remove top-level apiVersion/kind from YAML dict,"
+            " since we don't allow to change typemeta"
+        )
+        yaml_dict.pop("apiVersion", None)
+        yaml_dict.pop("kind", None)
         _LOG.debug("Finished to read YAML file: %r", yaml_dict)
 
-        original_crd_dict[self.name]["spec"].update(yaml_dict["spec"])
-        original_crd_dict[self.name]["metadata"]["generation"] = str(
-            int(original_crd_dict[self.name]["metadata"]["generation"]) + 1
-        )
+        deep_update(original_crd_dict[self.name], yaml_dict)
+        _LOG.debug("Updated CRD config dict: %r", original_crd_dict)
 
         res = input_class()
         ParseDict(original_crd_dict, res)
@@ -641,21 +639,21 @@ def convert_crd_metadata(
 ) -> dict:
     """
     Convert CRD metadata for a given class.
+
+    Since Michelangelo yaml format is putting `apiVersion` and `kind`
+    at the top level, we need to move them inside of the `typemeta` field.
     """
     _LOG.info("Convert CRD metadata for class %r from %r", crd_class, yaml_path)
     if not isinstance(yaml_dict, dict):
         _LOG.error("Expected a dictionary, got: %r", type(yaml_dict))
         raise ValueError("Expected a dictionary for CRD metadata")
+    _LOG.debug("Raw yaml dict: metadata: %r", yaml_dict)
 
-    res = {"spec": deepcopy(yaml_dict["spec"])}
-    res["metadata"] = {
-        # TODO: this generation field should be hanlded by server side
-        "generation": "0",
-        "resourceVersion": "0",
-        "name": yaml_dict["metadata"]["name"],
-        "namespace": yaml_dict["metadata"]["namespace"],
-        "uid": str(uuid4()),
-    }
+    res = deepcopy(yaml_dict)
+    if "apiVersion" in res:
+        res.setdefault("typeMeta", {})["apiVersion"] = res.pop("apiVersion")
+    if "kind" in res:
+        res.setdefault("typeMeta", {})["kind"] = res.pop("kind")
     _LOG.debug("Converted CRD metadata: %r", res)
     return res
 
@@ -955,7 +953,10 @@ def main(channel: Channel):
     print(result)
 
 
-if __name__ == "__main__":
+def run():
+    """
+    Entry point for mactl
+    """
     if USE_TLS:
         _LOG.info(
             "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
@@ -964,14 +965,18 @@ if __name__ == "__main__":
         )
         # Use secure TLS connection
         with secure_channel(ADDRESS, ssl_channel_credentials()) as channel:
-            main(channel)
-    else:
-        _LOG.info(
-            "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
-            USE_TLS,
-            ADDRESS,
-        )
-        # Use secure TLS connection
-        # Use insecure connection for local development
-        with insecure_channel(ADDRESS) as channel:
-            main(channel)
+            return main(channel)
+
+    _LOG.info(
+        "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",
+        USE_TLS,
+        ADDRESS,
+    )
+    # Use secure TLS connection
+    # Use insecure connection for local development
+    with insecure_channel(ADDRESS) as channel:
+        return main(channel)
+
+
+if __name__ == "__main__":
+    run()
