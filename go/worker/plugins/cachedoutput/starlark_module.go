@@ -46,8 +46,8 @@ var properties = map[string]star.PropertyFactory{}
 
 // These are some error reasons
 const (
-	_errorReasonUnpackArgs           = "UnpackArgsError"
-	_errorReasonConvertStarlarkValue = "ConvertStarlarkValueError"
+	errorReasonUnpackArgs           = "UnpackArgsError"
+	errorReasonConvertStarlarkValue = "ConvertStarlarkValueError"
 )
 
 // get returns a cachedoutput obj by namespace and name
@@ -68,7 +68,7 @@ func (r *module) get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 		"namespace", &namespace,
 		"name", &name,
 	); err != nil {
-		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
 
@@ -86,7 +86,7 @@ func (r *module) get(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 
 	var cachedOutputValue starlark.Value
 	if err := utils.AsStar(response.CachedOutput, &cachedOutputValue); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 	return cachedOutputValue, nil
@@ -105,13 +105,13 @@ func (r *module) put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 	if err := starlark.UnpackArgs("put", args, kwargs,
 		"cachedoutput", &cachedOutputDict,
 	); err != nil {
-		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
 
 	co := v2pb.CachedOutput{}
 	if err := utils.AsGo(cachedOutputDict, &co); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
@@ -128,7 +128,7 @@ func (r *module) put(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tupl
 
 	var cachedOutputValue starlark.Value
 	if err := utils.AsStar(response.CachedOutput, &cachedOutputValue); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
@@ -158,26 +158,26 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 		"lookback_days", &lookbackDaysValue,
 		"limit", &limitValue,
 	); err != nil {
-		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
 
 	var namespace string
 	if err := utils.AsGo(namespaceValue, &namespace); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
 	matchCriterion := map[string]interface{}{}
 	if err := utils.AsGo(matchCritrionDict, &matchCriterion); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
 	orderBy := []*apipb.OrderBy{}
 
 	if err := utils.AsGo(orderByValue, &orderBy); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
@@ -185,12 +185,12 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	var limit int
 
 	if err := utils.AsGo(lookbackDaysValue, &lookbackDays); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 
 	if err := utils.AsGo(limitValue, &limit); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 	labelSelectors := []string{}
@@ -225,7 +225,7 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 
 	var responseValue starlark.Value
 	if err := utils.AsStar(response, &responseValue); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 	return responseValue, nil

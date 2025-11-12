@@ -10,7 +10,7 @@ import (
 // BackfillTrigger workflow with provided trigger run spec
 func (r *workflows) BackfillTrigger(ctx workflow.Context, req triggerrun.CreateTriggerRequest) (map[string]any, error) {
 	ctx = workflow.WithBackend(ctx, r.workflow)
-	ctx = workflow.WithActivityOptions(ctx, _activityOptionsDefault)
+	ctx = workflow.WithActivityOptions(ctx, activityOptionsDefault)
 	tr := req.TriggerRun
 	log := workflow.GetLogger(ctx).With(
 		zap.String("trigger_run", tr.Name),

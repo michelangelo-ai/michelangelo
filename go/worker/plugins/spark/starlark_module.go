@@ -16,20 +16,20 @@ import (
 
 // These are some error reasons
 const (
-	_errorReasonUnpackArgs           = "UnpackArgsError"
-	_errorReasonConvertJob           = "ConvertSparkJobError"
-	_errorReasonConvertStarlarkValue = "ConvertStarlarkValueError"
-	_errorReasonSubmitJob            = "SubmitJobError"
-	_errorReasonSensorJob            = "SensorJobError"
-	_errorReasonTermninateJob        = "TerminateJobError"
+	errorReasonUnpackArgs           = "UnpackArgsError"
+	errorReasonConvertJob           = "ConvertSparkJobError"
+	errorReasonConvertStarlarkValue = "ConvertStarlarkValueError"
+	errorReasonSubmitJob            = "SubmitJobError"
+	errorReasonSensorJob            = "SensorJobError"
+	errorReasonTermninateJob        = "TerminateJobError"
 )
 
-const _reasonForCancel = "Canceled by request"
+const reasonForCancel = "Canceled by request"
 
 // These are general const
 const (
-	_defaultPollSeconds  = 10
-	_maxJobSensorRetries = 100
+	defaultPollSeconds  = 10
+	maxJobSensorRetries = 100
 )
 
 // TODO: andrii: implement Spark starlark plugin here
@@ -78,7 +78,7 @@ func (r *module) createJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		"job", &_job,
 		"timeout_seconds?", &timeout,
 	); err != nil {
-		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
 	if timeout == 0 {
@@ -129,19 +129,19 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 
 	var _job *starlark.Dict
 	timeout := int64(utils.CadenceLongTimeout.Seconds())
-	poll := _defaultPollSeconds
+	poll := defaultPollSeconds
 	var assertConditionType string = utils.SucceededCondition
 
 	if err := starlark.UnpackArgs("sensor_job", args, kwargs,
 		"job", &_job,
 		"assert_condition_type?", &assertConditionType,
 	); err != nil {
-		logger.Error(_errorReasonUnpackArgs, ext.ZapError(err)...)
+		logger.Error(errorReasonUnpackArgs, ext.ZapError(err)...)
 		return nil, err
 	}
 	var sparkJob v2pb.SparkJob
 	if err := utils.AsGo(_job, &sparkJob); err != nil {
-		logger.Error(_errorReasonConvertJob, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertJob, ext.ZapError(err)...)
 		return nil, err
 	}
 
@@ -155,7 +155,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 		Namespace: sparkJob.Namespace,
 	}
 	var getSparkJobResponse spark.SensorSparkJobResponse
-	maxSensorTries := _maxJobSensorRetries
+	maxSensorTries := maxJobSensorRetries
 	for i := 0; i < maxSensorTries; i++ {
 		if err := workflow.ExecuteActivity(sensorCtx, spark.Activities.SensorSparkJob, getSparkJobRequest).Get(ctx, &getSparkJobResponse); err != nil {
 			if workflow.IsCanceledError(ctx, err) {
@@ -165,21 +165,21 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 					Name:      sparkJob.Name,
 					Namespace: sparkJob.Namespace,
 					Type:      v2pb.TERMINATION_TYPE_FAILED,
-					Reason:    _reasonForCancel,
+					Reason:    reasonForCancel,
 				}
 				var terminateResponse v2pb.UpdateSparkJobResponse
 				if terminateErr := workflow.ExecuteActivity(ctx, spark.Activities.TerminateSparkJob, terminateRequest).Get(ctx, &terminateResponse); terminateErr != nil {
-					logger.Error(_errorReasonTermninateJob, ext.ZapError(terminateErr)...)
+					logger.Error(errorReasonTermninateJob, ext.ZapError(terminateErr)...)
 					return nil, terminateErr
 				}
 				var res starlark.Value
 				if convertErr := utils.AsStar(terminateResponse.SparkJob, &res); convertErr != nil {
-					logger.Error(_errorReasonConvertJob, ext.ZapError(err)...)
+					logger.Error(errorReasonConvertJob, ext.ZapError(err)...)
 					return nil, convertErr
 				}
 				return res, nil
 			}
-			logger.Error(_errorReasonSensorJob, ext.ZapError(err)...)
+			logger.Error(errorReasonSensorJob, ext.ZapError(err)...)
 			continue
 		}
 		// we will break as long as succeeded condition has been set
@@ -190,7 +190,7 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 
 	var sparkJobValue starlark.Value
 	if err := utils.AsStar(getSparkJobResponse.SparkJob, &sparkJobValue); err != nil {
-		logger.Error(_errorReasonConvertStarlarkValue, ext.ZapError(err)...)
+		logger.Error(errorReasonConvertStarlarkValue, ext.ZapError(err)...)
 		return nil, err
 	}
 	return sparkJobValue, nil
