@@ -223,7 +223,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	}
 
 	// Delete the object in K8s/ETCD
-	if storage.EnableMetadataStorage(&handler.conf) == false {
+	if !storage.EnableMetadataStorage(&handler.conf) {
 		err = handler.k8sHandler.Delete(ctx, obj, opts)
 		return surfaceGrpcError(err, "delete", objMeta.GetNamespace(), objMeta.GetName())
 	}
@@ -315,7 +315,7 @@ func (handler *apiHandler) DeleteCollection(
 	log, headers := initLogger(ctx, handler.logger, "DeleteCollection", namespace, "", kind)
 	defer emitAPIMetrics("DeleteCollection", handler.metrics, log, start, kind, headers)
 
-	if storage.EnableMetadataStorage(&handler.conf) == false {
+	if !storage.EnableMetadataStorage(&handler.conf) {
 		err := handler.k8sHandler.DeleteCollection(ctx, objType, namespace, deleteOpts, listOpts)
 		return surfaceGrpcError(err, "delete collection", namespace, "")
 	}

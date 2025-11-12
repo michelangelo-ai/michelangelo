@@ -81,7 +81,7 @@ func GetGrpcStatusCode(err error) codes.Code {
 		}
 
 		grpcErrCode, found := K8sStatusReasonToGrpcError[statusErr.Status().Reason]
-		if found == false {
+		if !found {
 			grpcErrCode = codes.Unknown
 		}
 		return grpcErrCode
