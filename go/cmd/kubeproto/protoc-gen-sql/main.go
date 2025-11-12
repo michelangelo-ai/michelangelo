@@ -58,7 +58,7 @@ func generateSQLSchema(crdRootMsg *protogen.Message, crdOptions *pboptions.Optio
 				buf.Write([]byte("    KEY    `" + getIndexName(crdTableName, field.Key) + "` ("))
 				firstSubfield := true
 				for _, subField := range field.SubFields {
-					if firstSubfield == true {
+					if firstSubfield {
 						firstSubfield = false
 					} else {
 						buf.Write([]byte(", "))
