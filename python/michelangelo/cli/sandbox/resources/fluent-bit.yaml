@@ -24,11 +24,21 @@ spec:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
             - name: "AWS_ACCESS_KEY_ID"
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: "aws-credentials"
+                  key: "aws-access-key-id"
             - name: "AWS_SECRET_ACCESS_KEY"
-              value: "minioadmin"
+              valueFrom:
+                secretKeyRef:
+                  name: "aws-credentials"
+                  key: "aws-secret-access-key"
             - name: "AWS_DEFAULT_REGION"
-              value: "us-east-1"
+              valueFrom:
+                secretKeyRef:
+                  name: "aws-credentials"
+                  key: "aws-default-region"
+                  optional: true
           volumeMounts:
             - name: "fluent-bit-config-volume"
               mountPath: "/fluent-bit/etc"
