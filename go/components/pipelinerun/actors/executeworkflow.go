@@ -97,7 +97,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	}
 
 	if pipelineRun.Spec.Kill {
-		err, workflowTerminated := a.processJobTermination(ctx, pipelineRun)
+		workflowTerminated, err := a.processJobTermination(ctx, pipelineRun)
 		if err != nil {
 			logger.Error("failed to terminate workflow", zap.Error(err))
 			return &apipb.Condition{
@@ -212,7 +212,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 	return newCondition, nil
 }
 
-func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) (error, bool) {
+func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipelineRun *v2.PipelineRun) (bool, error) {
 	workflowID := pipelineRun.Status.WorkflowId
 	runID := pipelineRun.Status.WorkflowRunId
 
@@ -223,15 +223,15 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 				err := a.workflowClient.CancelWorkflow(ctx, workflowID, runID, defaultengine.KillReason)
 				// if CancelWorkflow return a non-nil error, the workflow has not been successfully terminated
 				if err != nil {
-					return err, false
+					return false, err
 				} else {
-					return err, true
+					return true, err
 				}
 			}
 		}
 	}
 	// in this case, the workflow is unable to be terminated because it has not yet been started
-	return nil, false
+	return false, nil
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
