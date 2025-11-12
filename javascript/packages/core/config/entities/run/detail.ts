@@ -53,6 +53,8 @@ export const RUN_DETAIL_CONFIG: DetailViewConfig = {
             {
               id: 'logUrl',
               label: 'Logs',
+              type: CellType.LINK,
+              url: 'logUrl',
             },
             {
               id: 'state',
