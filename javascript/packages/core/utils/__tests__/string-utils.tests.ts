@@ -32,6 +32,11 @@ describe('isAbsoluteURL', () => {
     expect(isAbsoluteURL('http://www.google.com')).toBe(true);
   });
 
+  it('should return true for localhost URLs with protocol', () => {
+    expect(isAbsoluteURL('http://localhost:3000')).toBe(true);
+    expect(isAbsoluteURL('https://localhost')).toBe(true);
+  });
+
   it('should return false if the string is not a valid absolute URL', () => {
     expect(isAbsoluteURL('something')).toBe(false);
   });
