@@ -16,11 +16,13 @@ const (
 	ImageBuildType = "Image Build"
 )
 
+// ImageBuildActor handles the image building stage of pipeline execution.
 type ImageBuildActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger *zap.Logger
 }
 
+// NewImageBuildActor creates a new ImageBuildActor with the specified logger.
 func NewImageBuildActor(logger *zap.Logger) *ImageBuildActor {
 	return &ImageBuildActor{
 		logger: logger.With(zap.String("actor", "imagebuild")),

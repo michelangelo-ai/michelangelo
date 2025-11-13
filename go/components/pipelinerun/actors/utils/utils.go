@@ -28,6 +28,7 @@ const (
 	UniflowTaskStateSkipped   = "SKIPPED"
 )
 
+// GetStep retrieves a specific step from a pipeline run by name.
 func GetStep(pipelineRun *v2.PipelineRun, name string) *v2.PipelineRunStepInfo {
 	for _, step := range pipelineRun.Status.Steps {
 		if step.Name == name {

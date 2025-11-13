@@ -16,12 +16,15 @@ const (
 	SourcePipelineType = "SourcePipeline"
 )
 
+// SourcePipelineActor handles retrieving and attaching the source pipeline definition
+// to a pipeline run.
 type SourcePipelineActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	apiHandler api.Handler
 	logger     *zap.Logger
 }
 
+// NewSourcePipelineActor creates a new SourcePipelineActor with the specified API handler and logger.
 func NewSourcePipelineActor(apiHandler api.Handler, logger *zap.Logger) *SourcePipelineActor {
 	return &SourcePipelineActor{
 		apiHandler: apiHandler,
