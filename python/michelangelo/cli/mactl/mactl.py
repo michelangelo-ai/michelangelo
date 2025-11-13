@@ -1085,6 +1085,13 @@ def main(channel: Channel):
         channel,
     )
 
+    # TODO: this will be handled by CRD automatically later with argparse
+    if user_command_action not in crds[user_command_crd].func_signature:
+        print(f"Unknown action: {user_command_action}")
+        print(f"Available actions: {', '.join(crds[user_command_crd].func_signature)}")
+        print(f"Run 'mactl {user_command_crd} --help' for more information")
+        sys.exit(1)
+
     func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
     func_generator(channel, action_parser)
 
