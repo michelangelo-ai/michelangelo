@@ -14,7 +14,9 @@ go_library(
     deps = [
         "//go/components/inferenceserver/plugins:go_default_library",
         "//go/components/inferenceserver/plugins/oss:go_default_library",
+        "//go/shared/configmap:go_default_library",
         "//go/shared/gateways:go_default_library",
+        "//go/shared/gateways/backends:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",

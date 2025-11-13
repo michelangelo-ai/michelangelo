@@ -1,4 +1,4 @@
-package gateways
+package configmap
 
 import (
 	"context"
@@ -15,14 +15,14 @@ import (
 )
 
 // ConfigMapProvider manages ConfigMaps for inference servers
-type ConfigMapProvider struct {
+type DefaultConfigMapProvider struct {
 	kubeClient client.Client
 	logger     *zap.Logger
 }
 
-// NewConfigMapProvider creates a new ConfigMapProvider instance
-func NewConfigMapProvider(client client.Client, logger *zap.Logger) *ConfigMapProvider {
-	return &ConfigMapProvider{
+// NewDefaultConfigMapProvider creates a new DefaultConfigMapProvider instance
+func NewDefaultConfigMapProvider(client client.Client, logger *zap.Logger) *DefaultConfigMapProvider {
+	return &DefaultConfigMapProvider{
 		kubeClient: client,
 		logger:     logger,
 	}
@@ -59,7 +59,7 @@ type ConfigMapRequest struct {
 }
 
 // CreateModelConfigMap creates a ConfigMap for model configuration
-func (p *ConfigMapProvider) CreateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
+func (p *DefaultConfigMapProvider) CreateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
 	configMapName := fmt.Sprintf("%s-model-config", request.InferenceServer)
 
 	p.logger.Info("Creating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace), zap.String("backend", request.BackendType.String()))
@@ -114,7 +114,7 @@ func (p *ConfigMapProvider) CreateModelConfigMap(ctx context.Context, request Co
 
 // UpdateModelConfigMap updates an existing ConfigMap with new model configurations
 // This follows the correct pattern from PR #188: Get -> Parse -> Modify -> Marshal -> Update
-func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
+func (p *DefaultConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request ConfigMapRequest) error {
 	configMapName := fmt.Sprintf("%s-model-config", request.InferenceServer)
 
 	p.logger.Info("Updating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
@@ -182,7 +182,7 @@ func (p *ConfigMapProvider) UpdateModelConfigMap(ctx context.Context, request Co
 }
 
 // DeleteModelConfigMap deletes a ConfigMap for model configuration
-func (p *ConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServerName, namespace string) error {
+func (p *DefaultConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServerName, namespace string) error {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
 	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
@@ -203,7 +203,7 @@ func (p *ConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceS
 }
 
 // GetModelConfigMap retrieves a ConfigMap and parses its model configurations
-func (p *ConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServerName, namespace string) ([]ModelConfigEntry, error) {
+func (p *DefaultConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServerName, namespace string) ([]ModelConfigEntry, error) {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
@@ -230,7 +230,7 @@ func (p *ConfigMapProvider) GetModelConfigMap(ctx context.Context, inferenceServ
 }
 
 // CreateDefaultModelConfig creates a default model configuration for an inference server
-func (p *ConfigMapProvider) CreateDefaultModelConfig(defaultModelName, defaultModelPath string) []ModelConfigEntry {
+func (p *DefaultConfigMapProvider) CreateDefaultModelConfig(defaultModelName, defaultModelPath string) []ModelConfigEntry {
 	return []ModelConfigEntry{
 		{
 			Name:   defaultModelName,
@@ -240,7 +240,7 @@ func (p *ConfigMapProvider) CreateDefaultModelConfig(defaultModelName, defaultMo
 }
 
 // AddModelToConfig adds a new model to existing configuration
-func (p *ConfigMapProvider) AddModelToConfig(ctx context.Context, inferenceServerName, namespace, modelName, modelPath string) error {
+func (p *DefaultConfigMapProvider) AddModelToConfig(ctx context.Context, inferenceServerName, namespace, modelName, modelPath string) error {
 	// Get current config
 	currentConfigs, err := p.GetModelConfigMap(ctx, inferenceServerName, namespace)
 	if err != nil {
@@ -284,7 +284,7 @@ func (p *ConfigMapProvider) AddModelToConfig(ctx context.Context, inferenceServe
 }
 
 // RemoveModelFromConfig removes a model from existing configuration
-func (p *ConfigMapProvider) RemoveModelFromConfig(ctx context.Context, inferenceServerName, namespace, modelName string) error {
+func (p *DefaultConfigMapProvider) RemoveModelFromConfig(ctx context.Context, inferenceServerName, namespace, modelName string) error {
 	// Get current config
 	currentConfigs, err := p.GetModelConfigMap(ctx, inferenceServerName, namespace)
 	if err != nil {
@@ -311,7 +311,7 @@ func (p *ConfigMapProvider) RemoveModelFromConfig(ctx context.Context, inference
 
 // UpdateDeploymentModel updates the model for a specific deployment using simplified shared ConfigMap approach
 // This adds entries directly to the shared model-config ConfigMap (no deployment-registry)
-func (p *ConfigMapProvider) UpdateDeploymentModel(ctx context.Context, inferenceServerName, namespace, deploymentName, modelName string, roleType string) error {
+func (p *DefaultConfigMapProvider) UpdateDeploymentModel(ctx context.Context, inferenceServerName, namespace, deploymentName, modelName string, roleType string) error {
 	p.logger.Info("Updating deployment model directly in shared ConfigMap",
 		zap.String("inferenceServer", inferenceServerName),
 		zap.String("deployment", deploymentName),
@@ -331,7 +331,7 @@ func (p *ConfigMapProvider) UpdateDeploymentModel(ctx context.Context, inference
 }
 
 // RemoveDeploymentFromRegistry removes a deployment from the deployment registry (UCS cleanup pattern)
-func (p *ConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, inferenceServerName, namespace, deploymentName string) error {
+func (p *DefaultConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, inferenceServerName, namespace, deploymentName string) error {
 	registryName := fmt.Sprintf("%s-deployment-registry", inferenceServerName)
 
 	p.logger.Info("Removing deployment from registry",
@@ -371,7 +371,7 @@ func (p *ConfigMapProvider) RemoveDeploymentFromRegistry(ctx context.Context, in
 
 // GetActiveModelsForInferenceServer returns all models currently used by any deployment
 // This enables safe cleanup by identifying which models are still needed
-func (p *ConfigMapProvider) GetActiveModelsForInferenceServer(ctx context.Context, inferenceServerName, namespace string) ([]string, error) {
+func (p *DefaultConfigMapProvider) GetActiveModelsForInferenceServer(ctx context.Context, inferenceServerName, namespace string) ([]string, error) {
 	registryName := fmt.Sprintf("%s-deployment-registry", inferenceServerName)
 
 	registry, err := p.getDeploymentRegistry(ctx, registryName, namespace)
@@ -408,7 +408,7 @@ func (p *ConfigMapProvider) GetActiveModelsForInferenceServer(ctx context.Contex
 
 // CleanupUnusedModels removes models from ConfigMap that are not used by any deployment
 // This is the safe cleanup function that mimics Uber's asset lifecycle management
-func (p *ConfigMapProvider) CleanupUnusedModels(ctx context.Context, inferenceServerName, namespace string) error {
+func (p *DefaultConfigMapProvider) CleanupUnusedModels(ctx context.Context, inferenceServerName, namespace string) error {
 	p.logger.Info("Starting cleanup of unused models", zap.String("inferenceServer", inferenceServerName))
 
 	// Get currently active models across all deployments
@@ -464,7 +464,7 @@ func (p *ConfigMapProvider) CleanupUnusedModels(ctx context.Context, inferenceSe
 }
 
 // getOrCreateDeploymentRegistry gets existing registry or creates new one
-func (p *ConfigMapProvider) getOrCreateDeploymentRegistry(ctx context.Context, registryName, namespace, inferenceServerName string) (*DeploymentModelRegistry, error) {
+func (p *DefaultConfigMapProvider) getOrCreateDeploymentRegistry(ctx context.Context, registryName, namespace, inferenceServerName string) (*DeploymentModelRegistry, error) {
 	registry, err := p.getDeploymentRegistry(ctx, registryName, namespace)
 	if err != nil {
 		// Create new registry if it doesn't exist
@@ -482,7 +482,7 @@ func (p *ConfigMapProvider) getOrCreateDeploymentRegistry(ctx context.Context, r
 }
 
 // getDeploymentRegistry retrieves deployment registry from ConfigMap
-func (p *ConfigMapProvider) getDeploymentRegistry(ctx context.Context, registryName, namespace string) (*DeploymentModelRegistry, error) {
+func (p *DefaultConfigMapProvider) getDeploymentRegistry(ctx context.Context, registryName, namespace string) (*DeploymentModelRegistry, error) {
 	configMap := &corev1.ConfigMap{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: registryName, Namespace: namespace}, configMap)
 	if err != nil {
@@ -503,7 +503,7 @@ func (p *ConfigMapProvider) getDeploymentRegistry(ctx context.Context, registryN
 }
 
 // createDeploymentRegistryConfigMap creates ConfigMap for deployment registry
-func (p *ConfigMapProvider) createDeploymentRegistryConfigMap(ctx context.Context, registryName, namespace string, registry *DeploymentModelRegistry) error {
+func (p *DefaultConfigMapProvider) createDeploymentRegistryConfigMap(ctx context.Context, registryName, namespace string, registry *DeploymentModelRegistry) error {
 	registryJSON, err := json.MarshalIndent(registry, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal deployment registry: %w", err)
@@ -528,7 +528,7 @@ func (p *ConfigMapProvider) createDeploymentRegistryConfigMap(ctx context.Contex
 }
 
 // saveDeploymentRegistry saves deployment registry to ConfigMap
-func (p *ConfigMapProvider) saveDeploymentRegistry(ctx context.Context, registryName, namespace string, registry *DeploymentModelRegistry) error {
+func (p *DefaultConfigMapProvider) saveDeploymentRegistry(ctx context.Context, registryName, namespace string, registry *DeploymentModelRegistry) error {
 	configMap := &corev1.ConfigMap{}
 	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: registryName, Namespace: namespace}, configMap)
 	if err != nil {
@@ -551,7 +551,7 @@ func (p *ConfigMapProvider) saveDeploymentRegistry(ctx context.Context, registry
 // FlushMergedStateToModelConfig implements Uber's UCS flush pattern
 // This method merges the deployment registry state with the model config,
 // ensuring the model-config ConfigMap reflects all active models from all deployments
-func (p *ConfigMapProvider) FlushMergedStateToModelConfig(ctx context.Context, inferenceServerName, namespace string) error {
+func (p *DefaultConfigMapProvider) FlushMergedStateToModelConfig(ctx context.Context, inferenceServerName, namespace string) error {
 	p.logger.Info("UCS FLUSH: Merging deployment registry state to model config", zap.String("inferenceServer", inferenceServerName))
 
 	// Get active models from deployment registry (like Uber's generateTrackedModels)

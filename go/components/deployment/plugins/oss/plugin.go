@@ -15,6 +15,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -31,7 +32,7 @@ type Plugin struct {
 	gateway           gateways.Gateway
 	blobstore         *blobstore.BlobStore
 	logger            *zap.Logger
-	configMapProvider *gateways.ConfigMapProvider
+	configMapProvider configmap.ConfigMapProvider
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
@@ -48,7 +49,7 @@ type Params struct {
 	Gateway           gateways.Gateway
 	BlobStore         *blobstore.BlobStore
 	Logger            *zap.Logger
-	ConfigMapProvider *gateways.ConfigMapProvider
+	ConfigMapProvider configmap.ConfigMapProvider
 }
 
 // NewPlugin creates a new instance of OSS plugin

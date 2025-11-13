@@ -9,6 +9,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -17,9 +18,10 @@ import (
 // ModelCleanupActor handles cleanup of old models after successful deployment
 // Following Uber's UCS pattern for safe model cleanup
 type ModelCleanupActor struct {
-	Client  client.Client
-	Gateway gateways.Gateway
-	Logger  *zap.Logger
+	Client            client.Client
+	configMapProvider configmap.ConfigMapProvider
+	Gateway           gateways.Gateway
+	Logger            *zap.Logger
 }
 
 func (a *ModelCleanupActor) GetType() string {
@@ -139,11 +141,11 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 		// Create update request to remove old model from ConfigMap
-		updateRequest := gateways.ModelConfigUpdateRequest{
+		updateRequest := configmap.ConfigMapRequest{
 			InferenceServer: inferenceServerName,
 			Namespace:       resource.Namespace,
 			BackendType:     v2pb.BACKEND_TYPE_TRITON,
-			ModelConfigs: []gateways.ModelConfigEntry{
+			ModelConfigs: []configmap.ModelConfigEntry{
 				{
 					Name:   desiredModel, // Only keep the new model
 					S3Path: fmt.Sprintf("s3://deploy-models/%s/", desiredModel),
@@ -151,7 +153,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 			},
 		}
 
-		if err := a.Gateway.UpdateModelConfig(ctx, a.Logger, updateRequest); err != nil {
+		if err := a.configMapProvider.UpdateModelConfigMap(ctx, updateRequest); err != nil {
 			a.Logger.Error("Failed to update ConfigMap during cleanup", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
@@ -164,6 +166,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
 		a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))
 
+		// TODO: use gateway.UnloadModel() instead
 		if err := a.unloadModelFromTriton(ctx, currentModel, inferenceServerName); err != nil {
 			a.Logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
 			// Don't fail the deployment if direct unload fails - ConfigMap update should handle it
@@ -201,6 +204,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 }
 
 // unloadModelFromTriton directly calls Triton API to unload model (following Uber's pattern)
+// TODO: use gateway.UnloadModel() instead
 func (a *ModelCleanupActor) unloadModelFromTriton(ctx context.Context, modelName, inferenceServerName string) error {
 	// Construct Triton unload API endpoint
 	unloadURL := fmt.Sprintf("http://localhost:8889/%s/v2/repository/models/%s/unload", inferenceServerName, modelName)

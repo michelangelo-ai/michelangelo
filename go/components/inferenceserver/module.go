@@ -12,7 +12,10 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
+	configmap "github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	triton "github.com/michelangelo-ai/michelangelo/go/shared/gateways/backends"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Module provides the inference server controller with all dependencies
@@ -36,7 +39,10 @@ func NewInferenceServerGateway(kubeClient client.Client, logger *zap.Logger) gat
 		panic(fmt.Errorf("failed to create dynamic client: %w", err))
 	}
 
-	return gateways.NewGatewayWithClients(kubeClient, dynamicClient, logger)
+	gateway := gateways.NewGatewayWithClients(kubeClient, dynamicClient, logger)
+	gateway.RegisterBackend(v2pb.BACKEND_TYPE_TRITON, triton.NewTritonBackend(kubeClient, dynamicClient, configmap.NewDefaultConfigMapProvider(kubeClient, logger), logger))
+
+	return gateway
 }
 
 // NewPluginRegistry creates a new plugin registry with all OSS plugins registered

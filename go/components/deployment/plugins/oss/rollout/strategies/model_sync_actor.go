@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -180,7 +181,7 @@ import (
 type ModelSyncActor struct {
 	client            client.Client
 	gateway           gateways.Gateway
-	configMapProvider *gateways.ConfigMapProvider
+	configMapProvider configmap.ConfigMapProvider
 	logger            *zap.Logger
 }
 
@@ -301,7 +302,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 				if err != nil {
 					a.logger.Error("Failed to get current models from ConfigMap", zap.Error(err))
 					// Continue with just the new model if we can't read existing ones
-					currentModels = []gateways.ModelConfigEntry{}
+					currentModels = []configmap.ModelConfigEntry{}
 				}
 
 				// Check if new model already exists to avoid duplicates
@@ -315,7 +316,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 
 				// Add the new model if it doesn't already exist
 				if !modelExists {
-					currentModels = append(currentModels, gateways.ModelConfigEntry{
+					currentModels = append(currentModels, configmap.ModelConfigEntry{
 						Name:   modelName,
 						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
 					})
@@ -325,14 +326,14 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 					a.logger.Info("Model already exists in ConfigMap", zap.String("model", modelName))
 				}
 
-				updateRequest := gateways.ModelConfigUpdateRequest{
+				updateRequest := configmap.ConfigMapRequest{
 					InferenceServer: inferenceServerName,
 					Namespace:       deployment.Namespace,
 					BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
 					ModelConfigs:    currentModels,
 				}
 
-				if err := a.gateway.UpdateModelConfig(ctx, a.logger, updateRequest); err != nil {
+				if err := a.configMapProvider.UpdateModelConfigMap(ctx, updateRequest); err != nil {
 					a.logger.Error("Failed to update model config via gateway", zap.Error(err))
 					return &apipb.Condition{
 						Type:    a.GetType(),
@@ -358,7 +359,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 
 // getCurrentModelsFromConfigMap retrieves current models from the inference server ConfigMap
 // Following the correct pattern from PR #188: Get -> Parse with proper error handling
-func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]gateways.ModelConfigEntry, error) {
+func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]configmap.ModelConfigEntry, error) {
 	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
 
 	// Get the ConfigMap using Kubernetes client
@@ -369,7 +370,7 @@ func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logg
 		// If ConfigMap doesn't exist, return empty list (new deployment)
 		if client.IgnoreNotFound(err) == nil {
 			logger.Info("ConfigMap not found, starting with empty model list", zap.String("configMap", configMapName))
-			return []gateways.ModelConfigEntry{}, nil
+			return []configmap.ModelConfigEntry{}, nil
 		}
 		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
 	}
@@ -378,15 +379,15 @@ func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logg
 	modelListJSON, exists := configMap.Data["model-list.json"]
 	if !exists || modelListJSON == "" {
 		logger.Info("model-list.json not found or empty in ConfigMap", zap.String("configMap", configMapName))
-		return []gateways.ModelConfigEntry{}, nil
+		return []configmap.ModelConfigEntry{}, nil
 	}
 
 	// Parse JSON to get current models with proper error handling
-	var currentModels []gateways.ModelConfigEntry
+	var currentModels []configmap.ModelConfigEntry
 	if err := json.Unmarshal([]byte(modelListJSON), &currentModels); err != nil {
 		logger.Error("Failed to parse model-list.json from ConfigMap", zap.Error(err), zap.String("configMap", configMapName))
 		// Return empty list on parse failure rather than nil to allow recovery
-		return []gateways.ModelConfigEntry{}, nil
+		return []configmap.ModelConfigEntry{}, nil
 	}
 
 	logger.Info("Retrieved current models from ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(currentModels)))

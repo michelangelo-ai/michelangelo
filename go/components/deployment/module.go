@@ -3,6 +3,7 @@ package deployment
 import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
 	"github.com/go-logr/logr"
@@ -12,7 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 )
 
 // Module FX
@@ -22,7 +23,9 @@ var Module = fx.Options(
 	}),
 	fx.Invoke(register),
 	oss.Module,
-	fx.Provide(gateways.NewConfigMapProvider),
+	fx.Provide(func(client client.Client, logger *zap.Logger) configmap.ConfigMapProvider {
+		return configmap.NewDefaultConfigMapProvider(client, logger)
+	}),
 )
 
 func register(

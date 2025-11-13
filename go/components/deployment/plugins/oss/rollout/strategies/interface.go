@@ -7,6 +7,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -16,7 +17,7 @@ type Params struct {
 	Client            client.Client
 	Gateway           gateways.Gateway
 	Logger            *zap.Logger
-	ConfigMapProvider *gateways.ConfigMapProvider
+	ConfigMapProvider configmap.ConfigMapProvider
 }
 
 // GetActorsForStrategy returns actors for the appropriate strategy

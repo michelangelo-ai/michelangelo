@@ -10,6 +10,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
+	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -24,9 +25,9 @@ type conditionPlugin struct {
 // Params contains dependencies for rollout plugin
 type Params struct {
 	Client            client.Client
+	ConfigMapProvider configmap.ConfigMapProvider
 	Gateway           gateways.Gateway
 	Logger            *zap.Logger
-	ConfigMapProvider *gateways.ConfigMapProvider
 }
 
 // NewRolloutPlugin creates a new rollout plugin following Uber patterns
@@ -312,7 +313,7 @@ func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deplo
 type RolloutCompletionActor struct {
 	client            client.Client
 	gateway           gateways.Gateway
-	configMapProvider *gateways.ConfigMapProvider
+	configMapProvider configmap.ConfigMapProvider
 	logger            *zap.Logger
 }
 
@@ -361,7 +362,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			}
 
-			if err := a.gateway.AddDeploymentSpecificRoute(ctx, a.logger, proxyConfigRequest); err != nil {
+			if err := a.gateway.AddDeploymentRoute(ctx, a.logger, proxyConfigRequest); err != nil {
 				a.logger.Error("Failed to add deployment-specific route", zap.Error(err))
 				return &apipb.Condition{
 					Type:    a.GetType(),
@@ -400,19 +401,13 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				a.logger.Info("Cleaning up old models from ConfigMap", zap.String("newModel", modelName))
 
 				// Create cleanup request that will remove old models and keep only the new one
-				cleanupRequest := gateways.ModelConfigUpdateRequest{
+				cleanupRequest := configmap.ConfigMapRequest{
 					InferenceServer: inferenceServerName,
 					Namespace:       deployment.Namespace,
-					BackendType:     v2pb.BACKEND_TYPE_TRITON,
-					ModelConfigs: []gateways.ModelConfigEntry{
-						{
-							Name:   modelName,
-							S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
-						},
-					},
+					ModelConfigs:    []configmap.ModelConfigEntry{{Name: modelName, S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName)}},
 				}
 
-				if err := a.gateway.UpdateModelConfig(ctx, a.logger, cleanupRequest); err != nil {
+				if err := a.configMapProvider.UpdateModelConfigMap(ctx, cleanupRequest); err != nil {
 					a.logger.Error("Failed to cleanup old models from ConfigMap", zap.Error(err))
 					// Don't fail the whole rollout completion due to cleanup failure
 					// but log the error for investigation
