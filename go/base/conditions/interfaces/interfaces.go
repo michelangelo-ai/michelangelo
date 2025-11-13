@@ -16,6 +16,8 @@ type Engine[T client.Object] interface {
 	Run(ctx context.Context, plugin Plugin[T], resource T) (Result, error)
 }
 
+// ConditionActor represents an actor that performs actions to progress a resource's
+// condition towards a desired state.
 type ConditionActor[T client.Object] interface {
 	// Run runs the action that will attempt to move the condition status in the positive direction.
 	// If there is a failure to perform any action, the plugin must set the appropriate properties in the returned

@@ -22,12 +22,15 @@ const (
 
 var _ conditionInterfaces.Engine[client.Object] = &DefaultEngine[client.Object]{}
 
+// DefaultEngine is the default implementation of the condition engine that executes
+// plugin actors sequentially and manages resource state transitions.
 type DefaultEngine[T client.Object] struct {
 	logger *zap.Logger
 }
 
 var _ conditionInterfaces.Engine[client.Object] = &DefaultEngine[client.Object]{}
 
+// NewDefaultEngine creates a new DefaultEngine with the specified logger.
 func NewDefaultEngine[T client.Object](logger *zap.Logger) *DefaultEngine[T] {
 	return &DefaultEngine[T]{
 		logger: logger,
