@@ -4,13 +4,13 @@ from logging import getLogger
 
 from grpc import Channel
 
-from mactl import CRD
-
 from inspect import Signature, Parameter
 from types import MethodType
 from google.protobuf.message import Message
 from google.protobuf.json_format import ParseDict
-from mactl import (
+
+from michelangelo.cli.mactl.mactl import (
+    CRD,
     get_methods_from_service,
     get_message_class_by_name,
     bind_signature,

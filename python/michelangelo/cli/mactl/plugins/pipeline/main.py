@@ -3,10 +3,15 @@ from types import MethodType
 
 from grpc import Channel
 
-from mactl import CRD
-from plugins.pipeline.create import convert_crd_metadata_pipeline_create
-from plugins.pipeline.run import generate_run, convert_crd_metadata_pipeline_run
-from plugins.pipeline.dev_run import (
+from michelangelo.cli.mactl.mactl import CRD
+from michelangelo.cli.mactl.plugins.pipeline.create import (
+    convert_crd_metadata_pipeline_create,
+)
+from michelangelo.cli.mactl.plugins.pipeline.run import (
+    generate_run,
+    convert_crd_metadata_pipeline_run,
+)
+from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
     generate_dev_run,
     convert_crd_metadata_pipeline_dev_run,
 )

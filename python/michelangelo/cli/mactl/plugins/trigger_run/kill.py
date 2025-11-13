@@ -6,7 +6,12 @@ from grpc import Channel
 from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict, ParseDict
 
-from mactl import CRD, bind_signature, METADATA_STUB, get_single_arg
+from michelangelo.cli.mactl.mactl import (
+    CRD,
+    bind_signature,
+    METADATA_STUB,
+    get_single_arg,
+)
 
 
 _LOG = getLogger(__name__)

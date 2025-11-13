@@ -3,8 +3,8 @@ from types import MethodType
 
 from grpc import Channel
 
-from mactl import CRD
-from plugins.trigger_run.kill import generate_kill
+from michelangelo.cli.mactl.mactl import CRD
+from michelangelo.cli.mactl.plugins.trigger_run.kill import generate_kill
 
 
 _LOG = getLogger(__name__)
