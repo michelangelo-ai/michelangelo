@@ -8,6 +8,7 @@ import (
 
 const pluginID = "model"
 
+// Plugin is the global instance of the model plugin for Starlark workflows.
 var Plugin = &plugin{}
 
 type plugin struct{}

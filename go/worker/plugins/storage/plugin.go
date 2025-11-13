@@ -16,6 +16,7 @@ import (
 
 const pluginID = "storage"
 
+// Plugin is the global instance of the storage plugin for Starlark workflows.
 var Plugin = &plugin{}
 
 type plugin struct{}
@@ -41,6 +42,8 @@ func (m *module) Truth() starlark.Bool                  { return true }
 func (m *module) Hash() (uint32, error)                 { return 0, fmt.Errorf("no-hash") }
 func (m *module) Attr(n string) (starlark.Value, error) { return m.attributes[n], nil }
 func (m *module) AttrNames() []string                   { return ext.SortedKeys(m.attributes) }
+
+// AsStar converts a Go value to a Starlark value by marshaling through JSON.
 func AsStar(source any, out any) error {
 	b, err := jsoniter.Marshal(source)
 	if err != nil {
