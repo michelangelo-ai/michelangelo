@@ -4,47 +4,56 @@ metadata:
   name: "fluent-bit-config"
 data:
   fluent-bit.yaml: |
-    plugins:
-      - "/fluent-bit/plugins/out_clp_s3_v2_linux_amd64.so"
-
     service:
       flush: 1
       daemon: "off"
-      log_level: "trace"
+      log_level: "debug"
+
+    parsers:
+      - name: "cri"
+        format: "regex"
+        regex: "^(?<time>[^ ]+) (?<stream>stdout|stderr) (?<logtag>[^ ]*) (?<message>.*)$"
+        time_key: "time"
+        time_format: "%Y-%m-%dT%H:%M:%S.%L%z"
 
     pipeline:
       inputs:
-        # Tails unstructured Ray job logs (driver and worker) and:
-        # 1. Emits log content in the 'message' field of each event, add a verbosity tag if it doesn't exist
-        # 2. Extracts 'session_id' and role (driver or worker) from the log path to create a log-specific tag
-        # 3. Tunes collection settings to efficiently handle potentially very long log messages common in Ray apps
-        - name: "tail"
-          path: "/tmp/ray/session_*/logs/job-*.log"
-          path_key: "file_path"
-          # sample log path /tmp/ray/session_2025-06-10_15-24-04_695651_1530/logs
-          tag_regex: "^\/tmp\/ray\/(?<session_id>[^\/]+)\/logs\/job-(?<role>driver|worker)-.*\\.log$"
-          tag: "<session_id>/<role>.log"
-          # The interval of refreshing the list of watched files in seconds
+        - name: tail
+          path: /var/log/containers/uf-rj-*.log
+          parser: cri
+          tag: ray.batch
+          path_key: filepath
           refresh_interval: 5
-          # For new discovered files on start (without a database offset/position),
-          # read the content from the head of the file, not tail.
-          read_from_head: true
-          # When a message is unstructured (no parser applied), it's appended as a string under the key
-          # name log. This option allows defining an alternative name for that key.
-          key: "message"
-          buffer_max_size: "1MB"
-          processors: []
-
+          rotate_wait: 30
+          skip_long_lines: On
+          skip_empty_lines: On
+          read_from_head: On
+        - name: tail
+          path: /var/log/containers/uniflow-sp-*.log
+          parser: cri
+          tag: spark.batch
+          path_key: filepath
+          refresh_interval: 5
+          rotate_wait: 30
+          skip_long_lines: On
+          skip_empty_lines: On
+          read_from_head: On
       filters:
-        # Ensure a log verbosity level is set if absent
-        - name: "modify"
-          match: "*"
-          Add:
-            - "level INFO"
-
+        - name: rewrite_tag
+          match: ray.batch
+          rule: $filepath .*(uf-rj-[^_]+)_.* $1.log false
+        - name: rewrite_tag
+          match: spark.batch
+          rule: $filepath .*(uniflow-sp-[^-]+)-driver.* $1.log false
       outputs:
-        # For each unique tag match, append compressed logs to Minio using the filename "<tag>.clp.zst"
-        - name: "out_clp_s3_v2"
-          match: "*/*"
-          log_bucket: "logs"
-          log_level_key: "level"
+        - name: s3
+          match: "*.log"
+          bucket: logs
+          region: us-east-1
+          endpoint: http://minio:9091
+          use_put_object: On
+          s3_key_format: /$TAG
+          total_file_size: 50M
+          upload_timeout: 5m
+          store_dir: /tmp/fluent-bit-s3
+          store_dir_limit_size: 100M
