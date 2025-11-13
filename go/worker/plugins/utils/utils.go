@@ -51,6 +51,8 @@ var CadenceDefaultNonRetriableErrorReasons = []string{
 	yarpcerrors.CodeInternal.String(),         // server error; serious error, like panic
 }
 
+// CadenceDefaultRetryPolicy is the default retry policy for Cadence workflows with
+// a 15-second initial interval and 5-minute expiration.
 var CadenceDefaultRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 15,
 	BackoffCoefficient:       1,
@@ -59,6 +61,8 @@ var CadenceDefaultRetryPolicy = workflow.RetryPolicy{
 	MaximumAttempts:          1,
 }
 
+// CadenceDefaultSensorRetryPolicy is the default retry policy for sensor workflows
+// with a 10-second initial interval and long timeout for polling operations.
 var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
 	InitialInterval:          time.Second * 10,
 	BackoffCoefficient:       1,
@@ -66,6 +70,7 @@ var CadenceDefaultSensorRetryPolicy = workflow.RetryPolicy{
 	NonRetriableErrorReasons: CadenceDefaultNonRetriableErrorReasons,
 }
 
+// AsStar converts a Go value to a Starlark value by marshaling through JSON.
 func AsStar(source any, out any) error {
 	b, err := jsoniter.Marshal(source)
 	if err != nil {
@@ -73,6 +78,8 @@ func AsStar(source any, out any) error {
 	}
 	return star.Decode(b, out)
 }
+
+// AsGo converts a Starlark value to a Go value by encoding through JSON.
 func AsGo(source starlark.Value, out any) error {
 	b, err := star.Encode(source)
 	if err != nil {

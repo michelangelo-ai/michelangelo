@@ -8,6 +8,7 @@ import (
 
 const pluginID = "cachedoutput"
 
+// Plugin is the global instance of the cached output plugin for Starlark workflows.
 var Plugin = &plugin{}
 
 type plugin struct{}

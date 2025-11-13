@@ -8,6 +8,7 @@ import (
 
 const pluginID = "spark"
 
+// Plugin is the global instance of the Spark plugin for Starlark workflows.
 var Plugin = &plugin{}
 
 type plugin struct{}
