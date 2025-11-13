@@ -28,10 +28,12 @@ def apply_plugins(
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
-        crd.generate_run = MethodType(lambda self, ch: generate_run(self, ch), crd)
+        crd.generate_run = MethodType(
+            lambda self, ch, parser: generate_run(self, ch, parser), crd
+        )
     if target_command == "dev_run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_dev_run
         crd.generate_dev_run = MethodType(
-            lambda self, ch: generate_dev_run(self, ch), crd
+            lambda self, ch, parser: generate_dev_run(self, ch, parser), crd
         )
     _LOG.info("Plugins applied successfully to crd: %s", crd)

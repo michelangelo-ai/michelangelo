@@ -3,6 +3,7 @@ MaCTL - Michelangelo Command Line Tool
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
+from argparse import ArgumentParser
 from collections import defaultdict
 from collections.abc import MutableMapping
 from copy import deepcopy
@@ -14,7 +15,7 @@ from logging import basicConfig, getLogger, WARNING
 from os import getenv, environ
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 import logging
 import re
 import sys
@@ -364,9 +365,124 @@ class CRD:
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
         self.method_info: dict = {}
+        self.func_signature: dict = {
+            "apply": [
+                {
+                    "func_signature": Parameter(
+                        "file",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                    ),
+                    "args": ["-f", "--file"],
+                    "kwargs": {
+                        "dest": "file",
+                        "type": str,
+                        "required": True,
+                        "help": "Custom Resource YAML file (can be configured with --file)",
+                    },
+                },
+            ],
+            "delete": [
+                {
+                    "func_signature": Parameter(
+                        "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                    ),
+                    "args": ["-n", "--namespace"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Namespace of the resource",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "name",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default="",
+                    ),
+                    "args": ["--name"],
+                    "kwargs": {
+                        "dest": "name",
+                        "type": str,
+                        "required": True,
+                        "help": "Name of the resource",
+                    },
+                },
+            ],
+            "get": [
+                {
+                    "args": ["name"],
+                    "kwargs": {
+                        "nargs": "?",
+                        "type": str,
+                        "help": "Name of the resource (can be configured with --name)",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                    ),
+                    "args": ["-n", "--namespace"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Namespace of the resource",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "name",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default="",
+                    ),
+                    "args": ["--name"],
+                    "kwargs": {
+                        "dest": "name",
+                        "type": str,
+                        "required": False,
+                        "help": "Name of the resource",
+                    },
+                },
+            ],
+        }
 
     def __repr__(self):
         return f"CRD(name={self.name}, full_name={self.full_name})"
+
+    def configure_parser(self, action: str, parser: Optional[ArgumentParser]) -> None:
+        """
+        Configure argparse parser for action, if parse is set.
+        Detailed arguments would be defined by `arguments`.
+
+        Args:
+            parser: ArgumentParser to configure
+            arguments: list of args and kwargs to add to the parser
+        """
+        _LOG.info("Configuring argparse (%r) for CRD `%r` action", parser, action)
+        if parser is None:
+            return
+        _LOG.debug(
+            "Start to configure parser with args: %r", self.func_signature[action]
+        )
+        for arg_def in self.func_signature[action]:
+            args = arg_def.get("args", [])
+            kwargs = arg_def.get("kwargs", {})
+            parser.add_argument(*args, **kwargs)
+
+    def _read_signatures(self, method_name: str) -> Signature:
+        """
+        Read function signatures for method name.
+        """
+        _LOG.debug("Prepare func signature for `%r` function", method_name)
+        res = Signature(
+            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
+            + [
+                arg["func_signature"]
+                for arg in self.func_signature[method_name]
+                if "func_signature" in arg
+            ]
+        )
+        _LOG.debug("Read func signature: %r", res)
+        return res
 
     def _extract_method_info(
         self, channel: Channel, full_name: str, function_name: str
@@ -404,7 +520,9 @@ class CRD:
         )
         return method_name, input_class, output_class
 
-    def generate_delete(self, channel: Channel):
+    def generate_delete(
+        self, channel: Channel, parser: Optional[ArgumentParser] = None
+    ):
         """
         Generate delete function of this class.
         """
@@ -414,22 +532,23 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "Delete"),
         )
-        delete_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [
-                Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-                for name in ["namespace", "name"]
-            ]
-        )
+
+        self.configure_parser("delete", parser)
+        func_signature = self._read_signatures("delete")
 
         bound_func = partial(delete_func_impl, method_info)
-        bound_func = bind_signature(delete_func_signature)(bound_func)
+        bound_func = bind_signature(func_signature)(bound_func)
         self.delete = MethodType(bound_func, self)
         _LOG.debug("Generated DELETE injected well: %r", self.delete)
 
-    def generate_get(self, channel: Channel):
+    def generate_get(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """
         Generate get function of this class.
+        Optionally configure argparse parser with arguments.
+
+        Args:
+            channel: gRPC channel
+            parser: Optional ArgumentParser to configure with --namespace and --name
         """
         _LOG.info("Generate GET method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
@@ -437,18 +556,16 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "Get"),
         )
-        get_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter("namespace", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter("name", Parameter.POSITIONAL_OR_KEYWORD, default="")]
-        )
+
+        self.configure_parser("get", parser)
+        func_signature = self._read_signatures("get")
 
         bound_func = partial(get_func_impl, method_info)
-        bound_func = bind_signature(get_func_signature)(bound_func)
+        bound_func = bind_signature(func_signature)(bound_func)
         self.get = MethodType(bound_func, self)
         _LOG.debug("Generated GET injected well: %r", self.get)
 
-    def generate_apply(self, channel: Channel):
+    def generate_apply(self, channel: Channel, parser: Optional[ArgumentParser] = None):
         """
         Generate apply function of this class.
         """
@@ -460,13 +577,12 @@ class CRD:
             self.full_name,
             *self._extract_method_info(channel, self.full_name, "Update"),
         )
-        apply_func_signature = Signature(
-            [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-            + [Parameter(name, Parameter.POSITIONAL_OR_KEYWORD) for name in ["file"]]
-        )
+
+        self.configure_parser("apply", parser)
+        func_signature = self._read_signatures("apply")
 
         bound_func = partial(apply_func_impl, method_info)
-        bound_func = bind_signature(apply_func_signature)(bound_func)
+        bound_func = bind_signature(func_signature)(bound_func)
         self.apply = MethodType(bound_func, self)
         _LOG.debug("Generated APPLY injected well: %r", self.apply)
 
@@ -899,6 +1015,8 @@ def main(channel: Channel):
     """
     Main function for mactl
     """
+    _LOG.debug("Starting mactl...")
+
     # Load config and set environment variables
     if CONFIG_FILE.exists():
         with open(CONFIG_FILE, "r") as f:
@@ -911,33 +1029,82 @@ def main(channel: Channel):
         if not getenv("AWS_ENDPOINT_URL"):
             environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
 
-    user_command_crd, user_command_action, kwargs = handle_args()
-
-    print("Starting mactl...")
+    # Phase 1: Discover CRDs and create resource subcommands
     services = list_services(channel)
     _LOG.info("Got %d services: %r", len(services), services)
-
     crds = create_serivce_classes(services)
-    read_plugins(crds[user_command_crd], user_command_action, crds, channel)
 
-    assert user_command_crd in crds, (
-        f"Command {user_command_crd} not found in services: {list(crds)}"
+    # Phase 2: Pre-parse to get selected resource
+    base_parser = ArgumentParser(description="MaCTL - Michelangelo CLI", add_help=False)
+    base_parser.add_argument(
+        "-vv",
+        "--verbose",
+        action="store_true",
+        help="Increase verbosity level",
     )
-    if not hasattr(crds[user_command_crd], f"generate_{user_command_action}"):
-        raise ValueError(
-            f"Command '{user_command_crd}' does not support"
-            f" '{user_command_action}' action."
+    resource_subparsers = base_parser.add_subparsers(dest="resource", required=True)
+
+    for crd_name in crds.keys():
+        resource_subparsers.add_parser(crd_name, add_help=False)
+
+    # Parse only resource name, leave rest for later
+    namespace, remaining = base_parser.parse_known_args()
+    _LOG.debug(
+        "Parsed arguments -- namespace: %r / remaining: %r", namespace, remaining
+    )
+    user_command_crd = namespace.resource
+
+    # Handle CRD-level help (e.g., "ma project --help" or "ma project -h")
+    # TODO: this will be generated by CRD automatically later
+    if len(remaining) >= 1 and remaining[0] in ["--help", "-h"]:
+        print(f"Usage: mactl {user_command_crd} <action> [options]")
+        print("\nAvailable actions:")
+        print("  get       Get or List specific resource(s)")
+        print("  apply     Create or update a resource from YAML file")
+        print("  delete    Delete a resource")
+        print(
+            f"\nFor action-specific help, use: mactl {user_command_crd} <action> --help"
         )
+        sys.exit(0)
 
-    # Generate and run
-    func_action_generator = getattr(
-        crds[user_command_crd], f"generate_{user_command_action}"
+    if len(remaining) < 1:
+        print(f"Usage: mactl {user_command_crd} <action>")
+        print("Available actions: get, apply, delete")
+        print(f"Run 'mactl {user_command_crd} --help' for more information")
+        sys.exit(1)
+
+    user_command_action = kebab_to_snake(remaining[0])
+
+    # Phase 3: Generate method + configure argparse
+    action_parser = ArgumentParser(
+        prog=f"mactl {user_command_crd} {user_command_action}"
     )
-    func_action_generator(channel)
 
-    assert hasattr(crds[user_command_crd], user_command_action)
+    # Load plugins (may also configure action_parser)
+    read_plugins(
+        crds[user_command_crd],
+        user_command_action,
+        crds,
+        channel,
+    )
+
+    # TODO: this will be handled by CRD automatically later with argparse
+    if user_command_action not in crds[user_command_crd].func_signature:
+        print(f"Unknown action: {user_command_action}")
+        print(f"Available actions: {', '.join(crds[user_command_crd].func_signature)}")
+        print(f"Run 'mactl {user_command_crd} --help' for more information")
+        sys.exit(1)
+
+    func_generator = getattr(crds[user_command_crd], f"generate_{user_command_action}")
+    func_generator(channel, action_parser)
+
+    # Phase 4: Parse remaining arguments
+    args = action_parser.parse_args(remaining[1:])
+
+    # Phase 5: Execute
     func_action = getattr(crds[user_command_crd], user_command_action)
-    result = func_action(**kwargs)
+    _LOG.debug("target action function is ready: %r", func_action)
+    result = func_action(**vars(args))
 
     # Convert to JSON and pretty print
     # temporary disable json converting due to issue:

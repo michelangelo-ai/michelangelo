@@ -1,8 +1,9 @@
-from types import MethodType
-from logging import getLogger
+from argparse import ArgumentParser
 from inspect import Signature, Parameter
+from logging import getLogger
 from pathlib import Path
-
+from types import MethodType
+from typing import Optional
 
 from git import Repo
 from google.protobuf.json_format import ParseDict
@@ -36,11 +37,59 @@ _UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
 _LOG = getLogger(__name__)
 
 
-def generate_dev_run(crd: CRD, channel: Channel):
+def generate_dev_run(
+    crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None
+):
     """
     Generate dev run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
+    crd.func_signature["dev_run"] = [
+        {
+            "func_signature": Parameter(
+                "file",
+                Parameter.POSITIONAL_OR_KEYWORD,
+            ),
+            "args": ["-f", "--file"],
+            "kwargs": {
+                "type": str,
+                "required": True,
+                "help": "Path to the pipeline YAML configuration file",
+            },
+        },
+        {
+            "func_signature": Parameter(
+                "env",
+                Parameter.POSITIONAL_OR_KEYWORD,
+                default={},
+            ),
+            "args": ["--env"],
+            "kwargs": {
+                "type": str,
+                "required": False,
+                "default": {},
+                "help": "Name of the resource",
+            },
+        },
+        {
+            "func_signature": Parameter(
+                "resume_from",
+                Parameter.POSITIONAL_OR_KEYWORD,
+                default=None,
+            ),
+            "args": ["--resume_from"],
+            "kwargs": {
+                "type": str,
+                "required": False,
+                "default": None,
+                "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+            },
+        },
+    ]
+    _LOG.debug(
+        "Added function signature for action and argparser: %r",
+        crd.func_signature,
+    )
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
     methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
@@ -60,16 +109,10 @@ def generate_dev_run(crd: CRD, channel: Channel):
     input_class = get_message_class_by_name(method_pool, method_run.input_type[1:])
     output_class = get_message_class_by_name(method_pool, method_run.output_type[1:])
 
-    dev_run_func_signature = Signature(
-        [
-            Parameter("self", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("file", Parameter.POSITIONAL_OR_KEYWORD),
-            Parameter("env", Parameter.POSITIONAL_OR_KEYWORD, default={}),
-            Parameter("resume_from", Parameter.POSITIONAL_OR_KEYWORD, default=None),
-        ]
-    )
+    crd.configure_parser("dev_run", parser)
+    func_signature = crd._read_signatures("dev_run")
 
-    @bind_signature(dev_run_func_signature)
+    @bind_signature(func_signature)
     def dev_run_func(bound_args: Signature) -> Message:
         _LOG.info("Start dev_run_func for pipeline")
         _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -122,7 +165,7 @@ def generate_dev_run(crd: CRD, channel: Channel):
         _LOG.info("Stub method completed (%r): %r", type(response), response)
         return response
 
-    dev_run_func.__signature__ = dev_run_func_signature
+    dev_run_func.__signature__ = func_signature  # type: ignore[attr-defined]
     crd.dev_run = MethodType(dev_run_func, crd)
 
 
