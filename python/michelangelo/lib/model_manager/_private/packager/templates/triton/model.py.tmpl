@@ -1,0 +1,122 @@
+import json
+import numpy as np
+import triton_python_backend_utils as pb_utils
+
+import user_model
+
+
+class TritonPythonModel:
+    """Your Python model must use the same class name. Every Python model
+    that is created must have "TritonPythonModel" as the class name.
+    """
+
+    def initialize(self, args):
+        """`initialize` is called only once when the model is being loaded.
+        Implementing `initialize` function is optional. This function allows
+        the model to initialize any state associated with this model.
+
+        Parameters
+        ----------
+        args : dict
+          Both keys and values are strings. The dictionary keys and values are:
+          * model_config: A JSON string containing the model configuration
+          * model_instance_kind: A string containing model instance kind
+          * model_repository: Model repository path
+          * model_name: Model name
+        """
+        self.logger = pb_utils.Logger
+
+        # You must parse model_config. JSON string is not parsed here
+        self.model_config = model_config = json.loads(args['model_config'])
+        self.input_dict = {}
+        input_count = 0
+        for config_input in model_config['input']:
+            index = input_count
+            self.input_dict[index] = [
+                config_input['name'], config_input['data_type'],
+                config_input['dims']
+            ]
+            input_count += 1
+
+        self.output_dict = {}
+        output_count = 0
+        for config_output in model_config['output']:
+            index = output_count
+            self.output_dict[index] = [
+                config_output['name'], config_output['data_type'],
+                config_output['dims']
+            ]
+            output_count += 1
+
+        self.model = user_model.get_model()
+
+    def execute(self, requests):
+        """`execute` MUST be implemented in every Python model. `execute`
+        function receives a list of pb_utils.InferenceRequest as the only
+        argument. This function is called when an inference request is made
+        for this model. Depending on the batching configuration (e.g. Dynamic
+        Batching) used, `requests` may contain multiple requests. Every
+        Python model, must create one pb_utils.InferenceResponse for every
+        pb_utils.InferenceRequest in `requests`. If there is an error, you can
+        set the error argument when creating a pb_utils.InferenceResponse
+
+        Parameters
+        ----------
+        requests : list
+          A list of pb_utils.InferenceRequest
+
+        Returns
+        -------
+        list
+          A list of pb_utils.InferenceResponse. The length of this list must
+          be the same as `requests`
+        """
+        responses = []
+        # Inputs are a map of tensor name to the numpy tensor.
+        inputs = {}
+        num_requests = len(requests)
+        request_batch_sizes = []
+        for i in self.input_dict.keys():
+            name, dt, shape = self.input_dict[i]
+            first_input = pb_utils.get_input_tensor_by_name(requests[0], name)
+
+            if not first_input:
+                continue
+
+            first_tensor = first_input.as_numpy()
+            request_batch_sizes.append(first_tensor.shape[0])
+            batched_tensor = first_tensor
+            for j in range(1, num_requests):
+                tensor = pb_utils.get_input_tensor_by_name(requests[j],
+                                                           name).as_numpy()
+                request_batch_sizes.append(request_batch_sizes[-1] + tensor.shape[0])
+                batched_tensor = np.concatenate((batched_tensor, tensor), axis=0)
+            inputs[name] = batched_tensor
+
+        batched_results = self.model.execute(inputs)
+        chunky_batched_results = {}
+
+        for i in self.output_dict.keys():
+            output_name, dt, shape = self.output_dict[i]
+            batch = batched_results[output_name]
+            chunky_batched_results[output_name] = np.split(batch, request_batch_sizes, axis=0)
+
+        for batch_num in range(num_requests):
+            output_tensors = []
+            for output_name in chunky_batched_results:
+                result = chunky_batched_results[output_name][batch_num]
+                output_tensor = pb_utils.Tensor(
+                    output_name, result)
+                output_tensors.append(output_tensor)
+            inference_response = pb_utils.InferenceResponse(
+                output_tensors=output_tensors)
+            responses.append(inference_response)
+
+        return responses
+
+    def finalize(self):
+        """`finalize` is called only once when the model is being unloaded.
+        Implementing `finalize` function is OPTIONAL. This function allows
+        the model to perform any necessary clean ups before exit.
+        """
+        print('Cleaning up...')

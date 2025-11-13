@@ -1,0 +1,51 @@
+name: "{{model_name}}"
+backend: "{{backend}}"
+max_batch_size: 256
+{%- if enable_dynamic_batching %}
+dynamic_batching: {
+{%- if preferred_batch_size %}
+  preferred_batch_size: {{preferred_batch_size}},
+{%- endif %}
+{%- if max_queue_delay_microseconds %}
+  max_queue_delay_microseconds: {{max_queue_delay_microseconds}},
+  preserve_ordering: true
+{%- endif %}
+}
+{%- endif %}
+input : [
+{%- for input_name, input in inputs.items() %}
+  {
+    name: "{{input_name}}",
+    data_type: TYPE_{{input.data_type}},
+    dims: {{input.shape}}
+    {%- if input.optional %},
+    optional: True
+    {%- endif %}
+  }{{ "," if not loop.last else "" }}
+{%- endfor %}
+]
+output: [
+{%- for output_name, output in outputs.items() %}
+  {
+    name: "{{output_name}}",
+    data_type: TYPE_{{output.data_type}},
+    dims: {{output.shape}}
+  }{{ "," if not loop.last else "" }}
+{%- endfor %}
+]
+instance_group: [
+  {
+    kind: {% if backend == "tensorrt" %}KIND_GPU{% else %}KIND_CPU{% endif %},
+    count: {{instance_count}}
+  }
+]
+{% if backend == "tensorrt" -%}
+optimization: {
+  cuda: {
+    graphs: true
+  }
+  input_pinned_memory: {
+    enable: true
+  }
+}
+{%- endif %}
