@@ -30,20 +30,21 @@ RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 USER_ID = os.environ.get("USER_ID", "default_user")
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
-RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX", "http://localhost:9091/logs")
+RAY_LOG_URL_PREFIX = os.environ.get("RAY_LOG_URL_PREFIX")
 
 def get_ray_log_url(ray_job_name):
     """
     Generate a log URL for a Ray job based on the job name.
+    Only generates URL when RAY_LOG_URL_PREFIX environment variable is provided.
     Expected format: {RAY_LOG_URL_PREFIX}/{ray_job_name}.log
 
     Args:
         ray_job_name: The name of the Ray job (e.g., "uf-ray-abc123")
 
     Returns:
-        str: The complete log URL
+        str: The complete log URL or empty string if prefix not configured
     """
-    if ray_job_name:
+    if RAY_LOG_URL_PREFIX and ray_job_name:
         return "{}/{}.log".format(RAY_LOG_URL_PREFIX, ray_job_name)
     return ""
 
@@ -346,8 +347,10 @@ def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_e
     )
     print("ray | +run job: job=" + str(job))
 
-    # Extract Ray job name from job object and generate log URL
-    ray_job_name = job.get("metadata", {}).get("name", cluster_name)
+    # Extract Ray job ID/name from job object - try job ID first, then metadata name, then cluster name
+    ray_job_name = (job.get("spec", {}).get("jobId") or
+                   job.get("status", {}).get("jobId") or
+                   job.get("metadata", {}).get("name", cluster_name))
     generated_log_url = get_ray_log_url(ray_job_name)
     log_url = generated_log_url if generated_log_url else cluster_url
 

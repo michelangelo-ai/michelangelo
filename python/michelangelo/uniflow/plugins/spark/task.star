@@ -16,20 +16,21 @@ SPARK_DEFAULT_EXECUTOR_DISK = os.environ.get("SPARK_DEFAULT_EXECUTOR_DISK", "512
 SPARK_DEFAULT_EXECUTOR_GPU = os.environ.get("SPARK_DEFAULT_EXECUTOR_GPU", "0")
 SPARK_DEFAULT_EXECUTOR_INSTANCES = os.environ.get("SPARK_DEFAULT_EXECUTOR_INSTANCES", "1")
 
-SPARK_LOG_URL_PREFIX = os.environ.get("SPARK_LOG_URL_PREFIX", "http://localhost:9091/logs")
+SPARK_LOG_URL_PREFIX = os.environ.get("SPARK_LOG_URL_PREFIX")
 
 def get_spark_log_url(spark_job_name):
     """
     Generate a log URL for a Spark job based on the job name.
+    Only generates URL when SPARK_LOG_URL_PREFIX environment variable is provided.
     Expected format: {SPARK_LOG_URL_PREFIX}/{spark_job_name}.log
 
     Args:
         spark_job_name: The name of the Spark job (e.g., "uniflow-sp-abc123")
 
     Returns:
-        str: The complete log URL
+        str: The complete log URL or empty string if prefix not configured
     """
-    if spark_job_name:
+    if SPARK_LOG_URL_PREFIX and spark_job_name:
         return "{}/{}.log".format(SPARK_LOG_URL_PREFIX, spark_job_name)
     return ""
 
