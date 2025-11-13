@@ -19,7 +19,6 @@ func register(
 	mgr manager.Manager,
 	sparkClient Client,
 ) error {
-	//restConfig := mgr.GetConfig()
 	// Create SparkApplication client
 	return (&Reconciler{
 		Client:      mgr.GetClient(),
