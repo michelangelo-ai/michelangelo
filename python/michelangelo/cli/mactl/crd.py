@@ -663,7 +663,8 @@ def inject_func_signature(crd: CRD, function_name: str, signatures: list[dict]) 
     """
     _LOG.debug(
         "Add or Overwrite function signature action %r: %r",
-        function_name, crd.func_signature.get(function_name, {})
+        function_name,
+        crd.func_signature.get(function_name, {}),
     )
     crd.func_signature[function_name] = deepcopy(signatures)
     _LOG.debug(
