@@ -48,6 +48,8 @@ type TaskProgress struct {
 	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
 }
 
+// ExecuteWorkflowActor handles the execution of workflows for pipeline runs by starting
+// and monitoring workflow executions in Cadence/Temporal.
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -57,6 +59,8 @@ type ExecuteWorkflowActor struct {
 	configProvider uberconfig.Provider
 }
 
+// NewExecuteWorkflowActor creates a new ExecuteWorkflowActor with the specified dependencies
+// for managing workflow execution.
 func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler, configProvider uberconfig.Provider) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),

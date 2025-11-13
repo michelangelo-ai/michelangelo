@@ -13,6 +13,8 @@ import (
 	"k8s.io/client-go/rest"
 )
 
+// SparkClient implements the Spark job client interface for creating and managing
+// Spark applications in Kubernetes.
 type SparkClient struct {
 	K8sClient      rest.Interface
 	ParameterCodec runtime.ParameterCodec
