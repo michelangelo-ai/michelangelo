@@ -1049,6 +1049,9 @@ def main(channel: Channel):
 
     # Parse only resource name, leave rest for later
     namespace, remaining = base_parser.parse_known_args()
+    _LOG.debug(
+        "Parsed arguments -- namespace: %r / remaining: %r", namespace, remaining
+    )
     user_command_crd = namespace.resource
 
     # Handle CRD-level help (e.g., "ma project --help" or "ma project -h")
