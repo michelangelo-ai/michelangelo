@@ -94,28 +94,6 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		Type:   ExecuteWorkflowType,
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
 	}
-	if metadata := previousCondition.GetMetadata(); metadata != nil {
-		// Unmarshal the Any type to a struct that contains the attempts field
-		var metadataStruct pbtypes.Struct
-		if err := pbtypes.UnmarshalAny(metadata, &metadataStruct); err == nil {
-			if attemptsValue, exists := metadataStruct.Fields["attempts"]; exists {
-				// attempts is always stored as NumberValue in the condition engine
-				if numberVal := attemptsValue.GetNumberValue(); int32(numberVal) == 3 {
-					// Handle the case where attempts == 3
-					executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
-					executeWorkflowStep.EndTime = pbtypes.TimestampNow()
-					executeWorkflowStep.Message = fmt.Sprintf("Failed after 3 retry attempts: %v", err)
-
-					return &apipb.Condition{
-						Type:    ExecuteWorkflowType,
-						Status:  apipb.CONDITION_STATUS_FALSE,
-						Reason:  "retry_exhausted",
-						Message: fmt.Sprintf("Failed after 3 retry attempts: %v", err),
-					}, nil
-				}
-			}
-		}
-	}
 
 	if pipelineRun.Spec.Kill {
 		err, workflowTerminated := a.processJobTermination(ctx, pipelineRun)
@@ -149,7 +127,6 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 
 		if err != nil {
 			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
-			return nil, fmt.Errorf("failed to fetch project %w", err)
 		}
 
 		taskList, taskListErr := a.getTaskList(project, pipelineRun)
@@ -171,6 +148,12 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 				zap.String("operation", "start_workflow"),
 				zap.String("namespace", pipelineRun.Namespace),
 				zap.String("name", pipelineRun.Name))
+
+			// Check if this is the final retry attempt and handle accordingly
+			if retryCondition, isExhausted := a.handleRetryExhaustion(previousCondition, executeWorkflowStep, err); isExhausted {
+				return retryCondition, nil
+			}
+
 			return nil, fmt.Errorf("start workflow for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
 		}
 		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_RUNNING
@@ -649,10 +632,51 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 	return stepInfo
 }
 
+// handleRetryExhaustion checks if the current execution is the final retry attempt
+// and handles the retry exhaustion by updating the step state and returning the appropriate condition
+func (a *ExecuteWorkflowActor) handleRetryExhaustion(previousCondition *apipb.Condition, executeWorkflowStep *v2.PipelineRunStepInfo, err error) (*apipb.Condition, bool) {
+	if previousCondition == nil || previousCondition.GetMetadata() == nil {
+		return nil, false
+	}
+
+	var metadataStruct pbtypes.Struct
+	if unmarshalErr := pbtypes.UnmarshalAny(previousCondition.GetMetadata(), &metadataStruct); unmarshalErr != nil {
+		return nil, false
+	}
+
+	attemptsValue, exists := metadataStruct.Fields["attempts"]
+	if !exists {
+		return nil, false
+	}
+
+	if numberVal := attemptsValue.GetNumberValue(); int32(numberVal) == 2 {
+		// Handle retry exhaustion - this is the final attempt
+		executeWorkflowStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED
+		executeWorkflowStep.EndTime = pbtypes.TimestampNow()
+
+		var message string
+		if err != nil {
+			message = fmt.Sprintf("Failed after 3 retry attempts: %v", err)
+		} else {
+			message = "Failed after 3 retry attempts"
+		}
+		executeWorkflowStep.Message = message
+
+		return &apipb.Condition{
+			Type:    ExecuteWorkflowType,
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "retry_exhausted",
+			Message: message,
+		}, true
+	}
+
+	return nil, false
+}
+
 func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.PipelineRun) (string, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 	var taskList string
-	if project.GetMetadata().GetAnnotations() != nil {
+	if project != nil && project.GetMetadata() != nil && project.GetMetadata().GetAnnotations() != nil {
 		if workerQueue, exists := project.GetMetadata().GetAnnotations()["michelangelo/worker_queue"]; exists && workerQueue != "" {
 			taskList = workerQueue
 			logger.Info("using worker queue from project annotations", zap.String("taskList", taskList))
