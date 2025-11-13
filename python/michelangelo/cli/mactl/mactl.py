@@ -40,6 +40,8 @@ from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 from yaml import YAMLError, safe_load as yaml_safe_load
 import configparser
 
+from michelangelo.cli.mactl.grpc_tools import list_services
+
 
 def _load_rc_config() -> dict:
     """Load configuration from ~/.mactlrc file."""
@@ -81,6 +83,7 @@ METADATA = [
 ### For OSS server
 # $ (Run oss server)
 ADDRESS = "127.0.0.1:14566"
+# TODO: Change metadata as dict
 METADATA = [
     ("rpc-caller", "grpcurl"),
     ("rpc-service", "ma-apiserver"),
@@ -360,11 +363,11 @@ class CRD:
     Representation of each CRD with its service methods
     """
 
-    def __init__(self, name: str, full_name: str):
+    def __init__(self, name: str, full_name: str, metadata: list):
         self.name = name
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
-        self.method_info: dict = {}
+        self.metadata = metadata
         self.func_signature: dict = {
             "apply": [
                 {
@@ -493,7 +496,9 @@ class CRD:
         assert isinstance(function_name, str), function_name
         assert function_name in ["Get", "Update", "Create", "List", "Delete"]
 
-        methods, method_pool = get_methods_from_service(channel, full_name)
+        methods, method_pool = get_methods_from_service(
+            channel, full_name, self.metadata
+        )
         method_name = function_name + snake_to_camel(self.name)
 
         _LOG.info("Get intput/output of method %r", method_name)
@@ -660,22 +665,6 @@ class CRD:
         return res
 
 
-def list_services(channel) -> list[str]:
-    stub = reflection_pb2_grpc.ServerReflectionStub(channel)
-
-    request = reflection_pb2.ServerReflectionRequest(list_services="")
-    responses = stub.ServerReflectionInfo(
-        iter([request]),
-        metadata=METADATA,
-    )
-    _LOG.info("Got response from ServerReflection: %r", responses)
-
-    for response in responses:
-        services = response.list_services_response.service
-        return [s.name for s in services]
-    raise ValueError("No services found")
-
-
 def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[Message]:
     """
     message_name example: "michelangelo.api.v2beta1.Pipeline"
@@ -837,12 +826,14 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
 
 def get_methods_from_service(
-    channel: Channel, service: str
+    channel: Channel,
+    service: str,
+    metadata: list,
 ) -> tuple[dict[str, MethodDescriptorProto], DescriptorPool]:
     """
     Get methods from a service descriptor.
     """
-    methods = list(get_service_descriptors(channel, service))
+    methods = list(get_service_descriptors(channel, service, metadata))
     _LOG.info("Succeed to retireve %d methods", len(methods))
     _LOG.debug("Detailed Method information: %r", methods)
     if not methods:
@@ -851,7 +842,7 @@ def get_methods_from_service(
 
     _LOG.info("Method list for service: %r", [m.name for m in methods])
     # Assume only one method matching
-    pool = retrieve_full_descriptor_pool(channel, methods[0].name)
+    pool = retrieve_full_descriptor_pool(channel, methods[0].name, metadata)
     method_services = [m for m in methods[0].service]
     _LOG.info(
         "Method service list for %d service: %r / %r",
@@ -874,6 +865,7 @@ def get_methods_from_service(
 def get_all_file_descriptors_by_filename(
     channel: Channel,
     filename: str,
+    metadata: list,
     deps: int = 0,
     visited: Union[None, set[str]] = None,
 ):
@@ -901,7 +893,7 @@ def get_all_file_descriptors_by_filename(
 
     stub = reflection_pb2_grpc.ServerReflectionStub(channel)
     request = reflection_pb2.ServerReflectionRequest(file_by_filename=filename)
-    responses = stub.ServerReflectionInfo(iter([request]), metadata=METADATA)
+    responses = stub.ServerReflectionInfo(iter([request]), metadata=metadata)
     for response in responses:
         for fd_bytes in response.file_descriptor_response.file_descriptor_proto:
             fd = FileDescriptorProto()
@@ -909,18 +901,20 @@ def get_all_file_descriptors_by_filename(
             _LOG.debug("Deps: %r", fd.dependency)
             for dependency in fd.dependency:
                 yield from get_all_file_descriptors_by_filename(
-                    channel, dependency, deps + 1, visited
+                    channel, dependency, metadata, deps + 1, visited
                 )
             yield fd
 
 
-def retrieve_full_descriptor_pool(channel: Channel, filename: str) -> DescriptorPool:
+def retrieve_full_descriptor_pool(
+    channel: Channel, filename: str, metadata: list
+) -> DescriptorPool:
     """
     Retrieve the full descriptor pool for a given filename.
     This is useful for introspection and understanding the service's API.
     """
     _LOG.info("Start retrieve full descriptor pool for %r / %r", channel, filename)
-    fds = list(get_all_file_descriptors_by_filename(channel, filename))
+    fds = list(get_all_file_descriptors_by_filename(channel, filename, metadata))
     # print([type(f) for f in fds])
     pool = DescriptorPool()
     for fd in fds:
@@ -935,15 +929,18 @@ def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
     Create service classes from a list of service names
     """
     res = {}
+    # TODO: we don't have to create all CRD instances for all services
     for service in services:
         if service.endswith("Service") and not service.endswith("ExtService"):
             name = camel_to_snake(re.sub(r"Service$", "", service.split(".")[-1]))
-            res[name] = CRD(name=name, full_name=service)
+            res[name] = CRD(name=name, full_name=service, metadata=METADATA)
     _LOG.info("Created %d CRD instances: %r", len(res), res)
     return res
 
 
-def get_service_descriptors(channel, service_name) -> list[FileDescriptorProto]:
+def get_service_descriptors(
+    channel, service_name, metadata: list
+) -> list[FileDescriptorProto]:
     _LOG.info(
         "Start to get service descriptors for %r / %r",
         channel,
@@ -955,10 +952,7 @@ def get_service_descriptors(channel, service_name) -> list[FileDescriptorProto]:
     request = reflection_pb2.ServerReflectionRequest(
         file_containing_symbol=service_name, host=""
     )
-    responses = stub.ServerReflectionInfo(
-        iter([request]),
-        metadata=METADATA,
-    )
+    responses = stub.ServerReflectionInfo(iter([request]), metadata=metadata)
 
     for response in responses:
         file_desc_proto = response.file_descriptor_response.file_descriptor_proto
@@ -1030,7 +1024,7 @@ def main(channel: Channel):
             environ["AWS_ENDPOINT_URL"] = minio_config.get("endpoint_url", "")
 
     # Phase 1: Discover CRDs and create resource subcommands
-    services = list_services(channel)
+    services = list_services(channel, METADATA)
     _LOG.info("Got %d services: %r", len(services), services)
     crds = create_serivce_classes(services)
 

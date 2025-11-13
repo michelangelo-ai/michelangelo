@@ -26,6 +26,16 @@ class GrpcReflectionTest(TestCase):
     MaCTL gRPC Reflection feature related Tests
     """
 
+    def setUp(self):
+        """
+        Set up common test data
+        """
+        self.metadata: list = [
+            ("rpc-caller", "grpcurl"),
+            ("rpc-service", "ma-apiserver"),
+            ("rpc-encoding", "proto"),
+        ]
+
     def test_list_services(self):
         """
         Test `list_services()` function
@@ -66,7 +76,7 @@ class GrpcReflectionTest(TestCase):
             "michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub",
             return_value=mock_stub,
         ):
-            result = list_services(mock_channel)
+            result = list_services(mock_channel, self.metadata)
 
         expected_services = [
             "grpc.reflection.v1alpha.ServerReflection",
@@ -112,7 +122,7 @@ class GrpcReflectionTest(TestCase):
             return_value=mock_stub,
         ):
             with self.assertRaises(ValueError) as context:
-                list_services(mock_channel)
+                list_services(mock_channel, self.metadata)
 
         # Verify the error message
         self.assertEqual(str(context.exception), "No services found")
@@ -332,6 +342,16 @@ class GetServiceDescriptorsTest(TestCase):
     Tests for get_service_descriptors function
     """
 
+    def setUp(self):
+        """
+        Set up common test data
+        """
+        self.metadata: list = [
+            ("rpc-caller", "grpcurl"),
+            ("rpc-service", "ma-apiserver"),
+            ("rpc-encoding", "proto"),
+        ]
+
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
     def test_get_service_descriptors_success(
@@ -363,7 +383,9 @@ class GetServiceDescriptorsTest(TestCase):
         mock_stub_class.return_value = mock_stub
 
         # Call the function
-        result = list(get_service_descriptors(mock_channel, service_name))
+        result = list(
+            get_service_descriptors(mock_channel, service_name, self.metadata)
+        )
 
         # Verify the result
         self.assertEqual(len(result), 1)
@@ -440,7 +462,9 @@ class GetServiceDescriptorsTest(TestCase):
         mock_stub_class.side_effect = stub_factory
 
         ### Call the function
-        result = list(get_service_descriptors(mock_channel, service_name))
+        result = list(
+            get_service_descriptors(mock_channel, service_name, self.metadata)
+        )
 
         ### Verify the result
         self.assertEqual(len(result), 2)
@@ -490,7 +514,9 @@ class GetServiceDescriptorsTest(TestCase):
         mock_stub_class.return_value = mock_stub
 
         # Call the function
-        result = list(get_service_descriptors(mock_channel, service_name))
+        result = list(
+            get_service_descriptors(mock_channel, service_name, self.metadata)
+        )
 
         # Verify the result is empty
         self.assertEqual(len(result), 0)
@@ -772,6 +798,16 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
     Tests for `get_all_file_descriptors_by_filename()` function
     """
 
+    def setUp(self):
+        """
+        Set up common test data
+        """
+        self.metadata: list = [
+            ("rpc-caller", "grpcurl"),
+            ("rpc-service", "ma-apiserver"),
+            ("rpc-encoding", "proto"),
+        ]
+
     @patch("michelangelo.cli.mactl.mactl.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.mactl.FileDescriptorProto")
     def test_no_dependencies(self, mock_fd_proto_class, mock_stub_class):
@@ -799,7 +835,9 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
         mock_stub_class.return_value = mock_stub
 
         # Call the function
-        result = list(get_all_file_descriptors_by_filename(mock_channel, filename))
+        result = list(
+            get_all_file_descriptors_by_filename(mock_channel, filename, self.metadata)
+        )
 
         # Verify result
         self.assertEqual(len(result), 1)
@@ -973,7 +1011,11 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
         mock_stub_class.return_value = mock_stub
 
         ### Call the function
-        result = list(get_all_file_descriptors_by_filename(mock_channel, main_filename))
+        result = list(
+            get_all_file_descriptors_by_filename(
+                mock_channel, main_filename, self.metadata
+            )
+        )
 
         ### Verification
         # Verify result - should return 11 file descriptors (matching the log)
@@ -1051,7 +1093,11 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
         # Call with deps=999, which should process fine initially,
         # but fail when trying to process the dependency at depth 1000
         with self.assertRaises(RecursionError) as context:
-            list(get_all_file_descriptors_by_filename(mock_channel, filename, deps=999))
+            list(
+                get_all_file_descriptors_by_filename(
+                    mock_channel, filename, self.metadata, deps=999
+                )
+            )
 
         # Verify the error message
         self.assertIn("Maximum recursion depth exceeded", str(context.exception))
