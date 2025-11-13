@@ -979,7 +979,7 @@ func TestProcessJobTermination(t *testing.T) {
 			apiHandler := apiHandler.NewFakeAPIHandler(k8sClient)
 
 			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandler)
-			err, _ = actor.processJobTermination(context.Background(), testCase.pipelineRun)
+			_, err = actor.processJobTermination(context.Background(), testCase.pipelineRun)
 
 			if testCase.expectError {
 				require.Error(t, err)
