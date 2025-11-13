@@ -133,7 +133,6 @@ func (r *Suite) Test_ModelSearch_Failed() {
 		Namespace:      "ma-test-sandbox",
 		DeploymentName: "shadow-test",
 	})
-	// assert.NoError(r.T(), err)
 	var res *ModelSearchResponse
 	err = val.Get(&res)
 	assert.NoError(r.t, err)

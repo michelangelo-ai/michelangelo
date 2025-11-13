@@ -49,7 +49,6 @@ func (r *activities) GetModel(ctx context.Context, namespace string, modelName s
 
 // ModelSearch searches model by deployment name or v1 deployment tag
 func (r *activities) ModelSearch(ctx context.Context, request *ModelSearchRequest) (*ModelSearchResponse, error) {
-	// logger := activity.GetLogger(ctx)
 	logger := zap.NewNop()
 	if request.Namespace == "" || request.DeploymentName == "" {
 		return nil, fmt.Errorf("\"namespace\" and \"deployment name\" are required to perform model search")
