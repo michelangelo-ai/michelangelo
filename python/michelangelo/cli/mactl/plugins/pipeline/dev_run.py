@@ -11,14 +11,17 @@ from google.protobuf.message import Message
 from grpc import Channel
 
 
-from mactl import (
+from michelangelo.cli.mactl.crd import (
     CRD,
     METADATA_STUB,
     bind_signature,
+    get_single_arg,
+    inject_func_signature,
+    yaml_to_dict,
+)
+from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
-    yaml_to_dict,
-    get_single_arg,
 )
 
 from plugins.pipeline.create import (
@@ -37,6 +40,58 @@ _UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
 _LOG = getLogger(__name__)
 
 
+def add_function_signature(crd: CRD) -> None:
+    """
+    Add function signature for pipeline dev_run command.
+    """
+    inject_func_signature(
+        crd,
+        "dev_run",
+        [
+            {
+                "func_signature": Parameter(
+                    "file",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+                "args": ["-f", "--file"],
+                "kwargs": {
+                    "type": str,
+                    "required": True,
+                    "help": "Path to the pipeline YAML configuration file",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "env",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default={},
+                ),
+                "args": ["--env"],
+                "kwargs": {
+                    "type": str,
+                    "required": False,
+                    "default": {},
+                    "help": "Name of the resource",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "resume_from",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default=None,
+                ),
+                "args": ["--resume_from"],
+                "kwargs": {
+                    "type": str,
+                    "required": False,
+                    "default": None,
+                    "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                },
+            },
+        ],
+    )
+
+
 def generate_dev_run(
     crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None
 ):
@@ -44,55 +99,11 @@ def generate_dev_run(
     Generate dev run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
-    crd.func_signature["dev_run"] = [
-        {
-            "func_signature": Parameter(
-                "file",
-                Parameter.POSITIONAL_OR_KEYWORD,
-            ),
-            "args": ["-f", "--file"],
-            "kwargs": {
-                "type": str,
-                "required": True,
-                "help": "Path to the pipeline YAML configuration file",
-            },
-        },
-        {
-            "func_signature": Parameter(
-                "env",
-                Parameter.POSITIONAL_OR_KEYWORD,
-                default={},
-            ),
-            "args": ["--env"],
-            "kwargs": {
-                "type": str,
-                "required": False,
-                "default": {},
-                "help": "Name of the resource",
-            },
-        },
-        {
-            "func_signature": Parameter(
-                "resume_from",
-                Parameter.POSITIONAL_OR_KEYWORD,
-                default=None,
-            ),
-            "args": ["--resume_from"],
-            "kwargs": {
-                "type": str,
-                "required": False,
-                "default": None,
-                "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
-            },
-        },
-    ]
-    _LOG.debug(
-        "Added function signature for action and argparser: %r",
-        crd.func_signature,
-    )
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
-    methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
+    methods, method_pool = get_methods_from_service(
+        channel, pipeline_run_service, crd.metadata
+    )
     method_name = "CreatePipelineRun"
 
     _LOG.info("Run input/output of method %r", method_name)

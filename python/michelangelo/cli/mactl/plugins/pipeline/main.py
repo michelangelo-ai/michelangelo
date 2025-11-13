@@ -3,12 +3,19 @@ from types import MethodType
 
 from grpc import Channel
 
-from mactl import CRD
-from plugins.pipeline.create import convert_crd_metadata_pipeline_create
-from plugins.pipeline.run import generate_run, convert_crd_metadata_pipeline_run
-from plugins.pipeline.dev_run import (
+from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.plugins.pipeline.create import (
+    convert_crd_metadata_pipeline_create,
+)
+from michelangelo.cli.mactl.plugins.pipeline.run import (
+    generate_run,
+    convert_crd_metadata_pipeline_run,
+    add_function_signature as add_run_function_signature,
+)
+from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
     generate_dev_run,
     convert_crd_metadata_pipeline_dev_run,
+    add_function_signature as add_dev_run_function_signature,
 )
 
 
@@ -28,11 +35,13 @@ def apply_plugins(
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
+        add_run_function_signature(crd)
         crd.generate_run = MethodType(
             lambda self, ch, parser: generate_run(self, ch, parser), crd
         )
     if target_command == "dev_run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_dev_run
+        add_dev_run_function_signature(crd)
         crd.generate_dev_run = MethodType(
             lambda self, ch, parser: generate_dev_run(self, ch, parser), crd
         )

@@ -1,27 +1,79 @@
+from argparse import ArgumentParser
+from inspect import Signature, Parameter
+from logging import getLogger
+from types import MethodType
+from typing import Optional
 import time
 import uuid
-from argparse import ArgumentParser
-from logging import getLogger
-from typing import Optional
 
+from google.protobuf.json_format import ParseDict
+from google.protobuf.message import Message
 from grpc import Channel
 
-from mactl import CRD
-
-from inspect import Signature, Parameter
-from types import MethodType
-from google.protobuf.message import Message
-from google.protobuf.json_format import ParseDict
-from mactl import (
-    get_methods_from_service,
-    get_message_class_by_name,
-    bind_signature,
+from michelangelo.cli.mactl.crd import (
+    CRD,
     METADATA_STUB,
+    bind_signature,
     get_single_arg,
+    inject_func_signature,
+)
+from michelangelo.cli.mactl.grpc_tools import (
+    get_message_class_by_name,
+    get_methods_from_service,
 )
 
 
 _LOG = getLogger(__name__)
+
+
+def add_function_signature(crd: CRD) -> None:
+    """
+    Add function signature for pipeline run command.
+    """
+    inject_func_signature(
+        crd,
+        "run",
+        [
+            {
+                "func_signature": Parameter(
+                    "namespace",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+                "args": ["-n", "--namespace"],
+                "kwargs": {
+                    "type": str,
+                    "required": True,
+                    "help": "Namespace of the resource",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "name",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+                "args": ["--name"],
+                "kwargs": {
+                    "type": str,
+                    "required": True,
+                    "help": "Name of the resource",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "resume_from",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default=None,
+                ),
+                "args": ["--resume_from"],
+                "kwargs": {
+                    "type": str,
+                    "required": False,
+                    "default": None,
+                    "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                },
+            },
+        ],
+    )
 
 
 def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
@@ -29,53 +81,11 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
     Generate run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
-    crd.func_signature["run"] = [
-        {
-            "func_signature": Parameter(
-                "namespace",
-                Parameter.POSITIONAL_OR_KEYWORD,
-            ),
-            "args": ["-n", "--namespace"],
-            "kwargs": {
-                "type": str,
-                "required": True,
-                "help": "Namespace of the resource",
-            },
-        },
-        {
-            "func_signature": Parameter(
-                "name",
-                Parameter.POSITIONAL_OR_KEYWORD,
-            ),
-            "args": ["--name"],
-            "kwargs": {
-                "type": str,
-                "required": True,
-                "help": "Name of the resource",
-            },
-        },
-        {
-            "func_signature": Parameter(
-                "resume_from",
-                Parameter.POSITIONAL_OR_KEYWORD,
-                default=None,
-            ),
-            "args": ["--resume_from"],
-            "kwargs": {
-                "type": str,
-                "required": False,
-                "default": None,
-                "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
-            },
-        },
-    ]
-    _LOG.debug(
-        "Added function signature for action and argparser: %r",
-        crd.func_signature,
-    )
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
-    methods, method_pool = get_methods_from_service(channel, pipeline_run_service)
+    methods, method_pool = get_methods_from_service(
+        channel, pipeline_run_service, crd.metadata
+    )
     method_name = "CreatePipelineRun"
 
     _LOG.info("Run input/output of method %r", method_name)
