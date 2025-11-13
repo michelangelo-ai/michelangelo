@@ -268,8 +268,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		log.Info(message)
 		deployment.Status.Stage = stage
 		terminal := r.handleStageTransition(ctx, metrics, deployment, err)
-		// Simplified: Skip revision management for now
-		// TODO(#534): Decision needed on deployment revision management:
+		// TODO(#534): Enable these once revision codes are migrated:
 		// - Either implement UpsertDeploymentRevision properly with full error handling
 		// - Or permanently remove revision management infrastructure if not needed
 		// - See issue #534 for discussion
