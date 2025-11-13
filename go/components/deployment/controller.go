@@ -269,6 +269,14 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		deployment.Status.Stage = stage
 		terminal := r.handleStageTransition(ctx, metrics, deployment, err)
 		// Simplified: Skip revision management for now
+		// TODO: Decision needed on deployment revision management:
+		// - Either implement UpsertDeploymentRevision properly with full error handling
+		// - Or permanently remove revision management infrastructure if not needed
+		// - See discussion in issue tracking this technical debt
+		// upsertErr := UpsertDeploymentRevision(ctx, deployment, r.RevisionManager)
+		// if upsertErr != nil {
+		//	log.Info(fmt.Sprintf("fail to upsert deployment revision. Proceeding with deployment. Error: %+v", upsertErr))
+		// }
 		// Make sure that we only set the conditions to nil after the upserting the revision, so we keep track of the
 		// latest set of conditions to render.
 		if terminal {
