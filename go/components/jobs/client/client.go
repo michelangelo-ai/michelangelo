@@ -126,7 +126,7 @@ type FederatedClient interface {
 	DeleteJob(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) error
 
 	// CreateJob creates a job on the specified cluster
-	CreateJob(ctx context.Context, jobObject runtime.Object, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
+	CreateJob(ctx context.Context, jobObject, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
 
 	// CreateJobCluster creates a cluster on the specified cluster
 	CreateJobCluster(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
@@ -220,12 +220,12 @@ func (c *Client) CreateSecret(
 		return err
 	}
 
-	secretData, err := c.secretsProvider.GenerateHadoopSecret(
+	secretData, err := c.secretsProvider.GetSecretsForDataStore(
 		ctx,
 		jobObject,
 		cluster)
 	if err != nil {
-		return fmt.Errorf("generate hadoop secret err:%w", err)
+		return fmt.Errorf("get secrets for job err:%w", err)
 	}
 
 	labels := map[string]string{
@@ -346,7 +346,7 @@ func (c *Client) CreateJob(
 			return fmt.Errorf("get client for cluster err:%v", err)
 		}
 
-		kubeRayJob, _, err := c.mapper.MapGlobalToLocal(jobObject, jobClusterObject, kubeCluster)
+		kubeRayJob, err := c.mapper.MapGlobalJobToLocal(jobObject, jobClusterObject, kubeCluster)
 		if err != nil {
 			return fmt.Errorf("map global to local err:%w", err)
 		}
@@ -378,7 +378,7 @@ func (c *Client) CreateJobCluster(ctx context.Context, jobClusterObject runtime.
 	}
 	rayCluster := jobClusterObject.(*v2pb.RayCluster)
 
-	_, localCluster, err := c.mapper.MapGlobalToLocal(nil, jobClusterObject, kubeCluster)
+	localCluster, err := c.mapper.MapGlobalJobClusterToLocal(jobClusterObject, kubeCluster)
 	if err != nil {
 		return fmt.Errorf("map global to local err:%w", err)
 	}

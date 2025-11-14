@@ -15,7 +15,7 @@ import (
 func TestGetKubeSecretName(t *testing.T) {
 	jobName := "test-job"
 	secretName := GetKubeSecretName(jobName)
-	expectedName := "ma-hadoop-" + jobName
+	expectedName := "ma-job-secret-" + jobName
 	require.Equal(t, expectedName, secretName)
 }
 
@@ -171,7 +171,7 @@ func TestProviderGenerateHadoopSecret(t *testing.T) {
 	}
 
 	// Test that GenerateHadoopSecret returns empty for now
-	result, err := provider.GenerateHadoopSecret(context.Background(), job, cluster)
+	result, err := provider.GetSecretsForDataStore(context.Background(), job, cluster)
 	require.NoError(t, err)
 	require.Nil(t, result)
 }

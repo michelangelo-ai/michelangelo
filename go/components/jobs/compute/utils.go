@@ -1,4 +1,4 @@
-package infra
+package compute
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 )
 
-func NewClientConfigFromConfiguration(
+func GetKubeClientConfigFromConfiguration(
 	serviceName string,
 	dnsPath string,
 	namespace string,

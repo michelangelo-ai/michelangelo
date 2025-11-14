@@ -12,7 +12,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/infra"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray/kuberay"
 )
@@ -100,7 +99,7 @@ func (f *factory) getClientCfg(c *v2pb.Cluster, key string) (*rest.Config, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster client auth: %w", err)
 	}
-	cfg, err := infra.NewClientConfigFromConfiguration(
+	cfg, err := GetKubeClientConfigFromConfiguration(
 		_serviceName, key, metav1.NamespaceAll, &auth, true)
 	if err != nil {
 		return nil, err

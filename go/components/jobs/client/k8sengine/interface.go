@@ -9,10 +9,15 @@ import (
 // to their corresponding local (Kubernetes) representations and extracting
 // identifying information such as namespace and name.
 type MapperInterface interface {
-	// MapGlobalToLocal converts a global job object and its associated cluster object
-	// into Kubernetes-native runtime.Objects. It returns the mapped job object,
-	// the mapped cluster object, and an error if the mapping fails.
-	MapGlobalToLocal(obj runtime.Object, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, runtime.Object, error)
+	// MapGlobalJobToLocal converts a global job object and its associated cluster object
+	// into a Kubernetes-native runtime.Object representing the job.
+	// It returns the mapped job object and an error if the mapping fails.
+	MapGlobalJobToLocal(jobObject runtime.Object, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error)
+
+	// MapGlobalJobClusterToLocal converts a global cluster object into a Kubernetes-native
+	// runtime.Object representing the cluster.
+	// It returns the mapped cluster object and an error if the mapping fails.
+	MapGlobalJobClusterToLocal(jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error)
 
 	// GetLocalName extracts the namespace and name from the provided job object.
 	// These values are used to identify the corresponding Kubernetes resource.

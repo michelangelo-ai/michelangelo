@@ -1,3 +1,4 @@
+//go:generate mamockgen SecretProvider
 package secrets
 
 import (
@@ -18,11 +19,15 @@ import (
 // SecretProvider defines the interface for secret management
 type SecretProvider interface {
 	GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (ClientAuth, error)
-
-	GenerateHadoopSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error)
+	GetSecretsForDataStore(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error)
 }
 
-// Provider implements the SecretProvider interface
+// Provider implements the SecretProvider interface.
+//
+// NOTE: This is a SAMPLE IMPLEMENTATION that stores secrets in the MA control plane K8s Cluster.
+// This is NOT recommended for production use. For real deployments, use external secret
+// management systems (e.g., HashiCorp Vault, AWS Secrets Manager) or explore utilities
+// designed for sandbox/testing purposes.
 type Provider struct {
 	k8sClusterClient kubernetes.Interface
 	logger           *zap.Logger
@@ -87,7 +92,7 @@ func New(p Params) Result {
 
 // GetKubeSecretName gets the k8s secret name using the job name
 func GetKubeSecretName(jobName string) string {
-	return constants.SecretHadoopNamePrefix + jobName
+	return constants.SecretNamePrefix + jobName
 }
 
 // retrieveAndDecodeSecret retrieves and decodes a secret from the Kubernetes cluster
@@ -129,6 +134,6 @@ func (p Provider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluste
 	return clientAuth, nil
 }
 
-func (p Provider) GenerateHadoopSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error) {
+func (p Provider) GetSecretsForDataStore(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error) {
 	return nil, nil
 }

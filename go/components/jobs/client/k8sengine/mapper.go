@@ -27,42 +27,42 @@ func NewMapper() MapperResult {
 	}
 }
 
-// MapGlobalToLocal maps the global crd to local crd
-func (m Mapper) MapGlobalToLocal(jobObject runtime.Object, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, runtime.Object, error) {
-	// localJob and localCluster are optional depending on which objects are provided
-	var localJob, localCluster runtime.Object
-
-	// Map job object when provided
-	if jobObject != nil {
-		switch obj := jobObject.(type) {
-		case *v2pb.RayJob:
-			lj, err := m.mapRay(obj, jobClusterObject, cluster)
-			if err != nil {
-				return nil, nil, fmt.Errorf("map ray job: %w", err)
-			}
-			localJob = lj
-		case *v2pb.SparkJob:
-			return nil, nil, fmt.Errorf("spark job mapping not implemented: %T", jobObject)
-		default:
-			return nil, nil, fmt.Errorf("unsupported job object type: %T", jobObject)
-		}
+// MapGlobalJobToLocal maps the global job object to local job object
+func (m Mapper) MapGlobalJobToLocal(jobObject runtime.Object, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {
+	if jobObject == nil {
+		return nil, fmt.Errorf("jobObject cannot be nil")
 	}
 
-	// Map cluster object when provided
-	if jobClusterObject != nil {
-		switch obj := jobClusterObject.(type) {
-		case *v2pb.RayCluster:
-			lc, err := m.mapRayCluster(obj)
-			if err != nil {
-				return nil, nil, fmt.Errorf("map ray cluster: %w", err)
-			}
-			localCluster = lc
-		default:
-			return nil, nil, fmt.Errorf("unsupported cluster object type: %T", jobClusterObject)
+	switch obj := jobObject.(type) {
+	case *v2pb.RayJob:
+		localJob, err := m.mapRay(obj, jobClusterObject, cluster)
+		if err != nil {
+			return nil, fmt.Errorf("map ray job: %w", err)
 		}
+		return localJob, nil
+	case *v2pb.SparkJob:
+		return nil, fmt.Errorf("spark job mapping not implemented: %T", jobObject)
+	default:
+		return nil, fmt.Errorf("unsupported job object type: %T", jobObject)
+	}
+}
+
+// MapGlobalJobClusterToLocal maps the global cluster object to local cluster object
+func (m Mapper) MapGlobalJobClusterToLocal(jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {
+	if jobClusterObject == nil {
+		return nil, fmt.Errorf("jobClusterObject cannot be nil")
 	}
 
-	return localJob, localCluster, nil
+	switch obj := jobClusterObject.(type) {
+	case *v2pb.RayCluster:
+		localCluster, err := m.mapRayCluster(obj)
+		if err != nil {
+			return nil, fmt.Errorf("map ray cluster: %w", err)
+		}
+		return localCluster, nil
+	default:
+		return nil, fmt.Errorf("unsupported cluster object type: %T", jobClusterObject)
+	}
 }
 
 // GetLocalName gets the namespaced name of the local crd. This is used by methods that only require the

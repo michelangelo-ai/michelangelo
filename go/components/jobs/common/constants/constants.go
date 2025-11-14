@@ -71,20 +71,32 @@ const (
 	ClustersNamespace string = "ma-system"
 )
 
-// Labels
+// Michelangelo label keys
+const (
+	JobNameLabelKey       string = "ma/job-name"
+	ProjectNameLabelKey   string = "ma/project-name"
+	JobControlPlaneEnvKey string = "ma/control-plane-env"
+	UserLabelKey          string = "ma/user"
+	OwnerServiceLabelKey  string = "ma/owner-service"
+)
+
+// Ray label keys
+const (
+	RayClusterNameLabelKey string = "ray.io/cluster"
+	RayNodeTypeLabelKey    string = "ray.io/node-type"
+	RayNodeLabelKey        string = "ray.io/is-ray-node"
+)
+
+// Secret label keys and values
+const (
+	SecretAppNameKey   string = "app"
+	SecretAppNameValue string = "michelangelo-controllermgr"
+)
+
+// Label values
 const (
 	GenericSpireIdentityLabelValue string = "michelangelo.ray.workload"
-	JobNameLabelKey                string = "ma/job-name"
-	ProjectNameLabelKey            string = "ma/project-name"
-	JobControlPlaneEnvKey          string = "ma/control-plane-env"
-	RayClusterNameLabelKey         string = "ray.io/cluster"
-	RayNodeTypeLabelKey            string = "ray.io/node-type"
-	RayNodeLabelKey                string = "ray.io/is-ray-node"
-	SecretAppNameKey               string = "app"
-	SecretAppNameValue             string = "michelangelo-controllermgr"
 	SecureServiceMeshMTLSValue     string = "lts"
-	UserLabelKey                   string = "ma/user"
-	OwnerServiceLabelKey           string = "ma/owner-service"
 	MAOwnerServiceLabelValue       string = "michelangelo-ray"
 	MAOwnerSparkLabelValue         string = "michelangelo-spark"
 )
@@ -130,8 +142,7 @@ const (
 
 // secret related constants
 const (
-	SecretHadoopNamePrefix string = "ma-hadoop-"
-	SecretHadoopMountPath  string = "/etc/ma_hadoop"
+	SecretNamePrefix string = "ma-job-secret-"
 )
 
 // port annotations

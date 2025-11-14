@@ -1,40 +1,24 @@
 package compute
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets/secretsmocks"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// MockSecretProvider is a mock implementation of SecretProvider for testing
-type MockSecretProvider struct {
-	shouldError bool
-}
-
-func (m *MockSecretProvider) GetClusterClientAuth(ctx context.Context, cluster *v2pb.Cluster) (secrets.ClientAuth, error) {
-	if m.shouldError {
-		return secrets.ClientAuth{}, fmt.Errorf("mock error")
-	}
-	return secrets.ClientAuth{
-		CertificateAuthorityData: "test-ca",
-		ClientTokenData:          "test-token",
-	}, nil
-}
-
-func (m *MockSecretProvider) GenerateHadoopSecret(ctx context.Context, jobObject runtime.Object, cluster *v2pb.Cluster) (map[string][]byte, error) {
-	return nil, nil
-}
-
 func TestNewClientSetFactory(t *testing.T) {
-	mockProvider := &MockSecretProvider{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
 	factory := NewClientSetFactory(mockProvider)
 	require.NotNil(t, factory)
 }
@@ -67,7 +51,14 @@ func TestGetClientSetForCluster(t *testing.T) {
 	}
 
 	t.Run("secret provider error", func(t *testing.T) {
-		mockProvider := &MockSecretProvider{shouldError: true}
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+
+		mockProvider := secretsmocks.NewMockSecretProvider(ctrl)
+		mockProvider.EXPECT().
+			GetClusterClientAuth(gomock.Any(), &testCluster).
+			Return(secrets.ClientAuth{}, fmt.Errorf("mock error"))
+
 		factory := NewClientSetFactory(mockProvider)
 
 		_, err := factory.GetClientSetForCluster(&testCluster)
