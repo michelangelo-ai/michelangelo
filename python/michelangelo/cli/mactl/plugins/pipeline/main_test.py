@@ -16,6 +16,7 @@ class PipelineMainTest(TestCase):
     def setUp(self):
         """Set up test fixtures."""
         self.mock_crd = Mock()
+        self.mock_crd.func_signature = {}  # Real dict for item assignment
         self.mock_crds = {"pipeline": self.mock_crd}
         self.mock_channel = Mock()
 

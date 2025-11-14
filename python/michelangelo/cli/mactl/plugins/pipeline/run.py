@@ -21,6 +21,8 @@ from michelangelo.cli.mactl.mactl import (
 
 _LOG = getLogger(__name__)
 
+# TODO: Add E2E tests for pipeline run command with representative scenarios (normal run, resume from checkpoint)
+
 
 def generate_run(crd: CRD, channel: Channel):
     """
