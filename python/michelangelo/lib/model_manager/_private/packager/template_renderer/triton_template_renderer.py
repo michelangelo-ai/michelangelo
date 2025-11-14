@@ -1,4 +1,6 @@
-from michelangelo.lib.model_manager._private.packager.template_renderer import TemplateRenderer
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TemplateRenderer,
+)
 
 
 class TritonTemplateRenderer(TemplateRenderer):

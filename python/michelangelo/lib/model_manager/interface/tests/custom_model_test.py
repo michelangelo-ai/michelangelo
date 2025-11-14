@@ -2,7 +2,9 @@ import tempfile
 import numpy as np
 from unittest import TestCase
 from michelangelo.lib.model_manager.interface.custom_model import Model
-from michelangelo.lib.model_manager.interface.tests.fixtures.custom_model import CustomModel
+from michelangelo.lib.model_manager.interface.tests.fixtures.custom_model import (
+    CustomModel,
+)
 
 
 class IncompleteModel(Model):

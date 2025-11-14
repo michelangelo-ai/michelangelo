@@ -3,7 +3,9 @@ from typing import Optional, Union
 from numpy import ndarray
 from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
+)
 
 
 class CustomTritonPackager:

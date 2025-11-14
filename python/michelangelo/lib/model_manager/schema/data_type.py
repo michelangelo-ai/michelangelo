@@ -13,7 +13,7 @@ class DataType(Enum):
     UNKNOWN = 1
     STRING = 7
     BYTE = 15
-    CHAR = 16 
+    CHAR = 16
     SHORT = 17
     INT = 18
     LONG = 19

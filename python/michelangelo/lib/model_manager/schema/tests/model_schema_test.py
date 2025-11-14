@@ -30,9 +30,13 @@ class ModelSchemaTest(TestCase):
         self.assertEqual(schema.input_schema[1].name, "input2")
         self.assertEqual(schema.input_schema[1].data_type, DataType.UNKNOWN)
         self.assertEqual(schema.feature_store_features_schema[0].name, "feature1")
-        self.assertEqual(schema.feature_store_features_schema[0].data_type, DataType.UNKNOWN)
+        self.assertEqual(
+            schema.feature_store_features_schema[0].data_type, DataType.UNKNOWN
+        )
         self.assertEqual(schema.feature_store_features_schema[1].name, "feature2")
-        self.assertEqual(schema.feature_store_features_schema[1].data_type, DataType.UNKNOWN)
+        self.assertEqual(
+            schema.feature_store_features_schema[1].data_type, DataType.UNKNOWN
+        )
 
         schema = ModelSchema(
             input_schema=[
@@ -52,9 +56,13 @@ class ModelSchemaTest(TestCase):
         self.assertEqual(schema.input_schema[1].name, "input2")
         self.assertEqual(schema.input_schema[1].data_type, DataType.STRING)
         self.assertEqual(schema.feature_store_features_schema[0].name, "feature1")
-        self.assertEqual(schema.feature_store_features_schema[0].data_type, DataType.DOUBLE)
+        self.assertEqual(
+            schema.feature_store_features_schema[0].data_type, DataType.DOUBLE
+        )
         self.assertEqual(schema.feature_store_features_schema[1].name, "feature2")
-        self.assertEqual(schema.feature_store_features_schema[1].data_type, DataType.INT)
+        self.assertEqual(
+            schema.feature_store_features_schema[1].data_type, DataType.INT
+        )
 
         schema = ModelSchema(
             input_schema=[
@@ -62,7 +70,9 @@ class ModelSchemaTest(TestCase):
                 ModelSchemaItem(name="input2", data_type=DataType.STRING),
             ],
             feature_store_features_schema=[
-                ModelSchemaItem(name="feature1", data_type=DataType.LONG, shape=[-1, 1]),
+                ModelSchemaItem(
+                    name="feature1", data_type=DataType.LONG, shape=[-1, 1]
+                ),
                 ModelSchemaItem(name="feature2", data_type=DataType.DOUBLE),
             ],
         )
@@ -76,8 +86,12 @@ class ModelSchemaTest(TestCase):
         self.assertEqual(schema.input_schema[1].data_type, DataType.STRING)
         self.assertIsNone(schema.input_schema[1].shape)
         self.assertEqual(schema.feature_store_features_schema[0].name, "feature1")
-        self.assertEqual(schema.feature_store_features_schema[0].data_type, DataType.LONG)
+        self.assertEqual(
+            schema.feature_store_features_schema[0].data_type, DataType.LONG
+        )
         self.assertEqual(schema.feature_store_features_schema[0].shape, [-1, 1])
         self.assertEqual(schema.feature_store_features_schema[1].name, "feature2")
-        self.assertEqual(schema.feature_store_features_schema[1].data_type, DataType.DOUBLE)
+        self.assertEqual(
+            schema.feature_store_features_schema[1].data_type, DataType.DOUBLE
+        )
         self.assertIsNone(schema.feature_store_features_schema[1].shape)
