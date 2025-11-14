@@ -28,6 +28,7 @@ def add_function_signature(crd: CRD) -> None:
         crd,
         "kill",
         {
+            "help": "Kill a configured trigger entity.",
             "args": [
                 {
                     "func_signature": Parameter(

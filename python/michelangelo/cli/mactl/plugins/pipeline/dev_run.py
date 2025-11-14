@@ -48,6 +48,7 @@ def add_function_signature(crd: CRD) -> None:
         crd,
         "dev_run",
         {
+            "help": "Run a pipeline locally for development and testing purposes",
             "args": [
                 {
                     "func_signature": Parameter(

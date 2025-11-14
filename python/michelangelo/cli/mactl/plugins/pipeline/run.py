@@ -34,6 +34,7 @@ def add_function_signature(crd: CRD) -> None:
         crd,
         "run",
         {
+            "help": "Run a registered pipeline. (requires pipeline to be created first)",
             "args": [
                 {
                     "func_signature": Parameter(

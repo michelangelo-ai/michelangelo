@@ -357,6 +357,7 @@ class CRD:
         self.metadata = metadata
         self.func_signature: dict[str, dict] = {
             "apply": {
+                "help": "Apply an Entity (create or update)",
                 "args": [
                     {
                         "func_signature": Parameter(
@@ -374,6 +375,7 @@ class CRD:
                 ],
             },
             "delete": {
+                "help": "Delete an Entity",
                 "args": [
                     {
                         "func_signature": Parameter(
@@ -403,6 +405,7 @@ class CRD:
                 ],
             },
             "get": {
+                "help": "Get an Entity or list all entities in the namespace",
                 "args": [
                     {
                         "args": ["name"],
@@ -463,9 +466,6 @@ class CRD:
         _LOG.debug(
             "Start to configure parser with args: %r", self.func_signature[action]
         )
-        func_args = self.func_signature[action].get("args", [])
-        if not func_args or not isinstance(func_args, list):
-            _LOG.info("Invalid or empty args for parser configuration!")
         for arg_def in self.func_signature[action]["args"]:
             args = arg_def.get("args", [])
             kwargs = arg_def.get("kwargs", {})
