@@ -349,9 +349,7 @@ def main(channel: Channel):
                 for k, v in crds[user_command_crd].func_signature.items()
             ]
         )
-        print(
-            f"\nFor action-specific help, use: ma {user_command_crd} <action> --help"
-        )
+        print(f"\nFor action-specific help, use: ma {user_command_crd} <action> --help")
         sys.exit(0)
 
     if len(remaining) < 1:
