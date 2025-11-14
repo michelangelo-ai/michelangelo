@@ -33,46 +33,48 @@ def add_function_signature(crd: CRD) -> None:
     inject_func_signature(
         crd,
         "run",
-        [
-            {
-                "func_signature": Parameter(
-                    "namespace",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-                "args": ["-n", "--namespace"],
-                "kwargs": {
-                    "type": str,
-                    "required": True,
-                    "help": "Namespace of the resource",
+        {
+            "args": [
+                {
+                    "func_signature": Parameter(
+                        "namespace",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                    ),
+                    "args": ["-n", "--namespace"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Namespace of the resource",
+                    },
                 },
-            },
-            {
-                "func_signature": Parameter(
-                    "name",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-                "args": ["--name"],
-                "kwargs": {
-                    "type": str,
-                    "required": True,
-                    "help": "Name of the resource",
+                {
+                    "func_signature": Parameter(
+                        "name",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                    ),
+                    "args": ["--name"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Name of the resource",
+                    },
                 },
-            },
-            {
-                "func_signature": Parameter(
-                    "resume_from",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                    default=None,
-                ),
-                "args": ["--resume_from"],
-                "kwargs": {
-                    "type": str,
-                    "required": False,
-                    "default": None,
-                    "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                {
+                    "func_signature": Parameter(
+                        "resume_from",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--resume_from"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": None,
+                        "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                    },
                 },
-            },
-        ],
+            ],
+        },
     )
 
 
