@@ -1,4 +1,3 @@
-import tempfile
 from typing import Optional, Union
 from numpy import ndarray
 from michelangelo.lib.model_manager.schema import ModelSchema
