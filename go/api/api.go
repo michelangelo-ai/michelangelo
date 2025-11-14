@@ -25,7 +25,7 @@ const (
 
 	// ImmutableAnnotation is used to mark a CRD object if the spec and status of the object
 	// will no longer be updated .  If this annotation is set to "true", ingester will remove
-	// this CRD ojbect from k8s/ETCD and only the annotation and label of the immutable CRD
+	// this CRD object from k8s/ETCD and only the annotation and label of the immutable CRD
 	// object can be changed in MySQL later on.
 	ImmutableAnnotation = "michelangelo/Immutable"
 

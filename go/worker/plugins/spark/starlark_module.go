@@ -196,14 +196,14 @@ func (r *module) sensorJob(t *starlark.Thread, _ *starlark.Builtin, args starlar
 	return sparkJobValue, nil
 }
 
-func getRunningConditionType(reciever starlark.Value) (starlark.Value, error) {
+func getRunningConditionType(receiver starlark.Value) (starlark.Value, error) {
 	return starlark.String(utils.SparkAppRunningCondition), nil
 }
 
-func getSucceededConditionType(reciever starlark.Value) (starlark.Value, error) {
+func getSucceededConditionType(receiver starlark.Value) (starlark.Value, error) {
 	return starlark.String(utils.SucceededCondition), nil
 }
 
-func getKilledConditionType(reciever starlark.Value) (starlark.Value, error) {
+func getKilledConditionType(receiver starlark.Value) (starlark.Value, error) {
 	return starlark.String(utils.KilledCondition), nil
 }
