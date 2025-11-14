@@ -30,7 +30,7 @@ class CustomTritonPackager:
         model_name: Optional[str] = None,
         dest_model_path: Optional[str] = None,
         model_revision: Optional[str] = "0",
-        model_path_source_type: Optional[str] = StorageType.HDFS,
+        model_path_source_type: Optional[str] = StorageType.LOCAL,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
         """
