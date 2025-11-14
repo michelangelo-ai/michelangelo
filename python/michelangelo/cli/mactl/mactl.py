@@ -9,6 +9,7 @@ from importlib.util import spec_from_file_location, module_from_spec
 from logging import basicConfig, getLogger, WARNING
 from os import getenv, environ
 from pathlib import Path
+from typing import Union
 import logging
 import re
 import sys
@@ -117,7 +118,7 @@ def kebab_to_snake(name: str) -> str:
     return name.replace("-", "_")
 
 
-def read_module_from_file(crd_name: str) -> object:
+def read_module_from_file(crd_name: str) -> Union[object, None]:
     """
     Read and load a plugin module from a given file path.
     """
@@ -160,6 +161,8 @@ def read_plugins(crd: CRD, channel: Channel) -> None:
     """
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_module = read_module_from_file(crd.name)
+    if plugin_module is None:
+        return
 
     plugin_module.apply_plugins(crd, channel)
     _LOG.info("Apply plugin done for %r entity", crd.name)
@@ -174,6 +177,8 @@ def read_plugin_command(
     """
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_module = read_module_from_file(crd.name)
+    if plugin_module is None:
+        return
 
     if hasattr(plugin_module, "apply_plugin_command"):
         plugin_module.apply_plugin_command(crd, user_command_action, crds, channel)
@@ -315,9 +320,8 @@ def main(channel: Channel):
     if len(remaining) >= 1 and remaining[0] in ["--help", "-h"]:
         print(f"Usage: mactl {user_command_crd} <action> [options]")
         print("\nAvailable actions:")
-        print("  get       Get or List specific resource(s)")
-        print("  apply     Create or update a resource from YAML file")
-        print("  delete    Delete a resource")
+        for action in crds[user_command_crd].func_signature:
+            print(f"  {action}")
         print(
             f"\nFor action-specific help, use: mactl {user_command_crd} <action> --help"
         )
