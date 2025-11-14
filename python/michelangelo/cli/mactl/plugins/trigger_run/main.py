@@ -10,16 +10,15 @@ from plugins.trigger_run.kill import generate_kill, add_function_signature
 _LOG = getLogger(__name__)
 
 
-def apply_plugins(
-    crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel
-):
+def apply_plugins(crd: CRD, channel: Channel):
     """
-    Apply plugins to the crd.
+    Apply plugin entity function signatures to the CRD.
+    It adds the necessary function signatures and methods for user commands
     """
-    _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
-    if target_command == "kill":
-        add_function_signature(crd)
-        crd.generate_kill = MethodType(
-            lambda self, ch, parser: generate_kill(self, ch, parser), crd
-        )
-    _LOG.info("Plugins applied successfully to crd: %s", crd)
+    _LOG.info("Applying plugin entity to crd: %r", crd)
+    _LOG.debug("gRPC Channel: %r", channel)
+    add_function_signature(crd)
+    crd.generate_kill = MethodType(
+        lambda self, ch, parser: generate_kill(self, ch, parser), crd
+    )
+    _LOG.info("Plugin entities applied successfully to crd: %s", crd)
