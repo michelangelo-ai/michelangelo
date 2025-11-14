@@ -321,17 +321,17 @@ def main(channel: Channel):
         action="store_true",
         help="Increase verbosity level",
     )
-    resource_subparsers = base_parser.add_subparsers(dest="resource", required=True)
+    entity_subparsers = base_parser.add_subparsers(dest="entity", required=True)
 
     for crd_name in crds.keys():
-        resource_subparsers.add_parser(crd_name, add_help=False)
+        entity_subparsers.add_parser(crd_name, add_help=False)
 
     # Parse only resource name, leave rest for later
     namespace, remaining = base_parser.parse_known_args()
     _LOG.debug(
         "Parsed arguments -- namespace: %r / remaining: %r", namespace, remaining
     )
-    user_command_crd = namespace.resource
+    user_command_crd = namespace.entity
 
     # Load plugins for target CRD
     read_plugins(
