@@ -1,3 +1,5 @@
+# gazelle:go_proto_compilers //bazel/rules/proto:go_kubeconversion,//bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_validation
+
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 load("@io_bazel_rules_go//proto:def.bzl", "go_proto_library")
 load("@rules_proto//proto:defs.bzl", "proto_library")
@@ -16,10 +18,7 @@ proto_library(
         "//proto/api:api_proto",
         "//proto/api/v2:v2_proto",
         "@com_google_protobuf//:any_proto",
-        "@com_google_protobuf//:duration_proto",
-        "@com_google_protobuf//:struct_proto",
         "@com_google_protobuf//:timestamp_proto",
-        "@io_k8s_api//core/v1:v1_proto",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:v1_proto",
     ],
 )
@@ -29,7 +28,7 @@ go_proto_library(
     compilers = [
         "//bazel/rules/proto:go_kubeproto",
         "//bazel/rules/proto:go_validation",
-        "//bazel/rules/proto:go_kubeconversion",  # Enable conversion compiler
+        "//bazel/rules/proto:go_kubeconversion",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1",
     proto = ":v2alpha1_proto",
