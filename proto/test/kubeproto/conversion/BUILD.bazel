@@ -1,1 +1,16 @@
 # gazelle:go_proto_compilers //bazel/rules/proto:go_kubeconversion,//bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_kubeproto_unittest
+
+load("@io_bazel_rules_go//go:def.bzl", "go_test")
+
+go_test(
+    name = "project_conversion_test",
+    size = "small",
+    srcs = ["project_conversion_test.go"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "//proto/api/v2alpha1:go_default_library",
+        "@com_github_r3labs_diff_v3//:go_default_library",
+        "@com_github_stretchr_testify//assert",
+        "@io_k8s_sigs_controller_runtime//pkg/conversion",
+    ],
+)
