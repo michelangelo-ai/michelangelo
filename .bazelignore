@@ -3,3 +3,4 @@ go/vendor
 pkg
 python
 tools
+javascript/node_modules
