@@ -1,0 +1,382 @@
+// Project API provides interfaces for managing ML projects in Michelangelo.
+// A project represents a logical grouping of ML resources and workloads.
+// The project definition includes:
+// - Project metadata and ownership information
+// - Resource retention policies and configurations
+// - Notification settings for project events
+// - Git repository tracking for project code
+//
+// Key concepts:
+// - Projects organize related ML resources together
+// - Ownership controls access and permissions
+// - Retention policies manage resource lifecycle
+// - Notifications control event communication
+// - Projects track Git repositories and commits
+//
+// ============================================================================
+// DEMO: v2alpha1 Spoke Version - Conversion Testing
+// ============================================================================
+// This file demonstrates the protoc-gen-kubeconversion plugin for multi-version
+// CRD support in Kubernetes. v2alpha1 is a "spoke" version that converts to/from
+// the v2 "hub" version (storage version).
+//
+// DEMO CHANGES SUMMARY:
+//
+// [DEMO CHANGE 1] Removed field: ProjectSpec.type_info
+//   Purpose: Demonstrate field deprecation in spoke versions
+//   Location: ProjectSpec message (line ~91)
+//
+// [DEMO CHANGE 2] Removed field: ProjectSpec.ext (google.protobuf.Any)
+//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
+//   Location: ProjectSpec message (line ~98)
+//
+// [DEMO CHANGE 3] Field rename: description -> project_description
+//   Purpose: Demonstrate API evolution with field renaming
+//   Location: ProjectSpec.project_description (line ~113)
+//
+// [DEMO CHANGE 4] Added field: ProjectSpec.legacy_alpha_config
+//   Purpose: Demonstrate spoke-specific fields not in hub
+//   Location: ProjectSpec message (line ~127)
+//
+// [DEMO CHANGE 5] Removed field: ProjectStatus.ext (google.protobuf.Any)
+//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
+//   Location: ProjectStatus message (line ~201)
+//
+// [DEMO CHANGE 6] Removed field: ProjectStatus.last_update_time (google.protobuf.Timestamp)
+//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
+//   Location: ProjectStatus message (line ~210)
+//
+// TYPE INCOMPATIBILITY EXPLANATION:
+// The codebase uses two incompatible protobuf implementations:
+// - Main proto code (.pb.go): gogo/protobuf (github.com/gogo/protobuf/types)
+// - Conversion code (.conversion.pb.go): google/protobuf (google.golang.org/protobuf/proto)
+//
+// Problem: proto.Clone() requires protoreflect.ProtoMessage interface, which
+// gogo/protobuf types don't implement. This causes compilation errors for
+// google.protobuf.* well-known types (Any, Timestamp, Duration, etc.).
+//
+// Solution: Use ignore_unmapped_hub_fields to exclude ALL google.protobuf.*
+// fields from spoke versions.
+//
+// ============================================================================
+// HOW TO TEST THIS DEMO
+// ============================================================================
+//
+// Step 1: Build the proto files with conversion compiler
+// -------------------------------------------------------
+// Run this command to generate Go code including conversion functions:
+//
+//   bazel build //proto/api/... --output_groups=go_generated_srcs --verbose_failures
+//
+// Flags explained:
+// - //proto/api/...              : Build all targets under proto/api (includes v2 and v2alpha1)
+// - --output_groups=go_generated_srcs : Generate Go source files (not just compiled .a files)
+// - --verbose_failures           : Show detailed error messages if build fails
+//
+// Step 2: Examine the generated conversion code
+// ----------------------------------------------
+// After successful build, check the generated .conversion.pb.go files:
+//
+// Hub version (v2):
+//   bazel-bin/proto/api/v2/v2_go_proto_/github.com/michelangelo-ai/michelangelo/proto/api/v2/project.conversion.pb.go
+//
+//   Expected content:
+//     func (*Project) Hub() {}    // Simple marker - v2 is the hub (storage version)
+//
+// Spoke version (v2alpha1):
+//   bazel-bin/proto/api/v2alpha1/v2alpha1_go_proto_/github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1/project.conversion.pb.go
+//
+//   Expected content:
+//     func (src *Project) ConvertTo(dstRaw conversion.Hub) error {
+//       // Converts v2alpha1 → v2 (spoke to hub)
+//     }
+//
+//     func (dst *Project) ConvertFrom(srcRaw conversion.Hub) error {
+//       // Converts v2 → v2alpha1 (hub to spoke)
+//     }
+//
+// Step 3: Verify the demo changes in generated code
+// --------------------------------------------------
+// Open the v2alpha1 conversion file and verify:
+//
+// ✓ [DEMO CHANGE 3] Field rename is applied:
+//     Line ~83:  out.Description = in.ProjectDescription      // spoke → hub
+//     Line ~120: out.ProjectDescription = in.Description      // hub → spoke
+//
+// ✓ [DEMO CHANGE 1,2] Ignored fields are NOT in conversion functions:
+//     - ProjectSpec.type_info: Should NOT appear in ConvertProjectSpecToHub/FromHub
+//     - ProjectSpec.ext: Should NOT appear in ConvertProjectSpecToHub/FromHub
+//
+// ✓ [DEMO CHANGE 4] Spoke-only field is NOT in conversion functions:
+//     - ProjectSpec.legacy_alpha_config: Should NOT appear in any conversion function
+//
+// ✓ [DEMO CHANGE 5,6] Ignored timestamp/any fields are NOT in conversion:
+//     - ProjectStatus.ext: Should NOT appear in ConvertProjectStatusToHub/FromHub
+//     - ProjectStatus.last_update_time: Should NOT appear in ConvertProjectStatusToHub/FromHub
+//
+// Step 4: Verify the build compiles successfully
+// -----------------------------------------------
+// If the build succeeds without errors, it means:
+// ✓ No type incompatibility errors (gogo/google protobuf conflict resolved)
+// ✓ All conversion functions are properly generated
+// ✓ Field mappings are correct (renames, ignores, etc.)
+//
+// Alternative: View generated files directly
+// ------------------------------------------
+// You can also read the generated files directly:
+//
+//   cat bazel-bin/proto/api/v2alpha1/v2alpha1_go_proto_/github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1/project.conversion.pb.go
+//
+// Look for the ConvertTo and ConvertFrom methods on the Project struct to see
+// the full conversion logic generated by protoc-gen-kubeconversion.
+//
+// ============================================================================
+
+syntax = "proto3";
+
+package michelangelo.api.v2alpha1;
+
+option go_package = "v2alpha1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2alpha1/git.proto";
+import "michelangelo/api/v2/project.proto";  // Import hub version for conversion
+
+// Defines the owner information for a project.
+message OwnerInfo {
+  // Owning team UUID such as an uOwn asset UUID.
+  string owning_team = 1 [(michelangelo.api.validation) = {uuid: true}];
+
+  // List of owners (LDAP name) who can mutate this project.
+  repeated string owners = 2;
+
+  // List of owner LDAP groups whose members can mutate this project.
+  repeated string owner_groups = 3;
+}
+
+// Describes the notification control.
+enum NotificationControl {
+  // Default Notification
+  NOTIFICATION_CONTROL_INVALID = 0;
+
+  // Send to project owner and user team
+  NOTIFICATION_CONTROL_PROJECT_OWNER_AND_USER_TEAM = 1;
+
+  // Only send to project owner
+  NOTIFICATION_CONTROL_PROJECT_OWNER_ONLY = 2;
+
+  // No Notification
+  NOTIFICATION_CONTROL_NOTIFICATION_OFF = 3;
+
+}
+
+// Define the value and unit of SLA.
+message Retention {
+  // Retention setting in days
+  int32 retention_in_days = 1;
+}
+
+// Defines the Retention Config for different entities of the project.
+message RetentionConfig {
+  // Retention policy for online deployment.
+  Retention online_deployment_retention = 1;
+
+  // Retention for offline deployment
+  Retention offline_deployment_retention = 2;
+
+  // Retention for endpoint
+  Retention endpoint_retention = 3;
+
+  // Retention for model
+  Retention model_retention = 4;
+
+  NotificationControl notification_control = 10;
+}
+
+// Define the type of the project.
+message ProjectTypeInfo {
+  bool is_core_ml = 1;
+  bool is_generative_ai = 2;
+}
+
+// Defines the spec of a ML project such as description, tier, owner,
+// default job configurations, etc.
+message ProjectSpec {
+  option (michelangelo.api.no_default) = true;
+
+  // [DEMO CHANGE 1] Removed field: type_info (ProjectTypeInfo)
+  // REASON: Demonstrates how to deprecate/remove fields in a spoke version.
+  // The hub version (v2) has a type_info field, but v2alpha1 doesn't support it.
+  // Using ignore_unmapped_hub_fields prevents conversion errors when this field
+  // exists in the hub but not in the spoke.
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "type_info";
+
+  // [DEMO CHANGE 2] Removed field: ext (google.protobuf.Any)
+  // REASON: CRITICAL - Type incompatibility mitigation for gogo/protobuf vs google/protobuf.
+  // The hub version uses gogo/protobuf for generating .pb.go files, but protoc-gen-kubeconversion
+  // uses google.golang.org/protobuf/proto.Clone() which requires protoreflect.ProtoMessage interface.
+  // gogo/protobuf types don't implement this interface, causing compilation errors.
+  // Solution: Exclude all google.protobuf.* well-known types (Any, Timestamp, Duration, etc.)
+  // from spoke versions using ignore_unmapped_hub_fields.
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
+
+  // [DEMO CHANGE 3] Field rename: description -> project_description
+  // REASON: Demonstrates field renaming between versions for API evolution.
+  // In v2 (hub), this field is called "description". In v2alpha1 (spoke), we renamed it to
+  // "project_description" for better clarity. The field_rename_to option tells the conversion
+  // compiler to map project_description (spoke) <-> description (hub) during conversions.
+  // This ensures data is correctly transferred between versions despite the name change.
+  string project_description = 1 [(michelangelo.api.field_rename_to) = "description"];
+
+  // Owner information of the project.
+  OwnerInfo owner = 2;
+
+  // The tier of the project.
+  int32 tier = 3 [(michelangelo.api.validation) = {min: "1", max: "4"}];
+
+  // GIT repo where the project artifacts are checked in
+  string git_repo = 4;
+
+  // Project root directory in the GIT repo such as `ml-code`
+  string root_dir = 5;
+
+  // [DEMO CHANGE 4] Added field: legacy_alpha_config (v2alpha1-only field)
+  // REASON: Demonstrates adding spoke-specific fields that don't exist in the hub version.
+  // This field only exists in v2alpha1 and will not be copied to/from v2 during conversion.
+  // Using ignore_unmapped tells the conversion compiler to skip this field during ConvertTo/ConvertFrom.
+  // Use case: Migration fields, version-specific configurations, or deprecated features being phased out.
+  string legacy_alpha_config = 20 [
+    (michelangelo.api.validation) = {optional: true},
+    (michelangelo.api.ignore_unmapped) = true
+  ];
+
+  // Default job specs for Spark and Ray.
+  // JobSpecs job_defaults = 6 [(michelangelo.api.validation) = {optional: true}];
+
+  // Commit Info of the project.
+  CommitInfo commit = 7 [(michelangelo.api.validation) = {optional: true}];
+
+  // Supporting links and documentations for the project.
+  map<string, string> supporting_links = 8 [(michelangelo.api.validation) = {optional: true}];
+
+  // Retention Config for entities in the project
+  RetentionConfig retention_config = 9 [(michelangelo.api.validation) = {optional: true}];
+
+  // SUMMARY: Fields from v2 hub NOT included in v2alpha1:
+  // - type_info (ProjectTypeInfo): Removed to demonstrate field deprecation [DEMO CHANGE 1]
+  // - ext (google.protobuf.Any): Removed due to gogo/google protobuf incompatibility [DEMO CHANGE 2]
+}
+
+// Describes the state of a project resource.
+enum ProjectState {
+  // The project is newly added into the system, but not it's not yet
+  // valid to use
+  PROJECT_STATE_INVALID = 0;
+
+  // The project is provisioning various type of resources
+  PROJECT_STATE_PROVISIONING = 1;
+
+  // The project is waiting for resources to be fully provisioned
+  PROJECT_STATE_PROVISION_PENDING = 2;
+
+  // The project is ready to use.
+  PROJECT_STATE_READY = 3;
+
+  // The project has build errors.
+  PROJECT_STATE_ERROR = 4;
+}
+
+// Describes different phases of a project, similar to software
+// application lifecycle
+enum ProjectPhase {
+  // default project phase is invalid
+  PROJECT_PHASE_INVALID= 0;
+
+  // a project is in DEVELOPMENT phase after it's successfully
+  // provisioned (i.e. project state is READY)
+  PROJECT_PHASE_DEVELOPMENT = 1;
+
+  // If a project is READY and in DEVELOPMENT phase, user can promote
+  // it to STAGING phase TODO: only server as a label for users. there
+  // is no side effect of marking a project as STAGING.
+  PROJECT_PHASE_STAGING = 2;
+
+  // If a project is READY and in STAGING phase, user can promote it
+  // to PRODUCTION phase TODO: only server as a label for users. there
+  // is no side effect of marking a project as PRODUCTION.
+  PROJECT_PHASE_PRODUCTION = 3;
+
+  // user can mark a project as DECOMMISSION. users are not able to
+  // create new pipeline or pipeline run from a decommissioned project
+  PROJECT_PHASE_DECOMMISSION = 4;
+}
+
+
+// Defines the status of a ML project
+message ProjectStatus {
+  // [DEMO CHANGE 5] Removed field: ext (google.protobuf.Any)
+  // REASON: CRITICAL - Type incompatibility mitigation (same as DEMO CHANGE 2).
+  // google.protobuf.Any cannot be used in spoke versions because:
+  // 1. Hub .pb.go files use gogo/protobuf types
+  // 2. Conversion compiler uses google.golang.org/protobuf/proto.Clone()
+  // 3. gogo types don't implement protoreflect.ProtoMessage interface required by proto.Clone()
+  // This would cause: "cannot use hub.Status.Ext (type *types.Any) as type proto.Message"
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
+
+  // [DEMO CHANGE 6] Removed field: last_update_time (google.protobuf.Timestamp)
+  // REASON: CRITICAL - Type incompatibility mitigation.
+  // google.protobuf.Timestamp has the same gogo/google protobuf incompatibility as Any.
+  // The conversion compiler cannot call proto.Clone() on gogo/protobuf Timestamp types.
+  // All google.protobuf well-known types (Timestamp, Duration, Any, etc.) must be excluded.
+  option (michelangelo.api.ignore_unmapped_hub_fields) = "last_update_time";
+
+  // project state
+  ProjectState state = 1;
+
+  // project phases. similar to software application lifecycle
+  ProjectPhase phase = 2;
+
+  // human readable error message. reason should be set only if state is PROJECT_STATE_ERROR
+  string error_message = 3;
+
+  // SUMMARY: Fields from v2 hub NOT included in v2alpha1:
+  // - last_update_time (google.protobuf.Timestamp): Type incompatibility [DEMO CHANGE 6]
+  // - ext (google.protobuf.Any): Type incompatibility [DEMO CHANGE 5]
+}
+
+// Defines a ML Project for a specific ML use case.
+message Project {
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
+
+  // index fields
+  option (michelangelo.api.index) = {
+    path: "spec.tier",
+    key: "tier",
+  };
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMeta metadata = 2;
+
+  // Spec of the desired behavior of the Project.
+  ProjectSpec spec = 3;
+
+  // Most recently observed status of the Project.
+  ProjectStatus status = 4;
+}
+
+// A list of Project objects.
+message ProjectList {
+  option (michelangelo.api.resource_list) = {};
+
+  k8s.io.apimachinery.pkg.apis.meta.v1.TypeMeta type_meta = 1;
+  k8s.io.apimachinery.pkg.apis.meta.v1.ListMeta metadata = 2;
+
+  // A list of Project
+  repeated Project items = 3;
+}
+
