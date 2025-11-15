@@ -150,9 +150,12 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 		case "CleanupComplete":
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-			} else {
+			} else if cond.Status == apipb.CONDITION_STATUS_FALSE {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
 			}
+			// If status is UNKNOWN, don't drive the stage from cleanup yet.
+			// Let rollout-related conditions determine the stage.
+			continue
 		case "RollbackComplete":
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE

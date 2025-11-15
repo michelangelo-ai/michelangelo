@@ -25,6 +25,16 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
+	"github.com/uber-go/tally"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
@@ -36,15 +46,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"github.com/uber-go/tally"
-	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/tools/record"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
-	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 const (
@@ -121,6 +122,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues(_deploymentKey, req.NamespacedName.String())
 	ctx, cancel := context.WithTimeout(ctx, _reconciliationTimeout)
+	fmt.Printf("DEBUG: Reconcile is getting called for %s\n", req.NamespacedName.String())
 	defer cancel()
 	defer func() {
 		if err := recover(); err != nil {
@@ -230,29 +232,18 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
 	stage := plugin.ParseStage(deployment)
 
-	// Check if we've reached max attempts OR if condition is satisfied but terminal.
-	// For successful terminal conditions, we should continue processing to allow stage progression.
-	if result.IsTerminal && !result.AreSatisfied {
-		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
-			"until the resource is updated again. If in cleanup, we will no longer reconcile."
-		log.Info(message)
-		r.Recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
-		metrics.terminalCounter.Inc(1)
-		newStage, shouldRequeue := getTerminalStage(*deployment)
-		stage = newStage
-		if shouldRequeue {
-			result.Result = defaultResult
-		}
-		runtimeCtx := plugins.RequestContext{
-			Deployment: deployment,
-			Logger:     log,
-		}
-		plugin.PopulateDeploymentLogs(ctx, runtimeCtx, deployment)
-	} else if result.IsTerminal && result.AreSatisfied {
-		// Successful terminal condition - allow progression by ensuring requeue
-		result.Result = ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: _defaultRequeuePeriod,
+	// Check result from condition engine
+	// NOTE: CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE
+	if result.IsTerminal {
+		if result.AreSatisfied {
+			// Successful terminal – we still need one more reconcile to progress the stage.
+			result.Result = ctrl.Result{Requeue: true, RequeueAfter: _defaultRequeuePeriod}
+		} else {
+			// Terminal but NOT satisfied indicates the plugin surfaced an error.
+			// Keep reconciling so we can retry rather than giving up forever.
+			log.Info("Condition engine returned terminal-unsatisfied; will requeue to retry")
+			metrics.terminalCounter.Inc(1)
+			result.Result = defaultResult // immediate requeue
 		}
 	}
 
@@ -410,7 +401,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		metrics.rolloutMetrics.initiatedCount.Inc(1)
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
 
-		//cleanup rollback reason from previous deployment (if any)
+		// cleanup rollback reason from previous deployment (if any)
 		delete(deployment.Annotations, _deploymentRollbackReason)
 
 		if IsEmergencyRollout(*deployment) {
@@ -424,6 +415,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 		if !ShouldSkipRollout(*deployment) {
 			r.incrementRolloutCount(deployment, log)
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+			fmt.Printf("DEBUG: Getting rollout plugin for starting new rollout %s\n", deployment.Name)
 			conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
 			if err != nil {
 				log.Info("failed to retrieve rollout plugin")
@@ -460,8 +452,8 @@ func (r *Reconciler) handleStageTransition(
 	ctx context.Context,
 	metrics *ControllerMetrics,
 	deployment *v2pb.Deployment,
-	err error) bool {
-
+	err error,
+) bool {
 	var messages []string
 	if !IsTerminalStage(deployment.Status.Stage) {
 		if deployment.Status.Message != "" {

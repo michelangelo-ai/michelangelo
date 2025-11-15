@@ -170,7 +170,7 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, inferenceServer 
 	}
 
 	// Get current status from gateway
-	statusResp, err := r.Gateway.GetInfrastructureStatus(ctx, r.logger, gateways.InfrastructureStatusRequest{
+	statusResp, err := r.Gateway.GetInfrastructureStatus(ctx, r.logger, gateways.GetInfrastructureStatusRequest{
 		InferenceServer: inferenceServer.Name,
 		Namespace:       inferenceServer.Namespace,
 		BackendType:     inferenceServer.Spec.BackendType,
@@ -182,16 +182,16 @@ func (r *Reconciler) updateExternalDetails(ctx context.Context, inferenceServer 
 	}
 
 	// Update status based on external state
-	if statusResp.State != inferenceServer.Status.State {
+	if statusResp.Status.State != inferenceServer.Status.State {
 		r.logger.Info("External state change detected",
 			zap.String("currentState", inferenceServer.Status.State.String()),
-			zap.String("externalState", statusResp.State.String()))
+			zap.String("externalState", statusResp.Status.State.String()))
 
-		inferenceServer.Status.State = statusResp.State
-		inferenceServer.Status.ProviderMetadata = statusResp.Message
+		inferenceServer.Status.State = statusResp.Status.State
+		inferenceServer.Status.ProviderMetadata = statusResp.Status.Message
 
 		// Record state transition events
-		switch statusResp.State {
+		switch statusResp.Status.State {
 		case StateServing:
 			r.Recorder.Event(inferenceServer, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
 		case StateFailed:
@@ -281,7 +281,7 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger *zap.Logger, inf
 		if inferenceServer.Status.ProviderMetadata != "proxy-configured" {
 			r.logger.Info("Configuring proxy for serving server")
 
-			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
+			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, gateways.ConfigureProxyRequest{
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
 				ModelName:       inferenceServer.Name, // Use server name as model name for now

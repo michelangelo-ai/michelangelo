@@ -28,14 +28,14 @@ func GetRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 			gateway: params.Gateway,
 			logger:  params.Logger,
 		},
+		&RollingRolloutActor{
+			client: params.Client,
+			logger: params.Logger,
+		},
 		&ModelCleanupActor{
 			Client:  params.Client,
 			Gateway: params.Gateway,
 			Logger:  params.Logger,
-		},
-		&RollingRolloutActor{
-			client: params.Client,
-			logger: params.Logger,
 		},
 	}
 }

@@ -4,9 +4,10 @@ import (
 	"context"
 
 	"github.com/cadence-workflow/starlark-worker/workflow"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	"go.uber.org/yarpc/yarpcerrors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -46,14 +47,14 @@ func (r *activities) SensorRollout(ctx context.Context, request SensorRolloutReq
 		Deployment:    deployment,
 		UpdateOptions: &metav1.UpdateOptions{},
 	})
-	updatedDeployment := updatedDeploymentRes.GetDeployment()
 	if err != nil {
 		return nil, workflow.NewCustomError(ctx, yarpcerrors.CodeInternal.String(), "failed to update deployment")
 	}
+	updatedDeployment := updatedDeploymentRes.GetDeployment()
 	deploymentCompleted := updatedDeployment.Status.CurrentRevision.Equal(updatedDeployment.Spec.DesiredRevision)
 	if deploymentCompleted {
 		return &v2pb.GetDeploymentResponse{
-			Deployment: deployment,
+			Deployment: updatedDeployment,
 		}, nil
 	}
 

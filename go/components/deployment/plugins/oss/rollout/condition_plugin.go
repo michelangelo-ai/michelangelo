@@ -354,7 +354,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		// Add deployment-specific route for the new routing architecture
 		if a.gateway != nil {
 			// Add deployment-specific route: /<inference-server-name>/<deployment-name> -> /v2/models/<model-name>
-			proxyConfigRequest := gateways.ProxyConfigRequest{
+			proxyConfigRequest := gateways.AddDeploymentRouteRequest{
 				InferenceServer: inferenceServerName,
 				Namespace:       deployment.Namespace,
 				ModelName:       modelName,

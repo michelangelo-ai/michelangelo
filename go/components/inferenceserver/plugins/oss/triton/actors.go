@@ -81,7 +81,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger *zap.Logger
 	logger.Info("Retrieving Triton infrastructure condition")
 
 	// Check if infrastructure exists
-	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
+	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.GetInfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -99,11 +99,11 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, logger *zap.Logger
 	reason := "InfrastructureCreating"
 	message := "Infrastructure is being created"
 
-	if statusResp.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
+	if statusResp.Status.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "InfrastructureReady"
 		message = "Infrastructure is ready"
-	} else if statusResp.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
+	} else if statusResp.Status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
 		// Infrastructure doesn't exist or is incomplete, needs to be created
 		status = apipb.CONDITION_STATUS_FALSE
 		reason = "InfrastructureNotFound"
@@ -134,7 +134,7 @@ func (a *ResourceCreationActor) Run(ctx context.Context, logger *zap.Logger, res
 		},
 	}
 
-	_, err := a.gateway.CreateInfrastructure(ctx, logger, gateways.InfrastructureRequest{
+	_, err := a.gateway.CreateInfrastructure(ctx, logger, gateways.CreateInfrastructureRequest{
 		InferenceServer: resource,
 		BackendType:     resource.Spec.BackendType,
 		Namespace:       resource.Namespace,
@@ -234,7 +234,7 @@ func (a *ProxyConfigurationActor) GetType() string {
 func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton proxy configuration condition")
 
-	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, gateways.ProxyStatusRequest{
+	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, gateways.GetProxyStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 	})
@@ -243,7 +243,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logg
 	reason := "ProxyNotConfigured"
 	message := "Proxy is not configured"
 
-	if err == nil && proxyStatus.Configured {
+	if err == nil && proxyStatus.Status.Configured {
 		status = apipb.CONDITION_STATUS_TRUE
 		reason = "ProxyConfigured"
 		message = "Proxy is configured and ready"
@@ -262,7 +262,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logg
 func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton proxy configuration")
 
-	err := a.gateway.ConfigureProxy(ctx, logger, gateways.ProxyConfigRequest{
+	err := a.gateway.ConfigureProxy(ctx, logger, gateways.ConfigureProxyRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		ModelName:       resource.Name,
@@ -299,7 +299,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, logger *zap.Logger, resourc
 	logger.Info("Retrieving Triton cleanup condition")
 
 	// Check if infrastructure still exists
-	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.InfrastructureStatusRequest{
+	_, err := a.gateway.GetInfrastructureStatus(ctx, logger, gateways.GetInfrastructureStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,
@@ -352,7 +352,7 @@ func (a *CleanupActor) Run(ctx context.Context, logger *zap.Logger, resource *v2
 
 	// STEP 3: Delete infrastructure (Kubernetes resources like Deployment, Service, etc.)
 	logger.Info("Cleaning up Kubernetes infrastructure", zap.String("inferenceServer", resource.Name))
-	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.InfrastructureDeleteRequest{
+	err := a.gateway.DeleteInfrastructure(ctx, logger, gateways.DeleteInfrastructureRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		BackendType:     resource.Spec.BackendType,

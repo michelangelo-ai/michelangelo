@@ -37,9 +37,9 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 	if resource.Status.CurrentRevision == nil || resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "NoCleanupNeeded",
-			Message: "No cleanup needed - no revisions to compare",
+			Status:  apipb.CONDITION_STATUS_UNKNOWN,
+			Reason:  "RevisionsNotSet",
+			Message: "Waiting for revisions to be set before evaluating cleanup",
 		}, nil
 	}
 
@@ -65,7 +65,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 	// Check if old model still exists in Triton (following Uber's verification pattern)
 	if a.Gateway != nil {
 		// Use gateway to check if old model is still loaded
-		statusRequest := gateways.ModelStatusRequest{
+		statusRequest := gateways.CheckModelStatusRequest{
 			ModelName:       currentModel,
 			InferenceServer: inferenceServerName,
 			Namespace:       resource.Namespace,
@@ -110,9 +110,9 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	if resource.Status.CurrentRevision == nil || resource.Spec.DesiredRevision == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "NoCleanupNeeded",
-			Message: "No cleanup needed - no revisions specified",
+			Status:  apipb.CONDITION_STATUS_UNKNOWN,
+			Reason:  "RevisionsNotSet",
+			Message: "Waiting for revisions to be set before running cleanup",
 		}, nil
 	}
 
@@ -176,7 +176,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		// PHASE 3: Verify cleanup completed
 		a.Logger.Info("Phase 3: Verifying old model is unloaded", zap.String("old_model", currentModel))
 
-		statusRequest := gateways.ModelStatusRequest{
+		statusRequest := gateways.CheckModelStatusRequest{
 			ModelName:       currentModel,
 			InferenceServer: inferenceServerName,
 			Namespace:       resource.Namespace,

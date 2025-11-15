@@ -203,7 +203,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployme
 			inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
 			// Check if the desired model is ready in Triton
-			modelStatusRequest := gateways.ModelStatusRequest{
+			modelStatusRequest := gateways.CheckModelStatusRequest{
 				ModelName:       modelName,
 				InferenceServer: inferenceServerName,
 				DeploymentName:  deployment.Name, // Include deployment name for deployment-specific routing
@@ -395,7 +395,7 @@ func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logg
 }
 
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
-func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelStatusRequest gateways.ModelStatusRequest) (bool, error) {
+func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelStatusRequest gateways.CheckModelStatusRequest) (bool, error) {
 	const (
 		modelHealthCheckTimeout  = 10 * time.Minute // Configurable timeout for model health checks
 		modelHealthCheckInterval = 30 * time.Second // Interval between health check retries
