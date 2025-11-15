@@ -1,5 +1,4 @@
 from michelangelo.lib.model_manager.schema import DataType
-from michelangelo.lib.model_manager._private.schema.triton.data_type import DATA_TYPE_MAPPING
 
 
 # Mapping from ModelSchema data types to Triton data types.
