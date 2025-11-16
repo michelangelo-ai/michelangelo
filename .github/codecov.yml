@@ -1,0 +1,106 @@
+# Codecov Configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  status:
+    # Overall project coverage (using baseline approach)
+    project:
+      default:
+        target: auto          # Use baseline from main branch
+        threshold: 1%         # Allow 1% drop from baseline
+        if_ci_failed: error
+
+    # Coverage for changes in PR (strictly enforced)
+    patch:
+      default:
+        target: 85%           # New code must have 85% coverage
+        threshold: 0%         # No tolerance for drops in new code
+        if_ci_failed: error
+
+  precision: 2
+  round: down
+  range: 70...100
+
+# Comment settings for PRs
+comment:
+  layout: "header, diff, flags, components, footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+# Ignore patterns
+ignore:
+  - "python/michelangelo/gen/**/*"
+  - "python/tests/**/*"
+  - "python/examples/**/*"
+  - "**/*_pb2.py"
+  - "**/*_pb2_grpc.py"
+  - "**/test_*.py"
+  - "**/*_test.py"
+
+# Flag configuration
+flags:
+  python:
+    paths:
+      - python/michelangelo/
+    carryforward: true
+
+  go:
+    paths:
+      - go/**/*.go
+    carryforward: true
+
+  javascript:
+    paths:
+      - "**/*.js"
+      - "**/*.mjs"
+      - "**/*.cjs"
+    carryforward: true
+
+  combined:
+    carryforward: true
+
+# Component configuration
+component_management:
+  individual_components:
+    # Python components
+    - component_id: python-api
+      name: Python API Client
+      paths:
+        - python/michelangelo/api/**
+
+    - component_id: python-uniflow
+      name: Python Uniflow
+      paths:
+        - python/michelangelo/uniflow/**
+
+    - component_id: python-cli
+      name: Python CLI
+      paths:
+        - python/michelangelo/cli/**
+
+    # Go components
+    - component_id: go-api
+      name: Go API Server
+      paths:
+        - go/components/apiserver/**
+
+    - component_id: go-controller
+      name: Go Controllers
+      paths:
+        - go/components/deployment/**
+        - go/components/model/**
+
+    - component_id: go-worker
+      name: Go Worker
+      paths:
+        - go/components/worker/**
+
+    # JavaScript components
+    - component_id: javascript
+      name: JavaScript
+      paths:
+        - "**/*.js"
+        - "**/*.mjs"
+        - "**/*.cjs"
