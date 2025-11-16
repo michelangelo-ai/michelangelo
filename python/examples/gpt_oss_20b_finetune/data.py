@@ -98,8 +98,6 @@ def prepare_finetune_dataset(
 
     val_dv = DatasetVariable.create(val_ray_dataset)
     val_dv.save_ray_dataset()
-
-    log.info("✅ Dataset preparation completed")
     return train_dv, val_dv
 
 
