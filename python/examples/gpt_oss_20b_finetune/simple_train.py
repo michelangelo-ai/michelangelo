@@ -47,8 +47,6 @@ def simple_train_gpt(
     val_dv.load_ray_dataset()
     val_data: Dataset = val_dv.value
 
-    log.info("✅ Datasets loaded")
-
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
@@ -74,7 +72,7 @@ def simple_train_gpt(
         model = get_peft_model(model, lora_config)
         model.print_trainable_parameters()
 
-    log.info("✅ Model loaded")
+    log.info("Model loaded")
 
     # Convert Ray datasets to simple format
     train_df = train_data.to_pandas()
@@ -139,8 +137,6 @@ def simple_train_gpt(
     output_dir = "/tmp/simple_model"
     trainer.save_model(output_dir)
     tokenizer.save_pretrained(output_dir)
-
-    log.info("✅ Training completed")
 
     return {
         "model_path": output_dir,
