@@ -54,6 +54,8 @@ if __name__ == "__main__":
     ctx.environ["MA_NAMESPACE"] = "default"
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
+    ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
+    ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
 
     # Run the workflow
     result = ctx.run(
