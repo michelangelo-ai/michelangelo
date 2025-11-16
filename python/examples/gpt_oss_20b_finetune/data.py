@@ -35,7 +35,7 @@ def prepare_finetune_dataset(
     max_length: int = 2048,
     sample_size: int = 10000,
     model_name: str = "openai/gpt-oss-20b"
-) -> Tuple[DatasetVariable, DatasetVariable]:
+) -> Tuple[DatasetVariable, DatasetVariable, DatasetVariable]:
     """
     Prepare fine-tuning dataset for GPT-OSS-20B
 
@@ -46,7 +46,7 @@ def prepare_finetune_dataset(
         model_name: Model name for tokenizer
 
     Returns:
-        Tuple of (train_dataset, validation_dataset) as DatasetVariables
+        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables
     """
     log.info(f"Preparing {dataset_name} dataset for GPT-OSS-20B fine-tuning")
 
@@ -81,16 +81,20 @@ def prepare_finetune_dataset(
     processed_dataset = preprocess_dataset(dataset, tokenizer, max_length)
     log.info(f"Preprocessed dataset to {len(processed_dataset)} samples")
 
-    # Split into train/validation
-    train_size = int(0.9 * len(processed_dataset))
-    train_dataset = processed_dataset.select(range(train_size))
-    val_dataset = processed_dataset.select(range(train_size, len(processed_dataset)))
+    # Split into train/validation/test (80/10/10)
+    train_size = int(0.8 * len(processed_dataset))
+    val_size = int(0.1 * len(processed_dataset))
 
-    log.info(f"Split into {len(train_dataset)} train, {len(val_dataset)} validation samples")
+    train_dataset = processed_dataset.select(range(train_size))
+    val_dataset = processed_dataset.select(range(train_size, train_size + val_size))
+    test_dataset = processed_dataset.select(range(train_size + val_size, len(processed_dataset)))
+
+    log.info(f"Split into {len(train_dataset)} train, {len(val_dataset)} validation, {len(test_dataset)} test samples")
 
     # Convert to Ray Datasets
     train_ray_dataset = ray.data.from_pandas(train_dataset.to_pandas())
     val_ray_dataset = ray.data.from_pandas(val_dataset.to_pandas())
+    test_ray_dataset = ray.data.from_pandas(test_dataset.to_pandas())
 
     # Create DatasetVariables
     train_dv = DatasetVariable.create(train_ray_dataset)
@@ -98,7 +102,12 @@ def prepare_finetune_dataset(
 
     val_dv = DatasetVariable.create(val_ray_dataset)
     val_dv.save_ray_dataset()
-    return train_dv, val_dv
+
+    test_dv = DatasetVariable.create(test_ray_dataset)
+    test_dv.save_ray_dataset()
+
+    log.info("✅ Dataset preparation completed")
+    return train_dv, val_dv, test_dv
 
 
 def load_alpaca_dataset(sample_size: int) -> HFDataset:

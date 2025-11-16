@@ -8,6 +8,7 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 # Import simple functions
 from examples.gpt_oss_20b_finetune.simple_train import simple_train_gpt
 from examples.gpt_oss_20b_finetune.data import prepare_finetune_dataset
+from examples.gpt_oss_20b_finetune.eval import evaluate_gpt_model
 
 
 @uniflow.workflow()
@@ -20,7 +21,7 @@ def simple_gpt_workflow(
     """Simple GPT fine-tuning workflow for testing"""
 
     # Prepare dataset
-    train_dv, val_dv = prepare_finetune_dataset(
+    train_dv, val_dv, test_dv = prepare_finetune_dataset(
         dataset_name=dataset_name,
         max_length=512,
         sample_size=sample_size,
@@ -28,7 +29,7 @@ def simple_gpt_workflow(
     )
 
     # Train model
-    result = simple_train_gpt(
+    train_result = simple_train_gpt(
         train_dv=train_dv,
         val_dv=val_dv,
         model_name=model_name,
@@ -37,6 +38,22 @@ def simple_gpt_workflow(
         learning_rate=5e-5,
         use_lora=True
     )
+
+    # Evaluate model
+    eval_result = evaluate_gpt_model(
+        test_dv=test_dv,
+        model_path=train_result["model_path"],
+        model_name=model_name,
+        max_length=512,
+        batch_size=1,
+        num_samples=20
+    )
+
+    # Combine results
+    result = {
+        "training": train_result,
+        "evaluation": eval_result
+    }
 
     return result
 
