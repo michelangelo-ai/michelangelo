@@ -11,6 +11,7 @@ class DataType(Enum):
 
     INVALID = 0
     UNKNOWN = 1
+    BOOLEAN = 4
     STRING = 7
     BYTE = 15
     CHAR = 16
