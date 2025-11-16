@@ -9,6 +9,7 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 from examples.gpt_oss_20b_finetune.simple_train import simple_train_gpt
 from examples.gpt_oss_20b_finetune.data import prepare_finetune_dataset
 from examples.gpt_oss_20b_finetune.eval import evaluate_gpt_model
+from examples.gpt_oss_20b_finetune.package_model import package_gpt_model
 
 
 @uniflow.workflow()
@@ -49,10 +50,18 @@ def simple_gpt_workflow(
         num_samples=20
     )
 
+    # Package model
+    package_result = package_gpt_model(
+        model_path=train_result["model_path"],
+        model_name=model_name,
+        package_name=f"{model_name}_finetuned_alpaca"
+    )
+
     # Combine results
     result = {
         "training": train_result,
-        "evaluation": eval_result
+        "evaluation": eval_result,
+        "packaging": package_result
     }
 
     return result
