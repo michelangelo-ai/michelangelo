@@ -4,8 +4,10 @@ Handles dataset loading, preprocessing, and tokenization
 """
 
 import logging
-from typing import Dict, Tuple
+import os
+from typing import Dict, List, Tuple
 import ray
+from ray.data import Dataset
 from datasets import load_dataset, Dataset as HFDataset
 from transformers import AutoTokenizer
 
@@ -19,18 +21,21 @@ log = logging.getLogger(__name__)
 @uniflow.task(
     config=RayTask(
         head_cpu=2,
-        head_memory="4Gi",
+        head_memory="16Gi",
         worker_cpu=2,
-        worker_memory="4Gi",
+        worker_memory="16Gi",
         worker_instances=2,
+        runtime_env={
+            "pip": ["datasets", "transformers", "tokenizers"]
+        }
     )
 )
 def prepare_finetune_dataset(
     dataset_name: str = "alpaca",
     max_length: int = 2048,
     sample_size: int = 10000,
-    model_name: str = "openai/gpt-oss-20b",
-) -> Tuple[DatasetVariable, DatasetVariable, DatasetVariable]:
+    model_name: str = "openai/gpt-oss-20b"
+) -> Tuple[DatasetVariable, DatasetVariable]:
     """
     Prepare fine-tuning dataset for GPT-OSS-20B
 
@@ -41,14 +46,16 @@ def prepare_finetune_dataset(
         model_name: Model name for tokenizer
 
     Returns:
-        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables
+        Tuple of (train_dataset, validation_dataset) as DatasetVariables
     """
     log.info(f"Preparing {dataset_name} dataset for GPT-OSS-20B fine-tuning")
 
     # Load tokenizer
     try:
         tokenizer = AutoTokenizer.from_pretrained(
-            model_name, trust_remote_code=True, use_fast=True
+            model_name,
+            trust_remote_code=True,
+            use_fast=True
         )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
@@ -74,24 +81,16 @@ def prepare_finetune_dataset(
     processed_dataset = preprocess_dataset(dataset, tokenizer, max_length)
     log.info(f"Preprocessed dataset to {len(processed_dataset)} samples")
 
-    # Split into train/validation/test (80/10/10)
-    train_size = int(0.8 * len(processed_dataset))
-    val_size = int(0.1 * len(processed_dataset))
-
+    # Split into train/validation
+    train_size = int(0.9 * len(processed_dataset))
     train_dataset = processed_dataset.select(range(train_size))
-    val_dataset = processed_dataset.select(range(train_size, train_size + val_size))
-    test_dataset = processed_dataset.select(
-        range(train_size + val_size, len(processed_dataset))
-    )
+    val_dataset = processed_dataset.select(range(train_size, len(processed_dataset)))
 
-    log.info(
-        f"Split into {len(train_dataset)} train, {len(val_dataset)} validation, {len(test_dataset)} test samples"
-    )
+    log.info(f"Split into {len(train_dataset)} train, {len(val_dataset)} validation samples")
 
     # Convert to Ray Datasets
     train_ray_dataset = ray.data.from_pandas(train_dataset.to_pandas())
     val_ray_dataset = ray.data.from_pandas(val_dataset.to_pandas())
-    test_ray_dataset = ray.data.from_pandas(test_dataset.to_pandas())
 
     # Create DatasetVariables
     train_dv = DatasetVariable.create(train_ray_dataset)
@@ -100,11 +99,8 @@ def prepare_finetune_dataset(
     val_dv = DatasetVariable.create(val_ray_dataset)
     val_dv.save_ray_dataset()
 
-    test_dv = DatasetVariable.create(test_ray_dataset)
-    test_dv.save_ray_dataset()
-
     log.info("✅ Dataset preparation completed")
-    return train_dv, val_dv, test_dv
+    return train_dv, val_dv
 
 
 def load_alpaca_dataset(sample_size: int) -> HFDataset:
@@ -150,13 +146,11 @@ def create_dummy_dataset(sample_size: int) -> HFDataset:
 
     dummy_data = []
     for i in range(min(sample_size, 1000)):  # Cap at 1000 for dummy data
-        dummy_data.append(
-            {
-                "instruction": f"What is the capital of country {i}?",
-                "input": "",
-                "output": f"The capital of country {i} is City {i}.",
-            }
-        )
+        dummy_data.append({
+            "instruction": f"What is the capital of country {i}?",
+            "input": "",
+            "output": f"The capital of country {i} is City {i}."
+        })
 
     return HFDataset.from_list(dummy_data)
 
@@ -166,7 +160,6 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
     Preprocess dataset for GPT-OSS-20B fine-tuning
     Formats data in instruction-following format
     """
-
     def format_sample(sample):
         """Format sample for instruction fine-tuning"""
         if "instruction" in sample and "output" in sample:
@@ -204,7 +197,7 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
             truncation=True,
             max_length=max_length,
             padding=False,  # Don't pad here, will pad in collator
-            return_tensors=None,
+            return_tensors=None
         )
 
         # For causal LM, labels are the same as input_ids (shifted in the model)
@@ -218,7 +211,9 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
 
     log.info("Tokenizing samples...")
     tokenized_dataset = formatted_dataset.map(
-        tokenize_sample, remove_columns=formatted_dataset.column_names, batched=False
+        tokenize_sample,
+        remove_columns=formatted_dataset.column_names,
+        batched=False
     )
 
     # Filter out samples that are too short or too long
@@ -242,7 +237,7 @@ def create_data_collator(tokenizer, max_length: int):
         tokenizer=tokenizer,
         mlm=False,  # Causal LM, not masked LM
         pad_to_multiple_of=8,  # For efficiency
-        return_tensors="pt",
+        return_tensors="pt"
     )
 
 
@@ -261,12 +256,10 @@ def get_dataset_stats(dataset: HFDataset) -> Dict:
     # Calculate length statistics
     if "input_ids" in sample:
         lengths = [len(sample["input_ids"]) for sample in dataset]
-        stats.update(
-            {
-                "min_length": min(lengths),
-                "max_length": max(lengths),
-                "avg_length": sum(lengths) / len(lengths),
-            }
-        )
+        stats.update({
+            "min_length": min(lengths),
+            "max_length": max(lengths),
+            "avg_length": sum(lengths) / len(lengths)
+        })
 
     return stats
