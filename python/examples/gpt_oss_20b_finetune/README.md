@@ -1,12 +1,13 @@
 # GPT-OSS-20B Fine-tuning Demo
 
-Simple demo for fine-tuning GPT models using Uniflow, PyTorch, and LoRA. Demonstrates parameter-efficient training with distributed execution.
+Simple demo for fine-tuning GPT models using Uniflow, PyTorch, and LoRA. Demonstrates parameter-efficient training with distributed execution and model evaluation.
 
 ## Features
 
 - **Parameter-Efficient Training**: LoRA fine-tuning (1.29% trainable parameters)
 - **Distributed Execution**: Ray-based workflow with Uniflow
 - **Real Dataset**: Stanford Alpaca instruction-following dataset
+- **Model Evaluation**: Perplexity and generation quality metrics
 - **Scalable**: Tested with GPT-2, designed for GPT-OSS-20B
 
 ## How to Run

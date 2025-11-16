@@ -8,7 +8,9 @@ __author__ = "Michelangelo Team"
 
 # Import main workflow function
 from .simple_workflow import simple_gpt_workflow
+from .eval import evaluate_gpt_model
 
 __all__ = [
-    "simple_gpt_workflow"
+    "simple_gpt_workflow",
+    "evaluate_gpt_model"
 ]
