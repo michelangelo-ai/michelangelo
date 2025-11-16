@@ -77,6 +77,8 @@ if __name__ == "__main__":
     ctx.environ["ENABLE_BF16"] = "False"
     ctx.environ["MAX_QUERY_LENGTH"] = "128"
     ctx.environ["MAX_DOC_LENGTH"] = "512"
+    ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
+    ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
 
     sample_size = 1000
     if ctx.is_local_run():
