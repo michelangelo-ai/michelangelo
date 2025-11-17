@@ -1,7 +1,7 @@
 """
 Simple GPT Fine-tuning Demo (Local Testing Version)
 """
-
+import os
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
@@ -29,8 +29,8 @@ def simple_gpt_workflow(
         model_name=model_name
     )
 
-    # Train model
-    train_result = simple_train_gpt(
+    # Train model (returns MLflow URI directly)
+    model_uri = simple_train_gpt(
         train_dv=train_dv,
         val_dv=val_dv,
         model_name=model_name,
@@ -40,31 +40,17 @@ def simple_gpt_workflow(
         use_lora=True
     )
 
-    # Evaluate model
-    eval_result = evaluate_gpt_model(
+    # Evaluate model using MLflow URI
+    evaluate_gpt_model(
         test_dv=test_dv,
-        model_path=train_result["model_path"],
+        model_uri=model_uri,
         model_name=model_name,
         max_length=512,
         batch_size=1,
         num_samples=20
     )
 
-    # Package model
-    package_result = package_gpt_model(
-        model_path=train_result["model_path"],
-        model_name=model_name,
-        package_name=f"{model_name}_finetuned_alpaca"
-    )
-
-    # Combine results
-    result = {
-        "training": train_result,
-        "evaluation": eval_result,
-        "packaging": package_result
-    }
-
-    return result
+    return True
 
 
 if __name__ == "__main__":
@@ -83,16 +69,14 @@ if __name__ == "__main__":
     ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
     ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
 
+    if not ctx.is_local_run():
+        os.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
+
     # Run the workflow
-    result = ctx.run(
+    ctx.run(
         simple_gpt_workflow,
         dataset_name="alpaca",
-        num_epochs=1,
-        sample_size=50,
+        num_epochs=5,
+        sample_size=500,
         model_name="gpt2"
     )
-
-    print("=" * 60)
-    print("Training completed!")
-    print(f"Result: {result}")
-    print("=" * 60)
