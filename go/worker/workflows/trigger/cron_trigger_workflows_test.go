@@ -428,7 +428,7 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 	}
 }
 
-// TODO: Add comprehensive workflow execution tests with activity mocking once starlark-worker
+// TODO(#564): Add comprehensive workflow execution tests with activity mocking once starlark-worker
 // test framework supports Go workflows with Cadence/Temporal backend.
 // Currently, starlark-worker's test suite does not support Go workflows using workflow.Context.
 // The framework needs an ExecuteWorkflow() method that handles context wrapping for Go workflows.

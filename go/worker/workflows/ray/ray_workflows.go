@@ -10,7 +10,7 @@ var Workflows = (*workflows)(nil)
 
 type workflows struct{}
 
-// TODO: andrii: implement Ray workflows once Ray API is ready
+// TODO(#562): andrii: implement Ray workflows once Ray API is ready
 
 func (r *workflows) CreateRayCluster(ctx workflow.Context, request any) (any, error) {
 	logger := workflow.GetLogger(ctx)

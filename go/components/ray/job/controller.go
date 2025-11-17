@@ -166,7 +166,7 @@ func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.R
 			Entrypoint: job.Spec.Entrypoint,
 			// kuberay 1.0 only support SubmitterPodTemplate for configuration submitter pod
 			// We need to allow user to configure the submitter pod template via ray task configuration
-			// TODO: add support for v1.2.2 kuberay once we upgrade to newer version
+			// TODO(#554): add support for v1.2.2 kuberay once we upgrade to newer version
 			SubmitterPodTemplate: pod,
 		},
 	}

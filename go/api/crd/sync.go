@@ -276,7 +276,7 @@ func mergeCRDVersions(
 			}
 			// Only set conversion strategy when there are multiple versions
 			if len(mergedCRD.Spec.Versions) > 1 {
-				// TODO: conversion strategy is set to NoneConverter for now,
+				// TODO(#557): conversion strategy is set to NoneConverter for now,
 				// we will support webhook conversion in the next iteration
 				mergedCRD.Spec.Conversion = &apiextv1.CustomResourceConversion{
 					Strategy: apiextv1.NoneConverter,

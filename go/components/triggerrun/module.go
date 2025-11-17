@@ -32,7 +32,7 @@ func register(
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
 		BackfillTrigger:   backfillTrigger,
-		// TODO: Add other trigger types as needed
+		// TODO(#548): Add other trigger types as needed
 	})
 	return reconciler.Register(mgr)
 }
