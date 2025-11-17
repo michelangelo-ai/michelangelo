@@ -51,15 +51,16 @@ go_proto_compiler(
 # Generates bi-directional conversion functions between hub/spoke versions.
 go_proto_compiler(
     name = "go_kubeconversion",
+    options = GOGO_WELL_KNOWN_TYPE_REMAPS,
     plugin = "//go/cmd/kubeproto/protoc-gen-kubeconversion:protoc-gen-kubeconversion",
     suffix = ".conversion.pb.go",
     visibility = ["//visibility:public"],
     deps = [
         "@io_k8s_sigs_controller_runtime//pkg/conversion:go_default_library",
-        "@org_golang_google_protobuf//proto:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
         "@org_golang_google_protobuf//types/descriptorpb:go_default_library",
         "@org_golang_google_protobuf//types/pluginpb:go_default_library",
-    ] + WELL_KNOWN_TYPE_RULES.values(),
+    ],
 )
 
 # generates gRPC service code (e.g. CRUD functions) for k8s CRDs defined in protobuf files

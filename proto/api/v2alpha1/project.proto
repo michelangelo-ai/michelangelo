@@ -24,39 +24,12 @@
 //
 // [DEMO CHANGE 1] Removed field: ProjectSpec.type_info
 //   Purpose: Demonstrate field deprecation in spoke versions
-//   Location: ProjectSpec message (line ~91)
 //
-// [DEMO CHANGE 2] Removed field: ProjectSpec.ext (google.protobuf.Any)
-//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
-//   Location: ProjectSpec message (line ~98)
-//
-// [DEMO CHANGE 3] Field rename: description -> project_description
+// [DEMO CHANGE 2] Field rename: description -> project_description
 //   Purpose: Demonstrate API evolution with field renaming
-//   Location: ProjectSpec.project_description (line ~113)
 //
-// [DEMO CHANGE 4] Added field: ProjectSpec.legacy_alpha_config
+// [DEMO CHANGE 3] Added field: ProjectSpec.legacy_alpha_config
 //   Purpose: Demonstrate spoke-specific fields not in hub
-//   Location: ProjectSpec message (line ~127)
-//
-// [DEMO CHANGE 5] Removed field: ProjectStatus.ext (google.protobuf.Any)
-//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
-//   Location: ProjectStatus message (line ~201)
-//
-// [DEMO CHANGE 6] Removed field: ProjectStatus.last_update_time (google.protobuf.Timestamp)
-//   Purpose: CRITICAL - Mitigate gogo/google protobuf type incompatibility
-//   Location: ProjectStatus message (line ~210)
-//
-// TYPE INCOMPATIBILITY EXPLANATION:
-// The codebase uses two incompatible protobuf implementations:
-// - Main proto code (.pb.go): gogo/protobuf (github.com/gogo/protobuf/types)
-// - Conversion code (.conversion.pb.go): google/protobuf (google.golang.org/protobuf/proto)
-//
-// Problem: proto.Clone() requires protoreflect.ProtoMessage interface, which
-// gogo/protobuf types don't implement. This causes compilation errors for
-// google.protobuf.* well-known types (Any, Timestamp, Duration, etc.).
-//
-// Solution: Use ignore_unmapped_hub_fields to exclude ALL google.protobuf.*
-// fields from spoke versions.
 //
 // ============================================================================
 // HOW TO TEST THIS DEMO
@@ -99,27 +72,24 @@
 // --------------------------------------------------
 // Open the v2alpha1 conversion file and verify:
 //
-// ✓ [DEMO CHANGE 3] Field rename is applied:
-//     Line ~83:  out.Description = in.ProjectDescription      // spoke → hub
-//     Line ~120: out.ProjectDescription = in.Description      // hub → spoke
+// ✓ [DEMO CHANGE 2] Field rename is applied:
+//     out.Description = in.ProjectDescription      // spoke → hub
+//     out.ProjectDescription = in.Description      // hub → spoke
 //
-// ✓ [DEMO CHANGE 1,2] Ignored fields are NOT in conversion functions:
+// ✓ [DEMO CHANGE 1] Ignored field is NOT in conversion functions:
 //     - ProjectSpec.type_info: Should NOT appear in ConvertProjectSpecToHub/FromHub
-//     - ProjectSpec.ext: Should NOT appear in ConvertProjectSpecToHub/FromHub
 //
-// ✓ [DEMO CHANGE 4] Spoke-only field is NOT in conversion functions:
+// ✓ [DEMO CHANGE 3] Spoke-only field is NOT in conversion functions:
 //     - ProjectSpec.legacy_alpha_config: Should NOT appear in any conversion function
 //
-// ✓ [DEMO CHANGE 5,6] Ignored timestamp/any fields are NOT in conversion:
-//     - ProjectStatus.ext: Should NOT appear in ConvertProjectStatusToHub/FromHub
-//     - ProjectStatus.last_update_time: Should NOT appear in ConvertProjectStatusToHub/FromHub
+// ✓ Well-known types (Any, Timestamp) are properly converted using gogo/protobuf
 //
 // Step 4: Verify the build compiles successfully
 // -----------------------------------------------
 // If the build succeeds without errors, it means:
-// ✓ No type incompatibility errors (gogo/google protobuf conflict resolved)
 // ✓ All conversion functions are properly generated
 // ✓ Field mappings are correct (renames, ignores, etc.)
+// ✓ Well-known types (Any, Timestamp) are properly handled
 //
 // Alternative: View generated files directly
 // ------------------------------------------
@@ -139,16 +109,16 @@
 // Test coverage includes:
 // - TestProjectConversion: Verifies v2/v2alpha1 implement Hub/Convertible interfaces
 // - TestProjectConvertToHub: Tests v2alpha1 → v2 conversion (spoke to hub)
-//   ✓ Verifies [DEMO CHANGE 3] field rename: project_description → description
-//   ✓ Verifies [DEMO CHANGE 4] spoke-only field is NOT copied to hub
-//   ✓ Verifies [DEMO CHANGE 1,2,5,6] excluded fields remain nil in hub
+//   ✓ Verifies [DEMO CHANGE 2] field rename: project_description → description
+//   ✓ Verifies [DEMO CHANGE 3] spoke-only field is NOT copied to hub
+//   ✓ Verifies [DEMO CHANGE 1] excluded type_info field remains nil in hub
 // - TestProjectConvertFromHub: Tests v2 → v2alpha1 conversion (hub to spoke)
-//   ✓ Verifies [DEMO CHANGE 3] field rename: description → project_description
+//   ✓ Verifies [DEMO CHANGE 2] field rename: description → project_description
 //   ✓ Verifies [DEMO CHANGE 1] hub-only field type_info is NOT copied to spoke
-//   ✓ Verifies [DEMO CHANGE 4] spoke-only field legacy_alpha_config is empty
+//   ✓ Verifies [DEMO CHANGE 3] spoke-only field legacy_alpha_config is empty
 // - TestProjectRoundTripConversion: Tests bidirectional conversion (v2alpha1 → v2 → v2alpha1)
-//   ✓ Verifies [DEMO CHANGE 4] spoke-only field is lost during round-trip
-//   ✓ Verifies [DEMO CHANGE 3] field rename works bidirectionally
+//   ✓ Verifies [DEMO CHANGE 3] spoke-only field is lost during round-trip
+//   ✓ Verifies [DEMO CHANGE 2] field rename works bidirectionally
 //   ✓ Ensures data integrity during round-trip conversions
 // - TestProjectConversionWithMinimalFields: Tests edge cases with minimal/nil fields
 //   ✓ Ensures conversion handles nil fields without panics
@@ -241,21 +211,11 @@ message ProjectSpec {
   // exists in the hub but not in the spoke.
   option (michelangelo.api.ignore_unmapped_hub_fields) = "type_info";
 
-  // [DEMO CHANGE 2] Removed field: ext (google.protobuf.Any)
-  // REASON: CRITICAL - Type incompatibility mitigation for gogo/protobuf vs google/protobuf.
-  // The hub version uses gogo/protobuf for generating .pb.go files, but protoc-gen-kubeconversion
-  // uses google.golang.org/protobuf/proto.Clone() which requires protoreflect.ProtoMessage interface.
-  // gogo/protobuf types don't implement this interface, causing compilation errors.
-  // Solution: Exclude all google.protobuf.* well-known types (Any, Timestamp, Duration, etc.)
-  // from spoke versions using ignore_unmapped_hub_fields.
-  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
-
-  // [DEMO CHANGE 3] Field rename: description -> project_description
+  // [DEMO CHANGE 2] Field rename: description -> project_description
   // REASON: Demonstrates field renaming between versions for API evolution.
   // In v2 (hub), this field is called "description". In v2alpha1 (spoke), we renamed it to
   // "project_description" for better clarity. The field_rename_to option tells the conversion
   // compiler to map project_description (spoke) <-> description (hub) during conversions.
-  // This ensures data is correctly transferred between versions despite the name change.
   string project_description = 1 [(michelangelo.api.field_rename_to) = "description"];
 
   // Owner information of the project.
@@ -270,11 +230,10 @@ message ProjectSpec {
   // Project root directory in the GIT repo such as `ml-code`
   string root_dir = 5;
 
-  // [DEMO CHANGE 4] Added field: legacy_alpha_config (v2alpha1-only field)
+  // [DEMO CHANGE 3] Added field: legacy_alpha_config (v2alpha1-only field)
   // REASON: Demonstrates adding spoke-specific fields that don't exist in the hub version.
   // This field only exists in v2alpha1 and will not be copied to/from v2 during conversion.
   // Using ignore_unmapped tells the conversion compiler to skip this field during ConvertTo/ConvertFrom.
-  // Use case: Migration fields, version-specific configurations, or deprecated features being phased out.
   string legacy_alpha_config = 20 [
     (michelangelo.api.validation) = {optional: true},
     (michelangelo.api.ignore_unmapped) = true
@@ -292,9 +251,11 @@ message ProjectSpec {
   // Retention Config for entities in the project
   RetentionConfig retention_config = 9 [(michelangelo.api.validation) = {optional: true}];
 
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999 [(michelangelo.api.validation) = {optional: true}];
+
   // SUMMARY: Fields from v2 hub NOT included in v2alpha1:
   // - type_info (ProjectTypeInfo): Removed to demonstrate field deprecation [DEMO CHANGE 1]
-  // - ext (google.protobuf.Any): Removed due to gogo/google protobuf incompatibility [DEMO CHANGE 2]
 }
 
 // Describes the state of a project resource.
@@ -344,22 +305,6 @@ enum ProjectPhase {
 
 // Defines the status of a ML project
 message ProjectStatus {
-  // [DEMO CHANGE 5] Removed field: ext (google.protobuf.Any)
-  // REASON: CRITICAL - Type incompatibility mitigation (same as DEMO CHANGE 2).
-  // google.protobuf.Any cannot be used in spoke versions because:
-  // 1. Hub .pb.go files use gogo/protobuf types
-  // 2. Conversion compiler uses google.golang.org/protobuf/proto.Clone()
-  // 3. gogo types don't implement protoreflect.ProtoMessage interface required by proto.Clone()
-  // This would cause: "cannot use hub.Status.Ext (type *types.Any) as type proto.Message"
-  option (michelangelo.api.ignore_unmapped_hub_fields) = "ext";
-
-  // [DEMO CHANGE 6] Removed field: last_update_time (google.protobuf.Timestamp)
-  // REASON: CRITICAL - Type incompatibility mitigation.
-  // google.protobuf.Timestamp has the same gogo/google protobuf incompatibility as Any.
-  // The conversion compiler cannot call proto.Clone() on gogo/protobuf Timestamp types.
-  // All google.protobuf well-known types (Timestamp, Duration, Any, etc.) must be excluded.
-  option (michelangelo.api.ignore_unmapped_hub_fields) = "last_update_time";
-
   // project state
   ProjectState state = 1;
 
@@ -369,9 +314,11 @@ message ProjectStatus {
   // human readable error message. reason should be set only if state is PROJECT_STATE_ERROR
   string error_message = 3;
 
-  // SUMMARY: Fields from v2 hub NOT included in v2alpha1:
-  // - last_update_time (google.protobuf.Timestamp): Type incompatibility [DEMO CHANGE 6]
-  // - ext (google.protobuf.Any): Type incompatibility [DEMO CHANGE 5]
+  // timestamp of last status update
+  google.protobuf.Timestamp last_update_time = 4;
+
+  // Extension field for additional custom data
+  google.protobuf.Any ext = 999;
 }
 
 // Defines a ML Project for a specific ML use case.
