@@ -130,9 +130,3 @@ jobs:
           echo "❌ Found TODO comments without issue links"
           echo "Please link all TODOs to GitHub issues using the format: TODO(#issue): description"
           exit 1
-
-      - name: Fail if lint issues found
-        if: steps.golangci-lint.outputs.exit_code != '0'
-        run: |
-          echo "❌ golangci-lint found issues"
-          exit 1

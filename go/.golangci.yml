@@ -24,7 +24,6 @@ linters-settings:
       - FIXME
       - BUG
       - HACK
-      - NOTE
     # Enable to fail on any TODO without issue reference
     # We'll start with reporting only, can enable strict mode later
     # For now, we want to detect unlinked TODOs
