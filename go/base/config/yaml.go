@@ -26,7 +26,7 @@ func newYAML(env env.Context, lookupFun config.LookupFunc) (config.Provider, err
 
 // getYAMLFiles returns all config yaml files, includes
 // expanded files: base.yaml and {environment}.yaml, raw files: secretes.yaml
-// variable is defined like ${ENV_VAR_NAME:default} and expended by looking up os envs
+// variable is defined like ${ENV_VAR_NAME:default} and expanded by looking up os envs
 func getYAMLFiles(env env.Context) []FileInfo {
 	files := defaultExpandedFiles(env)
 	files = append(files, defaultRawFiles(env)...)
@@ -56,8 +56,8 @@ func defaultExpandedFiles(env env.Context) []FileInfo {
 	return namesToInfo(names, true)
 }
 
-// defaultRawFiles returns yaml files shouldn't be expanded,
-// e.g. secrets files which often unescaped contain special characters, like "S"
+// defaultRawFiles returns yaml files that shouldn't be expanded,
+// e.g. secrets files which often contain unescaped special characters, like "$"
 func defaultRawFiles(env env.Context) []FileInfo {
 	names := []string{SecretsFile}
 	return namesToInfo(names, false)

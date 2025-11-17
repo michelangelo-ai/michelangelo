@@ -21,12 +21,15 @@ var (
 	)
 )
 
+// Plugin implements the PipelineRun plugin with a collection of condition actors
+// that execute different stages of the pipeline lifecycle.
 type Plugin struct {
 	conditionsInterfaces.Plugin[*v2.PipelineRun]
 	Actors []conditionsInterfaces.ConditionActor[*v2.PipelineRun]
 	Logger *zap.Logger
 }
 
+// PluginParams contains the dependencies required to create a PipelineRun plugin.
 type PluginParams struct {
 	fx.In
 	ApiHandler     api.Handler
@@ -36,6 +39,8 @@ type PluginParams struct {
 	Logger         *zap.Logger
 }
 
+// NewPlugin creates a new PipelineRun plugin with all required actors for managing
+// pipeline execution stages.
 func NewPlugin(params PluginParams) *Plugin {
 	logger := params.Logger.With(zap.String("plugin", "pipelinerun"))
 	return &Plugin{

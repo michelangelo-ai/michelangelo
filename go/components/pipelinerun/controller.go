@@ -5,16 +5,19 @@ import (
 	"fmt"
 	"reflect"
 
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	ctrl "sigs.k8s.io/controller-runtime"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
+// Reconciler reconciles PipelineRun objects by executing pipeline workflows
+// through the condition engine and managing their lifecycle states.
 type Reconciler struct {
 	api.Handler
 	logger            *zap.Logger
@@ -23,6 +26,8 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 }
 
+// NewReconciler creates a new PipelineRun reconciler with the specified plugin,
+// logger, and API handler factory.
 func NewReconciler(plugin *plugin.Plugin, logger *zap.Logger, apiHandlerFactory apiHandler.Factory) *Reconciler {
 	logger = logger.With(zap.String("component", "pipelinerun"))
 	return &Reconciler{

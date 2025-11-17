@@ -3,9 +3,10 @@ package conditionInterfaces
 import (
 	"context"
 
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	api "github.com/michelangelo-ai/michelangelo/proto/api"
 )
 
 // Engine refers to the implementation that executes the conditional checks via the Retrieve method and runs the actions
@@ -16,7 +17,14 @@ type Engine[T client.Object] interface {
 	Run(ctx context.Context, plugin Plugin[T], resource T) (Result, error)
 }
 
+// ConditionActor represents an actor that performs actions to progress a resource's
+// condition towards a desired state.
 type ConditionActor[T client.Object] interface {
+	// Retrieve retrieves the current state/status of the condition without performing any action.
+	// This method should be idempotent and free of side effects.
+	// This is used to check if the condition is satisfied before attempting to run the action.
+	Retrieve(ctx context.Context, resource T, previousCondition *api.Condition) (*api.Condition, error)
+
 	// Run runs the action that will attempt to move the condition status in the positive direction.
 	// If there is a failure to perform any action, the plugin must set the appropriate properties in the returned
 	// condition. Any errors that are returned are used only for logging purposes.
@@ -47,7 +55,7 @@ type Result struct {
 	// AreSatisfied is true if all the conditions for a particular plugin execution are satisfied.
 	AreSatisfied bool
 
-	// IsTerminal is returned if the maximum number of configured retries are exhausted.
+	// IsTerminal is true if the condition is in a terminal state.
 	IsTerminal bool
 
 	// IsKilled is returned if execute workflow process has been killed

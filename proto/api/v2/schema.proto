@@ -57,6 +57,7 @@ message DataSchemaItem {
 enum DataType {
   DATA_TYPE_INVALID = 0;
   DATA_TYPE_UNKNOWN = 1;
+  DATA_TYPE_BOOLEAN = 4;
   DATA_TYPE_STRING = 7;
   DATA_TYPE_BYTE = 15;
   DATA_TYPE_CHAR = 16;

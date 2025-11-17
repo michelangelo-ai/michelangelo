@@ -3,6 +3,7 @@ kind: Project
 metadata:
   annotations:
     test-annotation: "test"
+    michelangelo/worker_queue: "default"
   labels:
     michelangelo/ml-flavor-coreml: "true"
   name: ma-dev-test

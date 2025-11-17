@@ -8,15 +8,16 @@ import (
 
 	"github.com/gogo/protobuf/jsonpb"
 	pbtypes "github.com/gogo/protobuf/types"
-	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
-	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zaptest"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 func TestSourcePipelineActor(t *testing.T) {
@@ -28,31 +29,6 @@ func TestSourcePipelineActor(t *testing.T) {
 		expectedSourcePipeline *v2.SourcePipeline
 		errMsg                 string
 	}{
-		{
-			name: "pipeline run with nil pipeline condition",
-			pipelineRun: v2.PipelineRun{
-				Spec: v2.PipelineRunSpec{
-					Pipeline: &apipb.ResourceIdentifier{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
-					},
-				},
-			},
-			initialObjects: []runtime.Object{
-				&v2.Pipeline{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pipeline",
-						Namespace: "test-namespace",
-					},
-				},
-			},
-			expectedCondition: &apipb.Condition{
-				Type:   SourcePipelineType,
-				Status: apipb.CONDITION_STATUS_UNKNOWN,
-			},
-			expectedSourcePipeline: nil,
-			errMsg:                 "",
-		},
 		{
 			name: "pipeline run without resource id",
 			pipelineRun: v2.PipelineRun{
@@ -392,4 +368,115 @@ func extractEnvironmentFromPipeline(t *testing.T, pipeline *v2.Pipeline) map[str
 	}
 
 	return envVars
+}
+
+func TestSourcePipelineActor_Retrieve(t *testing.T) {
+	testCases := []struct {
+		name              string
+		pipelineRun       *v2.PipelineRun
+		initialObjects    []runtime.Object
+		expectedCondition *apipb.Condition
+	}{
+		{
+			name: "Source pipeline already populated",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							ObjectMeta: metav1.ObjectMeta{
+								Name:      "test-pipeline",
+								Namespace: "test-namespace",
+							},
+						},
+					},
+				},
+			},
+			initialObjects: []runtime.Object{},
+			expectedCondition: &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			},
+		},
+		{
+			name: "Dev-run with inline pipeline_spec",
+			pipelineRun: &v2.PipelineRun{
+				Spec: v2.PipelineRunSpec{
+					PipelineSpec: &v2.PipelineSpec{
+						Type: v2.PIPELINE_TYPE_TRAIN,
+					},
+				},
+			},
+			initialObjects: []runtime.Object{},
+			expectedCondition: &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "No pipeline reference",
+			pipelineRun: &v2.PipelineRun{
+				Spec: v2.PipelineRunSpec{},
+			},
+			initialObjects: []runtime.Object{},
+			expectedCondition: &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+				Reason: "Missing pipeline reference",
+			},
+		},
+		{
+			name: "Pipeline not found",
+			pipelineRun: &v2.PipelineRun{
+				Spec: v2.PipelineRunSpec{
+					Pipeline: &apipb.ResourceIdentifier{
+						Name:      "nonexistent-pipeline",
+						Namespace: "test-namespace",
+					},
+				},
+			},
+			initialObjects: []runtime.Object{},
+			expectedCondition: &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+				Reason: "Pipeline not found",
+			},
+		},
+		{
+			name: "Pipeline exists but not loaded",
+			pipelineRun: &v2.PipelineRun{
+				Spec: v2.PipelineRunSpec{
+					Pipeline: &apipb.ResourceIdentifier{
+						Name:      "test-pipeline",
+						Namespace: "test-namespace",
+					},
+				},
+			},
+			initialObjects: []runtime.Object{
+				&v2.Pipeline{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pipeline",
+						Namespace: "test-namespace",
+					},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   SourcePipelineType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			actor := setUpSourcePipelineActor(t, testCase.initialObjects)
+			condition, err := actor.Retrieve(context.Background(), testCase.pipelineRun, nil)
+
+			require.NoError(t, err)
+			require.Equal(t, testCase.expectedCondition.Type, condition.Type)
+			require.Equal(t, testCase.expectedCondition.Status, condition.Status)
+			if testCase.expectedCondition.Reason != "" {
+				require.Equal(t, testCase.expectedCondition.Reason, condition.Reason)
+			}
+		})
+	}
 }

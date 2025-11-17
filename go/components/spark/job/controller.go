@@ -18,6 +18,8 @@ import (
 
 const requeueAfter = 10 * time.Second
 
+// Reconciler reconciles SparkJob objects by creating and monitoring Spark applications
+// in the cluster and updating their status accordingly.
 type Reconciler struct {
 	client.Client
 	SparkClient Client

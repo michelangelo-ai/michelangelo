@@ -8,6 +8,7 @@ import (
 
 const pluginID = "ray"
 
+// Plugin is the global instance of the Ray plugin for Starlark workflows.
 var Plugin = &plugin{}
 
 type plugin struct{}

@@ -1,23 +1,77 @@
+from argparse import ArgumentParser
 from logging import getLogger
 from inspect import Signature, Parameter
 from types import MethodType
+from typing import Optional
 
 from grpc import Channel
 from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict, ParseDict
 
-from michelangelo.cli.mactl.mactl import (
+from michelangelo.cli.mactl.crd import (
     CRD,
-    bind_signature,
     METADATA_STUB,
+    bind_signature,
     get_single_arg,
+    inject_func_signature,
 )
 
 
 _LOG = getLogger(__name__)
 
 
-def generate_kill(crd: CRD, channel: Channel):
+def add_function_signature(crd: CRD) -> None:
+    """
+    Add function signature for pipeline kill command.
+    """
+    inject_func_signature(
+        crd,
+        "kill",
+        [
+            {
+                "func_signature": Parameter(
+                    "namespace",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+                "args": ["-n", "--namespace"],
+                "kwargs": {
+                    "type": str,
+                    "required": True,
+                    "help": "Namespace of the resource",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "name",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                ),
+                "args": ["--name"],
+                "kwargs": {
+                    "type": str,
+                    "required": True,
+                    "help": "Name of the resource",
+                },
+            },
+            {
+                "func_signature": Parameter(
+                    "yes",
+                    Parameter.POSITIONAL_OR_KEYWORD,
+                    default=False,
+                ),
+                "args": ["--yes"],
+                "kwargs": {
+                    "action": "store_true",
+                    "help": (
+                        "Automatic yes to prompts; assume 'yes' as answer to "
+                        "all prompts and run non-interactively."
+                    ),
+                },
+            },
+        ],
+    )
+
+
+def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
     """
     Generate kill function for pipeline_run CRD.
     """
@@ -29,23 +83,17 @@ def generate_kill(crd: CRD, channel: Channel):
         channel, crd.full_name, "Update"
     )
 
-    kill_func_signature = Signature(
-        [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
-        + [
-            Parameter(name, Parameter.POSITIONAL_OR_KEYWORD)
-            for name in ["namespace", "name"]
-        ]
-        + [Parameter("yes", Parameter.POSITIONAL_OR_KEYWORD, default=[])]
-    )
+    crd.configure_parser("kill", parser)
+    func_signature = crd._read_signatures("kill")
 
-    @bind_signature(kill_func_signature)
+    @bind_signature(func_signature)
     def kill_func(bound_args: Signature) -> Message:
         _LOG.info("Start kill_func for pipeline_run")
         _LOG.info("Bound arguments: %r", bound_args.arguments)
         _self: CRD = bound_args.arguments["self"]
         _name = get_single_arg(bound_args.arguments, "name")
         _namespace = get_single_arg(bound_args.arguments, "namespace")
-        _yes = bound_args.arguments.get("yes", [])
+        _yes = bound_args.arguments.get("yes", False)
 
         if not _yes:
             resource_type = _self.name.replace("_", " ")
@@ -107,5 +155,5 @@ def generate_kill(crd: CRD, channel: Channel):
         _LOG.info("Kill operation completed (%r): %r", type(response), response)
         return response
 
-    kill_func.__signature__ = kill_func_signature
+    kill_func.__signature__ = func_signature
     crd.kill = MethodType(kill_func, crd)

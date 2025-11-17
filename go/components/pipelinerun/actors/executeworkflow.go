@@ -9,6 +9,10 @@ import (
 	"github.com/gogo/protobuf/jsonpb"
 	"github.com/gogo/protobuf/proto"
 	pbtypes "github.com/gogo/protobuf/types"
+	uberconfig "go.uber.org/config"
+	"go.uber.org/zap"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
@@ -18,9 +22,6 @@ import (
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	uberconfig "go.uber.org/config"
-	"go.uber.org/zap"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
@@ -48,6 +49,8 @@ type TaskProgress struct {
 	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
 }
 
+// ExecuteWorkflowActor handles the execution of workflows for pipeline runs by starting
+// and monitoring workflow executions in Cadence/Temporal.
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -57,6 +60,8 @@ type ExecuteWorkflowActor struct {
 	configProvider uberconfig.Provider
 }
 
+// NewExecuteWorkflowActor creates a new ExecuteWorkflowActor with the specified dependencies
+// for managing workflow execution.
 func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces.WorkflowClient, blobStore *blobstore.BlobStore, apiHandler api.Handler, configProvider uberconfig.Provider) *ExecuteWorkflowActor {
 	return &ExecuteWorkflowActor{
 		logger:         logger.With(zap.String("actor", "execute-workflow")),
@@ -67,32 +72,81 @@ func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces
 	}
 }
 
+func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
+
+	executeWorkflowStep := pipelinerunutils.GetStep(resource, pipelinerunutils.ExecuteWorkflowStepName)
+	// Check if workflow step is already in a terminal state.
+	if executeWorkflowStep != nil {
+		switch executeWorkflowStep.State {
+		case v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED:
+			logger.Info("workflow execution already completed successfully")
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			}, nil
+		case v2.PIPELINE_RUN_STEP_STATE_FAILED, v2.PIPELINE_RUN_STEP_STATE_KILLED:
+			logger.Info("workflow execution failed or was killed")
+			return &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, nil
+		case v2.PIPELINE_RUN_STEP_STATE_RUNNING:
+			if resource.Status.WorkflowRunId != "" && resource.Status.WorkflowId != "" {
+				logger.Info("workflow is running")
+				return &apipb.Condition{
+					Type:   ExecuteWorkflowType,
+					Status: apipb.CONDITION_STATUS_FALSE,
+				}, nil
+			}
+		}
+	}
+
+	// Check if workflow needs to be started
+	if resource.Status.WorkflowRunId == "" || resource.Status.WorkflowId == "" {
+		logger.Info("workflow not started yet, ready to start")
+		return &apipb.Condition{
+			Type:   ExecuteWorkflowType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+		}, nil
+	}
+
+	// Workflow is in progress
+	logger.Info("workflow execution in progress")
+	return &apipb.Condition{
+		Type:   ExecuteWorkflowType,
+		Status: apipb.CONDITION_STATUS_FALSE,
+	}, nil
+}
+
 func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	if previousCondition == nil {
-		logger.Info("pipeline run has no previous condition, setting to unknown, adding step")
-		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, &v2.PipelineRunStepInfo{
+	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
+	if executeWorkflowStep == nil {
+		logger.Info("execute workflow step not found, setting to pending")
+		executeWorkflowStep = &v2.PipelineRunStepInfo{
 			Name:        pipelinerunutils.ExecuteWorkflowStepName,
 			DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
 			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
 			StartTime:   pbtypes.TimestampNow(),
-		})
-		return &apipb.Condition{
-			Type:   ExecuteWorkflowType,
-			Status: apipb.CONDITION_STATUS_UNKNOWN,
-		}, nil
+		}
+		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, executeWorkflowStep)
 	}
 
-	if previousCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
-		// the previous condition is terminal, so we don't need to run the actor again
-		logger.Info("pipeline run has a terminal condition, skipping")
-		return previousCondition, nil
-	}
-
-	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
 	newCondition := &apipb.Condition{
 		Type:   ExecuteWorkflowType,
 		Status: apipb.CONDITION_STATUS_UNKNOWN,
+	}
+
+	// If the step is already in a terminal state, just return the condition without any queries
+	// This prevents unnecessary status updates which would trigger reconcile loops
+	if executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_FAILED || executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_KILLED {
+		logger.Info("workflow step already in terminal state, skipping all workflow operations")
+		newCondition.Status = apipb.CONDITION_STATUS_FALSE
+		if executeWorkflowStep.State == v2.PIPELINE_RUN_STEP_STATE_KILLED {
+			newCondition.Reason = defaultengine.KillReason
+		}
+		return newCondition, nil
 	}
 
 	if pipelineRun.Spec.Kill {
@@ -124,7 +178,6 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 		// Try cluster-scoped first (projects might be cluster-scoped resources)
 		logger.Info("deciding worker queue...")
 		err := a.apiHandler.Get(ctx, pipelineRun.Namespace, pipelineRun.Namespace, &metav1.GetOptions{}, project)
-
 		if err != nil {
 			logger.Warn("failed to get project, using config fallback", zap.Error(err), zap.String("projectName", pipelineRun.Namespace))
 			return &apipb.Condition{
@@ -234,7 +287,6 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 }
 
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
-
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
 		return nil, fmt.Errorf("get workflow inputs for pipeline run %s/%s: %w", pipelineRun.Namespace, pipelineRun.Name, err)
@@ -273,7 +325,6 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 }
 
 func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{}, map[string]interface{}, error) {
-
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
 	pipelineConfigMap, err := decodePipelineManifestContent(pipeline.Spec)
 	if err != nil {
@@ -621,7 +672,7 @@ func getStepInfoFromTaskProgress(taskProgress *TaskProgress, namespace string) *
 
 	if taskProgress.RetryAttemptID != "" {
 		stepInfo.Resources = []*v2.PipelineRunResource{
-			&v2.PipelineRunResource{
+			{
 				Resource: &v2.PipelineRunResource_ExternalResource{
 					ExternalResource: &v2.ExternalResource{
 						Name: fmt.Sprintf("Attempt%s-DriverURL", taskProgress.RetryAttemptID),

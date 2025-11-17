@@ -17,6 +17,7 @@ type blobstoreClientsIn struct {
 	BlobStoreClients []BlobStoreClient `group:"blobstore_clients"`
 }
 
+// NewBlobStore creates a new BlobStore with all registered blob storage clients.
 func NewBlobStore(in blobstoreClientsIn, logger *zap.Logger) *BlobStore {
 	blobStore := BlobStore{
 		Clients: make(map[string]BlobStoreClient),
