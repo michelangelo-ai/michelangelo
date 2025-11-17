@@ -27,8 +27,10 @@ Follow the conventions and patterns documented at https://google.github.io/style
 
 ### Imports
 - Use `import` statements for packages and modules only
+- Use `from x import y` where `x` is the package prefix and `y` is the module name with no prefix.
 - Import each module using the full pathname location
 - Avoid `from module import *`
+- Would we add this too?
 - Order: standard library, third-party, local application imports
 
 ### Naming Conventions
