@@ -19,9 +19,7 @@ Use this skill automatically when:
 **When Google's style guide conflicts with PEP 8, always follow PEP 8.** PEP 8 is the official Python style guide and is the canonical source for Python coding conventions. Google's guide extends and clarifies PEP 8 but should not override it.
 
 Common areas where conflicts may occur:
-- Line length (PEP 8: 79 chars, Google: 80-100 chars) → **Use 100 chars** (project standard)
-- Import formatting and ordering → Follow PEP 8 conventions
-- Whitespace and indentation rules → Follow PEP 8 strictly
+- Line length (PEP 8: 79 chars, Google: 80-100 chars) → **Use 99 chars** (project standard)
 
 ## Key Reminders
 
