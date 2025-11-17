@@ -8,6 +8,13 @@ import (
 
 	pbtypes "github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+	uberconfig "go.uber.org/config"
+	"go.uber.org/zap/zaptest"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/blobstore"
@@ -19,12 +26,6 @@ import (
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"github.com/stretchr/testify/require"
-	uberconfig "go.uber.org/config"
-	"go.uber.org/zap/zaptest"
-	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
 func TestExecuteWorkflowActor(t *testing.T) {
@@ -162,15 +163,20 @@ func TestExecuteWorkflowActor(t *testing.T) {
 		{
 			name: "Condition is nil, adding step",
 			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "nonexistent",
+				},
 				Status: v2.PipelineRunStatus{
 					Steps: []*v2.PipelineRunStepInfo{},
 				},
 			},
 			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				// No mocks needed since it should fail on project fetch
 			},
 			expectedCondition: &apipb.Condition{
 				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_UNKNOWN,
+				Status: apipb.CONDITION_STATUS_FALSE,
 			},
 			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
 				Name:        pipelinerunutils.ExecuteWorkflowStepName,
@@ -180,7 +186,7 @@ func TestExecuteWorkflowActor(t *testing.T) {
 			},
 			expectedWorkflowRunID: "",
 			expectedWorkflowID:    "",
-			errMsg:                "",
+			errMsg:                "failed to fetch project",
 		},
 		{
 			name: "Workflow run ID is empty, starting workflow",
@@ -516,6 +522,101 @@ func TestExecuteWorkflowActor(t *testing.T) {
 				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
 				State:       v2.PIPELINE_RUN_STEP_STATE_RUNNING,
 				StartTime:   pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "test-run-id",
+			expectedWorkflowID:    "test-workflow-id",
+			errMsg:                "",
+		},
+		{
+			name: "pipeline in FAILED state, should skip all workflow operations",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_FAILED,
+							StartTime:   pbtypes.TimestampNow(),
+							EndTime:     pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_FALSE,
+						},
+					},
+					WorkflowRunId: "test-run-id",
+					WorkflowId:    "test-workflow-id",
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				// No mock expectations
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_FAILED,
+				StartTime:   pbtypes.TimestampNow(),
+				EndTime:     pbtypes.TimestampNow(),
+			},
+			expectedWorkflowRunID: "test-run-id",
+			expectedWorkflowID:    "test-workflow-id",
+			errMsg:                "",
+		},
+		{
+			name: "pipeline in killed state, should skip workflow operations",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline-run",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Kill: true,
+				},
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:        pipelinerunutils.ExecuteWorkflowStepName,
+							DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+							State:       v2.PIPELINE_RUN_STEP_STATE_KILLED,
+							StartTime:   pbtypes.TimestampNow(),
+							EndTime:     pbtypes.TimestampNow(),
+						},
+					},
+					Conditions: []*apipb.Condition{
+						{
+							Type:   ExecuteWorkflowType,
+							Status: apipb.CONDITION_STATUS_FALSE,
+							Reason: defaultengine.KillReason,
+						},
+					},
+					WorkflowRunId: "test-run-id",
+					WorkflowId:    "test-workflow-id",
+				},
+			},
+			mockFunc: func(workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
+				// No mock expectations
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+				Reason: defaultengine.KillReason,
+			},
+			expectedExecuteWorkflowStep: &v2.PipelineRunStepInfo{
+				Name:        pipelinerunutils.ExecuteWorkflowStepName,
+				DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
+				State:       v2.PIPELINE_RUN_STEP_STATE_KILLED,
+				StartTime:   pbtypes.TimestampNow(),
+				EndTime:     pbtypes.TimestampNow(),
 			},
 			expectedWorkflowRunID: "test-run-id",
 			expectedWorkflowID:    "test-workflow-id",
@@ -1201,7 +1302,6 @@ func TestResumeFromPipelineRun(t *testing.T) {
 				},
 			},
 			mockSetup: func(t *testing.T, workflowClient *workflowclientMock.MockWorkflowClient, blobStoreClient *blobstoreMock.MockBlobStoreClient) {
-
 				blobStoreClient.EXPECT().Get(gomock.Any(), "mock://test-uniflow-tar").Return([]byte(""), nil)
 
 				// Capture the environment variables passed to StartWorkflow
@@ -1579,6 +1679,148 @@ func TestGetTaskList(t *testing.T) {
 				require.NoError(t, err)
 				require.Equal(t, testCase.expectedTaskList, taskList)
 			}
+		})
+	}
+}
+
+func TestExecuteWorkflowActor_Retrieve(t *testing.T) {
+	testCases := []struct {
+		name              string
+		pipelineRun       *v2.PipelineRun
+		expectedCondition *apipb.Condition
+	}{
+		{
+			name: "Workflow step already succeeded",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED,
+						},
+					},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			},
+		},
+		{
+			name: "Workflow step already failed",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_FAILED,
+						},
+					},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "Workflow step killed",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_KILLED,
+						},
+					},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "Workflow step running with workflow IDs",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+						},
+					},
+					WorkflowRunId: "test-run-id",
+					WorkflowId:    "test-workflow-id",
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "Workflow step running without workflow IDs",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{
+						{
+							Name:  pipelinerunutils.ExecuteWorkflowStepName,
+							State: v2.PIPELINE_RUN_STEP_STATE_RUNNING,
+						},
+					},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "Workflow not started yet",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					Steps: []*v2.PipelineRunStepInfo{},
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+		{
+			name: "Workflow in progress",
+			pipelineRun: &v2.PipelineRun{
+				Status: v2.PipelineRunStatus{
+					WorkflowRunId: "test-run-id",
+					WorkflowId:    "test-workflow-id",
+				},
+			},
+			expectedCondition: &apipb.Condition{
+				Type:   ExecuteWorkflowType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			workflowClient := workflowclientMock.NewMockWorkflowClient(ctrl)
+			blobStoreClient := blobstoreMock.NewMockBlobStoreClient(ctrl)
+			scheme := runtime.NewScheme()
+			err := v2.AddToScheme(scheme)
+			require.NoError(t, err)
+			k8sClient := fake.NewClientBuilder().WithScheme(scheme).Build()
+			apiHandlerInstance := apiHandler.NewFakeAPIHandler(k8sClient)
+
+			actor := setUpExecuteWorkflowActor(t, workflowClient, blobStoreClient, apiHandlerInstance)
+			condition, err := actor.Retrieve(context.Background(), testCase.pipelineRun, nil)
+
+			require.NoError(t, err)
+			require.Equal(t, testCase.expectedCondition, condition)
 		})
 	}
 }

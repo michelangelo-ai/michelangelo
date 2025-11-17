@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/michelangelo-ai/michelangelo/go/api"
-	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	pbtypes "github.com/gogo/protobuf/types"
+
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const (
@@ -34,20 +38,72 @@ func NewSourcePipelineActor(apiHandler api.Handler, logger *zap.Logger) *SourceP
 
 var _ conditionInterfaces.ConditionActor[*v2.PipelineRun] = &SourcePipelineActor{}
 
-func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	if previousCondition == nil {
-		logger.Info("pipeline run has no previous condition, setting to unknown")
+func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
+
+	// Check if source pipeline is already populated
+	if resource.Status.SourcePipeline != nil && resource.Status.SourcePipeline.Pipeline != nil {
+		logger.Info("source pipeline already retrieved")
 		return &apipb.Condition{
 			Type:   SourcePipelineType,
-			Status: apipb.CONDITION_STATUS_UNKNOWN,
+			Status: apipb.CONDITION_STATUS_TRUE,
 		}, nil
 	}
 
-	if previousCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
-		// the previous condition is terminal, so we don't need to run the actor again
-		logger.Info("pipeline run has a terminal condition, skipping")
-		return previousCondition, nil
+	// Check if this is a pipeline dev-run with inline pipeline_spec
+	if resource.Spec.PipelineSpec != nil {
+		logger.Info("pipeline dev-run detected with inline pipeline_spec, needs to be processed")
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+		}, nil
+	}
+
+	// Check if default pipeline run has a pipeline reference
+	if resource.Spec.Pipeline == nil {
+		logger.Info("pipeline run has no pipeline resource ID")
+		return &apipb.Condition{
+			Type:   SourcePipelineType,
+			Status: apipb.CONDITION_STATUS_FALSE,
+			Reason: "Missing pipeline reference",
+		}, nil
+	}
+
+	// Try to fetch the pipeline to verify that it exists
+	pipeline := &v2.Pipeline{}
+	pipelineResourceID := resource.Spec.Pipeline
+	err := a.apiHandler.Get(ctx, resource.Namespace, pipelineResourceID.GetName(), &metav1.GetOptions{}, pipeline)
+	if err != nil {
+		logger.Error("failed to retrieve pipeline", zap.Error(err))
+		return &apipb.Condition{
+			Type:    SourcePipelineType,
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "Pipeline not found",
+			Message: err.Error(),
+		}, nil
+	}
+
+	// Pipeline exists but hasn't been loaded into status yet
+	logger.Info("pipeline exists but needs to be loaded into status")
+	return &apipb.Condition{
+		Type:   SourcePipelineType,
+		Status: apipb.CONDITION_STATUS_FALSE,
+	}, nil
+}
+
+func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+
+	sourcePipelineStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.SourcePipelineStepName)
+	if sourcePipelineStep == nil {
+		logger.Info("source pipeline step not found, setting to pending")
+		sourcePipelineStep = &v2.PipelineRunStepInfo{
+			Name:        pipelinerunutils.SourcePipelineStepName,
+			DisplayName: pipelinerunutils.SourcePipelineStepName,
+			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+			StartTime:   pbtypes.TimestampNow(),
+		}
+		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, sourcePipelineStep)
 	}
 
 	pipelineRunSpec := pipelineRun.GetSpec()

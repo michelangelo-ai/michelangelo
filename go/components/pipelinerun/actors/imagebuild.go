@@ -5,11 +5,12 @@ import (
 	"fmt"
 
 	pbtypes "github.com/gogo/protobuf/types"
+	"go.uber.org/zap"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"go.uber.org/zap"
 )
 
 const (
@@ -31,29 +32,71 @@ func NewImageBuildActor(logger *zap.Logger) *ImageBuildActor {
 
 var _ conditionInterfaces.ConditionActor[*v2.PipelineRun] = &ImageBuildActor{}
 
-func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
-	if previousCondition == nil {
-		logger.Info("pipeline run has no previous condition, setting to unknown")
-		imageBuildStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ImageBuildStepName)
-		if imageBuildStep == nil {
-			// we also init the ImageBuild Step in the pipeline run status
-			pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, &v2.PipelineRunStepInfo{
-				Name:        pipelinerunutils.ImageBuildStepName,
-				DisplayName: pipelinerunutils.ImageBuildStepName,
-				State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
-				StartTime:   pbtypes.TimestampNow(),
-			})
+func (a *ImageBuildActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
+
+	// Check if image build step is already in a terminal state
+	imageBuildStep := pipelinerunutils.GetStep(resource, pipelinerunutils.ImageBuildStepName)
+	if imageBuildStep != nil {
+		switch imageBuildStep.State {
+		case v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED:
+			logger.Info("image build already completed successfully")
+			return &apipb.Condition{
+				Type:   ImageBuildType,
+				Status: apipb.CONDITION_STATUS_TRUE,
+			}, nil
+		case v2.PIPELINE_RUN_STEP_STATE_FAILED:
+			logger.Info("image build failed")
+			return &apipb.Condition{
+				Type:   ImageBuildType,
+				Status: apipb.CONDITION_STATUS_FALSE,
+			}, nil
 		}
+	}
+
+	// Check if source pipeline is available to get image ID
+	sourcePipeline := resource.Status.SourcePipeline
+	if sourcePipeline == nil || sourcePipeline.Pipeline == nil {
+		logger.Info("source pipeline not available yet")
 		return &apipb.Condition{
 			Type:   ImageBuildType,
-			Status: apipb.CONDITION_STATUS_UNKNOWN,
+			Status: apipb.CONDITION_STATUS_FALSE,
 		}, nil
 	}
 
-	if previousCondition.Status != apipb.CONDITION_STATUS_UNKNOWN {
-		logger.Info("pipeline run has a terminal condition, skipping")
-		return previousCondition, nil
+	// Check if image ID annotation exists
+	annotations := sourcePipeline.Pipeline.Annotations
+	if annotations == nil || annotations[pipelinerunutils.ImageIDAnnotationKey] == "" {
+		logger.Info("image ID annotation not found in source pipeline")
+		return &apipb.Condition{
+			Type:    ImageBuildType,
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "Missing image ID",
+			Message: fmt.Sprintf("Source pipeline is available but missing %s annotation", pipelinerunutils.ImageIDAnnotationKey),
+		}, nil
+	}
+
+	// Image ID is available but build step hasn't been updated yet
+	logger.Info("image ID found, image build ready to be processed")
+	return &apipb.Condition{
+		Type:   ImageBuildType,
+		Status: apipb.CONDITION_STATUS_FALSE,
+	}, nil
+}
+
+func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
+	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
+
+	imageBuildStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ImageBuildStepName)
+	if imageBuildStep == nil {
+		logger.Info("image build step not found, setting to pending")
+		imageBuildStep = &v2.PipelineRunStepInfo{
+			Name:        pipelinerunutils.ImageBuildStepName,
+			DisplayName: pipelinerunutils.ImageBuildStepName,
+			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
+			StartTime:   pbtypes.TimestampNow(),
+		}
+		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, imageBuildStep)
 	}
 
 	// At the moment, the image id is configured as an annotation of the source pipeline.
@@ -66,8 +109,6 @@ func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, 
 	}
 
 	annotations := sourcePipeline.Pipeline.Annotations
-	imageBuildStep := pipelinerunutils.GetStep(pipelineRun, ImageBuildType)
-
 	if annotations == nil || annotations[pipelinerunutils.ImageIDAnnotationKey] == "" {
 		logger.Info("source pipeline has no image id, setting to false")
 		imageBuildStep.State = v2.PIPELINE_RUN_STEP_STATE_FAILED

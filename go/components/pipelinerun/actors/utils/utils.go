@@ -4,16 +4,20 @@ import (
 	"context"
 	"fmt"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	ImageBuildStepName                 = "Image Build"
-	ImageBuildOutputKey                = "image"
-	ExecuteWorkflowStepName            = "Execute Workflow"
+	ImageBuildOutputKey = "image"
+
+	ImageBuildStepName      = "Image Build"
+	ExecuteWorkflowStepName = "Execute Workflow"
+	SourcePipelineStepName  = "Source Pipeline"
+
 	UniflowTaskProgressQueryHandlerKey = "task_progress"
 	ImageIDAnnotationKey               = "michelangelo/uniflow-image"
 )
@@ -40,7 +44,8 @@ func GetStep(pipelineRun *v2.PipelineRun, name string) *v2.PipelineRunStepInfo {
 
 // GetPipelineRun gets a PipelineRun by the provided resource identifier.
 func GetPipelineRun(ctx context.Context, pipelineRunID *apipb.ResourceIdentifier, apiHandler api.Handler,
-	pipelineRun *v2.PipelineRun) error {
+	pipelineRun *v2.PipelineRun,
+) error {
 	if pipelineRunID == nil {
 		return fmt.Errorf("PipelineRun resource identifier is nil")
 	}
