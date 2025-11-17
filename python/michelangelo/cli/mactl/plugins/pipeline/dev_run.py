@@ -47,48 +47,51 @@ def add_function_signature(crd: CRD) -> None:
     inject_func_signature(
         crd,
         "dev_run",
-        [
-            {
-                "func_signature": Parameter(
-                    "file",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-                "args": ["-f", "--file"],
-                "kwargs": {
-                    "type": str,
-                    "required": True,
-                    "help": "Path to the pipeline YAML configuration file",
+        {
+            "help": "Run a pipeline locally for development and testing purposes",
+            "args": [
+                {
+                    "func_signature": Parameter(
+                        "file",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                    ),
+                    "args": ["-f", "--file"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Path to the pipeline YAML configuration file",
+                    },
                 },
-            },
-            {
-                "func_signature": Parameter(
-                    "env",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                    default={},
-                ),
-                "args": ["--env"],
-                "kwargs": {
-                    "type": str,
-                    "required": False,
-                    "default": {},
-                    "help": "Name of the resource",
+                {
+                    "func_signature": Parameter(
+                        "env",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default={},
+                    ),
+                    "args": ["--env"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": {},
+                        "help": "Name of the resource",
+                    },
                 },
-            },
-            {
-                "func_signature": Parameter(
-                    "resume_from",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                    default=None,
-                ),
-                "args": ["--resume_from"],
-                "kwargs": {
-                    "type": str,
-                    "required": False,
-                    "default": None,
-                    "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                {
+                    "func_signature": Parameter(
+                        "resume_from",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=None,
+                    ),
+                    "args": ["--resume_from"],
+                    "kwargs": {
+                        "type": str,
+                        "required": False,
+                        "default": None,
+                        "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                    },
                 },
-            },
-        ],
+            ],
+        },
     )
 
 

@@ -27,47 +27,50 @@ def add_function_signature(crd: CRD) -> None:
     inject_func_signature(
         crd,
         "kill",
-        [
-            {
-                "func_signature": Parameter(
-                    "namespace",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-                "args": ["-n", "--namespace"],
-                "kwargs": {
-                    "type": str,
-                    "required": True,
-                    "help": "Namespace of the resource",
-                },
-            },
-            {
-                "func_signature": Parameter(
-                    "name",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                ),
-                "args": ["--name"],
-                "kwargs": {
-                    "type": str,
-                    "required": True,
-                    "help": "Name of the resource",
-                },
-            },
-            {
-                "func_signature": Parameter(
-                    "yes",
-                    Parameter.POSITIONAL_OR_KEYWORD,
-                    default=False,
-                ),
-                "args": ["--yes"],
-                "kwargs": {
-                    "action": "store_true",
-                    "help": (
-                        "Automatic yes to prompts; assume 'yes' as answer to "
-                        "all prompts and run non-interactively."
+        {
+            "help": "Kill a configured trigger entity.",
+            "args": [
+                {
+                    "func_signature": Parameter(
+                        "namespace",
+                        Parameter.POSITIONAL_OR_KEYWORD,
                     ),
+                    "args": ["-n", "--namespace"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Namespace of the resource",
+                    },
                 },
-            },
-        ],
+                {
+                    "func_signature": Parameter(
+                        "name",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                    ),
+                    "args": ["--name"],
+                    "kwargs": {
+                        "type": str,
+                        "required": True,
+                        "help": "Name of the resource",
+                    },
+                },
+                {
+                    "func_signature": Parameter(
+                        "yes",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--yes"],
+                    "kwargs": {
+                        "action": "store_true",
+                        "help": (
+                            "Automatic yes to prompts; assume 'yes' as answer to "
+                            "all prompts and run non-interactively."
+                        ),
+                    },
+                },
+            ],
+        },
     )
 
 

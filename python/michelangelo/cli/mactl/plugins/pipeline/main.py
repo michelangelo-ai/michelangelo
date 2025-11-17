@@ -22,11 +22,29 @@ from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
 _LOG = getLogger(__name__)
 
 
-def apply_plugins(
+def apply_plugins(crd: CRD, channel: Channel):
+    """
+    Apply plugin entity function signatures to the CRD.
+    It adds the necessary function signatures and methods for user commands
+    """
+    _LOG.info("Applying plugin entity to crd: %r", crd)
+    _LOG.debug("gRPC Channel: %r", channel)
+    add_run_function_signature(crd)
+    crd.generate_run = MethodType(
+        lambda self, ch, parser: generate_run(self, ch, parser), crd
+    )
+    add_dev_run_function_signature(crd)
+    crd.generate_dev_run = MethodType(
+        lambda self, ch, parser: generate_dev_run(self, ch, parser), crd
+    )
+    _LOG.info("Plugin entities applied successfully to crd: %s", crd)
+
+
+def apply_plugin_command(
     crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel
 ):
     """
-    Apply plugins to the crd.
+    Apply specific target command plugins to the crd.
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     _LOG.debug("Available CRDs: %r", crds)
@@ -35,14 +53,6 @@ def apply_plugins(
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_create
     if target_command == "run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_run
-        add_run_function_signature(crd)
-        crd.generate_run = MethodType(
-            lambda self, ch, parser: generate_run(self, ch, parser), crd
-        )
     if target_command == "dev_run":
         crd.func_crd_metadata_converter = convert_crd_metadata_pipeline_dev_run
-        add_dev_run_function_signature(crd)
-        crd.generate_dev_run = MethodType(
-            lambda self, ch, parser: generate_dev_run(self, ch, parser), crd
-        )
     _LOG.info("Plugins applied successfully to crd: %s", crd)

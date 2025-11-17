@@ -355,84 +355,93 @@ class CRD:
         self.full_name = full_name
         self.func_crd_metadata_converter = convert_crd_metadata
         self.metadata = metadata
-        self.func_signature: dict = {
-            "apply": [
-                {
-                    "func_signature": Parameter(
-                        "file",
-                        Parameter.POSITIONAL_OR_KEYWORD,
-                    ),
-                    "args": ["-f", "--file"],
-                    "kwargs": {
-                        "dest": "file",
-                        "type": str,
-                        "required": True,
-                        "help": "Custom Resource YAML file (can be configured with --file)",
+        self.func_signature: dict[str, dict] = {
+            "apply": {
+                "help": "Apply an Entity (create or update)",
+                "args": [
+                    {
+                        "func_signature": Parameter(
+                            "file",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                        ),
+                        "args": ["-f", "--file"],
+                        "kwargs": {
+                            "dest": "file",
+                            "type": str,
+                            "required": True,
+                            "help": "Custom Resource YAML file (can be configured with --file)",
+                        },
                     },
-                },
-            ],
-            "delete": [
-                {
-                    "func_signature": Parameter(
-                        "namespace", Parameter.POSITIONAL_OR_KEYWORD
-                    ),
-                    "args": ["-n", "--namespace"],
-                    "kwargs": {
-                        "type": str,
-                        "required": True,
-                        "help": "Namespace of the resource",
+                ],
+            },
+            "delete": {
+                "help": "Delete an Entity",
+                "args": [
+                    {
+                        "func_signature": Parameter(
+                            "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                        ),
+                        "args": ["-n", "--namespace"],
+                        "kwargs": {
+                            "type": str,
+                            "required": True,
+                            "help": "Namespace of the resource",
+                        },
                     },
-                },
-                {
-                    "func_signature": Parameter(
-                        "name",
-                        Parameter.POSITIONAL_OR_KEYWORD,
-                        default="",
-                    ),
-                    "args": ["--name"],
-                    "kwargs": {
-                        "dest": "name",
-                        "type": str,
-                        "required": True,
-                        "help": "Name of the resource",
+                    {
+                        "func_signature": Parameter(
+                            "name",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
+                        ),
+                        "args": ["--name"],
+                        "kwargs": {
+                            "dest": "name",
+                            "type": str,
+                            "required": True,
+                            "help": "Name of the resource",
+                        },
                     },
-                },
-            ],
-            "get": [
-                {
-                    "args": ["name"],
-                    "kwargs": {
-                        "nargs": "?",
-                        "type": str,
-                        "help": "Name of the resource (can be configured with --name)",
+                ],
+            },
+            "get": {
+                "help": "Get an Entity or list all entities in the namespace",
+                "args": [
+                    {
+                        "args": ["name"],
+                        "kwargs": {
+                            "nargs": "?",
+                            "type": str,
+                            "help": "Name of the resource (can be configured with --name)",
+                        },
                     },
-                },
-                {
-                    "func_signature": Parameter(
-                        "namespace", Parameter.POSITIONAL_OR_KEYWORD
-                    ),
-                    "args": ["-n", "--namespace"],
-                    "kwargs": {
-                        "type": str,
-                        "required": True,
-                        "help": "Namespace of the resource",
+                    {
+                        "func_signature": Parameter(
+                            "namespace", Parameter.POSITIONAL_OR_KEYWORD
+                        ),
+                        "args": ["-n", "--namespace"],
+                        "kwargs": {
+                            "type": str,
+                            "required": True,
+                            "help": "Namespace of the resource",
+                        },
                     },
-                },
-                {
-                    "func_signature": Parameter(
-                        "name",
-                        Parameter.POSITIONAL_OR_KEYWORD,
-                        default="",
-                    ),
-                    "args": ["--name"],
-                    "kwargs": {
-                        "dest": "name",
-                        "type": str,
-                        "required": False,
-                        "help": "Name of the resource",
+                    {
+                        "func_signature": Parameter(
+                            "name",
+                            Parameter.POSITIONAL_OR_KEYWORD,
+                            default="",
+                        ),
+                        "args": ["--name"],
+                        "kwargs": {
+                            "dest": "name",
+                            "type": str,
+                            "required": False,
+                            "help": "Name of the resource",
+                        },
                     },
-                },
-            ],
+                ],
+            },
         }
 
         # TODO: This would be changed to use centralized config metadata stub
@@ -457,7 +466,7 @@ class CRD:
         _LOG.debug(
             "Start to configure parser with args: %r", self.func_signature[action]
         )
-        for arg_def in self.func_signature[action]:
+        for arg_def in self.func_signature[action]["args"]:
             args = arg_def.get("args", [])
             kwargs = arg_def.get("kwargs", {})
             parser.add_argument(*args, **kwargs)
@@ -471,7 +480,7 @@ class CRD:
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
             + [
                 arg["func_signature"]
-                for arg in self.func_signature[method_name]
+                for arg in self.func_signature[method_name]["args"]
                 if "func_signature" in arg
             ]
         )
@@ -656,7 +665,7 @@ class CRD:
         return res
 
 
-def inject_func_signature(crd: CRD, function_name: str, signatures: list[dict]) -> None:
+def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> None:
     """
     Utility function for injecting function signature
     for plugin command
