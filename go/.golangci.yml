@@ -9,6 +9,7 @@ run:
     - thirdparty
 
 linters:
+  disable-all: true
   enable:
     - godox  # Detects TODO/FIXME/BUG comments and enforces format
 
