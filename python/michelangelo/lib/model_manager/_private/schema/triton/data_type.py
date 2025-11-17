@@ -12,7 +12,6 @@ DATA_TYPE_MAPPING: "dict[DataType, str]" = {
     DataType.FLOAT: "FP32",
     DataType.DOUBLE: "FP64",
     DataType.STRING: "STRING",
-    DataType.NUMERIC: "FP64",
 }
 
 

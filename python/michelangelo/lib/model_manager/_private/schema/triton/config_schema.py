@@ -1,6 +1,5 @@
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager._private.schema.triton.data_type import convert_data_type
-from michelangelo.lib.model_manager._private.schema.triton.config_schema import convert_schema_to_dict
 
 
 def convert_model_schema(
