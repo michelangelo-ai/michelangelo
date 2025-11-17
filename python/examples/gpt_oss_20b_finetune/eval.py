@@ -6,6 +6,7 @@ Handles model evaluation with perplexity and generation quality metrics
 import logging
 import torch
 import numpy as np
+import mlflow.pytorch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import PeftModel
 from ray.data import Dataset
@@ -18,19 +19,16 @@ log = logging.getLogger(__name__)
 
 @uniflow.task(
     config=RayTask(
-        head_cpu=2,
+        head_cpu=1,
         head_memory="8Gi",
-        worker_cpu=2,
+        worker_cpu=1,
         worker_memory="8Gi",
         worker_instances=1,
-        runtime_env={
-            "pip": ["transformers", "torch", "peft", "datasets", "accelerate"]
-        }
     )
 )
 def evaluate_gpt_model(
     test_dv: DatasetVariable,
-    model_path: str,
+    model_uri: str,
     model_name="gpt2",
     max_length=512,
     batch_size=1,
@@ -41,7 +39,7 @@ def evaluate_gpt_model(
 
     Args:
         test_dv: Test dataset variable
-        model_path: Path to the trained model
+        model_uri: MLflow model URI
         model_name: Base model name used for training
         max_length: Maximum sequence length for evaluation
         batch_size: Batch size for evaluation
@@ -51,7 +49,7 @@ def evaluate_gpt_model(
         Dictionary with evaluation metrics
     """
     log.info(f"Starting evaluation with model: {model_name}")
-    log.info(f"Model path: {model_path}")
+    log.info(f"Model URI: {model_uri}")
 
     # Load test dataset
     test_dv.load_ray_dataset()
@@ -59,32 +57,15 @@ def evaluate_gpt_model(
 
     log.info("✅ Test dataset loaded")
 
+    # Load model from MLflow URI
+    log.info("Loading model from MLflow...")
+    model = mlflow.pytorch.load_model(model_uri)
+    log.info("✅ Model loaded from MLflow")
+
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-
-    # Load base model
-    base_model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-        device_map="auto" if torch.cuda.is_available() else None
-    )
-
-    # Load LoRA adapters if they exist
-    try:
-        model = PeftModel.from_pretrained(base_model, model_path)
-        log.info("✅ LoRA adapters loaded")
-    except:
-        # Fallback: load the full model state
-        try:
-            checkpoint = torch.load(f"{model_path}/pytorch_model.bin", map_location="cpu")
-            base_model.load_state_dict(checkpoint, strict=False)
-            model = base_model
-            log.info("✅ Full model state loaded")
-        except:
-            log.warning("Could not load trained weights, using base model")
-            model = base_model
 
     model.eval()
     device = next(model.parameters()).device
@@ -177,7 +158,7 @@ def evaluate_gpt_model(
         "average_generation_score": avg_generation_score,
         "generation_score_std": np.std(generation_scores) if generation_scores else 0.0,
         "model_name": model_name,
-        "model_path": model_path,
+        "model_uri": model_uri,
         "device": str(device)
     }
 

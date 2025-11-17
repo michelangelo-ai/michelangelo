@@ -178,24 +178,11 @@ class GPTFinetunedModel:
 
 @uniflow.task(
     config=RayTask(
-        head_cpu=2,
-        head_memory="8Gi",
-        worker_cpu=2,
-        worker_memory="8Gi",
+        head_cpu=1,
+        head_memory="4Gi",
+        worker_cpu=1,
+        worker_memory="4Gi",
         worker_instances=1,
-        runtime_env={
-            "pip": [
-                "transformers",
-                "torch",
-                "peft",
-                "numpy",
-                "mlflow",
-                "boto3",
-                "protobuf",
-                "grpcio"
-            ],
-            "env_vars": {"PYTHONPATH": "/Users/weric/works/uber/michelangelo_ai/michelangelo/python"}
-        }
     )
 )
 def package_gpt_model(
@@ -220,52 +207,34 @@ def package_gpt_model(
     """
     log.info(f"📦 Packaging GPT model from {model_path} using MLflow")
 
-    # Set MA_API_SERVER for Model CR creation
-    if create_model_cr and not os.getenv("MA_API_SERVER"):
-        os.environ["MA_API_SERVER"] = "localhost:14566"
-        log.info(f"🔗 Set MA_API_SERVER to {os.environ['MA_API_SERVER']} for Model CR creation")
+    # Create MLflow packager
+    packager = MLflowModelPackager(
+        experiment_name=experiment_name,
+        artifact_location="s3://mlflow"  # Configure S3 storage for MLflow artifacts
+    )
 
-    try:
-        # Create MLflow packager
-        packager = MLflowModelPackager(
-            experiment_name=experiment_name,
-            artifact_location="s3://mlflow"  # Configure S3 storage for MLflow artifacts
-        )
+    # Package the model with MLflow
+    result = packager.package_gpt_model(
+        model_path=model_path,
+        model_name=model_name,
+        model_registry_name=package_name,
+        run_name=f"gpt-finetune-{model_name.replace('/', '-')}",
+        description=f"Fine-tuned {model_name} model with LoRA adapters for instruction following",
+        tags={
+            "model_type": "gpt_finetuned",
+            "base_model": model_name,
+            "framework": "pytorch",
+            "technique": "lora",
+            "task": "instruction_following"
+        },
+        create_model_cr=create_model_cr,
+        namespace=namespace
+    )
 
-        # Package the model with MLflow
-        result = packager.package_gpt_model(
-            model_path=model_path,
-            model_name=model_name,
-            model_registry_name=package_name,
-            run_name=f"gpt-finetune-{model_name.replace('/', '-')}",
-            description=f"Fine-tuned {model_name} model with LoRA adapters for instruction following",
-            tags={
-                "model_type": "gpt_finetuned",
-                "base_model": model_name,
-                "framework": "pytorch",
-                "technique": "lora",
-                "task": "instruction_following"
-            },
-            create_model_cr=create_model_cr,
-            namespace=namespace
-        )
+    log.info(f"✅ Model packaged successfully with MLflow!")
+    log.info(f"   Model URI: {result['model_uri']}")
 
-        if result["status"] == "success":
-            log.info(f"✅ Model packaged successfully with MLflow!")
-            log.info(f"   Model URI: {result['model_uri']}")
-            log.info(f"   Registry: {result['model_registry_name']}")
-            log.info(f"   Version: {result['model_version']}")
-            log.info(f"   Artifact Location: {result['artifact_location']}")
-
-        return result
-
-    except Exception as e:
-        log.error(f"❌ Failed to package model with MLflow: {e}")
-        return {
-            "status": "failed",
-            "error": str(e),
-            "model_path": model_path
-        }
+    return result['model_uri']
 
 
 def generate_test_predictions(model_path: str, model_name: str = "gpt2") -> Dict[str, Any]:

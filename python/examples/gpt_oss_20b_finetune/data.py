@@ -21,13 +21,10 @@ log = logging.getLogger(__name__)
 @uniflow.task(
     config=RayTask(
         head_cpu=2,
-        head_memory="16Gi",
+        head_memory="4Gi",
         worker_cpu=2,
-        worker_memory="16Gi",
+        worker_memory="4Gi",
         worker_instances=2,
-        runtime_env={
-            "pip": ["datasets", "transformers", "tokenizers"]
-        }
     )
 )
 def prepare_finetune_dataset(
