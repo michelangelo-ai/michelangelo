@@ -25,6 +25,8 @@ from michelangelo.cli.mactl.grpc_tools import (
 
 _LOG = getLogger(__name__)
 
+# TODO: Add E2E tests for pipeline run command with representative scenarios (normal run, resume from checkpoint)
+
 
 def add_function_signature(crd: CRD) -> None:
     """

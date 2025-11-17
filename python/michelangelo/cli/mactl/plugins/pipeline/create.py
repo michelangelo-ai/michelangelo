@@ -20,6 +20,8 @@ from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 
 _LOG = getLogger(__name__)
 
+# TODO: Add end-to-end tests for get_pipeline_config_and_tar() with real config files and subprocess execution
+
 # Constants for registration output files
 _UNIFLOW_TAR_PATH_FILENAME = "uniflow_tar_path.txt"
 _UNIFLOW_INPUT_FILENAME = "uniflow_input.txt"
