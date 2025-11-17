@@ -1,0 +1,138 @@
+name: Go Lint & TODO Tracking
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'go/**/*.go'
+      - 'go/.golangci.yml'
+      - '.github/workflows/go-lint.yml'
+
+jobs:
+  golangci-lint:
+    name: Go Lint with TODO Tracking
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: go/go.sum
+
+      - name: Install golangci-lint
+        run: |
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.62.2
+          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
+
+      - name: Run golangci-lint
+        id: golangci-lint
+        working-directory: ./go
+        continue-on-error: true
+        run: |
+          golangci-lint run --out-format=github-actions ./... 2>&1 | tee ../lint-output.txt
+          exit_code=${PIPESTATUS[0]}
+          echo "exit_code=$exit_code" >> $GITHUB_OUTPUT
+          exit 0
+
+      - name: Check for unlinked TODOs
+        id: check-todos
+        working-directory: ./go
+        run: |
+          echo "Checking for TODO comments without issue links..."
+
+          # Pattern to match TODO comments without (#issue) format
+          # Valid: TODO(#123), TODO(https://github.com/...)
+          # Invalid: TODO: description, TODO description, TODO - description
+
+          unlinked_todos=$(grep -rn "TODO" --include="*.go" \
+            --exclude-dir=gen \
+            --exclude-dir=thirdparty \
+            . | grep -v "TODO(#" | grep -v "TODO(https://" || true)
+
+          if [ -n "$unlinked_todos" ]; then
+            echo "found=true" >> $GITHUB_OUTPUT
+            echo "UNLINKED_TODOS<<EOF" >> $GITHUB_ENV
+            echo "$unlinked_todos" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          else
+            echo "found=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Read lint output
+        id: read-lint
+        if: always()
+        run: |
+          if [ -f lint-output.txt ]; then
+            lint_output=$(cat lint-output.txt)
+            echo "LINT_OUTPUT<<EOF" >> $GITHUB_ENV
+            echo "$lint_output" >> $GITHUB_ENV
+            echo "EOF" >> $GITHUB_ENV
+          fi
+
+      - name: Comment on PR with results
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const lintOutput = process.env.LINT_OUTPUT || '';
+            const unlinkedTodos = process.env.UNLINKED_TODOS || '';
+            const hasUnlinkedTodos = '${{ steps.check-todos.outputs.found }}' === 'true';
+            const lintExitCode = '${{ steps.golangci-lint.outputs.exit_code }}';
+            const pr_number = context.payload.pull_request.number;
+
+            let body = "### 🔍 Go Lint & TODO Tracking Results\n\n";
+
+            // Lint results
+            if (lintExitCode === '0') {
+              body += "#### ✅ golangci-lint: No issues found\n\n";
+            } else {
+              body += "#### ⚠️ golangci-lint: Issues detected\n";
+              if (lintOutput) {
+                body += "```\n" + lintOutput.substring(0, 4000) + "\n```\n\n";
+              }
+            }
+
+            // TODO tracking results
+            if (hasUnlinkedTodos) {
+              body += "#### 🚨 Unlinked TODO Comments Found\n\n";
+              body += "The following TODO comments are missing GitHub issue links:\n\n";
+              body += "```\n" + unlinkedTodos.substring(0, 4000) + "\n```\n\n";
+              body += "**Required format:** `TODO(#issue): description`\n\n";
+              body += "Please:\n";
+              body += "1. Create a GitHub issue for each TODO\n";
+              body += "2. Update the TODO comment to reference the issue: `TODO(#123): description`\n";
+              body += "\nThis ensures all technical debt is properly tracked and prioritized.\n";
+            } else {
+              body += "#### ✅ TODO Tracking: All TODOs properly linked to issues\n\n";
+            }
+
+            // Create comment
+            await github.rest.issues.createComment({
+              issue_number: pr_number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+      - name: Fail if unlinked TODOs found
+        if: steps.check-todos.outputs.found == 'true'
+        run: |
+          echo "❌ Found TODO comments without issue links"
+          echo "Please link all TODOs to GitHub issues using the format: TODO(#issue): description"
+          exit 1
+
+      - name: Fail if lint issues found
+        if: steps.golangci-lint.outputs.exit_code != '0'
+        run: |
+          echo "❌ golangci-lint found issues"
+          exit 1
