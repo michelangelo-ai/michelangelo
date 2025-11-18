@@ -119,7 +119,7 @@ jobs:
             exit 1
           else
             echo "✅ Coverage $COVERAGE% meets baseline threshold (53.1%)"
-            echo "📈 Goal: Maintain baseline and enforce 85% on new code"
+            echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
 
       - name: Upload coverage to Codecov
@@ -156,7 +156,7 @@ jobs:
 
             **Coverage Policy:**
             - **Baseline (existing code):** ≥53.1% (current coverage)
-            - **New/changed code:** ≥85% ✅ **STRICTLY ENFORCED**
+            - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
             - **Long-term goal:** Improve baseline to 70%
 
             <details>
@@ -207,7 +207,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
           echo "- **Baseline (existing code):** ≥53.1% (current coverage)" >> $GITHUB_STEP_SUMMARY
-          echo "- **New/changed code:** ≥85% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Running Tests Locally" >> $GITHUB_STEP_SUMMARY
@@ -238,9 +238,9 @@ jobs:
         run: |
           echo "✅ Go coverage checks completed"
           echo "- Baseline coverage: ≥53.1% (current coverage)"
-          echo "- New code coverage: ≥85% ✅ STRICTLY ENFORCED"
+          echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
           echo ""
           echo "📝 Coverage Policy:"
           echo "- Existing code must maintain baseline (53.1%)"
-          echo "- New/changed code must meet 85% coverage"
+          echo "- New/changed code must meet 90% coverage"
           echo "- Long-term goal: Improve baseline to 70%"

@@ -93,5 +93,5 @@ jobs:
         if: matrix.python-version == '3.9'
         run: |
           # Baseline coverage is 34.94% - we don't fail on overall coverage
-          # New code must meet 85% (enforced in python-coverage.yml via diff-cover)
+          # New code must meet 90% (enforced in python-coverage.yml via diff-cover)
           poetry run coverage report --fail-under=34

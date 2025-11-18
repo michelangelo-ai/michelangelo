@@ -93,9 +93,9 @@ jobs:
 
             | Component | Coverage | Baseline | New Code | Status |
             |-----------|----------|----------|----------|--------|
-            | 🐍 Python | ${{ env.PYTHON_COVERAGE }}% | ≥34.94% | ≥85% ✅ | ${{ env.PYTHON_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
-            | 🐹 Go | ${{ env.GO_COVERAGE }}% | ≥53.1% | ≥85% ✅ | ${{ env.GO_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
-            | 📜 JavaScript | ${{ env.JS_COVERAGE }}% | ≥78.74% | ≥85% ✅ | ${{ env.JS_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 🐍 Python | ${{ env.PYTHON_COVERAGE }}% | ≥34.94% | ≥90% ✅ | ${{ env.PYTHON_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 🐹 Go | ${{ env.GO_COVERAGE }}% | ≥53.1% | ≥90% ✅ | ${{ env.GO_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 📜 JavaScript | ${{ env.JS_COVERAGE }}% | ≥78.74% | ≥90% ✅ | ${{ env.JS_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
 
             ---
 
@@ -106,7 +106,7 @@ jobs:
             - Go: ≥53.1% (current coverage)
             - JavaScript: ≥78.74% (current coverage)
 
-            **New/Changed Code:** ≥85% **STRICTLY ENFORCED**
+            **New/Changed Code:** ≥90% **STRICTLY ENFORCED**
 
             **Long-term Goal:** Improve all baselines to 70%
 
@@ -152,7 +152,7 @@ jobs:
           echo "- JavaScript: ≥78.74%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### New/Changed Code" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ All languages: ≥85% **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All languages: ≥90% **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Long-term Goal" >> $GITHUB_STEP_SUMMARY
           echo "- Improve all baselines to 70%" >> $GITHUB_STEP_SUMMARY

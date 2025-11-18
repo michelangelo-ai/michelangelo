@@ -80,7 +80,7 @@ jobs:
         uses: py-cov-action/python-coverage-comment-action@v3
         with:
           GITHUB_TOKEN: ${{ github.token }}
-          MINIMUM_GREEN: 85
+          MINIMUM_GREEN: 90
           MINIMUM_ORANGE: 35
           ANNOTATE_MISSING_LINES: true
           ANNOTATION_TYPE: warning
@@ -105,11 +105,11 @@ jobs:
           # The goal is to maintain or improve from baseline
           poetry run coverage report --fail-under=34
           echo "✅ Coverage meets baseline threshold (34.94%)"
-          echo "📈 Goal: Maintain baseline and enforce 85% on new code"
+          echo "📈 Goal: Maintain baseline and enforce 90% on new code"
         continue-on-error: true
 
-      # Check coverage for new/changed code (85% threshold)
-      - name: Check diff coverage (85% for new code)
+      # Check coverage for new/changed code (90% threshold)
+      - name: Check diff coverage (90% for new code)
         run: |
           # Get list of changed Python files
           git fetch origin main:main
@@ -129,7 +129,7 @@ jobs:
           # Run diff-cover to check coverage on changed lines only
           diff-cover coverage.xml \
             --compare-branch=origin/main \
-            --fail-under=85 \
+            --fail-under=90 \
             --html-report=diff-cover.html \
             --json-report=diff-cover.json
         continue-on-error: false
@@ -156,7 +156,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
           echo "- **Baseline (existing code):** ≥34.94% (current coverage)" >> $GITHUB_STEP_SUMMARY
-          echo "- **New/changed code:** ≥85% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[View detailed HTML report in artifacts]" >> $GITHUB_STEP_SUMMARY

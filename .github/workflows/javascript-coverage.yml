@@ -93,7 +93,7 @@ jobs:
             exit 1
           else
             echo "✅ Coverage $COVERAGE% meets baseline threshold (78.74%)"
-            echo "📈 Goal: Maintain baseline and enforce 85% on new code"
+            echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
 
       - name: Upload coverage to Codecov
@@ -117,7 +117,7 @@ jobs:
 
             **Coverage Policy:**
             - **Baseline (existing code):** ≥78.74% (current coverage)
-            - **New/changed code:** ≥85% ✅ **STRICTLY ENFORCED**
+            - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
 
             <details>
             <summary>Coverage Details</summary>
@@ -130,7 +130,7 @@ jobs:
 
             [View detailed HTML report in artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
-      - name: Check diff coverage (85% for new code)
+      - name: Check diff coverage (90% for new code)
         if: github.event_name == 'pull_request'
         working-directory: ./javascript
         run: |
@@ -162,14 +162,14 @@ jobs:
           fi
 
           # Run diff-cover to check coverage on changed lines only
-          # This will enforce 85% coverage on new/changed code only
+          # This will enforce 90% coverage on new/changed code only
           diff-cover coverage/lcov.info \
             --compare-branch=origin/main \
-            --fail-under=85 \
+            --fail-under=90 \
             --html-report=diff-cover.html \
             --json-report=diff-cover.json
 
-          echo "✅ New code meets 85% coverage threshold"
+          echo "✅ New code meets 90% coverage threshold"
 
       - name: Upload coverage artifacts
         uses: actions/upload-artifact@v4
@@ -189,7 +189,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
           echo "- **Baseline (existing code):** ≥78.74% (current coverage)" >> $GITHUB_STEP_SUMMARY
-          echo "- **New/changed code:** ≥85% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
   coverage-quality-gate:
@@ -203,8 +203,8 @@ jobs:
         run: |
           echo "✅ JavaScript coverage checks completed"
           echo "- Baseline coverage: ≥78.74% (current coverage)"
-          echo "- New code coverage: ≥85% ✅ STRICTLY ENFORCED"
+          echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
           echo ""
           echo "📝 Coverage Policy:"
           echo "- Existing code must maintain baseline (78.74%)"
-          echo "- New/changed code must meet 85% coverage"
+          echo "- New/changed code must meet 90% coverage"

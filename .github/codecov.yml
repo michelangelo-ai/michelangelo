@@ -13,7 +13,7 @@ coverage:
     # Coverage for changes in PR (strictly enforced)
     patch:
       default:
-        target: 85%           # New code must have 85% coverage
+        target: 90%           # New code must have 90% coverage
         threshold: 0%         # No tolerance for drops in new code
         if_ci_failed: error
 
