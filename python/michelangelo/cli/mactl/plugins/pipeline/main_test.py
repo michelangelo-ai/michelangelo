@@ -7,7 +7,7 @@ Tests the apply_plugins function which configures the CRD with plugin-specific c
 from unittest import TestCase
 from unittest.mock import Mock
 
-from michelangelo.cli.mactl.plugins.pipeline.main import apply_plugins
+from michelangelo.cli.mactl.plugins.pipeline.main import apply_plugin_command
 
 
 class PipelineMainTest(TestCase):
@@ -22,7 +22,7 @@ class PipelineMainTest(TestCase):
 
     def test_apply_plugins_create_command(self):
         """Test apply_plugins for create command."""
-        apply_plugins(self.mock_crd, "create", self.mock_crds, self.mock_channel)
+        apply_plugin_command(self.mock_crd, "create", self.mock_crds, self.mock_channel)
 
         # Verify that the metadata converter was set
         self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
@@ -31,7 +31,7 @@ class PipelineMainTest(TestCase):
 
     def test_apply_plugins_run_command(self):
         """Test apply_plugins for run command."""
-        apply_plugins(self.mock_crd, "run", self.mock_crds, self.mock_channel)
+        apply_plugin_command(self.mock_crd, "run", self.mock_crds, self.mock_channel)
 
         # Verify that both the metadata converter and generate_run were set
         self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
@@ -41,7 +41,9 @@ class PipelineMainTest(TestCase):
 
     def test_apply_plugins_dev_run_command(self):
         """Test apply_plugins for dev_run command."""
-        apply_plugins(self.mock_crd, "dev_run", self.mock_crds, self.mock_channel)
+        apply_plugin_command(
+            self.mock_crd, "dev_run", self.mock_crds, self.mock_channel
+        )
 
         # Verify that both the metadata converter and generate_dev_run were set
         self.assertTrue(hasattr(self.mock_crd, "func_crd_metadata_converter"))
