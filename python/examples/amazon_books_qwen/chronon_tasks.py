@@ -29,26 +29,6 @@ from pyspark.sql.functions import (
 )
 
 # Ray for dataset conversion
-
-# Chronon SDK
-from ai.chronon.repo.compile import thrift_simple_json_protected
-from ai.chronon.api.ttypes import StagingQuery, GroupBy
-
-# Chronon definitions (moved to top level)
-try:
-    from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
-        base_table,
-    )
-    from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
-        book_popularity,
-        book_velocity,
-    )
-except ModuleNotFoundError:
-    # Use relative imports
-    from data.staging_queries.amazon_books.books_reviews import base_table
-    from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
-
-
 def _setup_chronon_environment():
     """
     Set up Chronon environment with JAR and directories (integrated into SparkTask)
@@ -124,6 +104,24 @@ def compute_chronon_features_with_spark(
     """
     REAL Chronon feature computation with integrated compilation and dataset return
     """
+
+    # Chronon SDK
+    from ai.chronon.repo.compile import thrift_simple_json_protected
+    from ai.chronon.api.ttypes import StagingQuery, GroupBy
+
+    # Chronon definitions (moved to top level)
+    try:
+        from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
+            base_table,
+        )
+        from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
+            book_popularity,
+            book_velocity,
+        )
+    except ModuleNotFoundError:
+        # Use relative imports
+        from data.staging_queries.amazon_books.books_reviews import base_table
+        from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
 
     # Step 1: Setup Chronon environment (integrated)
     jar_path = _setup_chronon_environment()
