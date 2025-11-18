@@ -377,7 +377,8 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	mockMetadataStorage.EXPECT().
 		List(gomock.Any(), gomock.Any(), "project01", &metav1.ListOptions{}, &apipb.ListOptionsExt{}, gomock.Any()).
 		Do(func(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, listOptions *metav1.ListOptions,
-			listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) {
+			listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse,
+		) {
 			assert.Equal(t, typeMeta.Kind, "RayJob")
 			listResponse.Items = []runtime.Object{
 				&jobA,
@@ -394,7 +395,8 @@ func TestK8sAndMetadataStorage(t *testing.T) {
 	mockMetadataStorage.EXPECT().
 		List(gomock.Any(), gomock.Any(), "project01", &metav1.ListOptions{}, nil, gomock.Any()).
 		Do(func(ctx context.Context, typeMeta *metav1.TypeMeta, namespace string, listOptions *metav1.ListOptions,
-			listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse) {
+			listOptionsExt *apipb.ListOptionsExt, listResponse *storage.ListResponse,
+		) {
 			assert.Equal(t, typeMeta.Kind, "RayJob")
 			listResponse.Items = []runtime.Object{
 				&jobA,
@@ -460,4 +462,404 @@ func TestNewAPIServerHandler(t *testing.T) {
 	job := v2pb.RayJob{}
 	err = handler.Get(context.Background(), "project0", "job01", &metav1.GetOptions{}, &job)
 	assert.True(t, strings.Contains(err.Error(), "test dialer failure"))
+}
+
+func TestCheckDryRun(t *testing.T) {
+	// No dry run
+	dryRun := []string{}
+	isDryRun, err := checkDryRun(dryRun)
+	assert.False(t, isDryRun)
+	assert.NoError(t, err)
+
+	// Valid dry run
+	dryRun = []string{metav1.DryRunAll}
+	isDryRun, err = checkDryRun(dryRun)
+	assert.True(t, isDryRun)
+	assert.NoError(t, err)
+
+	// Multiple dry run strategies
+	dryRun = []string{metav1.DryRunAll, "Other"}
+	isDryRun, err = checkDryRun(dryRun)
+	assert.False(t, isDryRun)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "multiple dry run strategies are not supported")
+
+	// Unsupported dry run strategy
+	dryRun = []string{"Unsupported"}
+	isDryRun, err = checkDryRun(dryRun)
+	assert.False(t, isDryRun)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported dry run strategy")
+}
+
+func TestDeleteDryRun(t *testing.T) {
+	t.Run("K8sOnly_DryRun", func(t *testing.T) {
+		// Test dry run with K8s-only mode (no metadata storage)
+		client, err := setupK8s()
+		assert.NoError(t, err)
+		handler := NewFakeAPIHandler(client)
+
+		// Create a job first
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-dryrun-job",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-dryrun-job",
+			},
+		}
+		err = handler.Create(context.Background(), testJob, &metav1.CreateOptions{})
+		assert.NoError(t, err)
+
+		// Verify the job exists
+		retrievedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-dryrun-job", nil, retrievedJob)
+		assert.NoError(t, err)
+
+		// Perform dry run delete - should succeed without actually deleting
+		deleteJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-dryrun-job",
+			},
+		}
+		err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{
+			DryRun: []string{metav1.DryRunAll},
+		})
+		assert.NoError(t, err)
+
+		// Verify the job still exists after dry run
+		stillExistsJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-dryrun-job", nil, stillExistsJob)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-dryrun-job", stillExistsJob.Name)
+
+		// Perform actual delete to verify it works
+		err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{})
+		assert.NoError(t, err)
+
+		// Verify the job is now deleted
+		deletedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-dryrun-job", nil, deletedJob)
+		assert.Error(t, err)
+		checkGrpcStatusCode(t, codes.NotFound, err)
+	})
+
+	t.Run("MetadataStorage_MutableObject_DryRun", func(t *testing.T) {
+		// Test dry run with metadata storage enabled for mutable objects
+		k8sClient, err := setupK8s()
+		assert.NoError(t, err)
+
+		mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+		// Use builder to create handler with metadata storage enabled
+		config := storage.MetadataStorageConfig{
+			EnableMetadataStorage:      true,
+			DeletionDelay:              0,
+			EnableResourceVersionCache: false,
+		}
+
+		builder := NewAPIHandlerBuilder().
+			WithK8sClient(k8sClient).
+			WithMetadataStorage(mockMetadataStorage, config).
+			WithBlobStorage(mockBlobStorage).
+			WithZapLogger(zap.Must(zap.NewDevelopment())).
+			WithMetrics(tally.NoopScope)
+		handler, err := builder.Build()
+		assert.NoError(t, err)
+
+		// Create a job in K8s first (mutable object - no immutable annotation)
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-mutable-dryrun",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-mutable-dryrun",
+			},
+		}
+		err = k8sClient.Create(context.Background(), testJob)
+		assert.NoError(t, err)
+
+		// Perform dry run delete - should succeed without updating annotations
+		deleteJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-mutable-dryrun",
+			},
+		}
+		err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{
+			DryRun: []string{metav1.DryRunAll},
+		})
+		assert.NoError(t, err)
+
+		// Verify the job still exists and doesn't have deleting annotation
+		retrievedJob := &v2pb.RayJob{}
+		err = k8sClient.Get(context.Background(), ctrlRTClient.ObjectKey{
+			Namespace: "default",
+			Name:      "test-mutable-dryrun",
+		}, retrievedJob)
+		assert.NoError(t, err)
+		annotations := retrievedJob.GetAnnotations()
+		if annotations != nil {
+			_, hasDeleteAnnotation := annotations[api.DeletingAnnotation]
+			assert.False(t, hasDeleteAnnotation, "Dry run should not add deleting annotation")
+		}
+	})
+
+	t.Run("DryRun_InvalidDryRunStrategy", func(t *testing.T) {
+		// Test that invalid dry run strategies are properly rejected
+		client, err := setupK8s()
+		assert.NoError(t, err)
+		handler := NewFakeAPIHandler(client)
+
+		// Create a job first
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-invalid-dryrun",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-invalid-dryrun",
+			},
+		}
+		err = handler.Create(context.Background(), testJob, &metav1.CreateOptions{})
+		assert.NoError(t, err)
+
+		// Test invalid dry run strategy
+		deleteJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-invalid-dryrun",
+			},
+		}
+		err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{
+			DryRun: []string{"InvalidStrategy"},
+		})
+		assert.Error(t, err)
+		checkGrpcStatusCode(t, codes.InvalidArgument, err)
+		assert.Contains(t, err.Error(), "unsupported dry run strategy")
+
+		// Test multiple dry run strategies
+		err = handler.Delete(context.Background(), deleteJob, &metav1.DeleteOptions{
+			DryRun: []string{metav1.DryRunAll, "Other"},
+		})
+		assert.Error(t, err)
+		checkGrpcStatusCode(t, codes.InvalidArgument, err)
+		assert.Contains(t, err.Error(), "multiple dry run strategies are not supported")
+
+		// Verify the job still exists after failed dry run attempts
+		retrievedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-invalid-dryrun", nil, retrievedJob)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-invalid-dryrun", retrievedJob.Name)
+	})
+}
+
+func TestUpdateDryRun(t *testing.T) {
+	t.Run("K8sOnly_Update_DryRun", func(t *testing.T) {
+		// Test dry run with K8s-only mode (no metadata storage)
+		client, err := setupK8s()
+		assert.NoError(t, err)
+		handler := NewFakeAPIHandler(client)
+
+		// Create a job first
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-update-dryrun",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-update-dryrun",
+			},
+		}
+		err = handler.Create(context.Background(), testJob, &metav1.CreateOptions{})
+		assert.NoError(t, err)
+
+		// Get the created job to get its resource version
+		retrievedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-update-dryrun", nil, retrievedJob)
+		assert.NoError(t, err)
+		originalUser := retrievedJob.Spec.User
+
+		// Modify the job for update
+		retrievedJob.Spec.User = &v2pb.UserInfo{
+			Name: "test-user-dryrun",
+		}
+
+		// Perform dry run update - should succeed without actually updating
+		err = handler.Update(context.Background(), retrievedJob, &metav1.UpdateOptions{
+			DryRun: []string{metav1.DryRunAll},
+		})
+		assert.NoError(t, err)
+
+		// Verify the job was not actually updated (should still have original values)
+		stillOriginalJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-update-dryrun", nil, stillOriginalJob)
+		assert.NoError(t, err)
+		assert.Equal(t, originalUser, stillOriginalJob.Spec.User, "Dry run should not modify the object")
+
+		// Perform actual update to verify it works
+		err = handler.Update(context.Background(), retrievedJob, &metav1.UpdateOptions{})
+		assert.NoError(t, err)
+
+		// Verify the job is now updated
+		updatedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-update-dryrun", nil, updatedJob)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-user-dryrun", updatedJob.Spec.User.Name)
+	})
+
+	t.Run("MetadataStorage_Update_ObjectNotInK8s_DryRun", func(t *testing.T) {
+		// Test dry run with metadata storage enabled when object doesn't exist in K8s
+		k8sClient, err := setupK8s()
+		assert.NoError(t, err)
+
+		mockMetadataStorage, mockBlobStorage := setupMocks(t)
+
+		config := storage.MetadataStorageConfig{
+			EnableMetadataStorage:      true,
+			DeletionDelay:              0,
+			EnableResourceVersionCache: false,
+		}
+
+		builder := NewAPIHandlerBuilder().
+			WithK8sClient(k8sClient).
+			WithMetadataStorage(mockMetadataStorage, config).
+			WithBlobStorage(mockBlobStorage).
+			WithZapLogger(zap.Must(zap.NewDevelopment())).
+			WithMetrics(tally.NoopScope)
+		handler, err := builder.Build()
+		assert.NoError(t, err)
+
+		// Create a job that doesn't exist in K8s (simulating metadata-only object)
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-metadata-update-dryrun",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-metadata-update-dryrun",
+				User: &v2pb.UserInfo{
+					Name: "updated-user",
+				},
+			},
+		}
+
+		// Mock the metadata storage update call that should NOT be called during dry run
+		// No expectations set - if Update is called, the test will fail
+
+		// Perform dry run update - should succeed without calling metadataHandler.Update
+		err = handler.Update(context.Background(), testJob, &metav1.UpdateOptions{
+			DryRun: []string{metav1.DryRunAll},
+		})
+		assert.NoError(t, err)
+	})
+
+	t.Run("Update_DryRun_InvalidStrategy", func(t *testing.T) {
+		// Test that invalid dry run strategies are properly rejected in Update
+		client, err := setupK8s()
+		assert.NoError(t, err)
+		handler := NewFakeAPIHandler(client)
+
+		// Create a job first
+		testJob := &v2pb.RayJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-invalid-update-dryrun",
+			},
+			Spec: v2pb.RayJobSpec{
+				JobId: "test-invalid-update-dryrun",
+			},
+		}
+		err = handler.Create(context.Background(), testJob, &metav1.CreateOptions{})
+		assert.NoError(t, err)
+
+		// Get the job for update
+		retrievedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-invalid-update-dryrun", nil, retrievedJob)
+		assert.NoError(t, err)
+
+		// Modify the job
+		retrievedJob.Spec.User = &v2pb.UserInfo{Name: "test"}
+
+		// Test invalid dry run strategy
+		err = handler.Update(context.Background(), retrievedJob, &metav1.UpdateOptions{
+			DryRun: []string{"InvalidStrategy"},
+		})
+		assert.Error(t, err)
+		checkGrpcStatusCode(t, codes.InvalidArgument, err)
+		assert.Contains(t, err.Error(), "unsupported dry run strategy")
+
+		// Test multiple dry run strategies
+		err = handler.Update(context.Background(), retrievedJob, &metav1.UpdateOptions{
+			DryRun: []string{metav1.DryRunAll, "Other"},
+		})
+		assert.Error(t, err)
+		checkGrpcStatusCode(t, codes.InvalidArgument, err)
+		assert.Contains(t, err.Error(), "multiple dry run strategies are not supported")
+
+		// Verify the job was not modified after failed dry run attempts
+		unchangedJob := &v2pb.RayJob{}
+		err = handler.Get(context.Background(), "default", "test-invalid-update-dryrun", nil, unchangedJob)
+		assert.NoError(t, err)
+		assert.Nil(t, unchangedJob.Spec.User, "Job should remain unchanged after failed dry run")
+	})
+
+	t.Run("UpdateStatus_DryRun", func(t *testing.T) {
+		// Test dry run functionality for UpdateStatus
+		client, err := setupK8s()
+		assert.NoError(t, err)
+		handler := NewFakeAPIHandler(client)
+
+		// Create a project first (since projects have status)
+		testProject := &v2pb.Project{
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace: "default",
+				Name:      "test-updatestatus-dryrun",
+			},
+			Spec: v2pb.ProjectSpec{
+				Owner:       &v2pb.OwnerInfo{OwningTeam: "4b0ff595-0d8c-4081-923c-cc322448c1d5"},
+				Description: "test project for update status dry run",
+				Tier:        3,
+				GitRepo:     "repo",
+				RootDir:     "root",
+				Ext:         &types.Any{},
+			},
+		}
+		err = handler.Create(context.Background(), testProject, &metav1.CreateOptions{})
+		assert.NoError(t, err)
+
+		// Get the created project
+		retrievedProject := &v2pb.Project{}
+		err = handler.Get(context.Background(), "default", "test-updatestatus-dryrun", nil, retrievedProject)
+		assert.NoError(t, err)
+		originalState := retrievedProject.Status.State
+
+		// Modify the status
+		retrievedProject.Status.State = v2pb.PROJECT_STATE_READY
+
+		// Perform dry run status update - should succeed without actually updating
+		err = handler.UpdateStatus(context.Background(), retrievedProject, &metav1.UpdateOptions{
+			DryRun: []string{metav1.DryRunAll},
+		})
+		assert.NoError(t, err)
+
+		// Verify the status was not actually updated
+		stillOriginalProject := &v2pb.Project{}
+		err = handler.Get(context.Background(), "default", "test-updatestatus-dryrun", nil, stillOriginalProject)
+		assert.NoError(t, err)
+		assert.Equal(t, originalState, stillOriginalProject.Status.State, "Dry run should not modify the status")
+
+		// Perform actual status update to verify it works
+		err = handler.UpdateStatus(context.Background(), retrievedProject, &metav1.UpdateOptions{})
+		assert.NoError(t, err)
+
+		// Verify the status is now updated
+		updatedProject := &v2pb.Project{}
+		err = handler.Get(context.Background(), "default", "test-updatestatus-dryrun", nil, updatedProject)
+		assert.NoError(t, err)
+		assert.Equal(t, v2pb.PROJECT_STATE_READY, updatedProject.Status.State)
+	})
 }

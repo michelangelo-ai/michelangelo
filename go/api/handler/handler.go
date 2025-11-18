@@ -92,6 +92,11 @@ func (handler *apiHandler) Create(ctx context.Context, obj ctrlRTClient.Object, 
 
 	setUpdateTimestamp(obj, true)
 
+	_, err = checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	// If the object does not exist in MetadataStorage, create it in K8s/ETCD.
 	err = handler.k8sHandler.Create(ctx, obj, opts)
 
@@ -164,10 +169,18 @@ func (handler *apiHandler) Update(ctx context.Context, obj ctrlRTClient.Object, 
 		return status.Errorf(codes.InvalidArgument, "object does not implement the controller-runtime client.Object interface")
 	}
 
+	dryRun, err := checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	err = handler.k8sHandler.Update(ctx, obj, opts)
 
 	// If the object does not exist in K8s/ETCD, update it in MetadataStorage directly.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
+		if dryRun {
+			return nil
+		}
 		err = handler.metadataHandler.Update(ctx, tmpObj)
 		if err != nil {
 			return surfaceGrpcError(err, "update", tmpObj.GetNamespace(), tmpObj.GetName())
@@ -200,7 +213,11 @@ func (handler *apiHandler) UpdateStatus(ctx context.Context, obj ctrlRTClient.Ob
 
 	setUpdateTimestamp(obj, false)
 
-	err := handler.k8sHandler.UpdateStatus(ctx, obj, opts)
+	_, err := checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+	err = handler.k8sHandler.UpdateStatus(ctx, obj, opts)
 
 	return surfaceGrpcError(err, "updateStatus", tmpObj.GetNamespace(), tmpObj.GetName())
 }
@@ -222,6 +239,11 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		return status.Errorf(codes.InvalidArgument, err.Error())
 	}
 
+	dryRun, err := checkDryRun(opts.DryRun)
+	if err != nil {
+		return err
+	}
+
 	// Delete the object in K8s/ETCD
 	if !storage.EnableMetadataStorage(&handler.conf) {
 		err = handler.k8sHandler.Delete(ctx, obj, opts)
@@ -239,7 +261,7 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		if utils.IsImmutable(tmpObj) {
 			// If the obj is immutable, it means we're deleting an immutable object within its grace period
 			// There are two cases:
-			// 1. The object has deletion time stamp: It means the object is already synced to metadata storage by the
+			// 1. The object has deletion timestamp: It means the object is already synced to metadata storage by the
 			// 	  ingester controller, and is pending to be deleted after the grace period passes. We should delete the
 			//    object from metadata storage.
 			// 2. The object does not have deletion time stamp: It means the object has not yet be processed by the
@@ -248,6 +270,9 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 			//    later.
 			if tmpObj.GetDeletionTimestamp() != nil {
 				log.Info("Deleting an immutable object with deletion timestamp != nil - deleting from metadata storage")
+				if dryRun {
+					return nil
+				}
 				return deleteObjectFromMetadataStorage(ctx, tmpObj, handler)
 			}
 
@@ -256,6 +281,9 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 		}
 
 		log.Info("Deleting a mutable object")
+		if dryRun {
+			return nil
+		}
 		// Update the UserDeletionAnnotation to "true" so that ingester will delete it
 		annotation := tmpObj.GetAnnotations()
 		if annotation == nil {
@@ -271,6 +299,9 @@ func (handler *apiHandler) Delete(ctx context.Context, obj ctrlRTClient.Object,
 	// If the object does not exist in K8s/ETCD, delete it in metadata storage.
 	if apiErrors.IsNotFound(err) && storage.EnableMetadataStorage(&handler.conf) {
 		log.Info("Object does not exist in ETCD - deleting from metadata storage")
+		if dryRun {
+			return nil
+		}
 		return deleteObjectFromMetadataStorage(ctx, obj, handler)
 	}
 	return err
@@ -315,8 +346,12 @@ func (handler *apiHandler) DeleteCollection(
 	log, headers := initLogger(ctx, handler.logger, "DeleteCollection", namespace, "", kind)
 	defer emitAPIMetrics("DeleteCollection", handler.metrics, log, start, kind, headers)
 
+	_, err := checkDryRun(deleteOpts.DryRun)
+	if err != nil {
+		return err
+	}
 	if !storage.EnableMetadataStorage(&handler.conf) {
-		err := handler.k8sHandler.DeleteCollection(ctx, objType, namespace, deleteOpts, listOpts)
+		err = handler.k8sHandler.DeleteCollection(ctx, objType, namespace, deleteOpts, listOpts)
 		return surfaceGrpcError(err, "delete collection", namespace, "")
 	}
 
@@ -520,4 +555,22 @@ func (handler *apiHandler) handleBlobStorageForGet(ctx context.Context, obj ctrl
 			log.Error(terrablobErr, "Failed to merging with blob storage")
 		}
 	}
+}
+
+// checkDryRun checks if the dry run option is valid (either empty or []string{"All"}), if not returns an error
+// return true if dry run is requested
+// return false if dry run is not requested
+func checkDryRun(dryRun []string) (bool, error) {
+	if len(dryRun) == 0 {
+		return false, nil
+	}
+	if len(dryRun) > 1 {
+		return false, status.Errorf(codes.InvalidArgument, "multiple dry run strategies are not supported")
+	}
+	if dryRun[0] == metav1.DryRunAll {
+		return true, nil
+	}
+
+	return false, status.Errorf(codes.InvalidArgument,
+		"unsupported dry run strategy: %s. supported value: %s", dryRun[0], metav1.DryRunAll)
 }
