@@ -103,7 +103,6 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
 			StartTime:   pbtypes.TimestampNow(),
 		}
-		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, sourcePipelineStep)
 	}
 
 	pipelineRunSpec := pipelineRun.GetSpec()
