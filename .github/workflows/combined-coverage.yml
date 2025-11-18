@@ -3,9 +3,25 @@ name: Combined Coverage Report
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+      - 'python/**'
+      - 'go/**/*.go'
+      - 'go/**/BUILD.bazel'
+      - 'proto/**/*.proto'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/package.json'
+      - '**/package-lock.json'
   push:
     branches:
       - main
+    paths:
+      - 'python/**'
+      - 'go/**/*.go'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
 
 permissions:
   contents: read
