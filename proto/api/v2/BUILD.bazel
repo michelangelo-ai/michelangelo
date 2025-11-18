@@ -1,5 +1,5 @@
-# gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto
-# gazelle:go_grpc_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_yarpc,//bazel/rules/proto:go_kubeyarpc,//bazel/rules/proto:go_validation
+# gazelle:go_proto_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_kubeconversion
+# gazelle:go_grpc_compilers //bazel/rules/proto:go_kubeproto,//bazel/rules/proto:go_yarpc,//bazel/rules/proto:go_kubeyarpc,//bazel/rules/proto:go_validation,//bazel/rules/proto:go_kubeconversion
 # gazelle:exclude michelangelo_v2mock.go
 load("@io_bazel_rules_go//extras:gomock.bzl", "gomock")
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
@@ -68,6 +68,7 @@ go_proto_library(
         "//bazel/rules/proto:go_yarpc",
         "//bazel/rules/proto:go_kubeyarpc",
         "//bazel/rules/proto:go_validation",
+        "//bazel/rules/proto:go_kubeconversion",  # Required for Hub() method
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2",
     proto = ":v2_proto",

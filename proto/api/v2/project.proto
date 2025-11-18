@@ -186,7 +186,9 @@ message ProjectStatus {
 
 // Defines a ML Project for a specific ML use case.
 message Project {
-  option (michelangelo.api.resource) = {};
+  option (michelangelo.api.resource) = {
+    conversion: true  // Enable conversion for multi-version support
+  };
 
   // index fields
   option (michelangelo.api.index) = {

@@ -1,0 +1,34 @@
+// Git API provides interfaces for managing Git repositories and commits in Michelangelo.
+// The Git API allows:
+// - Tracking Git commit information for pipeline manifests and code
+// - Referencing specific Git revisions by commit hash or branch
+// - Managing Git repository access and credentials
+// - Validating Git references and branches
+//
+// Key concepts:
+// - Git references can be commit hashes or branch names
+// - Commit info tracks both the reference and branch
+// - Git validation ensures references exist
+// - Repository access is managed through credentials
+
+syntax = "proto3";
+
+package michelangelo.api.v2alpha1;
+
+option go_package = "v2alpha1";
+
+import "michelangelo/api/options.proto";
+import "michelangelo/api/v2/git.proto";  // Import hub version for conversion
+
+// Defines the Git Commit Info
+message CommitInfo {
+
+  // GIT reference of a resource, in either short/long
+  // SHA1 hash format, or branch/HEAD. See
+  // https://git-scm.com/book/en/v2/Git-Internals-Git-References for
+  // details.
+  string git_ref = 1 [(michelangelo.api.validation) = {required: true}];
+
+  // Git branch name
+  string branch = 2 [(michelangelo.api.validation) = {required: true}];
+}

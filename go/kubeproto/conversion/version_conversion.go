@@ -317,7 +317,7 @@ func generateFieldAssignment(g *protogen.GeneratedFile, file *protogen.File, ext
 			}
 			if isSameExternalMessage(sf, hf) {
 				// Deep-clone identical external message types
-				protoClone := protogen.GoIdent{GoImportPath: "google.golang.org/protobuf/proto", GoName: "Clone"}
+				protoClone := protogen.GoIdent{GoImportPath: "github.com/gogo/protobuf/proto", GoName: "Clone"}
 				if sf.Desc.IsList() {
 					g.P("if ", in, " == nil {")
 					g.P("\t", out, " = nil")
@@ -435,7 +435,7 @@ func generateFieldAssignment(g *protogen.GeneratedFile, file *protogen.File, ext
 				g.P("\t\t", out, "[k] = t")
 			} else if isSameExternalMessage(sf.Message.Fields[1], hf.Message.Fields[1]) {
 				// Clone value for identical external message types
-				protoClone := protogen.GoIdent{GoImportPath: "google.golang.org/protobuf/proto", GoName: "Clone"}
+				protoClone := protogen.GoIdent{GoImportPath: "github.com/gogo/protobuf/proto", GoName: "Clone"}
 				g.P("\t\t", out, "[k] = ", g.QualifiedGoIdent(protoClone), "(v).(*",
 					g.QualifiedGoIdent(sf.Message.Fields[1].Message.GoIdent), ")")
 			} else {
