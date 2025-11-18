@@ -49,7 +49,10 @@ class JSONData(BaseModel):
                 # user did not set either field info or default value
                 field_info = field()
 
-            if field_info.default is PydanticUndefined and not field_info.json_schema_extra["json_data_field"].get("required"):
+            if (
+                field_info.default is PydanticUndefined
+                and not field_info.json_schema_extra["json_data_field"].get("required")
+            ):
                 field_info.default = _get_default_value(type_info, field_type)
             setattr(cls, field_name, field_info)
             field_info.json_schema_extra["json_data_field"] |= type_info
@@ -62,10 +65,15 @@ class JSONData(BaseModel):
                 oneof = v.default
                 for f in oneof.fields:
                     if f not in fields:
-                        raise ValueError(f"Field in one_of '{attr_name}' does not exist. No field named '{f}' in class {cls.__name__}.")
+                        raise ValueError(
+                            f"Field in one_of '{attr_name}' does not exist. No field named '{f}' in class {cls.__name__}."
+                        )
                     f_info = fields[f][1]
                     if not f_info.json_schema_extra["json_data_field"].get("nullable"):
-                        raise TypeError(f"Field '{f}' in one_of '{attr_name}' is not optional. " "All the fields in oneof must be optional (nullable).")
+                        raise TypeError(
+                            f"Field '{f}' in one_of '{attr_name}' is not optional. "
+                            "All the fields in oneof must be optional (nullable)."
+                        )
                 one_of_list = json_data_info.get("oneof", [])
                 one_of_list.append(oneof.model_dump())
                 json_data_info["oneof"] = one_of_list
@@ -75,24 +83,37 @@ class JSONData(BaseModel):
         cls.__validate__ = pydantic.model_validator(mode="after")(_validate_model_)
 
     @model_serializer(mode="wrap")
-    def serialize_model(self, handler, info: SerializationInfo) -> dict[str, typing.Any]:
+    def serialize_model(
+        self, handler, info: SerializationInfo
+    ) -> dict[str, typing.Any]:
         dump = handler(self, info)
         if info.context and info.context.get("UniflowCodec", False):
-            dump |= {"__codec__": "dataclass", "__class__": f"{type(self).__module__}.{type(self).__name__}"}
+            dump |= {
+                "__codec__": "dataclass",
+                "__class__": f"{type(self).__module__}.{type(self).__name__}",
+            }
         return dump
 
 
-def _get_type_info(field_name: str, field_type: type, position: str = "Field") -> dict[str, typing.Any]:
+def _get_type_info(
+    field_name: str, field_type: type, position: str = "Field"
+) -> dict[str, typing.Any]:
     origin = typing.get_origin(field_type)
 
     # <type> | None or typing.Optional[type]
     if origin is typing.Union:
         if position in ["List item", "Dict value"]:
-            raise TypeError(f"{position} type '{field_type}' is not supported in JSONData class. Field: '{field_name}'")
+            raise TypeError(
+                f"{position} type '{field_type}' is not supported in JSONData class. Field: '{field_name}'"
+            )
         type_list = typing.get_args(field_type)
         if len(type_list) > 2 or type(None) not in type_list:
-            raise TypeError(f"Field type '{field_type}' is not supported in JSONData class. Field: '{field_name}'")
-        type_info = _get_type_info(field_name, next(iter(t for t in type_list if t is not type(None))))
+            raise TypeError(
+                f"Field type '{field_type}' is not supported in JSONData class. Field: '{field_name}'"
+            )
+        type_info = _get_type_info(
+            field_name, next(iter(t for t in type_list if t is not type(None)))
+        )
         type_info["nullable"] = True
         return type_info
 
@@ -105,10 +126,17 @@ def _get_type_info(field_name: str, field_type: type, position: str = "Field") -
         # String enum
         if issubclass(field_type, str):
             return {"type": field_type.__name__}
-        raise TypeError(f"Enum type {field_type} is not supported in JSONData class. " f"Only string Enum is supported. Field: '{field_name}'")
+        raise TypeError(
+            f"Enum type {field_type} is not supported in JSONData class. "
+            f"Only string Enum is supported. Field: '{field_name}'"
+        )
 
     # JSONData class
-    if origin is None and isinstance(field_type, type) and issubclass(field_type, JSONData):
+    if (
+        origin is None
+        and isinstance(field_type, type)
+        and issubclass(field_type, JSONData)
+    ):
         return {"type": field_type.__name__}
 
     if field_type is list or origin is list:
@@ -120,7 +148,10 @@ def _get_type_info(field_name: str, field_type: type, position: str = "Field") -
         else:
             raise TypeError(f"Invalid list type: {field_type}. Field: '{field_name}'")
 
-        return {"type": "list", "item_type": _get_type_info(field_name, item_type, "List item")}
+        return {
+            "type": "list",
+            "item_type": _get_type_info(field_name, item_type, "List item"),
+        }
 
     if field_type is dict or origin is dict:
         type_args = typing.get_args(field_type)
@@ -131,10 +162,14 @@ def _get_type_info(field_name: str, field_type: type, position: str = "Field") -
             key_type = str
             value_type = typing.Any
         else:
-            raise TypeError(f"Invalid dictionary type: {field_type}. Field: '{field_name}'")
+            raise TypeError(
+                f"Invalid dictionary type: {field_type}. Field: '{field_name}'"
+            )
 
         if key_type is not str:
-            raise TypeError(f"Invalid dictionary type: {field_type}. Dictionary keys must be strings. Field: '{field_name}'")
+            raise TypeError(
+                f"Invalid dictionary type: {field_type}. Dictionary keys must be strings. Field: '{field_name}'"
+            )
 
         return {
             "type": "map",
@@ -145,7 +180,9 @@ def _get_type_info(field_name: str, field_type: type, position: str = "Field") -
     if field_type is typing.Any:
         return {"type": "any"}
 
-    raise TypeError(f"{position} type {field_type} is not supported in JSONData class. Field: '{field_name}'")
+    raise TypeError(
+        f"{position} type {field_type} is not supported in JSONData class. Field: '{field_name}'"
+    )
 
 
 def _get_default_value(type_info: dict[str, str], field_type: type) -> typing.Any:
@@ -182,12 +219,16 @@ def _validate_model_(self: BaseModel):
     This function will be called by pydantic.BaseModel to do the json_data specific validations.
     (currently, only oneof validation)
     """
-    one_of_list = self.model_config["json_schema_extra"]["json_data_object"].get("oneof", [])
+    one_of_list = self.model_config["json_schema_extra"]["json_data_object"].get(
+        "oneof", []
+    )
     for i in one_of_list:
         one_of = _OneOf(**i)
         set_fields = [f for f in one_of.fields if getattr(self, f) is not None]
         if len(set_fields) == 0 and one_of.required:
             raise ValueError(f"One field in {one_of.fields} must be set (not None).")
         if len(set_fields) > 1:
-            raise ValueError(f"More than one field in {one_of.fields} are set (not None): {set_fields}.")
-    return self 
+            raise ValueError(
+                f"More than one field in {one_of.fields} are set (not None): {set_fields}."
+            )
+    return self
