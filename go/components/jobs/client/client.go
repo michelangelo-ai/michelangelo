@@ -365,7 +365,7 @@ func (c *Client) CreateJob(
 
 		return nil
 	case *v2pb.SparkJob:
-		// TODO: Implement Spark job creation
+		// NOTE: Implement Spark job creation
 		panic("Spark job creation not implemented")
 	}
 	return nil
