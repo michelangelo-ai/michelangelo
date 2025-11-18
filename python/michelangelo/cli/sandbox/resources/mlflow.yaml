@@ -31,14 +31,6 @@ spec:
           value: "minioadmin"
         - name: MLFLOW_S3_ENDPOINT_URL
           value: "http://minio:9000"
-        - name: MLFLOW_TRACKING_SERVER_HOST
-          value: "0.0.0.0"
-        - name: MLFLOW_DISABLE_SECURITY
-          value: "true"
-        - name: MLFLOW_ENABLE_SECURITY_MIDDLEWARE
-          value: "false"
-        - name: MLFLOW_SERVER_DISABLE_SECURITY_MIDDLEWARE
-          value: "true"
         command:
         - /bin/bash
         - -c
@@ -70,7 +62,11 @@ spec:
                       sys.exit(1)
           "
           # Start MLflow tracking server
-          mlflow server --backend-store-uri mysql+pymysql://root:root@mysql:3306/mlflow --default-artifact-root s3://mlflow --host 0.0.0.0 --port 5000 --serve-artifacts --no-host-validation
+          mlflow server \
+            --backend-store-uri mysql+pymysql://root:root@mysql:3306/mlflow \
+            --default-artifact-root s3://mlflow \
+            --host 0.0.0.0 \
+            --port 5000
         readinessProbe:
           httpGet:
             path: /health
@@ -99,73 +95,3 @@ spec:
     targetPort: 5000
     nodePort: 30013
   type: NodePort
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: mlflow-proxy-config
-data:
-  nginx.conf: |
-    events {
-        worker_connections 1024;
-    }
-    http {
-        upstream mlflow {
-            server mlflow-tracking-server:5000;
-        }
-        server {
-            listen 5001;
-            location / {
-                proxy_pass http://mlflow;
-                proxy_set_header Host localhost:5000;
-                proxy_set_header X-Real-IP $remote_addr;
-                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto $scheme;
-            }
-        }
-    }
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: mlflow-proxy
-  labels:
-    app: mlflow-proxy
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: mlflow-proxy
-  template:
-    metadata:
-      labels:
-        app: mlflow-proxy
-    spec:
-      containers:
-      - name: nginx
-        image: nginx:alpine
-        ports:
-        - containerPort: 5001
-        volumeMounts:
-        - name: config
-          mountPath: /etc/nginx/nginx.conf
-          subPath: nginx.conf
-      volumes:
-      - name: config
-        configMap:
-          name: mlflow-proxy-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: mlflow-proxy
-  labels:
-    app: mlflow-proxy
-spec:
-  selector:
-    app: mlflow-proxy
-  ports:
-  - name: http
-    port: 5001
-    targetPort: 5001
-  type: ClusterIP
