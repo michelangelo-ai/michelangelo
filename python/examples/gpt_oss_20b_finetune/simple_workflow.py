@@ -50,6 +50,16 @@ def simple_gpt_workflow(
         num_samples=20
     )
 
+    # Package the model using MLflow URI and create Model CR (final step)
+    package_gpt_model(
+        model_path=model_uri,
+        model_name=model_name,
+        package_name=model_name,
+        experiment_name="gpt-finetune-experiment",
+        namespace="default",
+        create_model_cr=True
+    )
+
     return True
 
 
@@ -69,14 +79,30 @@ if __name__ == "__main__":
     ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
     ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
 
-    if not ctx.is_local_run():
+    # MLflow environment variables
+    if ctx.is_local_run():
+        # Local development - use localhost with port forwarding
+        ctx.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
+        ctx.environ["MLFLOW_BACKEND_STORE_URI"] = "mysql+pymysql://root:root@localhost:3306/mlflow"
+        ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://localhost:9091"
+        os.environ["MA_API_SERVER"] = "localhost:14566"
+    else:
+        # Cluster deployment - use Kubernetes service names
+        ctx.environ["MLFLOW_TRACKING_URI"] = "http://mlflow-tracking-server:5001"
+        ctx.environ["MLFLOW_BACKEND_STORE_URI"] = "mysql+pymysql://root:root@mysql:3306/mlflow"
+        ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9000"
         os.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
+
+    # These remain the same for both local and cluster
+    ctx.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "s3://mlflow"
+    ctx.environ["AWS_ACCESS_KEY_ID"] = "minioadmin"
+    ctx.environ["AWS_SECRET_ACCESS_KEY"] = "minioadmin"
 
     # Run the workflow
     ctx.run(
         simple_gpt_workflow,
         dataset_name="alpaca",
-        num_epochs=5,
-        sample_size=500,
+        num_epochs=1,
+        sample_size=50,
         model_name="gpt2"
     )
