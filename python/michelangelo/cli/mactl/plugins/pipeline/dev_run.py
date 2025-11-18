@@ -66,14 +66,18 @@ def add_function_signature(crd: CRD) -> None:
                     "func_signature": Parameter(
                         "env",
                         Parameter.POSITIONAL_OR_KEYWORD,
-                        default={},
+                        default=[],
                     ),
                     "args": ["--env"],
                     "kwargs": {
                         "type": str,
                         "required": False,
-                        "default": {},
-                        "help": "Name of the resource",
+                        "action": "append",
+                        "default": [],
+                        "help": (
+                            "Environment variable in format KEY=VALUE"
+                            " (can be used multiple times)"
+                        ),
                     },
                 },
                 {
@@ -87,7 +91,10 @@ def add_function_signature(crd: CRD) -> None:
                         "type": str,
                         "required": False,
                         "default": None,
-                        "help": "Resume from a previous pipeline run. Format: 'pipeline_run_name[:step_name]'",
+                        "help": (
+                            "Resume from a previous pipeline run. Format:"
+                            " 'pipeline_run_name[:step_name]'"
+                        ),
                     },
                 },
             ],
