@@ -94,7 +94,7 @@ func (d defaultHelper) NewFilteredListWatchFromClient(client rest.Interface, res
 			Namespace(namespace).
 			Resource(resource).
 			VersionedParams(&options, codec).
-			Do(context.TODO()).
+			Do(context.Background()).
 			Get()
 	}
 	watchFunc := func(options metav1.ListOptions) (watch.Interface, error) {
@@ -104,7 +104,7 @@ func (d defaultHelper) NewFilteredListWatchFromClient(client rest.Interface, res
 			Namespace(namespace).
 			Resource(resource).
 			VersionedParams(&options, codec).
-			Watch(context.TODO())
+			Watch(context.Background())
 	}
 	return &cache.ListWatch{ListFunc: listFunc, WatchFunc: watchFunc}
 }
