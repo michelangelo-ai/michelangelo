@@ -1,0 +1,9 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["constants.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants",
+    visibility = ["//visibility:public"],
+    deps = ["@io_k8s_api//core/v1:go_default_library"],
+)
