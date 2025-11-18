@@ -1,0 +1,97 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow-tracking-server
+  labels:
+    app: mlflow-tracking-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow-tracking-server
+  template:
+    metadata:
+      labels:
+        app: mlflow-tracking-server
+    spec:
+      containers:
+      - name: mlflow-tracking-server
+        image: python:3.10-slim
+        ports:
+        - containerPort: 5000
+        env:
+        - name: MLFLOW_BACKEND_STORE_URI
+          value: "mysql+pymysql://root:root@mysql:3306/mlflow"
+        - name: MLFLOW_DEFAULT_ARTIFACT_ROOT
+          value: "s3://mlflow"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: MLFLOW_S3_ENDPOINT_URL
+          value: "http://minio:9000"
+        command:
+        - /bin/bash
+        - -c
+        - |
+          pip install mlflow==3.6.0 pymysql boto3 psutil cryptography
+          # Wait for MySQL to be ready and create MLflow database
+          python -c "
+          import pymysql
+          import time
+          import sys
+
+          max_attempts = 60
+          for attempt in range(max_attempts):
+              try:
+                  print(f'Attempting to connect to MySQL (attempt {attempt + 1}/{max_attempts})')
+                  conn = pymysql.connect(host='mysql', user='root', password='root', connect_timeout=5)
+                  cursor = conn.cursor()
+                  cursor.execute('CREATE DATABASE IF NOT EXISTS mlflow')
+                  conn.commit()
+                  conn.close()
+                  print('MLflow database created successfully')
+                  break
+              except Exception as e:
+                  print(f'Database connection failed: {e}')
+                  if attempt < max_attempts - 1:
+                      time.sleep(2)
+                  else:
+                      print('Failed to connect to MySQL after all attempts')
+                      sys.exit(1)
+          "
+          # Start MLflow tracking server
+          mlflow server \
+            --backend-store-uri mysql+pymysql://root:root@mysql:3306/mlflow \
+            --default-artifact-root s3://mlflow \
+            --host 0.0.0.0 \
+            --port 5000
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 60
+          periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mlflow-tracking-server
+  labels:
+    app: mlflow-tracking-server
+spec:
+  selector:
+    app: mlflow-tracking-server
+  ports:
+  - name: http
+    port: 5000
+    targetPort: 5000
+    nodePort: 30013
+  type: NodePort
