@@ -80,36 +80,36 @@ func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap
 				},
 			},
 			"spec": map[string]interface{}{
-				"parentRefs": []map[string]interface{}{
-					{
+				"parentRefs": []interface{}{
+					map[string]interface{}{
 						"group":     gatewayAPIGroup,
 						"kind":      gatewayKind,
 						"name":      gatewayName,
 						"namespace": request.Namespace,
 					},
 				},
-				"rules": []map[string]interface{}{
-					{
+				"rules": []interface{}{
+					map[string]interface{}{
 						// Baseline inference server endpoint - routes to whatever model is loaded in Triton
-						"matches": []map[string]interface{}{
-							{
+						"matches": []interface{}{
+							map[string]interface{}{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
 									"value": fmt.Sprintf("/%s", request.InferenceServer),
 								},
 							},
 						},
-						"backendRefs": []map[string]interface{}{
-							{
+						"backendRefs": []interface{}{
+							map[string]interface{}{
 								"group":  "",
 								"kind":   "Service",
 								"name":   addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
-								"port":   80,
-								"weight": 100,
+								"port":   int64(80),
+								"weight": int64(100),
 							},
 						},
-						"filters": []map[string]interface{}{
-							{
+						"filters": []interface{}{
+							map[string]interface{}{
 								"type": "URLRewrite",
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
@@ -277,25 +277,25 @@ func (h *httpRouteManager) addDeploymentRoute(ctx context.Context, logger *zap.L
 		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
 
 	newRule := map[string]interface{}{
-		"matches": []map[string]interface{}{
-			{
+		"matches": []interface{}{
+			map[string]interface{}{
 				"path": map[string]interface{}{
 					"type":  "PathPrefix",
 					"value": deploymentPath,
 				},
 			},
 		},
-		"backendRefs": []map[string]interface{}{
-			{
+		"backendRefs": []interface{}{
+			map[string]interface{}{
 				"group":  "",
 				"kind":   "Service",
 				"name":   addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
-				"port":   80,
-				"weight": 100,
+				"port":   int64(80),
+				"weight": int64(100),
 			},
 		},
-		"filters": []map[string]interface{}{
-			{
+		"filters": []interface{}{
+			map[string]interface{}{
 				"type": "URLRewrite",
 				"urlRewrite": map[string]interface{}{
 					"path": map[string]interface{}{
