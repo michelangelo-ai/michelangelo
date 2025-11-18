@@ -86,7 +86,7 @@ class DatasetVariable(Variable):
             self.save_pandas_dataframe()
 
         else:
-            raise TypeError(f"Unsupported value type")
+            raise TypeError("Unsupported value type")
 
     def save_spark_dataframe(self):
         """
