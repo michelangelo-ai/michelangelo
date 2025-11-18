@@ -110,7 +110,7 @@ func start(lc fx.Lifecycle, mgr manager.Manager) error {
 //	mgr (manager.Manager): Kubernetes controller manager to be started.
 func _start(mgr manager.Manager) {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		// TODO: handle error properly. Exit app? Propagate to the parent thread?
+		// TODO(#563): handle error properly. Exit app? Propagate to the parent thread?
 		fmt.Printf("ERR: Controller Manager execution failed: %v", err)
 		os.Exit(1)
 	}

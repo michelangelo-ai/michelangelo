@@ -18,7 +18,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// TODO: andrii: implement Ray starlark plugin here
+// TODO(#559): andrii: implement Ray starlark plugin here
 
 var _ starlark.HasAttrs = (*module)(nil)
 var poll int64 = 10
@@ -118,7 +118,7 @@ func (r *module) createCluster(t *starlark.Thread, _ *starlark.Builtin, args sta
 	cluster = *sensorResponse.RayCluster
 
 	if cluster.Status.State == v2pb.RAY_CLUSTER_STATE_FAILED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_TERMINATED || cluster.Status.State == v2pb.RAY_CLUSTER_STATE_UNKNOWN {
-		// TODO: [ray] send termination signal?
+		// TODO(#560): [ray] send termination signal?
 		err := workflow.NewCustomError(
 			ctx,
 			yarpcerrors.CodeInternal.String(),

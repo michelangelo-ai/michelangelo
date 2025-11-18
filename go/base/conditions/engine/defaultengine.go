@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	// TODO: Make this configurable
+	// TODO(#566): Make this configurable
 	defaultInactiveRequeuePeriodInSeconds = 10
 	KillReason                            = "killed due to workflow termination"
 )

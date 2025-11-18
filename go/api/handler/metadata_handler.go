@@ -109,7 +109,7 @@ func (n *NullMetadataHandler) List(ctx context.Context, namespace string, opts *
 // This function handles the actual update operation by delegating to the storage layer.
 func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage storage.MetadataStorage, direct bool,
 	indexedFields []storage.IndexedField, handler storage.BlobStorage) error {
-	// TODO: update the object in blob storage
+	// TODO(#555): update the object in blob storage
 	return metadataStorage.Upsert(ctx, obj, direct, indexedFields)
 }
 
@@ -120,7 +120,7 @@ func handleUpdate(ctx context.Context, obj ctrlRTClient.Object, metadataStorage 
 func handleDelete(ctx context.Context, log logr.Logger, typeMeta *metav1.TypeMeta, object ctrlRTClient.Object,
 	metadataStorage storage.MetadataStorage, handler storage.BlobStorage) error {
 	if handler.IsObjectInteresting(object) {
-		// TODO: if blob annotations are already available, this Get is not needed
+		// TODO(#556): if blob annotations are already available, this Get is not needed
 		getErr := metadataStorage.GetByID(ctx, string(object.GetUID()), object)
 		if err := metadataStorage.Delete(ctx, typeMeta, object.GetNamespace(), object.GetName()); err != nil {
 			return err

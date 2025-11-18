@@ -26,8 +26,8 @@ import (
 
 const (
 	ExecuteWorkflowType        = "Execute Workflow"
-	UniflowCadenceWorkflowName = "starlark-workflow" // TODO: fix the typo and make this configurable
-	DefaultWorkSpaceRootURL    = "s3://default"      // TODO: make this configurable
+	UniflowCadenceWorkflowName = "starlark-workflow" // TODO(#546): fix the typo and make this configurable
+	DefaultWorkSpaceRootURL    = "s3://default"      // TODO(#547): make this configurable
 	WorkflowEnvironKey         = "environ"
 	WorkflowKWArgsKey          = "kwargs"
 	WorkflowArgsKey            = "args"

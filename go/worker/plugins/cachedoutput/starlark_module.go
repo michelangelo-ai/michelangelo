@@ -197,7 +197,7 @@ func (r *module) query(t *starlark.Thread, _ *starlark.Builtin, args starlark.Tu
 	for k, v := range matchCriterion {
 		labelSelectors = append(labelSelectors, fmt.Sprintf("%s=%v", strings.TrimPrefix(k, "cached_output.label."), v))
 	}
-	// TODO : add support for listOptionExt for orderBy and lookbackDays
+	// TODO(#558): add support for listOptionExt for orderBy and lookbackDays
 
 	request := v2pb.ListCachedOutputRequest{
 		Namespace: namespace,

@@ -440,7 +440,7 @@ type Dependencies struct {
 }
 
 // SparkPodSpec defines common things that can be customized for a Spark driver or executor pod.
-// TODO: investigate if we should use v1.PodSpec and limit what can be set instead.
+// TODO(#565): investigate if we should use v1.PodSpec and limit what can be set instead.
 type SparkPodSpec struct {
 	// Cores maps to `spark.driver.cores` or `spark.executor.cores` for the driver and executors, respectively.
 	// +optional

@@ -202,7 +202,7 @@ func (r *Reconciler) createCluster(ctx context.Context, log logr.Logger, cluster
 	log.Info("ray cluster created", "namespace", createdRayCluster.Namespace, "name", createdRayCluster.Name)
 	// Update the cluster's head node information
 	cluster.Status.HeadNode = &v2pb.RayHeadNodeInfo{
-		// TODO: use createdRayCluster.Status.Head.PodName after upgrading to a newer version
+		// TODO(#553): use createdRayCluster.Status.Head.PodName after upgrading to a newer version
 		Name: cluster.Spec.Head.Pod.Name,
 		Ip:   createdRayCluster.Status.Head.PodIP,
 	}

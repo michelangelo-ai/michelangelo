@@ -70,7 +70,7 @@ const (
 // Reconciler reconciles a Deployment object
 type Reconciler struct {
 	api.Handler
-	// TODO: refactor so these are not exported
+	// TODO(#549): refactor so these are not exported
 	Log               logr.Logger
 	Recorder          record.EventRecorder
 	Registrar         pluginmanager.Registrar[plugins.Plugin]
@@ -288,7 +288,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
 	}
 
-	// TODO: Make the GetState call return just the deployment state instead of the entire status payload
+	// TODO(#550): Make the GetState call return just the deployment state instead of the entire status payload
 	sw := metrics.getStateMetrics.duration.Start()
 	metrics.getStateMetrics.count.Inc(1)
 	observability := r.getObservability(log, deployment.Namespace)
@@ -336,7 +336,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	var err error
 	var conditionPlugin conditionInterfaces.Plugin[*v2pb.Deployment]
 
-	// TODO: Add runtime context to match Uber internal pattern exactly
+	// TODO(#551): Add runtime context to match Uber internal pattern exactly
 	// The Uber internal code uses: runtimeContext := conditions.NewRequestContext(log, r.Recorder)
 	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
 	// This requires updating the Engine interface to match Uber's 4-parameter signature
@@ -613,7 +613,7 @@ func getTerminalStage(deployment v2pb.Deployment) (v2pb.DeploymentStage, bool) {
 // createDeploymentEvent creates a deployment event for tracking deployment state transitions
 // In simplified version, this is a no-op to maintain structure compatibility with Uber internal code
 func (r *Reconciler) createDeploymentEvent(ctx context.Context, deployment *v2pb.Deployment) error {
-	// TODO: In full implementation, this would:
+	// TODO(#552): In full implementation, this would:
 	// 1. Marshal the deployment object to protobuf.Any
 	// 2. Create a DeploymentEvent resource with the marshaled deployment content
 	// 3. Save it to the cluster for audit/tracking purposes
