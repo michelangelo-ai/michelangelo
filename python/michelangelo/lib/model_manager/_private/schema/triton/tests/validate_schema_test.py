@@ -36,7 +36,7 @@ class ValidateSchemaTest(TestCase):
             str(error),
             (
                 "Invalid data type: DataType.UNKNOWN. Supported data types for Triton models: "
-                "['BOOLEAN', 'BYTE', 'CHAR', 'SHORT', 'INT', 'LONG', 'FLOAT', 'DOUBLE', 'STRING', 'NUMERIC']"
+                "['BOOLEAN', 'BYTE', 'CHAR', 'SHORT', 'INT', 'LONG', 'FLOAT', 'DOUBLE', 'STRING']"
             ),
         )
 
