@@ -23,8 +23,8 @@ var Module = fx.Options(
 	}),
 	fx.Invoke(register),
 	oss.Module,
-	fx.Provide(func(client client.Client, logger *zap.Logger) configmap.ConfigMapProvider {
-		return configmap.NewDefaultConfigMapProvider(client, logger)
+	fx.Provide(func(client client.Client, logger *zap.Logger) configmap.ModelConfigMapProvider {
+		return configmap.NewDefaultModelConfigMapProvider(client, logger)
 	}),
 )
 

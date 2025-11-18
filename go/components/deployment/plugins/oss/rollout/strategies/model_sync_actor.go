@@ -10,6 +10,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -179,10 +180,10 @@ import (
 
 // ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
 type ModelSyncActor struct {
-	client            client.Client
-	gateway           gateways.Gateway
-	configMapProvider configmap.ConfigMapProvider
-	logger            *zap.Logger
+	client                 client.Client
+	gateway                gateways.Gateway
+	modelConfigMapProvider configmap.ModelConfigMapProvider
+	logger                 *zap.Logger
 }
 
 func (a *ModelSyncActor) GetType() string {
@@ -276,10 +277,10 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 
 		// UCS CACHE PATTERN: Replicate Uber's exact UCS cache update pattern from rolling/actor.go:76
 		// Original Uber code: err = a.ucsCache.UpdateDeployment(*deployment, constraints, nil, common.RoleTypeCandidate)
-		if a.configMapProvider != nil {
+		if a.modelConfigMapProvider != nil {
 			// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
 			// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
-			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
+			if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
 				a.logger.Error("Failed to update deployment via ConfigMapProvider (UCS cache pattern)", zap.Error(err))
 				return &apipb.Condition{
 					Type:    a.GetType(),
@@ -326,14 +327,14 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 					a.logger.Info("Model already exists in ConfigMap", zap.String("model", modelName))
 				}
 
-				updateRequest := configmap.ConfigMapRequest{
+				updateRequest := configmap.UpdateModelConfigMapRequest{
 					InferenceServer: inferenceServerName,
 					Namespace:       deployment.Namespace,
 					BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
 					ModelConfigs:    currentModels,
 				}
 
-				if err := a.configMapProvider.UpdateModelConfigMap(ctx, updateRequest); err != nil {
+				if err := a.modelConfigMapProvider.UpdateModelConfigMap(ctx, updateRequest); err != nil {
 					a.logger.Error("Failed to update model config via gateway", zap.Error(err))
 					return &apipb.Condition{
 						Type:    a.GetType(),

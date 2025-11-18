@@ -24,10 +24,10 @@ type conditionPlugin struct {
 
 // Params contains dependencies for rollout plugin
 type Params struct {
-	Client            client.Client
-	ConfigMapProvider configmap.ConfigMapProvider
-	Gateway           gateways.Gateway
-	Logger            *zap.Logger
+	Client                 client.Client
+	ModelConfigMapProvider configmap.ModelConfigMapProvider
+	Gateway                gateways.Gateway
+	Logger                 *zap.Logger
 }
 
 // NewRolloutPlugin creates a new rollout plugin following Uber patterns
@@ -53,10 +53,10 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
-		Client:            p.Client,
-		ConfigMapProvider: p.ConfigMapProvider,
-		Gateway:           p.Gateway,
-		Logger:            p.Logger,
+		Client:                 p.Client,
+		ModelConfigMapProvider: p.ModelConfigMapProvider,
+		Gateway:                p.Gateway,
+		Logger:                 p.Logger,
 	}, deployment)
 	if err != nil {
 		return nil, err
@@ -65,10 +65,10 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Post-placement actors (completion and cleanup)
 	postPlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RolloutCompletionActor{
-			client:            p.Client,
-			gateway:           p.Gateway,
-			configMapProvider: p.ConfigMapProvider,
-			logger:            p.Logger,
+			client:                 p.Client,
+			gateway:                p.Gateway,
+			modelConfigMapProvider: p.ModelConfigMapProvider,
+			logger:                 p.Logger,
 		},
 	}
 
@@ -311,10 +311,10 @@ func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deplo
 
 // RolloutCompletionActor handles post-rollout completion tasks
 type RolloutCompletionActor struct {
-	client            client.Client
-	gateway           gateways.Gateway
-	configMapProvider configmap.ConfigMapProvider
-	logger            *zap.Logger
+	client                 client.Client
+	gateway                gateways.Gateway
+	modelConfigMapProvider configmap.ModelConfigMapProvider
+	logger                 *zap.Logger
 }
 
 func (a *RolloutCompletionActor) GetType() string {
@@ -382,11 +382,11 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		a.logger.Info("CurrentRevision updated after successful traffic switch", zap.String("model", modelName))
 
 		// DEPLOYMENT-LEVEL CLEANUP: Promote candidate to current and trigger safe cleanup
-		if a.configMapProvider != nil {
+		if a.modelConfigMapProvider != nil {
 			// Promote candidate model to current (this automatically triggers cleanup of unused models)
 			a.logger.Info("Promoting candidate model to current and cleaning up unused models", zap.String("newModel", modelName))
 
-			if err := a.configMapProvider.UpdateDeploymentModel(ctx, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {
+			if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {
 				a.logger.Error("Failed to promote model to current via ConfigMapProvider", zap.Error(err))
 				// Don't fail the whole rollout completion due to cleanup failure
 				// but log the error for investigation
@@ -401,13 +401,13 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				a.logger.Info("Cleaning up old models from ConfigMap", zap.String("newModel", modelName))
 
 				// Create cleanup request that will remove old models and keep only the new one
-				cleanupRequest := configmap.ConfigMapRequest{
+				cleanupRequest := configmap.UpdateModelConfigMapRequest{
 					InferenceServer: inferenceServerName,
 					Namespace:       deployment.Namespace,
 					ModelConfigs:    []configmap.ModelConfigEntry{{Name: modelName, S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName)}},
 				}
 
-				if err := a.configMapProvider.UpdateModelConfigMap(ctx, cleanupRequest); err != nil {
+				if err := a.modelConfigMapProvider.UpdateModelConfigMap(ctx, cleanupRequest); err != nil {
 					a.logger.Error("Failed to cleanup old models from ConfigMap", zap.Error(err))
 					// Don't fail the whole rollout completion due to cleanup failure
 					// but log the error for investigation

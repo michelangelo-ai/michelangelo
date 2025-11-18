@@ -19,7 +19,7 @@ import (
 // Following Uber's UCS pattern for safe model cleanup
 type ModelCleanupActor struct {
 	Client            client.Client
-	configMapProvider configmap.ConfigMapProvider
+	configMapProvider configmap.ModelConfigMapProvider
 	Gateway           gateways.Gateway
 	Logger            *zap.Logger
 }
@@ -141,7 +141,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 		// Create update request to remove old model from ConfigMap
-		updateRequest := configmap.ConfigMapRequest{
+		updateRequest := configmap.UpdateModelConfigMapRequest{
 			InferenceServer: inferenceServerName,
 			Namespace:       resource.Namespace,
 			BackendType:     v2pb.BACKEND_TYPE_TRITON,

@@ -7,9 +7,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -19,38 +16,33 @@ import (
 
 // gateway implements the Gateway interface
 type gateway struct {
-	httpClient *http.Client
-	kubeClient client.Client
+	httpClient    *http.Client
+	kubeClient    client.Client
+	dynamicClient dynamic.Interface
 
-	registry          *registry
-	configMapProvider configmap.ConfigMapProvider
-	dynamicClient     dynamic.Interface
-}
+	registry         *registry
+	httpRouteManager *httpRouteManager
 
-// NewGateway creates a new inference server gateway
-func NewGateway() Gateway {
-	return &gateway{
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-	}
+	modelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
 // NewGatewayWithClients creates a new inference server gateway with Kubernetes clients
 func NewGatewayWithClients(kubeClient client.Client, dynamicClient dynamic.Interface, logger *zap.Logger) Gateway {
-	// Create configmap provider
-	configMapProvider := configmap.NewDefaultConfigMapProvider(kubeClient, logger)
-
 	return &gateway{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		kubeClient:        kubeClient,
-		dynamicClient:     dynamicClient,
-		registry:          newRegistry(),
-		configMapProvider: configMapProvider,
+		kubeClient:    kubeClient,
+		dynamicClient: dynamicClient,
+
+		registry:         newRegistry(),
+		httpRouteManager: newHTTPRouteManager(dynamicClient, logger),
+
+		modelConfigMapProvider: configmap.NewDefaultModelConfigMapProvider(kubeClient, logger),
 	}
 }
+
+// Inference Server Backend Management Methods
 
 // RegisterBackend registers a backend for a specific backend type
 func (g *gateway) RegisterBackend(backendType v2pb.BackendType, backend Backend) {
@@ -97,6 +89,8 @@ func (g *gateway) IsHealthy(ctx context.Context, logger *zap.Logger, serverName 
 	return backend.IsHealthy(ctx, logger, serverName)
 }
 
+// Model Management Methods
+
 // LoadModel dispatches model loading based on backend type
 func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, request LoadModelRequest) error {
 	logger.Info("Loading model", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
@@ -114,7 +108,6 @@ func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, request U
 	if err != nil {
 		return err
 	}
-
 	return backend.UnloadModel(ctx, logger, request)
 }
 
@@ -125,7 +118,6 @@ func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, requ
 	if err != nil {
 		return false, err
 	}
-
 	return backend.CheckModelStatus(ctx, logger, request)
 }
 
@@ -133,46 +125,28 @@ func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, requ
 
 // ConfigureProxy sets up Istio VirtualService routing
 func (g *gateway) ConfigureProxy(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) error {
-	logger.Info("Configuring proxy", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
-	// Use the same Istio logic from the deployment provider
-	return g.configureIstioProxy(ctx, logger, request)
+	logger.Info("Configuring proxy with Gateway API HTTPRoute", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
+	httpRoute, err := g.httpRouteManager.getOrCreateHTTPRoute(ctx, logger, request)
+	if err != nil {
+		return fmt.Errorf("failed to get or create HTTPRoute: %w", err)
+	}
+	return g.httpRouteManager.updateProductionRoute(ctx, logger, httpRoute, request)
 }
 
 // GetProxyStatus checks the status of Istio VirtualService configuration
 func (g *gateway) GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error) {
 	logger.Info("Getting proxy status", zap.String("server", request.InferenceServer))
-	return g.getIstioProxyStatus(ctx, logger, request)
+	return g.httpRouteManager.getProxyStatus(ctx, logger, request)
 }
 
 // AddDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
 func (g *gateway) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error {
 	logger.Info("Adding deployment-specific route", zap.String("server", request.InferenceServer), zap.String("deployment", request.DeploymentName), zap.String("model", request.ModelName))
-
-	return g.addDeploymentSpecificRoute(ctx, logger, request)
+	return g.httpRouteManager.addDeploymentRoute(ctx, logger, request)
 }
 
 // DeleteHTTPRoute deletes an HTTPRoute by name and namespace
 func (g *gateway) DeleteHTTPRoute(ctx context.Context, logger *zap.Logger, httpRouteName, namespace string) error {
 	logger.Info("Deleting HTTPRoute", zap.String("httpRoute", httpRouteName), zap.String("namespace", namespace))
-	if g.dynamicClient == nil {
-		return fmt.Errorf("dynamicClient not available")
-	}
-	// Use the Gateway API HTTPRoute GroupVersionResource
-	gvr := schema.GroupVersionResource{
-		Group:    "gateway.networking.k8s.io",
-		Version:  "v1",
-		Resource: "httproutes",
-	}
-	if err := g.dynamicClient.Resource(gvr).Namespace(namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
-		// Ignore not found errors as the HTTPRoute may already be deleted
-		if errors.IsNotFound(err) {
-			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", httpRouteName))
-		} else {
-			return fmt.Errorf("failed to delete HTTPRoute %s in namespace %s: %w", httpRouteName, namespace, err)
-		}
-	} else {
-		logger.Info("HTTPRoute deleted successfully", zap.String("httpRoute", httpRouteName), zap.String("namespace", namespace))
-	}
-
-	return nil
+	return g.httpRouteManager.deleteHTTPRoute(ctx, logger, httpRouteName, namespace)
 }

@@ -504,7 +504,7 @@ func (r *Reconciler) handleStageTransition(
 		}
 
 		// Clear candidate and current revisions.
-		deployment.Status.CurrentRevision = nil
+		// deployment.Status.CurrentRevision = nil
 		deployment.Status.CandidateRevision = nil
 		break
 	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:

@@ -3,6 +3,7 @@ package inferenceserver
 import (
 	"fmt"
 
+	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -18,16 +19,43 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
+const (
+	configKey = "gateways"
+)
+
+// GatewayConfig defines configuration for gateway backends
+type GatewayConfig struct {
+	// InferenceServiceEndpoint is the base URL for reaching inference services
+	// e.g., "http://localhost:8889" for local development
+	// or "http://istio-gateway.default.svc.cluster.local:80" for in-cluster
+	InferenceServiceEndpoint string `yaml:"inferenceServiceEndpoint"`
+}
+
 // Module provides the inference server controller with all dependencies
 var Module = fx.Module("inferenceserver",
+	fx.Provide(NewGatewayConfig),
 	fx.Provide(NewInferenceServerGateway),
 	fx.Provide(NewPluginRegistry),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
 )
 
+// NewGatewayConfig creates a new gateway configuration from the config provider
+func NewGatewayConfig(provider config.Provider) (GatewayConfig, error) {
+	var conf GatewayConfig
+	// Set default value if not configured
+	conf.InferenceServiceEndpoint = "http://localhost:8889"
+
+	// Try to populate from config, but don't fail if the key doesn't exist
+	if err := provider.Get(configKey).Populate(&conf); err != nil {
+		// Config key doesn't exist, use default
+		return conf, nil
+	}
+	return conf, nil
+}
+
 // NewInferenceServerGateway creates a new inference server gateway with clients
-func NewInferenceServerGateway(kubeClient client.Client, logger *zap.Logger) gateways.Gateway {
+func NewInferenceServerGateway(kubeClient client.Client, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
 	// Create dynamic client from the same config as kube client
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
@@ -40,7 +68,18 @@ func NewInferenceServerGateway(kubeClient client.Client, logger *zap.Logger) gat
 	}
 
 	gateway := gateways.NewGatewayWithClients(kubeClient, dynamicClient, logger)
-	gateway.RegisterBackend(v2pb.BACKEND_TYPE_TRITON, triton.NewTritonBackend(kubeClient, dynamicClient, configmap.NewDefaultConfigMapProvider(kubeClient, logger), logger))
+
+	// Register Triton backend with its endpoint configuration
+	gateway.RegisterBackend(
+		v2pb.BACKEND_TYPE_TRITON,
+		triton.NewTritonBackend(
+			kubeClient,
+			dynamicClient,
+			configmap.NewDefaultModelConfigMapProvider(kubeClient, logger),
+			gatewayConfig.InferenceServiceEndpoint,
+			logger,
+		),
+	)
 
 	return gateway
 }

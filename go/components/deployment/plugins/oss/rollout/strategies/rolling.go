@@ -18,10 +18,10 @@ import (
 func GetRollingActors(params Params, deployment *v2pb.Deployment) []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&ModelSyncActor{
-			client:            params.Client,
-			gateway:           params.Gateway,
-			logger:            params.Logger,
-			configMapProvider: params.ConfigMapProvider,
+			client:                 params.Client,
+			gateway:                params.Gateway,
+			logger:                 params.Logger,
+			modelConfigMapProvider: params.ModelConfigMapProvider,
 		},
 		&TrafficRoutingActor{
 			client:  params.Client,

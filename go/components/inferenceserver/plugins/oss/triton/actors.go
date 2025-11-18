@@ -284,7 +284,7 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, r
 // CleanupActor cleans up Triton infrastructure
 type CleanupActor struct {
 	gateway           gateways.Gateway
-	configMapProvider configmap.ConfigMapProvider
+	configMapProvider configmap.ModelConfigMapProvider
 }
 
 func NewCleanupActor(gateway gateways.Gateway) plugins.ConditionActor {
@@ -331,7 +331,10 @@ func (a *CleanupActor) Run(ctx context.Context, logger *zap.Logger, resource *v2
 
 	// Clean up model-config ConfigMap
 	modelConfigMapName := fmt.Sprintf("%s-model-config", resource.Name)
-	if err := a.configMapProvider.DeleteModelConfigMap(ctx, modelConfigMapName, resource.Namespace); err != nil {
+	if err := a.configMapProvider.DeleteModelConfigMap(ctx, configmap.DeleteModelConfigMapRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+	}); err != nil {
 		logger.Error("Failed to delete model ConfigMap", zap.String("configMap", modelConfigMapName), zap.Error(err))
 		// Don't fail the whole cleanup for ConfigMap errors, but log them
 	} else {

@@ -9,9 +9,10 @@ workflowClient:
   host: localhost:7833
   transport: grpc
   domain: default
-  # taskList is a used as a fallback if project.Metatdata.Annotations["michelangelo/worker_queue"] is empty
-  taskList: default # TODO: MaCTL support for adding project.Metatdata.Annotations["michelangelo/worker_queue"] to project CRD
-    
+
+gateways:
+  inferenceServiceEndpoint: "http://localhost:8889"
+
 k8s:
   qps: 600
   burst: 600

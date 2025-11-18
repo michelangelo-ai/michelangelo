@@ -14,10 +14,10 @@ import (
 
 // Params contains dependencies for strategy actors
 type Params struct {
-	Client            client.Client
-	Gateway           gateways.Gateway
-	Logger            *zap.Logger
-	ConfigMapProvider configmap.ConfigMapProvider
+	Client                 client.Client
+	Gateway                gateways.Gateway
+	Logger                 *zap.Logger
+	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
 // GetActorsForStrategy returns actors for the appropriate strategy

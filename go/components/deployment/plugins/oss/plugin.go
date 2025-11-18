@@ -28,11 +28,11 @@ var _ plugins.Plugin = &Plugin{}
 
 // Plugin is the OSS plugin implementation
 type Plugin struct {
-	client            client.Client
-	gateway           gateways.Gateway
-	blobstore         *blobstore.BlobStore
-	logger            *zap.Logger
-	configMapProvider configmap.ConfigMapProvider
+	client                 client.Client
+	gateway                gateways.Gateway
+	blobstore              *blobstore.BlobStore
+	logger                 *zap.Logger
+	modelConfigMapProvider configmap.ModelConfigMapProvider
 
 	rolloutPlugin     conditionInterfaces.Plugin[*v2pb.Deployment]
 	rollbackPlugin    conditionInterfaces.Plugin[*v2pb.Deployment]
@@ -44,22 +44,22 @@ type Plugin struct {
 type Params struct {
 	fx.In
 
-	Registrar         pluginmanager.Registrar[plugins.Plugin]
-	Client            client.Client
-	Gateway           gateways.Gateway
-	BlobStore         *blobstore.BlobStore
-	Logger            *zap.Logger
-	ConfigMapProvider configmap.ConfigMapProvider
+	Registrar              pluginmanager.Registrar[plugins.Plugin]
+	Client                 client.Client
+	Gateway                gateways.Gateway
+	BlobStore              *blobstore.BlobStore
+	Logger                 *zap.Logger
+	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
 // NewPlugin creates a new instance of OSS plugin
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
-		client:            params.Client,
-		gateway:           params.Gateway,
-		blobstore:         params.BlobStore,
-		logger:            params.Logger,
-		configMapProvider: params.ConfigMapProvider,
+		client:                 params.Client,
+		gateway:                params.Gateway,
+		blobstore:              params.BlobStore,
+		logger:                 params.Logger,
+		modelConfigMapProvider: params.ModelConfigMapProvider,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
 			Client:  params.Client,
 			Gateway: params.Gateway,
@@ -81,10 +81,10 @@ func NewPlugin(params Params) *Plugin {
 // GetRolloutPlugin returns the rollout plugin using the OSS rollout conditions plugin
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
-		Client:            p.client,
-		ConfigMapProvider: p.configMapProvider,
-		Gateway:           p.gateway,
-		Logger:            p.logger,
+		Client:                 p.client,
+		ModelConfigMapProvider: p.modelConfigMapProvider,
+		Gateway:                p.gateway,
+		Logger:                 p.logger,
 	}, deployment)
 	if err != nil {
 		return nil, err
