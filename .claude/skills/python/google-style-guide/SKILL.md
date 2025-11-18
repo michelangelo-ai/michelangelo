@@ -1,5 +1,5 @@
 ---
-name: Google Python Style Guide
+name: Google Python Style Guide (PEP 8 + Google Extensions)
 description: "Apply Python best practices, conventions, and style rules from Google's Python Style Guide. Use when writing, reviewing, or refactoring Python code to ensure clean, maintainable, and Pythonic implementations."
 ---
 
@@ -19,7 +19,7 @@ Use this skill automatically when:
 **When Google's style guide conflicts with PEP 8, always follow PEP 8.** PEP 8 is the official Python style guide and is the canonical source for Python coding conventions. Google's guide extends and clarifies PEP 8 but should not override it.
 
 Common areas where conflicts may occur:
-- Line length (PEP 8: 79 chars, Google: 80-100 chars) → **Use 99 chars** (project standard)
+- Line length (PEP 8: 79 chars, Google: 80-100 chars) → **Use Google style** (project standard)
 
 ## Key Reminders
 
@@ -30,7 +30,6 @@ Follow the conventions and patterns documented at https://google.github.io/style
 - Use `from x import y` where `x` is the package prefix and `y` is the module name with no prefix.
 - Import each module using the full pathname location
 - Avoid `from module import *`
-- Would we add this too?
 - Order: standard library, third-party, local application imports
 
 ### Naming Conventions
@@ -62,7 +61,7 @@ Follow the conventions and patterns documented at https://google.github.io/style
   ```
 
 ### Type Annotations
-- Use type hints for function signatures (Python 3.5+)
+- Use type hints for function signatures (Python 3.9+)
 - Annotate public APIs
 - Use `typing` module for complex types
 - Prefer specific types over `Any`
