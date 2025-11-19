@@ -1,6 +1,5 @@
 import os
 import shutil
-from typing import Optional
 from michelangelo.lib.model_manager.constants import StorageType
 
 
