@@ -96,14 +96,14 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 		return nil, "", err
 	}
 
-	appID := result.Status.AppState.State
+	state := result.Status.AppState.State
 	url := result.Status.DriverInfo.WebUIIngressAddress
 
 	job.Status.ApplicationId = string(result.UID)
 	job.Status.JobUrl = url
 
-	appIDStr := string(appID)
-	return &appIDStr, url, nil
+	stateStr := string(state)
+	return &stateStr, url, nil
 }
 
 // toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec
