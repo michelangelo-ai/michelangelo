@@ -50,7 +50,10 @@ class ValidateSchemaTest(TestCase):
         is_valid, error = validate_model_schema_item(schema_item)
         self.assertFalse(is_valid)
         self.assertIsInstance(error, ValueError)
-        self.assertEqual(str(error), "Shape must be provided for item: ModelSchemaItem(name='ft1', data_type=<DataType.INT: 18>, shape=[], optional=None)")
+        self.assertEqual(
+            str(error),
+            "Shape must be provided for item: ModelSchemaItem(name='ft1', data_type=<DataType.INT: 18>, shape=[], optional=None)",
+        )
 
         schema_item = ModelSchemaItem(
             name="ft1",
@@ -60,7 +63,8 @@ class ValidateSchemaTest(TestCase):
         self.assertFalse(is_valid)
         self.assertIsInstance(error, ValueError)
         self.assertEqual(
-            str(error), "Shape must be provided for item: ModelSchemaItem(name='ft1', data_type=<DataType.INT: 18>, shape=None, optional=None)"
+            str(error),
+            "Shape must be provided for item: ModelSchemaItem(name='ft1', data_type=<DataType.INT: 18>, shape=None, optional=None)",
         )
 
     def test_validate_model_schema_success(self):

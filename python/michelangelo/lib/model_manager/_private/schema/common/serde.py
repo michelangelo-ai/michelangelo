@@ -24,9 +24,16 @@ def schema_to_dict(schema: ModelSchema) -> dict:
 
 def dict_to_schema(schema_dict: dict) -> ModelSchema:
     return ModelSchema(
-        input_schema=[dict_to_schema_item(item) for item in schema_dict["input_schema"]],
-        feature_store_features_schema=[dict_to_schema_item(item) for item in schema_dict["feature_store_features_schema"]],
-        output_schema=[dict_to_schema_item(item) for item in schema_dict["output_schema"]],
+        input_schema=[
+            dict_to_schema_item(item) for item in schema_dict["input_schema"]
+        ],
+        feature_store_features_schema=[
+            dict_to_schema_item(item)
+            for item in schema_dict["feature_store_features_schema"]
+        ],
+        output_schema=[
+            dict_to_schema_item(item) for item in schema_dict["output_schema"]
+        ],
     )
 
 

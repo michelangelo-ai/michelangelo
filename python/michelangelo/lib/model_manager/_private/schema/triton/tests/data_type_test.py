@@ -1,6 +1,9 @@
 from unittest import TestCase
 from michelangelo.lib.model_manager.schema import DataType
-from michelangelo.lib.model_manager._private.schema.triton.data_type import convert_data_type, DATA_TYPE_MAPPING
+from michelangelo.lib.model_manager._private.schema.triton.data_type import (
+    convert_data_type,
+    DATA_TYPE_MAPPING,
+)
 
 
 class DataTypeTest(TestCase):

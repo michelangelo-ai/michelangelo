@@ -16,11 +16,15 @@ class SerdeTest(TestCase):
     def setUp(self):
         self.schema = ModelSchema(
             input_schema=[
-                ModelSchemaItem(name="input1", data_type=DataType.FLOAT, shape=[-1, -1]),
+                ModelSchemaItem(
+                    name="input1", data_type=DataType.FLOAT, shape=[-1, -1]
+                ),
                 ModelSchemaItem(name="input2", data_type=DataType.INT, shape=[-1]),
             ],
             feature_store_features_schema=[
-                ModelSchemaItem(name="feature1", data_type=DataType.FLOAT, shape=[1, 2]),
+                ModelSchemaItem(
+                    name="feature1", data_type=DataType.FLOAT, shape=[1, 2]
+                ),
                 ModelSchemaItem(name="feature2", data_type=DataType.INT),
             ],
             output_schema=[

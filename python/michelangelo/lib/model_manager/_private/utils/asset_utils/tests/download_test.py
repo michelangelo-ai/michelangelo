@@ -24,7 +24,9 @@ class DownloadTest(TestCase):
             paths = []
 
             for dirpath, _, filenames in os.walk(des_path):
-                paths.extend([os.path.join(dirpath, filename) for filename in filenames])
+                paths.extend(
+                    [os.path.join(dirpath, filename) for filename in filenames]
+                )
                 if len(filenames) == 0:
                     paths.append(dirpath)
 

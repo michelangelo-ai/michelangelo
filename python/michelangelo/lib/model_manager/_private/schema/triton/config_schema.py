@@ -1,5 +1,7 @@
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
-from michelangelo.lib.model_manager._private.schema.triton.data_type import convert_data_type
+from michelangelo.lib.model_manager._private.schema.triton.data_type import (
+    convert_data_type,
+)
 
 
 def convert_model_schema(
@@ -14,7 +16,9 @@ def convert_model_schema(
     Returns:
         tuple[dict, dict]: Tuple containing the input and output schema dictionaries.
     """
-    input_schema = convert_schema_to_dict(model_schema.input_schema + model_schema.feature_store_features_schema)
+    input_schema = convert_schema_to_dict(
+        model_schema.input_schema + model_schema.feature_store_features_schema
+    )
     output_schema = convert_schema_to_dict(model_schema.output_schema)
     return input_schema, output_schema
 
@@ -49,4 +53,8 @@ def convert_shape(shape: list[int]) -> str:
     Returns:
         str: String representation of the shape.
     """
-    return f"[ {', '.join(str(dim) for dim in shape)} ]" if shape and len(shape) > 0 else "[ -1 ]"
+    return (
+        f"[ {', '.join(str(dim) for dim in shape)} ]"
+        if shape and len(shape) > 0
+        else "[ -1 ]"
+    )

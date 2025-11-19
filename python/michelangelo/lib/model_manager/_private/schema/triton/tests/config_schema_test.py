@@ -4,7 +4,10 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
 )
-from michelangelo.lib.model_manager._private.schema.triton import convert_model_schema, convert_schema_to_dict
+from michelangelo.lib.model_manager._private.schema.triton import (
+    convert_model_schema,
+    convert_schema_to_dict,
+)
 
 
 class ConfigSchemaTest(TestCase):
@@ -15,7 +18,9 @@ class ConfigSchemaTest(TestCase):
                 ModelSchemaItem(name="input2", data_type=DataType.INT, shape=[1, 2]),
             ],
             feature_store_features_schema=[
-                ModelSchemaItem(name="@palette:feature1", data_type=DataType.STRING, shape=[1]),
+                ModelSchemaItem(
+                    name="@palette:feature1", data_type=DataType.STRING, shape=[1]
+                ),
             ],
             output_schema=[
                 ModelSchemaItem(name="output1", data_type=DataType.INT, shape=[1, 2]),
@@ -30,14 +35,22 @@ class ConfigSchemaTest(TestCase):
             {
                 "input1": {"data_type": "FP32", "shape": "[ 1 ]", "optional": None},
                 "input2": {"data_type": "INT32", "shape": "[ 1, 2 ]", "optional": None},
-                "@palette:feature1": {"data_type": "STRING", "shape": "[ 1 ]", "optional": None},
+                "@palette:feature1": {
+                    "data_type": "STRING",
+                    "shape": "[ 1 ]",
+                    "optional": None,
+                },
             },
         )
 
         self.assertEqual(
             output_schema,
             {
-                "output1": {"data_type": "INT32", "shape": "[ 1, 2 ]", "optional": None},
+                "output1": {
+                    "data_type": "INT32",
+                    "shape": "[ 1, 2 ]",
+                    "optional": None,
+                },
                 "output2": {"data_type": "STRING", "shape": "[ 1 ]", "optional": None},
             },
         )

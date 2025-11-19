@@ -2,7 +2,9 @@ from michelangelo.lib.model_manager.schema import (
     ModelSchema,
     ModelSchemaItem,
 )
-from michelangelo.lib.model_manager._private.schema.triton.data_type import DATA_TYPE_MAPPING
+from michelangelo.lib.model_manager._private.schema.triton.data_type import (
+    DATA_TYPE_MAPPING,
+)
 
 
 def validate_model_schema(model_schema: ModelSchema) -> tuple[bool, Exception]:
@@ -69,6 +71,8 @@ def validate_output_schema_item(item: ModelSchemaItem) -> tuple[bool, Exception]
         return False, error
 
     if item.optional:
-        return False, ValueError(f"Optional is not allowed for output schema. Please remove the optional flag from the schema item: {item}")
+        return False, ValueError(
+            f"Optional is not allowed for output schema. Please remove the optional flag from the schema item: {item}"
+        )
 
     return True, None
