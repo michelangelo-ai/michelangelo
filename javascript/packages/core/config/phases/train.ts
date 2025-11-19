@@ -1,3 +1,4 @@
+import { MODEL_ENTITY_CONFIG } from '#core/config/entities/model/model';
 import { PIPELINE_ENTITY_CONFIG } from '#core/config/entities/pipeline/pipeline';
 import { RUN_ENTITY_CONFIG } from '#core/config/entities/run/run';
 import { TRIGGER_ENTITY_CONFIG } from '#core/config/entities/trigger/trigger';
@@ -14,13 +15,7 @@ export const TRAIN_PHASE: PhaseConfig = {
     PIPELINE_ENTITY_CONFIG,
     RUN_ENTITY_CONFIG,
     TRIGGER_ENTITY_CONFIG,
-    {
-      id: 'models',
-      name: 'trained models',
-      state: 'disabled',
-      service: 'model',
-      views: [],
-    },
+    MODEL_ENTITY_CONFIG,
     {
       id: 'evaluations',
       name: 'evaluations',
