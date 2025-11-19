@@ -22,7 +22,7 @@ class ImportParserTest(TestCase):
         )
 
     def test_get_imports_with_relative_imports(self):
-        module = importlib.import_module("uber.ai.michelangelo.sdk.model_manager._private.utils.module_finder.tests.fixtures.module_with_relative_imports")
+        module = importlib.import_module("michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_relative_imports")
         imports = get_imports(module)
 
         self.assertEqual(
