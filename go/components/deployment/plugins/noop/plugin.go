@@ -223,32 +223,6 @@ func (a *CompletingActor) Run(ctx context.Context, resource *v2pb.Deployment, pr
 	}, nil
 }
 
-// Retrieve retrieves the current condition state
-func (a *CompletingActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
-	// Return a progressing condition based on current stage
-	now := time.Now().UnixMilli()
-
-	// If already complete, return TRUE so Run() won't be called
-	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
-		return &api.Condition{
-			Type:                 "DeploymentProgressing",
-			Status:               api.CONDITION_STATUS_TRUE,
-			Reason:               "Complete",
-			Message:              "Deployment is complete",
-			LastUpdatedTimestamp: now,
-		}, nil
-	}
-
-	// Otherwise return UNKNOWN so Run() will be called to advance the stage
-	return &api.Condition{
-		Type:                 "DeploymentProgressing",
-		Status:               api.CONDITION_STATUS_UNKNOWN,
-		Reason:               "Progressing",
-		Message:              "Deployment is progressing through stage: " + resource.Status.Stage.String(),
-		LastUpdatedTimestamp: now,
-	}, nil
-}
-
 // GetType returns the type of this actor
 func (a *CompletingActor) GetType() string {
 	return "DeploymentProgressing"
@@ -272,19 +246,6 @@ func (a *NoOpActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, con
 
 // Run always returns a successful condition
 func (a *NoOpActor) Run(ctx context.Context, resource *v2pb.Deployment, previousCondition *api.Condition) (*api.Condition, error) {
-	now := time.Now().UnixMilli()
-	return &api.Condition{
-		Type:                 "NoOp",
-		Status:               api.CONDITION_STATUS_TRUE,
-		Reason:               "NoOpComplete",
-		Message:              "No-op operation completed successfully",
-		LastUpdatedTimestamp: now,
-	}, nil
-}
-
-// Retrieve retrieves the current condition state
-func (a *NoOpActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *api.Condition) (*api.Condition, error) {
-	// Return a successful no-op condition
 	now := time.Now().UnixMilli()
 	return &api.Condition{
 		Type:                 "NoOp",

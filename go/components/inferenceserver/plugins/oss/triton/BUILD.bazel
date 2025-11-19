@@ -9,9 +9,10 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/components/inferenceserver/configmap:go_default_library",
+        "//go/components/inferenceserver/gateways:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
-        "//go/shared/configmap:go_default_library",
-        "//go/shared/gateways:go_default_library",
+        "//go/components/inferenceserver/proxy:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@org_uber_go_zap//:go_default_library",

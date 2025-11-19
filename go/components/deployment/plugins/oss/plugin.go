@@ -15,8 +15,9 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -29,6 +30,7 @@ var _ plugins.Plugin = &Plugin{}
 // Plugin is the OSS plugin implementation
 type Plugin struct {
 	client                 client.Client
+	proxyProvider          proxy.ProxyProvider
 	gateway                gateways.Gateway
 	blobstore              *blobstore.BlobStore
 	logger                 *zap.Logger
@@ -47,6 +49,7 @@ type Params struct {
 	Registrar              pluginmanager.Registrar[plugins.Plugin]
 	Client                 client.Client
 	Gateway                gateways.Gateway
+	ProxyProvider          proxy.ProxyProvider
 	BlobStore              *blobstore.BlobStore
 	Logger                 *zap.Logger
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
@@ -57,6 +60,7 @@ func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:                 params.Client,
 		gateway:                params.Gateway,
+		proxyProvider:          params.ProxyProvider,
 		blobstore:              params.BlobStore,
 		logger:                 params.Logger,
 		modelConfigMapProvider: params.ModelConfigMapProvider,
@@ -82,6 +86,7 @@ func NewPlugin(params Params) *Plugin {
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
 		Client:                 p.client,
+		ProxyProvider:          p.proxyProvider,
 		ModelConfigMapProvider: p.modelConfigMapProvider,
 		Gateway:                p.gateway,
 		Logger:                 p.logger,

@@ -18,8 +18,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -31,11 +32,12 @@ const (
 // Reconciler reconciles InferenceServer objects
 type Reconciler struct {
 	client.Client
-	logger   *zap.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Gateway  gateways.Gateway
-	Plugins  plugins.PluginRegistry
+	logger        *zap.Logger
+	Scheme        *runtime.Scheme
+	Recorder      record.EventRecorder
+	Gateway       gateways.Gateway
+	ProxyProvider proxy.ProxyProvider
+	Plugins       plugins.PluginRegistry
 }
 
 // Reconcile handles InferenceServer CRD reconciliation
@@ -281,7 +283,7 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger *zap.Logger, inf
 		if inferenceServer.Status.ProviderMetadata != "proxy-configured" {
 			r.logger.Info("Configuring proxy for serving server")
 
-			proxyErr := r.Gateway.ConfigureProxy(ctx, logger, gateways.ConfigureProxyRequest{
+			proxyErr := r.ProxyProvider.ConfigureProxy(ctx, logger, proxy.ConfigureProxyRequest{
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
 				ModelName:       inferenceServer.Name, // Use server name as model name for now

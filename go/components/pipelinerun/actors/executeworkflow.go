@@ -466,54 +466,6 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 	}
 }
 
-func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
-
-	// Check if workflow execution is already completed
-	executeWorkflowStep := pipelinerunutils.GetStep(resource, pipelinerunutils.ExecuteWorkflowStepName)
-	if executeWorkflowStep != nil {
-		switch executeWorkflowStep.State {
-		case v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED:
-			logger.Info("workflow execution already completed successfully")
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_TRUE,
-			}, nil
-		case v2.PIPELINE_RUN_STEP_STATE_FAILED, v2.PIPELINE_RUN_STEP_STATE_KILLED:
-			logger.Info("workflow execution failed or was killed")
-			return &apipb.Condition{
-				Type:   ExecuteWorkflowType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, nil
-		case v2.PIPELINE_RUN_STEP_STATE_RUNNING:
-			// Check if workflow is still running by querying workflow client
-			if resource.Status.WorkflowRunId != "" && resource.Status.WorkflowId != "" {
-				logger.Info("workflow is running, checking status")
-				return &apipb.Condition{
-					Type:   ExecuteWorkflowType,
-					Status: apipb.CONDITION_STATUS_FALSE,
-				}, nil
-			}
-		}
-	}
-
-	// Check if workflow needs to be started
-	if resource.Status.WorkflowRunId == "" || resource.Status.WorkflowId == "" {
-		logger.Info("workflow not started yet")
-		return &apipb.Condition{
-			Type:   ExecuteWorkflowType,
-			Status: apipb.CONDITION_STATUS_FALSE,
-		}, nil
-	}
-
-	// Workflow is in progress
-	logger.Info("workflow execution in progress")
-	return &apipb.Condition{
-		Type:   ExecuteWorkflowType,
-		Status: apipb.CONDITION_STATUS_FALSE,
-	}, nil
-}
-
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }

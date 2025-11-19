@@ -7,8 +7,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 

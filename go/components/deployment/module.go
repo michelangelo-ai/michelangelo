@@ -13,7 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 )
 
 // Module FX

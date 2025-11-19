@@ -6,7 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 )
 
 // UpdateDeploymentModel updates the model for a specific deployment using simplified shared ConfigMap approach

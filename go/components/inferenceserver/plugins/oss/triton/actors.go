@@ -6,20 +6,25 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ValidationActor validates Triton-specific configuration
 type ValidationActor struct {
-	gateway gateways.Gateway
+	gateway       gateways.Gateway
+	proxyProvider proxy.ProxyProvider
 }
 
-func NewValidationActor(gateway gateways.Gateway) plugins.ConditionActor {
-	return &ValidationActor{gateway: gateway}
+func NewValidationActor(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.ConditionActor {
+	return &ValidationActor{
+		gateway:       gateway,
+		proxyProvider: proxyProvider,
+	}
 }
 
 func (a *ValidationActor) GetType() string {
@@ -169,7 +174,11 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton health condition")
 
-	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
+	healthy, err := a.gateway.IsHealthy(ctx, logger, gateways.HealthCheckRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
+	})
 
 	status := apipb.CONDITION_STATUS_FALSE
 	reason := "HealthCheckFailed"
@@ -196,7 +205,11 @@ func (a *HealthCheckActor) Run(ctx context.Context, logger *zap.Logger, resource
 
 	// For health checks, there's typically no corrective action
 	// Just update the condition based on current health status
-	healthy, err := a.gateway.IsHealthy(ctx, logger, resource.Name, resource.Spec.BackendType)
+	healthy, err := a.gateway.IsHealthy(ctx, logger, gateways.HealthCheckRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+		BackendType:     resource.Spec.BackendType,
+	})
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE
 		condition.Reason = "HealthCheckError"
@@ -220,11 +233,15 @@ func (a *HealthCheckActor) Run(ctx context.Context, logger *zap.Logger, resource
 
 // ProxyConfigurationActor configures Istio proxy
 type ProxyConfigurationActor struct {
-	gateway gateways.Gateway
+	gateway       gateways.Gateway
+	proxyProvider proxy.ProxyProvider
 }
 
-func NewProxyConfigurationActor(gateway gateways.Gateway) plugins.ConditionActor {
-	return &ProxyConfigurationActor{gateway: gateway}
+func NewProxyConfigurationActor(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.ConditionActor {
+	return &ProxyConfigurationActor{
+		gateway:       gateway,
+		proxyProvider: proxyProvider,
+	}
 }
 
 func (a *ProxyConfigurationActor) GetType() string {
@@ -234,7 +251,7 @@ func (a *ProxyConfigurationActor) GetType() string {
 func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition apipb.Condition) (apipb.Condition, error) {
 	logger.Info("Retrieving Triton proxy configuration condition")
 
-	proxyStatus, err := a.gateway.GetProxyStatus(ctx, logger, gateways.GetProxyStatusRequest{
+	proxyStatus, err := a.proxyProvider.GetProxyStatus(ctx, logger, proxy.GetProxyStatusRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 	})
@@ -262,7 +279,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logg
 func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton proxy configuration")
 
-	err := a.gateway.ConfigureProxy(ctx, logger, gateways.ConfigureProxyRequest{
+	err := a.proxyProvider.ConfigureProxy(ctx, logger, proxy.ConfigureProxyRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		ModelName:       resource.Name,
@@ -285,10 +302,11 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, r
 type CleanupActor struct {
 	gateway           gateways.Gateway
 	configMapProvider configmap.ModelConfigMapProvider
+	proxyProvider     proxy.ProxyProvider
 }
 
-func NewCleanupActor(gateway gateways.Gateway) plugins.ConditionActor {
-	return &CleanupActor{gateway: gateway}
+func NewCleanupActor(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.ConditionActor {
+	return &CleanupActor{gateway: gateway, proxyProvider: proxyProvider}
 }
 
 func (a *CleanupActor) GetType() string {
@@ -346,7 +364,10 @@ func (a *CleanupActor) Run(ctx context.Context, logger *zap.Logger, resource *v2
 	// STEP 2: Delete HTTPRoute for the inference server
 	logger.Info("Cleaning up HTTPRoute for inference server", zap.String("inferenceServer", resource.Name))
 	httpRouteName := fmt.Sprintf("%s-httproute", resource.Name)
-	if err := a.gateway.DeleteHTTPRoute(ctx, logger, httpRouteName, resource.Namespace); err != nil {
+	if err := a.proxyProvider.DeleteRoute(ctx, logger, proxy.DeleteRouteRequest{
+		InferenceServer: resource.Name,
+		Namespace:       resource.Namespace,
+	}); err != nil {
 		logger.Error("Failed to delete HTTPRoute", zap.String("httpRoute", httpRouteName), zap.Error(err))
 		// Don't fail the whole cleanup for HTTPRoute errors, but log them
 	} else {

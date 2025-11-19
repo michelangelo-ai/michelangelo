@@ -140,56 +140,6 @@ func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, 
 	}, nil
 }
 
-func (a *ImageBuildActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
-	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
-
-	// Check if image build step is already completed
-	imageBuildStep := pipelinerunutils.GetStep(resource, pipelinerunutils.ImageBuildStepName)
-	if imageBuildStep != nil {
-		switch imageBuildStep.State {
-		case v2.PIPELINE_RUN_STEP_STATE_SUCCEEDED:
-			logger.Info("image build already completed successfully")
-			return &apipb.Condition{
-				Type:   ImageBuildType,
-				Status: apipb.CONDITION_STATUS_TRUE,
-			}, nil
-		case v2.PIPELINE_RUN_STEP_STATE_FAILED:
-			logger.Info("image build failed")
-			return &apipb.Condition{
-				Type:   ImageBuildType,
-				Status: apipb.CONDITION_STATUS_FALSE,
-			}, nil
-		}
-	}
-
-	// Check if source pipeline is available to get image ID
-	sourcePipeline := resource.Status.SourcePipeline
-	if sourcePipeline == nil || sourcePipeline.Pipeline == nil {
-		logger.Info("source pipeline not available yet")
-		return &apipb.Condition{
-			Type:   ImageBuildType,
-			Status: apipb.CONDITION_STATUS_FALSE,
-		}, nil
-	}
-
-	// Check if image ID annotation exists
-	annotations := sourcePipeline.Pipeline.Annotations
-	if annotations == nil || annotations[pipelinerunutils.ImageIDAnnotationKey] == "" {
-		logger.Info("image ID annotation not found in source pipeline")
-		return &apipb.Condition{
-			Type:   ImageBuildType,
-			Status: apipb.CONDITION_STATUS_FALSE,
-		}, nil
-	}
-
-	// Image ID is available but build step hasn't been updated yet
-	logger.Info("image ID found, image build ready to be processed")
-	return &apipb.Condition{
-		Type:   ImageBuildType,
-		Status: apipb.CONDITION_STATUS_FALSE,
-	}, nil
-}
-
 func (a *ImageBuildActor) GetType() string {
 	return ImageBuildType
 }

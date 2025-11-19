@@ -8,14 +8,16 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	triton "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
-	configmap "github.com/michelangelo-ai/michelangelo/go/shared/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
-	triton "github.com/michelangelo-ai/michelangelo/go/shared/gateways/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -35,6 +37,8 @@ type GatewayConfig struct {
 var Module = fx.Module("inferenceserver",
 	fx.Provide(NewGatewayConfig),
 	fx.Provide(NewInferenceServerGateway),
+	fx.Provide(NewDynamicClient),
+	fx.Provide(proxy.NewHTTPRouteManager),
 	fx.Provide(NewPluginRegistry),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
@@ -54,9 +58,7 @@ func NewGatewayConfig(provider config.Provider) (GatewayConfig, error) {
 	return conf, nil
 }
 
-// NewInferenceServerGateway creates a new inference server gateway with clients
-func NewInferenceServerGateway(kubeClient client.Client, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
-	// Create dynamic client from the same config as kube client
+func NewDynamicClient(restConfig *rest.Config) (dynamic.Interface, error) {
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
 		panic(fmt.Errorf("failed to get REST config: %w", err))
@@ -66,8 +68,27 @@ func NewInferenceServerGateway(kubeClient client.Client, gatewayConfig GatewayCo
 	if err != nil {
 		panic(fmt.Errorf("failed to create dynamic client: %w", err))
 	}
+	return dynamicClient, nil
+}
 
-	gateway := gateways.NewGatewayWithClients(kubeClient, dynamicClient, logger)
+// NewInferenceServerGateway creates a new inference server gateway with clients
+func NewInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.Interface, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
+	// // Create dynamic client from the same config as kube client
+	// restConfig, err := ctrl.GetConfig()
+	// if err != nil {
+	// 	panic(fmt.Errorf("failed to get REST config: %w", err))
+	// }
+
+	// dynamicClient, err := dynamic.NewForConfig(restConfig)
+	// if err != nil {
+	// 	panic(fmt.Errorf("failed to create dynamic client: %w", err))
+	// }
+
+	gateway := gateways.NewGatewayWithClients(gateways.Params{
+		KubeClient:             kubeClient,
+		DynamicClient:          dynamicClient,
+		ModelConfigMapProvider: configmap.NewDefaultModelConfigMapProvider(kubeClient, logger),
+	})
 
 	// Register Triton backend with its endpoint configuration
 	gateway.RegisterBackend(
@@ -85,22 +106,23 @@ func NewInferenceServerGateway(kubeClient client.Client, gatewayConfig GatewayCo
 }
 
 // NewPluginRegistry creates a new plugin registry with all OSS plugins registered
-func NewPluginRegistry(gateway gateways.Gateway) plugins.PluginRegistry {
+func NewPluginRegistry(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.PluginRegistry {
 	registry := plugins.NewPluginRegistry()
-	oss.RegisterPlugins(registry, gateway)
+	oss.RegisterPlugins(registry, gateway, proxyProvider)
 	return registry
 }
 
 // NewReconciler creates a new inference server reconciler
-func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, pluginRegistry plugins.PluginRegistry, logger *zap.Logger) *Reconciler {
+func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, pluginRegistry plugins.PluginRegistry, logger *zap.Logger) *Reconciler {
 	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   scheme,
-		Recorder: mgr.GetEventRecorderFor(ControllerName),
-		Gateway:  gateway,
-		Plugins:  pluginRegistry,
-		logger:   logger,
+		Client:        mgr.GetClient(),
+		Scheme:        scheme,
+		Recorder:      mgr.GetEventRecorderFor(ControllerName),
+		Gateway:       gateway,
+		Plugins:       pluginRegistry,
+		ProxyProvider: proxyProvider,
+		logger:        logger,
 	}
 }
 

@@ -10,8 +10,9 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -25,6 +26,7 @@ type conditionPlugin struct {
 // Params contains dependencies for rollout plugin
 type Params struct {
 	Client                 client.Client
+	ProxyProvider          proxy.ProxyProvider
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 	Gateway                gateways.Gateway
 	Logger                 *zap.Logger
@@ -68,6 +70,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			client:                 p.Client,
 			gateway:                p.Gateway,
 			modelConfigMapProvider: p.ModelConfigMapProvider,
+			proxyProvider:          p.ProxyProvider,
 			logger:                 p.Logger,
 		},
 	}
@@ -315,6 +318,7 @@ type RolloutCompletionActor struct {
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
+	proxyProvider          proxy.ProxyProvider
 }
 
 func (a *RolloutCompletionActor) GetType() string {
@@ -354,7 +358,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		// Add deployment-specific route for the new routing architecture
 		if a.gateway != nil {
 			// Add deployment-specific route: /<inference-server-name>/<deployment-name> -> /v2/models/<model-name>
-			proxyConfigRequest := gateways.AddDeploymentRouteRequest{
+			proxyConfigRequest := proxy.AddDeploymentRouteRequest{
 				InferenceServer: inferenceServerName,
 				Namespace:       deployment.Namespace,
 				ModelName:       modelName,
@@ -362,7 +366,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			}
 
-			if err := a.gateway.AddDeploymentRoute(ctx, a.logger, proxyConfigRequest); err != nil {
+			if err := a.proxyProvider.AddDeploymentRoute(ctx, a.logger, proxyConfigRequest); err != nil {
 				a.logger.Error("Failed to add deployment-specific route", zap.Error(err))
 				return &apipb.Condition{
 					Type:    a.GetType(),

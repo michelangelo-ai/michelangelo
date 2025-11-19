@@ -1,21 +1,24 @@
 package triton
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TritonPlugin implements InferenceServerPlugin for Triton backend
 type TritonPlugin struct {
-	gateway gateways.Gateway
+	gateway       gateways.Gateway
+	proxyProvider proxy.ProxyProvider
 }
 
 // NewPlugin creates a new Triton plugin
-func NewPlugin(gateway gateways.Gateway) plugins.InferenceServerPlugin {
+func NewPlugin(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
-		gateway: gateway,
+		gateway:       gateway,
+		proxyProvider: proxyProvider,
 	}
 }
 
@@ -27,28 +30,31 @@ func (p *TritonPlugin) GetType() v2pb.BackendType {
 // GetCreationPlugin returns the plugin for infrastructure creation
 func (p *TritonPlugin) GetCreationPlugin() plugins.Plugin {
 	return &TritonCreationPlugin{
-		gateway: p.gateway,
+		gateway:       p.gateway,
+		proxyProvider: p.proxyProvider,
 	}
 }
 
 // GetDeletionPlugin returns the plugin for infrastructure cleanup
 func (p *TritonPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) plugins.Plugin {
 	return &TritonDeletionPlugin{
-		gateway: p.gateway,
+		gateway:       p.gateway,
+		proxyProvider: p.proxyProvider,
 	}
 }
 
 // TritonCreationPlugin implements the Plugin interface for creation lifecycle
 type TritonCreationPlugin struct {
-	gateway gateways.Gateway
+	gateway       gateways.Gateway
+	proxyProvider proxy.ProxyProvider
 }
 
 func (p *TritonCreationPlugin) GetActors() []plugins.ConditionActor {
 	return []plugins.ConditionActor{
-		NewValidationActor(p.gateway),
+		NewValidationActor(p.gateway, p.proxyProvider),
 		NewResourceCreationActor(p.gateway),
 		NewHealthCheckActor(p.gateway),
-		NewProxyConfigurationActor(p.gateway),
+		NewProxyConfigurationActor(p.gateway, p.proxyProvider),
 	}
 }
 
@@ -75,12 +81,13 @@ func (p *TritonCreationPlugin) PutCondition(resource *v2pb.InferenceServer, cond
 
 // TritonDeletionPlugin implements the Plugin interface for deletion lifecycle
 type TritonDeletionPlugin struct {
-	gateway gateways.Gateway
+	gateway       gateways.Gateway
+	proxyProvider proxy.ProxyProvider
 }
 
 func (p *TritonDeletionPlugin) GetActors() []plugins.ConditionActor {
 	return []plugins.ConditionActor{
-		NewCleanupActor(p.gateway),
+		NewCleanupActor(p.gateway, p.proxyProvider),
 	}
 }
 
