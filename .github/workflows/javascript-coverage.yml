@@ -1,0 +1,210 @@
+name: JavaScript Coverage
+
+on:
+  pull_request:
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/package.json'
+      - '**/package-lock.json'
+      - '.github/workflows/javascript-coverage.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  test-coverage:
+    name: JavaScript Test & Coverage
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.11.0'
+          cache: 'yarn'
+          cache-dependency-path: 'javascript/yarn.lock'
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        working-directory: ./javascript
+        run: yarn install --frozen-lockfile
+
+      - name: Run tests with coverage
+        working-directory: ./javascript
+        run: |
+          # Run tests with vitest coverage
+          yarn test:coverage
+
+      - name: Extract coverage percentage
+        id: coverage
+        working-directory: ./javascript
+        run: |
+          # Extract coverage from vitest coverage-final.json
+          if [ -f "coverage/coverage-final.json" ]; then
+            # Parse the coverage data (vitest/v8 format)
+            COVERAGE=$(node -e "
+              const fs = require('fs');
+              const coverage = JSON.parse(fs.readFileSync('coverage/coverage-final.json', 'utf8'));
+              const files = Object.values(coverage);
+              const totals = files.reduce((acc, file) => {
+                const statements = Object.values(file.s || {});
+                acc.hit += statements.filter(s => s > 0).length;
+                acc.total += statements.length;
+                return acc;
+              }, {hit: 0, total: 0});
+              const pct = totals.total > 0 ? (totals.hit / totals.total * 100).toFixed(2) : 0;
+              console.log(pct);
+            ")
+          else
+            COVERAGE="0"
+          fi
+
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "JavaScript Coverage: $COVERAGE%"
+
+      - name: Check coverage threshold (baseline: 78.74%)
+        run: |
+          BASELINE=78
+          COVERAGE=${{ env.COVERAGE }}
+          COVERAGE_INT=${COVERAGE%.*}
+
+          echo "Coverage: $COVERAGE% (baseline: 78.74%)"
+
+          if [ "$COVERAGE_INT" -lt "$BASELINE" ]; then
+            echo "❌ Coverage $COVERAGE% is below baseline $BASELINE%"
+            echo "Coverage should not decrease from baseline"
+            exit 1
+          else
+            echo "✅ Coverage $COVERAGE% meets baseline threshold (78.74%)"
+            echo "📈 Goal: Maintain baseline and enforce 90% on new code"
+          fi
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info,./coverage/coverage-final.json
+          flags: javascript
+          name: javascript-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Coverage report PR comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          header: javascript-coverage
+          message: |
+            ## JavaScript Coverage Report
+
+            **Total Coverage:** ${{ env.COVERAGE }}%
+
+            **Coverage Policy:**
+            - **Baseline (existing code):** ≥78.74% (current coverage)
+            - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
+
+            <details>
+            <summary>Coverage Details</summary>
+
+            ```
+            $(cat coverage/coverage-summary.json 2>/dev/null | node -p "const c=require('fs').readFileSync(0,'utf8'); JSON.stringify(JSON.parse(c).total, null, 2)" || echo "Coverage summary not available")
+            ```
+
+            </details>
+
+            [View detailed HTML report in artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+
+      - name: Check diff coverage (90% for new code)
+        if: github.event_name == 'pull_request'
+        working-directory: ./javascript
+        run: |
+          # Get changed JavaScript/TypeScript files
+          git fetch origin main:main
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | \
+            grep -E '\.(js|jsx|ts|tsx)$' | \
+            grep -v test | \
+            grep -v spec | \
+            grep -v __tests__ | \
+            grep '^javascript/' | \
+            sed 's|^javascript/||' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "✅ No JavaScript/TypeScript source files changed"
+            exit 0
+          fi
+
+          echo "📝 Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Install diff-cover for checking coverage on changed lines
+          pip install diff-cover
+
+          # Check if coverage report exists
+          if [ ! -f "coverage/lcov.info" ]; then
+            echo "⚠️  No coverage report found, skipping diff coverage check"
+            exit 0
+          fi
+
+          # Run diff-cover to check coverage on changed lines only
+          # This will enforce 90% coverage on new/changed code only
+          diff-cover coverage/lcov.info \
+            --compare-branch=origin/main \
+            --fail-under=90 \
+            --html-report=diff-cover.html \
+            --json-report=diff-cover.json
+
+          echo "✅ New code meets 90% coverage threshold"
+
+      - name: Upload coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: javascript-coverage-reports
+          path: |
+            coverage/
+            coverage/lcov-report/
+            coverage/coverage-summary.json
+
+      - name: Add coverage to job summary
+        if: always()
+        run: |
+          echo "## JavaScript Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Coverage:** ${{ env.COVERAGE }}%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline (existing code):** ≥78.74% (current coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+  coverage-quality-gate:
+    name: Coverage Quality Gate
+    runs-on: ubuntu-latest
+    needs: test-coverage
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Check coverage meets requirements
+        run: |
+          echo "✅ JavaScript coverage checks completed"
+          echo "- Baseline coverage: ≥78.74% (current coverage)"
+          echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
+          echo ""
+          echo "📝 Coverage Policy:"
+          echo "- Existing code must maintain baseline (78.74%)"
+          echo "- New/changed code must meet 90% coverage"

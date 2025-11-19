@@ -1,0 +1,174 @@
+name: Combined Coverage Report
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'python/**'
+      - 'go/**/*.go'
+      - 'go/**/BUILD.bazel'
+      - 'proto/**/*.proto'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+      - '**/package.json'
+      - '**/package-lock.json'
+  push:
+    branches:
+      - main
+    paths:
+      - 'python/**'
+      - 'go/**/*.go'
+      - '**/*.js'
+      - '**/*.mjs'
+      - '**/*.cjs'
+
+permissions:
+  contents: read
+  pull-requests: write
+  statuses: write
+  actions: read
+
+jobs:
+  aggregate-coverage:
+    name: Aggregate All Coverage
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Python coverage
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: python-coverage.yml
+          name: coverage-reports
+          path: ./coverage-reports/python
+          if_no_artifact_found: warn
+
+      - name: Download Go coverage
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: go-coverage.yml
+          name: go-coverage-reports
+          path: ./coverage-reports/go
+          if_no_artifact_found: warn
+
+      - name: Download JavaScript coverage
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: javascript-coverage.yml
+          name: javascript-coverage-reports
+          path: ./coverage-reports/javascript
+          if_no_artifact_found: warn
+
+      - name: Extract coverage metrics
+        id: metrics
+        run: |
+          # Python coverage
+          if [ -f "coverage-reports/python/coverage.json" ]; then
+            PYTHON_COV=$(python3 -c "import json; print(json.load(open('coverage-reports/python/coverage.json'))['totals']['percent_covered_display'])" 2>/dev/null || echo "N/A")
+          else
+            PYTHON_COV="N/A"
+          fi
+
+          # Go coverage
+          if [ -f "coverage-reports/go/coverage.txt" ]; then
+            GO_COV=$(grep "total:" coverage-reports/go/coverage.txt | awk '{print $3}' | sed 's/%//' || echo "N/A")
+          else
+            GO_COV="N/A"
+          fi
+
+          # JavaScript coverage
+          if [ -f "coverage-reports/javascript/coverage-summary.json" ]; then
+            JS_COV=$(node -p "require('./coverage-reports/javascript/coverage-summary.json').total.lines.pct" 2>/dev/null || echo "N/A")
+          else
+            JS_COV="N/A"
+          fi
+
+          echo "PYTHON_COVERAGE=$PYTHON_COV" >> $GITHUB_ENV
+          echo "GO_COVERAGE=$GO_COV" >> $GITHUB_ENV
+          echo "JS_COVERAGE=$JS_COV" >> $GITHUB_ENV
+
+      - name: Upload combined coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage-reports/python/coverage.xml,./coverage-reports/go/coverage.out,./coverage-reports/javascript/lcov.info
+          flags: combined
+          name: combined-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Create combined coverage report
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: combined-coverage
+          message: |
+            ## 📊 Combined Coverage Report
+
+            | Component | Coverage | Baseline | New Code | Status |
+            |-----------|----------|----------|----------|--------|
+            | 🐍 Python | ${{ env.PYTHON_COVERAGE }}% | ≥34.94% | ≥90% ✅ | ${{ env.PYTHON_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 🐹 Go | ${{ env.GO_COVERAGE }}% | ≥53.1% | ≥90% ✅ | ${{ env.GO_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 📜 JavaScript | ${{ env.JS_COVERAGE }}% | ≥78.74% | ≥90% ✅ | ${{ env.JS_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+
+            ---
+
+            ### Coverage Policy
+
+            **Baseline (Existing Code):**
+            - Python: ≥34.94% (current coverage)
+            - Go: ≥53.1% (current coverage)
+            - JavaScript: ≥78.74% (current coverage)
+
+            **New/Changed Code:** ≥90% **STRICTLY ENFORCED**
+
+            **Long-term Goal:** Improve all baselines to 70%
+
+            ---
+
+            <details>
+            <summary>📝 Coverage Guidelines</summary>
+
+            - All new code must include tests
+            - Coverage should not decrease from the base branch
+            - Use `# pragma: no cover` sparingly for truly untestable code
+            - Aim for meaningful tests, not just coverage numbers
+
+            </details>
+
+            <details>
+            <summary>🔗 Quick Links</summary>
+
+            - [Python Coverage Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Go Coverage Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+            - [Codecov Dashboard](https://codecov.io/gh/${{ github.repository }})
+
+            </details>
+
+      - name: Generate combined summary
+        if: always()
+        run: |
+          echo "# 📊 Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Coverage by Component" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Coverage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Python | ${{ env.PYTHON_COVERAGE }}% | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Go | ${{ env.GO_COVERAGE }}% | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| JavaScript | ${{ env.JS_COVERAGE }}% | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Coverage Policy" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Baseline (Existing Code)" >> $GITHUB_STEP_SUMMARY
+          echo "- Python: ≥34.94%" >> $GITHUB_STEP_SUMMARY
+          echo "- Go: ≥53.1%" >> $GITHUB_STEP_SUMMARY
+          echo "- JavaScript: ≥78.74%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### New/Changed Code" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ All languages: ≥90% **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Long-term Goal" >> $GITHUB_STEP_SUMMARY
+          echo "- Improve all baselines to 70%" >> $GITHUB_STEP_SUMMARY

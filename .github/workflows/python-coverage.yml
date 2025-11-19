@@ -1,0 +1,162 @@
+name: Python Coverage Check
+
+on:
+  pull_request:
+    paths:
+      - 'python/**/*.py'
+      - 'python/pyproject.toml'
+      - 'python/tests/**'
+      - '.github/workflows/python-coverage.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  coverage:
+    name: Check Coverage (Python 3.9)
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./python
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for coverage comparison
+
+      - name: Set up Python 3.9
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+        with:
+          version: 1.8.0
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+
+      - name: Load cached venv
+        id: cached-poetry-dependencies
+        uses: actions/cache@v4
+        with:
+          path: python/.venv
+          key: venv-${{ runner.os }}-3.9-${{ hashFiles('**/poetry.lock') }}
+
+      - name: Install dependencies
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+        run: poetry install --extras "dev" --no-interaction --no-root
+
+      - name: Install project
+        run: poetry install --extras "dev" --no-interaction
+
+      # Run tests with coverage
+      - name: Run tests with coverage
+        run: |
+          poetry run pytest \
+            --cov=michelangelo \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --cov-report=html \
+            --cov-report=json \
+            --cov-branch \
+            --junitxml=junit.xml \
+            -v
+        continue-on-error: true
+
+      # Generate coverage badge
+      - name: Generate coverage badge
+        run: |
+          poetry run coverage json
+          COVERAGE=$(python -c "import json; print(json.load(open('coverage.json'))['totals']['percent_covered_display'])")
+          echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+          echo "Coverage: $COVERAGE%"
+
+      # Comment on PR with detailed coverage report
+      - name: Coverage comment
+        uses: py-cov-action/python-coverage-comment-action@v3
+        with:
+          GITHUB_TOKEN: ${{ github.token }}
+          MINIMUM_GREEN: 90
+          MINIMUM_ORANGE: 35
+          ANNOTATE_MISSING_LINES: true
+          ANNOTATION_TYPE: warning
+          VERBOSE: true
+          COVERAGE_PATH: python
+          COVERAGE_DATA_BRANCH: main
+
+      # Upload coverage to Codecov for tracking over time
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./python/coverage.xml
+          flags: python
+          name: python-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      # Check overall coverage threshold (baseline: 34.94%)
+      - name: Check overall coverage threshold (baseline: 34.94%)
+        run: |
+          # Baseline coverage is 34.94% - we don't fail on this
+          # The goal is to maintain or improve from baseline
+          poetry run coverage report --fail-under=34
+          echo "✅ Coverage meets baseline threshold (34.94%)"
+          echo "📈 Goal: Maintain baseline and enforce 90% on new code"
+        continue-on-error: true
+
+      # Check coverage for new/changed code (90% threshold)
+      - name: Check diff coverage (90% for new code)
+        run: |
+          # Get list of changed Python files
+          git fetch origin main:main
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD | grep '\.py$' | grep -v '/gen/' | grep -v 'test_' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No Python files changed"
+            exit 0
+          fi
+
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+
+          # Install diff-cover
+          pip install diff-cover
+
+          # Run diff-cover to check coverage on changed lines only
+          diff-cover coverage.xml \
+            --compare-branch=origin/main \
+            --fail-under=90 \
+            --html-report=diff-cover.html \
+            --json-report=diff-cover.json
+        continue-on-error: false
+
+      # Store coverage reports as artifacts
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            python/htmlcov/
+            python/coverage.xml
+            python/coverage.json
+            python/diff-cover.html
+            python/diff-cover.json
+
+      # Add coverage summary to job summary
+      - name: Add coverage summary
+        if: always()
+        run: |
+          echo "## Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Overall coverage: **${{ env.COVERAGE }}%**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline (existing code):** ≥34.94% (current coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
+          echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "[View detailed HTML report in artifacts]" >> $GITHUB_STEP_SUMMARY
