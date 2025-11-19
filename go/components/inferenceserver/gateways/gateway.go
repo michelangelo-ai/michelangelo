@@ -9,7 +9,7 @@ import (
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/michelangelo-ai/michelangelo/go/shared/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -19,8 +19,7 @@ type gateway struct {
 	kubeClient    client.Client
 	dynamicClient dynamic.Interface
 
-	registry         *registry
-	httpRouteManager RouteManager
+	registry *registry
 
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 }
@@ -28,7 +27,6 @@ type gateway struct {
 type Params struct {
 	KubeClient             client.Client
 	DynamicClient          dynamic.Interface
-	HttpRouteManager       RouteManager
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
@@ -43,7 +41,6 @@ func NewGatewayWithClients(p Params) Gateway {
 
 		registry: newRegistry(),
 
-		httpRouteManager:       p.HttpRouteManager,
 		modelConfigMapProvider: p.ModelConfigMapProvider,
 	}
 }
@@ -125,30 +122,4 @@ func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, requ
 		return false, err
 	}
 	return backend.CheckModelStatus(ctx, logger, request)
-}
-
-// Proxy Management Methods
-
-// ConfigureProxy sets up Istio VirtualService routing
-func (g *gateway) ConfigureProxy(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) error {
-	logger.Info("Configuring proxy for inference server", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
-	return g.httpRouteManager.ConfigureProxy(ctx, logger, request)
-}
-
-// GetProxyStatus checks the status of Istio VirtualService configuration
-func (g *gateway) GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error) {
-	logger.Info("Getting proxy status for inference server", zap.String("server", request.InferenceServer))
-	return g.httpRouteManager.GetProxyStatus(ctx, logger, request)
-}
-
-// AddDeploymentSpecificRoute adds a deployment-specific route to the HTTPRoute
-func (g *gateway) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error {
-	logger.Info("Adding deployment-specific route for inference server", zap.String("server", request.InferenceServer), zap.String("deployment", request.DeploymentName), zap.String("model", request.ModelName))
-	return g.httpRouteManager.AddDeploymentRoute(ctx, logger, request)
-}
-
-// DeleteRoute deletes a network route by name and namespace
-func (g *gateway) DeleteRoute(ctx context.Context, logger *zap.Logger, request DeleteRouteRequest) error {
-	logger.Info("Deleting network route for inference server", zap.String("server", request.InferenceServer), zap.String("namespace", request.Namespace))
-	return g.httpRouteManager.DeleteRoute(ctx, logger, request)
 }

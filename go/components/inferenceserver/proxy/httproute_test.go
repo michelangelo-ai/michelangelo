@@ -1,4 +1,4 @@
-package httproute
+package proxy
 
 import (
 	"context"
@@ -13,21 +13,20 @@ import (
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 func TestConfigureProxy(t *testing.T) {
 	tests := []struct {
 		name              string
-		request           gateways.ConfigureProxyRequest
+		request           ConfigureProxyRequest
 		existingHTTPRoute *unstructured.Unstructured
 		expectError       bool
 		validateFunc      func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
 	}{
 		{
 			name: "create new httproute without production route, returns error",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "new-server",
 				Namespace:       "default",
 				ModelName:       "new-model",
@@ -49,7 +48,7 @@ func TestConfigureProxy(t *testing.T) {
 		},
 		{
 			name: "update existing httproute production route successfully",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelName:       "updated-model",
@@ -81,7 +80,7 @@ func TestConfigureProxy(t *testing.T) {
 		},
 		{
 			name: "update production route in prod namespace with existing httproute",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "prod-server",
 				Namespace:       "prod-namespace",
 				ModelName:       "updated-model",
@@ -111,7 +110,7 @@ func TestConfigureProxy(t *testing.T) {
 		},
 		{
 			name: "production route not found, returns error",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelName:       "model",
@@ -127,7 +126,7 @@ func TestConfigureProxy(t *testing.T) {
 		},
 		{
 			name: "httproute already configured for desired model, no update needed",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelName:       "existing-model",
@@ -142,7 +141,7 @@ func TestConfigureProxy(t *testing.T) {
 		},
 		{
 			name: "httproute with no rules, returns error",
-			request: gateways.ConfigureProxyRequest{
+			request: ConfigureProxyRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelName:       "model",
@@ -198,21 +197,21 @@ func TestConfigureProxy(t *testing.T) {
 func TestGetProxyStatus(t *testing.T) {
 	tests := []struct {
 		name              string
-		request           gateways.GetProxyStatusRequest
+		request           GetProxyStatusRequest
 		existingHTTPRoute *unstructured.Unstructured
-		expectedResponse  *gateways.GetProxyStatusResponse
+		expectedResponse  *GetProxyStatusResponse
 	}{
 		{
 			name: "get status for existing httproute with routes",
-			request: gateways.GetProxyStatusRequest{
+			request: GetProxyStatusRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 			},
 			existingHTTPRoute: createHTTPRouteWithBackendAndFilters("test-server-httproute", "default", "/test-server", "test-server-inference-service", "/v2/models/test-model"),
-			expectedResponse: &gateways.GetProxyStatusResponse{
-				Status: gateways.ProxyStatus{
+			expectedResponse: &GetProxyStatusResponse{
+				Status: ProxyStatus{
 					Configured: true,
-					Routes: []gateways.ActiveRoute{
+					Routes: []ActiveRoute{
 						{
 							Path:        "/test-server",
 							Destination: "test-server-inference-service",
@@ -226,13 +225,13 @@ func TestGetProxyStatus(t *testing.T) {
 		},
 		{
 			name: "get status for non-existent httproute",
-			request: gateways.GetProxyStatusRequest{
+			request: GetProxyStatusRequest{
 				InferenceServer: "non-existent-server",
 				Namespace:       "default",
 			},
 			existingHTTPRoute: nil,
-			expectedResponse: &gateways.GetProxyStatusResponse{
-				Status: gateways.ProxyStatus{
+			expectedResponse: &GetProxyStatusResponse{
+				Status: ProxyStatus{
 					Configured: false,
 					Message:    "HTTPRoute not found: httproutes.gateway.networking.k8s.io \"non-existent-server-httproute\" not found",
 				},
@@ -240,13 +239,13 @@ func TestGetProxyStatus(t *testing.T) {
 		},
 		{
 			name: "get status for httproute with no routes",
-			request: gateways.GetProxyStatusRequest{
+			request: GetProxyStatusRequest{
 				InferenceServer: "empty-server",
 				Namespace:       "default",
 			},
 			existingHTTPRoute: createEmptyHTTPRoute("empty-server-httproute", "default"),
-			expectedResponse: &gateways.GetProxyStatusResponse{
-				Status: gateways.ProxyStatus{
+			expectedResponse: &GetProxyStatusResponse{
+				Status: ProxyStatus{
 					Configured: true,
 					Routes:     nil,
 					Message:    "HTTPRoute is properly configured",
@@ -282,14 +281,14 @@ func TestGetProxyStatus(t *testing.T) {
 func TestAddDeploymentRoute(t *testing.T) {
 	tests := []struct {
 		name         string
-		request      gateways.AddDeploymentRouteRequest
+		request      AddDeploymentRouteRequest
 		httpRoute    *unstructured.Unstructured
 		expectError  bool
 		validateFunc func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
 	}{
 		{
 			name: "add new deployment route successfully",
-			request: gateways.AddDeploymentRouteRequest{
+			request: AddDeploymentRouteRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				DeploymentName:  "new-deployment",
@@ -326,7 +325,7 @@ func TestAddDeploymentRoute(t *testing.T) {
 		},
 		{
 			name: "update existing deployment route",
-			request: gateways.AddDeploymentRouteRequest{
+			request: AddDeploymentRouteRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				DeploymentName:  "existing-deployment",
@@ -356,7 +355,7 @@ func TestAddDeploymentRoute(t *testing.T) {
 		},
 		{
 			name: "add deployment route to non-existent httproute, returns error",
-			request: gateways.AddDeploymentRouteRequest{
+			request: AddDeploymentRouteRequest{
 				InferenceServer: "non-existent-server",
 				Namespace:       "default",
 				DeploymentName:  "deployment",
@@ -447,7 +446,7 @@ func TestDeleteHTTPRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.DeleteRoute(context.Background(), zap.NewNop(), gateways.DeleteRouteRequest{
+			err := manager.DeleteRoute(context.Background(), zap.NewNop(), DeleteRouteRequest{
 				InferenceServer: tt.httpRouteName,
 				Namespace:       tt.namespace,
 			})

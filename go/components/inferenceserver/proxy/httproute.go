@@ -1,4 +1,4 @@
-package httproute
+package proxy
 
 import (
 	"context"
@@ -11,8 +11,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
-
-	"github.com/michelangelo-ai/michelangelo/go/shared/gateways"
 )
 
 const (
@@ -38,7 +36,7 @@ var (
 	}
 )
 
-var _ gateways.RouteManager = &httpRouteManager{} // Ensure httpRouteManager implements RouteManager interface
+var _ ProxyProvider = &httpRouteManager{} // Ensure httpRouteManager implements ProxyProvider interface
 
 type httpRouteManager struct {
 	dynamicClient dynamic.Interface
@@ -54,7 +52,7 @@ func NewHTTPRouteManager(dynamicClient dynamic.Interface, logger *zap.Logger) *h
 
 // Gateway API Proxy Management using HTTPRoute
 
-func (h *httpRouteManager) ConfigureProxy(ctx context.Context, logger *zap.Logger, request gateways.ConfigureProxyRequest) error {
+func (h *httpRouteManager) ConfigureProxy(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) error {
 	logger.Info("Configuring proxy with Gateway API HTTPRoute", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
 	httpRoute, err := h.getOrCreateHTTPRoute(ctx, logger, request)
 	if err != nil {
@@ -69,7 +67,7 @@ func (h *httpRouteManager) ConfigureProxy(ctx context.Context, logger *zap.Logge
 	return h.updateProductionRoute(ctx, logger, httpRoute, request)
 }
 
-func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap.Logger, request gateways.ConfigureProxyRequest) (*unstructured.Unstructured, error) {
+func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) (*unstructured.Unstructured, error) {
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
 
 	// Try to get existing HTTPRoute
@@ -157,7 +155,7 @@ func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap
 	return createdRoute, nil
 }
 
-func (h *httpRouteManager) updateProductionRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request gateways.ConfigureProxyRequest) error {
+func (h *httpRouteManager) updateProductionRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request ConfigureProxyRequest) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		logger.Error("rules not found in HTTPRoute",
@@ -268,14 +266,14 @@ func (h *httpRouteManager) updateProductionRoute(ctx context.Context, logger *za
 	return nil
 }
 
-func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logger, request gateways.GetProxyStatusRequest) (*gateways.GetProxyStatusResponse, error) {
+func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error) {
 	logger.Info("Getting proxy status from HTTPRoute", zap.String("server", request.InferenceServer))
 
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
 	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err != nil {
-		return &gateways.GetProxyStatusResponse{
-			Status: gateways.ProxyStatus{
+		return &GetProxyStatusResponse{
+			Status: ProxyStatus{
 				Configured: false,
 				Message:    fmt.Sprintf("HTTPRoute not found: %v", err),
 			},
@@ -285,15 +283,15 @@ func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logge
 	// Extract routes from HTTPRoute
 	routes, extractErr := h.extractActiveHTTPRoutes(httpRoute, request.InferenceServer)
 	if extractErr != nil {
-		return &gateways.GetProxyStatusResponse{
-			Status: gateways.ProxyStatus{
+		return &GetProxyStatusResponse{
+			Status: ProxyStatus{
 				Configured: false,
 				Message:    fmt.Sprintf("Failed to extract HTTPRoute routes: %v", extractErr),
 			},
 		}, nil
 	}
-	return &gateways.GetProxyStatusResponse{
-		Status: gateways.ProxyStatus{
+	return &GetProxyStatusResponse{
+		Status: ProxyStatus{
 			Configured: true,
 			Routes:     routes,
 			Message:    "HTTPRoute is properly configured",
@@ -302,7 +300,7 @@ func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logge
 }
 
 // addDeploymentRoute adds a deployment-specific route to the HTTPRoute
-func (h *httpRouteManager) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request gateways.AddDeploymentRouteRequest) error {
+func (h *httpRouteManager) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error {
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
 	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err != nil {
@@ -415,7 +413,7 @@ func (h *httpRouteManager) AddDeploymentRoute(ctx context.Context, logger *zap.L
 	return nil
 }
 
-func (h *httpRouteManager) DeleteRoute(ctx context.Context, logger *zap.Logger, request gateways.DeleteRouteRequest) error {
+func (h *httpRouteManager) DeleteRoute(ctx context.Context, logger *zap.Logger, request DeleteRouteRequest) error {
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
 	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
 		if errors.IsNotFound(err) {
@@ -434,7 +432,7 @@ func (h *httpRouteManager) DeleteRoute(ctx context.Context, logger *zap.Logger, 
 }
 
 // updateExistingDeploymentRoute updates an existing deployment-specific route
-func (h *httpRouteManager) updateExistingDeploymentRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request gateways.AddDeploymentRouteRequest, deploymentPath string) error {
+func (h *httpRouteManager) updateExistingDeploymentRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request AddDeploymentRouteRequest, deploymentPath string) error {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		logger.Error("rules not found in HTTPRoute",
@@ -526,7 +524,7 @@ func (h *httpRouteManager) updateExistingDeploymentRoute(ctx context.Context, lo
 }
 
 // isHTTPRouteAlreadyConfiguredForModel checks if the HTTPRoute already points to the desired model
-func (h *httpRouteManager) isHTTPRouteAlreadyConfiguredForModel(httpRoute *unstructured.Unstructured, request gateways.ConfigureProxyRequest) bool {
+func (h *httpRouteManager) isHTTPRouteAlreadyConfiguredForModel(httpRoute *unstructured.Unstructured, request ConfigureProxyRequest) bool {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
 		return false
@@ -573,13 +571,13 @@ func (h *httpRouteManager) isHTTPRouteAlreadyConfiguredForModel(httpRoute *unstr
 	return false
 }
 
-func (h *httpRouteManager) extractActiveHTTPRoutes(httpRoute *unstructured.Unstructured, inferenceServer string) ([]gateways.ActiveRoute, error) {
+func (h *httpRouteManager) extractActiveHTTPRoutes(httpRoute *unstructured.Unstructured, inferenceServer string) ([]ActiveRoute, error) {
 	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 	if err != nil || !found {
-		return []gateways.ActiveRoute{}, nil
+		return []ActiveRoute{}, nil
 	}
 
-	var routes []gateways.ActiveRoute
+	var routes []ActiveRoute
 
 	for _, rule := range rules {
 		ruleMap, ok := rule.(map[string]interface{})
@@ -650,7 +648,7 @@ func (h *httpRouteManager) extractActiveHTTPRoutes(httpRoute *unstructured.Unstr
 			}
 
 			if path != "" {
-				routes = append(routes, gateways.ActiveRoute{
+				routes = append(routes, ActiveRoute{
 					Path:        path,
 					Destination: destination,
 					Rewrite:     rewrite,
