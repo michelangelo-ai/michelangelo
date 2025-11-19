@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_binary", "go_library", "go_test")
+
+go_library(
+    name = "proto-patcher_lib",
+    srcs = ["main.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/tools/proto-patcher",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//tools/proto-patcher/config",
+        "//tools/proto-patcher/generator",
+        "//tools/proto-patcher/parser",
+        "//tools/proto-patcher/patcher",
+    ],
+)
+
+go_binary(
+    name = "proto-patcher",
+    embed = [":proto-patcher_lib"],
+    visibility = ["//visibility:public"],
+)
+
+go_test(
+    name = "proto-patcher_test",
+    srcs = ["main_test.go"],
+    embed = [":proto-patcher_lib"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

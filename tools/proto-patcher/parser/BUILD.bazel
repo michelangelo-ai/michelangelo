@@ -1,0 +1,23 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "parser",
+    srcs = ["parser.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/tools/proto-patcher/parser",
+    visibility = ["//tools/proto-patcher:__subpackages__"],
+    deps = [
+        "@com_github_jhump_protoreflect//desc",
+        "@com_github_jhump_protoreflect//desc/protoparse",
+        "@org_golang_google_protobuf//types/descriptorpb",
+    ],
+)
+
+go_test(
+    name = "parser_test",
+    srcs = ["parser_test.go"],
+    embed = [":parser"],
+    deps = [
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)

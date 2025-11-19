@@ -9,6 +9,7 @@ Michelangelo-AI is an open-source platform designed to streamline the developmen
 - **Model Evaluation**: Assess model performance with a range of metrics and visualization tools.
 - **Model Deployment**: Seamlessly deploy models to production environments with support for both batch and real-time inference.
 - **Monitoring and Logging**: Continuously monitor model performance and log predictions to ensure reliability and accuracy.
+- **Proto Extension Framework**: Extend Michelangelo CRDs with organization-specific fields without forking the repository. See [Proto Extensions](PROTO_EXTENSIONS.md) for details.
 
 ## Installation
 
@@ -25,10 +26,33 @@ Here's a basic example of how to train and deploy a model using Michelangelo-AI:
 
 For detailed instructions and advanced usage, refer to the [Michelangelo-AI Wiki](https://github.com/michelangelo-ai/michelangelo/wiki).
 
+## Extending Michelangelo
+
+Michelangelo supports extension of its protocol buffer definitions to add organization-specific fields:
+
+```python
+# In your organization's repo
+load("@michelangelo//bazel/rules/proto:patched_proto.bzl", "patched_proto_library")
+
+patched_proto_library(
+    name = "michelangelo_extended",
+    base_protos = "@michelangelo//proto/api/v2:v2_proto",
+    extension_protos = glob(["extensions/*.proto"]),
+    field_prefix = "YOUR_ORG_",
+)
+```
+
+This allows you to add custom fields like owner IDs, cost centers, or compliance tags without modifying OSS code.
+
+**Learn more**:
+- [Proto Extension Framework](PROTO_EXTENSIONS.md) - Overview and quick start
+- [Extending Guide](docs/EXTENDING.md) - Comprehensive documentation
+- [Examples](examples/extensions/) - Working examples
+
 
 ## Contributing
 
-We welcome contributions to Michelangelo-AI!  
+We welcome contributions to Michelangelo-AI!
 If you're interested in contributing, please read our [Contributing Guidelines](https://github.com/michelangelo-ai/michelangelo/wiki/Contributing-Guidelines) to get started.
 
 

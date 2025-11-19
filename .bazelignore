@@ -2,4 +2,9 @@ docker
 go/vendor
 pkg
 python
-tools
+tools/bazel
+tools/gazelle
+tools/go
+tools/goimports
+tools/mamockgen
+tools/gopackagesdriver.sh

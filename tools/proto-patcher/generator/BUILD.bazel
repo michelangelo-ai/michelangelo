@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "generator",
+    srcs = ["generator.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/tools/proto-patcher/generator",
+    visibility = ["//tools/proto-patcher:__subpackages__"],
+    deps = [
+        "//tools/proto-patcher/parser",
+    ],
+)
+
+go_test(
+    name = "generator_test",
+    srcs = ["generator_test.go"],
+    embed = [":generator"],
+    deps = [
+        "//tools/proto-patcher/parser",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
+
+
+

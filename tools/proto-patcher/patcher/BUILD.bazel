@@ -1,0 +1,25 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "patcher",
+    srcs = ["patcher.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/tools/proto-patcher/patcher",
+    visibility = ["//tools/proto-patcher:__subpackages__"],
+    deps = [
+        "//tools/proto-patcher/parser",
+    ],
+)
+
+go_test(
+    name = "patcher_test",
+    srcs = ["patcher_test.go"],
+    embed = [":patcher"],
+    deps = [
+        "//tools/proto-patcher/parser",
+        "@com_github_stretchr_testify//assert",
+        "@com_github_stretchr_testify//require",
+    ],
+)
+
+
+

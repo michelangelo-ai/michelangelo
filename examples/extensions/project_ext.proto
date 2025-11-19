@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package example.michelangelo.extensions;
+
+import "michelangelo/api/options.proto";
+
+// Example extension fields for ProjectSpec
+// This demonstrates how organizations can add their own fields
+message ProjectSpecExtension {
+  // Organization-specific owner identifier
+  // Must be a valid UUID
+  string owner_id = 1 [(michelangelo.api.validation) = {
+    uuid: true,
+    required: true,
+    msg: "owner_id must be a valid UUID"
+  }];
+
+  // Cost center or budget code
+  // Format: Uppercase letters, dash, numbers (e.g., "ML-123")
+  string cost_center = 2 [(michelangelo.api.validation) = {
+    pattern: "[A-Z]+-[0-9]+",
+    required: true,
+    msg: "cost_center must match pattern [A-Z]+-[0-9]+"
+  }];
+
+  // Compliance tags for data governance
+  // At least one tag required from the allowed list
+  repeated string compliance_tags = 3 [(michelangelo.api.validation) = {
+    min_items: "1",
+    items: {in: ["pii", "gdpr", "ccpa", "hipaa", "sox", "none"]}
+  }];
+
+  // Department or organization unit
+  string department = 4 [(michelangelo.api.validation) = {
+    optional: true,
+    max_length: "100"
+  }];
+
+  // Budget allocated for this project in USD
+  int64 budget_usd = 5 [(michelangelo.api.validation) = {
+    min: "0",
+    optional: true
+  }];
+
+  // Approval required before resource creation
+  bool requires_approval = 6;
+
+  // Security classification level
+  enum SecurityLevel {
+    SECURITY_LEVEL_INVALID = 0;
+    SECURITY_LEVEL_PUBLIC = 1;
+    SECURITY_LEVEL_INTERNAL = 2;
+    SECURITY_LEVEL_CONFIDENTIAL = 3;
+    SECURITY_LEVEL_RESTRICTED = 4;
+  }
+
+  SecurityLevel security_level = 7 [(michelangelo.api.validation) = {
+    min: "1",  // Must not be INVALID
+    required: true
+  }];
+}
+
+// Example extension fields for ProjectStatus
+message ProjectStatusExtension {
+  // Internal workflow state
+  string internal_state = 1;
+
+  // Last audit timestamp (Unix epoch)
+  int64 last_audit_timestamp = 2;
+
+  // Compliance check status
+  bool compliance_verified = 3;
+
+  // Budget utilization percentage (0-100)
+  double budget_utilization_percent = 4 [(michelangelo.api.validation) = {
+    min: "0",
+    max: "100"
+  }];
+}
+
+
