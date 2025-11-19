@@ -1,6 +1,7 @@
 import { createClient, Interceptor } from '@connectrpc/connect';
 import { createGrpcWebTransport } from '@connectrpc/connect-web';
 
+import { ModelService } from './gen/michelangelo/api/v2/model_svc_pb';
 import { PipelineRunService } from './gen/michelangelo/api/v2/pipeline_run_svc_pb';
 import { PipelineService } from './gen/michelangelo/api/v2/pipeline_svc_pb';
 import { ProjectService } from './gen/michelangelo/api/v2/project_svc_pb';
@@ -24,6 +25,7 @@ type Services = {
   PipelineService: ReturnType<typeof createClient<typeof PipelineService>>;
   PipelineRunService: ReturnType<typeof createClient<typeof PipelineRunService>>;
   TriggerRunService: ReturnType<typeof createClient<typeof TriggerRunService>>;
+  ModelService: ReturnType<typeof createClient<typeof ModelService>>;
 };
 
 let servicesPromise: Promise<Services> | null = null;
@@ -44,6 +46,7 @@ async function createServices(): Promise<Services> {
     PipelineService: createClient(PipelineService, transport),
     PipelineRunService: createClient(PipelineRunService, transport),
     TriggerRunService: createClient(TriggerRunService, transport),
+    ModelService: createClient(ModelService, transport),
   } as const;
 }
 
