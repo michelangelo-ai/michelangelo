@@ -16,7 +16,7 @@ export const MODEL_CELL_CONFIG: ColumnConfig<object>[] = [
   {
     id: 'metadata.creationTimestamp.seconds',
     label: 'Created',
-    type: CellType.DATE
+    type: CellType.DATE,
   },
   {
     id: 'spec.modelFamily.name',
