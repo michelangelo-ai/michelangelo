@@ -77,6 +77,11 @@ def make_ignore_files(target_path: str):
 
         sub_dir = current_dir.relative_to(target_dir)
 
-        return [f for f in files if os.path.exists(os.path.join(target_path, sub_dir, f)) and os.path.isfile(os.path.join(target_path, sub_dir, f))]
+        return [
+            f
+            for f in files
+            if os.path.exists(os.path.join(target_path, sub_dir, f))
+            and os.path.isfile(os.path.join(target_path, sub_dir, f))
+        ]
 
     return ignore_files

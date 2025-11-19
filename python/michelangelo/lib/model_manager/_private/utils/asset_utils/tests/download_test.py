@@ -1,7 +1,6 @@
 import os
 import tempfile
 from unittest import TestCase
-from unittest.mock import patch
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 

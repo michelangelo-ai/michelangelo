@@ -107,7 +107,9 @@ class FolderGeneratorTest(TestCase):
                 content = f.read()
                 self.assertEqual(content, "tmp_file_content_2")
 
-            with open(pjoin(temp_dir, "triton", "0", "tmp_sub_sub_dir", "tmp_file_3")) as f:
+            with open(
+                pjoin(temp_dir, "triton", "0", "tmp_sub_sub_dir", "tmp_file_3")
+            ) as f:
                 content = f.read()
                 self.assertEqual(content, "tmp_file_content_3")
 
