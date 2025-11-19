@@ -1,7 +1,15 @@
-from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module import module_attr
-from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn1 import fn1
-from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn2 import fn2
-from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.package import fn1 as pfn1
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.simple_module import (
+    module_attr,
+)
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn1 import (
+    fn1,
+)
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn2 import (
+    fn2,
+)
+from michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.package import (
+    fn1 as pfn1,
+)
 import michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.folder.fn3 as fn3
 
 

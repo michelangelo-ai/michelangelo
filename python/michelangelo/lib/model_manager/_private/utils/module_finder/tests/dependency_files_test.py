@@ -1,11 +1,15 @@
 from unittest import TestCase
 import os
-from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
+from michelangelo.lib.model_manager._private.utils.module_finder import (
+    find_dependency_files,
+)
 
 
 class DependencyFilesTest(TestCase):
     def test_find_imported_module_files(self):
-        files = find_dependency_files("michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports")
+        files = find_dependency_files(
+            "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports"
+        )
 
         clean_paths = sorted(
             [os.path.join("", *f.split("/")[-2:]) for f in files],

@@ -44,5 +44,9 @@ def get_node_module(
         return node.module
 
     path_splits = module.__name__.split(".")
-    node_module_name = ".".join([*path_splits[: -node.level], node.module]) if len(path_splits) > 0 else node.module
+    node_module_name = (
+        ".".join([*path_splits[: -node.level], node.module])
+        if len(path_splits) > 0
+        else node.module
+    )
     return node_module_name

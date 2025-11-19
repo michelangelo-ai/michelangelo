@@ -2,12 +2,16 @@ import importlib
 import ast
 from unittest import TestCase
 from michelangelo.lib.model_manager._private.utils.module_finder import get_imports
-from michelangelo.lib.model_manager._private.utils.module_finder.import_parser import get_node_module
+from michelangelo.lib.model_manager._private.utils.module_finder.import_parser import (
+    get_node_module,
+)
 
 
 class ImportParserTest(TestCase):
     def test_get_imports(self):
-        module = importlib.import_module("michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports")
+        module = importlib.import_module(
+            "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports"
+        )
         imports = get_imports(module)
 
         self.assertEqual(
@@ -22,7 +26,9 @@ class ImportParserTest(TestCase):
         )
 
     def test_get_imports_with_relative_imports(self):
-        module = importlib.import_module("michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_relative_imports")
+        module = importlib.import_module(
+            "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_relative_imports"
+        )
         imports = get_imports(module)
 
         self.assertEqual(
