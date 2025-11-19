@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/webhook"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -10,6 +11,7 @@ import (
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"
@@ -41,6 +43,7 @@ func opts() fx.Option {
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
+		webhook.Module,
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		v2pb.ProjectSvcModule,
 		v2pb.PipelineSvcModule,
@@ -56,7 +59,8 @@ func opts() fx.Option {
 		crd.Module,
 		crd.SyncCRDs(v2pb.GroupVersion.Group,
 			[]string{},
-			v2pb.YamlSchemas),
+			v2pb.YamlSchemas,
+			v2alpha1pb.YamlSchemas),
 		fx.Invoke(registerProcedures),
 		fx.Invoke(startYARPCServer),
 	)
@@ -72,6 +76,9 @@ func getTallyScope() (tally.Scope, error) {
 func getScheme() (*runtime.Scheme, error) {
 	s := scheme.Scheme
 	if err := v2pb.AddToScheme(s); err != nil {
+		return nil, err
+	}
+	if err := v2alpha1pb.AddToScheme(s); err != nil {
 		return nil, err
 	}
 	return s, nil

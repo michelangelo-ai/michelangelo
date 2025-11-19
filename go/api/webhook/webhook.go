@@ -70,14 +70,18 @@ func parseConfig(provider config.Provider) (*Configuration, error) {
 }
 
 // getWebhookConversion returns the k8s WebhookConversion for the webhook server.
+// Prerequisites: Certificates must already exist in certDir (ca.crt, tls.crt, tls.key).
+// For local development, generate them by running: ./go/api/webhook/generate-certs.sh
 func getWebhookConversion(params Params) (*apiextv1.WebhookConversion, error) {
 	url := params.Config.URL + "/convert"
-	// read the ca.crt file from the cert dir
+
+	// Read CA certificate
 	caCertPath := filepath.Join(params.Config.CertDir, "ca.crt")
 	caCert, err := os.ReadFile(caCertPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read CA certificate from %s: %w", caCertPath, err)
+		return nil, fmt.Errorf("failed to read CA certificate from %s: %w (hint: run ./go/api/webhook/generate-certs.sh)", caCertPath, err)
 	}
+
 	return &apiextv1.WebhookConversion{
 		ClientConfig: &apiextv1.WebhookClientConfig{
 			URL:      &url,
