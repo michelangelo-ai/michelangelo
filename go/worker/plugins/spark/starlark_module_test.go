@@ -81,7 +81,6 @@ func (s *SparkModuleTestSuite) TestSensorJobSuccessfully() {
 	env := s.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(spark.Activities.SensorSparkJob)
 
-	//var sensorJobReq v2pb.GetSparkJobRequest
 	env.OnActivity(spark.Activities.SensorSparkJob, mock.Anything, mock.Anything).
 		Return(func(ctx context.Context, req v2pb.GetSparkJobRequest) (*spark.SensorSparkJobResponse, error) {
 			// Simulate a Spark job's status condition
