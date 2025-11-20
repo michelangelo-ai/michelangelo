@@ -3,7 +3,6 @@ Training task for fine-tuning a BERT model on the CoLA dataset.
 """
 
 import logging
-import os
 
 from datasets import Dataset as HFDataset
 import torch
@@ -13,7 +12,6 @@ from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
 import numpy as np
 
-import fsspec
 
 log = logging.getLogger(__name__)
 
