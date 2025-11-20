@@ -25,18 +25,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	"github.com/michelangelo-ai/michelangelo/go/api"
-	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
-	"github.com/michelangelo-ai/michelangelo/go/api/utils"
-	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
-	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
-	"github.com/michelangelo-ai/michelangelo/go/base/revision"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/noop"
-	"github.com/michelangelo-ai/michelangelo/go/logging"
-	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,6 +34,18 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+
+	"github.com/michelangelo-ai/michelangelo/go/api"
+	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
+	"github.com/michelangelo-ai/michelangelo/go/api/utils"
+	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
+	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
+	"github.com/michelangelo-ai/michelangelo/go/logging"
+	protoapi "github.com/michelangelo-ai/michelangelo/proto/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const (
@@ -82,19 +82,11 @@ type Reconciler struct {
 }
 
 // NewReconciler returns a new model deployment reconciler.
-func NewReconciler(apiHandlerFactory apiHandler.Factory) *Reconciler {
-	registrar := pluginmanager.NewSimpleRegistrar[plugins.Plugin](logr.Discard())
-
-	// Register plugins following Uber pattern - each plugin registers itself
-	if err := noop.RegisterNoOpPlugins(registrar); err != nil {
-		// In production, this would be handled properly, but for testing we continue
-		logr.Discard().Error(err, "failed to register noop plugins")
-	}
-
+func NewReconciler(apiHandlerFactory apiHandler.Factory, registrar pluginmanager.Registrar[plugins.Plugin]) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: apiHandlerFactory,
 		Registrar:         registrar,
-		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](zap.NewNop()),
+		Engine:            defaultengine.NewDefaultEngine[*v2pb.Deployment](createEngineLogger()),
 		RevisionManager:   revision.NewNoOpManager(),
 		Scope:             tally.NoopScope,
 		auditLogEmitter:   &logging.DummyAuditLog{},
@@ -130,6 +122,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues(_deploymentKey, req.NamespacedName.String())
 	ctx, cancel := context.WithTimeout(ctx, _reconciliationTimeout)
+	fmt.Printf("DEBUG: Reconcile is getting called for %s\n", req.NamespacedName.String())
 	defer cancel()
 	defer func() {
 		if err := recover(); err != nil {
@@ -239,25 +232,18 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
 	stage := plugin.ParseStage(deployment)
 
-	// Check if we've reached max attempts OR if condition is satisfied but terminal.
-	// For successful terminal conditions, we should continue processing to allow stage progression.
-	if result.IsTerminal && !result.AreSatisfied {
-		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
-			"until the resource is updated again. If in cleanup, we will no longer reconcile."
-		log.Info(message)
-		r.Recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
-		metrics.terminalCounter.Inc(1)
-		newStage, shouldRequeue := getTerminalStage(*deployment)
-		stage = newStage
-		if shouldRequeue {
-			result.Result = defaultResult
-		}
-		plugin.PopulateDeploymentLogs(ctx, deployment)
-	} else if result.IsTerminal && result.AreSatisfied {
-		// Successful terminal condition - allow progression by ensuring requeue
-		result.Result = ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: _defaultRequeuePeriod,
+	// Check result from condition engine
+	// NOTE: CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE
+	if result.IsTerminal {
+		if result.AreSatisfied {
+			// Successful terminal – we still need one more reconcile to progress the stage.
+			result.Result = ctrl.Result{Requeue: true, RequeueAfter: _defaultRequeuePeriod}
+		} else {
+			// Terminal but NOT satisfied indicates the plugin surfaced an error.
+			// Keep reconciling so we can retry rather than giving up forever.
+			log.Info("Condition engine returned terminal-unsatisfied; will requeue to retry")
+			metrics.terminalCounter.Inc(1)
+			result.Result = defaultResult // immediate requeue
 		}
 	}
 
@@ -285,7 +271,11 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			}
 			deployment.Status.Conditions = nil
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
-				plugin.PopulateMessage(ctx, deployment)
+				runtimeCtx := plugins.RequestContext{
+					Deployment: deployment,
+					Logger:     log,
+				}
+				plugin.PopulateMessage(ctx, runtimeCtx, deployment)
 			}
 		}
 		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
@@ -303,7 +293,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		return defaultResult, getStateErr
 	}
 	sw.Stop()
-	deployment.Status = *status
+	deployment.Status = status
 
 	if IsCleanupCompleteStage(deployment.Status.Stage) {
 		// If the resource is in cleanup completion stage, then it is eligible for deletion.
@@ -344,7 +334,11 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	// and passes it to all Engine.Run() calls: r.Engine.Run(ctx, runtimeContext, conditionPlugin, deployment)
 	// This requires updating the Engine interface to match Uber's 4-parameter signature
 	// For now, our simplified Engine interface uses 3 parameters: Engine.Run(ctx, conditionPlugin, deployment)
+	fmt.Printf("DEBUG processPlugin for %s: ShouldCleanup=%v, RolloutInProgress=%v\n",
+		deployment.Name, ShouldCleanup(*deployment), RolloutInProgress(*deployment))
+
 	if ShouldCleanup(*deployment) {
+		fmt.Printf("DEBUG: Taking cleanup branch for %s\n", deployment.Name)
 		if !IsCleanupStage(deployment.Status.Stage) {
 			log.Info("detected that a cleanup should occur")
 			metrics.cleanupMetrics.initiatedCount.Inc(1)
@@ -358,6 +352,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			return result, err
 		}
 	} else if RolloutInProgress(*deployment) {
+		fmt.Printf("DEBUG: Taking rollout branch for %s\n", deployment.Name)
 		sw := metrics.healthCheckGateMetrics.duration.Start()
 		metrics.healthCheckGateMetrics.count.Inc(1)
 		observability := r.getObservability(log, deployment.Namespace)
@@ -401,24 +396,26 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 		}
 	} else if TriggerNewRollout(*deployment) {
+		fmt.Printf("DEBUG: Taking new rollout branch for %s\n", deployment.Name)
 		log.Info("detected new rollout")
 		metrics.rolloutMetrics.initiatedCount.Inc(1)
 		deployment.Status.CandidateRevision = deployment.Spec.DesiredRevision
 
-		//cleanup rollback reason from previous deployment (if any)
+		// cleanup rollback reason from previous deployment (if any)
 		delete(deployment.Annotations, _deploymentRollbackReason)
 
 		if IsEmergencyRollout(*deployment) {
 			// Log emergency rollout for audit purposes
 			log.Info("Emergency rollout detected",
 				"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
-				"issue_link", deployment.Spec.Strategy.GetBlast().GetIssueLink(),
+				// "issue_link", deployment.Spec.Strategy.GetBlast().GetIssueLink(),
 				"with_rollback_alerts", deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger())
 		}
 
 		if !ShouldSkipRollout(*deployment) {
 			r.incrementRolloutCount(deployment, log)
 			deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_VALIDATION
+			fmt.Printf("DEBUG: Getting rollout plugin for starting new rollout %s\n", deployment.Name)
 			conditionPlugin, err = plugin.GetRolloutPlugin(ctx, deployment)
 			if err != nil {
 				log.Info("failed to retrieve rollout plugin")
@@ -431,6 +428,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			}
 		}
 	} else if InSteadyState(*deployment) {
+		fmt.Printf("DEBUG: Taking steady state branch for %s\n", deployment.Name)
 		metrics.steadyStateMetrics.initiatedCount.Inc(1)
 
 		conditionPlugin = plugin.GetSteadyStatePlugin()
@@ -439,6 +437,8 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			log.Error(err, "Steady state plugin processing failed with error")
 			return result, err
 		}
+	} else {
+		fmt.Printf("DEBUG: No branch taken for %s - falling through!\n", deployment.Name)
 	}
 	// Simplified: Skip condition removal for now
 	// removeConditionsForDeployment(deployment, conditionPlugin)
@@ -452,8 +452,8 @@ func (r *Reconciler) handleStageTransition(
 	ctx context.Context,
 	metrics *ControllerMetrics,
 	deployment *v2pb.Deployment,
-	err error) bool {
-
+	err error,
+) bool {
 	var messages []string
 	if !IsTerminalStage(deployment.Status.Stage) {
 		if deployment.Status.Message != "" {
@@ -504,7 +504,7 @@ func (r *Reconciler) handleStageTransition(
 		}
 
 		// Clear candidate and current revisions.
-		deployment.Status.CurrentRevision = nil
+		// deployment.Status.CurrentRevision = nil
 		deployment.Status.CandidateRevision = nil
 		break
 	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:
@@ -662,8 +662,14 @@ var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
 // TriggerNewRollout determines if a new rollout should be triggered
 func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	desiredRevision := deployment.Spec.DesiredRevision
-	return !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision) &&
-		(IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage))
+	desiredCandidateDiffer := !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision)
+	terminalOrInit := IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage)
+	result := desiredCandidateDiffer && terminalOrInit
+
+	fmt.Printf("DEBUG TriggerNewRollout for %s: desiredCandidateDiffer=%v (desired=%v, candidate=%v), terminalOrInit=%v (stage=%v), result=%v\n",
+		deployment.Name, desiredCandidateDiffer, desiredRevision, deployment.Status.CandidateRevision, terminalOrInit, deployment.Status.Stage, result)
+
+	return result
 }
 
 // ShouldRollback determines if a rollback should occur
@@ -680,9 +686,23 @@ func ShouldRollback(deployment v2pb.Deployment) bool {
 func RolloutInProgress(deployment v2pb.Deployment) bool {
 	currentRevision := deployment.Status.CurrentRevision
 	candidateRevision := deployment.Status.CandidateRevision
-	return !revisionEqual(currentRevision, candidateRevision) &&
-		!IsTerminalStage(deployment.Status.Stage) &&
-		!isInitializationStage(deployment.Status.Stage)
+
+	revisionsDiffer := !revisionEqual(currentRevision, candidateRevision)
+	notTerminal := !IsTerminalStage(deployment.Status.Stage)
+	notInitialization := !isInitializationStage(deployment.Status.Stage)
+
+	// FIXED: If deployment is in an active rollout stage (validation, placement),
+	// consider it in progress even if revisions are equal
+	isActiveRolloutStage := deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_VALIDATION ||
+		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_PLACEMENT
+
+	result := (revisionsDiffer || isActiveRolloutStage) && notTerminal && notInitialization
+
+	// Debug logging to understand why RolloutInProgress might return false
+	fmt.Printf("DEBUG RolloutInProgress for %s: revisionsDiffer=%v (current=%v, candidate=%v), isActiveRolloutStage=%v, notTerminal=%v (stage=%v), notInitialization=%v, result=%v\n",
+		deployment.Name, revisionsDiffer, currentRevision, candidateRevision, isActiveRolloutStage, notTerminal, deployment.Status.Stage, notInitialization, result)
+
+	return result
 }
 
 // InSteadyState checks if deployment needs to go through steady state plugin
@@ -768,4 +788,16 @@ func revisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 
 func desiredRevisionEqual(a, b *protoapi.ResourceIdentifier) bool {
 	return revisionEqual(a, b)
+}
+
+// createEngineLogger creates a proper zap logger for the engine instead of a no-op logger
+func createEngineLogger() *zap.Logger {
+	config := zap.NewDevelopmentConfig()
+	config.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	logger, err := config.Build()
+	if err != nil {
+		// Fallback to a basic logger if building fails
+		return zap.NewExample()
+	}
+	return logger
 }

@@ -4,6 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
+	"go.uber.org/fx"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
@@ -20,9 +23,9 @@ func NewNoOpPlugin() plugins.Plugin {
 }
 
 // GetState always returns success state
-func (p *NoOpPlugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, modelDeployment *v2pb.Deployment) (*v2pb.DeploymentStatus, error) {
+func (p *NoOpPlugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, modelDeployment *v2pb.Deployment) (v2pb.DeploymentStatus, error) {
 	// Return the current status unchanged
-	return &modelDeployment.Status, nil
+	return modelDeployment.Status, nil
 }
 
 // HealthCheckGate always returns healthy
@@ -56,13 +59,19 @@ func (p *NoOpPlugin) ParseStage(resource *v2pb.Deployment) v2pb.DeploymentStage 
 }
 
 // PopulateDeploymentLogs does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, modelDeployment *v2pb.Deployment) {
+func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, runtimeContext plugins.RequestContext, modelDeployment *v2pb.Deployment) {
 	// No-op
 }
 
 // PopulateMessage does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateMessage(ctx context.Context, modelDeployment *v2pb.Deployment) {
+func (p *NoOpPlugin) PopulateMessage(ctx context.Context, runtimeContext plugins.RequestContext, modelDeployment *v2pb.Deployment) {
 	// No-op
+}
+
+// HandleCleanup does nothing in the no-op implementation
+func (p *NoOpPlugin) HandleCleanup(ctx context.Context, logger logr.Logger, deployment *v2pb.Deployment) error {
+	// No-op cleanup
+	return nil
 }
 
 // CompletingConditionsPlugin is a conditions plugin that moves deployments to completion
@@ -252,23 +261,45 @@ func (a *NoOpActor) GetType() string {
 	return "NoOp"
 }
 
+// Module for fx dependency injection
+var Module = fx.Options(
+	fx.Invoke(Register),
+)
+
+// Params holds the dependencies for plugin registration
+type Params struct {
+	fx.In
+	Registrar pluginmanager.Registrar[plugins.Plugin]
+}
+
+// Register registers the no-op plugin for all target types and common subtypes
+func Register(p Params) error {
+	return registerPlugins(p.Registrar)
+}
+
 // RegisterNoOpPlugins registers the no-op plugin for all target types and common subtypes
+// This function is kept for backward compatibility with existing code
 func RegisterNoOpPlugins(registrar pluginmanager.Registrar[plugins.Plugin]) error {
+	return registerPlugins(registrar)
+}
+
+// registerPlugins is the shared implementation for both fx and legacy registration
+func registerPlugins(registrar pluginmanager.Registrar[plugins.Plugin]) error {
 	noOpPlugin := NewNoOpPlugin()
 
-	// Register for inference server with empty subtype
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin); err != nil {
-		return err
-	}
+	// TEMPORARILY DISABLED: Register for inference server with empty subtype
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
-	// Register for inference server with common subtypes
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "realtime-serving", noOpPlugin); err != nil {
-		return err
-	}
+	// TEMPORARILY DISABLED: Register for inference server with common subtypes
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "realtime-serving", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
-	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "batch-serving", noOpPlugin); err != nil {
-		return err
-	}
+	// if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_INFERENCE_SERVER.String(), "batch-serving", noOpPlugin); err != nil {
+	// 	return err
+	// }
 
 	// Register for offline deployments
 	if err := registrar.RegisterPlugin(v2pb.TARGET_TYPE_OFFLINE.String(), "", noOpPlugin); err != nil {

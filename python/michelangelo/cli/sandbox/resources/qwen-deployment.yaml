@@ -1,0 +1,27 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: qwen-deployment
+  namespace: default
+  labels:
+    app: qwen-deployment
+spec:
+  desiredRevision:
+    name: qwen1-5-1-8b-chat-v1
+    namespace: default
+  inferenceServer:
+    name: qwen-inference-server
+    namespace: default
+  selector:
+    matchLabels:
+      environment: production
+  deletionSpec:
+    deleted: false
+  strategy:
+    rolling:
+      incrementPercentage: 20
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+    subType: realtime-serving
+  owner:
+    name: "user-example"

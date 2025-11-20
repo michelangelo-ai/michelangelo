@@ -308,6 +308,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         _create_cluster_secrets(ns.jobs_cluster_name)
 
     _kube_wait()
+    _setup_istio(helm_existing_repos)
 
     print(
         "\n🚀 Sandbox created successfully. To access the services, please use the following links:\n"
@@ -442,6 +443,17 @@ def _setup_temporal(links, helm_existing_repos):
 
 
 def _create_cadence_domain(links):
+    # Wait for Cadence pod to be ready before registering domain
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=ready",
+        "pod",
+        "-l",
+        "app=cadence",
+        "--timeout=300s",
+    )
+
     _kube_run(
         image="ubercadence/cli:v1.2.6",
         command=[
@@ -456,7 +468,7 @@ def _create_cadence_domain(links):
         env={
             "CADENCE_CLI_ADDRESS": "cadence:7933",
         },
-        retry_attempts=3,
+        retry_attempts=5,
     )
 
 
@@ -487,23 +499,145 @@ def _create_demo_crs(_: argparse.Namespace):
     demo_dir = _dir / "demo"
     project_yaml_path = demo_dir / "project.yaml"
 
-    # Extract namespace from project.yaml
     with open(project_yaml_path) as f:
         project_yaml = yaml.safe_load(f)
     namespace = project_yaml.get("metadata", {}).get("namespace", "default")
 
-    _exec("kubectl", "create", "namespace", namespace)
+    try:
+        _exec("kubectl", "create", "namespace", namespace, raise_error=True)
+    except subprocess.CalledProcessError:
+        pass
 
-    # Create project first. Project CRD is essentially the "parent" of other CRDs. Under
+    print("🚀 Setting up Michelangelo AI Deployment Demo...")
+
+    # 1. Create Gateway API setup first (required for HTTPRoute)
+    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
+    if gateway_setup_path.exists():
+        print("✅ Setting up Gateway API and Istio Gateway...")
+        _kube_create(gateway_setup_path)
+        # Normalize Gateway service type for local clusters so Programmed becomes True
+        _exec(
+            "kubectl",
+            "annotate",
+            "gateway",
+            "ma-gateway",
+            "-n",
+            "default",
+            "networking.istio.io/service-type=ClusterIP",
+            "--overwrite",
+        )
+        # Wait for Gateway Programmed
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=condition=Programmed",
+            "gateway/ma-gateway",
+            "-n",
+            "default",
+            "--timeout=300s",
+        )
+        # Print status for visibility
+        _exec(
+            "kubectl",
+            "get",
+            "gateway",
+            "ma-gateway",
+            "-n",
+            "default",
+            "-o",
+            "wide",
+        )
+    else:
+        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}, exiting...")
+
+    # 2. Create secrets and configmaps for model storage
+    print("✅ Creating storage configuration...")
+    secrets_configmaps_path = _dir / "resources" / "secret.yaml"
+    if secrets_configmaps_path.exists():
+        _kube_create(secrets_configmaps_path)
+    else:
+        _err_exit(f"❌ Secrets and configmaps not found at {secrets_configmaps_path}, exiting...")
+
+    # 3. Create project first. Project CRD is essentially the "parent" of other CRDs. Under
     # normal circumstances, users must create a project before creating other CRDs.
-    _kube_create(project_yaml_path)
+    if project_yaml_path.exists():
+        _kube_create(project_yaml_path)
+    else:
+        _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
-    # Create all other YAML files in the demo directory
+    # 4. Create inference server
+    inference_server_path = _dir / "resources" / "inferenceserver.yaml"
+    if inference_server_path.exists():
+        print("✅ Creating Triton Inference Server...")
+        _kube_create(inference_server_path)
+
+        # 5. Wait for inference server to reach SERVING state (image pull may take time)
+        # Extract inference server name and namespace from YAML
+        with open(inference_server_path) as f:
+            inference_server_yaml = yaml.safe_load(f)
+        inference_server_name = inference_server_yaml["metadata"]["name"]
+        inference_server_namespace = inference_server_yaml["metadata"].get("namespace", "default")
+
+        print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
+        print("   (This may take 5-10 minutes for first-time Triton image pull)")
+        
+        try:
+            _exec(
+                "kubectl",
+                "wait",
+                "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+                f"inferenceservers.michelangelo.api/{inference_server_name}",
+                "-n",
+                inference_server_namespace,
+                "--timeout=720s",
+                raise_error=True,
+            )
+            print("✅ Inference server is ready!")
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Inference server '{inference_server_name}' failed to become ready after 720s.\n"
+                f"Check status with: kubectl get inferenceservers.michelangelo.api {inference_server_name} -n {inference_server_namespace} -o yaml\n"
+                f"Check logs with: kubectl logs -l app=inference-server -n {inference_server_namespace}"
+            )
+    else:
+        _err_exit(f"❌ Inference server not found at {inference_server_path}, exiting...")
+
+    # 6. Create deployment (this will trigger model deployment workflow)
+    deployment_path = _dir / "resources" / "deployment.yaml"
+    if deployment_path.exists():
+        print("  ✅ Creating model deployment...")
+        _kube_create(deployment_path)
+    else:
+        _err_exit(f"❌ Deployment CR not found at {deployment_path}, exiting...")
+
+    # 7. Create all other YAML files in the demo directory (training pipelines, etc.)
     for yaml_file in demo_dir.glob("*.yaml"):
-        if yaml_file.name != "project.yaml":
+        if yaml_file.name not in ["project.yaml", "gateway-api-setup.yaml", "inferenceserver.yaml", "deployment.yaml"]:
             _kube_create(yaml_file)
 
-    print(f"\nDemo CRs created in namespace {namespace}.")
+    print(f"\n🎉 Demo deployment created successfully in namespace {namespace}!")
+    print("\n📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • MinIO storage configuration")
+    print("  • Triton Inference Server")
+    print("  • BERT model deployment with HTTPRoute")
+    print("  • Training pipelines and project resources")
+
+    print(f"\n🌐 Production endpoint (model-agnostic):")
+    print(f"  http://localhost:8080/inference-server-bert-cola-endpoint/bert-cola-deployment")
+    print(f"\n💡 This endpoint will always serve the current model version without URL changes!")
+
+    print(f"\n📡 Port-forward setup (required for localhost access):")
+    print(f"  kubectl -n default port-forward svc/ma-gateway-istio 8080:80 8889:8889")
+    print(f"  (Using port 8889 to avoid conflicts with Cursor IDE)")
+
+    print(f"  bazel run //go/cmd/worker")
+    print(f"  bazel run //go/cmd/apiserver")
+
+    print(f"\n🔧 Useful commands:")
+    print(f"  kubectl get deployments.michelangelo.api")
+    print(f"  kubectl get httproute")
+    print(f"  kubectl get pods -l app=inference-server")
 
 
 def _delete(ns: argparse.Namespace):
@@ -526,7 +660,8 @@ def _stop(ns: argparse.Namespace):
 
 
 def _kube_create(path: Path):
-    _exec("kubectl", "create", "-f", str(path))
+    # Use apply instead of create for idempotency (creates if not exists, updates if exists)
+    _exec("kubectl", "apply", "-f", str(path))
 
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
@@ -652,6 +787,95 @@ def _exec(
 def _assert_command(command: str, err_message: str):
     if shutil.which(command) is None:
         _err_exit(err_message)
+
+
+def _setup_istio(helm_existing_repos):
+    """Install and configure Istio service mesh using Helm."""
+    print("Setting up Istio service mesh...")
+
+    # Add Istio Helm repository if not already present
+    if "istio" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "istio",
+            "https://istio-release.storage.googleapis.com/charts",
+        )
+        _exec("helm", "repo", "update")
+
+    # Install Istio base (CRDs and cluster roles)
+    _exec(
+        "helm",
+        "install",
+        "istio-base",
+        "istio/base",
+        "--namespace",
+        "istio-system",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Install Gateway API CRDs (required for HTTPRoute support)
+    print("Installing Gateway API CRDs...")
+    _exec(
+        "kubectl",
+        "apply",
+        "-f",
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
+    )
+    # Wait for Gateway API CRDs to be established
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=Established",
+        "crd/gateways.gateway.networking.k8s.io",
+        "crd/httproutes.gateway.networking.k8s.io",
+        "crd/gatewayclasses.gateway.networking.k8s.io",
+        "--timeout=60s",
+    )
+
+    # Install Istio control plane (istiod)
+    _exec(
+        "helm",
+        "install",
+        "istiod",
+        "istio/istiod",
+        "--namespace",
+        "istio-system",
+        "--wait",
+    )
+
+    # Install Istio ingress gateway
+    # Use NodePort instead of LoadBalancer to avoid k3d port exhaustion with svclb pods
+    _exec(
+        "helm",
+        "install",
+        "istio-ingressgateway",
+        "istio/gateway",
+        "--namespace",
+        "istio-ingress",
+        "--create-namespace",
+        "--set",
+        "service.type=NodePort",
+        "--wait",
+    )
+
+    # Wait for Istio components to be ready
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--namespace=istio-system",
+        "--all",
+        "--timeout=600s",
+    )
+
+    # Create the Istio Gateway for Michelangelo
+    _kube_create(_dir / "resources" / "istio-gateway.yaml")
+
+    print("✅ Istio service mesh installed successfully")
 
 
 def _err_exit(err_message: str, code: int = 1):

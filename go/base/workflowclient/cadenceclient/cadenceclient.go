@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
-	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"go.uber.org/cadence/.gen/go/shared"
 	cadenceClient "go.uber.org/cadence/client"
+
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 )
 
 // mapCadenceStatusToInterface maps Cadence workflow status to our interface status
@@ -44,7 +45,6 @@ type CadenceClient struct {
 var _ clientInterface.WorkflowClient = &CadenceClient{}
 
 func (c *CadenceClient) StartWorkflow(ctx context.Context, options clientInterface.StartWorkflowOptions, workflowName string, args ...interface{}) (*clientInterface.WorkflowExecution, error) {
-
 	cadenceOptions := cadenceClient.StartWorkflowOptions{
 		ID:                              options.ID,
 		TaskList:                        options.TaskList,

@@ -1,0 +1,22 @@
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: qwen-inference-server
+  namespace: default
+  labels:
+    app: inference-server
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  ownerSpec:
+    tier: 1
+  initSpec:
+    resourceSpec:
+      cpu: 2
+      memory: "4Gi"
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "user-example"

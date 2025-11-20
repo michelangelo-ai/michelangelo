@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: bert-cola-deployment-service
+  namespace: default
+spec:
+  selector:
+    app: bert-cola-deployment
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+    - name: grpc
+      port: 8001
+      targetPort: 8001
+  type: ClusterIP

@@ -1,0 +1,178 @@
+# Generic Kubernetes Gateway API HTTPRoute for BERT CoLA Inference
+# This replaces the Istio VirtualService with vendor-neutral HTTPRoute
+
+---
+# HTTPRoute for BERT CoLA inference server with traffic splitting support
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: bert-cola-inference-server-http-route
+  namespace: default
+  labels:
+    app: bert-cola-inference
+    migration: "from-virtualservice"
+spec:
+  parentRefs:
+  - name: ma-gateway
+    namespace: default
+  
+  rules:
+  # Route 1: Specific model endpoint (bert-cola-13)
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /bert-cola-endpoint/bert-cola-deployment
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /v2/models/bert-cola-13
+    backendRefs:
+    - name: bert-cola-inference-server-inference-service
+      port: 80
+      weight: 100
+
+  # Route 2: Second model endpoint (bert-cola-new-model)  
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /bert-cola-endpoint/bert-cola-deployment2
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /v2/models/bert-cola-new-model
+    backendRefs:
+    - name: bert-cola-inference-server-inference-service
+      port: 80
+      weight: 100
+
+  # Route 3: General endpoint with traffic splitting capability
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /bert-cola-endpoint
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
+    backendRefs:
+    - name: bert-cola-inference-server-inference-service
+      port: 80
+      weight: 100
+    # Example: Add traffic splitting (uncomment to enable canary)
+    # - name: bert-cola-deployment-canary-service
+    #   port: 80
+    #   weight: 10  # 10% traffic to canary
+
+---
+# HTTPRoute for Triton Inference Server (port 8889)
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: triton-test-inference-server-http-route
+  namespace: default
+  labels:
+    app: triton-inference
+    service: test-inference-server
+spec:
+  parentRefs:
+  - name: ma-gateway
+    namespace: default
+    sectionName: triton-http  # Targets the 8889 port listener
+  
+  rules:
+  # Health check endpoint
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v2/health
+    backendRefs:
+    - name: test-inference-server-inference-service
+      port: 80
+      weight: 100
+
+  # Model metadata endpoints
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v2/models
+    backendRefs:
+    - name: test-inference-server-inference-service
+      port: 80
+      weight: 100
+
+  # All other Triton endpoints
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: test-inference-server-inference-service
+      port: 80
+      weight: 100
+    # Example: Traffic splitting for A/B testing
+    # - name: test-inference-server-v2-service
+    #   port: 80
+    #   weight: 20  # 20% traffic to v2
+
+---
+# Advanced HTTPRoute example with header-based routing
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: advanced-triton-test-inference-server-http-route
+  namespace: default
+  labels:
+    app: triton-inference
+    type: advanced-routing
+    enabled: "false"  # Set to "true" to enable advanced routing
+spec:
+  parentRefs:
+  - name: ma-gateway
+    namespace: default
+    sectionName: triton-http
+  
+  rules:
+  # Route premium users to dedicated service
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v2/models
+      headers:
+      - name: "X-User-Tier"
+        value: "premium"
+    backendRefs:
+    - name: triton-premium-inference-service
+      port: 80
+      weight: 100
+
+  # Route canary users to experimental version
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+      headers:
+      - name: "X-Canary-User"
+        value: "true"
+    backendRefs:
+    - name: test-inference-server-canary-inference-service
+      port: 80
+      weight: 100
+
+  # Default routing with load balancing
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /
+    backendRefs:
+    - name: test-inference-server-inference-service
+      port: 80
+      weight: 80
+    - name: test-inference-server-backup-inference-service
+      port: 80
+      weight: 20

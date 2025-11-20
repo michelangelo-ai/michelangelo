@@ -1,0 +1,52 @@
+# Gateway API Setup for Michelangelo Sandbox
+# This replaces the Istio-specific Gateway with a generic Kubernetes Gateway API setup
+
+---
+# 1. GatewayClass - tells Kubernetes that Istio will handle Gateway resources
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: istio
+spec:
+  controllerName: istio.io/gateway-controller
+  description: Istio service mesh based gateway controller
+
+---
+# 2. Gateway - replaces the Istio Gateway with generic Kubernetes Gateway API
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ma-gateway
+  namespace: default
+  annotations:
+    networking.istio.io/service-type: LoadBalancer
+spec:
+  gatewayClassName: istio
+  listeners:
+  # Standard HTTP port - no hostname restriction for development
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  # Triton inference server port
+  - name: triton-http
+    port: 8889
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  # Additional ports for other services
+  - name: cadence-web
+    port: 8088
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  - name: envoy-admin
+    port: 8081
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All

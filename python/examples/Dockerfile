@@ -80,8 +80,13 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 # Install OpenJDK 11 (multi-arch compatible and open-source)
 RUN apt-get update && apt-get install -y openjdk-11-jdk
 
-# Set JAVA_HOME and update PATH
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
+# Set JAVA_HOME dynamically based on architecture and update PATH
+RUN ARCH=$(dpkg --print-architecture) && \
+    echo "Architecture: $ARCH" && \
+    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH} && \
+    echo "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH}" >> /etc/environment
+RUN echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-$(dpkg --print-architecture)" >> /etc/environment
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory
@@ -96,6 +101,7 @@ COPY . .
 RUN ls -alF ./
 
 RUN poetry config virtualenvs.create false
+RUN poetry lock
 RUN poetry install -E example
 
 # Activate Poetry's virtual environment by default

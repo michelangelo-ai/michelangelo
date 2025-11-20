@@ -8,6 +8,7 @@ import (
 	"go.uber.org/fx"
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/cachedoutput"
+	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/model"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/spark"
@@ -39,6 +40,11 @@ func RegisterModelPlugin(registry map[string]service.IPlugin) {
 	registry[model.Plugin.ID()] = model.Plugin
 }
 
+// RegisterSparkPlugin adds the spark plugin to the plugin registry.
+func RegisterDeploymentPlugin(registry map[string]service.IPlugin) {
+	registry[deployment.Plugin.ID()] = deployment.Plugin
+}
+
 // CreateStarlarkService creates the starlark service with all registered plugins.
 func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker.Worker, backend service.BackendType) error {
 	if len(workers) == 0 {
@@ -50,7 +56,9 @@ func CreateStarlarkService(registry map[string]service.IPlugin, workers []worker
 		return err
 	}
 	for _, w := range workers {
-		workerService.Register(w)
+		workerService.RegisterWithOptions(w, worker.RegisterWorkflowOptions{
+			Name: "starlark",
+		})
 	}
 
 	return nil
@@ -63,4 +71,5 @@ var Module = fx.Options(
 	fx.Invoke(RegisterSparkPlugin),
 	fx.Invoke(RegisterModelPlugin),
 	fx.Invoke(CreateStarlarkService),
+	fx.Invoke(RegisterDeploymentPlugin),
 )

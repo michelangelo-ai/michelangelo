@@ -1,0 +1,30 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "plugin.go",
+        "register.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/base/blobstore:go_default_library",
+        "//go/base/conditions/interfaces:go_default_library",
+        "//go/base/pluginmanager:go_default_library",
+        "//go/components/deployment/plugins:go_default_library",
+        "//go/components/deployment/plugins/oss/cleanup:go_default_library",
+        "//go/components/deployment/plugins/oss/rollback:go_default_library",
+        "//go/components/deployment/plugins/oss/rollout:go_default_library",
+        "//go/components/deployment/plugins/oss/steadystate:go_default_library",
+        "//go/components/inferenceserver/configmap:go_default_library",
+        "//go/components/inferenceserver/gateways:go_default_library",
+        "//go/components/inferenceserver/proxy:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)
