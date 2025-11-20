@@ -1,0 +1,21 @@
+{
+  "field_prefix": "UBER_INTERNAL_",
+  "tag_start": 999,
+  "patches": [
+    {
+      "target_proto": "project.proto",
+      "target_message": "ProjectSpec",
+      "extension_proto": "project_ext.proto",
+      "extension_message": "ProjectSpecExtension",
+      "patch_mode": "merge"
+    },
+    {
+      "target_proto": "project.proto",
+      "target_message": "ProjectStatus",
+      "extension_proto": "project_ext.proto",
+      "extension_message": "ProjectStatusExtension",
+      "patch_mode": "merge"
+    }
+  ],
+  "validation_overrides": []
+}

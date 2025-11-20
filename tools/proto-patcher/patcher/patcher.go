@@ -80,8 +80,14 @@ func (p *Patcher) Patch(baseProtos, extProtos map[string]*parser.ProtoFile) (map
 			return nil, fmt.Errorf("extension proto not found: %s", rule.ExtensionProto)
 		}
 
-		// Clone base file
-		patchedFile := p.cloneProtoFile(baseFile)
+		// Get or create patched file
+		// If we already have a patched version from a previous rule, use that
+		// Otherwise, clone the base file
+		outputName := strings.TrimSuffix(rule.TargetProto, ".proto") + "_patched.proto"
+		patchedFile, exists := result[outputName]
+		if !exists {
+			patchedFile = p.cloneProtoFile(baseFile)
+		}
 
 		// Find extension message
 		extMsg := p.findMessage(extFile.Messages, rule.ExtensionMessage)
@@ -113,8 +119,7 @@ func (p *Patcher) Patch(baseProtos, extProtos map[string]*parser.ProtoFile) (map
 			return nil, fmt.Errorf("unknown patch mode: %s (use 'copy' or 'merge')", patchMode)
 		}
 
-		// Store patched file with new name
-		outputName := strings.TrimSuffix(rule.TargetProto, ".proto") + "_patched.proto"
+		// Store patched file (may already be in result from previous patch to same file)
 		result[outputName] = patchedFile
 	}
 
