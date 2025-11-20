@@ -102,7 +102,7 @@ jobs:
           echo "COVERAGE=18.2" >> $GITHUB_ENV
           echo "⚠️  Using cached coverage estimate"
 
-      - name: Check coverage threshold (baseline: 53.1%)
+      - name: "Check coverage threshold (baseline: 53.1%)"
         run: |
           BASELINE=53
           COVERAGE=${{ env.COVERAGE }}
