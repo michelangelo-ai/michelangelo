@@ -9,16 +9,16 @@ metadata:
   name: ma-dev-test-v2alpha1
   namespace: ma-dev-test
 spec:
-  # DEMO CHANGE 2: v2alpha1 uses project_description instead of description
-  project_description: Michelangelo v2alpha1 project for testing multi-version conversion
+  # DEMO CHANGE 2: v2alpha1 uses projectDescription instead of description
+  projectDescription: Michelangelo v2alpha1 project for testing multi-version conversion
   owner:
-    owner_groups:
+    ownerGroups:
       - michelangelo
     owners:
       - frank.chen.cst
-    owning_team: d6190288-07ae-445b-91e6-2cfd6894fd0c
-  root_dir: "python/michelangelo/"
-  git_repo: git@github.com:michelangelo-ai/michelangelo.git
+    owningTeam: d6190288-07ae-445b-91e6-2cfd6894fd0c
+  rootDir: "python/michelangelo/"
+  gitRepo: git@github.com:michelangelo-ai/michelangelo.git
   tier: 3
   # DEMO CHANGE 3: v2alpha1-only field (spoke-specific, will be lost in hub)
-  legacy_alpha_config: "This is a v2alpha1-specific configuration field"
+  legacyAlphaConfig: "This is a v2alpha1-specific configuration field"

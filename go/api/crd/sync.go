@@ -252,6 +252,10 @@ func mergeCRDVersions(
 			}
 
 			storageVersion := versionConfig.StorageVersion
+			// Reset all storage flags to false before setting the desired one
+			for i := range mergedCRD.Spec.Versions {
+				mergedCRD.Spec.Versions[i].Storage = false
+			}
 			if storageVersion == "" {
 				if len(mergedCRD.Spec.Versions) == 1 {
 					mergedCRD.Spec.Versions[0].Storage = true // set storage version
