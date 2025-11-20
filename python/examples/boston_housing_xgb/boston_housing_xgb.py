@@ -1,7 +1,5 @@
 from dataclasses import dataclass
 
-import datasets
-import fsspec
 import logging
 from typing import Optional
 import pandas as pd
