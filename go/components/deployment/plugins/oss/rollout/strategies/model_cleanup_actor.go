@@ -3,7 +3,6 @@ package strategies
 import (
 	"context"
 	"fmt"
-	"net/http"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,7 +24,7 @@ type ModelCleanupActor struct {
 }
 
 func (a *ModelCleanupActor) GetType() string {
-	return common.ActorTypeCleanup
+	return common.ActorTypeModelCleanup
 }
 
 func (a *ModelCleanupActor) GetLogger() *zap.Logger {
@@ -141,6 +140,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 		// Create update request to remove old model from ConfigMap
+		// TODO(GHOSH): an inference server should be able to have multiple models loaded at the same time, so we need to update the ConfigMap to remove the old model and keep the new model along with the others
 		updateRequest := configmap.UpdateModelConfigMapRequest{
 			InferenceServer: inferenceServerName,
 			Namespace:       resource.Namespace,
@@ -166,8 +166,13 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
 		a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))
 
-		// TODO: use gateway.UnloadModel() instead
-		if err := a.unloadModelFromTriton(ctx, currentModel, inferenceServerName); err != nil {
+		// TODO(GHOSH): use gateway.UnloadModel() instead (DONE, CHECK)
+		if err := a.Gateway.UnloadModel(ctx, a.Logger, gateways.UnloadModelRequest{
+			ModelName:       currentModel,
+			InferenceServer: inferenceServerName,
+			Namespace:       resource.Namespace,
+			BackendType:     v2pb.BACKEND_TYPE_TRITON,
+		}); err != nil {
 			a.Logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
 			// Don't fail the deployment if direct unload fails - ConfigMap update should handle it
 			a.Logger.Info("ConfigMap update should eventually unload the model automatically")
@@ -201,36 +206,4 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		Reason:  "CleanupCompleted",
 		Message: fmt.Sprintf("Successfully cleaned up old model %s, active model is now %s", currentModel, desiredModel),
 	}, nil
-}
-
-// unloadModelFromTriton directly calls Triton API to unload model (following Uber's pattern)
-// TODO: use gateway.UnloadModel() instead
-func (a *ModelCleanupActor) unloadModelFromTriton(ctx context.Context, modelName, inferenceServerName string) error {
-	// Construct Triton unload API endpoint
-	unloadURL := fmt.Sprintf("http://localhost:8889/%s/v2/repository/models/%s/unload", inferenceServerName, modelName)
-
-	a.Logger.Info("Calling Triton unload API", zap.String("url", unloadURL), zap.String("model", modelName))
-
-	// Create HTTP request to unload model
-	req, err := http.NewRequestWithContext(ctx, "POST", unloadURL, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create unload request: %w", err)
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-
-	// Execute the request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to call Triton unload API: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("Triton unload API returned status %d", resp.StatusCode)
-	}
-
-	a.Logger.Info("Successfully called Triton unload API", zap.String("model", modelName), zap.Int("status", resp.StatusCode))
-	return nil
 }

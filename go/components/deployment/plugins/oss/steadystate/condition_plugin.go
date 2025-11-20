@@ -2,6 +2,7 @@ package steadystate
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +81,14 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 			Message: "Deployment is in steady state",
 		}, nil
 	}
+	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE {
+		return &apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_TRUE,
+			Reason:  "SteadyStateRestored",
+			Message: "Deployment has been restored to steady state",
+		}, nil
+	}
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -90,6 +99,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 }
 
 func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	// steady state plugin will only run if the deployment is in rollout/rollback complete stage.
 	a.logger.Info("Monitoring steady state for deployment", zap.String("deployment", resource.Name))
 
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE {
@@ -104,8 +114,21 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			a.logger.Info("Deployment not healthy, investigating", zap.String("state", resource.Status.State.String()))
-			// In a real implementation, this would check inference server health
-			// For now, assume we can restore to healthy state
+			// TODO(GHOSH): implement the health check for inference server (DONE, CHECK)
+			// Check if the inference server is healthy
+			if healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
+				InferenceServer: resource.Spec.GetInferenceServer().Name,
+				Namespace:       resource.Namespace,
+				BackendType:     v2pb.BACKEND_TYPE_TRITON,
+			}); err != nil {
+				return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: fmt.Sprintf("Failed to check health of inference server: %v", err)}, nil
+			} else if !healthy {
+				return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: "Inference server is not healthy"}, nil
+			}
+
+			// TODO(GHOSH): confirm this is truely the case.
+			// If the inference server is healthy, then the deployment is healthy
+			// TODO(GHOSH): implement the logic to set the model status
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		}
 
@@ -118,9 +141,9 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 			}
 		}
 
-		a.logger.Info("Deployment is in steady state", zap.String("deployment", resource.Name))
 	}
 
+	a.logger.Info("Deployment is in steady state", zap.String("deployment", resource.Name))
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,

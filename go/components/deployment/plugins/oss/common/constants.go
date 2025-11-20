@@ -22,6 +22,7 @@ const (
 	ActorTypeTrafficRouting       = "TrafficRoutingConfigured"
 	ActorTypeRolloutCompletion    = "RolloutCompleted"
 	ActorTypeCleanup              = "CleanupComplete"
+	ActorTypeModelCleanup         = "ModelCleanupComplete"
 	ActorTypeRollback             = "RollbackComplete"
 	ActorTypeSteadyState          = "StateSteady"
 )

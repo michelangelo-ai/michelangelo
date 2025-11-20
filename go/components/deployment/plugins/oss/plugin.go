@@ -2,6 +2,7 @@ package oss
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/fx"
 	"go.uber.org/zap"
@@ -155,12 +156,9 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 		case "CleanupComplete":
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-			} else if cond.Status == apipb.CONDITION_STATUS_FALSE {
+			} else {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
 			}
-			// If status is UNKNOWN, don't drive the stage from cleanup yet.
-			// Let rollout-related conditions determine the stage.
-			continue
 		case "RollbackComplete":
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
@@ -203,8 +201,16 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 		return false, nil
 	}
 
-	// For now, assume healthy - in a real implementation this would check the inference server status
-	return true, nil
+	// TODO(GHOSH): implement the health check operation (DONE, CHECK)
+	healthy, err := p.gateway.IsHealthy(ctx, p.logger, gateways.HealthCheckRequest{
+		InferenceServer: deployment.Spec.GetInferenceServer().Name,
+		Namespace:       deployment.Namespace,
+		BackendType:     v2pb.BACKEND_TYPE_TRITON,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to check health of inference server: %w", err)
+	}
+	return healthy, nil
 }
 
 // PopulateDeploymentLogs populates the deployment logs with error logs

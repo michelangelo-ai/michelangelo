@@ -233,17 +233,30 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	stage := plugin.ParseStage(deployment)
 
 	// Check result from condition engine
-	// NOTE: CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE
-	if result.IsTerminal {
-		if result.AreSatisfied {
-			// Successful terminal – we still need one more reconcile to progress the stage.
-			result.Result = ctrl.Result{Requeue: true, RequeueAfter: _defaultRequeuePeriod}
-		} else {
-			// Terminal but NOT satisfied indicates the plugin surfaced an error.
-			// Keep reconciling so we can retry rather than giving up forever.
-			log.Info("Condition engine returned terminal-unsatisfied; will requeue to retry")
-			metrics.terminalCounter.Inc(1)
-			result.Result = defaultResult // immediate requeue
+	// TODO(GHOSH): CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE (DONE, CHECK)
+	// Check if we've reached max attempts OR if condition is satisfied but terminal.
+	// For successful terminal conditions, we should continue processing to allow stage progression.
+	if result.IsTerminal && !result.AreSatisfied {
+		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
+			"until the resource is updated again. If in cleanup, we will no longer reconcile."
+		log.Info(message)
+		r.Recorder.Event(deployment, _normalType, _earlyTerminationEvent, message)
+		metrics.terminalCounter.Inc(1)
+		newStage, shouldRequeue := getTerminalStage(*deployment)
+		stage = newStage
+		if shouldRequeue {
+			result.Result = defaultResult
+		}
+		runtimeCtx := plugins.RequestContext{
+			Deployment: deployment,
+			Logger:     log,
+		}
+		plugin.PopulateDeploymentLogs(ctx, runtimeCtx, deployment)
+	} else if result.IsTerminal && result.AreSatisfied {
+		// Successful terminal condition - allow progression by ensuring requeue
+		result.Result = ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: _defaultRequeuePeriod,
 		}
 	}
 
@@ -504,7 +517,7 @@ func (r *Reconciler) handleStageTransition(
 		}
 
 		// Clear candidate and current revisions.
-		// deployment.Status.CurrentRevision = nil
+		deployment.Status.CurrentRevision = nil
 		deployment.Status.CandidateRevision = nil
 		break
 	case v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:
@@ -662,7 +675,8 @@ var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
 // TriggerNewRollout determines if a new rollout should be triggered
 func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	desiredRevision := deployment.Spec.DesiredRevision
-	desiredCandidateDiffer := !desiredRevisionEqual(desiredRevision, deployment.Status.CandidateRevision)
+	candidateRevision := deployment.Status.CandidateRevision
+	desiredCandidateDiffer := !desiredRevisionEqual(desiredRevision, candidateRevision)
 	terminalOrInit := IsTerminalStage(deployment.Status.Stage) || isInitializationStage(deployment.Status.Stage)
 	result := desiredCandidateDiffer && terminalOrInit
 

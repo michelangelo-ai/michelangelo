@@ -48,8 +48,9 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			logger:  logger,
 		},
 		&ResourceAcquisitionActor{
-			client: p.Client,
-			logger: logger,
+			client:  p.Client,
+			gateway: p.Gateway,
+			logger:  logger,
 		},
 	}
 
@@ -234,6 +235,8 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.D
 
 	// For OSS, assume assets are always available if the model name is valid
 	// In a real implementation, this would check MinIO/S3 for model artifacts
+	// TODO(GHOSH): update this to check if the model is available in the storage
+	// THIS needs a storage interface to be implemented. Maybe this is a different task.
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
@@ -257,6 +260,8 @@ func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployme
 		// 3. Prepare model configuration files
 		// 4. Ensure model is ready for inference server deployment
 
+		// TODO(GHOSH): download the model from the storage and prepare the assets and do the necessary validations
+
 		a.logger.Info("Asset preparation completed", zap.String("model", modelName))
 	}
 
@@ -270,8 +275,9 @@ func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployme
 
 // ResourceAcquisitionActor handles resource acquisition
 type ResourceAcquisitionActor struct {
-	client client.Client
-	logger *zap.Logger
+	client  client.Client
+	logger  *zap.Logger
+	gateway gateways.Gateway
 }
 
 func (a *ResourceAcquisitionActor) GetType() string {
@@ -279,36 +285,49 @@ func (a *ResourceAcquisitionActor) GetType() string {
 }
 
 func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	if resource.Spec.GetInferenceServer() != nil {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "ResourcesAvailable",
-			Message: "Required resources are available and allocated",
-		}, nil
+	if resource.Spec.GetInferenceServer() == nil {
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "NoInferenceServer", Message: "No inference server specified for deployment"}, nil
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "ResourcesPending",
-		Message: "Waiting for resource allocation",
-	}, nil
-}
-
-func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running resource acquisition for deployment", zap.String("deployment", resource.Name))
-
-	if resource.Spec.GetInferenceServer() != nil {
-		a.logger.Info("Resources acquired successfully",
-			zap.String("inference_server", resource.Spec.GetInferenceServer().Name))
+	// Check if the inference server is healthy
+	if healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
+		InferenceServer: resource.Spec.GetInferenceServer().Name,
+		Namespace:       resource.Namespace,
+		BackendType:     v2pb.BACKEND_TYPE_TRITON,
+	}); err != nil {
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: fmt.Sprintf("Failed to check health of inference server: %v", err)}, nil
+	} else if !healthy {
+		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: "Inference server is not healthy"}, nil
 	}
+
+	// TODO(GHOSH): Figure out how to check server capacity to see if model can be loaded.
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "ResourcesAcquired",
-		Message: "Deployment resources acquired successfully",
+		Reason:  "ResourcesAvailable",
+		Message: "Resources are available and can be acquired",
+	}, nil
+}
+
+func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	// TODO(GHOSH): update this to check if the inference server is ready and healthy
+	// Figure out how to check server capacity to see if model can be loaded.
+	// If not, then this should return false and error.
+	a.logger.Info("Running resource acquisition for deployment", zap.String("deployment", resource.Name))
+	// If resources were available, then Retreive() would have returned true.
+	// If resources are not available, nothing can be done to acquire them at this point.
+	// Return false here to mark the condition as terminal.
+	// if resource.Spec.GetInferenceServer() != nil {
+	// 	a.logger.Info("Resources acquired successfully",
+	// 		zap.String("inference_server", resource.Spec.GetInferenceServer().Name))
+	// }
+
+	return &apipb.Condition{
+		Type:    a.GetType(),
+		Status:  apipb.CONDITION_STATUS_FALSE,
+		Reason:  "ResourcesNotAvailable",
+		Message: "Resources are not available and cannot be acquired",
 	}, nil
 }
 
@@ -398,6 +417,7 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				a.logger.Info("Successfully promoted candidate to current and cleaned up unused models", zap.String("currentModel", modelName))
 			}
 		} else {
+			// TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
 			// Fallback to old gateway-based approach if ConfigMapProvider not available
 			a.logger.Info("ConfigMapProvider not available, falling back to gateway cleanup")
 			if a.gateway != nil {
