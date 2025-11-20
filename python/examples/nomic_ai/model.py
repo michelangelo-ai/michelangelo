@@ -1,9 +1,6 @@
 import torch
 import pytorch_lightning as pl
 from transformers import AutoModel, AutoTokenizer
-import pytorch_lightning as pl
-import torch
-from transformers import AutoModel, AutoTokenizer
 
 
 class HuggingFaceLightningModel(pl.LightningModule):
