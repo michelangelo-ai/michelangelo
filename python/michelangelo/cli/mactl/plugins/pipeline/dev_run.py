@@ -31,6 +31,8 @@ from michelangelo.cli.mactl.plugins.pipeline.run import (
     generate_pipeline_run_object,
 )
 
+from michelangelo.uniflow.core.file_sync import DefaultFileSync
+
 _ENV_VARIABLE_KEY = "env"
 _UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
 
@@ -93,6 +95,20 @@ def add_function_signature(crd: CRD) -> None:
                         ),
                     },
                 },
+                {
+                    "func_signature": Parameter(
+                        "file_sync",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--file-sync"],
+                    "kwargs": {
+                        "action": "store_true",
+                        "required": False,
+                        "default": False,
+                        "help": "Enable file synchronization for local code changes",
+                    },
+                },
             ],
         },
     )
@@ -143,6 +159,9 @@ def generate_dev_run(
         else:
             _resume_from = None
 
+        # Handle optional file_sync parameter
+        _file_sync = bound_args.arguments.get("file_sync", False)
+
         environment_variables = _process_env_variables(
             bound_args.arguments.get("env", [])
         )
@@ -156,6 +175,10 @@ def generate_dev_run(
         # Add resume_from to yaml_dict so it can be processed by the metadata converter
         if _resume_from:
             yaml_dict["resume_from"] = _resume_from
+
+        # Add file_sync to yaml_dict so it can be processed by the metadata converter
+        if _file_sync:
+            yaml_dict["file_sync"] = _file_sync
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
             yaml_dict, input_class, yaml_path
@@ -229,14 +252,32 @@ def convert_crd_metadata_pipeline_dev_run(
     # Extract resume_from parameter if present
     resume_from = yaml_dict.get("resume_from")
 
+    # Extract file_sync parameter and create tarball if enabled
+    file_sync = yaml_dict.get("file_sync", False)
+    file_sync_tarball_url = ""
+    if file_sync:
+        docker_image = (
+            yaml_dict.get("metadata", {})
+            .get("annotations", {})
+            .get(_UNIFLOW_IMAGE_ANNOTATION_KEY, "")
+        )
+        _LOG.info("Creating file-sync tarball with docker_image: %s", docker_image)
+        file_sync_tarball_url = DefaultFileSync(
+            docker_image=docker_image,
+        ).create_and_upload_tarball()
+        _LOG.info("File-sync tarball uploaded to: %s", file_sync_tarball_url)
+
     pipeline_dev_run_cr = generate_pipeline_dev_run_object(
-        yaml_dict, pipeline_spec, resume_from
+        yaml_dict, pipeline_spec, resume_from, file_sync_tarball_url
     )
     return {"pipeline_run": pipeline_dev_run_cr}
 
 
 def generate_pipeline_dev_run_object(
-    yaml_dict: dict, pipeline_spec: dict, resume_from: str = None
+    yaml_dict: dict,
+    pipeline_spec: dict,
+    resume_from: str = None,
+    file_sync_tarball_url: str = "",
 ) -> dict:
     """Generate Pipeline Dev Run CR as dictionary.
 
@@ -244,6 +285,7 @@ def generate_pipeline_dev_run_object(
         yaml_dict: YAML configuration dictionary
         pipeline_spec: Pipeline specification dictionary
         resume_from: Optional resume specification in format "pipeline_run_name:step_name"
+        file_sync_tarball_url: Optional remote storage URL for file-sync tarball
     """
     namespace = yaml_dict.get("metadata", {}).get("namespace", "")
     pipeline_name = yaml_dict.get("metadata", {}).get("name", "")
@@ -259,6 +301,11 @@ def generate_pipeline_dev_run_object(
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})
     # embed environment variables into pipeline_run.spec.inputs
     environment_variables = yaml_dict.get(_ENV_VARIABLE_KEY, {})
+
+    # Add file-sync tarball URL to environment if present
+    if file_sync_tarball_url:
+        environment_variables["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
+
     if environment_variables:
         pipeline_run_spec["input"] = {
             "environ": environment_variables,

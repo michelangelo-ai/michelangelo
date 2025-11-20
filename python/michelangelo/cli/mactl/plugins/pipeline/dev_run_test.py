@@ -133,3 +133,70 @@ class PipelineDevRunTest(TestCase):
         result = generate_pipeline_dev_run_object(yaml_dict, pipeline_spec)
 
         self.assertNotIn("input", result["spec"])
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+    )
+    def test_generate_pipeline_dev_run_object_with_file_sync(
+        self, mock_generate_run_obj, mock_generate_name
+    ):
+        """Test that file-sync tarball URL is injected into environment variables."""
+        mock_generate_name.return_value = "run-test-12345678"
+        base_obj = {
+            "metadata": {"name": "run-test-12345678", "namespace": "test-ns"},
+            "spec": {"pipeline": {"name": "test-pipeline"}},
+        }
+        mock_generate_run_obj.return_value = base_obj
+
+        yaml_dict = {"metadata": {"name": "test-pipeline", "namespace": "test-ns"}}
+        pipeline_spec = {"spec": {}}
+        file_sync_tarball_url = "s3://bucket/path/to/file-sync.tar.gz"
+
+        result = generate_pipeline_dev_run_object(
+            yaml_dict, pipeline_spec, None, file_sync_tarball_url
+        )
+
+        self.assertIn("input", result["spec"])
+        self.assertIn("environ", result["spec"]["input"])
+        self.assertEqual(
+            result["spec"]["input"]["environ"]["UF_FILE_SYNC_TARBALL_URL"],
+            "s3://bucket/path/to/file-sync.tar.gz",
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+    )
+    def test_generate_pipeline_dev_run_object_with_file_sync_and_env_vars(
+        self, mock_generate_run_obj, mock_generate_name
+    ):
+        """Test that file-sync URL is merged with existing env variables."""
+        mock_generate_name.return_value = "run-test-12345678"
+        base_obj = {
+            "metadata": {"name": "run-test-12345678", "namespace": "test-ns"},
+            "spec": {"pipeline": {"name": "test-pipeline"}},
+        }
+        mock_generate_run_obj.return_value = base_obj
+
+        yaml_dict = {
+            "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
+            "env": {"KEY1": "value1", "KEY2": "value2"},
+        }
+        pipeline_spec = {"spec": {}}
+        file_sync_tarball_url = "s3://bucket/path/to/file-sync.tar.gz"
+
+        result = generate_pipeline_dev_run_object(
+            yaml_dict, pipeline_spec, None, file_sync_tarball_url
+        )
+
+        self.assertIn("input", result["spec"])
+        self.assertIn("environ", result["spec"]["input"])
+        self.assertEqual(
+            result["spec"]["input"]["environ"],
+            {
+                "KEY1": "value1",
+                "KEY2": "value2",
+                "UF_FILE_SYNC_TARBALL_URL": "s3://bucket/path/to/file-sync.tar.gz",
+            },
+        )
