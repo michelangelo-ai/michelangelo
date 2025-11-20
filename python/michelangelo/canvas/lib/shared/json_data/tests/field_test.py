@@ -40,4 +40,4 @@ class TestField(TestCase):
         self.assertListEqual(f.fields, ["f1", "f2"])
         f = one_of(fields=["f3", "f4", "f5"], required=False)
         self.assertFalse(f.required)
-        self.assertListEqual(f.fields, ["f3", "f4", "f5"]) 
+        self.assertListEqual(f.fields, ["f3", "f4", "f5"])

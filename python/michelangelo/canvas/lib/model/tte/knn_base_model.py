@@ -10,7 +10,6 @@ logger = logging.getLogger(__name__)
 
 
 class KNNModel:
-
     def __init__(
         self,
         item_id_col,

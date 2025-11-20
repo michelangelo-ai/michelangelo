@@ -58,4 +58,4 @@ def one_of(fields: list[str], required: bool = True) -> _OneOf:
     :param required: If True, at least one field in the fields list must be not None.
     :return:
     """
-    return _OneOf(fields=fields, required=required) 
+    return _OneOf(fields=fields, required=required)
