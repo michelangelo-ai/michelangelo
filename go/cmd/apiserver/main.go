@@ -3,7 +3,6 @@ package main
 import (
 	"github.com/michelangelo-ai/michelangelo/go/api/crd"
 	apihandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
-	"github.com/michelangelo-ai/michelangelo/go/api/webhook"
 	"github.com/michelangelo-ai/michelangelo/go/auth"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
@@ -42,7 +41,6 @@ func opts() fx.Option {
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
 		fx.Provide(provideDispatcher),
 		fx.Provide(getScheme),
-		webhook.Module,
 		fx.Invoke(projectapihook.RegisterProjectAPIHook),
 		v2pb.ProjectSvcModule,
 		v2pb.PipelineSvcModule,

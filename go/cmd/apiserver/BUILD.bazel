@@ -14,7 +14,6 @@ go_library(
     deps = [
         "//go/api/crd:go_default_library",
         "//go/api/handler:go_default_library",
-        "//go/api/webhook:go_default_library",
         "//go/auth:go_default_library",
         "//go/base/config:go_default_library",
         "//go/base/env:go_default_library",
