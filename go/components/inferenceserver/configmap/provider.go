@@ -127,31 +127,8 @@ func (p *defaultModelConfigMapProvider) UpdateModelConfigMap(ctx context.Context
 		configMap.Data = make(map[string]string)
 	}
 
-	// Parse existing model list if it exists
-	var existingModelList []ModelConfigEntry
-	if data, exists := configMap.Data[modelListKey]; exists && data != "" {
-		if parseErr := json.Unmarshal([]byte(data), &existingModelList); parseErr != nil {
-			p.logger.Error("failed to parse existing model list, starting fresh",
-				zap.Error(parseErr),
-				zap.String("operation", "update_configmap"),
-				zap.String("namespace", request.Namespace),
-				zap.String("configMap", configMapName))
-			existingModelList = []ModelConfigEntry{}
-		}
-	}
-
-	// Build updated model list based on request - this allows for atomic replacement or append operations
-	var updatedModelList []ModelConfigEntry
-	if len(request.ModelConfigs) > 0 {
-		// Use the provided model configs (could be replacement or append)
-		updatedModelList = request.ModelConfigs
-	} else {
-		// Keep existing models if no new configs provided
-		updatedModelList = existingModelList
-	}
-
 	// Marshal the updated model list with proper formatting
-	modelListJSON, err := json.MarshalIndent(updatedModelList, "", "  ")
+	modelListJSON, err := json.MarshalIndent(request.ModelConfigs, "", "  ")
 	if err != nil {
 		p.logger.Error("failed to marshal model configs",
 			zap.Error(err),
@@ -166,10 +143,9 @@ func (p *defaultModelConfigMapProvider) UpdateModelConfigMap(ctx context.Context
 	configMap.Data[modelListKey] = string(modelListJSON)
 
 	// Update labels if provided
+	configMap.Labels = nil // Clear existing labels to avoid merging with existing labels
 	if len(request.Labels) > 0 {
-		if configMap.Labels == nil {
-			configMap.Labels = make(map[string]string)
-		}
+		configMap.Labels = make(map[string]string)
 		for k, v := range request.Labels {
 			configMap.Labels[k] = v
 		}
@@ -188,7 +164,7 @@ func (p *defaultModelConfigMapProvider) UpdateModelConfigMap(ctx context.Context
 		return fmt.Errorf("failed to update ConfigMap %s/%s: %w",
 			request.Namespace, configMapName, err)
 	}
-	p.logger.Info("Model ConfigMap updated successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(updatedModelList)))
+	p.logger.Info("Model ConfigMap updated successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(request.ModelConfigs)))
 	return nil
 }
 

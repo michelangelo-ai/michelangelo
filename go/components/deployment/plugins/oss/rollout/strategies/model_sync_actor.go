@@ -2,12 +2,10 @@ package strategies
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
 	"go.uber.org/zap"
-	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
@@ -39,58 +37,57 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployme
 		modelName := deployment.Spec.DesiredRevision.Name
 
 		// Check if model is loaded in Triton using the gateway health check
-		if a.gateway != nil {
-			inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
-			// Check if the desired model is ready in Triton
-			modelStatusRequest := gateways.CheckModelStatusRequest{
-				ModelName:       modelName,
-				InferenceServer: inferenceServerName,
-				DeploymentName:  deployment.Name, // Include deployment name for deployment-specific routing
-				Namespace:       deployment.Namespace,
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
-			}
+		inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
-			// Implement retry logic with configurable timeout for health checks
-			modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelStatusRequest)
-			if err != nil {
-				// Check if this is a timeout error vs other errors
-				if err.Error() == "health check timeout exceeded" {
-					a.logger.Info("Model health check timed out after 10 minutes", zap.String("model", modelName))
-					return &apipb.Condition{
-						Type:    a.GetType(),
-						Status:  apipb.CONDITION_STATUS_FALSE,
-						Reason:  "ModelHealthCheckTimeout",
-						Message: fmt.Sprintf("Model %s health check timed out after 10 minutes", modelName),
-					}, nil
-				}
+		// Check if the desired model is ready in Triton
+		modelStatusRequest := gateways.CheckModelStatusRequest{
+			ModelName:       modelName,
+			InferenceServer: inferenceServerName,
+			DeploymentName:  deployment.Name, // Include deployment name for deployment-specific routing
+			Namespace:       deployment.Namespace,
+			BackendType:     v2pb.BACKEND_TYPE_TRITON,
+		}
 
-				a.logger.Error("Failed to check model status in Triton", zap.String("model", modelName), zap.Error(err))
+		// Implement retry logic with configurable timeout for health checks
+		modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelStatusRequest)
+		if err != nil {
+			// Check if this is a timeout error vs other errors
+			if err.Error() == "health check timeout exceeded" {
+				a.logger.Info("Model health check timed out after 10 minutes", zap.String("model", modelName))
 				return &apipb.Condition{
 					Type:    a.GetType(),
 					Status:  apipb.CONDITION_STATUS_FALSE,
-					Reason:  "ModelHealthCheckError",
-					Message: fmt.Sprintf("Error checking model %s readiness: %v", modelName, err),
+					Reason:  "ModelHealthCheckTimeout",
+					Message: fmt.Sprintf("Model %s health check timed out after 10 minutes", modelName),
 				}, nil
 			}
 
-			if modelReady {
-				a.logger.Info("New model is loaded and ready in Triton", zap.String("model", modelName))
-				return &apipb.Condition{
-					Type:    a.GetType(),
-					Status:  apipb.CONDITION_STATUS_TRUE,
-					Reason:  "ModelSyncCompleted",
-					Message: fmt.Sprintf("Model %s successfully loaded and ready in Triton", modelName),
-				}, nil
-			} else {
-				a.logger.Info("New model is not yet ready in Triton, continuing to wait", zap.String("model", modelName))
-				return &apipb.Condition{
-					Type:    a.GetType(),
-					Status:  apipb.CONDITION_STATUS_FALSE,
-					Reason:  "ModelNotReady",
-					Message: fmt.Sprintf("Model %s is loading but not yet ready in Triton", modelName),
-				}, nil
-			}
+			a.logger.Error("Failed to check model status in Triton", zap.String("model", modelName), zap.Error(err))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ModelHealthCheckError",
+				Message: fmt.Sprintf("Error checking model %s readiness: %v", modelName, err),
+			}, nil
+		}
+
+		if modelReady {
+			a.logger.Info("New model is loaded and ready in Triton", zap.String("model", modelName))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_TRUE,
+				Reason:  "ModelSyncCompleted",
+				Message: fmt.Sprintf("Model %s successfully loaded and ready in Triton", modelName),
+			}, nil
+		} else {
+			a.logger.Info("New model is not yet ready in Triton, continuing to wait", zap.String("model", modelName))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ModelNotReady",
+				Message: fmt.Sprintf("Model %s is loading but not yet ready in Triton", modelName),
+			}, nil
 		}
 	}
 
@@ -116,123 +113,32 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 
 		// UCS CACHE PATTERN: Replicate Uber's exact UCS cache update pattern from rolling/actor.go:76
 		// Original Uber code: err = a.ucsCache.UpdateDeployment(*deployment, constraints, nil, common.RoleTypeCandidate)
-		if a.modelConfigMapProvider != nil {
-			// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
-			// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
-			if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
-				a.logger.Error("Failed to update deployment via ConfigMapProvider (UCS cache pattern)", zap.Error(err))
-				return &apipb.Condition{
-					Type:    a.GetType(),
-					Status:  apipb.CONDITION_STATUS_FALSE,
-					Reason:  "ConfigMapUpdateFailed",
-					Message: fmt.Sprintf("Failed to update deployment: %v", err),
-				}, nil
-			}
+		// (TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
+		// Fallback to old gateway-based approach if ConfigMapProvider not available
+		// (DONE, CHECK)
 
-			a.logger.Info("UCS cache pattern update completed successfully",
-				zap.String("deployment", deployment.Name),
-				zap.String("candidateModel", modelName),
-				zap.String("roleType", "candidate"))
-		} else {
-			// Fallback to old gateway-based approach if ConfigMapProvider not available
-			a.logger.Info("ConfigMapProvider not available, falling back to gateway approach")
-			if a.gateway != nil {
-				// Get current models from ConfigMap to preserve them during deployment
-				currentModels, err := a.getCurrentModelsFromConfigMap(ctx, a.logger, inferenceServerName, deployment.Namespace)
-				if err != nil {
-					a.logger.Error("Failed to get current models from ConfigMap", zap.Error(err))
-					// Continue with just the new model if we can't read existing ones
-					currentModels = []configmap.ModelConfigEntry{}
-				}
-
-				// Check if new model already exists to avoid duplicates
-				modelExists := false
-				for _, model := range currentModels {
-					if model.Name == modelName {
-						modelExists = true
-						break
-					}
-				}
-
-				// Add the new model if it doesn't already exist
-				if !modelExists {
-					currentModels = append(currentModels, configmap.ModelConfigEntry{
-						Name:   modelName,
-						S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
-					})
-					a.logger.Info("Adding new model for zero-downtime deployment",
-						zap.String("newModel", modelName), zap.Int("totalModels", len(currentModels)))
-				} else {
-					a.logger.Info("Model already exists in ConfigMap", zap.String("model", modelName))
-				}
-
-				updateRequest := configmap.UpdateModelConfigMapRequest{
-					InferenceServer: inferenceServerName,
-					Namespace:       deployment.Namespace,
-					BackendType:     v2pb.BACKEND_TYPE_TRITON, // Default to Triton for OSS
-					ModelConfigs:    currentModels,
-				}
-
-				if err := a.modelConfigMapProvider.UpdateModelConfigMap(ctx, updateRequest); err != nil {
-					a.logger.Error("Failed to update model config via gateway", zap.Error(err))
-					return &apipb.Condition{
-						Type:    a.GetType(),
-						Status:  apipb.CONDITION_STATUS_FALSE,
-						Reason:  "ModelConfigUpdateFailed",
-						Message: fmt.Sprintf("Failed to update model config: %v", err),
-					}, nil
-				}
-
-				a.logger.Info("Model configuration updated successfully for zero-downtime deployment",
-					zap.String("model", modelName), zap.Int("totalModels", len(currentModels)))
-			}
+		// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
+		// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
+		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
+			a.logger.Error("Failed to update deployment via ConfigMapProvider (UCS cache pattern)", zap.Error(err))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ConfigMapUpdateFailed",
+				Message: fmt.Sprintf("Failed to update deployment: %v", err),
+			}, nil
 		}
 
-		// DO NOT update HTTPRoute or CurrentRevision yet!
-		// We only sync the model to ConfigMap here. HTTPRoute update and CurrentRevision
-		// will be handled by ModelHealthCheckActor after verifying the new model is ready.
+		a.logger.Info("UCS cache pattern update completed successfully",
+			zap.String("deployment", deployment.Name),
+			zap.String("candidateModel", modelName),
+			zap.String("roleType", "candidate"))
+
 		a.logger.Info("Model sync to ConfigMap completed successfully - waiting for health check before switching traffic")
 	}
 
 	// TODO(GHOSH): probably need to return unknown so that the condition is only true when the model is truely ready and loaded in triton
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
-}
-
-// getCurrentModelsFromConfigMap retrieves current models from the inference server ConfigMap
-// Following the correct pattern from PR #188: Get -> Parse with proper error handling
-func (a *ModelSyncActor) getCurrentModelsFromConfigMap(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]configmap.ModelConfigEntry, error) {
-	configMapName := fmt.Sprintf("%s-model-config", inferenceServerName)
-
-	// Get the ConfigMap using Kubernetes client
-	configMap := &v1.ConfigMap{}
-	key := client.ObjectKey{Name: configMapName, Namespace: namespace}
-
-	if err := a.client.Get(ctx, key, configMap); err != nil {
-		// If ConfigMap doesn't exist, return empty list (new deployment)
-		if client.IgnoreNotFound(err) == nil {
-			logger.Info("ConfigMap not found, starting with empty model list", zap.String("configMap", configMapName))
-			return []configmap.ModelConfigEntry{}, nil
-		}
-		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", configMapName, err)
-	}
-
-	// Parse the model-list.json from ConfigMap - following PR #188 pattern
-	modelListJSON, exists := configMap.Data["model-list.json"]
-	if !exists || modelListJSON == "" {
-		logger.Info("model-list.json not found or empty in ConfigMap", zap.String("configMap", configMapName))
-		return []configmap.ModelConfigEntry{}, nil
-	}
-
-	// Parse JSON to get current models with proper error handling
-	var currentModels []configmap.ModelConfigEntry
-	if err := json.Unmarshal([]byte(modelListJSON), &currentModels); err != nil {
-		logger.Error("Failed to parse model-list.json from ConfigMap", zap.Error(err), zap.String("configMap", configMapName))
-		// Return empty list on parse failure rather than nil to allow recovery
-		return []configmap.ModelConfigEntry{}, nil
-	}
-
-	logger.Info("Retrieved current models from ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(currentModels)))
-	return currentModels, nil
 }
 
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks

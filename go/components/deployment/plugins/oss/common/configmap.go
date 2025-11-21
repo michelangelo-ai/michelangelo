@@ -9,8 +9,56 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 )
 
+func ModelExistsInConfig(ctx context.Context, logger *zap.Logger, provider configmap.ModelConfigMapProvider, inferenceServerName, namespace, modelName string) (bool, error) {
+	currentConfigs, err := provider.GetModelConfigMap(ctx, configmap.GetModelConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       namespace,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get current model config: %w", err)
+	}
+
+	for _, config := range currentConfigs {
+		if config.Name == modelName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func RemoveModelFromConfig(ctx context.Context, logger *zap.Logger, provider configmap.ModelConfigMapProvider, inferenceServerName, namespace, modelName string) error {
+	if modelName == "" {
+		return nil
+	}
+	logger.Info("Removing model from shared ConfigMap", zap.String("inferenceServer", inferenceServerName), zap.String("model", modelName))
+	currentConfigs, err := provider.GetModelConfigMap(ctx, configmap.GetModelConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       namespace,
+	})
+	if err != nil {
+		logger.Error("Failed to get current model config", zap.Error(err))
+		return fmt.Errorf("failed to get current model config: %w", err)
+	}
+	updatedConfigs := []configmap.ModelConfigEntry{}
+	fmt.Printf("DEBUG: RemoveModelFromConfig: Current configs: %v\n", currentConfigs)
+	for _, config := range currentConfigs {
+		if config.Name != modelName {
+			updatedConfigs = append(updatedConfigs, config)
+		}
+	}
+	fmt.Printf("DEBUG: RemoveModelFromConfig: Updated configs: %v\n", updatedConfigs)
+	// Update ConfigMap
+	request := configmap.UpdateModelConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       namespace,
+		ModelConfigs:    updatedConfigs,
+	}
+
+	return provider.UpdateModelConfigMap(ctx, request)
+}
+
 // UpdateDeploymentModel updates the model for a specific deployment using simplified shared ConfigMap approach
-// This adds entries directly to the shared model-config ConfigMap (no deployment-registry)
+// This adds entries directly to the shared model-config ConfigMap
 func UpdateDeploymentModel(ctx context.Context, logger *zap.Logger, provider configmap.ModelConfigMapProvider, inferenceServerName, namespace, deploymentName, modelName string, roleType string) error {
 	logger.Info("Updating deployment model directly in shared ConfigMap",
 		zap.String("inferenceServer", inferenceServerName),

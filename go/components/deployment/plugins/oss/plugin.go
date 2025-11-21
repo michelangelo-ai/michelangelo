@@ -71,9 +71,10 @@ func NewPlugin(params Params) *Plugin {
 			Logger:  params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			Client:  params.Client,
-			Gateway: params.Gateway,
-			Logger:  params.Logger,
+			Client:                 params.Client,
+			Gateway:                params.Gateway,
+			Logger:                 params.Logger,
+			ModelConfigMapProvider: params.ModelConfigMapProvider,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
 			Client:  params.Client,
@@ -134,6 +135,7 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	if len(deployment.Status.Conditions) == 0 {
 		// return v2pb.DEPLOYMENT_STAGE_VALIDATION
 		fmt.Printf("DEBUG: ParseStage: No conditions, would have started from validation\n")
+		return currentStage
 	}
 
 	// Check for actual rollout completion conditions (not just steady state)
@@ -200,12 +202,13 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 // HealthCheckGate checks if there are issues with the current model rollout
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
 	// For OSS, we'll do a basic health check
+
 	// Check if the inference server is specified
 	if deployment.Spec.GetInferenceServer() == nil {
 		return false, nil
 	}
 
-	// TODO(GHOSH): implement the health check operation (DONE, CHECK)
+	// Check if the inference server is healthy
 	healthy, err := p.gateway.IsHealthy(ctx, p.logger, gateways.HealthCheckRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,

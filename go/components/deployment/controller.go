@@ -237,10 +237,6 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	stage := plugin.ParseStage(deployment)
 	fmt.Printf("DEBUG: ParseStage returned stage=%v for %s\n", stage, deployment.Name)
 
-	// Check result from condition engine
-	// TODO(GHOSH): CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE (DONE, CHECK)
-	// Check if we've reached max attempts OR if condition is satisfied but terminal.
-	// For successful terminal conditions, we should continue processing to allow stage progression.
 	if result.IsTerminal && !result.AreSatisfied {
 		message := "Maximum attempts reached to reconcile the resource. Will not proceed with rollout or rollback " +
 			"until the resource is updated again. If in cleanup, we will no longer reconcile."
@@ -272,6 +268,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		log.Info(message)
 		deployment.Status.Stage = stage
 		terminal := r.handleStageTransition(ctx, metrics, deployment, err)
+		fmt.Printf("DEBUG: handleStageTransition returned terminal=%v for deployment %s\n", terminal, deployment.Name)
 		// TODO(#534): Enable these once revision codes are migrated:
 		// - Either implement UpsertDeploymentRevision properly with full error handling
 		// - Or permanently remove revision management infrastructure if not needed
@@ -287,8 +284,10 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
 				deployment.Status.ConditionsSnapshot = deployment.Status.Conditions
 			}
+			fmt.Printf("DEBUG: Setting conditions to nil for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 			deployment.Status.Conditions = nil
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
+				fmt.Printf("DEBUG: Populating message for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 				runtimeCtx := plugins.RequestContext{
 					Deployment: deployment,
 					Logger:     log,
@@ -296,6 +295,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 				plugin.PopulateMessage(ctx, runtimeCtx, deployment)
 			}
 		}
+		fmt.Printf("DEBUG: Recording event for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 		r.Recorder.Event(deployment, _normalType, _stageChangeEvent, message)
 	}
 
@@ -305,6 +305,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	observability := r.getObservability(log, deployment.Namespace)
 	status, getStateErr := plugin.GetState(ctx, observability, deployment)
 	if getStateErr != nil {
+		fmt.Printf("DEBUG: Failed to execute monitoring step for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 		metrics.getStateMetrics.errorCount.Inc(1)
 		log.Error(getStateErr, "Failed to execute monitoring step. The state may not be up-to-date.")
 
@@ -314,6 +315,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	deployment.Status = status
 
 	if IsCleanupCompleteStage(deployment.Status.Stage) {
+		fmt.Printf("DEBUG: IsCleanupCompleteStage is true for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 		// If the resource is in cleanup completion stage, then it is eligible for deletion.
 		// Since we do not expect this resource to be reconciled (until new user action), the finalizer will not be
 		// added again. If there is a new user action, then it is reasonable to avoid deletion. Conversely, if the
@@ -322,6 +324,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 
 		// We only want to delete all revisions when the deployment is marked for deletion.
 		if !deployment.GetDeletionTimestamp().IsZero() {
+			fmt.Printf("DEBUG: Deleting all revisions for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 			err = r.RevisionManager.DeleteAllRevisions(ctx, deployment.GetNamespace(), deployment.GetName(), "Deployment")
 			if err != nil {
 				log.Error(err, "Failed to delete all revisions for deployment. This is not critical. "+
@@ -473,6 +476,8 @@ func (r *Reconciler) handleStageTransition(
 	err error,
 ) bool {
 	var messages []string
+	fmt.Printf("DEBUG: handleStageTransition is getting called for deployment %s with stage %s\n", deployment.Name, deployment.Status.Stage)
+
 	if !IsTerminalStage(deployment.Status.Stage) {
 		if deployment.Status.Message != "" {
 			messages = append(messages, deployment.Status.Message)

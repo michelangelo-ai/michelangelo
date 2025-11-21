@@ -114,7 +114,6 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			a.logger.Info("Deployment not healthy, investigating", zap.String("state", resource.Status.State.String()))
-			// TODO(GHOSH): implement the health check for inference server (DONE, CHECK)
 			// Check if the inference server is healthy
 			if healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
 				InferenceServer: resource.Spec.GetInferenceServer().Name,
@@ -128,7 +127,23 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 
 			// TODO(GHOSH): confirm this is truely the case.
 			// If the inference server is healthy, then the deployment is healthy
-			// TODO(GHOSH): implement the logic to set the model status
+			// TODO(GHOSH): implement the logic to get the model status from the inference server
+			//(DONE, CHECK)
+			modelStatusRequest := gateways.CheckModelStatusRequest{
+				ModelName:       resource.Spec.DesiredRevision.Name,
+				InferenceServer: resource.Spec.GetInferenceServer().Name,
+				DeploymentName:  resource.Name,
+				Namespace:       resource.Namespace,
+				BackendType:     v2pb.BACKEND_TYPE_TRITON,
+			}
+			fmt.Printf("MADE IT TO HERE: modelStatusRequest: %+v\n", modelStatusRequest)
+			modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelStatusRequest)
+			if err != nil {
+				return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "ModelHealthCheckFailed", Message: fmt.Sprintf("Failed to check model status: %v", err)}, nil
+			}
+			if !modelReady {
+				return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "ModelHealthCheckFailed", Message: "Model is not ready"}, nil
+			}
 			resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		}
 

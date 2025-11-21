@@ -300,7 +300,9 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: "Inference server is not healthy"}, nil
 	}
 
-	// TODO(GHOSH): Figure out how to check server capacity to see if model can be loaded.
+	// TODO(GHOSH): update this to check if the inference server is ready and healthy
+	// Figure out how to check server capacity to see if model can be loaded.
+	// If not, then this should return false and error.
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -311,18 +313,9 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 }
 
 func (a *ResourceAcquisitionActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	// TODO(GHOSH): update this to check if the inference server is ready and healthy
-	// Figure out how to check server capacity to see if model can be loaded.
-	// If not, then this should return false and error.
-	a.logger.Info("Running resource acquisition for deployment", zap.String("deployment", resource.Name))
-	// If resources were available, then Retreive() would have returned true.
-	// If resources are not available, nothing can be done to acquire them at this point.
-	// Return false here to mark the condition as terminal.
-	// if resource.Spec.GetInferenceServer() != nil {
-	// 	a.logger.Info("Resources acquired successfully",
-	// 		zap.String("inference_server", resource.Spec.GetInferenceServer().Name))
-	// }
-
+	// If resources were available, Retrieve() would have marked the condition as true.
+	// Since resources are not available, there are no further actions to acquire them at this stage.
+	// Mark the condition as false to indicate this is a terminal state.
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_FALSE,
@@ -405,40 +398,17 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		a.logger.Info("CurrentRevision updated after successful traffic switch", zap.String("model", modelName))
 
 		// DEPLOYMENT-LEVEL CLEANUP: Promote candidate to current and trigger safe cleanup
-		if a.modelConfigMapProvider != nil {
-			// Promote candidate model to current (this automatically triggers cleanup of unused models)
-			a.logger.Info("Promoting candidate model to current and cleaning up unused models", zap.String("newModel", modelName))
-
-			if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {
-				a.logger.Error("Failed to promote model to current via ConfigMapProvider", zap.Error(err))
-				// Don't fail the whole rollout completion due to cleanup failure
-				// but log the error for investigation
-			} else {
-				a.logger.Info("Successfully promoted candidate to current and cleaned up unused models", zap.String("currentModel", modelName))
-			}
+		// TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
+		// Fallback to old gateway-based approach if ConfigMapProvider not available
+		// (DONE, CHECK)
+		// Promote candidate model to current (this automatically triggers cleanup of unused models)
+		a.logger.Info("Promoting candidate model to current and cleaning up unused models", zap.String("newModel", modelName))
+		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {
+			a.logger.Error("Failed to promote model to current via ConfigMapProvider", zap.Error(err))
+			// Don't fail the whole rollout completion due to cleanup failure
+			// but log the error for investigation
 		} else {
-			// TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
-			// Fallback to old gateway-based approach if ConfigMapProvider not available
-			a.logger.Info("ConfigMapProvider not available, falling back to gateway cleanup")
-			if a.gateway != nil {
-				// Get current model configuration to identify old models
-				a.logger.Info("Cleaning up old models from ConfigMap", zap.String("newModel", modelName))
-
-				// Create cleanup request that will remove old models and keep only the new one
-				cleanupRequest := configmap.UpdateModelConfigMapRequest{
-					InferenceServer: inferenceServerName,
-					Namespace:       deployment.Namespace,
-					ModelConfigs:    []configmap.ModelConfigEntry{{Name: modelName, S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName)}},
-				}
-
-				if err := a.modelConfigMapProvider.UpdateModelConfigMap(ctx, cleanupRequest); err != nil {
-					a.logger.Error("Failed to cleanup old models from ConfigMap", zap.Error(err))
-					// Don't fail the whole rollout completion due to cleanup failure
-					// but log the error for investigation
-				} else {
-					a.logger.Info("Successfully cleaned up old models from ConfigMap", zap.String("activeModel", modelName))
-				}
-			}
+			a.logger.Info("Successfully promoted candidate to current and cleaned up unused models", zap.String("currentModel", modelName))
 		}
 
 		// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO ROLLOUT_COMPLETE HERE?
