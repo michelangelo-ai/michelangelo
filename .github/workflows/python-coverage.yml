@@ -99,7 +99,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       # Check overall coverage threshold (baseline: 34.94%)
-      - name: Check overall coverage threshold (baseline: 34.94%)
+      - name: "Check overall coverage threshold (baseline: 34.94%)"
         run: |
           # Baseline coverage is 34.94% - we don't fail on this
           # The goal is to maintain or improve from baseline
