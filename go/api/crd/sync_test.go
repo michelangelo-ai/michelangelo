@@ -258,31 +258,31 @@ func TestSyncCRDs(t *testing.T) {
 	crdYaml, err := os.ReadFile(testCRDManifestDir + "/project.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err)
 
 	// incompatible change - should be blocked with empty allowlist
 	crdYaml, err = os.ReadFile(testCRDManifestDir + "/project_delete_props.pb.yaml")
 	assert.NoError(t, err)
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to update CRD. Schema is incompatible, and there are existing instances. Abort updating CRD projects.test")
 
 	// same incompatible change - should be allowed when CRD is in allowlist
 	err = syncCRDs(context.Background(), logger, "test",
-		true, &crdGateway, nil, []string{"projects.test"}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, []string{"projects.test"}, map[string]string{"Project": string(crdYaml)})
 	assert.NoError(t, err, "incompatible update should be allowed when CRD is in allowlist")
 
 	// fail to list existing CRDs
 	mockGateway := crdmocks.NewMockGateway(gomock.NewController(t))
 	mockGateway.EXPECT().List(gomock.Any()).Return(nil, fmt.Errorf("test error"))
 	err = syncCRDs(context.Background(), logger, "test",
-		true, mockGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, mockGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "failed to list existing CRDs: test error")
 
 	// do not update CRDs that are not in the specified groups
 	err = syncCRDs(context.Background(), logger, "test1",
-		true, &crdGateway, nil, []string{}, map[string]string{"Project": string(crdYaml)})
+		true, &crdGateway, nil, nil, []string{}, map[string]string{"Project": string(crdYaml)})
 	assert.Error(t, err, "CRD projects.test is not in the specified group test1")
 }
 
@@ -360,7 +360,7 @@ func TestMergeCRDVersions(t *testing.T) {
 		crd := createCRD("test-crd", "v1", false)
 		crdList := []*apiextv1.CustomResourceDefinition{crd}
 
-		result, err := mergeCRDVersions(crdList, nil)
+		result, err := mergeCRDVersions(crdList, nil, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, "test-crd", result[0].Name)
@@ -379,7 +379,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, "test-crd", result[0].Name)
@@ -401,7 +401,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.Equal(t, "test-crd", result[0].Name)
@@ -438,7 +438,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 1)
 		assert.True(t, result[0].Spec.Versions[0].Storage)
@@ -450,7 +450,7 @@ func TestMergeCRDVersions(t *testing.T) {
 		crdList := []*apiextv1.CustomResourceDefinition{crd1, crd2}
 		crdVersions := map[string]VersionConfig{}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "CRD test-crd has multiple versions but version config specified in crdVersions")
 	})
@@ -466,7 +466,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "CRD test-crd has multiple versions, but no storageVersion specified in crdVersions")
 	})
@@ -490,7 +490,7 @@ func TestMergeCRDVersions(t *testing.T) {
 		crdList := []*apiextv1.CustomResourceDefinition{crd}
 		crdVersions := map[string]VersionConfig{}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "each CRD item must only have one version. CRD test-crd has 2 versions")
 	})
@@ -501,7 +501,7 @@ func TestMergeCRDVersions(t *testing.T) {
 		crdList := []*apiextv1.CustomResourceDefinition{crd1, crd2}
 		crdVersions := map[string]VersionConfig{}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "CRD test-crd has duplicated definitions of version v1")
 	})
@@ -516,7 +516,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "version v2 of CRD test-crd is specified in crdVersions, but does not exist not in crdList")
 	})
@@ -531,7 +531,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		_, err := mergeCRDVersions(crdList, crdVersions)
+		_, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "CRD test-crd does not have the specified storage version v2")
 	})
@@ -547,7 +547,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 2)
 
@@ -576,7 +576,7 @@ func TestMergeCRDVersions(t *testing.T) {
 		crdList := []*apiextv1.CustomResourceDefinition{}
 		crdVersions := map[string]VersionConfig{}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 0)
 	})
@@ -597,7 +597,7 @@ func TestMergeCRDVersions(t *testing.T) {
 			},
 		}
 
-		result, err := mergeCRDVersions(crdList, crdVersions)
+		result, err := mergeCRDVersions(crdList, crdVersions, nil)
 		assert.NoError(t, err)
 		assert.Len(t, result, 2)
 

@@ -294,7 +294,9 @@ func CompareCRDSchemas(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiext
 }
 
 func hasChange(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) bool {
-	return !reflect.DeepEqual(oldCRD.Spec.Versions, newCRD.Spec.Versions)
+	versionsChanged := !reflect.DeepEqual(oldCRD.Spec.Versions, newCRD.Spec.Versions)
+	conversionChanged := !reflect.DeepEqual(oldCRD.Spec.Conversion, newCRD.Spec.Conversion)
+	return versionsChanged || conversionChanged
 }
 
 func isSpecChangeCompatible(oldCRD *apiextv1.CustomResourceDefinition, newCRD *apiextv1.CustomResourceDefinition) (bool, error) {

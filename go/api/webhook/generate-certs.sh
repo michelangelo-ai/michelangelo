@@ -72,16 +72,36 @@ openssl req -new \
 
 # Step 5: Sign server certificate with our CA
 echo "==> [5/5] Signing server certificate with CA..."
+# Create a config file for SAN (Subject Alternative Names)
+cat > "$CERT_DIR/san.conf" <<EOF
+[req]
+distinguished_name = req_distinguished_name
+req_extensions = v3_req
+
+[req_distinguished_name]
+
+[v3_req]
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = $SERVICE_NAME
+DNS.2 = localhost
+DNS.3 = host.docker.internal
+IP.1 = 127.0.0.1
+EOF
+
 openssl x509 -req \
   -in "$CERT_DIR/server.csr" \
   -CA "$CERT_DIR/ca.crt" \
   -CAkey "$CERT_DIR/ca.key" \
   -CAcreateserial \
   -out "$CERT_DIR/tls.crt" \
-  -days "$CERT_VALIDITY_DAYS" 2>/dev/null
+  -days "$CERT_VALIDITY_DAYS" \
+  -extensions v3_req \
+  -extfile "$CERT_DIR/san.conf" 2>/dev/null
 
-# Cleanup CSR (no longer needed)
-rm -f "$CERT_DIR/server.csr"
+# Cleanup CSR and SAN config (no longer needed)
+rm -f "$CERT_DIR/server.csr" "$CERT_DIR/san.conf"
 
 echo ""
 echo "==> ✓ Certificates generated successfully!"
