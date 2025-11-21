@@ -441,6 +441,8 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 			}
 		}
 
+		// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO ROLLOUT_COMPLETE HERE?
+		// OR SHOULD WE LET PARSESTAGE HANDLE THIS?
 		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		deployment.Status.Message = fmt.Sprintf("Rollout completed successfully for model %s", modelName)

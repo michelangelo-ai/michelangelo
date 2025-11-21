@@ -116,6 +116,10 @@ func (p *Plugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deploym
 
 // ParseStage goes through all the conditions and determines the current deployment stage
 func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
+	fmt.Printf("DEBUG: ParseStage CALLED for %s, DesiredRevision=%v, CandidateRevision=%v, conditions=%d\n",
+		deployment.Name, deployment.Spec.DesiredRevision, deployment.Status.CandidateRevision, len(deployment.Status.Conditions))
+
+	currentStage := deployment.Status.Stage
 	// Check if we need to trigger a new rollout despite having conditions
 	// This happens when desired != candidate, which means a new rollout should start
 	if deployment.Spec.DesiredRevision != nil && deployment.Status.CandidateRevision != nil {
@@ -126,8 +130,10 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	}
 
 	// If we have no conditions, start rollout process
+	// TODO(GHOSH): CHECK THIS
 	if len(deployment.Status.Conditions) == 0 {
-		return v2pb.DEPLOYMENT_STAGE_VALIDATION
+		// return v2pb.DEPLOYMENT_STAGE_VALIDATION
+		fmt.Printf("DEBUG: ParseStage: No conditions, would have started from validation\n")
 	}
 
 	// Check for actual rollout completion conditions (not just steady state)
@@ -166,9 +172,7 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 			}
 		case "StateSteady":
-			// StateSteady is not a rollout completion indicator - ignore it for stage determination
-			// This condition comes from steady state monitoring, not rollout completion
-			continue
+			return currentStage
 		}
 	}
 

@@ -224,13 +224,18 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 		log.Error(err, "failed to get deployment plugin")
 		return defaultResult, fmt.Errorf("failed to get deployment plugin: %w", err)
 	}
+	fmt.Printf("DEBUG: Got plugin for deployment %s/%s\n", deployment.Namespace, deployment.Name)
 
 	originalStage := deployment.Status.Stage
 	result, err := r.processPlugin(ctx, log, metrics, plugin, deployment, originalDeployment)
+	fmt.Printf("DEBUG: processPlugin returned for %s, result.AreSatisfied=%v, result.IsTerminal=%v, err=%v\n",
+		deployment.Name, result.AreSatisfied, result.IsTerminal, err)
 
 	// Inject the provider status as a log tag after processing has occurred.
 	log = log.WithValues(_providerStatus, deployment.Status.ProviderStatus)
+	fmt.Printf("DEBUG: About to call ParseStage for %s, conditions=%d\n", deployment.Name, len(deployment.Status.Conditions))
 	stage := plugin.ParseStage(deployment)
+	fmt.Printf("DEBUG: ParseStage returned stage=%v for %s\n", stage, deployment.Name)
 
 	// Check result from condition engine
 	// TODO(GHOSH): CHANGED THIS RECENTLY, REVISIT THIS LOGIC LATER TO VERIFY IF IT MAKES SENSE (DONE, CHECK)

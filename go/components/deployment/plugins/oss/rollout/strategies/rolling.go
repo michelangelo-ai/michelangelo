@@ -122,6 +122,8 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 
 		// Simulate successful rollout completion
 		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
+		// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO ROLLOUT_COMPLETE HERE?
+		// OR SHOULD WE LET PARSESTAGE HANDLE THIS?
 		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		a.logger.Info("Rolling rollout completed successfully", zap.String("model", modelName))
