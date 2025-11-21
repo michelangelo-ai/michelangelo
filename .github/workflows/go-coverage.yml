@@ -83,7 +83,7 @@ jobs:
             cp "$COVERAGE_FILE" coverage.dat
 
             # Remove external Bazel dependencies from coverage data (if any)
-            lcov --remove coverage.dat '*/external/*' -o coverage-filtered.dat --ignore-errors unused
+            lcov --remove coverage.dat 'external/*' -o coverage-filtered.dat --ignore-errors unused
             mv coverage-filtered.dat coverage.dat
 
             # Generate summary
