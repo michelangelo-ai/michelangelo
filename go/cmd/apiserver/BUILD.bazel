@@ -22,7 +22,6 @@ go_library(
         "//go/components/project/apihook:go_default_library",
         "//go/logging:go_default_library",
         "//proto/api/v2:go_default_library",
-        "//proto/api/v2alpha1:go_default_library",
         "@com_github_uber_go_tally//:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
         "@io_k8s_client_go//kubernetes/scheme:go_default_library",

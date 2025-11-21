@@ -1,40 +1,28 @@
 #!/bin/bash
 
 ################################################################################
-# Webhook Certificate Generator
+# This script generates HTTPS certificate files for testing.
 #
-# CONTEXT:
-# The Michelangelo webhook server uses HTTPS to receive conversion requests
-# from the Kubernetes API server. HTTPS requires TLS certificates.
-#
-# WHY WE NEED OUR OWN CA:
-# - Public CAs (like Let's Encrypt) are for public internet, not internal K8s clusters
-# - We create our own Certificate Authority (CA) to sign our webhook certificates
-# - K8s API server trusts our CA via the CABundle in the CRD's webhook config
-#
-# WHAT THIS SCRIPT GENERATES:
-# 1. ca.crt & ca.key     - Our own Certificate Authority (the "trust anchor")
-# 2. tls.crt & tls.key   - Webhook server certificate signed by our CA
-#
-# HOW IT WORKS:
-# - Controller-runtime (webhook server) uses tls.crt + tls.key for HTTPS
-# - K8s API server receives ca.crt via WebhookConversion config to trust our certs
-#
-# WHEN TO RUN:
-# - First time setting up local development
-# - When certificates expire (default: 1 year)
-# - When you delete the certs directory
+# Creates our own Certificate Authority for test purposes and generates:
+# 1. ca.crt & ca.key     - Certificate Authority (for K8s API server trust)
+# 2. tls.crt & tls.key   - Webhook server certificate
 #
 # USAGE:
-#   ./go/api/webhook/generate-certs.sh
+#   ./tools/test/generate-certs.sh [cert_directory]
 #
+# Arguments:
+#   cert_directory - Optional. Directory where certs will be created.
+#                    Defaults to ./tools/test/certs if not specified.
+#
+# Examples:
+#   ./tools/test/generate-certs.sh                    # Creates in ./tools/test/certs
+#   ./tools/test/generate-certs.sh /tmp/my-certs     # Creates in /tmp/my-certs
 ################################################################################
 
 set -euo pipefail
 
-# Directory where certificates will be generated
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CERT_DIR="$SCRIPT_DIR/certs"
+# Parse arguments
+CERT_DIR="${1:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/certs}"
 
 # Certificate parameters
 SERVICE_NAME="michelangelo-webhook-service.default.svc"
@@ -114,5 +102,7 @@ echo "  - $CERT_DIR/tls.key     (Server private key - used by webhook)"
 echo ""
 echo "Valid for: $CERT_VALIDITY_DAYS days (until $(date -v+${CERT_VALIDITY_DAYS}d '+%Y-%m-%d' 2>/dev/null || date -d "+${CERT_VALIDITY_DAYS} days" '+%Y-%m-%d' 2>/dev/null || echo 'N/A'))"
 echo ""
-echo "You can now run the apiserver:"
-echo "  bazel run //go/cmd/apiserver:apiserver"
+echo "Next steps:"
+echo "  1. Update config/base.yaml webhook.certDir to: $CERT_DIR"
+echo "  2. Run: bazel run //go/api/webhook:webhook"
+echo "  3. Run: bazel run //go/cmd/apiserver:apiserver"
