@@ -105,9 +105,6 @@ def compute_chronon_features_with_spark(
     REAL Chronon feature computation with integrated compilation and dataset return
     """
 
-    # INTENTIONAL FAILURE FOR TESTING
-    raise RuntimeError("Intentional failure in compute_chronon_features_with_spark for testing purposes")
-
     # Chronon SDK
     from ai.chronon.repo.compile import thrift_simple_json_protected
     from ai.chronon.api.ttypes import StagingQuery, GroupBy
