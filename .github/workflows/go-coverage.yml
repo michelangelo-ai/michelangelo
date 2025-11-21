@@ -29,6 +29,19 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for coverage comparison
 
+      - name: Free disk space for Bazel
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove large packages not needed for Go/Bazel builds
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/share/swift
+          echo "Disk space after cleanup:"
+          df -h
+
       - name: Mount bazel cache
         uses: actions/cache@v4
         with:
