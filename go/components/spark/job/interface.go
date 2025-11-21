@@ -31,8 +31,9 @@ type Client interface {
 	// - job: A pointer to a SparkJob object for which the status is being retrieved.
 	//
 	// Returns:
-	// - A pointer to a string representing the job status.
-	// - A string containing additional status information.
+	// - A pointer to a string representing the job status (state).
+	// - A string containing the job URL.
+	// - A string containing the error message (if the job failed).
 	// - An error if the status retrieval fails.
-	GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, error)
+	GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error)
 }
