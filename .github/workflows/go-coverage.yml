@@ -82,6 +82,9 @@ jobs:
             echo "Found coverage file: $COVERAGE_FILE"
             cp "$COVERAGE_FILE" coverage.dat
 
+            # Remove external Bazel dependencies from coverage data
+            lcov --remove coverage.dat '*/external/*' -o coverage.dat
+
             # Generate summary
             lcov --summary coverage.dat 2>&1 | tee coverage-summary.txt
 
@@ -93,7 +96,7 @@ jobs:
             echo "Go Coverage: $COVERAGE%"
 
             # Generate HTML report
-            genhtml coverage.dat -o coverage-html --ignore-errors source
+            genhtml coverage.dat -o coverage-html --ignore-errors source,unmapped
           else
             echo "⚠️  Coverage file not found"
             echo "COVERAGE=0" >> $GITHUB_ENV
