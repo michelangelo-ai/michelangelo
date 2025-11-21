@@ -28,6 +28,7 @@ from pyspark.sql.functions import (
     min as spark_min,
 )
 
+
 # Ray for dataset conversion
 def _setup_chronon_environment():
     """
@@ -121,7 +122,10 @@ def compute_chronon_features_with_spark(
     except ModuleNotFoundError:
         # Use relative imports
         from data.staging_queries.amazon_books.books_reviews import base_table
-        from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
+        from data.group_bys.amazon_books.book_features import (
+            book_popularity,
+            book_velocity,
+        )
 
     # Step 1: Setup Chronon environment (integrated)
     jar_path = _setup_chronon_environment()

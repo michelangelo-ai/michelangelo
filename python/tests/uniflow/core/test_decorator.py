@@ -103,19 +103,15 @@ def _echo_task(x):
 @task(
     config=TaskA(cpu=1),
     image_spec=ImageSpec(
-        container_image="test-image:latest",
-        recipe="bazel://test/path:target"
-    )
+        container_image="test-image:latest", recipe="bazel://test/path:target"
+    ),
 )
 def task_with_image_spec():
     """Task that uses ImageSpec with both container_image and recipe."""
     return "task_with_image_spec_result"
 
 
-@task(
-    config=TaskA(cpu=2),
-    image_spec=ImageSpec(container_image="registry-image:v1.0")
-)
+@task(config=TaskA(cpu=2), image_spec=ImageSpec(container_image="registry-image:v1.0"))
 def task_with_registry_image():
     """Task that uses ImageSpec with only container_image (no recipe)."""
     return "task_with_registry_image_result"
@@ -160,7 +156,7 @@ def image_spec_workflow() -> dict:
     return {
         "with_image_spec": result1,
         "with_registry_image": result2,
-        "without_image_spec": result3
+        "without_image_spec": result3,
     }
 
 
@@ -284,8 +280,12 @@ class ImageSpecTest(unittest.TestCase):
         """Test that tasks with ImageSpec can be created and have the correct attributes."""
         self.assertIsInstance(task_with_image_spec, TaskFunction)
         self.assertIsNotNone(task_with_image_spec._image_spec)
-        self.assertEqual(task_with_image_spec._image_spec.container_image, "test-image:latest")
-        self.assertEqual(task_with_image_spec._image_spec.recipe, "bazel://test/path:target")
+        self.assertEqual(
+            task_with_image_spec._image_spec.container_image, "test-image:latest"
+        )
+        self.assertEqual(
+            task_with_image_spec._image_spec.recipe, "bazel://test/path:target"
+        )
 
     def test_task_without_image_spec(self):
         """Test that tasks without ImageSpec have None for image_spec."""
