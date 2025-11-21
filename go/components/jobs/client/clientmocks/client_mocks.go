@@ -11,6 +11,7 @@ import (
 	gomock "github.com/golang/mock/gomock"
 	client "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
 	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	types "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v1 "k8s.io/api/core/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
@@ -167,13 +168,12 @@ func (mr *MockFederatedClientMockRecorder) GetClusterStatus(ctx, cluster interfa
 }
 
 // GetJobClusterStatus mocks base method.
-func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (string, *string, error) {
+func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (*types.ClusterStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJobClusterStatus", ctx, jobClusterObject, cluster)
-	ret0, _ := ret[0].(string)
-	ret1, _ := ret[1].(*string)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(*types.ClusterStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetJobClusterStatus indicates an expected call of GetJobClusterStatus.

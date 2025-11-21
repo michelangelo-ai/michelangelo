@@ -1,8 +1,6 @@
 package constants
 
 import (
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -290,11 +288,3 @@ const (
 	AssignmentReasonClusterDefaultSelected   string = "cluster_default_selected"
 	AssignmentReasonNoClustersFound          string = "no_clusters_found"
 )
-
-// RayCluster String to CRD State Mapping
-var RayClusterStrStateToCRDStateMapping = map[string]v2pb.RayClusterState{
-	"":                   v2pb.RAY_CLUSTER_STATE_UNKNOWN,
-	string(v1.Unhealthy): v2pb.RAY_CLUSTER_STATE_UNHEALTHY,
-	string(v1.Failed):    v2pb.RAY_CLUSTER_STATE_FAILED,
-	string(v1.Ready):     v2pb.RAY_CLUSTER_STATE_READY,
-}

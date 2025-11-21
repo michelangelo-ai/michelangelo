@@ -1,6 +1,7 @@
 package k8sengine
 
 import (
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -22,4 +23,9 @@ type MapperInterface interface {
 	// GetLocalName extracts the namespace and name from the provided job object.
 	// These values are used to identify the corresponding Kubernetes resource.
 	GetLocalName(obj runtime.Object) (namespace, name string)
+
+	// MapLocalClusterStatusToGlobal converts a local (Kubernetes) cluster status object
+	// to the global Michelangelo ClusterStatus representation.
+	// It returns the typed ClusterStatus and an error if the conversion fails.
+	MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.ClusterStatus, error)
 }

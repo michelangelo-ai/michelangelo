@@ -12,7 +12,6 @@ import (
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	v1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiErrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -483,14 +482,16 @@ func TestReconcilerReconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(string(v1.Ready), nil, nil)
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.ClusterStatus{
+						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_READY},
+					}, nil)
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_READY,
 			expectedMessage: "",
 			errorAssertion:  require.NoError,
 			postCheck: func(res ctrl.Result) {
-				// Should continue to requeue while ready
-				assert.Equal(t, requeueAfter, res.RequeueAfter)
+				assert.Equal(t, time.Duration(0), res.RequeueAfter)
 			},
 			verifyConditions: func(t *testing.T, cluster *v2pb.RayCluster) {},
 		},
@@ -535,8 +536,10 @@ func TestReconcilerReconcile(t *testing.T) {
 						Name: assignedCluster,
 					},
 				})
-				reason := "cluster failed"
-				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(string(v1.Failed), &reason, nil)
+				mfc.EXPECT().GetJobClusterStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+					&matypes.ClusterStatus{
+						Ray: &v2pb.RayClusterStatus{State: v2pb.RAY_CLUSTER_STATE_FAILED},
+					}, nil)
 			},
 			expectedState:   v2pb.RAY_CLUSTER_STATE_FAILED,
 			expectedMessage: "",

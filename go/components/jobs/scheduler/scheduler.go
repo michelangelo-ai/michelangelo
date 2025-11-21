@@ -332,7 +332,7 @@ func (c *Scheduler) assignJob(ctx context.Context, job framework.BatchJob) error
 
 	if !found {
 		// Didn't find any clusters for assignment
-		c.log.Info("No clusters found for assignment")
+		log.Info("No clusters found for assignment")
 		c.updateIfChanged(scheduledCondition, utils.ConditionUpdateParams{
 			Status:     apipb.CONDITION_STATUS_FALSE,
 			Reason:     "NoClustersFoundForAssignment",
@@ -340,7 +340,7 @@ func (c *Scheduler) assignJob(ctx context.Context, job framework.BatchJob) error
 		})
 	} else {
 		// No cluster matched job requirements
-		c.log.Info("No cluster matched job requirements. Updating number of attempts.")
+		log.Info("No cluster matched job requirements. Updating number of attempts.")
 		if err := c.updateConditionWithAttempts(scheduledCondition, utils.ConditionUpdateParams{
 			Status:     apipb.CONDITION_STATUS_FALSE,
 			Reason:     "NoClusterMatchedRequirements",

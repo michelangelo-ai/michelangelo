@@ -165,8 +165,9 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, nil
 	}
 
-	// Monitor state
-	state, reason, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
+	// Monitor state till RayCluster is ready
+	// TODO(#605): Remove after introducing Federated Watcher for watching RayCluster
+	clusterStatus, err := r.getClusterStatus(ctx, logger, assignedCluster, &rayCluster)
 	if err != nil {
 		if utils.IsNotFoundError(err) {
 			logger.Info("cluster not found on remote cluster, requeue")
@@ -176,7 +177,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		return ctrl.Result{RequeueAfter: requeueAfter}, err
 	}
 
-	r.applyRayClusterStatus(&rayCluster, state, reason, logger, &res)
+	if err := r.applyRayClusterStatus(&rayCluster, clusterStatus, logger, &res); err != nil {
+		logger.Error(err, "failed to apply cluster status")
+		return ctrl.Result{RequeueAfter: requeueAfter}, err
+	}
 
 	// Update the RayCluster status if any changes occurred
 	if !reflect.DeepEqual(originalRayCluster.Status, rayCluster.Status) {
@@ -393,6 +397,7 @@ func (r *Reconciler) cleanupCluster(
 	}
 
 	// Update status to terminated
+	// TODO(#605): Mark the cluster as killing and once federated watcher is introduced, the watcher will mark the cluster as killed after RayCluster is terminated in the compute cluster.
 	if err := jobsutils.UpdateStatusWithRetries(ctx, r, cluster,
 		func(obj client.Object) {
 			cluster := obj.(*v2pb.RayCluster)
@@ -503,72 +508,60 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 }
 
 // getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
-// TODO: move from string cluster status to enum or return the michelangelo RayCluster representation.
-func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (string, *string, error) {
-	// Create a temporary RayCluster object with namespace and name for the lookup
-
+func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.ClusterStatus, error) {
 	// Use the federated client to get the status from the remote cluster
-	status, reason, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
+	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to get cluster status: %w", err)
+		return nil, fmt.Errorf("failed to get cluster status: %w", err)
 	}
 
 	log.V(1).Info("retrieved cluster status",
 		"cluster", rayCluster.GetName(),
 		"namespace", rayCluster.GetNamespace(),
-		"status", status)
+		"state", clusterStatus.Ray.State)
 
-	return status, reason, nil
+	return clusterStatus, nil
 }
 
 // applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
-// It maps the raw state string to internal state enums and updates conditions accordingly.
 func (r *Reconciler) applyRayClusterStatus(
 	rayCluster *v2pb.RayCluster,
-	state string,
-	reason *string,
+	clusterStatus *matypes.ClusterStatus,
 	logger logr.Logger,
 	res *ctrl.Result,
-) {
-	// Update state and status conditions based on cluster status
-	newState, exists := constants.RayClusterStrStateToCRDStateMapping[state]
-	if !exists {
-		logger.Info("received unknown cluster state from KubeRay, treating as unknown",
-			"state", state, "reason", reason)
-		newState = v2pb.RAY_CLUSTER_STATE_UNKNOWN
+) error {
+	if clusterStatus == nil || clusterStatus.Ray == nil {
+		return fmt.Errorf("received nil cluster status")
 	}
+
+	// Extract state from the typed status
+	newState := clusterStatus.Ray.State
 
 	// Update cluster state
 	rayCluster.Status.State = newState
 	res.RequeueAfter = requeueAfter
 
-	// Extract reason and message for condition updates
-	reasonStr := ""
-	message := ""
-	if reason != nil && *reason != "" {
-		reasonStr = *reason
-		message = *reason
-	}
-
+	// Extract reason for condition updates
+	reasonStr := clusterStatus.Reason
 	// Handle state-specific logic and condition updates
 	succeededCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, SucceededCondition, rayCluster.Generation)
 	launchedCond := jobsutils.GetCondition(&rayCluster.Status.StatusConditions, LaunchedCondition, rayCluster.Generation)
 
 	switch newState {
 	case v2pb.RAY_CLUSTER_STATE_READY:
-		logger.Info("cluster is ready, continuing to monitor", "state", state, "reason", reasonStr, "message", message)
+		logger.Info("cluster is ready", "state", newState, "reason", reasonStr)
 		jobsutils.UpdateCondition(launchedCond, jobsutils.ConditionUpdateParams{
 			Status:     apipb.CONDITION_STATUS_TRUE,
 			Generation: rayCluster.Generation,
 			Reason:     "ClusterReady",
-			Message:    message,
 		})
+		res.RequeueAfter = time.Duration(0)
 
 	case v2pb.RAY_CLUSTER_STATE_FAILED:
 		logger.Error(nil, "cluster has failed, marking for termination",
-			"state", state,
+			"state", newState,
 			"reason", reasonStr,
-			"message", message)
+		)
 
 		// Mark succeeded condition as false to trigger termination
 		if reasonStr == "" {
@@ -578,14 +571,13 @@ func (r *Reconciler) applyRayClusterStatus(
 			Status:     apipb.CONDITION_STATUS_FALSE,
 			Generation: rayCluster.Generation,
 			Reason:     reasonStr,
-			Message:    message,
 		})
 
 	case v2pb.RAY_CLUSTER_STATE_UNHEALTHY:
 		logger.Info("cluster is unhealthy, marking for termination",
-			"state", state,
+			"state", newState,
 			"reason", reasonStr,
-			"message", message)
+		)
 		// Mark succeeded condition as false to trigger termination
 		if reasonStr == "" {
 			reasonStr = "ClusterUnhealthy"
@@ -594,18 +586,18 @@ func (r *Reconciler) applyRayClusterStatus(
 			Status:     apipb.CONDITION_STATUS_FALSE,
 			Generation: rayCluster.Generation,
 			Reason:     reasonStr,
-			Message:    message,
 		})
 
 	case v2pb.RAY_CLUSTER_STATE_UNKNOWN:
 		logger.Info("cluster state is unknown, will continue monitoring",
-			"state", state,
+			"state", newState,
 			"reason", reasonStr)
 
 	default:
 		logger.Info("cluster in transitional state, continuing to monitor",
 			"state", newState.String(),
-			"rawState", state,
 			"reason", reasonStr)
 	}
+
+	return nil
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client/k8sengine"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/secrets"
+	matypes "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/compute"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -137,7 +138,7 @@ type FederatedClient interface {
 	DeleteJobCluster(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) error
 
 	// GetJobClusterStatus gets the job cluster status from the specified cluster
-	GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (string, *string, error)
+	GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (*matypes.ClusterStatus, error)
 
 	// Watcher creates resource watchers on the specified cluster
 	Watcher(watcherParams []*WatcherParams, cluster *v2pb.Cluster) ([]*ResourceWatcher, error)
@@ -369,7 +370,7 @@ func (c *Client) CreateJob(
 		if err != nil {
 			return fmt.Errorf("create ray job err:%w", err)
 		}
-		c.logger.Info("Successfully created job in ray cluster", zap.String("name", job.GetName()), zap.String("namespace", localNamespace), zap.String("cluster", job.Spec.GetCluster().GetName()))
+		c.logger.Info("Successfully created job in ray cluster", zap.String(constants.Job, job.GetName()), zap.String("namespace", localNamespace), zap.String("cluster", job.Spec.GetCluster().GetName()))
 
 		return nil
 	case *v2pb.SparkJob:
@@ -429,12 +430,12 @@ func (c *Client) GetJobClusterStatus(
 	ctx context.Context,
 	jobClusterObject runtime.Object,
 	kubeCluster *v2pb.Cluster,
-) (string, *string, error) {
+) (*matypes.ClusterStatus, error) {
 	switch jobClusterObject.(type) {
 	case *v2pb.RayCluster:
 		cs, err := c.factory.GetClientSetForCluster(kubeCluster)
 		if err != nil {
-			return "", nil, fmt.Errorf("get client for cluster err:%v", err)
+			return nil, fmt.Errorf("get client for cluster err:%v", err)
 		}
 
 		localNamespace, localName := c.mapper.GetLocalName(jobClusterObject)
@@ -450,18 +451,18 @@ func (c *Client) GetJobClusterStatus(
 			rayV1Cluster,
 		)
 		if err != nil {
-			return "", nil, fmt.Errorf("get ray cluster %q status: %w", localName, err)
+			return nil, fmt.Errorf("get ray cluster %q status: %w", localName, err)
 		}
 
-		// Extract reason from status if available
-		var reason *string
-		if rayV1Cluster.Status.Reason != "" {
-			reason = &rayV1Cluster.Status.Reason
+		// Convert the KubeRay v1 status to our internal ClusterStatus type
+		clusterStatus, err := c.mapper.MapLocalClusterStatusToGlobal(rayV1Cluster)
+		if err != nil {
+			return nil, fmt.Errorf("map cluster status: %w", err)
 		}
 
-		return string(rayV1Cluster.Status.State), reason, nil
+		return clusterStatus, nil
 	default:
-		return "", nil, fmt.Errorf("unsupported cluster type: %T", jobClusterObject)
+		return nil, fmt.Errorf("unsupported cluster type: %T", jobClusterObject)
 	}
 }
 
