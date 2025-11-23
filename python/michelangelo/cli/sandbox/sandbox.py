@@ -30,7 +30,7 @@ _kube_ports = [
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
     "9092:30015",  # Prometheus
-    "5000:30013",  # MLflow Tracking Server
+    "5001:30013",  # MLflow Tracking Server
 ]
 
 # Workflow engine ports
@@ -274,7 +274,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         links.append(
             (
                 "MLflow Tracking Server",
-                "http://localhost:5000",
+                "http://localhost:5001",
                 "",
             )
         )
