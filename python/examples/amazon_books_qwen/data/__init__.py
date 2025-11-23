@@ -1,5 +1,4 @@
-"""
-Amazon Books Qwen Chronon Feature Definitions
+"""Amazon Books Qwen Chronon Feature Definitions
 
 This package contains Chronon feature definitions for the Amazon Books recommendation system:
 - staging_queries: Base data transformations and joins

@@ -4,8 +4,7 @@ from typing import Optional
 
 @dataclass
 class ImageSpec:
-    """
-    ImageSpec defines container image specifications for uniflow tasks.
+    """ImageSpec defines container image specifications for uniflow tasks.
 
     Example usage:
         @uniflow.task(

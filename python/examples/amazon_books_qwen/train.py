@@ -1,32 +1,31 @@
-"""
-Training module for Qwen Dual-Encoder model
+"""Training module for Qwen Dual-Encoder model
 Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 """
 
 import logging
 import os
-from typing import Dict, Any
+from typing import Any, Dict
+
+import numpy as np
+import ray
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModel, AutoTokenizer
-import numpy as np
+from ray.air.config import ScalingConfig
 from ray.data import Dataset
-import ray
 from ray.train import Checkpoint
 from ray.train.torch import TorchTrainer
-from ray.air.config import ScalingConfig
+from transformers import AutoModel, AutoTokenizer
 
-from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
 from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
 
 class QwenDualEncoder(nn.Module):
-    """
-    Qwen-based Dual Encoder for GenRec+Qwen architecture
+    """Qwen-based Dual Encoder for GenRec+Qwen architecture
     Implements query and document towers with shared/separate Qwen backbones
     """
 
@@ -134,8 +133,7 @@ class QwenDualEncoder(nn.Module):
 
 
 class InfoNCELoss(nn.Module):
-    """
-    InfoNCE contrastive loss for dual encoder training
+    """InfoNCE contrastive loss for dual encoder training
     As specified in GenRec+Qwen architecture
     """
 
@@ -144,8 +142,7 @@ class InfoNCELoss(nn.Module):
         self.temperature = temperature
 
     def forward(self, query_embeddings, doc_embeddings, labels):
-        """
-        Compute InfoNCE loss
+        """Compute InfoNCE loss
 
         Args:
             query_embeddings: [batch_size, embedding_dim]
@@ -168,12 +165,11 @@ class InfoNCELoss(nn.Module):
 
 
 def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Ray distributed training function for Qwen dual-encoder
+    """Ray distributed training function for Qwen dual-encoder
     This function runs on each Ray worker for distributed training
     """
-    import torch
     import ray.train
+    import torch
 
     # Get training configuration
     model_config = config.get("model_config", {})
@@ -334,8 +330,7 @@ def train_dual_encoder(
     use_gpu: bool = False,  # Default to False, can be set to True if GPU available
     distributed: bool = False,  # Default to False for local training
 ) -> Dict[str, Any]:
-    """
-    Unified Qwen dual encoder training function
+    """Unified Qwen dual encoder training function
     Supports both local and distributed training with optional GPU support
 
     Args:
@@ -670,8 +665,7 @@ def _train_local(
 
 
 class SimpleLocalDualEncoder(nn.Module):
-    """
-    Simple dual encoder for local testing when Qwen models fail
+    """Simple dual encoder for local testing when Qwen models fail
     """
 
     def __init__(self, vocab_size=10000, embedding_dim=256):

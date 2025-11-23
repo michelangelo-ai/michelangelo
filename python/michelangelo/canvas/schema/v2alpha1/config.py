@@ -6,8 +6,7 @@ from .job_specs import JobSpecs
 
 
 class TaskConfig(JSONData):
-    """
-    Task config class.
+    """Task config class.
 
     Each task function is required to have a task config, and the task config will be the first argument
     in the task function named as 'config' with type annotation.
@@ -30,8 +29,7 @@ class TaskConfig(JSONData):
 
 
 class WorkflowConfig(JSONData):
-    """
-    Workflow config class.
+    """Workflow config class.
 
     This class defines the workflow config schema. It is used to load the configuration specified in
     pipeline_conf.yaml.

@@ -1,6 +1,6 @@
 import michelangelo.uniflow.core as uniflow
-from examples.llm_prediction.vllm_predict import predict
 from examples.llm_prediction.data import load_data, write_data
+from examples.llm_prediction.vllm_predict import predict
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 

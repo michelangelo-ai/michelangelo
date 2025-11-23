@@ -1,11 +1,9 @@
 import logging
 
 import ray
-
 from datasets import load_dataset
 from ray.data import Dataset
 from transformers import AutoTokenizer
-
 
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask

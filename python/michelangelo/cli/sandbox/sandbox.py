@@ -1,15 +1,16 @@
+import argparse
+import base64
 import json
 import os
-import sys
-import argparse
 import shutil
 import subprocess
+import sys
 import tempfile
 import time
 import uuid
-import yaml
 from pathlib import Path
-import base64
+
+import yaml
 
 short_description = "Manage the sandbox cluster."
 
@@ -342,8 +343,7 @@ def _create_spark_operator(helm_existing_repos):
 
 
 def _create_kuberay_operator(helm_existing_repos):
-    """
-    Create the KubeRay operator using Helm.
+    """Create the KubeRay operator using Helm.
     Reference: https://docs.ray.io/en/releases-2.49.1/cluster/kubernetes/getting-started/kuberay-operator-installation.html#method-1-helm-recommended
     """
     if "kuberay" not in helm_existing_repos:
@@ -605,8 +605,7 @@ def _exec(
     retry_delay_seconds: int = 5,
     raise_error: bool = False,
 ):
-    """
-    Execute a shell command with optional retries. If the command exits with a non-zero code, it will be retried up to
+    """Execute a shell command with optional retries. If the command exits with a non-zero code, it will be retried up to
     retry_attempts times, waiting retry_delay_seconds between attempts.
 
     Parameters:
@@ -662,7 +661,6 @@ def _err_exit(err_message: str, code: int = 1):
 
 def _create_jobs_cluster(cluster_name: str):
     """Create a dedicated cluster for jobs."""
-
     args = [
         "k3d",
         "cluster",

@@ -1,20 +1,19 @@
-"""
-Amazon Books Dataset Download Task
+"""Amazon Books Dataset Download Task
 Production-ready Kaggle dataset download with SparkTask
 Downloads data and returns Spark DataFrames directly
 """
 
 import os
-from typing import Dict, Any, Optional, Tuple
-
-# Uniflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.spark import SparkTask
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from typing import Any, Dict, Optional, Tuple
 
 # PySpark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
+
+# Uniflow
+import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.spark import SparkTask
 
 
 @uniflow.task(
@@ -29,8 +28,7 @@ from pyspark.sql.functions import col
 def download_kaggle_dataset(
     dataset_config: Dict[str, Any],
 ) -> Tuple[Optional[DatasetVariable], Optional[DatasetVariable]]:
-    """
-    Download Amazon Books dataset from Kaggle using SparkTask
+    """Download Amazon Books dataset from Kaggle using SparkTask
     Returns Spark DataFrames (books_df, reviews_df) for downstream tasks
     Fails cleanly if download fails - no fallback logic
     """
@@ -120,9 +118,10 @@ def download_kaggle_dataset(
     # Download if files don't exist
     if not (os.path.exists(books_file) and os.path.exists(reviews_file)):
         print("🔑 Authenticating with Kaggle API...")
-        from kaggle.api.kaggle_api_extended import KaggleApi
-        import zipfile
         import shutil
+        import zipfile
+
+        from kaggle.api.kaggle_api_extended import KaggleApi
 
         api = KaggleApi()
         api.authenticate()
@@ -164,7 +163,7 @@ def download_kaggle_dataset(
                 break
 
             except Exception as e:
-                print(f"❌ Download attempt {attempt + 1} failed: {str(e)}")
+                print(f"❌ Download attempt {attempt + 1} failed: {e!s}")
                 if attempt < max_retries - 1:
                     print("🔄 Retrying download...")
                     # Clean up any partial downloads

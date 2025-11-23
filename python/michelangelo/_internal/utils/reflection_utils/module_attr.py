@@ -2,8 +2,7 @@ import importlib
 
 
 def get_module_attr(module_attr: str) -> any:
-    """
-    Load the attribute from the module
+    """Load the attribute from the module
 
     Args:
         module_attr: the full attribute definition,

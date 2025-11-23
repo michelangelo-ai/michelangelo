@@ -3,8 +3,7 @@ from .services.gen import ServicesGen
 
 
 class APIClient(ServicesGen):
-    """
-    Python client of Michelangelo 2.0 API.
+    """Python client of Michelangelo 2.0 API.
 
     :example:
 
@@ -18,21 +17,18 @@ class APIClient(ServicesGen):
 
     @classmethod
     def set_channel(cls, channel):
-        """
-        Set grpc channel for the client. Use the default channel if not set.
+        """Set grpc channel for the client. Use the default channel if not set.
         """
         cls._context.channel = channel
 
     @classmethod
     def set_header_provider(cls, provider):
-        """
-        Set header provider. Use the default header provider if not set.
+        """Set header provider. Use the default header provider if not set.
         """
         cls._context.header_provider = provider
 
     @classmethod
     def set_caller(cls, caller):
-        """
-        Set caller name. This will be passed to the server as the "Rpc-Caller" header.
+        """Set caller name. This will be passed to the server as the "Rpc-Caller" header.
         """
         cls._context.header_provider._caller = caller

@@ -1,5 +1,4 @@
-"""
-CLI program for registering Uniflow workflows with Michelangelo.
+"""CLI program for registering Uniflow workflows with Michelangelo.
 
 This module provides the main registration interface that builds, uploads,
 and prepares Uniflow workflows for pipeline creation via mactl.
@@ -14,16 +13,14 @@ from typing import Callable, Optional
 
 from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
-
-from michelangelo.uniflow.registration.uniflow_tar import prepare_uniflow_tar
 from michelangelo.uniflow.registration.config_builder import ConfigBuilder
+from michelangelo.uniflow.registration.uniflow_tar import prepare_uniflow_tar
 
 _logger = logging.getLogger(__name__)
 
 
 def main(args=None):
-    """
-    CLI program to register the given workflow.
+    """CLI program to register the given workflow.
     
     Usage:
         python -m michelangelo.uniflow.registration.register \
@@ -48,8 +45,7 @@ def prepare_uniflow_input(
     environ=None,
     output_dir=None,
 ):
-    """
-    Prepare uniflow input file for workflow registration.
+    """Prepare uniflow input file for workflow registration.
 
     This function supports two calling patterns:
     1. New pattern: prepare_uniflow_input(config_builder, output_dir)
@@ -102,8 +98,7 @@ def prepare_uniflow_input(
 
 
 def register_argument_parser():
-    """
-    Creates an argument parser for the Pipeline Registration CLI.
+    """Creates an argument parser for the Pipeline Registration CLI.
 
     Returns:
         argparse.ArgumentParser: Configured argument parser
@@ -174,8 +169,7 @@ def register(
     args: Optional[tuple] = None,
     kwargs: Optional[dict] = None,
 ):
-    """
-    Register the workflow function in the specified context.
+    """Register the workflow function in the specified context.
 
     This function builds a Uniflow package from the workflow function,
     uploads it to storage, and creates the necessary files for mactl
@@ -250,8 +244,7 @@ def register(
 def register_pipeline(
     project: str, pipeline: str, output_dir: str, workflow_config: str
 ):
-    """
-    Main registration function following the specification pattern.
+    """Main registration function following the specification pattern.
 
     This function implements the complete registration process:
     1. Create and upload workflow tarball

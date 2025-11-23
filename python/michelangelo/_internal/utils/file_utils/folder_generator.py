@@ -11,8 +11,7 @@ def generate_folder(
     folder_structure: dict,
     folder_path: str,
 ):
-    """
-    Create the folder given a Python dictionary that represents the folder structure
+    """Create the folder given a Python dictionary that represents the folder structure
     If the file already exists under folder_path, it will not be overwritten
 
     Args:
@@ -36,7 +35,7 @@ def generate_folder(
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    for name in folder_structure:  # noqa: PLC0206
+    for name in folder_structure:
         content = folder_structure[name]
         sub_path = os.path.join(folder_path, name)
         if isinstance(content, dict):
@@ -59,8 +58,7 @@ def generate_folder(
 
 def make_ignore_files(target_path: str):
     def ignore_files(directory: str, files: list[str]) -> list[str]:
-        """
-        ignore the files that already exist in the target path
+        """Ignore the files that already exist in the target path
 
         Args:
             directory: The directory in the current iteration of the subtree

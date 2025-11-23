@@ -10,10 +10,10 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
-from michelangelo.uniflow.core.utils import dot_path
+from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.file_sync import DefaultFileSync
+from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 
@@ -321,8 +321,7 @@ class RemoteRunTemporal:
 
 
 def _subprocess_run(args: list[str]) -> str:
-    """
-    Executes a subprocess command, prints stdout and stderr, and returns the stdout as text string.
+    """Executes a subprocess command, prints stdout and stderr, and returns the stdout as text string.
 
     Args:
         args: Command to execute.

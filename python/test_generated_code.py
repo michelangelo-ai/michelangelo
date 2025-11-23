@@ -1,6 +1,6 @@
 # test_generated_code.py
-import sys
 import os
+import sys
 
 # Ensure that the generated code is in the module search path
 # Adjust the path to point to the correct location where the generated code is located
@@ -8,8 +8,8 @@ sys.path.insert(
     0, os.path.abspath(os.path.join(os.path.dirname(__file__), "michelangelo/gen"))
 )
 
-from michelangelo.gen.api.v2.project_pb2 import Project
 from michelangelo.api.v2.client import APIClient
+from michelangelo.gen.api.v2.project_pb2 import Project
 
 # Initialize the API client
 APIClient.set_caller("test-client")

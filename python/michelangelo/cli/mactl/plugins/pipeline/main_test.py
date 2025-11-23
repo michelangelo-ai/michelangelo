@@ -1,5 +1,4 @@
-"""
-Unit tests for pipeline main plugin.
+"""Unit tests for pipeline main plugin.
 
 Tests the apply_plugins function which configures the CRD with plugin-specific converters.
 """

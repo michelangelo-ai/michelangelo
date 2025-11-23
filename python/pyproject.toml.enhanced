@@ -1,0 +1,411 @@
+# Enhanced Python Code Quality Configuration
+# This file contains the proposed updates to pyproject.toml for improved code quality
+
+# ============================================================================
+# SECTION 1: Enhanced Ruff Configuration
+# ============================================================================
+
+[tool.ruff]
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".ipynb_checkpoints",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pyenv",
+    ".pytest_cache",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    ".vscode",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "site-packages",
+    "venv",
+    "michelangelo/api/v2/services/gen/**",
+    "michelangelo/gen/**",
+]
+
+# PEP 8 compliant line length (same as Black)
+line-length = 88
+indent-width = 4
+
+# Target Python 3.9 for compatibility
+target-version = "py39"
+
+[tool.ruff.lint]
+# Enable comprehensive rule sets
+select = [
+    # Pyflakes
+    "F",        # Basic errors
+
+    # pycodestyle
+    "E",        # Error codes
+    "W",        # Warning codes
+
+    # isort
+    "I",        # Import sorting
+
+    # pep8-naming
+    "N",        # Naming conventions
+
+    # pydocstyle
+    "D",        # Docstring style
+
+    # pyupgrade
+    "UP",       # Modernize Python code
+
+    # flake8-bugbear
+    "B",        # Find likely bugs
+
+    # flake8-simplify
+    "SIM",      # Simplify code
+
+    # flake8-comprehensions
+    "C4",       # Better comprehensions
+
+    # flake8-pytest-style
+    "PT",       # Pytest style
+
+    # flake8-return
+    "RET",      # Return statement checks
+
+    # flake8-unused-arguments
+    "ARG",      # Unused function arguments
+
+    # flake8-use-pathlib
+    "PTH",      # Use pathlib instead of os.path
+
+    # flake8-logging-format
+    "G",        # Logging format strings
+
+    # flake8-type-checking
+    "TCH",      # Type-checking imports
+
+    # Pylint
+    "PL",       # Pylint rules
+
+    # Ruff-specific
+    "RUF",      # Ruff-specific rules
+
+    # flake8-annotations
+    "ANN",      # Type annotations (optional, can be strict)
+
+    # flake8-blind-except
+    "BLE",      # No bare except
+
+    # flake8-boolean-trap
+    "FBT",      # Boolean trap avoidance
+]
+
+ignore = [
+    # Ignore specific rules that may be too strict
+    "E501",     # Line too long (handled by formatter)
+    "D100",     # Missing docstring in public module (enable incrementally)
+    "D101",     # Missing docstring in public class (enable incrementally)
+    "D102",     # Missing docstring in public method (enable incrementally)
+    "D103",     # Missing docstring in public function (enable incrementally)
+    "D104",     # Missing docstring in public package
+    "D105",     # Missing docstring in magic method
+    "D107",     # Missing docstring in __init__
+
+    # Complexity rules (can be enabled later)
+    "PLR0913",  # Too many arguments to function call
+    "PLR0912",  # Too many branches
+    "PLR0915",  # Too many statements
+    "PLR2004",  # Magic value used in comparison
+
+    # Annotation rules (enable incrementally)
+    "ANN001",   # Missing type annotation for function argument
+    "ANN002",   # Missing type annotation for *args
+    "ANN003",   # Missing type annotation for **kwargs
+    "ANN101",   # Missing type annotation for self in method
+    "ANN102",   # Missing type annotation for cls in classmethod
+    "ANN201",   # Missing return type annotation for public function
+    "ANN202",   # Missing return type annotation for private function
+    "ANN204",   # Missing return type annotation for special method
+
+    # Boolean trap (can be strict)
+    "FBT001",   # Boolean positional arg in function definition
+    "FBT002",   # Boolean default value in function definition
+    "FBT003",   # Boolean positional value in function call
+]
+
+# Allow autofix for all enabled rules (when `--fix`) is provided
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Test files can have additional flexibility
+"tests/**/*.py" = [
+    "D",        # Don't require docstrings in tests
+    "ANN",      # Don't require annotations in tests
+    "PLR2004",  # Allow magic values in tests
+    "S101",     # Allow assert in tests
+]
+
+# Example files can have more flexibility
+"examples/**/*.py" = [
+    "D",        # Don't require docstrings in examples
+    "T201",     # Allow print statements in examples
+]
+
+# CLI scripts can use print
+"**/cli/**/*.py" = [
+    "T201",     # Allow print in CLI
+]
+
+[tool.ruff.lint.isort]
+# Import sorting configuration
+known-first-party = ["michelangelo"]
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder"
+]
+
+[tool.ruff.lint.pydocstyle]
+# Use Google-style docstrings
+convention = "google"
+
+[tool.ruff.lint.pylint]
+# Pylint-specific settings
+max-args = 7
+max-branches = 12
+max-returns = 6
+max-statements = 50
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings
+quote-style = "double"
+
+# Like Black, indent with spaces
+indent-style = "space"
+
+# Like Black, respect magic trailing commas
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect line ending
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings
+docstring-code-format = true
+
+# Set the line length for docstring code formatting
+docstring-code-line-length = "dynamic"
+
+
+# ============================================================================
+# SECTION 2: MyPy Configuration
+# ============================================================================
+
+[tool.mypy]
+# Basic settings
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+
+# Strictness (enable incrementally)
+# disallow_untyped_defs = true  # Enable when ready
+# disallow_any_generics = true  # Enable when ready
+check_untyped_defs = true
+no_implicit_reexport = true
+
+# Output
+show_error_codes = true
+show_error_context = true
+pretty = true
+
+# Exclude generated code
+exclude = [
+    'michelangelo/gen/',
+    '.venv/',
+]
+
+# Per-module overrides
+[[tool.mypy.overrides]]
+module = "michelangelo.gen.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+    "ray.*",
+    "transformers.*",
+    "pyspark.*",
+    "chronon.*",
+]
+ignore_missing_imports = true
+
+
+# ============================================================================
+# SECTION 3: Pytest Configuration (Enhanced)
+# ============================================================================
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+# Minimum code coverage threshold
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    # Uncomment when ready to enforce coverage
+    # "--cov=michelangelo",
+    # "--cov-report=term-missing",
+    # "--cov-report=html",
+    # "--cov-fail-under=80",
+]
+
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+
+# ============================================================================
+# SECTION 4: Coverage Configuration
+# ============================================================================
+
+[tool.coverage.run]
+source = ["michelangelo"]
+omit = [
+    "*/tests/*",
+    "*/gen/*",
+    "*/.venv/*",
+    "*/examples/*",
+]
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+]
+
+
+# ============================================================================
+# SECTION 5: Additional Development Dependencies
+# ============================================================================
+
+# Add these to [tool.poetry.dependencies] under dev extra:
+# mypy = "^1.11.0"
+# types-PyYAML = "^6.0.0"
+# coverage = {extras = ["toml"], version = "^7.6.0"}
+# pytest-cov = "^6.0.0"
+# sphinx = "^7.0.0"
+# sphinx-autodoc-typehints = "^1.25.0"
+# myst-parser = "^4.0.0"  # For markdown support in Sphinx
+
+
+# ============================================================================
+# SECTION 6: Pre-commit Configuration
+# Create as .pre-commit-config.yaml in python/ directory
+# ============================================================================
+
+# repos:
+#   - repo: https://github.com/astral-sh/ruff-pre-commit
+#     rev: v0.9.1
+#     hooks:
+#       # Run the linter
+#       - id: ruff
+#         args: [--fix, --exit-non-zero-on-fix]
+#       # Run the formatter
+#       - id: ruff-format
+#
+#   - repo: https://github.com/pre-commit/mirrors-mypy
+#     rev: v1.11.0
+#     hooks:
+#       - id: mypy
+#         additional_dependencies:
+#           - types-PyYAML
+#           - pydantic
+#         exclude: ^(michelangelo/gen/|\.venv/)
+#
+#   - repo: https://github.com/pre-commit/pre-commit-hooks
+#     rev: v5.0.0
+#     hooks:
+#       - id: trailing-whitespace
+#       - id: end-of-file-fixer
+#       - id: check-yaml
+#       - id: check-added-large-files
+#       - id: check-json
+#       - id: check-toml
+#       - id: debug-statements
+#
+#   - repo: https://github.com/python-poetry/poetry
+#     rev: 1.8.0
+#     hooks:
+#       - id: poetry-check
+#       - id: poetry-lock
+#         args: [--check]
+
+
+# ============================================================================
+# Usage Instructions
+# ============================================================================
+
+# 1. BACKUP your current pyproject.toml:
+#    cp pyproject.toml pyproject.toml.backup
+#
+# 2. MERGE the sections above into your pyproject.toml
+#
+# 3. INSTALL updated dependencies:
+#    poetry add --group dev mypy types-PyYAML coverage pytest-cov pre-commit
+#
+# 4. RUN initial check (will show many errors):
+#    poetry run ruff check michelangelo/ --select ALL
+#
+# 5. FIX auto-fixable issues:
+#    poetry run ruff check michelangelo/ --fix --select I,UP,W,F
+#
+# 6. GRADUALLY enable stricter rules:
+#    - Start with I (import sorting)
+#    - Then UP (pyupgrade)
+#    - Then B (bugbear)
+#    - Finally D (docstrings) and ANN (annotations)
+#
+# 7. SETUP pre-commit:
+#    poetry run pre-commit install
+#
+# 8. RUN on all files:
+#    poetry run pre-commit run --all-files
+#
+# 9. ENABLE mypy:
+#    poetry run mypy michelangelo/ --show-error-codes
+#
+# 10. TRACK progress:
+#     - Create GitHub issues for each module to update
+#     - Track type coverage with mypy reports
+#     - Monitor ruff violation counts over time
