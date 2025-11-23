@@ -32,18 +32,6 @@ func (a *ModelCleanupActor) GetLogger() *zap.Logger {
 }
 
 func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	// Check if cleanup is needed by comparing current vs desired revision
-	// TODO(GHOSH): VERIFY THIS LOGIC: WE ONLY START ROLLOUT IF DESIRED REVISION IS SET, SO WE SHOULD NOT NEED TO CHECK THIS
-	// (DONE, CHECK)
-	// if resource.Spec.GetDesiredRevision() == nil {
-	// 	return &apipb.Condition{
-	// 		Type:    a.GetType(),
-	// 		Status:  apipb.CONDITION_STATUS_FALSE,
-	// 		Reason:  "DesiredRevisionNotSet",
-	// 		Message: "Waiting for desired revision to be set before evaluating cleanup",
-	// 	}, nil
-	// }
-
 	currentModel := resource.Status.GetCurrentRevision().GetName()
 	desiredModel := resource.Spec.GetDesiredRevision().GetName()
 
@@ -105,32 +93,10 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 
 func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Running model cleanup for deployment", zap.String("deployment", resource.Name))
-	// TODO(GHOSH): VERIFY THIS LOGIC: WE ONLY START ROLLOUT IF DESIRED REVISION IS SET, SO WE SHOULD NOT NEED TO CHECK THIS
-	// (DONE, CHECK)
-	// if resource.Spec.GetDesiredRevision() == nil {
-	// 	return &apipb.Condition{
-	// 		Type:    a.GetType(),
-	// 		Status:  apipb.CONDITION_STATUS_UNKNOWN,
-	// 		Reason:  "RevisionsNotSet",
-	// 		Message: "Waiting for revisions to be set before running cleanup",
-	// 	}, nil
-	// }
 
 	currentModel := resource.Status.GetCurrentRevision().GetName()
 	desiredModel := resource.Spec.GetDesiredRevision().GetName()
 	inferenceServerName := resource.Spec.GetInferenceServer().GetName()
-
-	// TODO(GHOSH): VERIFY THIS LOGIC: WE ALREADY CHECKED THIS IN THE RETRIEVE FUNCTION, SO WE SHOULD NOT NEED TO CHECK THIS HERE
-	// (DONE, CHECK)
-	// // If models are the same, no cleanup needed
-	// if currentModel == "" || (currentModel == desiredModel) {
-	// 	return &apipb.Condition{
-	// 		Type:    a.GetType(),
-	// 		Status:  apipb.CONDITION_STATUS_TRUE,
-	// 		Reason:  "NoCleanupNeeded",
-	// 		Message: fmt.Sprintf("No cleanup needed - model %s is current", currentModel),
-	// 	}, nil
-	// }
 
 	a.Logger.Info("Starting model cleanup",
 		zap.String("old_model", currentModel),
@@ -142,9 +108,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	// Get current ConfigMap and remove old model from it
 	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
-	// Create update request to remove old model from ConfigMap
-	// TODO(GHOSH): an inference server should be able to have multiple models loaded at the same time, so we need to update the ConfigMap to remove the old model and keep the new model along with the others
-	// (DONE, CHECK)
+	// Remove old model from ConfigMap
 	if err := common.RemoveModelFromConfig(ctx, a.Logger, a.ModelConfigMapProvider, inferenceServerName, resource.Namespace, currentModel); err != nil {
 		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		return &apipb.Condition{

@@ -300,9 +300,8 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: "Inference server is not healthy"}, nil
 	}
 
-	// TODO(GHOSH): update this to check if the inference server is ready and healthy
-	// Figure out how to check server capacity to see if model can be loaded.
-	// If not, then this should return false and error.
+	// TODO(GHOSH): Figure out how to check server capacity to see if model can be loaded. If not, then this should return false and error.
+	// DO LATER
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -397,10 +396,6 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		deployment.Status.CurrentRevision = deployment.Spec.DesiredRevision
 		a.logger.Info("CurrentRevision updated after successful traffic switch", zap.String("model", modelName))
 
-		// DEPLOYMENT-LEVEL CLEANUP: Promote candidate to current and trigger safe cleanup
-		// TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
-		// Fallback to old gateway-based approach if ConfigMapProvider not available
-		// (DONE, CHECK)
 		// Promote candidate model to current (this automatically triggers cleanup of unused models)
 		a.logger.Info("Promoting candidate model to current and cleaning up unused models", zap.String("newModel", modelName))
 		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {

@@ -136,9 +136,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	// Get current ConfigMap and remove old model from it
 	a.logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
-	// Create update request to remove old model from ConfigMap
-	// TODO(GHOSH): an inference server should be able to have multiple models loaded at the same time, so we need to update the ConfigMap to remove the old model and keep the new model along with the others
-	// (DONE, CHECK)
+	// Remove old model from ConfigMap
 	if err := common.RemoveModelFromConfig(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, resource.Namespace, currentModel); err != nil {
 		a.logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		return &apipb.Condition{

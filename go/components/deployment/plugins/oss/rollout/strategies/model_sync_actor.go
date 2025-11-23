@@ -111,14 +111,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			zap.String("model", modelName),
 			zap.String("inference_server", inferenceServerName))
 
-		// UCS CACHE PATTERN: Replicate Uber's exact UCS cache update pattern from rolling/actor.go:76
-		// Original Uber code: err = a.ucsCache.UpdateDeployment(*deployment, constraints, nil, common.RoleTypeCandidate)
-		// (TODO(GHOSH): CONFIRM WHY THIS IS NEEDED. WHY CAN'T WE JUST ALWAYS USE THE CONFIGMAP PROVIDER?
-		// Fallback to old gateway-based approach if ConfigMapProvider not available
-		// (DONE, CHECK)
-
-		// Follow Uber's pattern exactly: UpdateDeployment with deployment, constraints, role
-		// For OSS: constraints are empty (no hosts), but we track deployment-level model ownership
+		// Update deployment model in ConfigMap
 		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
 			a.logger.Error("Failed to update deployment via ConfigMapProvider (UCS cache pattern)", zap.Error(err))
 			return &apipb.Condition{
@@ -129,16 +122,16 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			}, nil
 		}
 
-		a.logger.Info("UCS cache pattern update completed successfully",
+		a.logger.Info("Updated ConfigMap with candidate model",
 			zap.String("deployment", deployment.Name),
 			zap.String("candidateModel", modelName),
 			zap.String("roleType", "candidate"))
-
-		a.logger.Info("Model sync to ConfigMap completed successfully - waiting for health check before switching traffic")
 	}
 
 	// TODO(GHOSH): probably need to return unknown so that the condition is only true when the model is truely ready and loaded in triton
-	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil
+	// (DONE, CHECK)
+	// Return unknown so that the condition is only true when the model is truely ready and loaded in triton
+	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_UNKNOWN, Reason: "ModelSyncPending", Message: "Model sync is in progress"}, nil
 }
 
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks

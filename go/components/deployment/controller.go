@@ -461,8 +461,9 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 	} else {
 		fmt.Printf("DEBUG: No branch taken for %s - falling through!\n", deployment.Name)
 	}
+	// TODO(GHOSH): REVISIT THIS
 	// Simplified: Skip condition removal for now
-	// removeConditionsForDeployment(deployment, conditionPlugin)
+	removeConditionsForDeployment(deployment, conditionPlugin)
 	return result, nil
 }
 

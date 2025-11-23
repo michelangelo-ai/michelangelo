@@ -552,6 +552,8 @@ aws configure set default.s3.endpoint_url $ENDPOINT
 # Function to get currently loaded models from Triton
 get_loaded_models() {
   curl -s http://localhost:8000/v2/models 2>/dev/null | jq -r '.models[]?.name // empty' 2>/dev/null || echo ""
+//   TODO(GHOSH): VERIFY THIS LOGIC: WE SHOULD USE THE REPOSITORY INDEX ENDPOINT TO GET THE LOADED MODELS
+//   curl -X POST -s http://localhost:8000/v2/repository/index 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
 }
 
 # Function to load model in Triton

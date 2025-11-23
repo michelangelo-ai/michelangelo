@@ -126,9 +126,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 			}
 
 			// TODO(GHOSH): confirm this is truely the case.
-			// If the inference server is healthy, then the deployment is healthy
-			// TODO(GHOSH): implement the logic to get the model status from the inference server
-			//(DONE, CHECK)
+			// Check if the desired model is ready in Triton
 			modelStatusRequest := gateways.CheckModelStatusRequest{
 				ModelName:       resource.Spec.DesiredRevision.Name,
 				InferenceServer: resource.Spec.GetInferenceServer().Name,

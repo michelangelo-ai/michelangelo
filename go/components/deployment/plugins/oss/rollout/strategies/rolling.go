@@ -92,6 +92,8 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 	a.logger.Info("Running rolling rollout for deployment", zap.String("deployment", resource.Name))
 
 	// Update deployment to placement stage
+	// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO PLACEMENT HERE?
+	// OR SHOULD WE LET PARSESTAGE HANDLE THIS?
 	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_PLACEMENT
 	resource.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
 
