@@ -9,7 +9,6 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 from examples.gpt_oss_20b_finetune.simple_train import simple_train_gpt
 from examples.gpt_oss_20b_finetune.data import prepare_finetune_dataset
 from examples.gpt_oss_20b_finetune.eval import evaluate_gpt_model
-from examples.gpt_oss_20b_finetune.package_model import package_gpt_model
 
 
 @uniflow.workflow()
@@ -29,10 +28,10 @@ def simple_gpt_workflow(
         model_name=model_name
     )
 
-    # Train model (returns MLflow URI directly)
-    model_uri = simple_train_gpt(
+    # Train model (returns dict with checkpoint_path)
+    train_result = simple_train_gpt(
         train_dv=train_dv,
-        val_dv=val_dv,
+        validation_dv=val_dv,
         model_name=model_name,
         num_epochs=num_epochs,
         batch_size=1,
@@ -40,24 +39,17 @@ def simple_gpt_workflow(
         use_lora=True
     )
 
-    # Evaluate model using MLflow URI
+    # Evaluate model using checkpoint path
     evaluate_gpt_model(
         test_dv=test_dv,
-        model_uri=model_uri,
+        checkpoint_path=train_result['checkpoint_path'],
         model_name=model_name,
+        use_lora=True,
+        lora_rank=16,
+        learning_rate=5e-5,
         max_length=512,
         batch_size=1,
-        num_samples=20
-    )
-
-    # Package the model using MLflow URI and create Model CR (final step)
-    package_gpt_model(
-        model_path=model_uri,
-        model_name=model_name,
-        package_name=model_name,
-        experiment_name="gpt-finetune-experiment",
-        namespace="default",
-        create_model_cr=True
+        num_samples=3  # Very small for testing
     )
 
     return True
@@ -78,6 +70,7 @@ if __name__ == "__main__":
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
     ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
     ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
+    os.environ["RAY_TRAIN_ENABLE_V2_MIGRATION_WARNINGS"] = "0"
 
     # MLflow environment variables
     if ctx.is_local_run():
@@ -85,13 +78,14 @@ if __name__ == "__main__":
         ctx.environ["MLFLOW_TRACKING_URI"] = "http://localhost:5001"
         ctx.environ["MLFLOW_BACKEND_STORE_URI"] = "mysql+pymysql://root:root@localhost:3306/mlflow"
         ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://localhost:9091"
-        os.environ["MA_API_SERVER"] = "localhost:14566"
+        ctx.environ["MA_API_SERVER"] = "localhost:14566"
+
     else:
         # Cluster deployment - use Kubernetes service names
         ctx.environ["MLFLOW_TRACKING_URI"] = "http://mlflow-tracking-server:5001"
         ctx.environ["MLFLOW_BACKEND_STORE_URI"] = "mysql+pymysql://root:root@mysql:3306/mlflow"
-        ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9000"
-        os.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
+        ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "http://minio:9091"
+        ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
 
     # These remain the same for both local and cluster
     ctx.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "s3://mlflow"

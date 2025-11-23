@@ -1,19 +1,26 @@
 """
-Simple training task for GPT-OSS-20B fine-tuning (local testing version)
+Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
 """
 
 import logging
-import torch
-import mlflow
-from transformers import AutoModelForCausalLM, AutoTokenizer, Trainer, TrainingArguments
-from peft import LoraConfig, get_peft_model, TaskType
+import os
+import pytorch_lightning as pl
 from ray.data import Dataset
-from michelangelo.uniflow.plugins.ray import RayTask
-import michelangelo.uniflow.core as uniflow
+from ray.train import CheckpointConfig
+from ray.train.lightning import RayFSDPStrategy
 from michelangelo.sdk.workflow.variables import DatasetVariable
+import michelangelo.uniflow.core as uniflow
+from michelangelo.maf.ray.train import create_run_config, create_scaling_config
+from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
+    LightningTrainer,
+    LightningTrainerParam,
+)
+from michelangelo.uniflow.plugins.ray import RayTask
+from examples.gpt_oss_20b_finetune.model import create_gpt_model
+import mlflow
+from pytorch_lightning.loggers import MLFlowLogger
 
 log = logging.getLogger(__name__)
-
 
 @uniflow.task(
     config=RayTask(
@@ -26,146 +33,172 @@ log = logging.getLogger(__name__)
 )
 def simple_train_gpt(
     train_dv: DatasetVariable,
-    val_dv: DatasetVariable,
-    model_name="gpt2",
-    num_epochs=1,
-    batch_size=1,
-    learning_rate=5e-5,
-    use_lora=True
+    validation_dv: DatasetVariable,
+    model_name: str = "gpt2",
+    num_epochs: int = 1,
+    batch_size: int = 1,
+    learning_rate: float = 5e-5,
+    use_lora: bool = True,
+    lora_rank: int = 16,
+    num_workers: int = 2,
+    use_gpu: bool = True,
 ):
     """
-    Simple training function for testing
+    Distributed training function using Ray Lightning
     """
-    log.info(f"Starting simple training with model: {model_name}")
+    log.info(f"Starting distributed training with model: {model_name}")
+    log.info(f"Training with {num_workers} workers, use_gpu: {use_gpu}")
 
-    # Setup MLflow experiment
-    mlflow.set_experiment("gpt-finetune-experiment")
+    train_dv.load_ray_dataset()
+    train_data: Dataset = train_dv.value
 
-    with mlflow.start_run(run_name=f"training-{model_name.replace('/', '-')}"):
-        # Log parameters
-        mlflow.log_param("model_name", model_name)
-        mlflow.log_param("num_epochs", num_epochs)
-        mlflow.log_param("batch_size", batch_size)
-        mlflow.log_param("learning_rate", learning_rate)
-        mlflow.log_param("use_lora", use_lora)
+    validation_dv.load_ray_dataset()
+    validation_data: Dataset = validation_dv.value
 
-        # Load datasets
-        train_dv.load_ray_dataset()
-        train_data: Dataset = train_dv.value
+    # Detect accelerator type for proper configuration
+    import torch
 
-        val_dv.load_ray_dataset()
-        val_data: Dataset = val_dv.value
+    # Detect accelerator type and choose appropriate strategy
+    if torch.backends.mps.is_available():
+        # Apple Silicon - use CPU to avoid MPS/FSDP conflicts
+        use_gpu = False
+        log.info("Detected Apple Silicon (MPS) - using CPU for compatibility")
+    elif not torch.cuda.is_available():
+        use_gpu = False
+        log.info("No CUDA available - using CPU")
 
-        # Load tokenizer
-        tokenizer = AutoTokenizer.from_pretrained(model_name)
-        if tokenizer.pad_token is None:
-            tokenizer.pad_token = tokenizer.eos_token
+    # Create scaling configuration for Ray
+    scaling_config = create_scaling_config(
+        trainer_cpu=2,
+        cpu_per_worker=4,
+        num_workers=num_workers,
+        use_gpu=use_gpu,
+    )
+    log.info("scaling_config: %r", scaling_config)
 
-        # Load model
-        model = AutoModelForCausalLM.from_pretrained(
-            model_name,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
-        )
+    # Setup MLflow environment for Ray Train
 
-        # Setup LoRA if enabled
-        if use_lora:
-            lora_config = LoraConfig(
-                r=16,
-                lora_alpha=32,
-                lora_dropout=0.1,
-                target_modules=["c_attn", "c_proj"],
-                bias="none",
-                task_type=TaskType.CAUSAL_LM
-            )
-            model = get_peft_model(model, lora_config)
-            model.print_trainable_parameters()
+    # Create run configuration with checkpointing (no MLflow callback needed)
+    run_config = create_run_config(
+        name=f"gpt-distributed-{model_name.replace('/', '-')}",
+        checkpoint_config=CheckpointConfig(
+            num_to_keep=1,
+            checkpoint_score_attribute="val_loss",
+            checkpoint_score_order="min",
+        ),
+    )
+    log.info("run_config: %r", run_config)
 
-            # Log LoRA parameters
-            total_params = sum(p.numel() for p in model.parameters())
-            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            mlflow.log_param("total_parameters", total_params)
-            mlflow.log_param("trainable_parameters", trainable_params)
-            mlflow.log_param("trainable_percentage", (trainable_params / total_params) * 100)
+    # Setup MLflow logger for Lightning training
+    mlflow.set_tracking_uri("http://localhost:5001")
+    experiment_name = "gpt-finetune-experiment"
 
-        log.info("Model loaded")
+    # Create MLflow logger that will handle run creation automatically
+    mlflow_logger = MLFlowLogger(
+        experiment_name=experiment_name,
+        tracking_uri="http://localhost:5001",
+        run_name=f"training-{model_name}",
+        tags={
+            "model_name": model_name,
+            "use_lora": str(use_lora),
+            "lora_rank": str(lora_rank),
+            "training_type": "distributed"
+        }
+    )
 
-        # Convert Ray datasets to simple format
-        train_df = train_data.to_pandas()
-        val_df = val_data.to_pandas()
+    # Log hyperparameters to MLflow
+    mlflow_logger.log_hyperparams({
+        "model_name": model_name,
+        "learning_rate": learning_rate,
+        "use_lora": use_lora,
+        "lora_rank": lora_rank,
+        "batch_size": batch_size,
+        "num_epochs": num_epochs
+    })
 
-        # Log dataset info
-        mlflow.log_param("train_samples", len(train_df))
-        mlflow.log_param("val_samples", len(val_df))
+    # Lightning trainer configuration for distributed training
+    if torch.backends.mps.is_available():
+        # Apple Silicon - use CPU strategy to avoid MPS/FSDP conflicts
+        lightning_trainer_kwargs = {
+            "accelerator": "cpu",
+            "precision": 32,  # MPS doesn't support mixed precision well
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
+    elif use_gpu and torch.cuda.is_available():
+        # CUDA GPU - use FSDP
+        lightning_trainer_kwargs = {
+            "strategy": RayFSDPStrategy(
+                sharding_strategy="SHARD_GRAD_OP",
+            ),
+            "precision": "16-mixed",
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
+    else:
+        # CPU fallback
+        lightning_trainer_kwargs = {
+            "accelerator": "cpu",
+            "precision": 32,
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
 
-        # Create simple dataset class
-        class SimpleDataset(torch.utils.data.Dataset):
-            def __init__(self, dataframe):
-                self.data = dataframe
+    # Create Lightning trainer parameters
+    trainer_param = LightningTrainerParam(
+        create_model=create_gpt_model,
+        model_kwargs={
+            "model_name": model_name,
+            "learning_rate": learning_rate,
+            "use_lora": use_lora,
+            "lora_rank": lora_rank,
+        },
+        train_data=train_data,
+        validation_data=validation_data,
+        batch_size=batch_size,
+        num_epochs=num_epochs,
+        lightning_trainer_kwargs=lightning_trainer_kwargs,
+    )
 
-            def __len__(self):
-                return len(self.data)
+    # Create Lightning trainer
+    trainer = LightningTrainer(trainer_param)
 
-            def __getitem__(self, idx):
-                item = self.data.iloc[idx]
-                return {
-                    "input_ids": torch.tensor(item["input_ids"], dtype=torch.long),
-                    "attention_mask": torch.tensor(item["attention_mask"], dtype=torch.long),
-                    "labels": torch.tensor(item["labels"], dtype=torch.long)
-                }
+    # Log model information
+    log.info("Model configuration:")
+    log.info(f"  Model name: {model_name}")
+    log.info(f"  Learning rate: {learning_rate}")
+    log.info(f"  Use LoRA: {use_lora}")
+    log.info(f"  LoRA rank: {lora_rank}")
+    log.info(f"  Batch size: {batch_size}")
+    log.info(f"  Number of epochs: {num_epochs}")
 
-        train_dataset = SimpleDataset(train_df)
-        val_dataset = SimpleDataset(val_df)
+    # Start distributed training (MLflow logger will handle run creation)
+    log.info("Starting distributed Lightning training...")
+    result = trainer.train(run_config, scaling_config)
+    log.info("Distributed training completed successfully")
 
-        # Training arguments
-        training_args = TrainingArguments(
-            output_dir="/tmp/simple_train",
-            num_train_epochs=num_epochs,
-            per_device_train_batch_size=batch_size,
-            per_device_eval_batch_size=batch_size,
-            learning_rate=learning_rate,
-            logging_steps=10,
-            eval_strategy="steps",  # Updated API name
-            eval_steps=100,
-            save_steps=500,
-            remove_unused_columns=False,
-            report_to=["mlflow"]  # Enable MLflow reporting
-        )
+    # Get the MLflow run ID from the logger
+    run_id = mlflow_logger.run_id
+    log.info(f"✅ Training completed, MLflow run: {run_id}")
 
-        # Data collator
-        from transformers import DataCollatorForLanguageModeling
-        data_collator = DataCollatorForLanguageModeling(
-            tokenizer=tokenizer,
-            mlm=False
-        )
+    # Return checkpoint path for evaluation (much simpler!)
+    checkpoint = result.get_best_checkpoint(metric="val_loss", mode="min") or result.checkpoint
 
-        # Create trainer
-        trainer = Trainer(
-            model=model,
-            args=training_args,
-            train_dataset=train_dataset,
-            eval_dataset=val_dataset,
-            data_collator=data_collator,
-            tokenizer=tokenizer
-        )
+    # Convert Checkpoint object to directory path
+    if hasattr(checkpoint, 'as_directory'):
+        # If it's a Checkpoint object, get the directory path
+        checkpoint_path = checkpoint.path
+    else:
+        # If it's already a path string
+        checkpoint_path = checkpoint
 
-        # Train
-        log.info("Starting training...")
-        train_result = trainer.train()
+    log.info(f"✅ Best checkpoint available at: {checkpoint_path}")
 
-        # Log final metrics
-        if train_result.metrics:
-            for key, value in train_result.metrics.items():
-                mlflow.log_metric(f"final_{key}", value)
-
-        # Save model to MLflow directly (no local storage)
-        mlflow.pytorch.log_model(
-            pytorch_model=model,
-            artifact_path="gpt_model"
-        )
-
-        # Get the run ID and construct MLflow URI
-        run_id = mlflow.active_run().info.run_id
-        model_uri = f"runs:/{run_id}/gpt_model"
-
-        return model_uri
+    return {
+        'result': result,
+        'checkpoint_path': checkpoint_path,
+        'mlflow_run_id': run_id,
+    }
