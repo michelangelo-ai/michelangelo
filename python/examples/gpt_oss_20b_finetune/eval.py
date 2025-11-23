@@ -33,7 +33,7 @@ def evaluate_gpt_model(
     learning_rate: float = 5e-5,
     max_length=512,
     batch_size=1,
-    num_samples=100
+    num_samples=100,
 ):
     """
     Evaluate the fine-tuned GPT model
@@ -67,6 +67,7 @@ def evaluate_gpt_model(
     from examples.gpt_oss_20b_finetune.model import create_gpt_model
     import os
     import glob
+
     log.info("✅ Modules imported successfully")
 
     log.info("🔍 EVAL STEP 4: Finding checkpoint files")
@@ -88,7 +89,7 @@ def evaluate_gpt_model(
         model_name=model_name,
         learning_rate=learning_rate,
         use_lora=use_lora,
-        lora_rank=lora_rank
+        lora_rank=lora_rank,
     )
     log.info("✅ Model created successfully")
 
@@ -97,7 +98,7 @@ def evaluate_gpt_model(
     log.info("✅ Model weights loaded successfully")
 
     log.info("🔍 EVAL STEP 8: Extracting base model")
-    if hasattr(model, 'model'):
+    if hasattr(model, "model"):
         base_model = model.model
         log.info("✅ Extracted base model from Lightning wrapper")
     else:
@@ -132,7 +133,9 @@ def evaluate_gpt_model(
             # Get input and target text
             if "input_ids" in row:
                 # If already tokenized
-                input_ids = torch.tensor(row["input_ids"], dtype=torch.long).unsqueeze(0)
+                input_ids = torch.tensor(row["input_ids"], dtype=torch.long).unsqueeze(
+                    0
+                )
                 if "labels" in row:
                     labels = torch.tensor(row["labels"], dtype=torch.long).unsqueeze(0)
                 else:
@@ -145,7 +148,7 @@ def evaluate_gpt_model(
                     max_length=max_length,
                     truncation=True,
                     padding=False,
-                    return_tensors="pt"
+                    return_tensors="pt",
                 )
                 input_ids = tokens["input_ids"]
                 labels = input_ids.clone()
@@ -176,7 +179,7 @@ def evaluate_gpt_model(
                         num_return_sequences=1,
                         temperature=0.7,
                         do_sample=True,
-                        pad_token_id=tokenizer.eos_token_id
+                        pad_token_id=tokenizer.eos_token_id,
                     )
 
                 # Calculate generation score (simple length-based metric)
@@ -185,7 +188,7 @@ def evaluate_gpt_model(
                 generation_scores.append(generation_score)
 
     # Calculate final metrics
-    avg_perplexity = np.mean(perplexities) if perplexities else float('inf')
+    avg_perplexity = np.mean(perplexities) if perplexities else float("inf")
     avg_generation_score = np.mean(generation_scores) if generation_scores else 0.0
 
     # Additional metrics
@@ -197,7 +200,7 @@ def evaluate_gpt_model(
         "generation_score_std": np.std(generation_scores) if generation_scores else 0.0,
         "model_name": model_name,
         "checkpoint_path": checkpoint_path,
-        "device": str(device)
+        "device": str(device),
     }
 
     log.info("✅ Evaluation completed")

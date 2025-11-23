@@ -8,10 +8,10 @@ import pytorch_lightning as pl
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
-    get_linear_schedule_with_warmup
+    get_linear_schedule_with_warmup,
 )
 from peft import LoraConfig, get_peft_model, TaskType
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 
 log = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class GPTLightningModule(pl.LightningModule):
         lora_alpha: int = 32,
         lora_dropout: float = 0.1,
         warmup_steps: int = 100,
-        **kwargs
+        **kwargs,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -71,20 +71,18 @@ class GPTLightningModule(pl.LightningModule):
                 lora_dropout=self.lora_dropout,
                 target_modules=["c_attn", "c_proj"],  # GPT-2 specific
                 bias="none",
-                task_type=TaskType.CAUSAL_LM
+                task_type=TaskType.CAUSAL_LM,
             )
             self.model = get_peft_model(self.model, lora_config)
 
             # Print trainable parameters
-            if hasattr(self.model, 'print_trainable_parameters'):
+            if hasattr(self.model, "print_trainable_parameters"):
                 self.model.print_trainable_parameters()
 
     def forward(self, input_ids, attention_mask=None, labels=None):
         """Forward pass"""
         return self.model(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            labels=labels
+            input_ids=input_ids, attention_mask=attention_mask, labels=labels
         )
 
     def training_step(self, batch, batch_idx):
@@ -92,7 +90,7 @@ class GPTLightningModule(pl.LightningModule):
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            labels=batch["labels"]
+            labels=batch["labels"],
         )
 
         loss = outputs.loss
@@ -111,7 +109,7 @@ class GPTLightningModule(pl.LightningModule):
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
-            labels=batch["labels"]
+            labels=batch["labels"],
         )
 
         loss = outputs.loss
@@ -129,9 +127,7 @@ class GPTLightningModule(pl.LightningModule):
         """Configure optimizers and schedulers"""
         # Create optimizer
         optimizer = torch.optim.AdamW(
-            self.parameters(),
-            lr=self.learning_rate,
-            weight_decay=0.01
+            self.parameters(), lr=self.learning_rate, weight_decay=0.01
         )
 
         # Calculate total steps for scheduler
@@ -142,7 +138,7 @@ class GPTLightningModule(pl.LightningModule):
         scheduler = get_linear_schedule_with_warmup(
             optimizer,
             num_warmup_steps=self.warmup_steps,
-            num_training_steps=total_steps
+            num_training_steps=total_steps,
         )
 
         return {
@@ -150,16 +146,18 @@ class GPTLightningModule(pl.LightningModule):
             "lr_scheduler": {
                 "scheduler": scheduler,
                 "interval": "step",
-                "frequency": 1
-            }
+                "frequency": 1,
+            },
         }
 
     def get_model_info(self) -> Dict[str, Any]:
         """Get model information for logging"""
-        if self.use_lora and hasattr(self.model, 'peft_config'):
+        if self.use_lora and hasattr(self.model, "peft_config"):
             # Get parameter counts for LoRA model
             total_params = sum(p.numel() for p in self.model.parameters())
-            trainable_params = sum(p.numel() for p in self.model.parameters() if p.requires_grad)
+            trainable_params = sum(
+                p.numel() for p in self.model.parameters() if p.requires_grad
+            )
 
             return {
                 "model_name": self.model_name,
@@ -168,7 +166,7 @@ class GPTLightningModule(pl.LightningModule):
                 "lora_alpha": self.lora_alpha,
                 "total_parameters": total_params,
                 "trainable_parameters": trainable_params,
-                "trainable_percentage": (trainable_params / total_params) * 100
+                "trainable_percentage": (trainable_params / total_params) * 100,
             }
         else:
             total_params = sum(p.numel() for p in self.model.parameters())
@@ -177,7 +175,7 @@ class GPTLightningModule(pl.LightningModule):
                 "use_lora": self.use_lora,
                 "total_parameters": total_params,
                 "trainable_parameters": total_params,
-                "trainable_percentage": 100.0
+                "trainable_percentage": 100.0,
             }
 
 
@@ -189,7 +187,7 @@ def create_gpt_model(
     lora_alpha: int = 32,
     lora_dropout: float = 0.1,
     warmup_steps: int = 100,
-    **kwargs
+    **kwargs,
 ) -> pl.LightningModule:
     """
     Factory function to create GPT Lightning module
@@ -203,5 +201,5 @@ def create_gpt_model(
         lora_alpha=lora_alpha,
         lora_dropout=lora_dropout,
         warmup_steps=warmup_steps,
-        **kwargs
+        **kwargs,
     )

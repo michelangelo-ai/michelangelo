@@ -3,8 +3,6 @@ Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
 """
 
 import logging
-import os
-import pytorch_lightning as pl
 from ray.data import Dataset
 from ray.train import CheckpointConfig
 from ray.train.lightning import RayFSDPStrategy
@@ -21,6 +19,7 @@ import mlflow
 from pytorch_lightning.loggers import MLFlowLogger
 
 log = logging.getLogger(__name__)
+
 
 @uniflow.task(
     config=RayTask(
@@ -102,19 +101,21 @@ def simple_train_gpt(
             "model_name": model_name,
             "use_lora": str(use_lora),
             "lora_rank": str(lora_rank),
-            "training_type": "distributed"
-        }
+            "training_type": "distributed",
+        },
     )
 
     # Log hyperparameters to MLflow
-    mlflow_logger.log_hyperparams({
-        "model_name": model_name,
-        "learning_rate": learning_rate,
-        "use_lora": use_lora,
-        "lora_rank": lora_rank,
-        "batch_size": batch_size,
-        "num_epochs": num_epochs
-    })
+    mlflow_logger.log_hyperparams(
+        {
+            "model_name": model_name,
+            "learning_rate": learning_rate,
+            "use_lora": use_lora,
+            "lora_rank": lora_rank,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+        }
+    )
 
     # Lightning trainer configuration for distributed training
     if torch.backends.mps.is_available():
@@ -185,10 +186,12 @@ def simple_train_gpt(
     log.info(f"✅ Training completed, MLflow run: {run_id}")
 
     # Return checkpoint path for evaluation (much simpler!)
-    checkpoint = result.get_best_checkpoint(metric="val_loss", mode="min") or result.checkpoint
+    checkpoint = (
+        result.get_best_checkpoint(metric="val_loss", mode="min") or result.checkpoint
+    )
 
     # Convert Checkpoint object to directory path
-    if hasattr(checkpoint, 'as_directory'):
+    if hasattr(checkpoint, "as_directory"):
         # If it's a Checkpoint object, get the directory path
         checkpoint_path = checkpoint.path
     else:
@@ -198,7 +201,7 @@ def simple_train_gpt(
     log.info(f"✅ Best checkpoint available at: {checkpoint_path}")
 
     return {
-        'result': result,
-        'checkpoint_path': checkpoint_path,
-        'mlflow_run_id': run_id,
+        "result": result,
+        "checkpoint_path": checkpoint_path,
+        "mlflow_run_id": run_id,
     }
