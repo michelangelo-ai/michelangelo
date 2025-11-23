@@ -4,20 +4,20 @@ import inspect
 import logging
 import sys
 import tarfile
+from abc import ABC
+from collections.abc import Iterator
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any, Callable, Optional
-from collections.abc import Iterator
-from abc import ABC
 
 import fsspec
 
 from michelangelo.uniflow.core.decorator import (
+    TaskFunction,
+    get_star_plugin_binding,
     is_star_plugin,
     is_workflow,
-    get_star_plugin_binding,
-    TaskFunction,
 )
 from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
 from michelangelo.uniflow.core.utils import (

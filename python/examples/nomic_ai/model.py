@@ -1,5 +1,5 @@
-import torch
 import pytorch_lightning as pl
+import torch
 from transformers import AutoModel, AutoTokenizer
 
 

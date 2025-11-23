@@ -12,8 +12,8 @@ from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.plugins.pipeline.create import (
     convert_crd_metadata_pipeline_create,
-    populate_pipeline_spec_with_workflow_inputs,
     handle_workflow_inputs_retrieval,
+    populate_pipeline_spec_with_workflow_inputs,
 )
 
 

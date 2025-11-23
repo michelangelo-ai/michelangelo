@@ -1,14 +1,13 @@
-from dataclasses import dataclass
 import logging
 import os
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from pyspark.sql import DataFrame
-from pyspark.sql import SparkSession
+from pyspark.sql import DataFrame, SparkSession
 
 from michelangelo.uniflow.core.io_registry import io_registry
-from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 from michelangelo.uniflow.plugins.spark.io import SparkIO
 
 log = logging.getLogger(__name__)

@@ -6,16 +6,15 @@ using gRPC reflection.
 from logging import getLogger
 from typing import Union
 
+from google.protobuf import message_factory
 from google.protobuf.descriptor_pb2 import (
     FileDescriptorProto,
     MethodDescriptorProto,
 )
-from google.protobuf import message_factory
 from google.protobuf.descriptor_pool import DescriptorPool
 from google.protobuf.message import Message
 from grpc import Channel
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
-
 
 _LOG = getLogger(__name__)
 

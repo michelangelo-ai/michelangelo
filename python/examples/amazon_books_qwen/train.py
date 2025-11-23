@@ -5,21 +5,22 @@ Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 
 import logging
 import os
-from typing import Dict, Any
+from typing import Any, Dict
+
+import numpy as np
+import ray
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import AutoModel, AutoTokenizer
-import numpy as np
+from ray.air.config import ScalingConfig
 from ray.data import Dataset
-import ray
 from ray.train import Checkpoint
 from ray.train.torch import TorchTrainer
-from ray.air.config import ScalingConfig
+from transformers import AutoModel, AutoTokenizer
 
-from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
 from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
@@ -172,8 +173,8 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
     Ray distributed training function for Qwen dual-encoder
     This function runs on each Ray worker for distributed training
     """
-    import torch
     import ray.train
+    import torch
 
     # Get training configuration
     model_config = config.get("model_config", {})

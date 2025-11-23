@@ -5,7 +5,7 @@ Unit tests for mactl CLI functions.
 import os
 from importlib import reload
 from unittest import TestCase
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.mactl import (

@@ -1,7 +1,8 @@
-from google.protobuf import json_format
 from typing import Optional
 from unittest import TestCase
+
 import pytest
+from google.protobuf import json_format
 
 from michelangelo.canvas.lib.shared.json_data.field import field, one_of
 from michelangelo.canvas.lib.shared.json_data.json_data import JSONData
@@ -13,8 +14,8 @@ from michelangelo.gen.api.v2.spark_job_pb2 import (
 try:
     from michelangelo.canvas.schema.v2alpha1.job_specs import (
         DriverSpec,
-        PodSpec,
         JobSpecs,
+        PodSpec,
         RayJobSpec,
         ResourceSpec,
         SparkJobSpec,

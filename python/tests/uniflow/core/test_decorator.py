@@ -1,16 +1,18 @@
-import fsspec
 import ast
-import io
 import gzip
+import io
 import random
+import unittest
 from dataclasses import dataclass
 from typing import Optional
-import unittest
 from unittest import mock
-from michelangelo.uniflow.core.decorator import task, TaskFunction, workflow
-from michelangelo.uniflow.core.task_config import Dependencies
-from michelangelo.uniflow.core.ref import Ref
+
+import fsspec
+
+from michelangelo.uniflow.core.decorator import TaskFunction, task, workflow
 from michelangelo.uniflow.core.image_spec import ImageSpec
+from michelangelo.uniflow.core.ref import Ref
+from michelangelo.uniflow.core.task_config import Dependencies
 from tests.uniflow.core.test_task_config import TaskA, TaskB, a_environ, b_environ
 
 

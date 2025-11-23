@@ -4,14 +4,14 @@ Training task for fine-tuning a BERT model on the CoLA dataset.
 
 import logging
 
-from datasets import Dataset as HFDataset
+import numpy as np
 import torch
 import transformers
+from datasets import Dataset as HFDataset
 from ray.data import Dataset
-from michelangelo.uniflow.plugins.ray import RayTask
-import michelangelo.uniflow.core as uniflow
-import numpy as np
 
+import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 

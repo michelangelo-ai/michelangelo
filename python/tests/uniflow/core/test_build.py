@@ -1,9 +1,9 @@
 import json
 import unittest
 
-from michelangelo.uniflow.core.build import build, TranspilerCallback
 import tests.uniflow.core.demo_app.demo_app as demo_app
 import tests.uniflow.core.demo_platform.workflows as demo_platform_workflows
+from michelangelo.uniflow.core.build import TranspilerCallback, build
 
 
 class Test(unittest.TestCase):

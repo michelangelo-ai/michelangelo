@@ -2,10 +2,9 @@ from logging import getLogger
 from types import MethodType
 
 from grpc import Channel
+from plugins.trigger_run.kill import add_function_signature, generate_kill
 
 from michelangelo.cli.mactl.crd import CRD
-from plugins.trigger_run.kill import generate_kill, add_function_signature
-
 
 _LOG = getLogger(__name__)
 

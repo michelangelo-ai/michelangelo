@@ -1,4 +1,4 @@
-from michelangelo.uniflow.core import workflow, task
+from michelangelo.uniflow.core import task, workflow
 from michelangelo.uniflow.core.lib.time import sleep
 from tests.uniflow.core.demo_platform.test_conf.task_a import TaskA
 

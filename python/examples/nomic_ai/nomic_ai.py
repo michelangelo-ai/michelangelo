@@ -1,7 +1,7 @@
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 from examples.nomic_ai.data import load_data
 from examples.nomic_ai.train import train
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()

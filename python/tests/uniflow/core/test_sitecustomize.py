@@ -6,11 +6,11 @@ as a module initialization script with complex dependencies on file system,
 environment variables, and remote storage.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
-import tempfile
-from pathlib import Path
 import logging
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 class TestSitecustomize(unittest.TestCase):

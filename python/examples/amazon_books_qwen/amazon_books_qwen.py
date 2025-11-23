@@ -4,14 +4,13 @@ Main workflow entry point for training Qwen-based recommendation model
 """
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
+from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+from examples.amazon_books_qwen.download import download_kaggle_dataset
 
 # Import our local modules using direct file execution to avoid conflicts
-
 # Import workflow functions
 from examples.amazon_books_qwen.train import train_dual_encoder
-from examples.amazon_books_qwen.download import download_kaggle_dataset
-from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()

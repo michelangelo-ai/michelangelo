@@ -1,22 +1,21 @@
+import json
+import tempfile
 from copy import deepcopy
 from logging import getLogger
 from os import getenv
 from pathlib import Path
 from uuid import uuid4
-import json
-import tempfile
 
 from git import Repo
+from google.protobuf.any_pb2 import Any
 from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
-from google.protobuf.any_pb2 import Any
 
 from michelangelo.cli.mactl.utils import (
-    run_subprocess_registration,
     read_subprocess_outputs,
+    run_subprocess_registration,
 )
 from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
-
 
 _LOG = getLogger(__name__)
 

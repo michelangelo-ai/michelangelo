@@ -5,7 +5,6 @@ from pathlib import Path
 from git import Repo
 from google.protobuf.message import Message
 
-
 _LOG = getLogger(__name__)
 
 

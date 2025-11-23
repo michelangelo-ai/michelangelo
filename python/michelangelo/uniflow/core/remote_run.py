@@ -10,10 +10,10 @@ import sys
 from dataclasses import dataclass, field
 from typing import Callable, Optional
 
-from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.build import build
-from michelangelo.uniflow.core.utils import dot_path
+from michelangelo.uniflow.core.codec import encoder
 from michelangelo.uniflow.core.file_sync import DefaultFileSync
+from michelangelo.uniflow.core.utils import dot_path
 
 log = logging.getLogger(__name__)
 

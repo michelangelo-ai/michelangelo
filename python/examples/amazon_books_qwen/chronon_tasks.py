@@ -7,46 +7,50 @@ import os
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
-# Uniflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.spark import SparkTask
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from ai.chronon.api.ttypes import GroupBy, StagingQuery
+
+# Ray for dataset conversion
+# Chronon SDK
+from ai.chronon.repo.compile import thrift_simple_json_protected
 
 # PySpark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col,
-    when,
-    lit,
-    concat_ws,
-    rand,
-    count,
     avg,
+    col,
+    concat_ws,
+    count,
+    lit,
+    rand,
+    when,
+)
+from pyspark.sql.functions import (
     max as spark_max,
+)
+from pyspark.sql.functions import (
     min as spark_min,
 )
 
-# Ray for dataset conversion
-
-# Chronon SDK
-from ai.chronon.repo.compile import thrift_simple_json_protected
-from ai.chronon.api.ttypes import StagingQuery, GroupBy
+# Uniflow
+import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.spark import SparkTask
 
 # Chronon definitions (moved to top level)
 try:
-    from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
-        base_table,
-    )
     from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
         book_popularity,
         book_velocity,
     )
+    from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
+        base_table,
+    )
 except ModuleNotFoundError:
     # Use relative imports
-    from data.staging_queries.amazon_books.books_reviews import base_table
     from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
+    from data.staging_queries.amazon_books.books_reviews import base_table
 
 
 def _setup_chronon_environment():

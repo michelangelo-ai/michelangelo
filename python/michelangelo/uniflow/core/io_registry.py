@@ -1,8 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import Callable, Union, Optional, Any
-from typing import TypeVar, Generic
+from typing import Any, Callable, Generic, Optional, TypeVar, Union
 
 import fsspec
 

@@ -1,10 +1,9 @@
 import os
-from typing import Optional, Any
+from typing import Any, Optional
 
 import ray
-from ray.data import Dataset
-
 from michelangelo.uniflow.core.io_registry import IO
+from ray.data import Dataset
 
 UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 """

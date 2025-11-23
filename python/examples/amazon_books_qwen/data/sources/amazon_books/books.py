@@ -3,9 +3,10 @@ Source definitions for Amazon Books Chronon features
 Provides event sources for different aspects of the recommendation system
 """
 
-from ai.chronon.api.ttypes import Source, EventSource
+from ai.chronon.api.ttypes import EventSource, Source
 from ai.chronon.query import Query, select
 from ai.chronon.utils import get_staging_query_output_table_name
+
 from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
     base_table,
 )

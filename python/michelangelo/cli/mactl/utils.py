@@ -6,9 +6,9 @@ import os
 import shutil
 import subprocess
 import sys
+from logging import getLogger
 from pathlib import Path
 from typing import Optional, Tuple
-from logging import getLogger
 
 _logger = getLogger(__name__)
 

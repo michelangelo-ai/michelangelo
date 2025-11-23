@@ -7,7 +7,7 @@ from collections.abc import MutableMapping
 from copy import deepcopy
 from dataclasses import dataclass
 from functools import partial
-from inspect import Signature, Parameter
+from inspect import Parameter, Signature
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
@@ -20,13 +20,13 @@ from grpc import (
     RpcError,
     StatusCode,
 )
-from yaml import YAMLError, safe_load as yaml_safe_load
+from yaml import YAMLError
+from yaml import safe_load as yaml_safe_load
 
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-
 
 _LOG = getLogger(__name__)
 METADATA_STUB = []

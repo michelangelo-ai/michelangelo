@@ -1,4 +1,5 @@
 from unittest import TestCase
+
 from michelangelo._internal.utils.reflection_utils import get_module_attr
 
 

@@ -1,14 +1,15 @@
-import unittest
-from michelangelo.uniflow.core.file_sync import (
-    FileSync,
-    DefaultFileSync,
-)
-from pathlib import Path
-from unittest.mock import patch, MagicMock, mock_open
-import tempfile
+import io
 import os
 import tarfile
-import io
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, mock_open, patch
+
+from michelangelo.uniflow.core.file_sync import (
+    DefaultFileSync,
+    FileSync,
+)
 
 
 class _TestableFileBuilder(FileSync):

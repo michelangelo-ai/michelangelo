@@ -1,10 +1,10 @@
+import time
+import uuid
 from argparse import ArgumentParser
-from inspect import Signature, Parameter
+from inspect import Parameter, Signature
 from logging import getLogger
 from types import MethodType
 from typing import Optional
-import time
-import uuid
 
 from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
@@ -21,7 +21,6 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-
 
 _LOG = getLogger(__name__)
 

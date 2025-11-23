@@ -3,16 +3,17 @@ MaCTL - Michelangelo Command Line Tool
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
-from argparse import ArgumentParser
-from collections import defaultdict
-from importlib.util import spec_from_file_location, module_from_spec
-from logging import basicConfig, getLogger, WARNING
-from os import getenv, environ
-from pathlib import Path
-from typing import Union
+import configparser
 import logging
 import re
 import sys
+from argparse import ArgumentParser
+from collections import defaultdict
+from importlib.util import module_from_spec, spec_from_file_location
+from logging import WARNING, basicConfig, getLogger
+from os import environ, getenv
+from pathlib import Path
+from typing import Union
 
 from grpc import (
     Channel,
@@ -21,7 +22,6 @@ from grpc import (
     ssl_channel_credentials,
 )
 from yaml import safe_load as yaml_safe_load
-import configparser
 
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services

@@ -1,12 +1,12 @@
 from argparse import ArgumentParser
+from inspect import Parameter, Signature
 from logging import getLogger
-from inspect import Signature, Parameter
 from types import MethodType
 from typing import Optional
 
-from grpc import Channel
-from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.message import Message
+from grpc import Channel
 
 from michelangelo.cli.mactl.crd import (
     CRD,
@@ -15,7 +15,6 @@ from michelangelo.cli.mactl.crd import (
     get_single_arg,
     inject_func_signature,
 )
-
 
 _LOG = getLogger(__name__)
 

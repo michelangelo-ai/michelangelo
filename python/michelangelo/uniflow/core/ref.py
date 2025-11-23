@@ -1,9 +1,10 @@
 import logging
 import os
-import pydantic
-from typing import Optional
 import uuid
 from dataclasses import dataclass
+from typing import Optional
+
+import pydantic
 
 from michelangelo.uniflow.core.io_registry import IORegistry
 from michelangelo.uniflow.core.utils import (

@@ -1,13 +1,14 @@
-import sys
 import argparse
-import os
 import dataclasses
 import importlib
-import logging
-import json
 import inspect
-import pydantic
+import json
+import logging
+import os
+import sys
 from typing import Any, Optional
+
+import pydantic
 
 LOGGING_FORMAT = "%(asctime)s | %(levelname)+8.8s | %(name)-40.40s | %(message)s"
 

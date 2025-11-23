@@ -1,10 +1,11 @@
-import os
 import base64
 import json
+import os
 import unittest
 from unittest.mock import patch
-from michelangelo.uniflow.core.remote_run import RemoteRun
+
 from michelangelo.uniflow.core import workflow
+from michelangelo.uniflow.core.remote_run import RemoteRun
 
 _test_env = {
     "UFC_CADENCE_DOMAIN": "default",

@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from inspect import Signature, Parameter
+from inspect import Parameter, Signature
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
@@ -9,7 +9,6 @@ from git import Repo
 from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
 from grpc import Channel
-
 
 from michelangelo.cli.mactl.crd import (
     CRD,
@@ -23,15 +22,13 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-
 from michelangelo.cli.mactl.plugins.pipeline.create import (
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
 )
-
 from michelangelo.cli.mactl.plugins.pipeline.run import (
-    generate_pipeline_run_object,
     generate_pipeline_run_name,
+    generate_pipeline_run_object,
 )
 
 _ENV_VARIABLE_KEY = "env"

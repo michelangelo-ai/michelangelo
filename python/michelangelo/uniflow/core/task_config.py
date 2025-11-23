@@ -1,6 +1,6 @@
 import ast
-from abc import ABC, abstractmethod
 import dataclasses
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Callable
 

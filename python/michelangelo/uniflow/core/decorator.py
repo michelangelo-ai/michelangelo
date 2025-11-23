@@ -1,19 +1,20 @@
 import ast
 import inspect
+import json
 import logging
 import sys
 import threading
-import json
-import fsspec
-from functools import wraps, update_wrapper
-from typing import Callable, Optional, TypeVar, Generic
+from functools import update_wrapper, wraps
+from typing import Callable, Generic, Optional, TypeVar
 
-from michelangelo.uniflow.core.io_registry import IORegistry, default_io
+import fsspec
+
 from michelangelo.uniflow.core.codec import encoder
-from michelangelo.uniflow.core.ref import ref, unref, Ref
-from michelangelo.uniflow.core.task_config import TaskConfig, Dependencies
-from michelangelo.uniflow.core.utils import dot_path
 from michelangelo.uniflow.core.image_spec import ImageSpec
+from michelangelo.uniflow.core.io_registry import IORegistry, default_io
+from michelangelo.uniflow.core.ref import Ref, ref, unref
+from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
+from michelangelo.uniflow.core.utils import dot_path
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec

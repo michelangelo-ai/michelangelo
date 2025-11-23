@@ -5,16 +5,16 @@ Downloads data and returns Spark DataFrames directly
 """
 
 import os
-from typing import Dict, Any, Optional, Tuple
-
-# Uniflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.spark import SparkTask
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from typing import Any, Dict, Optional, Tuple
 
 # PySpark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
+
+# Uniflow
+import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.spark import SparkTask
 
 
 @uniflow.task(
@@ -120,9 +120,10 @@ def download_kaggle_dataset(
     # Download if files don't exist
     if not (os.path.exists(books_file) and os.path.exists(reviews_file)):
         print("🔑 Authenticating with Kaggle API...")
-        from kaggle.api.kaggle_api_extended import KaggleApi
-        import zipfile
         import shutil
+        import zipfile
+
+        from kaggle.api.kaggle_api_extended import KaggleApi
 
         api = KaggleApi()
         api.authenticate()

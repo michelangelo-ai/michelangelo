@@ -1,14 +1,14 @@
-from dataclasses import dataclass
 import logging
-from pathlib import Path
 import os
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
-import ray
-from ray.data import Dataset
 
+import ray
 from michelangelo.uniflow.core.io_registry import io_registry
-from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 from michelangelo.uniflow.plugins.ray.io import RayDatasetIO
+from ray.data import Dataset
 
 log = logging.getLogger(__name__)
 
