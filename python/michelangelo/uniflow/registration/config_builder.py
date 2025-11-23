@@ -84,7 +84,7 @@ class ConfigBuilder:
         _logger.info("Creating ConfigBuilder from config file: %s", config_file_path)
 
         # Read YAML configuration
-        with open(config_file_path, "r") as f:
+        with open(config_file_path) as f:
             config = yaml.safe_load(f)
 
         # Extract manifest path
@@ -277,7 +277,7 @@ class ConfigBuilder:
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, "r") as f:
+                with open(module_file) as f:
                     source = f.read()
 
                 # Parse the AST to find ctx.run calls
@@ -332,7 +332,7 @@ class ConfigBuilder:
             # Get the module file path
             module_file = module.__file__
             if module_file and os.path.exists(module_file):
-                with open(module_file, "r") as f:
+                with open(module_file) as f:
                     source = f.read()
 
                 # Parse the AST to find ctx.environ assignments

@@ -14,7 +14,7 @@ _TIMEOUT_SECONDS = 60
 _DEFAULT_SERVICE_CONFIG = {
     "methodConfig": [
         {
-            "timeout": "{}s".format(_TIMEOUT_SECONDS),
+            "timeout": f"{_TIMEOUT_SECONDS}s",
             "retryPolicy": {
                 "maxAttempts": 3,
                 "initialBackoff": "0.1s",
@@ -142,7 +142,7 @@ class Context:
         return _channel
 
 
-class BaseService(object):
+class BaseService:
     def __init__(self, context, stub_clz):
         self._context = context
         self._service_stub = None

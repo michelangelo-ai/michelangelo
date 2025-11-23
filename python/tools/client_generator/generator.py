@@ -28,7 +28,7 @@ def get_crds():
             snake_name = f.replace("_svc_pb2_grpc.py", "")
             if os.path.exists(os.path.join(pbgen_dir, snake_name + "_pb2.py")):
                 module = importlib.import_module(
-                    "michelangelo.gen.api.v2.{}_pb2".format(snake_name)
+                    f"michelangelo.gen.api.v2.{snake_name}_pb2"
                 )
                 cls = getattr(module, to_camel_case(snake_name), None)
                 if cls:
@@ -65,7 +65,7 @@ def gen_init(crds):
 
 def run():
     crds = get_crds()
-    os.system("rm -rf {}/*".format(gen_dir))
+    os.system(f"rm -rf {gen_dir}/*")
     for crd in crds:
         gen_service(crd)
     gen_init(crds)
