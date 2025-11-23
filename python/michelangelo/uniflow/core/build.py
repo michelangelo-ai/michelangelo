@@ -144,15 +144,13 @@ class Package:
 
 
 class TranspilerCallback(ABC):
-    """
-    Callback interface for the transpiler to make the transpilation process observable.
+    """Callback interface for the transpiler to make the transpilation process observable.
     Users can extend this class and override its methods to act on transpilation events,
     e.g., to collect additional metadata about the transpiled code.
     """
 
     def on_task_function(self, task_fn: TaskFunction):
-        """
-        Called when a reference to the @task function is encountered during transpilation.
+        """Called when a reference to the @task function is encountered during transpilation.
         """
         pass
 
@@ -294,8 +292,7 @@ def _add_star_file(path: Path, files: dict[Path, ast.Module]):
 
 
 def _iter_top_level_calls(module: ast.Module) -> Iterator[ast.Call]:
-    """
-    Utility function that finds and yields all top-level function call statements in the given AST module.
+    """Utility function that finds and yields all top-level function call statements in the given AST module.
     It is used to find `load` statements in the starlark source code.
     """
     for node in module.body:

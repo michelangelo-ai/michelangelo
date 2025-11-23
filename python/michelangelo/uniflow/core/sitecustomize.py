@@ -1,5 +1,4 @@
-"""
-sitecustomize.py - Automatic Uniflow initialization for remote environments.
+"""sitecustomize.py - Automatic Uniflow initialization for remote environments.
 
 This module is automatically imported by Python during startup when it's in the
 Python path. It runs the uniflow pre-run script to download and apply local
@@ -34,8 +33,7 @@ class StorageDownloader(ABC):
     def download(
         self, remote_path: str, local_path: Path, logger: logging.Logger
     ) -> bool:
-        """
-        Download a file from remote storage to local path.
+        """Download a file from remote storage to local path.
 
         Args:
             remote_path: The remote storage path (e.g., s3://bucket/key)
@@ -69,8 +67,7 @@ class FsspecDownloader(StorageDownloader):
 
 
 def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None):
-    """
-    Download and extract development files from remote storage with following steps:
+    """Download and extract development files from remote storage with following steps:
     1. Check for UF_FILE_SYNC_TARBALL_URL environment variable
     2. Download tarball using appropriate downloader (tb-cli or fsspec)
     3. Extract and replace files in current working directory
@@ -140,8 +137,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
 
 
 def file_sync_pre_run():
-    """
-    Automatically run the pre-run script if environment conditions are met.
+    """Automatically run the pre-run script if environment conditions are met.
 
     This is the entry point used by sitecustomize.py for automatic execution.
     It includes additional safety checks and logging for the container environment.

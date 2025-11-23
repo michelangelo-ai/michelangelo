@@ -1,5 +1,4 @@
-"""
-Configuration builder for uniflow pipeline registration.
+"""Configuration builder for uniflow pipeline registration.
 
 This module provides the ConfigBuilder class for parsing workflow configurations,
 extracting workflow functions, and serializing config data for pipeline manifests.
@@ -57,8 +56,7 @@ class ConfigBuilder:
     def __init__(
         self, workflow_function_obj: Callable, config_data: Optional[Dict] = None
     ):
-        """
-        Initialize ConfigBuilder with workflow function and optional config.
+        """Initialize ConfigBuilder with workflow function and optional config.
 
         Args:
             workflow_function_obj: The workflow function object
@@ -71,8 +69,7 @@ class ConfigBuilder:
     @classmethod
     @contextmanager
     def from_config_file(cls, config_file_path: str):
-        """
-        Create ConfigBuilder from configuration file.
+        """Create ConfigBuilder from configuration file.
 
         Args:
             config_file_path: Path to the pipeline YAML configuration file
@@ -113,8 +110,7 @@ class ConfigBuilder:
 
     @staticmethod
     def _discover_workflow_function(manifest_path: str) -> Callable:
-        """
-        Discover workflow function from manifest path.
+        """Discover workflow function from manifest path.
 
         Args:
             manifest_path: Module path like "module.submodule:function" or "module.submodule"
@@ -228,8 +224,7 @@ class ConfigBuilder:
         return self._workflow_function_obj
 
     def get_workflow_config_in_json(self) -> str:
-        """
-        Serialize workflow config to JSON format.
+        """Serialize workflow config to JSON format.
 
         Returns:
             str: JSON string representation of workflow config
@@ -254,8 +249,7 @@ class ConfigBuilder:
         return self._workflow_function_obj
 
     def get_workflow_args(self) -> list:
-        """
-        Extract positional arguments for the workflow function.
+        """Extract positional arguments for the workflow function.
 
         Returns:
             list: List of positional argument values (empty for workflows using kwargs)
@@ -265,8 +259,7 @@ class ConfigBuilder:
         return []
 
     def get_workflow_kwargs(self) -> dict:
-        """
-        Extract keyword arguments for the workflow function.
+        """Extract keyword arguments for the workflow function.
 
         First tries to extract from ctx.run() calls in the module,
         then falls back to default parameter values.
@@ -325,8 +318,7 @@ class ConfigBuilder:
         return kwargs
 
     def get_workflow_environ(self) -> dict:
-        """
-        Get workflow environment variables by analyzing the workflow module.
+        """Get workflow environment variables by analyzing the workflow module.
 
         Returns:
             dict: Environment variables for the workflow
@@ -387,8 +379,7 @@ class ConfigBuilder:
         return environ
 
     def get_workflow_config_as_manifest_content(self) -> dict:
-        """
-        Get workflow configuration formatted for manifest content.
+        """Get workflow configuration formatted for manifest content.
 
         Returns:
             dict: Configuration in the format expected by manifest content

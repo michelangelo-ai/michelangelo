@@ -28,8 +28,7 @@ class FileSync(ABC):
         pass
 
     def get_random_file_name(self) -> str:
-        """
-        Get a random file name for the tarball.
+        """Get a random file name for the tarball.
 
         Uses "file-sync" as the prefix for all file sync tarballs.
 
@@ -39,8 +38,7 @@ class FileSync(ABC):
         return f"file-sync-{uuid.uuid4().hex}.tar.gz"
 
     def get_file_name(self) -> str:
-        """
-        Get the file name for the tarball.
+        """Get the file name for the tarball.
 
         Returns:
             The file name, or None if the file name is not set
@@ -50,8 +48,7 @@ class FileSync(ABC):
         return self._file_name
 
     def get_remote_file_path(self) -> str:
-        """
-        Get the remote file path for the tarball.
+        """Get the remote file path for the tarball.
 
         Returns:
             The remote file path, or None if the remote file path is not set
@@ -62,8 +59,7 @@ class FileSync(ABC):
         return self._remote_file_path
 
     def create_diff_tarball_bytes(self) -> Optional[bytes]:
-        """
-        Create a tarball of the changed files in the Git repository.
+        """Create a tarball of the changed files in the Git repository.
 
         Returns:
             The tarball as bytes, or None if no changed files are found
@@ -136,8 +132,7 @@ class FileSync(ABC):
         return bb.getvalue()
 
     def create_and_upload_tarball(self) -> str:
-        """
-        Create a tarball of the changed files in the Git repository and upload it to the remote storage.
+        """Create a tarball of the changed files in the Git repository and upload it to the remote storage.
 
         Returns:
             The remote file path, or None if the remote file path is not set
@@ -161,8 +156,7 @@ class DefaultFileSync(FileSync):
         self._docker_image = docker_image
 
     def get_git_sha(self) -> Optional[str]:
-        """
-        Get the Git SHA from the Docker image.
+        """Get the Git SHA from the Docker image.
 
         If the Git SHA is not found in the Docker image labels or environment variables,
         returns None instead of raising an error. This allows file sync to work even
@@ -221,8 +215,7 @@ class DefaultFileSync(FileSync):
             return None
 
     def upload_tarball(self, local_path: str, remote_path: str):
-        """
-        Upload tarball to storage using fsspec.
+        """Upload tarball to storage using fsspec.
 
         Args:
             local_path: Local path to the tarball file

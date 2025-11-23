@@ -1,5 +1,4 @@
-"""
-Chronon Integration Tasks for Uniflow Pipeline
+"""Chronon Integration Tasks for Uniflow Pipeline
 End-to-end Chronon data preparation with local Spark
 """
 
@@ -54,8 +53,7 @@ except ModuleNotFoundError:
 
 
 def _setup_chronon_environment():
-    """
-    Set up Chronon environment with JAR and directories (integrated into SparkTask)
+    """Set up Chronon environment with JAR and directories (integrated into SparkTask)
     """
     print("🔧 Setting up Chronon environment...")
 
@@ -125,10 +123,8 @@ def compute_chronon_features_with_spark(
     books_dv: DatasetVariable,
     reviews_dv: DatasetVariable,
 ) -> tuple:
+    """REAL Chronon feature computation with integrated compilation and dataset return
     """
-    REAL Chronon feature computation with integrated compilation and dataset return
-    """
-
     # Step 1: Setup Chronon environment (integrated)
     jar_path = _setup_chronon_environment()
 

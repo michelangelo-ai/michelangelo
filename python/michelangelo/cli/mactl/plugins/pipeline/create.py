@@ -34,8 +34,7 @@ def get_pipeline_config_and_tar(
     pipeline: str,
     yaml_dict: dict = None,
 ) -> tuple[Struct, str, str]:
-    """
-    Run pipeline registration via subprocess to get uniflow artifacts.
+    """Run pipeline registration via subprocess to get uniflow artifacts.
 
     Executes registration in the user's Python environment to obtain:
     1) uniflow tarball path from "uniflow_tar_path.txt"
@@ -157,8 +156,7 @@ def get_pipeline_config_and_tar(
 def convert_crd_metadata_pipeline_create(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """
-    Convert CRD metadata for pipeline create crd.
+    """Convert CRD metadata for pipeline create crd.
     Integrates pipeline registration to get uniflow artifacts.
     """
     _LOG.info("Convert CRD metadata for class %r", crd_class)
@@ -212,10 +210,8 @@ def convert_crd_metadata_pipeline_create(
 def handle_workflow_inputs_retrieval(
     repo_root: Path, config_file_relative_path: str, project: str, pipeline: str
 ) -> tuple[dict, str, str]:
+    """Handle workflow inputs retrieval from subprocess registration.
     """
-    Handle workflow inputs retrieval from subprocess registration.
-    """
-
     workflow_inputs = None
     uniflow_tar_path = ""
     workflow_function_name = ""
@@ -273,8 +269,7 @@ def populate_pipeline_spec_with_workflow_inputs(
     uniflow_tar_path: str,
     workflow_function_name: str,
 ) -> dict:
-    """
-    Populate pipeline spec with workflow inputs.
+    """Populate pipeline spec with workflow inputs.
     """
     res["spec"] = deepcopy(yaml_dict["spec"])
     res["spec"]["commit"] = {

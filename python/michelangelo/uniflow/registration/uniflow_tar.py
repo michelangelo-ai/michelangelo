@@ -1,5 +1,4 @@
-"""
-Michelangelo-specific wrapper for uniflow tar building with S3 defaults.
+"""Michelangelo-specific wrapper for uniflow tar building with S3 defaults.
 
 This module provides backward compatibility for Michelangelo internal usage
 while delegating to the storage-agnostic implementation in uniflow_tar_impl.py.
@@ -24,8 +23,7 @@ _DEFAULT_S3_PATH = "s3://default/uniflow"
 
 
 class UniflowTarBuilder:
-    """
-    Michelangelo-specific UniflowTarBuilder with S3 defaults.
+    """Michelangelo-specific UniflowTarBuilder with S3 defaults.
 
     This class maintains compatibility with existing usage patterns
     while delegating to the storage-agnostic UniflowTarBuilderImpl.
@@ -41,8 +39,7 @@ class UniflowTarBuilder:
         storage_base_url: Optional[str] = None,
         output_filename: Optional[str] = None,
     ):
-        """
-        Initialize the Michelangelo Uniflow tar builder.
+        """Initialize the Michelangelo Uniflow tar builder.
 
         Args:
             project_name: Name of the project
@@ -104,8 +101,7 @@ def prepare_uniflow_tar(
     storage_base_url: Optional[str] = None,
     output_filename: Optional[str] = None,
 ):
-    """
-    Prepare and upload a Uniflow tarball for Michelangelo pipeline registration.
+    """Prepare and upload a Uniflow tarball for Michelangelo pipeline registration.
 
     This function builds a Uniflow package, uploads it to storage, and writes
     the storage path to a file for mactl consumption.

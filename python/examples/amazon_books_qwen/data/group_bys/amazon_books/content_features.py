@@ -1,5 +1,4 @@
-"""
-Content-based features for Amazon Books recommendation system
+"""Content-based features for Amazon Books recommendation system
 Computes features based on book content and metadata for enhanced recommendations
 """
 

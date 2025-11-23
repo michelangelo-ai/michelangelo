@@ -169,8 +169,7 @@ def train(
         cpu_per_worker: int,
         trainer_cpu: Optional[int] = None,
     ) -> ScalingConfig:
-        """
-        Creates a ScalingConfig object for a Ray trainer, optimized to utilize the maximum available resources of the cluster.
+        """Creates a ScalingConfig object for a Ray trainer, optimized to utilize the maximum available resources of the cluster.
         Dynamically calculates the optimal number of workers based on the current Ray cluster's resources.
         The function assumes that if the cluster has GPUs, each worker should use one GPU. If no GPUs are available,
         workers are configured to run without GPU resources.
@@ -186,7 +185,6 @@ def train(
         Raises:
             ValueError: If the cluster does not have sufficient CPU resources to meet the minimum requirements for the trainer and at least one worker.
         """
-
         if trainer_cpu is None:
             trainer_resources = None
             trainer_cpu = 1  # Reserve 1 CPU for trainer not letting workers to accupy all available CPUs.

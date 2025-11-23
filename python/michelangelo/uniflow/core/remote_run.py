@@ -321,8 +321,7 @@ class RemoteRunTemporal:
 
 
 def _subprocess_run(args: list[str]) -> str:
-    """
-    Executes a subprocess command, prints stdout and stderr, and returns the stdout as text string.
+    """Executes a subprocess command, prints stdout and stderr, and returns the stdout as text string.
 
     Args:
         args: Command to execute.

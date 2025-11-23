@@ -26,8 +26,7 @@ _LOG = getLogger(__name__)
 
 
 def apply_plugins(crd: CRD, channel: Channel):
-    """
-    Apply plugin entity function signatures to the CRD.
+    """Apply plugin entity function signatures to the CRD.
     It adds the necessary function signatures and methods for user commands
     """
     _LOG.info("Applying plugin entity to crd: %r", crd)
@@ -46,8 +45,7 @@ def apply_plugins(crd: CRD, channel: Channel):
 def apply_plugin_command(
     crd: CRD, target_command: str, crds: dict[str, CRD], channel: Channel
 ):
-    """
-    Apply specific target command plugins to the crd.
+    """Apply specific target command plugins to the crd.
     """
     _LOG.info("Applying plugins to crd: %r / %r", crd, target_command)
     _LOG.debug("Available CRDs: %r", crds)
