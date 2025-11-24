@@ -283,7 +283,6 @@ func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, r
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		ModelName:       resource.Name,
-		BackendType:     resource.Spec.BackendType,
 	})
 	if err != nil {
 		condition.Status = apipb.CONDITION_STATUS_FALSE

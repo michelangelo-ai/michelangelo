@@ -91,7 +91,6 @@ func (b *tritonBackend) CreateInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.modelConfigMapProvider.CreateModelConfigMap(ctx, configmap.CreateModelConfigMapRequest{
 		InferenceServer: request.InferenceServer.Name,
 		Namespace:       request.Namespace,
-		BackendType:     request.BackendType,
 		ModelConfigs:    []configmap.ModelConfigEntry{}, // Empty initially
 	}); err != nil {
 		logger.Error("failed to create ConfigMap",

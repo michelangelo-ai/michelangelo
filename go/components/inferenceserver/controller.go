@@ -287,7 +287,6 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger *zap.Logger, inf
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
 				ModelName:       inferenceServer.Name, // Use server name as model name for now
-				BackendType:     inferenceServer.Spec.BackendType,
 			})
 			if proxyErr != nil {
 				r.logger.Error("Failed to configure proxy", zap.Error(proxyErr))

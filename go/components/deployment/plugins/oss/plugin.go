@@ -131,10 +131,7 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	}
 
 	// If we have no conditions, start rollout process
-	// TODO(GHOSH): CHECK THIS
 	if len(deployment.Status.Conditions) == 0 {
-		// return v2pb.DEPLOYMENT_STAGE_VALIDATION
-		fmt.Printf("DEBUG: ParseStage: No conditions, would have started from validation\n")
 		return currentStage
 	}
 

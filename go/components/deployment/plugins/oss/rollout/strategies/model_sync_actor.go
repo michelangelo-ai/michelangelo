@@ -112,8 +112,15 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			zap.String("inference_server", inferenceServerName))
 
 		// Update deployment model in ConfigMap
-		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "candidate"); err != nil {
-			a.logger.Error("Failed to update deployment via ConfigMapProvider (UCS cache pattern)", zap.Error(err))
+		if err := a.modelConfigMapProvider.AddModelToConfigMap(ctx, configmap.AddModelToConfigMapRequest{
+			InferenceServer: inferenceServerName,
+			Namespace:       deployment.Namespace,
+			ModelConfig: configmap.ModelConfigEntry{
+				Name:   modelName,
+				S3Path: modelName,
+			},
+		}); err != nil {
+			a.logger.Error("Failed to update deployment via ConfigMapProvider", zap.Error(err))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
@@ -128,8 +135,6 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			zap.String("roleType", "candidate"))
 	}
 
-	// TODO(GHOSH): probably need to return unknown so that the condition is only true when the model is truely ready and loaded in triton
-	// (DONE, CHECK)
 	// Return unknown so that the condition is only true when the model is truely ready and loaded in triton
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_UNKNOWN, Reason: "ModelSyncPending", Message: "Model sync is in progress"}, nil
 }

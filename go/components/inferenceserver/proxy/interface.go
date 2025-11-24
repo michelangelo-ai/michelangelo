@@ -4,8 +4,6 @@ import (
 	"context"
 
 	"go.uber.org/zap"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Proxy Management Types
@@ -14,7 +12,6 @@ type ConfigureProxyRequest struct {
 	Namespace       string
 	ModelName       string
 	DeploymentName  string
-	BackendType     v2pb.BackendType
 }
 
 // AddDeploymentRouteRequest contains information needed to add a deployment-specific route
@@ -23,7 +20,6 @@ type AddDeploymentRouteRequest struct {
 	InferenceServer string
 	Namespace       string
 	DeploymentName  string
-	BackendType     v2pb.BackendType
 }
 
 // GetProxyStatusRequest contains information needed to get the proxy status

@@ -109,25 +109,31 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 	// Remove old model from ConfigMap
-	if err := common.RemoveModelFromConfig(ctx, a.Logger, a.ModelConfigMapProvider, inferenceServerName, resource.Namespace, currentModel); err != nil {
+	if err := a.ModelConfigMapProvider.RemoveModelFromConfigMap(ctx, configmap.RemoveModelFromConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       resource.Namespace,
+		ModelName:       currentModel,
+	}); err != nil {
 		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ConfigMapRemoveFailed",
-			Message: fmt.Sprintf("Failed to remove old model %s from ConfigMap: %v", currentModel, err),
-		}, nil
+		// Don't fail entire deployment if remove from ConfigMap fails
 	}
 
-	if err := common.UpdateDeploymentModel(ctx, a.Logger, a.ModelConfigMapProvider, inferenceServerName, resource.Namespace, resource.Name, desiredModel, "current"); err != nil {
-		a.Logger.Error("Failed to add new model to ConfigMap", zap.String("model", desiredModel), zap.Error(err))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ConfigMapAddFailed",
-			Message: fmt.Sprintf("Failed to add new model %s to ConfigMap: %v", desiredModel, err),
-		}, nil
-	}
+	// if err := a.ModelConfigMapProvider.AddModelToConfigMap(ctx, configmap.AddModelToConfigMapRequest{
+	// 	InferenceServer: inferenceServerName,
+	// 	Namespace:       resource.Namespace,
+	// 	ModelConfig: configmap.ModelConfigEntry{
+	// 		Name:   desiredModel,
+	// 		S3Path: desiredModel,
+	// 	},
+	// }); err != nil {
+	// 	a.Logger.Error("Failed to add new model to ConfigMap", zap.String("model", desiredModel), zap.Error(err))
+	// 	return &apipb.Condition{
+	// 		Type:    a.GetType(),
+	// 		Status:  apipb.CONDITION_STATUS_FALSE,
+	// 		Reason:  "ConfigMapAddFailed",
+	// 		Message: fmt.Sprintf("Failed to add new model %s to ConfigMap: %v", desiredModel, err),
+	// 	}, nil
+	// }
 
 	// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
 	a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))

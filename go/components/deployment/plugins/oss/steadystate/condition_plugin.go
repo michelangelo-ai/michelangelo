@@ -125,7 +125,6 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 				return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: "Inference server is not healthy"}, nil
 			}
 
-			// TODO(GHOSH): confirm this is truely the case.
 			// Check if the desired model is ready in Triton
 			modelStatusRequest := gateways.CheckModelStatusRequest{
 				ModelName:       resource.Spec.DesiredRevision.Name,

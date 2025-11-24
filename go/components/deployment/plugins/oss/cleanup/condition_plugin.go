@@ -5,6 +5,9 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
@@ -16,6 +19,12 @@ import (
 )
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
+
+var httpRouteGVR = schema.GroupVersionKind{
+	Group:   "gateway.networking.k8s.io",
+	Version: "v1",
+	Kind:    "HTTPRoute",
+}
 
 type conditionPlugin struct {
 	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
@@ -74,29 +83,47 @@ func (a *CleanupActor) GetType() string {
 	return common.ActorTypeCleanup
 }
 
-func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if cleanup is needed
 	// check if model still exists in ConfigMap
-	if exists, err := common.ModelExistsInConfig(
+	if exists, err := modelExistsInConfig(
 		ctx,
-		a.logger,
 		a.modelConfigMapProvider,
-		resource.Spec.GetInferenceServer().Name,
-		resource.Namespace,
-		resource.Status.CurrentRevision.Name,
+		deployment.Spec.GetInferenceServer().Name,
+		deployment.Namespace,
+		deployment.Status.CurrentRevision.Name,
 	); err != nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
 			Reason:  "UnableToCheckModelInConfigMap",
-			Message: fmt.Sprintf("Unable to check if model %s exists in ConfigMap: %v", resource.Status.CurrentRevision.Name, err),
+			Message: fmt.Sprintf("Unable to check if model %s exists in ConfigMap: %v", deployment.Status.CurrentRevision.Name, err),
 		}, nil
 	} else if exists {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
 			Reason:  "ModelStillExistsInConfigMap",
-			Message: fmt.Sprintf("Model %s still exists in ConfigMap", resource.Status.CurrentRevision.Name),
+			Message: fmt.Sprintf("Model %s still exists in ConfigMap", deployment.Status.CurrentRevision.Name),
+		}, nil
+	}
+
+	// Check if HTTPRoute already exists
+	var existingRoute unstructured.Unstructured
+	existingRoute.SetGroupVersionKind(httpRouteGVR)
+
+	// TODO(GHOSH): check if htttproute still exists for the inference server
+	//(DONE, CHECK)
+	err := a.client.Get(ctx, client.ObjectKey{
+		Name:      fmt.Sprintf("%s-httproute", deployment.Name),
+		Namespace: deployment.Namespace,
+	}, &existingRoute)
+	if err == nil && existingRoute.GetName() == fmt.Sprintf("%s-httproute", deployment.Name) {
+		return &apipb.Condition{
+			Type:    a.GetType(),
+			Status:  apipb.CONDITION_STATUS_FALSE,
+			Reason:  "HTTPRouteStillExists",
+			Message: fmt.Sprintf("Cleanup required: HTTPRoute %s still exists: %v", fmt.Sprintf("%s-httproute", deployment.Name), err),
 		}, nil
 	}
 
@@ -106,8 +133,6 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, 
 		Reason:  "CleanupCompleted",
 		Message: "Cleanup not required",
 	}, nil
-
-	// TODO(GHOSH): check if htttproute still exists for the inference server
 }
 
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
@@ -137,7 +162,11 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	a.logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 	// Remove old model from ConfigMap
-	if err := common.RemoveModelFromConfig(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, resource.Namespace, currentModel); err != nil {
+	if err := a.modelConfigMapProvider.RemoveModelFromConfigMap(ctx, configmap.RemoveModelFromConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       resource.Namespace,
+		ModelName:       currentModel,
+	}); err != nil {
 		a.logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -179,6 +208,25 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	}
 
 	// TODO(GHOSH): Cleanup httproutes
+	//(DONE, CHECK)
+	httpRoute := &unstructured.Unstructured{}
+	httpRoute.SetGroupVersionKind(httpRouteGVR)
+	httpRoute.SetName(fmt.Sprintf("%s-httproute", resource.Name))
+	httpRoute.SetNamespace(resource.Namespace)
+	fmt.Printf("DEBUG:Cleaning up httproute %+v\n", httpRoute)
+	if err := a.client.Delete(ctx, httpRoute); err != nil {
+		a.logger.Error("Failed to delete HTTPRoute", zap.Error(err))
+		if errors.IsNotFound(err) {
+			a.logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", fmt.Sprintf("%s-httproute", resource.Name)))
+		} else {
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "HTTPRouteCleanupFailed",
+				Message: fmt.Sprintf("Failed to delete HTTPRoute %s: %v", fmt.Sprintf("%s-httproute", resource.Name), err),
+			}, nil
+		}
+	}
 
 	a.logger.Info("Model cleanup completed successfully", zap.String("current_model", currentModel))
 
@@ -192,4 +240,21 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		Reason:  "CleanupCompleted",
 		Message: "Cleanup completed successfully",
 	}, nil
+}
+
+func modelExistsInConfig(ctx context.Context, provider configmap.ModelConfigMapProvider, inferenceServerName, namespace, modelName string) (bool, error) {
+	currentConfigs, err := provider.GetModelsFromConfigMap(ctx, configmap.GetModelConfigMapRequest{
+		InferenceServer: inferenceServerName,
+		Namespace:       namespace,
+	})
+	if err != nil {
+		return false, fmt.Errorf("failed to get current model config: %w", err)
+	}
+
+	for _, config := range currentConfigs {
+		if config.Name == modelName {
+			return true, nil
+		}
+	}
+	return false, nil
 }

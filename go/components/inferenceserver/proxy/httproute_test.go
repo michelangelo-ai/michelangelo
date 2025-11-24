@@ -12,8 +12,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes/scheme"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 func TestConfigureProxy(t *testing.T) {
@@ -31,7 +29,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "new-model",
 				DeploymentName:  "new-deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: nil,
 			expectError:       true,
@@ -53,7 +50,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "updated-model",
 				DeploymentName:  "test-deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/test-deployment/production", "/v2/models/old-model"),
 			expectError:       false,
@@ -85,7 +81,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "prod-namespace",
 				ModelName:       "updated-model",
 				DeploymentName:  "deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: createHTTPRouteWithProductionRoute("prod-server-httproute", "prod-namespace", "/prod-server/deployment/production", "/v2/models/old-model"),
 			expectError:       false,
@@ -115,7 +110,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "model",
 				DeploymentName:  "test-deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: createHTTPRoute("test-server-httproute", "default", "/different-path"),
 			expectError:       true,
@@ -131,7 +125,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "existing-model",
 				DeploymentName:  "test-deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/test-deployment/production", "/v2/models/existing-model"),
 			expectError:       false,
@@ -146,7 +139,6 @@ func TestConfigureProxy(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "model",
 				DeploymentName:  "test-deployment",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			existingHTTPRoute: &unstructured.Unstructured{
 				Object: map[string]interface{}{
@@ -293,7 +285,6 @@ func TestAddDeploymentRoute(t *testing.T) {
 				Namespace:       "default",
 				DeploymentName:  "new-deployment",
 				ModelName:       "new-model",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			httpRoute:   createHTTPRoute("test-server-httproute", "default", "/test-server"),
 			expectError: false,
@@ -330,7 +321,6 @@ func TestAddDeploymentRoute(t *testing.T) {
 				Namespace:       "default",
 				DeploymentName:  "existing-deployment",
 				ModelName:       "updated-model",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			httpRoute:   createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/existing-deployment", "/v2/models/old-model"),
 			expectError: false,
@@ -360,7 +350,6 @@ func TestAddDeploymentRoute(t *testing.T) {
 				Namespace:       "default",
 				DeploymentName:  "deployment",
 				ModelName:       "model",
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			},
 			httpRoute:   nil,
 			expectError: true,

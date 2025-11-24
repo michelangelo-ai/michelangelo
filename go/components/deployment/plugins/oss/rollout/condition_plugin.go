@@ -236,7 +236,8 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.D
 	// For OSS, assume assets are always available if the model name is valid
 	// In a real implementation, this would check MinIO/S3 for model artifacts
 	// TODO(GHOSH): update this to check if the model is available in the storage
-	// THIS needs a storage interface to be implemented. Maybe this is a different task.
+	// DO LATER
+
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
@@ -261,6 +262,7 @@ func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployme
 		// 4. Ensure model is ready for inference server deployment
 
 		// TODO(GHOSH): download the model from the storage and prepare the assets and do the necessary validations
+		// DO LATER
 
 		a.logger.Info("Asset preparation completed", zap.String("model", modelName))
 	}
@@ -374,7 +376,6 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 				Namespace:       deployment.Namespace,
 				ModelName:       modelName,
 				DeploymentName:  deployment.Name,
-				BackendType:     v2pb.BACKEND_TYPE_TRITON,
 			}
 
 			if err := a.proxyProvider.AddDeploymentRoute(ctx, a.logger, proxyConfigRequest); err != nil {
@@ -395,16 +396,6 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 		// NOW we can safely update CurrentRevision since traffic has been switched
 		deployment.Status.CurrentRevision = deployment.Spec.DesiredRevision
 		a.logger.Info("CurrentRevision updated after successful traffic switch", zap.String("model", modelName))
-
-		// Promote candidate model to current (this automatically triggers cleanup of unused models)
-		a.logger.Info("Promoting candidate model to current and cleaning up unused models", zap.String("newModel", modelName))
-		if err := common.UpdateDeploymentModel(ctx, a.logger, a.modelConfigMapProvider, inferenceServerName, deployment.Namespace, deployment.Name, modelName, "current"); err != nil {
-			a.logger.Error("Failed to promote model to current via ConfigMapProvider", zap.Error(err))
-			// Don't fail the whole rollout completion due to cleanup failure
-			// but log the error for investigation
-		} else {
-			a.logger.Info("Successfully promoted candidate to current and cleaned up unused models", zap.String("currentModel", modelName))
-		}
 
 		// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO ROLLOUT_COMPLETE HERE?
 		// OR SHOULD WE LET PARSESTAGE HANDLE THIS?

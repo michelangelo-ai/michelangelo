@@ -84,20 +84,20 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, resource *v2pb.Deplo
 	}, nil
 }
 
-func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", resource.Name))
+func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
-	if resource.Spec.GetInferenceServer() == nil {
+	if deployment.Spec.GetInferenceServer() == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
 			Reason:  "MissingInferenceServer",
-			Message: fmt.Sprintf("inference server not specified for deployment %s", resource.Name),
+			Message: fmt.Sprintf("inference server not specified for deployment %s", deployment.Name),
 		}, nil
 	}
 
-	deploymentRouteName := fmt.Sprintf("%s-httproute", resource.Name)
-	inferenceServerName := resource.Spec.GetInferenceServer().Name
+	deploymentRouteName := fmt.Sprintf("%s-httproute", deployment.Name)
+	inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
 	// Create HTTPRoute as unstructured object following existing pattern
 	httpRoute := &unstructured.Unstructured{
@@ -106,15 +106,15 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 			"kind":       "HTTPRoute",
 			"metadata": map[string]interface{}{
 				"name":      deploymentRouteName,
-				"namespace": resource.Namespace,
+				"namespace": deployment.Namespace,
 				"labels": map[string]interface{}{
 					"app.kubernetes.io/name":      "michelangelo-deployment",
 					"app.kubernetes.io/component": "traffic-routing",
-					"app.kubernetes.io/instance":  resource.Name,
-					"michelangelo.ai/deployment":  resource.Name,
+					"app.kubernetes.io/instance":  deployment.Name,
+					"michelangelo.ai/deployment":  deployment.Name,
 				},
 				"annotations": map[string]interface{}{
-					"michelangelo.ai/deployment":       resource.Name,
+					"michelangelo.ai/deployment":       deployment.Name,
 					"michelangelo.ai/inference-server": inferenceServerName,
 				},
 			},
@@ -131,7 +131,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 							map[string]interface{}{
 								"path": map[string]interface{}{
 									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name),
+									"value": fmt.Sprintf("/%s/%s", inferenceServerName, deployment.Name),
 								},
 							},
 						},
@@ -168,7 +168,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 
 	err := a.client.Get(ctx, client.ObjectKey{
 		Name:      deploymentRouteName,
-		Namespace: resource.Namespace,
+		Namespace: deployment.Namespace,
 	}, &existingRoute)
 
 	if err != nil {
@@ -183,8 +183,8 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 		}
 		a.logger.Info("Created HTTPRoute for deployment",
 			zap.String("httproute", deploymentRouteName),
-			zap.String("deployment", resource.Name),
-			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name)))
+			zap.String("deployment", deployment.Name),
+			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, deployment.Name)))
 	} else {
 		// Update existing HTTPRoute spec
 		existingRoute.Object["spec"] = httpRoute.Object["spec"]
@@ -198,8 +198,8 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, resource *v2pb.Deployment
 		}
 		a.logger.Info("Updated HTTPRoute for deployment",
 			zap.String("httproute", deploymentRouteName),
-			zap.String("deployment", resource.Name),
-			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, resource.Name)),
+			zap.String("deployment", deployment.Name),
+			zap.String("path", fmt.Sprintf("/%s/%s", inferenceServerName, deployment.Name)),
 		)
 	}
 

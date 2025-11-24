@@ -286,6 +286,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 			}
 			fmt.Printf("DEBUG: Setting conditions to nil for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 			deployment.Status.Conditions = nil
+			fmt.Printf("DEBUG: UPDATED CONDITIONS FOR DEPLOYMENT %+v \n", deployment.Name)
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
 				fmt.Printf("DEBUG: Populating message for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 				runtimeCtx := plugins.RequestContext{
@@ -304,6 +305,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 	metrics.getStateMetrics.count.Inc(1)
 	observability := r.getObservability(log, deployment.Namespace)
 	status, getStateErr := plugin.GetState(ctx, observability, deployment)
+	fmt.Printf("DEBUG: GetState returned status=%v for deployment %s during stage %s\n", status, deployment.Name, deployment.Status.Stage)
 	if getStateErr != nil {
 		fmt.Printf("DEBUG: Failed to execute monitoring step for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
 		metrics.getStateMetrics.errorCount.Inc(1)

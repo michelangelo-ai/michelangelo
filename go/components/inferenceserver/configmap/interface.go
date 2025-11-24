@@ -2,8 +2,6 @@ package configmap
 
 import (
 	"context"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ModelConfigEntry represents a model configuration entry
@@ -16,20 +14,23 @@ type ModelConfigEntry struct {
 type CreateModelConfigMapRequest struct {
 	InferenceServer string
 	Namespace       string
-	BackendType     v2pb.BackendType
 	ModelConfigs    []ModelConfigEntry
 	Labels          map[string]string
 	Annotations     map[string]string
 }
 
-// UpdateModelConfigMapRequest contains information needed to update a ModelConfigMap
-type UpdateModelConfigMapRequest struct {
+// AddModelToConfigMapRequest contains information needed to add a model to a ModelConfigMap
+type AddModelToConfigMapRequest struct {
 	InferenceServer string
 	Namespace       string
-	BackendType     v2pb.BackendType
-	ModelConfigs    []ModelConfigEntry
-	Labels          map[string]string
-	Annotations     map[string]string
+	ModelConfig     ModelConfigEntry
+}
+
+// RemoveModelFromConfigMapRequest contains information needed to remove a model from a ModelConfigMap
+type RemoveModelFromConfigMapRequest struct {
+	InferenceServer string
+	Namespace       string
+	ModelName       string
 }
 
 // GetModelConfigMapRequest contains information needed to get a ModelConfigMap
@@ -44,11 +45,13 @@ type DeleteModelConfigMapRequest struct {
 	Namespace       string
 }
 
-// ModelConfigMapProvider defines an interface for managing Kubernetes ConfigMaps
-// specifically for model configurations used in deployment and serving scenarios.
+// ModelConfigMapProvider is an interface for managing model configuraitons through ConfigMaps.
 type ModelConfigMapProvider interface {
 	CreateModelConfigMap(ctx context.Context, request CreateModelConfigMapRequest) error
-	UpdateModelConfigMap(ctx context.Context, request UpdateModelConfigMapRequest) error
-	GetModelConfigMap(ctx context.Context, request GetModelConfigMapRequest) ([]ModelConfigEntry, error)
+
+	GetModelsFromConfigMap(ctx context.Context, request GetModelConfigMapRequest) ([]ModelConfigEntry, error)
+	AddModelToConfigMap(ctx context.Context, request AddModelToConfigMapRequest) error
+	RemoveModelFromConfigMap(ctx context.Context, request RemoveModelFromConfigMapRequest) error
+
 	DeleteModelConfigMap(ctx context.Context, request DeleteModelConfigMapRequest) error
 }
