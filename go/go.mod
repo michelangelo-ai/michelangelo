@@ -43,6 +43,7 @@ require (
 	k8s.io/api v0.28.15
 	k8s.io/apiextensions-apiserver v0.28.15
 	k8s.io/apimachinery v0.28.15
+	k8s.io/apiserver v0.28.15
 	k8s.io/client-go v0.28.15
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4
 	sigs.k8s.io/controller-runtime v0.16.6
@@ -53,6 +54,7 @@ require (
 	github.com/BurntSushi/toml v1.2.1 // indirect
 	github.com/apache/thrift v0.16.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

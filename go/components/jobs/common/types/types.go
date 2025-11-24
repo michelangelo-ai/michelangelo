@@ -39,6 +39,8 @@ const (
 	SparkJob JobType = iota + 1
 	// RayJob is the job type for Ray jobs
 	RayJob
+	// RayCluster is the job type for Ray clusters
+	RayCluster
 )
 
 // SchedulableJobParams is the param to NewScheduledJob

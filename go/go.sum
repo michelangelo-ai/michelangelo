@@ -19,6 +19,8 @@ github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+github.com/blang/semver/v4 v4.0.0 h1:1PFHFE6yCCTv8C1TeyNNarDzntLi7wMI5i/pzqYIsAM=
+github.com/blang/semver/v4 v4.0.0/go.mod h1:IbckMUScFkM3pff0VJDNKRiT6TG/YpiHIM2yvyW5YoQ=
 github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b h1:AP/Y7sqYicnjGDfD5VcY4CIfh1hRXBUavxrvELjTiOE=
 github.com/bmizerany/perks v0.0.0-20141205001514-d9a9656a3a4b/go.mod h1:ac9efd0D1fsDb3EJvhqgXRbFx7bs2wqZ10HQPeU8U/Q=
 github.com/cactus/go-statsd-client/statsd v0.0.0-20200423205355-cb0885a1018c/go.mod h1:l/bIBLeOl9eX+wxJAzxS4TveKRtAqlyDpHjhkfO0MEI=
@@ -610,6 +612,8 @@ k8s.io/apiextensions-apiserver v0.28.15 h1:NPlscxcvT4EutwP6rHTrlEvBvUj8HUBlXvFfU
 k8s.io/apiextensions-apiserver v0.28.15/go.mod h1:JguNDFsusOJwhHTzZAW2oeQ+15ekGy1ubZX9XWcZn+k=
 k8s.io/apimachinery v0.28.15 h1:Jg15ZoCcAgnhSRKVS6tQyUZaX9c3i08bl2qAz8XE3bI=
 k8s.io/apimachinery v0.28.15/go.mod h1:zUG757HaKs6Dc3iGtKjzIpBfqTM4yiRsEe3/E7NX15o=
+k8s.io/apiserver v0.28.15 h1:i6cRWnWVtGL+1XCBBYilZ+dC/Yi8USpogVB4Sw2k+f4=
+k8s.io/apiserver v0.28.15/go.mod h1:aEe/SUzUWmXZAYUxSUvOyo0xXtisjU+D7numTbu2Sz4=
 k8s.io/client-go v0.28.15 h1:+g6Ub+i6tacV3tYJaoyK6bizpinPkamcEwsiKyHcIxc=
 k8s.io/client-go v0.28.15/go.mod h1:/4upIpTbhWQVSXKDqTznjcAegj2Bx73mW/i0aennJrY=
 k8s.io/component-base v0.28.15 h1:PRwUVO0iiKYjC9fYU2lCLlfjQffHcMv7D4ZhK9WWrKg=

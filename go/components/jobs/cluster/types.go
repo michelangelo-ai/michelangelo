@@ -1,3 +1,4 @@
+//go:generate mamockgen RegisteredClustersCache
 package cluster
 
 import (
