@@ -163,7 +163,7 @@ def download_kaggle_dataset(
                 break
 
             except Exception as e:
-                print(f"❌ Download attempt {attempt + 1} failed: {str(e)}")
+                print(f"❌ Download attempt {attempt + 1} failed: {e!s}")
                 if attempt < max_retries - 1:
                     print("🔄 Retrying download...")
                     # Clean up any partial downloads
