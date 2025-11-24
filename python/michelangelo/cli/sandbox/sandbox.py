@@ -671,7 +671,7 @@ def _create_jobs_cluster(cluster_name: str):
         "--servers",
         "1",
         "--agents",
-        "2",  # More worker nodes for Ray
+        "3",  # More worker nodes for Ray
         "--kubeconfig-switch-context=false",  # Don't switch kubectl context to this cluster
     ]
 
