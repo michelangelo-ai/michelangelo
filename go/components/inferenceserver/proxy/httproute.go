@@ -302,6 +302,7 @@ func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logge
 // addDeploymentRoute adds a deployment-specific route to the HTTPRoute
 func (h *httpRouteManager) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error {
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
+	fmt.Printf("DEBUG: Adding deployment route for %s/%s\n", request.InferenceServer, request.DeploymentName)
 	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
 	if err != nil {
 		logger.Error("failed to get HTTPRoute",

@@ -23,11 +23,6 @@ func GetRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 			logger:                 params.Logger,
 			modelConfigMapProvider: params.ModelConfigMapProvider,
 		},
-		&TrafficRoutingActor{
-			client:  params.Client,
-			gateway: params.Gateway,
-			logger:  params.Logger,
-		},
 		&ModelCleanupActor{
 			Client:                 params.Client,
 			Gateway:                params.Gateway,
