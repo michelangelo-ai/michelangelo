@@ -13,6 +13,7 @@ go_library(
         "//go/api:go_default_library",
         "//go/api/handler:go_default_library",
         "//go/api/utils:go_default_library",
+        "//go/base/env:go_default_library",
         "//go/components/controllerutil:go_default_library",
         "//go/components/jobs/client:go_default_library",
         "//go/components/jobs/common/constants:go_default_library",
@@ -25,7 +26,9 @@ go_library(
         "@io_k8s_apimachinery//pkg/util/wait:go_default_library",
         "@io_k8s_sigs_controller_runtime//:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/manager:go_default_library",
         "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ],
 )
 

@@ -35,7 +35,7 @@ type Reconciler struct {
 	log               logr.Logger
 	metrics           *metrics.ControllerMetrics
 
-	clusterClient *client.Client
+	clusterClient client.FederatedClient
 
 	// clusterDataMap is a mapping of ClusterName and the cluster specific details.
 	clusterDataMap *clusterMap
@@ -44,7 +44,7 @@ type Reconciler struct {
 // Params for controller constructor
 type Params struct {
 	fx.In
-	ClusterClient     *client.Client
+	ClusterClient     client.FederatedClient
 	Scope             tally.Scope
 	APIHandlerFactory apiHandler.Factory
 }
@@ -236,6 +236,7 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	clusterStatusRunnable := controllerutil.LeaderOnlyRunnable(r.periodicallyMonitorCluster)
 	mgr.Add(clusterStatusRunnable)
 
+	// Create a controller for the cluster resource
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.Cluster{}).
 		Complete(r)
@@ -303,8 +304,3 @@ func (r *Reconciler) updateClusterHealth(cluster *v2pb.Cluster) error {
 
 	return nil
 }
-
-const (
-	_sparkZonalClusterLabelKey   = "spark-zonal-cluster"
-	_sparkZonalClusterLabelValue = "true"
-)

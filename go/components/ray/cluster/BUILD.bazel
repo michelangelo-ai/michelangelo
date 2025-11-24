@@ -12,6 +12,7 @@ go_library(
     deps = [
         "//go/api/utils:go_default_library",
         "//go/base/env:go_default_library",
+        "//go/components/jobs/scheduler:go_default_library",
         "//proto/api/v2:go_default_library",
         "@com_github_go_logr_logr//:go_default_library",
         "@com_github_ray_project_kuberay_ray_operator//apis/ray/v1:go_default_library",
