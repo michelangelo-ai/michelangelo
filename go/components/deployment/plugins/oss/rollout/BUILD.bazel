@@ -2,7 +2,13 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
     name = "go_default_library",
-    srcs = ["condition_plugin.go"],
+    srcs = [
+        "asset_preparation.go",
+        "condition_plugin.go",
+        "resource_acquisition.go",
+        "rollout_completion.go",
+        "validation.go",
+    ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout",
     visibility = ["//visibility:public"],
     deps = [
