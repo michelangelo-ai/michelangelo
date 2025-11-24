@@ -13,7 +13,7 @@ __all__ = [
     "ImageSpec",
     "create_context",
     "star_plugin",
-    "task_context",
     "task",
+    "task_context",
     "workflow",
 ]

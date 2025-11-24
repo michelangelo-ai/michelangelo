@@ -35,7 +35,7 @@ def generate_folder(
     if not os.path.exists(folder_path):
         os.makedirs(folder_path)
 
-    for name in folder_structure:  # noqa: PLC0206
+    for name in folder_structure:
         content = folder_structure[name]
         sub_path = os.path.join(folder_path, name)
         if isinstance(content, dict):

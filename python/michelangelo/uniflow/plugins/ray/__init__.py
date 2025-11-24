@@ -3,6 +3,6 @@ from michelangelo.uniflow.plugins.ray.task import RayTask
 
 __all__ = [
     "UF_PLUGIN_RAY_USE_FSSPEC",
-    "RayTask",
     "RayDatasetIO",
+    "RayTask",
 ]

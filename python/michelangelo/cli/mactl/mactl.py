@@ -288,7 +288,7 @@ def main(channel: Channel):
 
     # Load config and set environment variables
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r") as f:
+        with open(CONFIG_FILE) as f:
             config = yaml_safe_load(f) or {}
         minio_config = config.get("minio", {})
         if not getenv("AWS_ACCESS_KEY_ID"):
