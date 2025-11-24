@@ -3,6 +3,7 @@ Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
 """
 
 import logging
+import os
 from ray.data import Dataset
 from ray.train import CheckpointConfig
 from ray.train.lightning import RayFSDPStrategy
@@ -89,13 +90,12 @@ def simple_train_gpt(
     log.info("run_config: %r", run_config)
 
     # Setup MLflow logger for Lightning training
-    mlflow.set_tracking_uri("http://localhost:5001")
     experiment_name = "gpt-finetune-experiment"
 
     # Create MLflow logger that will handle run creation automatically
     mlflow_logger = MLFlowLogger(
         experiment_name=experiment_name,
-        tracking_uri="http://localhost:5001",
+        tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"),
         run_name=f"training-{model_name}",
         tags={
             "model_name": model_name,
