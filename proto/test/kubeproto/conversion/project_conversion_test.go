@@ -7,7 +7,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	v2alpha1 "github.com/michelangelo-ai/michelangelo/proto/api/v2alpha1"
+	v2alpha1 "github.com/michelangelo-ai/michelangelo/proto/test/api/v2alpha1"
 )
 
 // ============================================================================

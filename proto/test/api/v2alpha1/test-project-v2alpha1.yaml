@@ -1,0 +1,24 @@
+apiVersion: michelangelo.api/v2alpha1
+kind: Project
+metadata:
+  annotations:
+    test-annotation: "v2alpha1-test"
+    michelangelo/worker_queue: "default"
+  labels:
+    michelangelo/ml-flavor-coreml: "true"
+  name: ma-dev-test-v2alpha1
+  namespace: ma-dev-test-v2alpha1
+spec:
+  # DEMO CHANGE 2: v2alpha1 uses projectDescription instead of description
+  projectDescription: Michelangelo v2alpha1 project for testing multi-version conversion
+  owner:
+    ownerGroups:
+      - michelangelo
+    owners:
+      - frank.chen.cst
+    owningTeam: d6190288-07ae-445b-91e6-2cfd6894fd0c
+  rootDir: "python/michelangelo/"
+  gitRepo: git@github.com:michelangelo-ai/michelangelo.git
+  tier: 3
+  # DEMO CHANGE 3: v2alpha1-only field (spoke-specific, will be lost in hub)
+  legacyAlphaConfig: "This is a v2alpha1-specific configuration field"
