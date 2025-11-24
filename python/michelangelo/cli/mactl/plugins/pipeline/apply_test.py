@@ -1,5 +1,4 @@
-"""
-Unit tests for pipeline apply plugin.
+"""Unit tests for pipeline apply plugin.
 
 Tests the convert_crd_metadata_pipeline_apply function.
 """

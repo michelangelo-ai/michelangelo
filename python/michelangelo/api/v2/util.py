@@ -3,8 +3,7 @@ from datetime import datetime, timezone
 
 
 def generate_random_name(prefix):
-    """
-    Generate object name following k8s and Michelangelo api conventions
+    """Generate object name following k8s and Michelangelo api conventions
     """
     if len(prefix) == 0:
         raise RuntimeError("Prefix cannot be empty.")

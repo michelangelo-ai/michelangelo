@@ -1,5 +1,4 @@
-"""
-CRD class and its member method implementations
+"""CRD class and its member method implementations
 """
 
 from argparse import ArgumentParser
@@ -48,8 +47,7 @@ def bind_signature(signature):
 def convert_crd_metadata(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """
-    Convert CRD metadata for a given class.
+    """Convert CRD metadata for a given class.
 
     Since Michelangelo yaml format is putting `apiVersion` and `kind`
     at the top level, we need to move them inside of the `typemeta` field.
@@ -70,8 +68,7 @@ def convert_crd_metadata(
 
 
 def deep_update(d: MutableMapping, u: MutableMapping):
-    """
-    Update dict-like object in deep way.
+    """Update dict-like object in deep way.
 
     ```py
     d1 = {'a': {'a1': 1, 'a2': 2}}
@@ -112,8 +109,7 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
 
 def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
-    """
-    Reads a YAML file and returns its content as a dictionary.
+    """Reads a YAML file and returns its content as a dictionary.
     """
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
     yaml_dict = yaml_to_dict(yaml_path_string)
@@ -135,8 +131,7 @@ def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, st
 
 
 def get_single_arg(arguments: dict, key: str) -> str:
-    """
-    Get a single argument from the arguments dictionary.
+    """Get a single argument from the arguments dictionary.
 
     Args:
         arguments: The arguments dictionary.
@@ -171,8 +166,7 @@ def read_yaml_to_crd_request(
     yaml_path_string: str,
     func_crd_metadata_converter: Callable,
 ) -> Message:
-    """
-    Reads a YAML file and converts it to a CRD request instance.
+    """Reads a YAML file and converts it to a CRD request instance.
     """
     yaml_path = Path(yaml_path_string).resolve()
     yaml_dict = yaml_to_dict(yaml_path_string)
@@ -187,8 +181,7 @@ def read_yaml_to_crd_request(
 
 
 def snake_to_camel(name: str) -> str:
-    """
-    snake_case → UpperCamelCase(PascalCase)
+    """snake_case → UpperCamelCase(PascalCase)
     ex) "my_function_name" → "MyFunctionName"
     """
     return "".join(word.capitalize() for word in name.split("_"))
@@ -196,8 +189,7 @@ def snake_to_camel(name: str) -> str:
 
 @dataclass
 class CrdMethodInfo:
-    """
-    Method information to run CRD member method with grpc reflection
+    """Method information to run CRD member method with grpc reflection
     """
 
     channel: Channel
@@ -208,8 +200,7 @@ class CrdMethodInfo:
 
 
 def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
-    """
-    Run CRD.method with grpc reflection with custom kwargs
+    """Run CRD.method with grpc reflection with custom kwargs
     (for input_class)
 
     Please make sure crd method input_class can be constructed
@@ -222,8 +213,7 @@ def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
 
 
 def crd_method_call(crd_method_info, request_input: Message) -> Message:
-    """
-    Call member method call of a CRD with grpc reflection
+    """Call member method call of a CRD with grpc reflection
     """
     _LOG.debug("CRD method info: %r", crd_method_info)
     _LOG.debug("Request input (%r): %r", type(request_input), request_input)
@@ -245,8 +235,7 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
 
 
 def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """
-    Default common CRD member method implementation for GET method.
+    """Default common CRD member method implementation for GET method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
@@ -266,8 +255,7 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
 
 
 def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """
-    Default common CRD member method implementation for LIST method.
+    """Default common CRD member method implementation for LIST method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
@@ -278,8 +266,7 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mes
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """
-    Default common CRD member method implementation for DELETE method.
+    """Default common CRD member method implementation for DELETE method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
@@ -293,8 +280,7 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """
-    Default common CRD member method implementation for APPLY method.
+    """Default common CRD member method implementation for APPLY method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
@@ -327,8 +313,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
 
 
 def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """
-    Default common CRD member method implementation for CREATE method.
+    """Default common CRD member method implementation for CREATE method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
@@ -346,8 +331,7 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
 
 
 class CRD:
-    """
-    Representation of each CRD with its service methods
+    """Representation of each CRD with its service methods
     """
 
     def __init__(self, name: str, full_name: str, metadata: list):
@@ -452,8 +436,7 @@ class CRD:
         return f"CRD(name={self.name}, full_name={self.full_name})"
 
     def configure_parser(self, action: str, parser: Optional[ArgumentParser]) -> None:
-        """
-        Configure argparse parser for action, if parse is set.
+        """Configure argparse parser for action, if parse is set.
         Detailed arguments would be defined by `arguments`.
 
         Args:
@@ -472,8 +455,7 @@ class CRD:
             parser.add_argument(*args, **kwargs)
 
     def _read_signatures(self, method_name: str) -> Signature:
-        """
-        Read function signatures for method name.
+        """Read function signatures for method name.
         """
         _LOG.debug("Prepare func signature for `%r` function", method_name)
         res = Signature(
@@ -490,8 +472,7 @@ class CRD:
     def _extract_method_info(
         self, channel: Channel, full_name: str, function_name: str
     ) -> tuple[str, type[Message], type[Message]]:
-        """
-        Extract method information and their input/output types
+        """Extract method information and their input/output types
         """
         assert isinstance(function_name, str), function_name
         assert function_name in ["Get", "Update", "Create", "List", "Delete"]
@@ -528,8 +509,7 @@ class CRD:
     def generate_delete(
         self, channel: Channel, parser: Optional[ArgumentParser] = None
     ):
-        """
-        Generate delete function of this class.
+        """Generate delete function of this class.
         """
         _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
@@ -547,8 +527,7 @@ class CRD:
         _LOG.debug("Generated DELETE injected well: %r", self.delete)
 
     def generate_get(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """
-        Generate get function of this class.
+        """Generate get function of this class.
         Optionally configure argparse parser with arguments.
 
         Args:
@@ -571,8 +550,7 @@ class CRD:
         _LOG.debug("Generated GET injected well: %r", self.get)
 
     def generate_apply(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """
-        Generate apply function of this class.
+        """Generate apply function of this class.
         """
         self.generate_get(channel)
 
@@ -592,8 +570,7 @@ class CRD:
         _LOG.debug("Generated APPLY injected well: %r", self.apply)
 
     def generate_create(self, channel: Channel):
-        """
-        Generate create function of this class.
+        """Generate create function of this class.
         """
         _LOG.info("Generate CREATE method for %r / %r", self.name, self.full_name)
 
@@ -613,8 +590,7 @@ class CRD:
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
     def generate_list(self, channel: Channel):
-        """
-        Generate list function of this class.
+        """Generate list function of this class.
         """
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
@@ -639,8 +615,7 @@ class CRD:
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
     ) -> Message:
-        """
-        Read a YAML file and update the original CRD request instance.
+        """Read a YAML file and update the original CRD request instance.
         """
         original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
@@ -666,8 +641,7 @@ class CRD:
 
 
 def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> None:
-    """
-    Utility function for injecting function signature
+    """Utility function for injecting function signature
     for plugin command
     """
     _LOG.debug(

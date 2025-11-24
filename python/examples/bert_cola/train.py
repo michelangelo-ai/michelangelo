@@ -1,5 +1,4 @@
-"""
-Training task for fine-tuning a BERT model on the CoLA dataset.
+"""Training task for fine-tuning a BERT model on the CoLA dataset.
 """
 
 import logging

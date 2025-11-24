@@ -1,5 +1,4 @@
-"""
-Utility functions for MaCTL subprocess management and environment detection.
+"""Utility functions for MaCTL subprocess management and environment detection.
 """
 
 import os
@@ -14,8 +13,7 @@ _logger = getLogger(__name__)
 
 
 def detect_user_python_interpreter() -> str:
-    """
-    Detect the user's Python interpreter from environment metadata.
+    """Detect the user's Python interpreter from environment metadata.
 
     This function attempts to find the appropriate Python interpreter
     for the user's project environment, following common patterns:
@@ -81,8 +79,7 @@ def detect_user_python_interpreter() -> str:
 
 
 def detect_poetry_python() -> Optional[str]:
-    """
-    Detect Python interpreter from Poetry environment.
+    """Detect Python interpreter from Poetry environment.
 
     Returns:
         Optional[str]: Path to Poetry's Python interpreter if found
@@ -115,8 +112,7 @@ def detect_poetry_python() -> Optional[str]:
 
 
 def detect_uv_python() -> Optional[str]:
-    """
-    Detect Python interpreter from UV environment.
+    """Detect Python interpreter from UV environment.
 
     Returns:
         Optional[str]: Path to UV's Python interpreter if found
@@ -157,8 +153,7 @@ def run_subprocess_registration(
     args: Optional[list] = None,
     kwargs: Optional[dict] = None,
 ) -> subprocess.CompletedProcess:
-    """
-    Execute registration in a subprocess using the user's Python environment.
+    """Execute registration in a subprocess using the user's Python environment.
 
     Args:
         project: Project name
@@ -238,8 +233,7 @@ def run_subprocess_registration(
 
 
 def read_subprocess_outputs(output_dir: str) -> Tuple[bool, str, Optional[str]]:
-    """
-    Read outputs from subprocess registration.
+    """Read outputs from subprocess registration.
 
     Args:
         output_dir: Directory containing output files

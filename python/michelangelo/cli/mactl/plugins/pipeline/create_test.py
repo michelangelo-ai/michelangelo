@@ -1,5 +1,4 @@
-"""
-Unit tests for pipeline create plugin.
+"""Unit tests for pipeline create plugin.
 
 Tests the convert_crd_metadata_pipeline_create and related functions.
 """

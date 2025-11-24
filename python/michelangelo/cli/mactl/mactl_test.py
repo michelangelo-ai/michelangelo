@@ -1,5 +1,4 @@
-"""
-Unit tests for mactl CLI functions.
+"""Unit tests for mactl CLI functions.
 """
 
 import os
@@ -15,14 +14,12 @@ from michelangelo.cli.mactl.mactl import (
 
 
 class ServiceClassCreationTest(TestCase):
-    """
-    Tests for create_serivce_classes function
+    """Tests for create_serivce_classes function
     """
 
     @patch("michelangelo.cli.mactl.mactl.CRD")
     def test_create_serivce_classes_with_various_service_lists(self, mock_crd_class):
-        """
-        Test `create_serivce_classes()` function with both v2 and v2beta1 service lists
+        """Test `create_serivce_classes()` function with both v2 and v2beta1 service lists
         """
         services = [
             "grpc.health.v1.Health",
@@ -74,8 +71,7 @@ class ServiceClassCreationTest(TestCase):
         self.assertEqual(mock_crd_class.call_count, 13)
 
     def test_create_serivce_classes_filters_out_non_service_entries(self):
-        """
-        Test that non-Service entries are filtered out correctly
+        """Test that non-Service entries are filtered out correctly
         """
         services = [
             "grpc.reflection.v1alpha.ServerReflection",  # Should be filtered out (not ending with Service)
@@ -97,8 +93,7 @@ class ServiceClassCreationTest(TestCase):
         self.assertEqual(mock_crd_class.call_count, 2)
 
     def test_create_serivce_classes_empty_list(self):
-        """
-        Test `create_serivce_classes()` function with empty service list
+        """Test `create_serivce_classes()` function with empty service list
         """
         services = []
 
@@ -110,8 +105,7 @@ class ServiceClassCreationTest(TestCase):
 
 
 class TLSConfigurationTest(TestCase):
-    """
-    Tests for TLS configuration functionality added to mactl
+    """Tests for TLS configuration functionality added to mactl
     """
 
     def setUp(self):
@@ -165,8 +159,7 @@ class TLSConfigurationTest(TestCase):
 
 
 class TLSConnectionTest(TestCase):
-    """
-    Tests for TLS connection functionality in main execution
+    """Tests for TLS connection functionality in main execution
     """
 
     @patch("michelangelo.cli.mactl.mactl.main")
@@ -342,8 +335,7 @@ class TLSConnectionTest(TestCase):
 
 
 class TLSErrorHandlingTest(TestCase):
-    """
-    Tests for TLS error handling scenarios
+    """Tests for TLS error handling scenarios
     """
 
     @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")

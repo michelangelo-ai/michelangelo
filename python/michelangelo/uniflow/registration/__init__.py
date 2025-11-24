@@ -1,5 +1,4 @@
-"""
-Michelangelo Uniflow Registration Module
+"""Michelangelo Uniflow Registration Module
 
 This module provides utilities for building, uploading, and registering
 Uniflow pipelines with Michelangelo pipeline services.

@@ -6,8 +6,7 @@ from typing import Callable
 
 
 class Dependencies:
-    """
-    A collection of dependencies is required to run a transpiled workflow function.
+    """A collection of dependencies is required to run a transpiled workflow function.
     These dependencies are gathered during the workflow transpilation process and are used to generate a tarball file that contains all the necessary code.
 
     There are three types of dependencies:
@@ -38,8 +37,7 @@ class Dependencies:
 
 @dataclasses.dataclass
 class TaskBinding:
-    """
-    TaskBinding is a dataclass that represents the connection between TaskConfig and its associated Starlark function, which orchestrates task execution.
+    """TaskBinding is a dataclass that represents the connection between TaskConfig and its associated Starlark function, which orchestrates task execution.
     It is utilized during the workflow function transpilation process to track dependencies and generate Starlark `load(...)` statements that import those
     dependencies.
 
@@ -54,8 +52,7 @@ class TaskBinding:
 
 
 class TaskConfig(ABC):
-    """
-    TaskConfig serves as the foundational class for all task configurations. Its subclasses define the following:
+    """TaskConfig serves as the foundational class for all task configurations. Its subclasses define the following:
 
     - Task configuration properties, which are represented as fields in a dataclass.
     - Pre-run and post-run hooks that are executed before and after the task function is executed.
@@ -64,12 +61,10 @@ class TaskConfig(ABC):
 
     @abstractmethod
     def get_binding(self) -> TaskBinding:
-        """
-        Returns the TaskBinding object for the TaskConfig, linking it with the Starlark function that drives
+        """Returns the TaskBinding object for the TaskConfig, linking it with the Starlark function that drives
         the task orchestration logic.
 
         Example:
-
             def get_binding(self) -> TaskBinding:
                 return TaskBinding(
                     star_file=Path(__file__).parent / "x_task.star",
@@ -94,8 +89,7 @@ class TaskConfig(ABC):
         raise NotImplementedError
 
     def to_keywords(self) -> list[ast.keyword]:
-        """
-        Generates a list of AST keyword nodes from the class properties that are not None.
+        """Generates a list of AST keyword nodes from the class properties that are not None.
         The returned AST keywords are used in constructing the Starlark function call.
         """
         assert dataclasses.is_dataclass(self)

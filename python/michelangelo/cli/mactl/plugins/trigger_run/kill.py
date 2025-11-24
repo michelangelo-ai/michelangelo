@@ -20,8 +20,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """
-    Add function signature for pipeline kill command.
+    """Add function signature for pipeline kill command.
     """
     inject_func_signature(
         crd,
@@ -74,8 +73,7 @@ def add_function_signature(crd: CRD) -> None:
 
 
 def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
-    """
-    Generate kill function for pipeline_run CRD.
+    """Generate kill function for pipeline_run CRD.
     """
     _LOG.info("Generating `pipeline_run kill` for: %s", crd)
 

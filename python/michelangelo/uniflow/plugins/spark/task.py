@@ -29,8 +29,7 @@ _config_binding = TaskBinding(
 
 @dataclass
 class SparkTask(TaskConfig):
-    """
-    This class encapsulates the configuration properties required to orchestrate a Spark task, including resource
+    """This class encapsulates the configuration properties required to orchestrate a Spark task, including resource
     specifications. It is designed to interface with a Starlark function that executes a Spark job according to these
     configurations.
 

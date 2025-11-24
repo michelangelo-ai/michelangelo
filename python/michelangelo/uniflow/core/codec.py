@@ -119,13 +119,12 @@ class EnumCodec(Codec):
 
 
 class TypeCodec(Codec):
-    """
-    JSON codec for Python types, such as classes and functions. JSON representation of the type is as follows:
+    """JSON codec for Python types, such as classes and functions. JSON representation of the type is as follows:
 
-        {
-            "path": "path.to.type",
-            "__codec__": "type"
-        }
+    {
+        "path": "path.to.type",
+        "__codec__": "type"
+    }
     """
 
     _ATTR_PATH: str = "path"

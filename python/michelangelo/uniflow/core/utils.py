@@ -67,8 +67,7 @@ def pydantic_dict(v: pydantic.BaseModel):
 
 
 class ArgparseEnvironAction(argparse.Action):
-    """
-    Custom argparse action to parse environment variables from command line arguments.
+    """Custom argparse action to parse environment variables from command line arguments.
 
     The action expects a list of strings, where each string can either be in the form 'ENV_VAR=value' or simply
     'ENV_VAR'. If the latter, it fetches the value of 'ENV_VAR' from the current environment variables.
@@ -92,12 +91,12 @@ class ArgparseEnvironAction(argparse.Action):
 
     @staticmethod
     def _parse_value(s: str):
-        """
-        Parses a single command line argument to extract the environment variable and its value.
+        """Parses a single command line argument to extract the environment variable and its value.
         Parameters:
             s: The command line argument. Expected format: "ENV_VAR=value" or just "ENV_VAR"
         Returns:
             tuple: A tuple containing the environment variable name and its value.
+
         Raises:
             KeyError: If the argument is not in the form 'ENV_VAR=value' and the environment variable is not found in os.environ.
         """
@@ -110,8 +109,7 @@ class ArgparseEnvironAction(argparse.Action):
 
 
 def encode_value_to_json(value, json_encoder: Optional[json.JSONEncoder] = None):
-    """
-    Encode a value to a json file.
+    """Encode a value to a json file.
 
     Parameters:
         value: the value to encode.

@@ -1,5 +1,4 @@
-"""
-Unit tests for sitecustomize.py
+"""Unit tests for sitecustomize.py
 
 Note: These tests are simplified because sitecustomize.py is designed to run
 as a module initialization script with complex dependencies on file system,

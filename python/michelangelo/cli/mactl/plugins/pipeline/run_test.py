@@ -1,5 +1,4 @@
-"""
-Unit tests for pipeline run plugin.
+"""Unit tests for pipeline run plugin.
 
 Tests helper functions for pipeline run generation.
 """

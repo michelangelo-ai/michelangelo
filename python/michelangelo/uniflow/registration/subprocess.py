@@ -1,5 +1,4 @@
-"""
-Subprocess registration module for MaCTL isolation.
+"""Subprocess registration module for MaCTL isolation.
 
 This module runs in the user's Python environment as a subprocess,
 allowing MaCTL to remain isolated while accessing user dependencies.
@@ -24,8 +23,7 @@ _logger = logging.getLogger(__name__)
 
 
 def discover_workflow_from_config(config_file_path: str):
-    """
-    Discover and import workflow function from pipeline configuration.
+    """Discover and import workflow function from pipeline configuration.
 
     This function reads the pipeline YAML configuration, extracts the manifest.path,
     and discovers the workflow function from ctx.run() calls in that module.
@@ -137,8 +135,7 @@ def discover_workflow_from_config(config_file_path: str):
 
 
 def main():
-    """
-    Entry point for subprocess registration.
+    """Entry point for subprocess registration.
 
     This function runs in the user's Python environment and handles
     workflow registration independently from the main MaCTL process.
@@ -242,8 +239,7 @@ def main():
 
 
 def create_argument_parser() -> argparse.ArgumentParser:
-    """
-    Create argument parser for subprocess registration.
+    """Create argument parser for subprocess registration.
 
     Returns:
         Configured argument parser

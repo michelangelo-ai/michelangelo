@@ -1,5 +1,4 @@
-"""
-User behavior features for Amazon Books recommendation system
+"""User behavior features for Amazon Books recommendation system
 Captures user reading patterns and preferences for personalization
 """
 

@@ -11,8 +11,7 @@ _LOG = getLogger(__name__)
 def convert_crd_metadata_pipeline_apply(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """
-    Convert CRD metadata for pipeline apply crd.
+    """Convert CRD metadata for pipeline apply crd.
     """
     _LOG.info("Convert CRD metadata for class %r", crd_class)
     if not isinstance(yaml_dict, dict):

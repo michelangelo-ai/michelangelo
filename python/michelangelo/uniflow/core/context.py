@@ -20,8 +20,7 @@ temporal = "temporal"
 
 @dataclass(frozen=True)
 class Context:
-    """
-    Represents the context for running a workflow, either locally or in-cluster.
+    """Represents the context for running a workflow, either locally or in-cluster.
 
     Attributes:
         _args: Command-line arguments for the run.
@@ -37,8 +36,7 @@ class Context:
         return self._target == "local-run"
 
     def run(self, fn, *args, **kwargs):
-        """
-        Executes the workflow function in the specified context.
+        """Executes the workflow function in the specified context.
 
         Args:
             fn: The workflow function to execute.
@@ -77,8 +75,7 @@ class Context:
 
 
 def create_context() -> Context:
-    """
-    Creates and configures the execution context based on command-line arguments.
+    """Creates and configures the execution context based on command-line arguments.
     """
     logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT, force=True)
 
@@ -98,11 +95,9 @@ def create_context() -> Context:
 
 
 def _local_run(fn: Callable, *args, **kw):
-    """
-    Execute a given workflow function in Local Mode. Sets up the necessary environment for running workflows locally
+    """Execute a given workflow function in Local Mode. Sets up the necessary environment for running workflows locally
     ensuring local storage and execution.
     """
-
     # Validate the function's code.
     try:
         build(fn)
@@ -120,8 +115,7 @@ def _local_run(fn: Callable, *args, **kw):
 
 
 def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
-    """
-    Creates an argument parser for the Remote Run Target.
+    """Creates an argument parser for the Remote Run Target.
 
     Args:
         environ: Whether to include --environ option.
@@ -129,7 +123,6 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: Configured argument parser.
     """
-
     p = argparse.ArgumentParser()
     p.add_argument(
         "--workflow",
@@ -187,8 +180,7 @@ def _remote_run(
     workflow: str = cadence,
     file_sync: bool = False,
 ):
-    """
-    Execute a given workflow function in Remote Mode.
+    """Execute a given workflow function in Remote Mode.
 
     Args:
         fn: The workflow function to be executed remotely.
