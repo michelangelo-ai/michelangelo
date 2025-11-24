@@ -3,13 +3,12 @@ package k8sengine
 import (
 	"fmt"
 
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	k8sptr "k8s.io/utils/ptr"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 func (m Mapper) mapRay(rayJob *v2pb.RayJob, jobClusterObject runtime.Object, cluster *v2pb.Cluster) (runtime.Object, error) {
@@ -89,4 +88,43 @@ func getWorkerGroupSpecs(clusterName string, workers []*v2pb.RayWorkerSpec) []ra
 		workerGroupSpecsJSON[i] = wg
 	}
 	return workerGroupSpecsJSON
+}
+
+// getRayClusterStateFromStatus maps KubeRay v1 cluster state to our internal v2pb.RayClusterState
+func getRayClusterStateFromKubeRayState(kubeRayState rayv1.ClusterState) v2pb.RayClusterState {
+	switch kubeRayState {
+	case rayv1.Ready:
+		return v2pb.RAY_CLUSTER_STATE_READY
+	case rayv1.Failed:
+		return v2pb.RAY_CLUSTER_STATE_FAILED
+	case rayv1.Unhealthy:
+		return v2pb.RAY_CLUSTER_STATE_UNHEALTHY
+	case "": // Empty state means unknown
+		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
+	default:
+		// For any future states we don't recognize, default to unknown
+		return v2pb.RAY_CLUSTER_STATE_UNKNOWN
+	}
+}
+
+// convertRayV1ClusterStatusToV2 converts a KubeRay v1 RayCluster status to our internal v2pb.RayClusterStatus
+func convertRayV1ClusterStatusToV2(rayV1Cluster *rayv1.RayCluster) *v2pb.RayClusterStatus {
+	status := &v2pb.RayClusterStatus{}
+
+	// Map state using the conversion function
+	status.State = getRayClusterStateFromKubeRayState(rayV1Cluster.Status.State)
+
+	// Map last update time
+	if rayV1Cluster.Status.LastUpdateTime != nil && !rayV1Cluster.Status.LastUpdateTime.IsZero() {
+		status.LastUpdateTime = rayV1Cluster.Status.LastUpdateTime
+	}
+
+	// Map head node info if available
+	if rayV1Cluster.Status.Head.PodIP != "" {
+		status.HeadNode = &v2pb.RayHeadNodeInfo{
+			Ip: rayV1Cluster.Status.Head.PodIP,
+		}
+	}
+
+	return status
 }

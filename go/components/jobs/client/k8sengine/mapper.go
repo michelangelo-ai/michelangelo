@@ -3,7 +3,9 @@ package k8sengine
 import (
 	"fmt"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/fx"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -72,9 +74,32 @@ func (m Mapper) GetLocalName(obj runtime.Object) (namespace, name string) {
 	case *v2pb.RayJob:
 		namespace = RayLocalNamespace
 		name = job.Name
+	case *v2pb.RayCluster:
+		namespace = RayLocalNamespace
+		name = job.Name
 	case *v2pb.SparkJob:
 		// Not implemented yet; return empty
 		return "", ""
 	}
 	return
+}
+
+// MapLocalClusterStatusToGlobal converts a local (Kubernetes) cluster status object
+// to the global Michelangelo ClusterStatus representation.
+func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.ClusterStatus, error) {
+	if localClusterObject == nil {
+		return nil, fmt.Errorf("localClusterObject cannot be nil")
+	}
+
+	switch obj := localClusterObject.(type) {
+	case *rayv1.RayCluster:
+		v2Status := convertRayV1ClusterStatusToV2(obj)
+		reason := obj.Status.Reason
+		return &types.ClusterStatus{
+			Ray:    v2Status,
+			Reason: reason,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported cluster object type: %T", localClusterObject)
+	}
 }

@@ -15,8 +15,8 @@ import (
 
 // Module provides the cluster reconciler and scheduler.
 var Module = fx.Options(
-	fx.Invoke(register),
 	fx.Provide(NewReconciler),
+	fx.Invoke(register),
 )
 
 func register(
@@ -26,10 +26,7 @@ func register(
 	logger *zap.Logger,
 	clusterClient client.FederatedClient,
 	scope tally.Scope,
+	reconciler *Reconciler,
 ) error {
-	return NewReconciler(Params{
-		ClusterClient:     clusterClient,
-		Scope:             scope,
-		APIHandlerFactory: apiHandlerFactory,
-	}).Reconciler.SetupWithManager(mgr)
+	return reconciler.SetupWithManager(mgr)
 }

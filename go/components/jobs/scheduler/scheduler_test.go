@@ -142,14 +142,14 @@ func TestRayClusterAssignment(t *testing.T) {
 				mockEngine.EXPECT().Select(gomock.Any(), gomock.Any()).Return(
 					nil,
 					false,
-					"NoClustersFoundInCache",
+					"NoClustersFoundForAssignment",
 					nil,
 				)
 				return mockEngine
 			},
 			wantCondition: &apipb.Condition{
 				Status: apipb.CONDITION_STATUS_FALSE,
-				Reason: "NoClustersFoundInCache",
+				Reason: "NoClustersFoundForAssignment",
 			},
 			wantAssignment: nil,
 		},

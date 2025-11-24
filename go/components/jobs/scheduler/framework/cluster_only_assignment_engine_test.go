@@ -6,6 +6,8 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/go-logr/logr"
+
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -27,6 +29,14 @@ func newFakeClusterCache(clusters ...*v2pb.Cluster) *fakeClusterCache {
 
 func (f *fakeClusterCache) GetClusters(_ cluster.FilterType) []*v2pb.Cluster { return f.list }
 func (f *fakeClusterCache) GetCluster(name string) *v2pb.Cluster             { return f.byName[name] }
+
+// newTestClusterOnlyStrategy creates a ClusterOnlyAssignmentStrategy for testing with a no-op logger
+func newTestClusterOnlyStrategy(cache cluster.RegisteredClustersCache) ClusterOnlyAssignmentStrategy {
+	return ClusterOnlyAssignmentStrategy{
+		ClusterCache: cache,
+		log:          logr.Discard(), // Use a no-op logger for tests
+	}
+}
 
 func TestClusterOnlyEngine_Select(t *testing.T) {
 	makeCluster := func(name string) *v2pb.Cluster {
