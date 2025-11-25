@@ -1,3 +1,9 @@
+"""Training task for Nomic BERT models.
+
+Implements distributed training using PyTorch Lightning with DeepSpeed strategy
+for efficient multi-GPU training.
+"""
+
 import logging
 
 import pytorch_lightning as pl
@@ -30,6 +36,20 @@ def train(
     model_name="nomic-ai/nomic-bert-2048",
     # breakpoint=True,
 ) -> dict:
+    """Train Nomic BERT model using PyTorch Lightning.
+
+    Trains the model with DeepSpeed strategy if GPUs are available,
+    otherwise uses CPU training.
+
+    Args:
+        train_data: Ray Dataset containing training data.
+        validation_data: Ray Dataset containing validation data.
+        test_data: Ray Dataset containing test data.
+        model_name: HuggingFace model identifier. Defaults to "nomic-ai/nomic-bert-2048".
+
+    Returns:
+        Dictionary with training status.
+    """
     log.info("Starting training...")
 
     # Training configuration
