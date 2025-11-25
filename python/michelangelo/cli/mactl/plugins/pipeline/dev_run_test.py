@@ -1,11 +1,12 @@
-"""Unit tests for pipeline dev_run plugin.
-"""
+"""Unit tests for pipeline dev_run plugin."""
 
+from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
     _process_env_variables,
+    convert_crd_metadata_pipeline_dev_run,
     generate_pipeline_dev_run_object,
 )
 
@@ -200,3 +201,121 @@ class PipelineDevRunTest(TestCase):
                 "UF_FILE_SYNC_TARBALL_URL": "s3://bucket/path/to/file-sync.tar.gz",
             },
         )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_dev_run_object"
+    )
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.DefaultFileSync")
+    def test_convert_crd_metadata_with_file_sync(
+        self,
+        mock_file_sync_class,
+        mock_generate_dev_run_obj,
+        mock_populate_spec,
+        mock_handle_workflow,
+        mock_repo,
+    ):
+        """Test convert_crd_metadata_pipeline_dev_run with file_sync enabled."""
+        # Setup mocks
+        mock_repo_instance = MagicMock()
+        mock_repo_instance.git.rev_parse.return_value = "/fake/repo"
+        mock_repo.return_value = mock_repo_instance
+
+        mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
+        mock_populate_spec.return_value = {"spec": {"steps": []}}
+
+        mock_file_sync = MagicMock()
+        mock_file_sync.create_and_upload_tarball.return_value = (
+            "s3://bucket/file-sync.tar.gz"
+        )
+        mock_file_sync_class.return_value = mock_file_sync
+
+        mock_generate_dev_run_obj.return_value = {
+            "metadata": {"name": "test-run"},
+            "spec": {
+                "input": {
+                    "environ": {
+                        "UF_FILE_SYNC_TARBALL_URL": "s3://bucket/file-sync.tar.gz"
+                    }
+                }
+            },
+        }
+
+        yaml_dict = {
+            "metadata": {
+                "name": "test-pipeline",
+                "namespace": "test-ns",
+                "annotations": {"michelangelo/uniflow-image": "test-image:v1.0"},
+            },
+            "file_sync": True,
+        }
+        yaml_path = Path("/fake/repo/pipeline.yaml")
+
+        result = convert_crd_metadata_pipeline_dev_run(
+            yaml_dict, MagicMock(), yaml_path
+        )
+
+        # Verify DefaultFileSync was created with correct image
+        mock_file_sync_class.assert_called_once_with(docker_image="test-image:v1.0")
+
+        # Verify create_and_upload_tarball was called
+        mock_file_sync.create_and_upload_tarball.assert_called_once()
+
+        # Verify the result contains pipeline_run with file-sync URL
+        self.assertIn("pipeline_run", result)
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_dev_run_object"
+    )
+    def test_convert_crd_metadata_without_file_sync(
+        self,
+        mock_generate_dev_run_obj,
+        mock_populate_spec,
+        mock_handle_workflow,
+        mock_repo,
+    ):
+        """Test convert_crd_metadata_pipeline_dev_run without file_sync."""
+        # Setup mocks
+        mock_repo_instance = MagicMock()
+        mock_repo_instance.git.rev_parse.return_value = "/fake/repo"
+        mock_repo.return_value = mock_repo_instance
+
+        mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
+        mock_populate_spec.return_value = {"spec": {"steps": []}}
+
+        mock_generate_dev_run_obj.return_value = {
+            "metadata": {"name": "test-run"},
+            "spec": {},
+        }
+
+        yaml_dict = {
+            "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
+            "file_sync": False,
+        }
+        yaml_path = Path("/fake/repo/pipeline.yaml")
+
+        result = convert_crd_metadata_pipeline_dev_run(
+            yaml_dict, MagicMock(), yaml_path
+        )
+
+        # Verify generate_pipeline_dev_run_object was called with empty
+        # file_sync_tarball_url
+        mock_generate_dev_run_obj.assert_called_once()
+        call_args = mock_generate_dev_run_obj.call_args
+        # Fourth positional argument should be file_sync_tarball_url (empty string)
+        self.assertEqual(call_args[0][3], "")
+
+        self.assertIn("pipeline_run", result)

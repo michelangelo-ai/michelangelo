@@ -30,7 +30,6 @@ from michelangelo.cli.mactl.plugins.pipeline.run import (
     generate_pipeline_run_name,
     generate_pipeline_run_object,
 )
-
 from michelangelo.uniflow.core.file_sync import DefaultFileSync
 
 _ENV_VARIABLE_KEY = "env"
@@ -40,8 +39,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """Add function signature for pipeline dev_run command.
-    """
+    """Add function signature for pipeline dev_run command."""
     inject_func_signature(
         crd,
         "dev_run",
@@ -117,8 +115,7 @@ def add_function_signature(crd: CRD) -> None:
 def generate_dev_run(
     crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None
 ):
-    """Generate dev run function for pipeline CRD.
-    """
+    """Generate dev run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
@@ -212,6 +209,7 @@ def convert_crd_metadata_pipeline_dev_run(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
     """Convert CRD metadata for pipeline dev-run command.
+
     This function generates a PipelineRunRequest object from command line arguments.
     """
     _LOG.info("Converting metadata for pipeline run command")
@@ -276,7 +274,7 @@ def convert_crd_metadata_pipeline_dev_run(
 def generate_pipeline_dev_run_object(
     yaml_dict: dict,
     pipeline_spec: dict,
-    resume_from: str = None,
+    resume_from: Optional[str] = None,
     file_sync_tarball_url: str = "",
 ) -> dict:
     """Generate Pipeline Dev Run CR as dictionary.
@@ -284,7 +282,8 @@ def generate_pipeline_dev_run_object(
     Args:
         yaml_dict: YAML configuration dictionary
         pipeline_spec: Pipeline specification dictionary
-        resume_from: Optional resume specification in format "pipeline_run_name:step_name"
+        resume_from: Optional resume specification in format
+            "pipeline_run_name:step_name"
         file_sync_tarball_url: Optional remote storage URL for file-sync tarball
     """
     namespace = yaml_dict.get("metadata", {}).get("namespace", "")
@@ -331,6 +330,7 @@ def generate_pipeline_dev_run_object(
 
 def _process_env_variables(env_variables: list[str]) -> dict:
     """Process environment variables which are passed as a list of strings.
+
     Format of the environment variables is "<ENV_VAR>=<VALUE>".
     """
     env_dict = {}
@@ -338,7 +338,8 @@ def _process_env_variables(env_variables: list[str]) -> dict:
         key_value_pair = env_variable.split("=", 1)
         if len(key_value_pair) != 2:
             raise TypeError(
-                f"Invalid environment variable format: {env_variable}, expected format is <ENV_VAR>=<VALUE>"
+                f"Invalid environment variable format: {env_variable}, "
+                f"expected format is <ENV_VAR>=<VALUE>"
             )
         env_dict[key_value_pair[0]] = key_value_pair[1]
     return env_dict
