@@ -1,7 +1,7 @@
-"""GPT Lightning Module for distributed training with LoRA support"""
+"""GPT Lightning Module for distributed training with LoRA support."""
 
 import logging
-from typing import Any, Dict
+from typing import Any
 
 import pytorch_lightning as pl
 import torch
@@ -16,8 +16,9 @@ log = logging.getLogger(__name__)
 
 
 class GPTLightningModule(pl.LightningModule):
-    """Lightning module for GPT training with LoRA support
-    Compatible with distributed training using Ray and PyTorch Lightning
+    """Lightning module for GPT training with LoRA support.
+
+    Compatible with distributed training using Ray and PyTorch Lightning.
     """
 
     def __init__(
@@ -31,6 +32,7 @@ class GPTLightningModule(pl.LightningModule):
         warmup_steps: int = 100,
         **kwargs,
     ):
+        """Initialize the GPT Lightning module."""
         super().__init__()
         self.save_hyperparameters()
 
@@ -46,7 +48,7 @@ class GPTLightningModule(pl.LightningModule):
         self.setup_model_and_tokenizer()
 
     def setup_model_and_tokenizer(self):
-        """Setup the model and tokenizer"""
+        """Setup the model and tokenizer."""
         log.info(f"Loading model: {self.model_name}")
 
         # Load tokenizer
@@ -78,13 +80,13 @@ class GPTLightningModule(pl.LightningModule):
                 self.model.print_trainable_parameters()
 
     def forward(self, input_ids, attention_mask=None, labels=None):
-        """Forward pass"""
+        """Forward pass."""
         return self.model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels
         )
 
     def training_step(self, batch, batch_idx):
-        """Training step"""
+        """Training step."""
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -103,7 +105,7 @@ class GPTLightningModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """Validation step"""
+        """Validation step."""
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -122,7 +124,7 @@ class GPTLightningModule(pl.LightningModule):
         return {"val_loss": loss, "val_perplexity": perplexity}
 
     def configure_optimizers(self):
-        """Configure optimizers and schedulers"""
+        """Configure optimizers and schedulers."""
         # Create optimizer
         optimizer = torch.optim.AdamW(
             self.parameters(), lr=self.learning_rate, weight_decay=0.01
@@ -148,8 +150,8 @@ class GPTLightningModule(pl.LightningModule):
             },
         }
 
-    def get_model_info(self) -> Dict[str, Any]:
-        """Get model information for logging"""
+    def get_model_info(self) -> dict[str, Any]:
+        """Get model information for logging."""
         if self.use_lora and hasattr(self.model, "peft_config"):
             # Get parameter counts for LoRA model
             total_params = sum(p.numel() for p in self.model.parameters())
@@ -187,8 +189,9 @@ def create_gpt_model(
     warmup_steps: int = 100,
     **kwargs,
 ) -> pl.LightningModule:
-    """Factory function to create GPT Lightning module
-    Compatible with internal training patterns
+    """Factory function to create GPT Lightning module.
+
+    Compatible with internal training patterns.
     """
     return GPTLightningModule(
         model_name=model_name,

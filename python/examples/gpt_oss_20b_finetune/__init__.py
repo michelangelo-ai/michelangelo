@@ -1,5 +1,7 @@
-"""GPT-OSS-20B Fine-tuning Example
-Advanced fine-tuning demo for OpenAI's GPT-OSS-20B using Uniflow, PyTorch, and distributed training
+"""GPT-OSS-20B Fine-tuning Example.
+
+Advanced fine-tuning demo for OpenAI's GPT-OSS-20B using Uniflow, PyTorch,
+and distributed training.
 """
 
 __version__ = "1.0.0"
