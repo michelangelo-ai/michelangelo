@@ -26,13 +26,13 @@ from michelangelo.uniflow.registration.uniflow_tar import (
 )
 
 __all__ = [
-    "register",
-    "register_pipeline",
-    "main",
-    "prepare_uniflow_input",
-    "UniflowTarBuilder",
-    "prepare_uniflow_tar",
     "ConfigBuilder",
     "ConfigEncoder",
+    "UniflowTarBuilder",
+    "main",
+    "prepare_uniflow_input",
+    "prepare_uniflow_tar",
+    "register",
+    "register_pipeline",
     "subprocess",
 ]
