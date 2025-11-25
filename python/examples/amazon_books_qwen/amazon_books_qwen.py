@@ -54,8 +54,11 @@ def amazon_books_qwen_workflow(sample_size=100):
     return model_result
 
 
-# For Local Run from python directory: PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
-# For Remote Run: python examples/amazon_books_qwen/amazon_books_qwen.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run from python directory:
+# PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
+# For Remote Run:
+# python examples/amazon_books_qwen/amazon_books_qwen.py remote-run \
+#   --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
     print("=" * 80)
     print("Amazon Books Qwen Dual-Encoder Pipeline")

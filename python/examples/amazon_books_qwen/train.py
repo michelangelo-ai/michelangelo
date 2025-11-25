@@ -5,13 +5,13 @@ Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import ray
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 from ray.air.config import ScalingConfig
 from ray.data import Dataset
 from ray.train import Checkpoint
@@ -40,8 +40,10 @@ class QwenDualEncoder(nn.Module):
         tokenizer: Qwen tokenizer for text encoding.
         query_encoder: Transformer encoder for query tower.
         doc_encoder: Transformer encoder for document tower.
-        query_projection: Linear layer projecting query representations to embedding_dim.
-        doc_projection: Linear layer projecting document representations to embedding_dim.
+        query_projection: Linear layer projecting query representations to
+            embedding_dim.
+        doc_projection: Linear layer projecting document representations to
+            embedding_dim.
     """
 
     def __init__(
@@ -55,11 +57,13 @@ class QwenDualEncoder(nn.Module):
         """Initialize the Qwen dual encoder model.
 
         Args:
-            model_name: Pretrained Qwen model name from HuggingFace. Defaults to "Qwen/Qwen2.5-1.5B".
+            model_name: Pretrained Qwen model name from HuggingFace.
+                Defaults to "Qwen/Qwen2.5-1.5B".
             embedding_dim: Dimension of output embeddings. Defaults to 1536.
             max_query_length: Maximum tokens for query encoding. Defaults to 128.
             max_doc_length: Maximum tokens for document encoding. Defaults to 512.
-            shared_encoder: Whether to use shared encoder for both towers. Defaults to False.
+            shared_encoder: Whether to use shared encoder for both towers.
+                Defaults to False.
         """
         super().__init__()
 
@@ -182,7 +186,8 @@ class InfoNCELoss(nn.Module):
         """Initialize InfoNCE loss.
 
         Args:
-            temperature: Temperature parameter for contrastive learning. Defaults to 0.05.
+            temperature: Temperature parameter for contrastive learning.
+                Defaults to 0.05.
         """
         super().__init__()
         self.temperature = temperature
@@ -210,7 +215,7 @@ class InfoNCELoss(nn.Module):
         return loss
 
 
-def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
+def train_func(config: dict[str, Any]) -> dict[str, Any]:
     """Ray distributed training function for Qwen dual-encoder.
 
     This function runs on each Ray worker for distributed training
@@ -251,7 +256,8 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
 
     for epoch in range(num_epochs):
         print(
-            f"Worker {ray.train.get_context().get_world_rank()}: Epoch {epoch + 1}/{num_epochs}"
+            f"Worker {ray.train.get_context().get_world_rank()}: "
+            f"Epoch {epoch + 1}/{num_epochs}"
         )
 
         epoch_losses = []
@@ -281,7 +287,8 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
             # Log progress
             if batch_idx % 10 == 0:
                 print(
-                    f"Worker {ray.train.get_context().get_world_rank()}: Batch {batch_idx}, Loss: {loss.item():.4f}"
+                    f"Worker {ray.train.get_context().get_world_rank()}: "
+                    f"Batch {batch_idx}, Loss: {loss.item():.4f}"
                 )
 
         avg_epoch_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0
@@ -376,7 +383,7 @@ def train_dual_encoder(
     num_workers: int = 1,  # Default to 1 for local training
     use_gpu: bool = False,  # Default to False, can be set to True if GPU available
     distributed: bool = False,  # Default to False for local training
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Unified Qwen dual encoder training function.
 
     Supports both local and distributed training with optional GPU support
@@ -398,7 +405,8 @@ def train_dual_encoder(
         Dictionary with training metrics and model info
     """
     log.info(
-        f"Starting Qwen dual encoder training - Distributed: {distributed}, GPU: {use_gpu}, Workers: {num_workers}"
+        f"Starting Qwen dual encoder training - Distributed: {distributed}, "
+        f"GPU: {use_gpu}, Workers: {num_workers}"
     )
 
     # Load DatasetVariables as Ray Datasets following boston_housing pattern
@@ -467,7 +475,7 @@ def _train_distributed(
     temperature: float,
     num_workers: int,
     use_gpu: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Distributed training using Ray TorchTrainer."""
     log.info(f"Starting Ray distributed training with {num_workers} workers")
 
@@ -543,7 +551,7 @@ def _train_local(
     num_epochs: int,
     temperature: float,
     use_gpu: bool,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Local training with single worker."""
     log.info(f"Starting local training with model: {model_name}")
 
@@ -673,7 +681,8 @@ def _train_local(
     final_train_loss = training_losses[-1] if training_losses else 0.0
 
     log.info(
-        f"Training completed! Final train loss: {final_train_loss:.4f}, Val loss: {avg_val_loss:.4f}"
+        f"Training completed! Final train loss: {final_train_loss:.4f}, "
+        f"Val loss: {avg_val_loss:.4f}"
     )
 
     # Save model checkpoint
