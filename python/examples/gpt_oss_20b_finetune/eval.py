@@ -6,13 +6,32 @@ Handles model evaluation with perplexity and generation quality metrics
 import logging
 import torch
 import numpy as np
+import os
+import shutil
 from transformers import AutoTokenizer
 from ray.data import Dataset
 import michelangelo.uniflow.core as uniflow
 from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.sdk.workflow.variables import DatasetVariable
+import mlflow
 
 log = logging.getLogger(__name__)
+
+
+def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
+    """
+    Fallback: Download a checkpoint from MLflow artifacts.
+
+    Args:
+        artifact_uri: MLflow artifact URI (e.g., "runs://{run_id}/artifacts/checkpoint")
+
+    Returns:
+        Local path to the downloaded checkpoint directory
+    """
+    log.info(f"Downloading checkpoint from MLflow: {artifact_uri}")
+    local_path = mlflow.artifacts.download_artifacts(artifact_uri)
+    log.info(f"Successfully downloaded checkpoint to: {local_path}")
+    return local_path
 
 
 @uniflow.task(
@@ -65,26 +84,43 @@ def evaluate_gpt_model(
     # Load Ray checkpoint directly (much simpler!)
     log.info("🔍 EVAL STEP 3: Importing modules")
     from examples.gpt_oss_20b_finetune.model import create_gpt_model
-    import os
     import glob
 
     log.info("✅ Modules imported successfully")
 
-    log.info("🔍 EVAL STEP 4: Finding checkpoint files")
-    log.info(f"Looking in directory: {checkpoint_path}")
+    log.info("🔍 EVAL STEP 4: Using checkpoint path")
+    log.info(f"Checkpoint path: {checkpoint_path}")
+
+    # Use checkpoint path directly (local path)
+    if os.path.exists(checkpoint_path):
+        local_checkpoint_path = checkpoint_path
+        log.info(f"Using local checkpoint path: {local_checkpoint_path}")
+    else:
+        # Fallback: try MLflow download if it's an MLflow URI
+        if checkpoint_path.startswith("runs:/"):
+            log.info("Trying MLflow download as fallback...")
+            local_checkpoint_path = download_checkpoint_from_mlflow(checkpoint_path)
+        else:
+            raise FileNotFoundError(f"Checkpoint path not found: {checkpoint_path}")
+
+    log.info("🔍 EVAL STEP 5: Finding checkpoint files")
+    log.info(f"Looking in directory: {local_checkpoint_path}")
 
     # Find checkpoint file
-    checkpoint_files = glob.glob(os.path.join(checkpoint_path, "*.ckpt"))
+    checkpoint_files = glob.glob(os.path.join(local_checkpoint_path, "*.ckpt"))
     log.info(f"Found {len(checkpoint_files)} checkpoint files: {checkpoint_files}")
+
+    if not checkpoint_files:
+        raise FileNotFoundError(f"No .ckpt files found in {local_checkpoint_path}")
 
     ckpt_path = checkpoint_files[0]
     log.info(f"Using checkpoint: {ckpt_path}")
 
-    log.info("🔍 EVAL STEP 5: Loading checkpoint data")
+    log.info("🔍 EVAL STEP 6: Loading checkpoint data")
     checkpoint_data = torch.load(ckpt_path, map_location="cpu")
     log.info(f"✅ Checkpoint loaded, keys: {list(checkpoint_data.keys())}")
 
-    log.info("🔍 EVAL STEP 6: Creating model")
+    log.info("🔍 EVAL STEP 7: Creating model")
     model = create_gpt_model(
         model_name=model_name,
         learning_rate=learning_rate,
@@ -93,11 +129,11 @@ def evaluate_gpt_model(
     )
     log.info("✅ Model created successfully")
 
-    log.info("🔍 EVAL STEP 7: Loading model weights")
+    log.info("🔍 EVAL STEP 8: Loading model weights")
     model.load_state_dict(checkpoint_data["state_dict"])
     log.info("✅ Model weights loaded successfully")
 
-    log.info("🔍 EVAL STEP 8: Extracting base model")
+    log.info("🔍 EVAL STEP 9: Extracting base model")
     if hasattr(model, "model"):
         base_model = model.model
         log.info("✅ Extracted base model from Lightning wrapper")
@@ -105,18 +141,18 @@ def evaluate_gpt_model(
         base_model = model
         log.info("✅ Using model directly (no wrapper)")
 
-    log.info("🔍 EVAL STEP 9: Loading tokenizer")
+    log.info("🔍 EVAL STEP 10: Loading tokenizer")
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
     log.info("✅ Tokenizer loaded successfully")
 
-    log.info("🔍 EVAL STEP 10: Setting model to eval mode")
+    log.info("🔍 EVAL STEP 11: Setting model to eval mode")
     model.eval()
     device = next(model.parameters()).device
     log.info(f"✅ Model ready, device: {device}")
 
-    log.info("🔍 EVAL STEP 11: Converting dataset")
+    log.info("🔍 EVAL STEP 12: Converting dataset")
     test_df = test_data.to_pandas()
     test_df = test_df.head(num_samples)
     log.info(f"✅ Dataset ready: {len(test_df)} samples")
@@ -206,5 +242,16 @@ def evaluate_gpt_model(
     log.info("✅ Evaluation completed")
     log.info(f"Average Perplexity: {avg_perplexity:.2f}")
     log.info(f"Average Generation Score: {avg_generation_score:.2f}")
+
+    # Clean up temporary files if any were downloaded
+    try:
+        if local_checkpoint_path != checkpoint_path and "tmp" in local_checkpoint_path:
+            if os.path.isdir(local_checkpoint_path):
+                shutil.rmtree(local_checkpoint_path)
+            else:
+                os.remove(local_checkpoint_path)
+            log.info(f"✅ Cleaned up temporary files: {local_checkpoint_path}")
+    except Exception as e:
+        log.warning(f"Failed to clean up temporary files {local_checkpoint_path}: {e}")
 
     return metrics
