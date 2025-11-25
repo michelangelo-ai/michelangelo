@@ -1,10 +1,10 @@
+import time
+import uuid
 from argparse import ArgumentParser
-from inspect import Signature, Parameter
+from inspect import Parameter, Signature
 from logging import getLogger
 from types import MethodType
 from typing import Optional
-import time
-import uuid
 
 from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
@@ -22,15 +22,13 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_methods_from_service,
 )
 
-
 _LOG = getLogger(__name__)
 
 # TODO: Add E2E tests for pipeline run command with representative scenarios (normal run, resume from checkpoint)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """
-    Add function signature for pipeline run command.
+    """Add function signature for pipeline run command.
     """
     inject_func_signature(
         crd,
@@ -82,8 +80,7 @@ def add_function_signature(crd: CRD) -> None:
 
 
 def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
-    """
-    Generate run function for pipeline CRD.
+    """Generate run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
 
@@ -159,8 +156,7 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
 def convert_crd_metadata_pipeline_run(
     yaml_dict: dict, crd_class: type, yaml_path
 ) -> dict:
-    """
-    Convert CRD metadata for pipeline run command.
+    """Convert CRD metadata for pipeline run command.
     This function generates a CreatePipelineRunRequest object from command line arguments.
     """
     _LOG.info("Converting metadata for pipeline run command")
@@ -200,8 +196,7 @@ def convert_crd_metadata_pipeline_run(
 def generate_pipeline_run_object(
     run_name: str, pipeline_name: str, namespace: str, resume_from: str = None
 ) -> dict:
-    """
-    Generate PipelineRun object as dictionary.
+    """Generate PipelineRun object as dictionary.
 
     Args:
         run_name: Generated unique name for the pipeline run
@@ -212,7 +207,6 @@ def generate_pipeline_run_object(
     Returns:
         dict: Configured pipeline run object as dictionary
     """
-
     pipeline_run_dict = {
         "typeMeta": {
             "kind": "PipelineRun",
@@ -247,8 +241,7 @@ def generate_pipeline_run_object(
 
 
 def parse_resume_from(resume_from: str, namespace: str) -> dict:
-    """
-    Parse the resume_from parameter and return a resume spec.
+    """Parse the resume_from parameter and return a resume spec.
 
     Args:
         resume_from: Resume specification in format "pipeline_run_name" or "pipeline_run_name:step_name"
@@ -285,8 +278,7 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
 
 
 def generate_pipeline_run_name() -> str:
-    """
-    Generates a pipeline-run name.
+    """Generates a pipeline-run name.
     """
     timestamp = int(time.time())
     uuid8 = str(uuid.uuid4())[:8]

@@ -1,11 +1,12 @@
-from dataclasses import dataclass
 import json
-import pydantic
+from dataclasses import dataclass
+from enum import Enum
 from typing import Any, Optional
 from unittest import TestCase
 
-from michelangelo.uniflow.core.codec import encoder, decoder
-from enum import Enum
+import pydantic
+
+from michelangelo.uniflow.core.codec import decoder, encoder
 
 
 class Color(Enum):
@@ -16,8 +17,7 @@ class Color(Enum):
 
 @dataclass
 class Entity:
-    """
-    Dataclass to represent a generic entity for testing purposes.
+    """Dataclass to represent a generic entity for testing purposes.
     """
 
     id: str  # Unique identifier for the entity. Simple string field.

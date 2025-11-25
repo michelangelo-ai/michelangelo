@@ -1,12 +1,14 @@
 import logging
+from typing import Any
+
+import numpy as np
 import ray
 from ray.data import Dataset
-from michelangelo.uniflow.plugins.ray import RayTask
 from ray.util.scheduling_strategies import PlacementGroupSchedulingStrategy
-import michelangelo.uniflow.core as uniflow
-import numpy as np
 from vllm import LLM, SamplingParams
-from typing import Any
+
+import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 

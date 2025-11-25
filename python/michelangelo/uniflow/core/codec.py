@@ -1,16 +1,17 @@
+import base64
 import importlib
 import inspect
 import logging
 from abc import ABC, abstractmethod
-from json import JSONEncoder, JSONDecoder
-from typing import Any, Optional
 from enum import Enum
+from json import JSONDecoder, JSONEncoder
+from typing import Any, Optional
+
 import pydantic
-import base64
 
 from michelangelo.uniflow.core.utils import (
-    dot_path,
     dataclass_dict,
+    dot_path,
     import_attribute,
     is_dataclass_instance,
     pydantic_dict,
@@ -118,13 +119,12 @@ class EnumCodec(Codec):
 
 
 class TypeCodec(Codec):
-    """
-    JSON codec for Python types, such as classes and functions. JSON representation of the type is as follows:
+    """JSON codec for Python types, such as classes and functions. JSON representation of the type is as follows:
 
-        {
-            "path": "path.to.type",
-            "__codec__": "type"
-        }
+    {
+        "path": "path.to.type",
+        "__codec__": "type"
+    }
     """
 
     _ATTR_PATH: str = "path"

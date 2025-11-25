@@ -1,5 +1,4 @@
-"""
-Unit tests for pipeline dev_run plugin.
+"""Unit tests for pipeline dev_run plugin.
 """
 
 from unittest import TestCase

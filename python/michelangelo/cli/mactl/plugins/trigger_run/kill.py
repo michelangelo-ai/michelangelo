@@ -1,12 +1,12 @@
 from argparse import ArgumentParser
+from inspect import Parameter, Signature
 from logging import getLogger
-from inspect import Signature, Parameter
 from types import MethodType
 from typing import Optional
 
-from grpc import Channel
-from google.protobuf.message import Message
 from google.protobuf.json_format import MessageToDict, ParseDict
+from google.protobuf.message import Message
+from grpc import Channel
 
 from michelangelo.cli.mactl.crd import (
     CRD,
@@ -16,13 +16,11 @@ from michelangelo.cli.mactl.crd import (
     inject_func_signature,
 )
 
-
 _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """
-    Add function signature for pipeline kill command.
+    """Add function signature for pipeline kill command.
     """
     inject_func_signature(
         crd,
@@ -75,8 +73,7 @@ def add_function_signature(crd: CRD) -> None:
 
 
 def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
-    """
-    Generate kill function for pipeline_run CRD.
+    """Generate kill function for pipeline_run CRD.
     """
     _LOG.info("Generating `pipeline_run kill` for: %s", crd)
 

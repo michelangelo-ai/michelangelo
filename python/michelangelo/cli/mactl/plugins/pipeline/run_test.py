@@ -1,17 +1,16 @@
-"""
-Unit tests for pipeline run plugin.
+"""Unit tests for pipeline run plugin.
 
 Tests helper functions for pipeline run generation.
 """
 
 from unittest import TestCase
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.pipeline.run import (
+    convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
     parse_resume_from,
-    convert_crd_metadata_pipeline_run,
 )
 
 

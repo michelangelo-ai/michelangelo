@@ -3,15 +3,15 @@ import unittest
 from dataclasses import dataclass, is_dataclass
 from pathlib import Path
 from typing import Any, Optional
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import fsspec
 import fsspec.core
 
 from michelangelo.uniflow.core.utils import (
     dataclass_dict,
-    is_dataclass_instance,
     encode_value_to_json,
+    is_dataclass_instance,
 )
 
 pwd = os.environ["PWD"]

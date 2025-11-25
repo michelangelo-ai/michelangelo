@@ -1,5 +1,4 @@
-"""
-sitecustomize.py - Automatic Uniflow initialization for remote environments.
+"""sitecustomize.py - Automatic Uniflow initialization for remote environments.
 
 This module is automatically imported by Python during startup when it's in the
 Python path. It runs the uniflow pre-run script to download and apply local
@@ -9,15 +8,16 @@ This leverages Python's built-in site initialization mechanism for clean,
 automatic execution without explicit container startup script modifications.
 """
 
-import os
-import tempfile
-import tarfile
-import shutil
-import traceback
 import logging
-import fsspec
-from pathlib import Path
+import os
+import shutil
+import tarfile
+import tempfile
+import traceback
 from abc import ABC, abstractmethod
+from pathlib import Path
+
+import fsspec
 
 
 def _get_logger(context="uniflow_task_pre_run"):
@@ -33,8 +33,7 @@ class StorageDownloader(ABC):
     def download(
         self, remote_path: str, local_path: Path, logger: logging.Logger
     ) -> bool:
-        """
-        Download a file from remote storage to local path.
+        """Download a file from remote storage to local path.
 
         Args:
             remote_path: The remote storage path (e.g., s3://bucket/key)
@@ -68,8 +67,7 @@ class FsspecDownloader(StorageDownloader):
 
 
 def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None):
-    """
-    Download and extract development files from remote storage with following steps:
+    """Download and extract development files from remote storage with following steps:
     1. Check for UF_FILE_SYNC_TARBALL_URL environment variable
     2. Download tarball using appropriate downloader (tb-cli or fsspec)
     3. Extract and replace files in current working directory
@@ -139,8 +137,7 @@ def download_and_extract_dev_files(*, downloader: StorageDownloader, logger=None
 
 
 def file_sync_pre_run():
-    """
-    Automatically run the pre-run script if environment conditions are met.
+    """Automatically run the pre-run script if environment conditions are met.
 
     This is the entry point used by sitecustomize.py for automatic execution.
     It includes additional safety checks and logging for the container environment.

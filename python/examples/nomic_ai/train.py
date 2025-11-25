@@ -1,15 +1,15 @@
 import logging
-import torch
 
-import michelangelo.uniflow.core as uniflow
 import pytorch_lightning as pl
-
-from examples.nomic_ai.model import HuggingFaceLightningModel
-from michelangelo.uniflow.plugins.ray import RayTask
+import torch
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from ray.data import Dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+
+import michelangelo.uniflow.core as uniflow
+from examples.nomic_ai.model import HuggingFaceLightningModel
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 

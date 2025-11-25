@@ -1,6 +1,7 @@
-from unittest import TestCase
-from michelangelo._internal.utils.file_utils import cd
 import os
+from unittest import TestCase
+
+from michelangelo._internal.utils.file_utils import cd
 
 
 class DirectoryTest(TestCase):

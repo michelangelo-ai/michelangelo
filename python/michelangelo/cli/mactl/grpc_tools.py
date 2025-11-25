@@ -1,28 +1,25 @@
-"""
-gRPC Tools for dynamic service introspection and method retrieval
+"""gRPC Tools for dynamic service introspection and method retrieval
 using gRPC reflection.
 """
 
 from logging import getLogger
 from typing import Union
 
+from google.protobuf import message_factory
 from google.protobuf.descriptor_pb2 import (
     FileDescriptorProto,
     MethodDescriptorProto,
 )
-from google.protobuf import message_factory
 from google.protobuf.descriptor_pool import DescriptorPool
 from google.protobuf.message import Message
 from grpc import Channel
 from grpc_reflection.v1alpha import reflection_pb2, reflection_pb2_grpc
 
-
 _LOG = getLogger(__name__)
 
 
 def list_services(channel, metadata: list) -> list[str]:
-    """
-    List the services available on a gRPC server using reflection.
+    """List the services available on a gRPC server using reflection.
     """
     stub = reflection_pb2_grpc.ServerReflectionStub(channel)
 
@@ -44,8 +41,7 @@ def get_methods_from_service(
     service: str,
     metadata: list,
 ) -> tuple[dict[str, MethodDescriptorProto], DescriptorPool]:
-    """
-    Get methods from a service descriptor.
+    """Get methods from a service descriptor.
     """
     methods = list(get_service_descriptors(channel, service, metadata))
     _LOG.info("Succeed to retireve %d methods", len(methods))
@@ -103,8 +99,7 @@ def get_service_descriptors(
 def retrieve_full_descriptor_pool(
     channel: Channel, filename: str, metadata: list
 ) -> DescriptorPool:
-    """
-    Retrieve the full descriptor pool for a given filename.
+    """Retrieve the full descriptor pool for a given filename.
     This is useful for introspection and understanding the service's API.
     """
     _LOG.info("Start retrieve full descriptor pool for %r / %r", channel, filename)
@@ -125,8 +120,7 @@ def get_all_file_descriptors_by_filename(
     deps: int = 0,
     visited: Union[None, set[str]] = None,
 ):
-    """
-    Get all file descriptors recursively by filename using ServerReflection.
+    """Get all file descriptors recursively by filename using ServerReflection.
     """
     _LOG.debug(
         "Start to get all descriptors with deps %2d for %r / %r / %r",
@@ -163,8 +157,7 @@ def get_all_file_descriptors_by_filename(
 
 
 def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[Message]:
-    """
-    message_name example: "michelangelo.api.v2beta1.Pipeline"
+    """message_name example: "michelangelo.api.v2beta1.Pipeline"
     """
     descriptor = pool.FindMessageTypeByName(message_name)
     # factory = message_factory.MessageFactory(pool)
