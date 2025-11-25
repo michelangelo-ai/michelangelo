@@ -1,5 +1,6 @@
 """Unit tests for sandbox module."""
 
+import argparse
 import subprocess
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -391,9 +392,7 @@ class DeleteTest(TestCase):
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     @patch("builtins.print")
-    def test_delete_prints_skip_message(
-        self, mock_print, mock_check_output, mock_exec
-    ):
+    def test_delete_prints_skip_message(self, mock_print, mock_check_output, mock_exec):
         """Test that skip message is printed when cluster doesn't exist."""
         ns = Mock()
         ns.compute_cluster_name = "test-compute"
@@ -406,7 +405,114 @@ class DeleteTest(TestCase):
         # Verify skip message was printed
         print_calls = [str(c) for c in mock_print.call_args_list]
         skip_message_found = any(
-            "not found" in str(c) and "skipping deletion" in str(c)
-            for c in print_calls
+            "not found" in str(c) and "skipping deletion" in str(c) for c in print_calls
         )
         self.assertTrue(skip_message_found, "Skip message should be printed")
+
+
+class CreateFunctionComputeClusterTest(TestCase):
+    """Tests for _create function compute cluster logic."""
+
+    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
+    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
+    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
+    def test_create_with_dedicated_compute_cluster(
+        self,
+        mock_create_compute_cluster,
+        mock_create_crd,
+        mock_apply_rbac,
+        mock_create_secrets,
+        mock_env_get,
+        mock_exec,
+        mock_kube_create,
+        mock_assert_command,
+        mock_check_output,
+        mock_create_kuberay,
+        mock_create_spark,
+        mock_create_cadence_domain,
+        mock_kube_wait,
+    ):
+        """Test _create function with dedicated compute cluster."""
+        # Setup namespace with create_compute_cluster=True
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=True,
+            compute_cluster_name="test-compute-cluster",
+        )
+
+        # Mock environment variable
+        mock_env_get.return_value = "test-token"
+        mock_check_output.return_value = b""
+
+        sandbox._create(ns)
+
+        # Verify dedicated compute cluster functions were called
+        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster")
+        mock_create_crd.assert_called_once_with("test-compute-cluster")
+        mock_apply_rbac.assert_called_once_with("test-compute-cluster")
+        mock_create_secrets.assert_called_once_with("test-compute-cluster")
+
+    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
+    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
+    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
+    def test_create_without_dedicated_compute_cluster(
+        self,
+        mock_create_compute_cluster,
+        mock_create_crd,
+        mock_apply_rbac,
+        mock_create_secrets,
+        mock_env_get,
+        mock_exec,
+        mock_kube_create,
+        mock_assert_command,
+        mock_check_output,
+        mock_create_kuberay,
+        mock_create_spark,
+        mock_create_cadence_domain,
+        mock_kube_wait,
+    ):
+        """Test _create function without dedicated compute cluster (uses control plane)."""
+        # Setup namespace with create_compute_cluster=False
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=False,
+            compute_cluster_name="test-compute-cluster",
+        )
+
+        # Mock environment variable
+        mock_env_get.return_value = "test-token"
+        mock_check_output.return_value = b""
+
+        sandbox._create(ns)
+
+        # Verify dedicated compute cluster was NOT created
+        mock_create_compute_cluster.assert_not_called()
+
+        # Verify control plane cluster CRD/RBAC/secrets were created with sandbox cluster name
+        mock_create_crd.assert_called_once_with("michelangelo-sandbox")
+        mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
+        mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
