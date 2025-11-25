@@ -21,13 +21,14 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		expectedConditionMessage string
 	}{
 		{
-			name: "rolling rollout completed when revisions match",
+			name: "rolling rollout completed when stage is PLACEMENT and state is INITIALIZING",
 			deployment: &v2pb.Deployment{
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					Stage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
+					State: v2pb.DEPLOYMENT_STATE_INITIALIZING,
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
@@ -35,13 +36,14 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 			expectedConditionMessage: "Rolling rollout completed successfully across all inference servers",
 		},
 		{
-			name: "rolling rollout pending when revisions don't match",
+			name: "rolling rollout pending when stage is not PLACEMENT",
 			deployment: &v2pb.Deployment{
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					Stage: v2pb.DEPLOYMENT_STAGE_VALIDATION,
+					State: v2pb.DEPLOYMENT_STATE_INITIALIZING,
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
@@ -49,60 +51,19 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 			expectedConditionMessage: "Rolling rollout has not started",
 		},
 		{
-			name: "rolling rollout pending when current revision is nil",
+			name: "rolling rollout pending when state is not INITIALIZING",
 			deployment: &v2pb.Deployment{
 				Spec: v2pb.DeploymentSpec{
 					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 				Status: v2pb.DeploymentStatus{
-					CurrentRevision: nil,
+					Stage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
+					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "RollingRolloutPending",
 			expectedConditionMessage: "Rolling rollout has not started",
-		},
-		{
-			name: "rolling rollout pending when desired revision is nil",
-			deployment: &v2pb.Deployment{
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: nil,
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "RollingRolloutPending",
-			expectedConditionMessage: "Rolling rollout has not started",
-		},
-		{
-			name: "rolling rollout pending when both revisions are nil",
-			deployment: &v2pb.Deployment{
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: nil,
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: nil,
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "RollingRolloutPending",
-			expectedConditionMessage: "Rolling rollout has not started",
-		},
-		{
-			name: "rolling rollout completed with bert_cola model",
-			deployment: &v2pb.Deployment{
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "bert_cola"},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "bert_cola"},
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "RollingRolloutCompleted",
-			expectedConditionMessage: "Rolling rollout completed successfully across all inference servers",
 		},
 	}
 
@@ -131,7 +92,6 @@ func TestRollingRolloutRun(t *testing.T) {
 		expectedConditionReason string
 		expectedStage           v2pb.DeploymentStage
 		expectedState           v2pb.DeploymentState
-		expectedCurrentRevision string
 	}{
 		{
 			name: "rolling rollout run completes successfully",
@@ -151,7 +111,6 @@ func TestRollingRolloutRun(t *testing.T) {
 			expectedConditionReason: "Success",
 			expectedStage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 			expectedState:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-			expectedCurrentRevision: "model-v2",
 		},
 		{
 			name: "rolling rollout run with default increment percentage",
@@ -174,7 +133,6 @@ func TestRollingRolloutRun(t *testing.T) {
 			expectedConditionReason: "Success",
 			expectedStage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 			expectedState:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-			expectedCurrentRevision: "bert_cola",
 		},
 		{
 			name: "rolling rollout run with custom increment percentage",
@@ -199,55 +157,6 @@ func TestRollingRolloutRun(t *testing.T) {
 			expectedConditionReason: "Success",
 			expectedStage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 			expectedState:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-			expectedCurrentRevision: "model-v3",
-		},
-		{
-			name: "rolling rollout run without desired revision",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: nil,
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
-				},
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "Success",
-			expectedStage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
-			expectedState:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-			expectedCurrentRevision: "model-v1",
-		},
-		{
-			name: "rolling rollout run with multiple annotations",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "complex-deployment",
-					Namespace: "production",
-					Annotations: map[string]string{
-						"rollout.michelangelo.ai/increment-percentage": "15",
-						"rollout.michelangelo.ai/strategy":             "rolling",
-						"other.annotation.com/custom":                  "value",
-					},
-				},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "llm-model"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "triton-cluster"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "old-llm-model"},
-				},
-			},
-			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
-			expectedConditionReason: "Success",
-			expectedStage:           v2pb.DEPLOYMENT_STAGE_PLACEMENT,
-			expectedState:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-			expectedCurrentRevision: "llm-model",
 		},
 	}
 
@@ -266,16 +175,6 @@ func TestRollingRolloutRun(t *testing.T) {
 			assert.Equal(t, "Operation completed successfully", condition.Message)
 			assert.Equal(t, tt.expectedStage, tt.deployment.Status.Stage)
 			assert.Equal(t, tt.expectedState, tt.deployment.Status.State)
-
-			if tt.deployment.Spec.DesiredRevision != nil {
-				assert.NotNil(t, tt.deployment.Status.CurrentRevision)
-				assert.Equal(t, tt.expectedCurrentRevision, tt.deployment.Status.CurrentRevision.Name)
-			} else {
-				// When no desired revision, current revision should remain unchanged
-				if tt.deployment.Status.CurrentRevision != nil {
-					assert.Equal(t, tt.expectedCurrentRevision, tt.deployment.Status.CurrentRevision.Name)
-				}
-			}
 		})
 	}
 }

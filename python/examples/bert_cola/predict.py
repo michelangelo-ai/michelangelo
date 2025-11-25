@@ -2,7 +2,7 @@ import requests
 from transformers import AutoTokenizer
 
 # Triton inference endpoint
-url = "http://localhost:8080/inference-server-bert-cola/bert-cola-deployment/v2/models/bert-cola-38/infer"
+url = "http://localhost:8080/inference-server-bert-cola/bert-cola-deployment/v2/models/bert-cola-37/infer"
 
 # Input text
 text = "Example input for prediction."

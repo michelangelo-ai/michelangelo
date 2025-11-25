@@ -719,7 +719,7 @@ func RolloutInProgress(deployment v2pb.Deployment) bool {
 	result := revisionsDiffer && notTerminal && notInitialization
 
 	// Debug logging to understand why RolloutInProgress might return false
-	fmt.Printf("DEBUG RolloutInProgress for %s: revisionsDiffer=%v (current=%v, candidate=%v), isActiveRolloutStage=%v, notTerminal=%v (stage=%v), notInitialization=%v, result=%v\n",
+	fmt.Printf("DEBUG RolloutInProgress for %s: revisionsDiffer=%v (current=%v, candidate=%v), notTerminal=%v (stage=%v), notInitialization=%v, result=%v\n",
 		deployment.Name, revisionsDiffer, currentRevision, candidateRevision, notTerminal, deployment.Status.Stage, notInitialization, result)
 
 	return result

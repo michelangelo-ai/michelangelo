@@ -1,7 +1,7 @@
 apiVersion: michelangelo.api/v2
 kind: Deployment
 metadata:
-  name: bert-cola-deployment
+  name: bert-cola-deployment-foo
   namespace: default
   labels:
     app: bert-cola-29

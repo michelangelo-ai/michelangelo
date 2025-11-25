@@ -47,10 +47,8 @@ func (a *RollingRolloutActor) GetLogger() *zap.Logger {
 
 func (a *RollingRolloutActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if rolling rollout is complete
-	if resource.Status.CurrentRevision != nil &&
-		resource.Spec.DesiredRevision != nil &&
-		resource.Status.CurrentRevision.Name == resource.Spec.DesiredRevision.Name {
-
+	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_PLACEMENT &&
+		resource.Status.State == v2pb.DEPLOYMENT_STATE_INITIALIZING {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_TRUE,
@@ -86,10 +84,6 @@ func (a *RollingRolloutActor) Run(ctx context.Context, resource *v2pb.Deployment
 		a.logger.Info("Rolling rollout configuration",
 			zap.Int("increment_percentage", incrementPercentage),
 			zap.String("strategy", "rolling"))
-
-		// Simulate successful rollout completion
-		resource.Status.CurrentRevision = resource.Spec.DesiredRevision
-		a.logger.Info("Rolling rollout completed successfully", zap.String("model", modelName))
 	}
 
 	return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_TRUE, Reason: "Success", Message: "Operation completed successfully"}, nil

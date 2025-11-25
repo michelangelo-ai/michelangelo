@@ -56,8 +56,8 @@ kubectl port-forward deploy/bert-cola-deployment-predictor-00001-deployment 8080
 
 ### Test the predictor
 ```bash
-# curl -X POST http://localhost:8889/inference-server-bert-cola/bert-cola-deployment-foo/models/bert-cola-38/infer
-curl -X POST http://localhost:8889/inference-server-bert-cola/v2/models/bert-cola-38/infer \
+# curl -X POST http://localhost:8889/inference-server-bert-cola/bert-cola-deployment-foo/models/bert-cola-37/infer
+curl -X POST http://localhost:8889/inference-server-bert-cola/v2/models/bert-cola-37/infer \
 -H "Content-Type: application/json" \
 -d '{
   "inputs": [
