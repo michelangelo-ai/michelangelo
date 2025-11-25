@@ -23,7 +23,8 @@ log = logging.getLogger(__name__)
         worker_cpu=2,
         worker_memory="4Gi",
         worker_instances=2,
-    )
+    ),
+    cache_enabled=True,
 )
 def prepare_finetune_dataset(
     dataset_name: str = "alpaca",

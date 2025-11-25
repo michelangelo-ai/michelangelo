@@ -8,6 +8,7 @@ import torch
 import numpy as np
 import os
 import shutil
+import inspect
 from transformers import AutoTokenizer
 from ray.data import Dataset
 import michelangelo.uniflow.core as uniflow
@@ -20,7 +21,7 @@ log = logging.getLogger(__name__)
 
 def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
     """
-    Fallback: Download a checkpoint from MLflow artifacts.
+    Download a checkpoint from MLflow artifacts.
 
     Args:
         artifact_uri: MLflow artifact URI (e.g., "runs://{run_id}/artifacts/checkpoint")
@@ -29,9 +30,17 @@ def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
         Local path to the downloaded checkpoint directory
     """
     log.info(f"Downloading checkpoint from MLflow: {artifact_uri}")
-    local_path = mlflow.artifacts.download_artifacts(artifact_uri)
-    log.info(f"Successfully downloaded checkpoint to: {local_path}")
-    return local_path
+
+    # Extract run_id from the URI and download specific checkpoint file
+    run_id = artifact_uri.split("/")[1]
+    checkpoint_file_uri = f"runs:/{run_id}/checkpoint/model_checkpoint.ckpt"
+    log.info(f"Downloading specific checkpoint file: {checkpoint_file_uri}")
+
+    checkpoint_file_path = mlflow.artifacts.download_artifacts(checkpoint_file_uri)
+    checkpoint_dir = os.path.dirname(checkpoint_file_path)
+    log.info(f"Successfully downloaded checkpoint file to: {checkpoint_file_path}")
+    log.info(f"Using checkpoint directory: {checkpoint_dir}")
+    return checkpoint_dir
 
 
 @uniflow.task(
@@ -71,40 +80,28 @@ def evaluate_gpt_model(
     Returns:
         Dictionary with evaluation metrics
     """
-    log.info("🔍 EVAL STEP 1: Starting evaluation")
     log.info(f"Checkpoint: {checkpoint_path}")
     log.info(f"Model config: {model_name}, LoRA: {use_lora}, rank: {lora_rank}")
 
     # Load test dataset
-    log.info("🔍 EVAL STEP 2: Loading test dataset")
     test_dv.load_ray_dataset()
     test_data: Dataset = test_dv.value
-    log.info("✅ Test dataset loaded successfully")
 
     # Load Ray checkpoint directly (much simpler!)
-    log.info("🔍 EVAL STEP 3: Importing modules")
     from examples.gpt_oss_20b_finetune.model import create_gpt_model
     import glob
 
     log.info("✅ Modules imported successfully")
 
-    log.info("🔍 EVAL STEP 4: Using checkpoint path")
-    log.info(f"Checkpoint path: {checkpoint_path}")
-
-    # Use checkpoint path directly (local path)
+    # Use checkpoint path directly (local path) or download from MLflow
     if os.path.exists(checkpoint_path):
         local_checkpoint_path = checkpoint_path
         log.info(f"Using local checkpoint path: {local_checkpoint_path}")
+    elif checkpoint_path.startswith("runs:/"):
+        log.info("Downloading checkpoint from MLflow...")
+        local_checkpoint_path = download_checkpoint_from_mlflow(checkpoint_path)
     else:
-        # Fallback: try MLflow download if it's an MLflow URI
-        if checkpoint_path.startswith("runs:/"):
-            log.info("Trying MLflow download as fallback...")
-            local_checkpoint_path = download_checkpoint_from_mlflow(checkpoint_path)
-        else:
-            raise FileNotFoundError(f"Checkpoint path not found: {checkpoint_path}")
-
-    log.info("🔍 EVAL STEP 5: Finding checkpoint files")
-    log.info(f"Looking in directory: {local_checkpoint_path}")
+        raise FileNotFoundError(f"Checkpoint path not found: {checkpoint_path}")
 
     # Find checkpoint file
     checkpoint_files = glob.glob(os.path.join(local_checkpoint_path, "*.ckpt"))
@@ -116,24 +113,17 @@ def evaluate_gpt_model(
     ckpt_path = checkpoint_files[0]
     log.info(f"Using checkpoint: {ckpt_path}")
 
-    log.info("🔍 EVAL STEP 6: Loading checkpoint data")
     checkpoint_data = torch.load(ckpt_path, map_location="cpu")
-    log.info(f"✅ Checkpoint loaded, keys: {list(checkpoint_data.keys())}")
+    log.info(f"Checkpoint loaded, keys: {list(checkpoint_data.keys())}")
 
-    log.info("🔍 EVAL STEP 7: Creating model")
     model = create_gpt_model(
         model_name=model_name,
         learning_rate=learning_rate,
         use_lora=use_lora,
         lora_rank=lora_rank,
     )
-    log.info("✅ Model created successfully")
-
-    log.info("🔍 EVAL STEP 8: Loading model weights")
     model.load_state_dict(checkpoint_data["state_dict"])
-    log.info("✅ Model weights loaded successfully")
 
-    log.info("🔍 EVAL STEP 9: Extracting base model")
     if hasattr(model, "model"):
         base_model = model.model
         log.info("✅ Extracted base model from Lightning wrapper")
@@ -141,21 +131,23 @@ def evaluate_gpt_model(
         base_model = model
         log.info("✅ Using model directly (no wrapper)")
 
-    log.info("🔍 EVAL STEP 10: Loading tokenizer")
+    # Debug model type
+    log.info(f"Base model type: {type(base_model)}")
+    log.info(f"Base model class: {base_model.__class__}")
+    log.info(f"Has generate method: {hasattr(base_model, 'generate')}")
+    if hasattr(base_model, 'generate'):
+        sig = inspect.signature(base_model.generate)
+        log.info(f"Generate method signature: {sig}")
+
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    log.info("✅ Tokenizer loaded successfully")
 
-    log.info("🔍 EVAL STEP 11: Setting model to eval mode")
     model.eval()
     device = next(model.parameters()).device
-    log.info(f"✅ Model ready, device: {device}")
 
-    log.info("🔍 EVAL STEP 12: Converting dataset")
     test_df = test_data.to_pandas()
     test_df = test_df.head(num_samples)
-    log.info(f"✅ Dataset ready: {len(test_df)} samples")
 
     # Evaluation metrics
     perplexities = []
@@ -209,14 +201,43 @@ def evaluate_gpt_model(
 
                 # Generate continuation
                 with torch.no_grad():
-                    generated = base_model.generate(
-                        prompt_ids,
-                        max_length=prompt_length + 50,
-                        num_return_sequences=1,
-                        temperature=0.7,
-                        do_sample=True,
-                        pad_token_id=tokenizer.eos_token_id,
-                    )
+                    try:
+                        # Try standard generate call
+                        generated = base_model.generate(
+                            prompt_ids,
+                            max_length=prompt_length + 50,
+                            num_return_sequences=1,
+                            temperature=0.7,
+                            do_sample=True,
+                            pad_token_id=tokenizer.eos_token_id,
+                        )
+                    except TypeError as e:
+                        log.warning(f"Standard generate failed: {e}")
+                        log.info(f"Trying generate with different approach...")
+                        # Fallback: Try with the main model if this is a LoRA model
+                        if hasattr(base_model, 'base_model') and hasattr(base_model.base_model, 'generate'):
+                            log.info("Using base_model.base_model for generation")
+                            generated = base_model.base_model.generate(
+                                prompt_ids,
+                                max_length=prompt_length + 50,
+                                num_return_sequences=1,
+                                temperature=0.7,
+                                do_sample=True,
+                                pad_token_id=tokenizer.eos_token_id,
+                            )
+                        elif hasattr(model, 'generate'):
+                            log.info("Using main model for generation")
+                            generated = model.generate(
+                                prompt_ids,
+                                max_length=prompt_length + 50,
+                                num_return_sequences=1,
+                                temperature=0.7,
+                                do_sample=True,
+                                pad_token_id=tokenizer.eos_token_id,
+                            )
+                        else:
+                            log.error("No suitable generate method found, skipping generation")
+                            continue
 
                 # Calculate generation score (simple length-based metric)
                 generated_length = len(generated[0]) - prompt_length
@@ -242,16 +263,5 @@ def evaluate_gpt_model(
     log.info("✅ Evaluation completed")
     log.info(f"Average Perplexity: {avg_perplexity:.2f}")
     log.info(f"Average Generation Score: {avg_generation_score:.2f}")
-
-    # Clean up temporary files if any were downloaded
-    try:
-        if local_checkpoint_path != checkpoint_path and "tmp" in local_checkpoint_path:
-            if os.path.isdir(local_checkpoint_path):
-                shutil.rmtree(local_checkpoint_path)
-            else:
-                os.remove(local_checkpoint_path)
-            log.info(f"✅ Cleaned up temporary files: {local_checkpoint_path}")
-    except Exception as e:
-        log.warning(f"Failed to clean up temporary files {local_checkpoint_path}: {e}")
 
     return metrics
