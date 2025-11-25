@@ -86,6 +86,7 @@ jobs:
           ANNOTATION_TYPE: warning
           VERBOSE: true
           COVERAGE_PATH: python
+          COVERAGE_DATA_BRANCH: main
         continue-on-error: true
 
       # Upload coverage to Codecov for tracking over time
