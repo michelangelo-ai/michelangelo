@@ -23,9 +23,7 @@ var Module = fx.Options(
 	}),
 	fx.Invoke(register),
 	oss.Module,
-	fx.Provide(func(client client.Client, logger *zap.Logger) configmap.ModelConfigMapProvider {
-		return configmap.NewDefaultModelConfigMapProvider(client, logger)
-	}),
+	fx.Provide(provideModelConfigMapProvider),
 )
 
 func register(
@@ -36,4 +34,8 @@ func register(
 	registrar pluginmanager.Registrar[plugins.Plugin],
 ) error {
 	return NewReconciler(apiHandlerFactory, registrar).SetupWithManager(mgr)
+}
+
+func provideModelConfigMapProvider(client client.Client, logger *zap.Logger) configmap.ModelConfigMapProvider {
+	return configmap.NewDefaultModelConfigMapProvider(client, logger)
 }

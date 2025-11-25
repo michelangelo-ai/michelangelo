@@ -431,7 +431,7 @@ func (r *Reconciler) processPlugin(ctx context.Context, log logr.Logger, metrics
 			// Log emergency rollout for audit purposes
 			log.Info("Emergency rollout detected",
 				"deployment", fmt.Sprintf("%s/%s", deployment.Namespace, deployment.Name),
-				// "issue_link", deployment.Spec.Strategy.GetBlast().GetIssueLink(),
+				"issue_link", deployment.Spec.Strategy.GetBlast().GetIssueLink(),
 				"with_rollback_alerts", deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger())
 		}
 
@@ -716,16 +716,11 @@ func RolloutInProgress(deployment v2pb.Deployment) bool {
 	notTerminal := !IsTerminalStage(deployment.Status.Stage)
 	notInitialization := !isInitializationStage(deployment.Status.Stage)
 
-	// FIXED: If deployment is in an active rollout stage (validation, placement),
-	// consider it in progress even if revisions are equal
-	isActiveRolloutStage := deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_VALIDATION ||
-		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_PLACEMENT
-
-	result := (revisionsDiffer || isActiveRolloutStage) && notTerminal && notInitialization
+	result := revisionsDiffer && notTerminal && notInitialization
 
 	// Debug logging to understand why RolloutInProgress might return false
 	fmt.Printf("DEBUG RolloutInProgress for %s: revisionsDiffer=%v (current=%v, candidate=%v), isActiveRolloutStage=%v, notTerminal=%v (stage=%v), notInitialization=%v, result=%v\n",
-		deployment.Name, revisionsDiffer, currentRevision, candidateRevision, isActiveRolloutStage, notTerminal, deployment.Status.Stage, notInitialization, result)
+		deployment.Name, revisionsDiffer, currentRevision, candidateRevision, notTerminal, deployment.Status.Stage, notInitialization, result)
 
 	return result
 }
