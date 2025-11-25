@@ -25,7 +25,7 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "old-model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 					Conditions: []*api.Condition{
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
@@ -105,7 +105,7 @@ func TestParseStage(t *testing.T) {
 					Stage:             v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 					Conditions: []*api.Condition{
 						{Type: "Validated", Status: api.CONDITION_STATUS_TRUE},
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
@@ -219,7 +219,7 @@ func TestParseStage(t *testing.T) {
 					Conditions: []*api.Condition{
 						{Type: "Validated", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "ModelSynced", Status: api.CONDITION_STATUS_TRUE},
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
@@ -235,7 +235,7 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 					Conditions: []*api.Condition{
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "CleanupComplete", Status: api.CONDITION_STATUS_FALSE},
 					},
 				},
@@ -252,7 +252,7 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 					Conditions: []*api.Condition{
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "RollbackComplete", Status: api.CONDITION_STATUS_FALSE},
 					},
 				},
@@ -278,7 +278,7 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 					Conditions: []*api.Condition{
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
@@ -296,7 +296,7 @@ func TestParseStage(t *testing.T) {
 					Conditions: []*api.Condition{
 						{Type: "Validated", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "ModelSynced", Status: api.CONDITION_STATUS_FALSE},
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 					},
 				},
 			},
@@ -312,7 +312,7 @@ func TestParseStage(t *testing.T) {
 					CandidateRevision: &api.ResourceIdentifier{Name: "model-v1"},
 					Stage:             v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
 					Conditions: []*api.Condition{
-						{Type: "RolloutComplete", Status: api.CONDITION_STATUS_TRUE},
+						{Type: "RolloutCompleted", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "CleanupComplete", Status: api.CONDITION_STATUS_TRUE},
 						{Type: "StateSteady", Status: api.CONDITION_STATUS_TRUE},
 					},

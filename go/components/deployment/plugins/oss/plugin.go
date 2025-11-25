@@ -119,73 +119,66 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	fmt.Printf("DEBUG: ParseStage CALLED for %s, DesiredRevision=%v, CandidateRevision=%v, conditions=%d\n",
 		deployment.Name, deployment.Spec.DesiredRevision, deployment.Status.CandidateRevision, len(deployment.Status.Conditions))
 
-	currentStage := deployment.Status.Stage
-	// Check if we need to trigger a new rollout despite having conditions
-	// This happens when desired != candidate, which means a new rollout should start
-	if deployment.Spec.DesiredRevision != nil && deployment.Status.CandidateRevision != nil {
-		if deployment.Spec.DesiredRevision.Name != deployment.Status.CandidateRevision.Name {
-			// New rollout needed - start from validation regardless of existing conditions
-			return v2pb.DEPLOYMENT_STAGE_VALIDATION
-		}
+	// New rollout needed if desired revision differs from candidate revision
+	desired := deployment.Spec.DesiredRevision
+	candidate := deployment.Status.CandidateRevision
+	if desired != nil && candidate != nil && desired.Name != candidate.Name {
+		return v2pb.DEPLOYMENT_STAGE_VALIDATION
 	}
 
+	// No conditions means stay in current stage
 	if len(deployment.Status.Conditions) == 0 {
-		return currentStage
+		return deployment.Status.Stage
 	}
-
-	// Check for actual rollout completion conditions (not just steady state)
-	hasRolloutComplete := false
-	hasValidated := false
 
 	for _, cond := range deployment.Status.Conditions {
 		switch cond.Type {
-		// case "RolloutComplete":
-		case common.ActorTypeRolloutCompletion:
+		case common.ActorTypeRollback:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				hasRolloutComplete = true
+				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 			}
-		// case "Validated":
-		case common.ActorTypeValidation:
+			return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+
+		case common.ActorTypeCleanup:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				hasValidated = true
-			} else if cond.Status == apipb.CONDITION_STATUS_FALSE {
+				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
+			}
+			return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
+
+		case common.ActorTypeSteadyState:
+			return deployment.Status.Stage
+
+		case common.ActorTypeValidation:
+			if cond.Status == apipb.CONDITION_STATUS_FALSE {
 				return v2pb.DEPLOYMENT_STAGE_VALIDATION
 			}
-		// case "ModelSynced":
+
 		case common.ActorTypeModelSync:
 			if cond.Status == apipb.CONDITION_STATUS_FALSE {
 				return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 			}
-		// case "CleanupComplete":
-		case common.ActorTypeCleanup:
-			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-			} else {
-				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-			}
-		// case "RollbackComplete":
-		case common.ActorTypeRollback:
-			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
-			} else {
-				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
-			}
-		// case "StateSteady":
-		case common.ActorTypeSteadyState:
-			return currentStage
 		}
 	}
 
-	// Determine stage based on rollout progress
+	// Determine stage based on rollout progress indicators
+	hasRolloutComplete := false
+	hasValidated := false
+	for _, cond := range deployment.Status.Conditions {
+		if cond.Type == common.ActorTypeRolloutCompletion && cond.Status == apipb.CONDITION_STATUS_TRUE {
+			hasRolloutComplete = true
+		}
+		if cond.Type == common.ActorTypeValidation && cond.Status == apipb.CONDITION_STATUS_TRUE {
+			hasValidated = true
+		}
+	}
+
 	if hasRolloutComplete {
 		return v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-	} else if hasValidated {
-		// Validation has completed, we are in placement stage
-		return v2pb.DEPLOYMENT_STAGE_PLACEMENT
-	} else {
-		// No clear progress indicators, start from validation
-		return v2pb.DEPLOYMENT_STAGE_VALIDATION
 	}
+	if hasValidated {
+		return v2pb.DEPLOYMENT_STAGE_PLACEMENT
+	}
+	return v2pb.DEPLOYMENT_STAGE_VALIDATION
 }
 
 // GetState returns the current deployment state
