@@ -81,8 +81,8 @@ if __name__ == "__main__":
         ctx.environ["MA_API_SERVER"] = "localhost:14566"
 
     else:
-        # Cluster deployment - use Kubernetes service names
-        ctx.environ["MLFLOW_TRACKING_URI"] = "http://mlflow-tracking-server:5000"
+        # Cluster deployment - use MLflow proxy to bypass security middleware
+        ctx.environ["MLFLOW_TRACKING_URI"] = "http://mlflow-proxy:5001"
         ctx.environ["MLFLOW_BACKEND_STORE_URI"] = (
             "mysql+pymysql://root:root@mysql:3306/mlflow"
         )

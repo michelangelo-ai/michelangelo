@@ -16,10 +16,12 @@ from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
 )
 from michelangelo.uniflow.plugins.ray import RayTask
 from examples.gpt_oss_20b_finetune.model import create_gpt_model
-import mlflow
 from pytorch_lightning.loggers import MLFlowLogger
 
 log = logging.getLogger(__name__)
+
+
+# MLflow checkpoint logging removed - using local paths for simplicity
 
 
 @uniflow.task(
@@ -200,8 +202,10 @@ def simple_train_gpt(
 
     log.info(f"✅ Best checkpoint available at: {checkpoint_path}")
 
+    # For now, use local checkpoint path (simpler and reliable)
+    log.info("🔄 Using local checkpoint path for distributed access")
+
     return {
-        "result": result,
-        "checkpoint_path": checkpoint_path,
+        "checkpoint_path": checkpoint_path,  # Local path
         "mlflow_run_id": run_id,
     }
