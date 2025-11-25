@@ -1,5 +1,4 @@
-"""GPT Lightning Module for distributed training with LoRA support
-"""
+"""GPT Lightning Module for distributed training with LoRA support"""
 
 import logging
 from typing import Any, Dict

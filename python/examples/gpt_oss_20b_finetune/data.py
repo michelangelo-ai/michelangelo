@@ -232,8 +232,7 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
 
 
 def create_data_collator(tokenizer, max_length: int):
-    """Create data collator for dynamic padding
-    """
+    """Create data collator for dynamic padding"""
     from transformers import DataCollatorForLanguageModeling
 
     return DataCollatorForLanguageModeling(

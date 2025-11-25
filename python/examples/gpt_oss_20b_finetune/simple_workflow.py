@@ -1,5 +1,4 @@
-"""Simple GPT Fine-tuning Demo (Local Testing Version)
-"""
+"""Simple GPT Fine-tuning Demo (Local Testing Version)"""
 
 import os
 
