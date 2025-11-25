@@ -30,6 +30,7 @@ from michelangelo.cli.mactl.plugins.pipeline.run import (
     generate_pipeline_run_name,
     generate_pipeline_run_object,
 )
+from michelangelo.uniflow.core.file_sync import DefaultFileSync
 
 _ENV_VARIABLE_KEY = "env"
 _UNIFLOW_IMAGE_ANNOTATION_KEY = "michelangelo/uniflow-image"
@@ -38,8 +39,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """Add function signature for pipeline dev_run command.
-    """
+    """Add function signature for pipeline dev_run command."""
     inject_func_signature(
         crd,
         "dev_run",
@@ -93,6 +93,20 @@ def add_function_signature(crd: CRD) -> None:
                         ),
                     },
                 },
+                {
+                    "func_signature": Parameter(
+                        "file_sync",
+                        Parameter.POSITIONAL_OR_KEYWORD,
+                        default=False,
+                    ),
+                    "args": ["--file-sync"],
+                    "kwargs": {
+                        "action": "store_true",
+                        "required": False,
+                        "default": False,
+                        "help": "Enable file synchronization for local code changes",
+                    },
+                },
             ],
         },
     )
@@ -101,8 +115,7 @@ def add_function_signature(crd: CRD) -> None:
 def generate_dev_run(
     crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None
 ):
-    """Generate dev run function for pipeline CRD.
-    """
+    """Generate dev run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
@@ -143,6 +156,9 @@ def generate_dev_run(
         else:
             _resume_from = None
 
+        # Handle optional file_sync parameter
+        _file_sync = bound_args.arguments.get("file_sync", False)  # pragma: no cover
+
         environment_variables = _process_env_variables(
             bound_args.arguments.get("env", [])
         )
@@ -150,12 +166,12 @@ def generate_dev_run(
         # parse pipeline yaml file
         yaml_path_string = _file
         yaml_path = Path(yaml_path_string).resolve()
-        yaml_dict = yaml_to_dict(yaml_path_string)
-        yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
-
-        # Add resume_from to yaml_dict so it can be processed by the metadata converter
-        if _resume_from:
-            yaml_dict["resume_from"] = _resume_from
+        yaml_dict = _add_optional_params_to_yaml_dict(
+            yaml_to_dict(yaml_path_string),
+            environment_variables,
+            _resume_from,
+            _file_sync,
+        )
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
             yaml_dict, input_class, yaml_path
@@ -189,6 +205,7 @@ def convert_crd_metadata_pipeline_dev_run(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
     """Convert CRD metadata for pipeline dev-run command.
+
     This function generates a PipelineRunRequest object from command line arguments.
     """
     _LOG.info("Converting metadata for pipeline run command")
@@ -229,21 +246,41 @@ def convert_crd_metadata_pipeline_dev_run(
     # Extract resume_from parameter if present
     resume_from = yaml_dict.get("resume_from")
 
+    # Extract file_sync parameter and create tarball if enabled
+    file_sync = yaml_dict.get("file_sync", False)
+    file_sync_tarball_url = ""
+    if file_sync:
+        docker_image = (
+            yaml_dict.get("metadata", {})
+            .get("annotations", {})
+            .get(_UNIFLOW_IMAGE_ANNOTATION_KEY, "")
+        )
+        _LOG.info("Creating file-sync tarball with docker_image: %s", docker_image)
+        file_sync_tarball_url = DefaultFileSync(
+            docker_image=docker_image,
+        ).create_and_upload_tarball()
+        _LOG.info("File-sync tarball uploaded to: %s", file_sync_tarball_url)
+
     pipeline_dev_run_cr = generate_pipeline_dev_run_object(
-        yaml_dict, pipeline_spec, resume_from
+        yaml_dict, pipeline_spec, resume_from, file_sync_tarball_url
     )
     return {"pipeline_run": pipeline_dev_run_cr}
 
 
 def generate_pipeline_dev_run_object(
-    yaml_dict: dict, pipeline_spec: dict, resume_from: str = None
+    yaml_dict: dict,
+    pipeline_spec: dict,
+    resume_from: Optional[str] = None,
+    file_sync_tarball_url: str = "",
 ) -> dict:
     """Generate Pipeline Dev Run CR as dictionary.
 
     Args:
         yaml_dict: YAML configuration dictionary
         pipeline_spec: Pipeline specification dictionary
-        resume_from: Optional resume specification in format "pipeline_run_name:step_name"
+        resume_from: Optional resume specification in format
+            "pipeline_run_name:step_name"
+        file_sync_tarball_url: Optional remote storage URL for file-sync tarball
     """
     namespace = yaml_dict.get("metadata", {}).get("namespace", "")
     pipeline_name = yaml_dict.get("metadata", {}).get("name", "")
@@ -259,6 +296,11 @@ def generate_pipeline_dev_run_object(
     pipeline_run_spec = pipeline_run_obj.setdefault("spec", {})
     # embed environment variables into pipeline_run.spec.inputs
     environment_variables = yaml_dict.get(_ENV_VARIABLE_KEY, {})
+
+    # Add file-sync tarball URL to environment if present
+    if file_sync_tarball_url:
+        environment_variables["UF_FILE_SYNC_TARBALL_URL"] = file_sync_tarball_url
+
     if environment_variables:
         pipeline_run_spec["input"] = {
             "environ": environment_variables,
@@ -284,6 +326,7 @@ def generate_pipeline_dev_run_object(
 
 def _process_env_variables(env_variables: list[str]) -> dict:
     """Process environment variables which are passed as a list of strings.
+
     Format of the environment variables is "<ENV_VAR>=<VALUE>".
     """
     env_dict = {}
@@ -291,7 +334,36 @@ def _process_env_variables(env_variables: list[str]) -> dict:
         key_value_pair = env_variable.split("=", 1)
         if len(key_value_pair) != 2:
             raise TypeError(
-                f"Invalid environment variable format: {env_variable}, expected format is <ENV_VAR>=<VALUE>"
+                f"Invalid environment variable format: {env_variable}, "
+                f"expected format is <ENV_VAR>=<VALUE>"
             )
         env_dict[key_value_pair[0]] = key_value_pair[1]
     return env_dict
+
+
+def _add_optional_params_to_yaml_dict(
+    yaml_dict: dict,
+    environment_variables: dict,
+    resume_from: Optional[str],
+    file_sync: bool,
+) -> dict:
+    """Add optional parameters to yaml_dict for dev_run command.
+
+    Args:
+        yaml_dict: Base YAML configuration dictionary
+        environment_variables: Environment variables to add
+        resume_from: Optional resume specification
+        file_sync: Whether file sync is enabled
+
+    Returns:
+        Updated yaml_dict with optional parameters
+    """
+    yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
+
+    if resume_from:
+        yaml_dict["resume_from"] = resume_from
+
+    if file_sync:
+        yaml_dict["file_sync"] = file_sync
+
+    return yaml_dict

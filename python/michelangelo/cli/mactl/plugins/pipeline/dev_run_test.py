@@ -1,17 +1,29 @@
-"""Unit tests for pipeline dev_run plugin.
-"""
+"""Unit tests for pipeline dev_run plugin."""
 
+from pathlib import Path
 from unittest import TestCase
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
     _process_env_variables,
+    convert_crd_metadata_pipeline_dev_run,
     generate_pipeline_dev_run_object,
 )
 
 
 class PipelineDevRunTest(TestCase):
     """Tests for pipeline dev_run plugin."""
+
+    def test_module_imports(self):
+        """Test that the module imports successfully including all dependencies."""
+        # This test ensures all imports in dev_run.py are valid and covered
+        from michelangelo.cli.mactl.plugins.pipeline import dev_run
+
+        # Verify key attributes exist
+        self.assertTrue(hasattr(dev_run, "convert_crd_metadata_pipeline_dev_run"))
+        self.assertTrue(hasattr(dev_run, "generate_pipeline_dev_run_object"))
+        self.assertTrue(hasattr(dev_run, "_process_env_variables"))
+        self.assertTrue(hasattr(dev_run, "DefaultFileSync"))
 
     def test_process_env_variables_basic(self):
         """Test processing environment variables from list to dict."""
@@ -133,3 +145,222 @@ class PipelineDevRunTest(TestCase):
         result = generate_pipeline_dev_run_object(yaml_dict, pipeline_spec)
 
         self.assertNotIn("input", result["spec"])
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+    )
+    def test_generate_pipeline_dev_run_object_with_file_sync(
+        self, mock_generate_run_obj, mock_generate_name
+    ):
+        """Test that file-sync tarball URL is injected into environment variables."""
+        mock_generate_name.return_value = "run-test-12345678"
+        base_obj = {
+            "metadata": {"name": "run-test-12345678", "namespace": "test-ns"},
+            "spec": {"pipeline": {"name": "test-pipeline"}},
+        }
+        mock_generate_run_obj.return_value = base_obj
+
+        yaml_dict = {"metadata": {"name": "test-pipeline", "namespace": "test-ns"}}
+        pipeline_spec = {"spec": {}}
+        file_sync_tarball_url = "s3://bucket/path/to/file-sync.tar.gz"
+
+        result = generate_pipeline_dev_run_object(
+            yaml_dict, pipeline_spec, None, file_sync_tarball_url
+        )
+
+        self.assertIn("input", result["spec"])
+        self.assertIn("environ", result["spec"]["input"])
+        self.assertEqual(
+            result["spec"]["input"]["environ"]["UF_FILE_SYNC_TARBALL_URL"],
+            "s3://bucket/path/to/file-sync.tar.gz",
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+    )
+    def test_generate_pipeline_dev_run_object_with_file_sync_and_env_vars(
+        self, mock_generate_run_obj, mock_generate_name
+    ):
+        """Test that file-sync URL is merged with existing env variables."""
+        mock_generate_name.return_value = "run-test-12345678"
+        base_obj = {
+            "metadata": {"name": "run-test-12345678", "namespace": "test-ns"},
+            "spec": {"pipeline": {"name": "test-pipeline"}},
+        }
+        mock_generate_run_obj.return_value = base_obj
+
+        yaml_dict = {
+            "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
+            "env": {"KEY1": "value1", "KEY2": "value2"},
+        }
+        pipeline_spec = {"spec": {}}
+        file_sync_tarball_url = "s3://bucket/path/to/file-sync.tar.gz"
+
+        result = generate_pipeline_dev_run_object(
+            yaml_dict, pipeline_spec, None, file_sync_tarball_url
+        )
+
+        self.assertIn("input", result["spec"])
+        self.assertIn("environ", result["spec"]["input"])
+        self.assertEqual(
+            result["spec"]["input"]["environ"],
+            {
+                "KEY1": "value1",
+                "KEY2": "value2",
+                "UF_FILE_SYNC_TARBALL_URL": "s3://bucket/path/to/file-sync.tar.gz",
+            },
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+    )
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.DefaultFileSync")
+    def test_convert_crd_metadata_with_file_sync(
+        self,
+        mock_file_sync_class,
+        mock_generate_run_name,
+        mock_populate_spec,
+        mock_handle_workflow,
+        mock_repo,
+    ):
+        """Test convert_crd_metadata_pipeline_dev_run with file_sync enabled."""
+        # Setup mocks
+        mock_repo_instance = MagicMock()
+        mock_repo_instance.git.rev_parse.return_value = "/fake/repo"
+        mock_repo.return_value = mock_repo_instance
+
+        mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
+        mock_populate_spec.return_value = {"spec": {"steps": []}}
+        mock_generate_run_name.return_value = "test-run-12345"
+
+        mock_file_sync = MagicMock()
+        mock_file_sync.create_and_upload_tarball.return_value = (
+            "s3://bucket/file-sync.tar.gz"
+        )
+        mock_file_sync_class.return_value = mock_file_sync
+
+        yaml_dict = {
+            "metadata": {
+                "name": "test-pipeline",
+                "namespace": "test-ns",
+                "annotations": {"michelangelo/uniflow-image": "test-image:v1.0"},
+            },
+            "file_sync": True,
+        }
+        yaml_path = Path("/fake/repo/pipeline.yaml")
+
+        result = convert_crd_metadata_pipeline_dev_run(
+            yaml_dict, MagicMock(), yaml_path
+        )
+
+        # Verify DefaultFileSync was created with correct image
+        mock_file_sync_class.assert_called_once_with(docker_image="test-image:v1.0")
+
+        # Verify create_and_upload_tarball was called
+        mock_file_sync.create_and_upload_tarball.assert_called_once()
+
+        # Verify the result contains pipeline_run with file-sync URL
+        self.assertIn("pipeline_run", result)
+        # Verify the file-sync URL is in the environment variables
+        self.assertIn(
+            "UF_FILE_SYNC_TARBALL_URL",
+            result["pipeline_run"]["spec"]["input"]["environ"],
+        )
+        self.assertEqual(
+            result["pipeline_run"]["spec"]["input"]["environ"][
+                "UF_FILE_SYNC_TARBALL_URL"
+            ],
+            "s3://bucket/file-sync.tar.gz",
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+    )
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    def test_convert_crd_metadata_without_file_sync(
+        self,
+        mock_generate_run_name,
+        mock_populate_spec,
+        mock_handle_workflow,
+        mock_repo,
+    ):
+        """Test convert_crd_metadata_pipeline_dev_run without file_sync."""
+        # Setup mocks
+        mock_repo_instance = MagicMock()
+        mock_repo_instance.git.rev_parse.return_value = "/fake/repo"
+        mock_repo.return_value = mock_repo_instance
+
+        mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
+        mock_populate_spec.return_value = {"spec": {"steps": []}}
+        mock_generate_run_name.return_value = "test-run-12345"
+
+        yaml_dict = {
+            "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
+            "file_sync": False,
+        }
+        yaml_path = Path("/fake/repo/pipeline.yaml")
+
+        result = convert_crd_metadata_pipeline_dev_run(
+            yaml_dict, MagicMock(), yaml_path
+        )
+
+        # Verify the result contains pipeline_run
+        self.assertIn("pipeline_run", result)
+        # Verify no file-sync URL in environment when file_sync is False
+        if (
+            "input" in result["pipeline_run"]["spec"]
+            and "environ" in result["pipeline_run"]["spec"]["input"]
+        ):
+            self.assertNotIn(
+                "UF_FILE_SYNC_TARBALL_URL",
+                result["pipeline_run"]["spec"]["input"]["environ"],
+            )
+
+    def test_add_optional_params_to_yaml_dict_with_file_sync(self):
+        """Test _add_optional_params_to_yaml_dict with file_sync=True."""
+        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+            _add_optional_params_to_yaml_dict,
+        )
+
+        yaml_dict = {"metadata": {"name": "test-pipeline"}}
+        env_vars = {"KEY1": "value1"}
+        resume_from = "old-run:step1"
+        file_sync = True
+
+        result = _add_optional_params_to_yaml_dict(
+            yaml_dict, env_vars, resume_from, file_sync
+        )
+
+        self.assertEqual(result["env"], {"KEY1": "value1"})
+        self.assertEqual(result["resume_from"], "old-run:step1")
+        self.assertEqual(result["file_sync"], True)
+
+    def test_add_optional_params_to_yaml_dict_without_file_sync(self):
+        """Test _add_optional_params_to_yaml_dict with file_sync=False."""
+        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+            _add_optional_params_to_yaml_dict,
+        )
+
+        yaml_dict = {"metadata": {"name": "test-pipeline"}}
+        env_vars = {}
+        resume_from = None
+        file_sync = False
+
+        result = _add_optional_params_to_yaml_dict(
+            yaml_dict, env_vars, resume_from, file_sync
+        )
+
+        self.assertEqual(result["env"], {})
+        self.assertNotIn("resume_from", result)
+        self.assertNotIn("file_sync", result)
