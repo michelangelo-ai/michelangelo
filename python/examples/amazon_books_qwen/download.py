@@ -1,4 +1,5 @@
-"""Amazon Books Dataset Download Task
+"""Amazon Books Dataset Download Task.
+
 Production-ready Kaggle dataset download with SparkTask
 Downloads data and returns Spark DataFrames directly
 """
@@ -28,7 +29,8 @@ from michelangelo.uniflow.plugins.spark import SparkTask
 def download_kaggle_dataset(
     dataset_config: Dict[str, Any],
 ) -> Tuple[Optional[DatasetVariable], Optional[DatasetVariable]]:
-    """Download Amazon Books dataset from Kaggle using SparkTask
+    """Download Amazon Books dataset from Kaggle using SparkTask.
+
     Returns Spark DataFrames (books_df, reviews_df) for downstream tasks
     Fails cleanly if download fails - no fallback logic
     """

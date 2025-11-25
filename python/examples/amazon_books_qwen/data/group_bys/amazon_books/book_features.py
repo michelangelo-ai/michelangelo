@@ -1,4 +1,5 @@
-"""Book-level features for Amazon Books recommendation system
+"""Book-level features for Amazon Books recommendation system.
+
 Computes temporal features that enhance the dual-encoder model training
 """
 

@@ -1,4 +1,5 @@
-"""Amazon Books Qwen Dual-Encoder Pipeline
+"""Amazon Books Qwen Dual-Encoder Pipeline.
+
 Main workflow entry point for training Qwen-based recommendation model
 """
 
@@ -14,7 +15,8 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 @uniflow.workflow()
 def amazon_books_qwen_workflow(sample_size=100):
-    """Complete workflow for training Qwen dual-encoder on Amazon Books data
+    """Complete workflow for training Qwen dual-encoder on Amazon Books data.
+
     Following GenRec+Qwen architecture (N3) specifications
     """
     # Step 1: Download dataset (can be cached/reused)

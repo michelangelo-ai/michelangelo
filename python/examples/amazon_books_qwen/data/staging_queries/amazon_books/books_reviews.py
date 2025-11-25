@@ -1,4 +1,5 @@
-"""Staging query for Amazon Books dataset
+"""Staging query for Amazon Books dataset.
+
 Prepares base table by joining books and reviews for feature engineering
 """
 
