@@ -1,3 +1,9 @@
+"""LLM prediction workflow using vLLM for high-performance inference.
+
+Example workflow demonstrating how to use vLLM for efficient batch inference
+with tensor parallelism. Ideal for production deployments requiring high throughput.
+"""
+
 import michelangelo.uniflow.core as uniflow
 from examples.llm_prediction.data import load_data, write_data
 from examples.llm_prediction.vllm_predict import predict
@@ -20,6 +26,26 @@ def llm_prediction_workflow(
     worker_gpu: int = 0,
     tensor_parallel_size: int = 1,
 ):
+    """LLM prediction workflow using vLLM for high-performance inference.
+
+    Loads data from HuggingFace datasets, runs batch prediction with vLLM,
+    and writes results to storage. Supports tensor parallelism for large models.
+
+    Args:
+        data_path: HuggingFace dataset path.
+        data_name: Dataset configuration name.
+        data_slice: Dataset split to use.
+        data_predict_column: Column containing text to predict on.
+        data_limit: Maximum number of samples to process.
+        batch_size: Batch size for prediction.
+        model_name: HuggingFace model identifier.
+        temperature: Sampling temperature.
+        top_p: Nucleus sampling parameter.
+        max_tokens: Maximum tokens to generate.
+        worker_instances: Number of Ray workers. Defaults to 1.
+        worker_gpu: GPUs per worker. Defaults to 0.
+        tensor_parallel_size: Number of GPUs for tensor parallelism. Defaults to 1.
+    """
     predict_data = load_data(
         path=data_path,
         name=data_name,

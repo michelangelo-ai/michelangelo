@@ -1,3 +1,9 @@
+"""HuggingFace-based prediction module for LLM inference.
+
+This module implements distributed batch inference using HuggingFace transformers
+with Ray for parallel processing. Supports both CPU and GPU inference.
+"""
+
 import logging
 
 import numpy as np
@@ -11,6 +17,18 @@ log = logging.getLogger(__name__)
 
 
 class HFPredictor:
+    """HuggingFace text generation predictor for batch inference.
+
+    Uses HuggingFace transformers pipeline for distributed text generation with Ray.
+    Automatically handles device placement and supports both CPU and GPU inference.
+
+    Attributes:
+        generator: HuggingFace text-generation pipeline.
+        temperature: Sampling temperature for generation diversity.
+        top_p: Nucleus sampling threshold.
+        max_tokens: Maximum length for generated sequences.
+    """
+
     def __init__(
         self,
         model_name: str,
@@ -18,6 +36,14 @@ class HFPredictor:
         top_p: float,
         max_tokens: int,
     ):
+        """Initialize HuggingFace predictor.
+
+        Args:
+            model_name: HuggingFace model identifier.
+            temperature: Sampling temperature for generation.
+            top_p: Nucleus sampling parameter.
+            max_tokens: Maximum tokens to generate.
+        """
         self.generator = pipeline(
             "text-generation", model=model_name, device_map="auto"
         )
@@ -26,6 +52,14 @@ class HFPredictor:
         self.max_tokens = max_tokens
 
     def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
+        """Generate text for a batch of prompts.
+
+        Args:
+            batch: Batch dictionary with 'text' key containing prompts.
+
+        Returns:
+            Dictionary with 'prompt' and 'generated_text' lists.
+        """
         prompt: list[str] = batch["text"].tolist()
         generated_text: list[str] = [
             self.generator(
@@ -68,6 +102,21 @@ def predict(
     top_p: float,
     max_tokens: int,
 ) -> Dataset:
+    """Run distributed batch prediction using HuggingFace models.
+
+    Args:
+        predict_data: Ray Dataset containing input prompts.
+        worker_instances: Number of concurrent Ray workers.
+        worker_gpu: Number of GPUs per worker.
+        batch_size: Batch size for prediction.
+        model_name: HuggingFace model identifier.
+        temperature: Sampling temperature.
+        top_p: Nucleus sampling parameter.
+        max_tokens: Maximum tokens to generate.
+
+    Returns:
+        Ray Dataset with generated text results.
+    """
     log.info("Starting offline prediction with HFPredictor...")
     log.info(
         f"Starting prediction with batch_size {batch_size} concurrency {worker_instances}"
