@@ -1,4 +1,5 @@
-"""Amazon Books Qwen Dual-Encoder Pipeline
+"""Amazon Books Qwen Dual-Encoder Pipeline.
+
 Main workflow entry point for training Qwen-based recommendation model
 """
 
@@ -14,7 +15,8 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 @uniflow.workflow()
 def amazon_books_qwen_workflow(sample_size=100):
-    """Complete workflow for training Qwen dual-encoder on Amazon Books data
+    """Complete workflow for training Qwen dual-encoder on Amazon Books data.
+
     Following GenRec+Qwen architecture (N3) specifications
     """
     # Step 1: Download dataset (can be cached/reused)
@@ -52,8 +54,11 @@ def amazon_books_qwen_workflow(sample_size=100):
     return model_result
 
 
-# For Local Run from python directory: PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
-# For Remote Run: python examples/amazon_books_qwen/amazon_books_qwen.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run from python directory:
+# PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
+# For Remote Run:
+# python examples/amazon_books_qwen/amazon_books_qwen.py remote-run \
+#   --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
     print("=" * 80)
     print("Amazon Books Qwen Dual-Encoder Pipeline")

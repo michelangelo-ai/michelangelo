@@ -1,4 +1,5 @@
-"""Book-level features for Amazon Books recommendation system
+"""Book-level features for Amazon Books recommendation system.
+
 Computes temporal features that enhance the dual-encoder model training
 """
 
@@ -15,12 +16,14 @@ from ai.chronon.query import Query, select
 
 # Removed imports that cause introspection issues:
 # from ai.chronon.utils import get_staging_query_output_table_name
-# from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import base_table
+# from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews
+#   import base_table
 
 # Source for book popularity features
 book_popularity_source = Source(
     events=EventSource(
-        table="amazon_books_books_reviews",  # Direct table name to avoid introspection issues
+        # Direct table name to avoid introspection issues
+        table="amazon_books_books_reviews",
         query=Query(selects=select("book_id", "review_score"), time_column="ts"),
     )
 )
@@ -77,7 +80,8 @@ book_popularity = GroupBy(
 # Source for review velocity features
 review_velocity_source = Source(
     events=EventSource(
-        table="amazon_books_books_reviews",  # Direct table name to avoid introspection issues
+        # Direct table name to avoid introspection issues
+        table="amazon_books_books_reviews",
         query=Query(selects=select("book_id", "1 AS review_event"), time_column="ts"),
     )
 )

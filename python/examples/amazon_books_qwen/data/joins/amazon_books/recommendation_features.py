@@ -1,4 +1,5 @@
-"""Join definition for Amazon Books recommendation features
+"""Join definition for Amazon Books recommendation features.
+
 Combines all feature GroupBys into a comprehensive feature set for ML training
 """
 

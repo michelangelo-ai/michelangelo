@@ -1,16 +1,17 @@
-"""Training module for Qwen Dual-Encoder model
+"""Training module for Qwen Dual-Encoder model.
+
 Implements GenRec+Qwen architecture with InfoNCE contrastive loss
 """
 
 import logging
 import os
-from typing import Any, Dict
+from typing import Any
 
 import numpy as np
 import ray
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 from ray.air.config import ScalingConfig
 from ray.data import Dataset
 from ray.train import Checkpoint
@@ -25,8 +26,24 @@ log = logging.getLogger(__name__)
 
 
 class QwenDualEncoder(nn.Module):
-    """Qwen-based Dual Encoder for GenRec+Qwen architecture
-    Implements query and document towers with shared/separate Qwen backbones
+    """Qwen-based Dual Encoder for GenRec+Qwen architecture.
+
+    Implements query and document towers with shared/separate Qwen backbones.
+    The model encodes queries and documents into a shared embedding space where
+    semantically similar items have high cosine similarity.
+
+    Attributes:
+        embedding_dim: Output embedding dimension.
+        max_query_length: Maximum sequence length for queries.
+        max_doc_length: Maximum sequence length for documents.
+        shared_encoder: Whether query and document towers share weights.
+        tokenizer: Qwen tokenizer for text encoding.
+        query_encoder: Transformer encoder for query tower.
+        doc_encoder: Transformer encoder for document tower.
+        query_projection: Linear layer projecting query representations to
+            embedding_dim.
+        doc_projection: Linear layer projecting document representations to
+            embedding_dim.
     """
 
     def __init__(
@@ -37,6 +54,17 @@ class QwenDualEncoder(nn.Module):
         max_doc_length: int = 512,
         shared_encoder: bool = False,
     ):
+        """Initialize the Qwen dual encoder model.
+
+        Args:
+            model_name: Pretrained Qwen model name from HuggingFace.
+                Defaults to "Qwen/Qwen2.5-1.5B".
+            embedding_dim: Dimension of output embeddings. Defaults to 1536.
+            max_query_length: Maximum tokens for query encoding. Defaults to 128.
+            max_doc_length: Maximum tokens for document encoding. Defaults to 512.
+            shared_encoder: Whether to use shared encoder for both towers.
+                Defaults to False.
+        """
         super().__init__()
 
         self.embedding_dim = embedding_dim
@@ -67,7 +95,7 @@ class QwenDualEncoder(nn.Module):
         log.info(f"Hidden size: {hidden_size}, Embedding dim: {embedding_dim}")
 
     def encode_queries(self, query_texts):
-        """Encode queries using query tower"""
+        """Encode queries using query tower."""
         # Tokenize queries
         query_inputs = self.tokenizer(
             query_texts,
@@ -96,7 +124,7 @@ class QwenDualEncoder(nn.Module):
         return query_embeddings
 
     def encode_documents(self, doc_texts):
-        """Encode documents using document tower"""
+        """Encode documents using document tower."""
         # Tokenize documents
         doc_inputs = self.tokenizer(
             doc_texts,
@@ -125,7 +153,16 @@ class QwenDualEncoder(nn.Module):
         return doc_embeddings
 
     def forward(self, query_texts, doc_texts):
-        """Forward pass for training"""
+        """Forward pass encoding both queries and documents.
+
+        Args:
+            query_texts: List of query text strings.
+            doc_texts: List of document text strings.
+
+        Returns:
+            Tuple of (query_embeddings, doc_embeddings), both normalized tensors
+            with shape (batch_size, embedding_dim).
+        """
         query_embeddings = self.encode_queries(query_texts)
         doc_embeddings = self.encode_documents(doc_texts)
 
@@ -133,16 +170,30 @@ class QwenDualEncoder(nn.Module):
 
 
 class InfoNCELoss(nn.Module):
-    """InfoNCE contrastive loss for dual encoder training
-    As specified in GenRec+Qwen architecture
+    """InfoNCE contrastive loss for dual encoder training.
+
+    Implements the InfoNCE (Information Noise Contrastive Estimation) loss function
+    used in contrastive learning. For each query-document pair, the loss encourages
+    the query to have high similarity with its corresponding document while having
+    low similarity with other documents in the batch (used as negatives).
+
+    Attributes:
+        temperature: Temperature scaling parameter that controls the concentration
+            of the distribution. Lower values make the model more confident.
     """
 
     def __init__(self, temperature: float = 0.05):
+        """Initialize InfoNCE loss.
+
+        Args:
+            temperature: Temperature parameter for contrastive learning.
+                Defaults to 0.05.
+        """
         super().__init__()
         self.temperature = temperature
 
     def forward(self, query_embeddings, doc_embeddings, labels):
-        """Compute InfoNCE loss
+        """Compute InfoNCE loss.
 
         Args:
             query_embeddings: [batch_size, embedding_dim]
@@ -164,8 +215,9 @@ class InfoNCELoss(nn.Module):
         return loss
 
 
-def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
-    """Ray distributed training function for Qwen dual-encoder
+def train_func(config: dict[str, Any]) -> dict[str, Any]:
+    """Ray distributed training function for Qwen dual-encoder.
+
     This function runs on each Ray worker for distributed training
     """
     import ray.train
@@ -204,7 +256,8 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
 
     for epoch in range(num_epochs):
         print(
-            f"Worker {ray.train.get_context().get_world_rank()}: Epoch {epoch + 1}/{num_epochs}"
+            f"Worker {ray.train.get_context().get_world_rank()}: "
+            f"Epoch {epoch + 1}/{num_epochs}"
         )
 
         epoch_losses = []
@@ -234,7 +287,8 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
             # Log progress
             if batch_idx % 10 == 0:
                 print(
-                    f"Worker {ray.train.get_context().get_world_rank()}: Batch {batch_idx}, Loss: {loss.item():.4f}"
+                    f"Worker {ray.train.get_context().get_world_rank()}: "
+                    f"Batch {batch_idx}, Loss: {loss.item():.4f}"
                 )
 
         avg_epoch_loss = sum(epoch_losses) / len(epoch_losses) if epoch_losses else 0
@@ -286,7 +340,7 @@ def train_func(config: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _convert_spark_to_ray_dataset(spark_df):
-    """Convert Spark DataFrame to Ray Dataset"""
+    """Convert Spark DataFrame to Ray Dataset."""
     try:
         # Convert Spark DataFrame to Pandas DataFrame first
         pandas_df = spark_df.toPandas()
@@ -329,8 +383,9 @@ def train_dual_encoder(
     num_workers: int = 1,  # Default to 1 for local training
     use_gpu: bool = False,  # Default to False, can be set to True if GPU available
     distributed: bool = False,  # Default to False for local training
-) -> Dict[str, Any]:
-    """Unified Qwen dual encoder training function
+) -> dict[str, Any]:
+    """Unified Qwen dual encoder training function.
+
     Supports both local and distributed training with optional GPU support
 
     Args:
@@ -350,7 +405,8 @@ def train_dual_encoder(
         Dictionary with training metrics and model info
     """
     log.info(
-        f"Starting Qwen dual encoder training - Distributed: {distributed}, GPU: {use_gpu}, Workers: {num_workers}"
+        f"Starting Qwen dual encoder training - Distributed: {distributed}, "
+        f"GPU: {use_gpu}, Workers: {num_workers}"
     )
 
     # Load DatasetVariables as Ray Datasets following boston_housing pattern
@@ -419,8 +475,8 @@ def _train_distributed(
     temperature: float,
     num_workers: int,
     use_gpu: bool,
-) -> Dict[str, Any]:
-    """Distributed training using Ray TorchTrainer"""
+) -> dict[str, Any]:
+    """Distributed training using Ray TorchTrainer."""
     log.info(f"Starting Ray distributed training with {num_workers} workers")
 
     # Configuration for distributed training
@@ -495,8 +551,8 @@ def _train_local(
     num_epochs: int,
     temperature: float,
     use_gpu: bool,
-) -> Dict[str, Any]:
-    """Local training with single worker"""
+) -> dict[str, Any]:
+    """Local training with single worker."""
     log.info(f"Starting local training with model: {model_name}")
 
     # Initialize model with fallback support
@@ -625,7 +681,8 @@ def _train_local(
     final_train_loss = training_losses[-1] if training_losses else 0.0
 
     log.info(
-        f"Training completed! Final train loss: {final_train_loss:.4f}, Val loss: {avg_val_loss:.4f}"
+        f"Training completed! Final train loss: {final_train_loss:.4f}, "
+        f"Val loss: {avg_val_loss:.4f}"
     )
 
     # Save model checkpoint
@@ -665,10 +722,26 @@ def _train_local(
 
 
 class SimpleLocalDualEncoder(nn.Module):
-    """Simple dual encoder for local testing when Qwen models fail
+    """Simple dual encoder for local testing when Qwen models fail.
+
+    Provides a lightweight fallback model using hash-based text encoding instead of
+    transformers. Useful for testing the training pipeline without GPU requirements
+    or when HuggingFace models are unavailable.
+
+    Attributes:
+        embedding_dim: Dimension of output embeddings.
+        text_embedding: Embedding layer for hash-based text encoding.
+        query_projection: Linear projection for query tower.
+        doc_projection: Linear projection for document tower.
     """
 
     def __init__(self, vocab_size=10000, embedding_dim=256):
+        """Initialize simple dual encoder for testing.
+
+        Args:
+            vocab_size: Vocabulary size for hash-based encoding. Defaults to 10000.
+            embedding_dim: Dimension of output embeddings. Defaults to 256.
+        """
         super().__init__()
         self.embedding_dim = embedding_dim
         self.text_embedding = nn.Embedding(vocab_size, embedding_dim)
@@ -676,6 +749,14 @@ class SimpleLocalDualEncoder(nn.Module):
         self.doc_projection = nn.Linear(embedding_dim, embedding_dim)
 
     def encode_text(self, texts):
+        """Encode text using simple hash-based embedding.
+
+        Args:
+            texts: List of text strings to encode.
+
+        Returns:
+            Tensor of embeddings with shape (batch_size, embedding_dim).
+        """
         # Simple hash-based encoding for testing
         embeddings = []
         for text in texts:
@@ -685,16 +766,41 @@ class SimpleLocalDualEncoder(nn.Module):
         return torch.stack(embeddings)
 
     def encode_queries(self, queries):
+        """Encode queries through query tower.
+
+        Args:
+            queries: List of query strings.
+
+        Returns:
+            Normalized query embeddings.
+        """
         embeddings = self.encode_text(queries)
         embeddings = self.query_projection(embeddings)
         return F.normalize(embeddings, p=2, dim=1)
 
     def encode_documents(self, documents):
+        """Encode documents through document tower.
+
+        Args:
+            documents: List of document strings.
+
+        Returns:
+            Normalized document embeddings.
+        """
         embeddings = self.encode_text(documents)
         embeddings = self.doc_projection(embeddings)
         return F.normalize(embeddings, p=2, dim=1)
 
     def forward(self, queries, documents):
+        """Forward pass encoding both queries and documents.
+
+        Args:
+            queries: List of query strings.
+            documents: List of document strings.
+
+        Returns:
+            Tuple of (query_embeddings, document_embeddings).
+        """
         query_emb = self.encode_queries(queries)
         doc_emb = self.encode_documents(documents)
         return query_emb, doc_emb

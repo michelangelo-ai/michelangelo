@@ -1,4 +1,5 @@
-"""Source definitions for Amazon Books Chronon features
+"""Source definitions for Amazon Books Chronon features.
+
 Provides event sources for different aspects of the recommendation system
 """
 
@@ -12,7 +13,8 @@ from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews 
 
 
 def books_source(*columns):
-    """Source for book-centric features based on reviews and metadata
+    """Source for book-centric features based on reviews and metadata.
+
     Used for building book popularity, rating trends, and content features
     """
     return Source(
@@ -27,7 +29,8 @@ def books_source(*columns):
 
 
 def user_interaction_source(*columns):
-    """Source for user interaction events (reviews, ratings)
+    """Source for user interaction events (reviews, ratings).
+
     Used for building user behavior patterns and preferences
     """
     return Source(
@@ -42,7 +45,8 @@ def user_interaction_source(*columns):
 
 
 def content_source(*columns):
-    """Source for content-based features (book descriptions, categories)
+    """Source for content-based features (book descriptions, categories).
+
     Used for text-based recommendation features
     """
     return Source(
