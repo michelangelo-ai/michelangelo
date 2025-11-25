@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -13,7 +12,6 @@ import (
 
 // RollbackActor handles rollback operations following Uber patterns
 type RollbackActor struct {
-	client client.Client
 	logger *zap.Logger
 }
 
@@ -48,14 +46,6 @@ func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, cond
 	resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
 
 	if resource.Status.CurrentRevision != nil {
-		// In Uber's implementation, rollback involves:
-		// 1. Identify the previous known good revision
-		// 2. Validate rollback target is available and healthy
-		// 3. Update UCS cache to rollback model references
-		// 4. Execute reverse rolling deployment to previous revision
-		// 5. Monitor rollback progress and validate success
-		// 6. Update MES records and clean up failed rollout artifacts
-
 		// Store the failed revision for reference
 		failedRevision := resource.Spec.DesiredRevision
 

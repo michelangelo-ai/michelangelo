@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -14,7 +13,6 @@ import (
 
 // ValidationActor validates deployment configuration
 type ValidationActor struct {
-	client client.Client
 	logger *zap.Logger
 }
 

@@ -2,7 +2,6 @@ package steadystate
 
 import (
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -18,7 +17,6 @@ type conditionPlugin struct {
 
 // Params contains dependencies for steadystate plugin
 type Params struct {
-	Client  client.Client
 	Gateway gateways.Gateway
 	Logger  *zap.Logger
 }
@@ -27,7 +25,6 @@ type Params struct {
 func NewSteadyStatePlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&SteadyStateActor{
-			client:  p.Client,
 			gateway: p.Gateway,
 			logger:  p.Logger,
 		},

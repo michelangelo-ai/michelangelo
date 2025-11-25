@@ -283,7 +283,7 @@ func (r *Reconciler) handleCreation(ctx context.Context, logger *zap.Logger, inf
 		if inferenceServer.Status.ProviderMetadata != "proxy-configured" {
 			r.logger.Info("Configuring proxy for serving server")
 
-			proxyErr := r.ProxyProvider.ConfigureProxy(ctx, logger, proxy.ConfigureProxyRequest{
+			proxyErr := r.ProxyProvider.EnsureInferenceServerRoute(ctx, logger, proxy.EnsureInferenceServerRouteRequest{
 				InferenceServer: inferenceServer.Name,
 				Namespace:       inferenceServer.Namespace,
 				ModelName:       inferenceServer.Name, // Use server name as model name for now

@@ -13,6 +13,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/cleanup"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollback"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/steadystate"
@@ -66,18 +67,16 @@ func NewPlugin(params Params) *Plugin {
 		logger:                 params.Logger,
 		modelConfigMapProvider: params.ModelConfigMapProvider,
 		rollbackPlugin: rollback.NewRollbackPlugin(rollback.Params{
-			Client:  params.Client,
 			Gateway: params.Gateway,
 			Logger:  params.Logger,
 		}),
 		cleanupPlugin: cleanup.NewCleanupPlugin(cleanup.Params{
-			Client:                 params.Client,
+			ProxyProvider:          params.ProxyProvider,
 			Gateway:                params.Gateway,
 			Logger:                 params.Logger,
 			ModelConfigMapProvider: params.ModelConfigMapProvider,
 		}),
 		steadyStatePlugin: steadystate.NewSteadyStatePlugin(steadystate.Params{
-			Client:  params.Client,
 			Gateway: params.Gateway,
 			Logger:  params.Logger,
 		}),
@@ -130,7 +129,6 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 		}
 	}
 
-	// If we have no conditions, start rollout process
 	if len(deployment.Status.Conditions) == 0 {
 		return currentStage
 	}
@@ -138,39 +136,42 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	// Check for actual rollout completion conditions (not just steady state)
 	hasRolloutComplete := false
 	hasValidated := false
-	hasModelSynced := false
 
 	for _, cond := range deployment.Status.Conditions {
 		switch cond.Type {
-		case "RolloutComplete", "RolloutCompleted", "RollingRolloutComplete":
+		// case "RolloutComplete":
+		case common.ActorTypeRolloutCompletion:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				hasRolloutComplete = true
 			}
-		case "Validated", "TrafficRoutingConfigured":
+		// case "Validated":
+		case common.ActorTypeValidation:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				hasValidated = true
 			} else if cond.Status == apipb.CONDITION_STATUS_FALSE {
 				return v2pb.DEPLOYMENT_STAGE_VALIDATION
 			}
-		case "ModelSynced":
-			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				hasModelSynced = true
-			} else if cond.Status == apipb.CONDITION_STATUS_FALSE {
+		// case "ModelSynced":
+		case common.ActorTypeModelSync:
+			if cond.Status == apipb.CONDITION_STATUS_FALSE {
 				return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 			}
-		case "CleanupComplete":
+		// case "CleanupComplete":
+		case common.ActorTypeCleanup:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
 			} else {
 				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
 			}
-		case "RollbackComplete":
+		// case "RollbackComplete":
+		case common.ActorTypeRollback:
 			if cond.Status == apipb.CONDITION_STATUS_TRUE {
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 			} else {
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
 			}
-		case "StateSteady":
+		// case "StateSteady":
+		case common.ActorTypeSteadyState:
 			return currentStage
 		}
 	}
@@ -178,11 +179,8 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	// Determine stage based on rollout progress
 	if hasRolloutComplete {
 		return v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-	} else if hasModelSynced && hasValidated {
-		// Both validation and model sync are complete, we're in placement/rollout stage
-		return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 	} else if hasValidated {
-		// Validation complete, now doing model sync
+		// Validation has completed, we are in placement stage
 		return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 	} else {
 		// No clear progress indicators, start from validation

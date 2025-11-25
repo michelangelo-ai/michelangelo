@@ -2,23 +2,16 @@ package cleanup
 
 import (
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
-
-var httpRouteGVR = schema.GroupVersionKind{
-	Group:   "gateway.networking.k8s.io",
-	Version: "v1",
-	Kind:    "HTTPRoute",
-}
 
 type conditionPlugin struct {
 	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
@@ -26,7 +19,7 @@ type conditionPlugin struct {
 
 // Params contains dependencies for cleanup plugin
 type Params struct {
-	Client                 client.Client
+	ProxyProvider          proxy.ProxyProvider
 	Gateway                gateways.Gateway
 	Logger                 *zap.Logger
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
@@ -36,7 +29,7 @@ type Params struct {
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
-			client:                 p.Client,
+			proxyProvider:          p.ProxyProvider,
 			gateway:                p.Gateway,
 			logger:                 p.Logger,
 			modelConfigMapProvider: p.ModelConfigMapProvider,

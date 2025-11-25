@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
@@ -15,9 +14,7 @@ import (
 )
 
 // ModelCleanupActor handles cleanup of old models after successful deployment
-// Following Uber's UCS pattern for safe model cleanup
 type ModelCleanupActor struct {
-	Client                 client.Client
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 	Gateway                gateways.Gateway
 	Logger                 *zap.Logger
@@ -103,7 +100,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		zap.String("new_model", desiredModel),
 		zap.String("inference_server", inferenceServerName))
 
-	// PHASE 1: Update ConfigMap to remove old model (following Uber's UCS pattern)
+	// PHASE 1: Update ConfigMap to remove old model
 
 	// Get current ConfigMap and remove old model from it
 	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
@@ -117,23 +114,6 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		// Don't fail entire deployment if remove from ConfigMap fails
 	}
-
-	// if err := a.ModelConfigMapProvider.AddModelToConfigMap(ctx, configmap.AddModelToConfigMapRequest{
-	// 	InferenceServer: inferenceServerName,
-	// 	Namespace:       resource.Namespace,
-	// 	ModelConfig: configmap.ModelConfigEntry{
-	// 		Name:   desiredModel,
-	// 		S3Path: desiredModel,
-	// 	},
-	// }); err != nil {
-	// 	a.Logger.Error("Failed to add new model to ConfigMap", zap.String("model", desiredModel), zap.Error(err))
-	// 	return &apipb.Condition{
-	// 		Type:    a.GetType(),
-	// 		Status:  apipb.CONDITION_STATUS_FALSE,
-	// 		Reason:  "ConfigMapAddFailed",
-	// 		Message: fmt.Sprintf("Failed to add new model %s to ConfigMap: %v", desiredModel, err),
-	// 	}, nil
-	// }
 
 	// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
 	a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))

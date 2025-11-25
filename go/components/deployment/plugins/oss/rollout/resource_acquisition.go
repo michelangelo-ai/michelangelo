@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -15,7 +14,6 @@ import (
 
 // ResourceAcquisitionActor handles resource acquisition
 type ResourceAcquisitionActor struct {
-	client  client.Client
 	logger  *zap.Logger
 	gateway gateways.Gateway
 }
@@ -41,7 +39,7 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 	}
 
 	// TODO(GHOSH): Figure out how to check server capacity to see if model can be loaded. If not, then this should return false and error.
-	// DO LATER
+	// DO LATER, MAKE ISSUE
 
 	return &apipb.Condition{
 		Type:    a.GetType(),

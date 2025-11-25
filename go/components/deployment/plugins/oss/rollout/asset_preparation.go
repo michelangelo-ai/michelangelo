@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -15,7 +14,6 @@ import (
 
 // AssetPreparationActor handles asset preparation following Uber patterns
 type AssetPreparationActor struct {
-	client  client.Client
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }
@@ -42,7 +40,7 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.D
 	// For OSS, assume assets are always available if the model name is valid
 	// In a real implementation, this would check MinIO/S3 for model artifacts
 	// TODO(GHOSH): update this to check if the model is available in the storage
-	// DO LATER
+	// DO LATER, MAKE ISSUE
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
@@ -58,18 +56,8 @@ func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployme
 	if resource.Spec.DesiredRevision != nil {
 		modelName := resource.Spec.DesiredRevision.Name
 		a.logger.Info("Preparing assets for model", zap.String("model", modelName))
-
-		// In Uber's implementation, this downloads from S3, compiles, and uploads to TerraBob
-		// For OSS, we simulate asset preparation by ensuring model is accessible in storage
-		// This would typically involve:
-		// 1. Validate model exists in MinIO/S3
-		// 2. Download and validate model artifacts
-		// 3. Prepare model configuration files
-		// 4. Ensure model is ready for inference server deployment
-
 		// TODO(GHOSH): download the model from the storage and prepare the assets and do the necessary validations
-		// DO LATER
-
+		// DO LATER, MAKE ISSUE
 		a.logger.Info("Asset preparation completed", zap.String("model", modelName))
 	}
 

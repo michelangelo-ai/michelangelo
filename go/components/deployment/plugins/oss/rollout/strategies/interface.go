@@ -9,12 +9,14 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Params contains dependencies for strategy actors
 type Params struct {
 	Client                 client.Client
+	ProxyProvider          proxy.ProxyProvider
 	Gateway                gateways.Gateway
 	Logger                 *zap.Logger
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
@@ -38,6 +40,7 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 
 // getDeploymentStrategy determines the rollout strategy from deployment configuration
 func getDeploymentStrategy(deployment *v2pb.Deployment) string {
+	// TODO(GHOSH): Update this to use the deployment strategy field
 	// Check annotations for strategy override
 	if deployment.Annotations != nil {
 		if strategy, ok := deployment.Annotations["rollout.strategy"]; ok {

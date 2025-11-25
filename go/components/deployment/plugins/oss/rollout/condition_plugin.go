@@ -38,16 +38,13 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Pre-placement actors (preparation and validation)
 	prePlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&ValidationActor{
-			client: p.Client,
 			logger: logger,
 		},
 		&AssetPreparationActor{
-			client:  p.Client,
 			gateway: p.Gateway,
 			logger:  logger,
 		},
 		&ResourceAcquisitionActor{
-			client:  p.Client,
 			gateway: p.Gateway,
 			logger:  logger,
 		},
@@ -56,6 +53,7 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
 		Client:                 p.Client,
+		ProxyProvider:          p.ProxyProvider,
 		ModelConfigMapProvider: p.ModelConfigMapProvider,
 		Gateway:                p.Gateway,
 		Logger:                 p.Logger,
@@ -67,12 +65,10 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	// Post-placement actors (completion and cleanup)
 	postPlacementActors := []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&TrafficRoutingActor{
-			client:  p.Client,
-			gateway: p.Gateway,
-			logger:  p.Logger,
+			ProxyProvider: p.ProxyProvider,
+			Logger:        p.Logger,
 		},
 		&RolloutCompletionActor{
-			client:                 p.Client,
 			gateway:                p.Gateway,
 			modelConfigMapProvider: p.ModelConfigMapProvider,
 			logger:                 p.Logger,

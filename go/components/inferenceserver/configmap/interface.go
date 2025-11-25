@@ -1,3 +1,5 @@
+//go:generate mamockgen ModelConfigMapProvider
+
 package configmap
 
 import (
@@ -48,10 +50,8 @@ type DeleteModelConfigMapRequest struct {
 // ModelConfigMapProvider is an interface for managing model configuraitons through ConfigMaps.
 type ModelConfigMapProvider interface {
 	CreateModelConfigMap(ctx context.Context, request CreateModelConfigMapRequest) error
-
 	GetModelsFromConfigMap(ctx context.Context, request GetModelConfigMapRequest) ([]ModelConfigEntry, error)
 	AddModelToConfigMap(ctx context.Context, request AddModelToConfigMapRequest) error
 	RemoveModelFromConfigMap(ctx context.Context, request RemoveModelFromConfigMapRequest) error
-
 	DeleteModelConfigMap(ctx context.Context, request DeleteModelConfigMapRequest) error
 }

@@ -51,10 +51,9 @@ func NewHTTPRouteManager(dynamicClient dynamic.Interface, logger *zap.Logger) *h
 }
 
 // Gateway API Proxy Management using HTTPRoute
-
-func (h *httpRouteManager) ConfigureProxy(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) error {
+func (h *httpRouteManager) EnsureInferenceServerRoute(ctx context.Context, logger *zap.Logger, request EnsureInferenceServerRouteRequest) error {
 	logger.Info("Configuring proxy with Gateway API HTTPRoute", zap.String("server", request.InferenceServer), zap.String("model", request.ModelName))
-	httpRoute, err := h.getOrCreateHTTPRoute(ctx, logger, request)
+	_, err := h.getOrCreateHTTPRoute(ctx, logger, request)
 	if err != nil {
 		logger.Error("failed to get or create HTTPRoute",
 			zap.Error(err),
@@ -64,10 +63,10 @@ func (h *httpRouteManager) ConfigureProxy(ctx context.Context, logger *zap.Logge
 		return fmt.Errorf("failed to get or create HTTPRoute for %s/%s: %w",
 			request.Namespace, request.InferenceServer, err)
 	}
-	return h.updateProductionRoute(ctx, logger, httpRoute, request)
+	return nil
 }
 
-func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) (*unstructured.Unstructured, error) {
+func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap.Logger, request EnsureInferenceServerRouteRequest) (*unstructured.Unstructured, error) {
 	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
 
 	// Try to get existing HTTPRoute
@@ -79,68 +78,25 @@ func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap
 	// Create new HTTPRoute if it doesn't exist
 	logger.Info("Creating new HTTPRoute with baseline routing", zap.String("name", httpRouteName))
 
-	// Extract environment from namespace or use default
 	environment := h.extractEnvironment(request.Namespace)
-
-	httpRoute = &unstructured.Unstructured{
-		Object: map[string]interface{}{
-			"apiVersion": fmt.Sprintf("%s/%s", gatewayAPIGroup, gatewayAPIVersion),
-			"kind":       "HTTPRoute",
-			"metadata": map[string]interface{}{
-				"name":      httpRouteName,
-				"namespace": request.Namespace,
-				"labels": map[string]interface{}{
-					"app":                        "inference-server",
-					"inference-server":           request.InferenceServer,
-					"environment":                environment,
-					"michelangelo.ai/managed-by": "controller",
-				},
-			},
-			"spec": map[string]interface{}{
-				"parentRefs": []interface{}{
-					map[string]interface{}{
-						"group":     gatewayAPIGroup,
-						"kind":      gatewayKind,
-						"name":      gatewayName,
-						"namespace": request.Namespace,
-					},
-				},
-				"rules": []interface{}{
-					map[string]interface{}{
-						// Baseline inference server endpoint - routes to whatever model is loaded in Triton
-						"matches": []interface{}{
-							map[string]interface{}{
-								"path": map[string]interface{}{
-									"type":  "PathPrefix",
-									"value": fmt.Sprintf("/%s", request.InferenceServer),
-								},
-							},
-						},
-						"backendRefs": []interface{}{
-							map[string]interface{}{
-								"group":  "",
-								"kind":   "Service",
-								"name":   addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
-								"port":   int64(80),
-								"weight": int64(100),
-							},
-						},
-						"filters": []interface{}{
-							map[string]interface{}{
-								"type": "URLRewrite",
-								"urlRewrite": map[string]interface{}{
-									"path": map[string]interface{}{
-										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
+	labels := map[string]string{
+		"app":                        "inference-server",
+		"inference-server":           request.InferenceServer,
+		"environment":                environment,
+		"michelangelo.ai/managed-by": "controller",
 	}
+
+	baselineWeight := int64(100)
+	httpRoute = buildHTTPRoute(
+		httpRouteName,
+		request.Namespace,
+		labels,
+		nil,
+		fmt.Sprintf("/%s", request.InferenceServer),
+		addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
+		&baselineWeight,
+		"/",
+	)
 
 	createdRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Create(ctx, httpRoute, metav1.CreateOptions{})
 	if err != nil {
@@ -155,117 +111,104 @@ func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap
 	return createdRoute, nil
 }
 
-func (h *httpRouteManager) updateProductionRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request ConfigureProxyRequest) error {
-	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
-	if err != nil || !found {
-		logger.Error("rules not found in HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_production_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("rules not found in HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
+// CheckDeploymentRouteStatus checks if a deployment-specific HTTPRoute is properly configured
+func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, request CheckDeploymentRouteStatusRequest) (bool, error) {
+	httpRouteName := addSuffixToString(request.DeploymentName, httpRouteNameSuffix)
+	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+	if err != nil {
+		return false, fmt.Errorf("failed to get HTTPRoute %s: %v", httpRouteName, err)
 	}
 
-	deploymentPrefix := fmt.Sprintf("/%s/%s/production", request.InferenceServer, request.DeploymentName)
-	updated := false
+	// Validate HTTPRoute configuration
+	spec, found, err := unstructured.NestedMap(httpRoute.Object, "spec")
+	if err != nil || !found {
+		return false, fmt.Errorf("HTTPRoute spec not found: %v", err)
+	}
 
-	// Look for existing production route
+	rules, found, err := unstructured.NestedSlice(spec, "rules")
+	if err != nil || !found || len(rules) == 0 {
+		return false, fmt.Errorf("HTTPRoute has no routing rules configured: %v", err)
+	}
+
+	// Verify the route matches the expected model and inference server configuration
+	expectedMatchPath := fmt.Sprintf("/%s/%s/models/%s", request.InferenceServer, request.DeploymentName, request.ModelName)
+	expectedRewritePath := fmt.Sprintf("/v2/models/%s", request.ModelName)
+	expectedBackendService := addSuffixToString(request.InferenceServer, inferenceServiceSuffix)
+
+	// Check if the route configuration matches expectations
 	for _, rule := range rules {
 		ruleMap, ok := rule.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		if h.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPrefix) {
-			logger.Info("Updating existing HTTPRoute production route", zap.String("modelName", request.ModelName))
-
-			// Update URLRewrite filter to route to specific model
-			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
-			if found {
-				for _, filter := range filters {
-					filterMap, ok := filter.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
-						newPath := fmt.Sprintf("/v2/models/%s", request.ModelName)
-						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
-							logger.Error("failed to set URLRewrite replacePrefixMatch",
-								zap.Error(err),
-								zap.String("operation", "update_production_route"),
-								zap.String("namespace", request.Namespace),
-								zap.String("inferenceServer", request.InferenceServer))
-							return fmt.Errorf("failed to set URLRewrite for HTTPRoute %s/%s: %w",
-								request.Namespace, request.InferenceServer, err)
-						}
-						break
-					}
+		// Check matches (path)
+		matches, matchesFound, _ := unstructured.NestedSlice(ruleMap, "matches")
+		if matchesFound && len(matches) > 0 {
+			for _, match := range matches {
+				matchMap, ok := match.(map[string]interface{})
+				if !ok {
+					continue
 				}
 
-				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
-					logger.Error("failed to update filters in HTTPRoute rule",
-						zap.Error(err),
-						zap.String("operation", "update_production_route"),
-						zap.String("namespace", request.Namespace),
-						zap.String("inferenceServer", request.InferenceServer))
-					return fmt.Errorf("failed to update filters in HTTPRoute %s/%s: %w",
-						request.Namespace, request.InferenceServer, err)
+				path, pathFound, _ := unstructured.NestedMap(matchMap, "path")
+				if pathFound {
+					pathValue, _, _ := unstructured.NestedString(path, "value")
+					if pathValue != expectedMatchPath {
+						return false, fmt.Errorf("HTTPRoute path mismatch: expected %s, got %s", expectedMatchPath, pathValue)
+					}
 				}
 			}
+		}
 
-			updated = true
-			break
+		// Check backend refs (service)
+		backendRefs, backendRefsFound, _ := unstructured.NestedSlice(ruleMap, "backendRefs")
+		if backendRefsFound && len(backendRefs) > 0 {
+			for _, backendRef := range backendRefs {
+				backendMap, ok := backendRef.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				serviceName, _, _ := unstructured.NestedString(backendMap, "name")
+				if serviceName != expectedBackendService {
+					return false, fmt.Errorf("HTTPRoute backend service mismatch: expected %s, got %s", expectedBackendService, serviceName)
+				}
+			}
+		}
+
+		// Check filters (path rewrite)
+		filters, filtersFound, _ := unstructured.NestedSlice(ruleMap, "filters")
+		if filtersFound && len(filters) > 0 {
+			for _, filter := range filters {
+				filterMap, ok := filter.(map[string]interface{})
+				if !ok {
+					continue
+				}
+
+				filterType, _, _ := unstructured.NestedString(filterMap, "type")
+				if filterType == "URLRewrite" {
+					path, urlRewritePathFound, _ := unstructured.NestedMap(filterMap, "urlRewrite", "path")
+					if urlRewritePathFound {
+						rewriteValue, _, _ := unstructured.NestedString(path, "replacePrefixMatch")
+						if rewriteValue != expectedRewritePath {
+							return false, fmt.Errorf("HTTPRoute rewrite path mismatch: expected %s, got %s", expectedRewritePath, rewriteValue)
+						}
+					}
+				}
+			}
 		}
 	}
 
-	if !updated {
-		logger.Info("Production route not found, checking if HTTPRoute already points to desired model",
-			zap.String("inferenceServer", request.InferenceServer), zap.String("desiredModel", request.ModelName))
+	logger.Info("HTTPRoute is properly configured",
+		zap.String("httpRoute", httpRouteName),
+		zap.String("matchPath", expectedMatchPath),
+		zap.String("backendService", expectedBackendService))
 
-		// Check if the production route already points to the desired model
-		if h.isHTTPRouteAlreadyConfiguredForModel(httpRoute, request) {
-			logger.Info("HTTPRoute already configured for desired model, skipping update",
-				zap.String("modelName", request.ModelName))
-			return nil
-		}
-
-		logger.Error("production route not found in HTTPRoute",
-			zap.String("operation", "update_production_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer),
-			zap.String("deploymentName", request.DeploymentName))
-		return fmt.Errorf("production route not found in HTTPRoute %s/%s for deployment %s",
-			request.Namespace, request.InferenceServer, request.DeploymentName)
-	}
-
-	// Update the HTTPRoute
-	if err = unstructured.SetNestedSlice(httpRoute.Object, rules, "spec", "rules"); err != nil {
-		logger.Error("failed to update rules in HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_production_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("failed to update rules in HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
-	}
-
-	_, err = h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
-	if err != nil {
-		logger.Error("failed to update HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_production_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("failed to update HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
-	}
-
-	logger.Info("HTTPRoute production route updated successfully", zap.String("modelName", request.ModelName), zap.String("inferenceServer", request.InferenceServer))
-	return nil
+	return true, nil
 }
 
+// GetProxyStatus gets the proxy status from the HTTPRoute
 func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error) {
 	logger.Info("Getting proxy status from HTTPRoute", zap.String("server", request.InferenceServer))
 
@@ -299,277 +242,108 @@ func (h *httpRouteManager) GetProxyStatus(ctx context.Context, logger *zap.Logge
 	}, nil
 }
 
-// addDeploymentRoute adds a deployment-specific route to the HTTPRoute
-func (h *httpRouteManager) AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error {
-	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
-	fmt.Printf("DEBUG: Adding deployment route for %s/%s\n", request.InferenceServer, request.DeploymentName)
-	httpRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, httpRouteName, metav1.GetOptions{})
+// EnsureDeploymentRoute ensures that a deployment-specific route is present.
+// In this case, we create a new HTTPRoute for the deployment.
+func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, request EnsureDeploymentRouteRequest) error {
+	deploymentRouteName := addSuffixToString(request.DeploymentName, httpRouteNameSuffix)
+	inferenceServerName := request.InferenceServer
+
+	labels := map[string]string{
+		"app.kubernetes.io/name":      "michelangelo-deployment",
+		"app.kubernetes.io/component": "traffic-routing",
+		"app.kubernetes.io/instance":  request.DeploymentName,
+		"michelangelo.ai/deployment":  request.DeploymentName,
+	}
+	annotations := map[string]string{
+		"michelangelo.ai/deployment":       request.DeploymentName,
+		"michelangelo.ai/inference-server": inferenceServerName,
+	}
+
+	matchPath := fmt.Sprintf("/%s/%s/models/%s", inferenceServerName, request.DeploymentName, request.ModelName)
+	rewritePath := fmt.Sprintf("/v2/models/%s", request.ModelName)
+
+	httpRoute := buildHTTPRoute(
+		deploymentRouteName,
+		request.Namespace,
+		labels,
+		annotations,
+		matchPath,
+		addSuffixToString(inferenceServerName, inferenceServiceSuffix),
+		nil,
+		rewritePath,
+	)
+
+	existingRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
 	if err != nil {
-		logger.Error("failed to get HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "add_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("failed to get HTTPRoute %s/%s: %w",
-			request.Namespace, httpRouteName, err)
-	}
-
-	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
-	if err != nil || !found {
-		logger.Error("rules not found in HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "add_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("rules not found in HTTPRoute %s/%s: %w",
-			request.Namespace, httpRouteName, err)
-	}
-
-	// Create deployment-specific route path: /<inference-server-name>/<deployment-name>
-	deploymentPath := fmt.Sprintf("/%s/%s", request.InferenceServer, request.DeploymentName)
-
-	// Check if deployment-specific route already exists
-	for _, rule := range rules {
-		ruleMap, ok := rule.(map[string]interface{})
-		if !ok {
-			continue
+		// Create new HTTPRoute
+		if _, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Create(ctx, httpRoute, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("failed to create HTTPRoute %s: %v", deploymentRouteName, err)
 		}
-
-		if h.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPath) {
-			logger.Info("Deployment-specific route already exists, updating",
-				zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
-
-			// Update existing route to point to new model
-			return h.updateExistingDeploymentRoute(ctx, logger, httpRoute, request, deploymentPath)
+		logger.Info("Created HTTPRoute for deployment",
+			zap.String("httproute", deploymentRouteName),
+			zap.String("deployment", request.DeploymentName),
+			zap.String("path", matchPath),
+			zap.String("rewrite", rewritePath))
+	} else {
+		// Update existing HTTPRoute spec
+		existingRoute.Object["spec"] = httpRoute.Object["spec"]
+		if _, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Update(ctx, existingRoute, metav1.UpdateOptions{}); err != nil {
+			return fmt.Errorf("failed to update HTTPRoute %s: %v", deploymentRouteName, err)
 		}
+		logger.Info("Updated HTTPRoute for deployment",
+			zap.String("httproute", deploymentRouteName),
+			zap.String("deployment", request.DeploymentName),
+			zap.String("path", matchPath),
+			zap.String("rewrite", rewritePath))
 	}
-
-	// Add new deployment-specific route
-	logger.Info("Adding new deployment-specific route",
-		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
-
-	newRule := map[string]interface{}{
-		"matches": []interface{}{
-			map[string]interface{}{
-				"path": map[string]interface{}{
-					"type":  "PathPrefix",
-					"value": deploymentPath,
-				},
-			},
-		},
-		"backendRefs": []interface{}{
-			map[string]interface{}{
-				"group":  "",
-				"kind":   "Service",
-				"name":   addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
-				"port":   int64(80),
-				"weight": int64(100),
-			},
-		},
-		"filters": []interface{}{
-			map[string]interface{}{
-				"type": "URLRewrite",
-				"urlRewrite": map[string]interface{}{
-					"path": map[string]interface{}{
-						"type":               "ReplacePrefixMatch",
-						"replacePrefixMatch": fmt.Sprintf("/v2/models/%s", request.ModelName),
-					},
-				},
-			},
-		},
-	}
-
-	// Prepend the new rule to ensure it matches before the baseline route
-	updatedRules := make([]interface{}, 0, len(rules)+1)
-	updatedRules = append(updatedRules, newRule)
-	for _, rule := range rules {
-		updatedRules = append(updatedRules, rule)
-	}
-
-	// Update the HTTPRoute using SetNestedField to avoid deep copy issues
-	err = unstructured.SetNestedField(httpRoute.Object, updatedRules, "spec", "rules")
-	if err != nil {
-		logger.Error("failed to set rules in HTTPRoute spec",
-			zap.Error(err),
-			zap.String("operation", "add_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("failed to set rules in HTTPRoute %s/%s: %w",
-			request.Namespace, httpRouteName, err)
-	}
-
-	_, err = h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
-	if err != nil {
-		logger.Error("failed to update HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "add_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer))
-		return fmt.Errorf("failed to update HTTPRoute %s/%s: %w",
-			request.Namespace, httpRouteName, err)
-	}
-
 	logger.Info("Deployment-specific route added successfully",
-		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
+		zap.String("deploymentPath", matchPath),
+		zap.String("modelName", request.ModelName))
 	return nil
 }
 
-func (h *httpRouteManager) DeleteRoute(ctx context.Context, logger *zap.Logger, request DeleteRouteRequest) error {
-	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
-	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Delete(ctx, httpRouteName, metav1.DeleteOptions{}); err != nil {
-		if errors.IsNotFound(err) {
-			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", httpRouteName))
-		} else {
-			logger.Error("failed to delete HTTPRoute",
-				zap.Error(err),
-				zap.String("operation", "delete_route"),
-				zap.String("namespace", request.Namespace),
-				zap.String("httpRoute", httpRouteName))
-			return fmt.Errorf("failed to delete HTTPRoute %s/%s: %w",
-				request.Namespace, httpRouteName, err)
-		}
-	}
-	return nil
-}
-
-// updateExistingDeploymentRoute updates an existing deployment-specific route
-func (h *httpRouteManager) updateExistingDeploymentRoute(ctx context.Context, logger *zap.Logger, httpRoute *unstructured.Unstructured, request AddDeploymentRouteRequest, deploymentPath string) error {
-	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
-	if err != nil || !found {
-		logger.Error("rules not found in HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer),
-			zap.String("deploymentPath", deploymentPath))
-		return fmt.Errorf("rules not found in HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
-	}
-
-	for _, rule := range rules {
-		ruleMap, ok := rule.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		if h.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPath) {
-			// Update URLRewrite filter to route to new model
-			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
-			if found {
-				for _, filter := range filters {
-					filterMap, ok := filter.(map[string]interface{})
-					if !ok {
-						continue
-					}
-
-					if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
-						newPath := fmt.Sprintf("/v2/models/%s", request.ModelName)
-						if err = unstructured.SetNestedField(filterMap, newPath, "urlRewrite", "path", "replacePrefixMatch"); err != nil {
-							logger.Error("failed to set URLRewrite replacePrefixMatch",
-								zap.Error(err),
-								zap.String("operation", "update_deployment_route"),
-								zap.String("namespace", request.Namespace),
-								zap.String("inferenceServer", request.InferenceServer),
-								zap.String("deploymentPath", deploymentPath),
-								zap.String("modelName", request.ModelName))
-							return fmt.Errorf("failed to set URLRewrite replacePrefixMatch for HTTPRoute %s/%s: %w",
-								request.Namespace, request.InferenceServer, err)
-						}
-						break
-					}
-				}
-
-				if err = unstructured.SetNestedField(ruleMap, filters, "filters"); err != nil {
-					logger.Error("failed to update filters in HTTPRoute rule",
-						zap.Error(err),
-						zap.String("operation", "update_deployment_route"),
-						zap.String("namespace", request.Namespace),
-						zap.String("inferenceServer", request.InferenceServer),
-						zap.String("deploymentPath", deploymentPath))
-					return fmt.Errorf("failed to update filters in HTTPRoute %s/%s: %w",
-						request.Namespace, request.InferenceServer, err)
-				}
-			}
-			break
-		}
-	}
-
-	// Update the HTTPRoute
-	if err = unstructured.SetNestedSlice(httpRoute.Object, rules, "spec", "rules"); err != nil {
-		logger.Error("failed to update rules in HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer),
-			zap.String("deploymentPath", deploymentPath))
-		return fmt.Errorf("failed to update rules in HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
-	}
-
-	_, err = h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Update(ctx, httpRoute, metav1.UpdateOptions{})
+// DeploymentRouteExists checks if a deployment-specific route exists.
+func (h *httpRouteManager) DeploymentRouteExists(ctx context.Context, logger *zap.Logger, request DeploymentRouteExistsRequest) (bool, error) {
+	deploymentRouteName := addSuffixToString(request.DeploymentName, httpRouteNameSuffix)
+	route, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Get(ctx, deploymentRouteName, metav1.GetOptions{})
 	if err != nil {
-		logger.Error("failed to update HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "update_deployment_route"),
-			zap.String("namespace", request.Namespace),
-			zap.String("inferenceServer", request.InferenceServer),
-			zap.String("deploymentPath", deploymentPath),
-			zap.String("modelName", request.ModelName))
-		return fmt.Errorf("failed to update HTTPRoute %s/%s: %w",
-			request.Namespace, request.InferenceServer, err)
+		if errors.IsNotFound(err) {
+			return false, nil
+		} else {
+			return false, fmt.Errorf("failed to get deployment HTTPRoute %s: %w", deploymentRouteName, err)
+		}
 	}
+	return route != nil, nil
+}
 
-	logger.Info("Deployment-specific route updated successfully",
-		zap.String("deploymentPath", deploymentPath), zap.String("modelName", request.ModelName))
+// DeleteDeploymentRoute deletes a deployment-specific route from the HTTPRoute.
+// In this case, since each deployment has its own HTTPRoute, we can just delete the HTTPRoute for the deployment.
+func (h *httpRouteManager) DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, request DeleteDeploymentRouteRequest) error {
+	deploymentRouteName := addSuffixToString(request.DeploymentName, httpRouteNameSuffix)
+	if err := h.deleteHTTPRoute(ctx, logger, deploymentRouteName, request.Namespace); err != nil {
+		return fmt.Errorf("failed to delete deployment HTTPRoute %s: %w", deploymentRouteName, err)
+	}
 	return nil
 }
 
-// isHTTPRouteAlreadyConfiguredForModel checks if the HTTPRoute already points to the desired model
-func (h *httpRouteManager) isHTTPRouteAlreadyConfiguredForModel(httpRoute *unstructured.Unstructured, request ConfigureProxyRequest) bool {
-	rules, found, err := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
-	if err != nil || !found {
-		return false
+// DeleteInferenceServerRoute deletes an HTTPRoute for an inference server.
+func (h *httpRouteManager) DeleteInferenceServerRoute(ctx context.Context, logger *zap.Logger, request DeleteInferenceServerRouteRequest) error {
+	httpRouteName := addSuffixToString(request.InferenceServer, httpRouteNameSuffix)
+	if err := h.deleteHTTPRoute(ctx, logger, httpRouteName, request.Namespace); err != nil {
+		return fmt.Errorf("failed to delete HTTPRoute %s: %w", httpRouteName, err)
 	}
+	return nil
+}
 
-	deploymentPrefix := fmt.Sprintf("/%s/%s/production", request.InferenceServer, request.DeploymentName)
-	expectedRewrite := fmt.Sprintf("/v2/models/%s", request.ModelName)
-
-	for _, rule := range rules {
-		ruleMap, ok := rule.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		if h.hasMatchingHTTPRoutePrefix(ruleMap, deploymentPrefix) {
-			// Check if this production route already points to the desired model
-			filters, found, _ := unstructured.NestedSlice(ruleMap, "filters")
-			if !found {
-				continue
-			}
-
-			for _, filter := range filters {
-				filterMap, ok := filter.(map[string]interface{})
-				if !ok {
-					continue
-				}
-
-				if filterType, ok := filterMap["type"]; ok && filterType == "URLRewrite" {
-					if urlRewriteMap, found, _ := unstructured.NestedMap(filterMap, "urlRewrite"); found {
-						if pathMap, found, _ := unstructured.NestedMap(urlRewriteMap, "path"); found {
-							if replacePrefixMatch, ok := pathMap["replacePrefixMatch"]; ok {
-								if rewriteStr, ok := replacePrefixMatch.(string); ok {
-									return rewriteStr == expectedRewrite
-								}
-							}
-						}
-					}
-					break
-				}
-			}
+func (h *httpRouteManager) deleteHTTPRoute(ctx context.Context, logger *zap.Logger, routeName, namespace string) error {
+	if err := h.dynamicClient.Resource(httpRouteGVR).Namespace(namespace).Delete(ctx, routeName, metav1.DeleteOptions{}); err != nil {
+		if errors.IsNotFound(err) {
+			logger.Info("HTTPRoute not found, already deleted", zap.String("httpRoute", routeName))
+		} else {
+			return err
 		}
 	}
-
-	return false
+	return nil
 }
 
 func (h *httpRouteManager) extractActiveHTTPRoutes(httpRoute *unstructured.Unstructured, inferenceServer string) ([]ActiveRoute, error) {
@@ -662,31 +436,80 @@ func (h *httpRouteManager) extractActiveHTTPRoutes(httpRoute *unstructured.Unstr
 	return routes, nil
 }
 
-func (h *httpRouteManager) hasMatchingHTTPRoutePrefix(ruleMap map[string]interface{}, targetPrefix string) bool {
-	matches, found, _ := unstructured.NestedSlice(ruleMap, "matches")
-	if !found {
-		return false
+func buildHTTPRoute(name, namespace string, labels, annotations map[string]string, pathValue, backendService string, backendWeight *int64, rewritePath string) *unstructured.Unstructured {
+	metadata := map[string]interface{}{
+		"name":      name,
+		"namespace": namespace,
+	}
+	if lbls := stringMapToInterface(labels); lbls != nil {
+		metadata["labels"] = lbls
+	}
+	if ann := stringMapToInterface(annotations); ann != nil {
+		metadata["annotations"] = ann
 	}
 
-	for _, match := range matches {
-		matchMap, ok := match.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		pathMap, found, _ := unstructured.NestedMap(matchMap, "path")
-		if !found {
-			continue
-		}
-
-		if value, ok := pathMap["value"]; ok {
-			if valueStr, ok := value.(string); ok && valueStr == targetPrefix {
-				return true
-			}
-		}
+	backendRef := map[string]interface{}{
+		"group": "",
+		"kind":  "Service",
+		"name":  backendService,
+		"port":  int64(80),
+	}
+	if backendWeight != nil {
+		backendRef["weight"] = *backendWeight
 	}
 
-	return false
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": fmt.Sprintf("%s/%s", gatewayAPIGroup, gatewayAPIVersion),
+			"kind":       "HTTPRoute",
+			"metadata":   metadata,
+			"spec": map[string]interface{}{
+				"parentRefs": []interface{}{
+					map[string]interface{}{
+						"group":     gatewayAPIGroup,
+						"kind":      gatewayKind,
+						"name":      gatewayName,
+						"namespace": namespace,
+					},
+				},
+				"rules": []interface{}{
+					map[string]interface{}{
+						"matches": []interface{}{
+							map[string]interface{}{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": pathValue,
+								},
+							},
+						},
+						"backendRefs": []interface{}{backendRef},
+						"filters": []interface{}{
+							map[string]interface{}{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": rewritePath,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+func stringMapToInterface(input map[string]string) map[string]interface{} {
+	if len(input) == 0 {
+		return nil
+	}
+	output := make(map[string]interface{}, len(input))
+	for k, v := range input {
+		output[k] = v
+	}
+	return output
 }
 
 // extractEnvironment derives environment from namespace or other context

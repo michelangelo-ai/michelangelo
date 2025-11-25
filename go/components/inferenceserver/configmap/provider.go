@@ -1,5 +1,9 @@
 package configmap
 
+// TODO(GHOSH): There's only one configmap per inference server and all deployments need to concurrently access these configmaps.
+// Add appropriate locking mechanisms to ensure data consistency.
+// DO LATER, MAKE ISSUE
+
 import (
 	"context"
 	"encoding/json"
@@ -196,13 +200,12 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 	}
 
 	updatedConfigs := []ModelConfigEntry{}
-	fmt.Printf("DEBUG: RemoveModelFromConfig: Current configs: %v\n", currentConfigs)
 	for _, config := range currentConfigs {
 		if config.Name != request.ModelName {
 			updatedConfigs = append(updatedConfigs, config)
 		}
 	}
-	fmt.Printf("DEBUG: RemoveModelFromConfig: Updated configs: %v\n", updatedConfigs)
+
 	// Update ConfigMap
 	if err := p.updateConfigMapWithModels(ctx, configMap, updatedConfigs); err != nil {
 		return err

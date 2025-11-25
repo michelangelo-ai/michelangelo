@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
@@ -17,7 +16,6 @@ import (
 
 // ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
 type ModelSyncActor struct {
-	client                 client.Client
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
@@ -117,7 +115,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			Namespace:       deployment.Namespace,
 			ModelConfig: configmap.ModelConfigEntry{
 				Name:   modelName,
-				S3Path: modelName,
+				S3Path: fmt.Sprintf("s3://deploy-models/%s/", modelName),
 			},
 		}); err != nil {
 			a.logger.Error("Failed to update deployment via ConfigMapProvider", zap.Error(err))

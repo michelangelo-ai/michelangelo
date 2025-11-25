@@ -279,7 +279,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, logger *zap.Logg
 func (a *ProxyConfigurationActor) Run(ctx context.Context, logger *zap.Logger, resource *v2pb.InferenceServer, condition *apipb.Condition) error {
 	logger.Info("Running Triton proxy configuration")
 
-	err := a.proxyProvider.ConfigureProxy(ctx, logger, proxy.ConfigureProxyRequest{
+	err := a.proxyProvider.EnsureInferenceServerRoute(ctx, logger, proxy.EnsureInferenceServerRouteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 		ModelName:       resource.Name,
@@ -363,7 +363,7 @@ func (a *CleanupActor) Run(ctx context.Context, logger *zap.Logger, resource *v2
 	// STEP 2: Delete HTTPRoute for the inference server
 	logger.Info("Cleaning up HTTPRoute for inference server", zap.String("inferenceServer", resource.Name))
 	httpRouteName := fmt.Sprintf("%s-httproute", resource.Name)
-	if err := a.proxyProvider.DeleteRoute(ctx, logger, proxy.DeleteRouteRequest{
+	if err := a.proxyProvider.DeleteInferenceServerRoute(ctx, logger, proxy.DeleteInferenceServerRouteRequest{
 		InferenceServer: resource.Name,
 		Namespace:       resource.Namespace,
 	}); err != nil {

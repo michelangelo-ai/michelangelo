@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -15,7 +14,6 @@ import (
 
 // SteadyStateActor handles steady state monitoring following Uber patterns
 type SteadyStateActor struct {
-	client  client.Client
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }

@@ -1,3 +1,5 @@
+//go:generate mamockgen Gateway
+
 package gateways
 
 import (

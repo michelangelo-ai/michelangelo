@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
@@ -16,7 +15,6 @@ import (
 
 // RolloutCompletionActor handles post-rollout completion tasks
 type RolloutCompletionActor struct {
-	client                 client.Client
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
@@ -49,13 +47,11 @@ func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deplo
 	a.logger.Info("Running rollout completion tasks for deployment", zap.String("deployment", deployment.Name))
 
 	if deployment.Spec.DesiredRevision != nil {
-		// NOW we can safely update CurrentRevision since traffic has been switched
+		// Now we can safely update CurrentRevision since traffic has been switched
 		modelName := deployment.Spec.DesiredRevision.Name
 		deployment.Status.CurrentRevision = deployment.Spec.DesiredRevision
 		a.logger.Info("CurrentRevision updated after successful traffic switch", zap.String("model", modelName))
 
-		// TODO(GHOSH): SHOULD WE DIRECTLY SET THE STAGE TO ROLLOUT_COMPLETE HERE?
-		// OR SHOULD WE LET PARSESTAGE HANDLE THIS?
 		deployment.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
 		deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
 		deployment.Status.Message = fmt.Sprintf("Rollout completed successfully for model %s", modelName)

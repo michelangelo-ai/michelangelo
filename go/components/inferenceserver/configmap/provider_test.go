@@ -195,6 +195,66 @@ func TestGetModelConfigMap(t *testing.T) {
 			expectedResponse:   nil,
 			expectError:        true,
 		},
+		{
+			name: "get models from configmap with empty model list",
+			request: GetModelConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[]`,
+					},
+				},
+			},
+			expectedResponse: []ModelConfigEntry{},
+			expectError:      false,
+		},
+		{
+			name: "get models from configmap with no model-list.json key",
+			request: GetModelConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						"other-key": "other-value",
+					},
+				},
+			},
+			expectedResponse: []ModelConfigEntry{},
+			expectError:      false,
+		},
+		{
+			name: "get models from configmap with invalid json",
+			request: GetModelConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `invalid json`,
+					},
+				},
+			},
+			expectedResponse: nil,
+			expectError:      true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -220,6 +280,357 @@ func TestGetModelConfigMap(t *testing.T) {
 				assert.NoError(t, err)
 				// Compare entire response
 				assert.Equal(t, tt.expectedResponse, actualResponse)
+			}
+		})
+	}
+}
+
+func TestAddModelToConfigMap(t *testing.T) {
+	tests := []struct {
+		name               string
+		request            AddModelToConfigMapRequest
+		existingConfigMaps []runtime.Object
+		expectError        bool
+		validateFunc       func(t *testing.T, client client.Client, request AddModelToConfigMapRequest)
+	}{
+		{
+			name: "add new model to existing configmap",
+			request: AddModelToConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelConfig: ModelConfigEntry{
+					Name:   "new-model",
+					S3Path: "s3://bucket/new-model",
+				},
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/existing-model"}]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify model was added
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				expectedModels := []ModelConfigEntry{
+					{Name: "existing-model", S3Path: "s3://bucket/existing-model"},
+					{Name: "new-model", S3Path: "s3://bucket/new-model"},
+				}
+				assert.Equal(t, expectedModels, actualModels)
+			},
+		},
+		{
+			name: "update existing model in configmap",
+			request: AddModelToConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelConfig: ModelConfigEntry{
+					Name:   "existing-model",
+					S3Path: "s3://bucket/updated-path",
+				},
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/old-path"}]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify model was updated (not duplicated)
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				expectedModels := []ModelConfigEntry{
+					{Name: "existing-model", S3Path: "s3://bucket/updated-path"},
+				}
+				assert.Equal(t, expectedModels, actualModels)
+			},
+		},
+		{
+			name: "add model to empty configmap",
+			request: AddModelToConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelConfig: ModelConfigEntry{
+					Name:   "first-model",
+					S3Path: "s3://bucket/first-model",
+				},
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify model was added
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				expectedModels := []ModelConfigEntry{
+					{Name: "first-model", S3Path: "s3://bucket/first-model"},
+				}
+				assert.Equal(t, expectedModels, actualModels)
+			},
+		},
+		{
+			name: "add model to non-existent configmap returns error",
+			request: AddModelToConfigMapRequest{
+				InferenceServer: "non-existent-server",
+				Namespace:       "default",
+				ModelConfig: ModelConfigEntry{
+					Name:   "model",
+					S3Path: "s3://bucket/model",
+				},
+			},
+			existingConfigMaps: []runtime.Object{},
+			expectError:        true,
+			validateFunc:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake client with existing objects
+			scheme := runtime.NewScheme()
+			_ = corev1.AddToScheme(scheme)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(tt.existingConfigMaps...).
+				Build()
+
+			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+
+			// Execute
+			err := provider.AddModelToConfigMap(context.Background(), tt.request)
+
+			// Assert
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.validateFunc != nil {
+					tt.validateFunc(t, fakeClient, tt.request)
+				}
+			}
+		})
+	}
+}
+
+func TestRemoveModelFromConfigMap(t *testing.T) {
+	tests := []struct {
+		name               string
+		request            RemoveModelFromConfigMapRequest
+		existingConfigMaps []runtime.Object
+		expectError        bool
+		validateFunc       func(t *testing.T, client client.Client, request RemoveModelFromConfigMapRequest)
+	}{
+		{
+			name: "remove existing model from configmap",
+			request: RemoveModelFromConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelName:       "model-to-remove",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[
+  {
+    "name": "model-to-keep",
+    "s3_path": "s3://bucket/model-to-keep"
+  },
+  {
+    "name": "model-to-remove",
+    "s3_path": "s3://bucket/model-to-remove"
+  }
+]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify model was removed
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				expectedModels := []ModelConfigEntry{
+					{Name: "model-to-keep", S3Path: "s3://bucket/model-to-keep"},
+				}
+				assert.Equal(t, expectedModels, actualModels)
+			},
+		},
+		{
+			name: "remove non-existent model from configmap (no error, no change)",
+			request: RemoveModelFromConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelName:       "non-existent-model",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/existing-model"}]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify nothing was removed
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				expectedModels := []ModelConfigEntry{
+					{Name: "existing-model", S3Path: "s3://bucket/existing-model"},
+				}
+				assert.Equal(t, expectedModels, actualModels)
+			},
+		},
+		{
+			name: "remove last model from configmap (results in empty list)",
+			request: RemoveModelFromConfigMapRequest{
+				InferenceServer: "test-server",
+				Namespace:       "default",
+				ModelName:       "only-model",
+			},
+			existingConfigMaps: []runtime.Object{
+				&corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-server-model-config",
+						Namespace: "default",
+					},
+					Data: map[string]string{
+						modelListKey: `[{"name":"only-model","s3_path":"s3://bucket/only-model"}]`,
+					},
+				},
+			},
+			expectError: false,
+			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
+				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+				cm := &corev1.ConfigMap{}
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				require.NoError(t, err)
+
+				// Verify list is now empty
+				modelListJSON, exists := cm.Data[modelListKey]
+				assert.True(t, exists)
+
+				var actualModels []ModelConfigEntry
+				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
+				require.NoError(t, err)
+
+				assert.Empty(t, actualModels)
+			},
+		},
+		{
+			name: "remove model from non-existent configmap returns error",
+			request: RemoveModelFromConfigMapRequest{
+				InferenceServer: "non-existent-server",
+				Namespace:       "default",
+				ModelName:       "model",
+			},
+			existingConfigMaps: []runtime.Object{},
+			expectError:        true,
+			validateFunc:       nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Create fake client with existing objects
+			scheme := runtime.NewScheme()
+			_ = corev1.AddToScheme(scheme)
+			fakeClient := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithRuntimeObjects(tt.existingConfigMaps...).
+				Build()
+
+			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+
+			// Execute
+			err := provider.RemoveModelFromConfigMap(context.Background(), tt.request)
+
+			// Assert
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.validateFunc != nil {
+					tt.validateFunc(t, fakeClient, tt.request)
+				}
 			}
 		})
 	}
@@ -259,6 +670,16 @@ func TestDeleteModelConfigMap(t *testing.T) {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "not found")
 			},
+		},
+		{
+			name: "delete non-existent configmap returns error",
+			request: DeleteModelConfigMapRequest{
+				InferenceServer: "non-existent-server",
+				Namespace:       "default",
+			},
+			existingConfigMaps: []runtime.Object{},
+			expectError:        true,
+			validateFunc:       nil,
 		},
 	}
 

@@ -14,147 +14,73 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 )
 
-func TestConfigureProxy(t *testing.T) {
+func TestEnsureInferenceServerRoute(t *testing.T) {
 	tests := []struct {
 		name              string
-		request           ConfigureProxyRequest
+		request           EnsureInferenceServerRouteRequest
 		existingHTTPRoute *unstructured.Unstructured
 		expectError       bool
 		validateFunc      func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
 	}{
 		{
-			name: "create new httproute without production route, returns error",
-			request: ConfigureProxyRequest{
+			name: "create new httproute with baseline routing",
+			request: EnsureInferenceServerRouteRequest{
 				InferenceServer: "new-server",
 				Namespace:       "default",
 				ModelName:       "new-model",
-				DeploymentName:  "new-deployment",
 			},
 			existingHTTPRoute: nil,
-			expectError:       true,
+			expectError:       false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "production route not found")
+				require.NoError(t, err)
 
-				// Verify HTTPRoute was created (even though update failed)
+				// Verify HTTPRoute was created
 				httpRoute, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
 					context.Background(), "new-server-httproute", metav1.GetOptions{})
 				require.NoError(t, getErr)
 				assert.Equal(t, "new-server-httproute", httpRoute.GetName())
-			},
-		},
-		{
-			name: "update existing httproute production route successfully",
-			request: ConfigureProxyRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "updated-model",
-				DeploymentName:  "test-deployment",
-			},
-			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/test-deployment/production", "/v2/models/old-model"),
-			expectError:       false,
-			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.NoError(t, err)
 
-				// Get the updated HTTPRoute
-				updated, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
-					context.Background(), "test-server-httproute", metav1.GetOptions{})
-				require.NoError(t, getErr)
-
-				// Verify the filter was updated
-				rules, _, _ := unstructured.NestedSlice(updated.Object, "spec", "rules")
-				require.Len(t, rules, 1)
-
-				ruleMap := rules[0].(map[string]interface{})
-				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
-				require.Len(t, filters, 1)
-
-				filterMap := filters[0].(map[string]interface{})
-				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
-				assert.Equal(t, "/v2/models/updated-model", replacePrefixMatch)
-			},
-		},
-		{
-			name: "update production route in prod namespace with existing httproute",
-			request: ConfigureProxyRequest{
-				InferenceServer: "prod-server",
-				Namespace:       "prod-namespace",
-				ModelName:       "updated-model",
-				DeploymentName:  "deployment",
-			},
-			existingHTTPRoute: createHTTPRouteWithProductionRoute("prod-server-httproute", "prod-namespace", "/prod-server/deployment/production", "/v2/models/old-model"),
-			expectError:       false,
-			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.NoError(t, err)
-
-				// Verify the production route was updated
-				httpRoute, getErr := fakeClient.Resource(httpRouteGVR).Namespace("prod-namespace").Get(
-					context.Background(), "prod-server-httproute", metav1.GetOptions{})
-				require.NoError(t, getErr)
-
-				// Verify the filter was updated
+				// Verify baseline route configuration
 				rules, _, _ := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
 				require.Len(t, rules, 1)
 
 				ruleMap := rules[0].(map[string]interface{})
-				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
-				filterMap := filters[0].(map[string]interface{})
-				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
-				assert.Equal(t, "/v2/models/updated-model", replacePrefixMatch)
+
+				// Check path match
+				matches, _, _ := unstructured.NestedSlice(ruleMap, "matches")
+				require.Len(t, matches, 1)
+				matchMap := matches[0].(map[string]interface{})
+				pathValue, _, _ := unstructured.NestedString(matchMap, "path", "value")
+				assert.Equal(t, "/new-server", pathValue)
+
+				// Check backend ref
+				backendRefs, _, _ := unstructured.NestedSlice(ruleMap, "backendRefs")
+				require.Len(t, backendRefs, 1)
+				backendMap := backendRefs[0].(map[string]interface{})
+				assert.Equal(t, "new-server-inference-service", backendMap["name"])
+				assert.Equal(t, int64(100), backendMap["weight"])
 			},
 		},
 		{
-			name: "production route not found, returns error",
-			request: ConfigureProxyRequest{
+			name: "get existing httproute successfully",
+			request: EnsureInferenceServerRouteRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
-				ModelName:       "model",
-				DeploymentName:  "test-deployment",
+				ModelName:       "test-model",
 			},
-			existingHTTPRoute: createHTTPRoute("test-server-httproute", "default", "/different-path"),
-			expectError:       true,
-			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "production route not found")
-			},
-		},
-		{
-			name: "httproute already configured for desired model, no update needed",
-			request: ConfigureProxyRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "existing-model",
-				DeploymentName:  "test-deployment",
-			},
-			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/test-deployment/production", "/v2/models/existing-model"),
+			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server", "/"),
 			expectError:       false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
-			},
-		},
-		{
-			name: "httproute with no rules, returns error",
-			request: ConfigureProxyRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "model",
-				DeploymentName:  "test-deployment",
-			},
-			existingHTTPRoute: &unstructured.Unstructured{
-				Object: map[string]interface{}{
-					"apiVersion": "gateway.networking.k8s.io/v1",
-					"kind":       "HTTPRoute",
-					"metadata": map[string]interface{}{
-						"name":      "test-server-httproute",
-						"namespace": "default",
-					},
-					"spec": map[string]interface{}{},
-				},
-			},
-			expectError: true,
-			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "rules not found")
+
+				// Get the HTTPRoute
+				httpRoute, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
+					context.Background(), "test-server-httproute", metav1.GetOptions{})
+				require.NoError(t, getErr)
+
+				// Verify it exists and is unchanged
+				rules, _, _ := unstructured.NestedSlice(httpRoute.Object, "spec", "rules")
+				require.Len(t, rules, 1)
 			},
 		},
 	}
@@ -170,7 +96,7 @@ func TestConfigureProxy(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.ConfigureProxy(context.Background(), zap.NewNop(), tt.request)
+			err := manager.EnsureInferenceServerRoute(context.Background(), zap.NewNop(), tt.request)
 
 			// Validate
 			if tt.expectError {
@@ -270,92 +196,91 @@ func TestGetProxyStatus(t *testing.T) {
 	}
 }
 
-func TestAddDeploymentRoute(t *testing.T) {
+func TestEnsureDeploymentRoute(t *testing.T) {
 	tests := []struct {
 		name         string
-		request      AddDeploymentRouteRequest
+		request      EnsureDeploymentRouteRequest
 		httpRoute    *unstructured.Unstructured
 		expectError  bool
 		validateFunc func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
 	}{
 		{
-			name: "add new deployment route successfully",
-			request: AddDeploymentRouteRequest{
+			name: "create new deployment-specific httproute successfully",
+			request: EnsureDeploymentRouteRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
-				DeploymentName:  "new-deployment",
+				DeploymentName:  "test-deployment",
 				ModelName:       "new-model",
 			},
-			httpRoute:   createHTTPRoute("test-server-httproute", "default", "/test-server"),
+			httpRoute:   nil,
 			expectError: false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
 
-				// Get the updated HTTPRoute
-				updated, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
-					context.Background(), "test-server-httproute", metav1.GetOptions{})
+				// Get the deployment HTTPRoute (not the inference server route)
+				deploymentRoute, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
+					context.Background(), "test-deployment-httproute", metav1.GetOptions{})
 				require.NoError(t, getErr)
 
-				// Verify the new route was added (should be prepended)
-				rules, _, _ := unstructured.NestedSlice(updated.Object, "spec", "rules")
-				assert.Len(t, rules, 2)
+				// Verify the route configuration
+				rules, _, _ := unstructured.NestedSlice(deploymentRoute.Object, "spec", "rules")
+				require.Len(t, rules, 1)
 
-				// Check the first rule is the new deployment route
+				// Check the path match
 				firstRule := rules[0].(map[string]interface{})
 				matches, _, _ := unstructured.NestedSlice(firstRule, "matches")
 				firstMatch := matches[0].(map[string]interface{})
 				pathValue, _, _ := unstructured.NestedString(firstMatch, "path", "value")
-				assert.Equal(t, "/test-server/new-deployment", pathValue)
+				assert.Equal(t, "/test-server/test-deployment/models/new-model", pathValue)
 
 				// Verify the filter
 				filters, _, _ := unstructured.NestedSlice(firstRule, "filters")
 				filterMap := filters[0].(map[string]interface{})
 				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
 				assert.Equal(t, "/v2/models/new-model", replacePrefixMatch)
+
+				// Verify backend ref points to inference server service
+				backendRefs, _, _ := unstructured.NestedSlice(firstRule, "backendRefs")
+				require.Len(t, backendRefs, 1)
+				backendMap := backendRefs[0].(map[string]interface{})
+				assert.Equal(t, "test-server-inference-service", backendMap["name"])
 			},
 		},
 		{
-			name: "update existing deployment route",
-			request: AddDeploymentRouteRequest{
+			name: "update existing deployment httproute",
+			request: EnsureDeploymentRouteRequest{
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				DeploymentName:  "existing-deployment",
 				ModelName:       "updated-model",
 			},
-			httpRoute:   createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server/existing-deployment", "/v2/models/old-model"),
+			httpRoute:   createHTTPRouteWithProductionRoute("existing-deployment-httproute", "default", "/test-server/existing-deployment/models/old-model", "/v2/models/old-model"),
 			expectError: false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
 
-				// Get the updated HTTPRoute
+				// Get the updated deployment HTTPRoute
 				updated, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
-					context.Background(), "test-server-httproute", metav1.GetOptions{})
+					context.Background(), "existing-deployment-httproute", metav1.GetOptions{})
 				require.NoError(t, getErr)
 
-				// Verify the route was updated
+				// Verify the route was updated with new model
 				rules, _, _ := unstructured.NestedSlice(updated.Object, "spec", "rules")
-				assert.Len(t, rules, 1)
+				require.Len(t, rules, 1)
 
 				ruleMap := rules[0].(map[string]interface{})
+
+				// Check path was updated
+				matches, _, _ := unstructured.NestedSlice(ruleMap, "matches")
+				matchMap := matches[0].(map[string]interface{})
+				pathValue, _, _ := unstructured.NestedString(matchMap, "path", "value")
+				assert.Equal(t, "/test-server/existing-deployment/models/updated-model", pathValue)
+
+				// Check filter was updated
 				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
 				filterMap := filters[0].(map[string]interface{})
 				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
 				assert.Equal(t, "/v2/models/updated-model", replacePrefixMatch)
-			},
-		},
-		{
-			name: "add deployment route to non-existent httproute, returns error",
-			request: AddDeploymentRouteRequest{
-				InferenceServer: "non-existent-server",
-				Namespace:       "default",
-				DeploymentName:  "deployment",
-				ModelName:       "model",
-			},
-			httpRoute:   nil,
-			expectError: true,
-			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
-				require.Error(t, err)
-				assert.Contains(t, err.Error(), "failed to get HTTPRoute")
 			},
 		},
 	}
@@ -371,7 +296,7 @@ func TestAddDeploymentRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.AddDeploymentRoute(context.Background(), zap.NewNop(), tt.request)
+			err := manager.EnsureDeploymentRoute(context.Background(), zap.NewNop(), tt.request)
 
 			// Validate
 			if tt.expectError {
@@ -387,7 +312,198 @@ func TestAddDeploymentRoute(t *testing.T) {
 	}
 }
 
-func TestDeleteHTTPRoute(t *testing.T) {
+func TestCheckDeploymentRouteStatus(t *testing.T) {
+	tests := []struct {
+		name         string
+		request      CheckDeploymentRouteStatusRequest
+		httpRoute    *unstructured.Unstructured
+		expectResult bool
+		expectError  bool
+	}{
+		{
+			name: "deployment route exists and is properly configured",
+			request: CheckDeploymentRouteStatusRequest{
+				DeploymentName:  "test-deployment",
+				Namespace:       "default",
+				InferenceServer: "test-server",
+				ModelName:       "test-model",
+			},
+			httpRoute:    createHTTPRouteWithProductionRoute("test-deployment-httproute", "default", "/test-server/test-deployment/models/test-model", "/v2/models/test-model"),
+			expectResult: true,
+			expectError:  false,
+		},
+		{
+			name: "deployment route does not exist",
+			request: CheckDeploymentRouteStatusRequest{
+				DeploymentName:  "nonexistent-deployment",
+				Namespace:       "default",
+				InferenceServer: "test-server",
+				ModelName:       "test-model",
+			},
+			httpRoute:    nil,
+			expectResult: false,
+			expectError:  true,
+		},
+		{
+			name: "deployment route exists but has no rules",
+			request: CheckDeploymentRouteStatusRequest{
+				DeploymentName:  "empty-deployment",
+				Namespace:       "default",
+				InferenceServer: "test-server",
+				ModelName:       "test-model",
+			},
+			httpRoute:    createEmptyHTTPRoute("empty-deployment-httproute", "default"),
+			expectResult: false,
+			expectError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup fake client
+			var objects []runtime.Object
+			if tt.httpRoute != nil {
+				objects = append(objects, tt.httpRoute)
+			}
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, objects...)
+			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
+
+			// Execute
+			result, err := manager.CheckDeploymentRouteStatus(context.Background(), zap.NewNop(), tt.request)
+
+			// Validate
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectResult, result)
+		})
+	}
+}
+
+func TestDeploymentRouteExists(t *testing.T) {
+	tests := []struct {
+		name         string
+		request      DeploymentRouteExistsRequest
+		httpRoute    *unstructured.Unstructured
+		expectResult bool
+		expectError  bool
+	}{
+		{
+			name: "deployment route exists",
+			request: DeploymentRouteExistsRequest{
+				DeploymentName: "test-deployment",
+				Namespace:      "default",
+			},
+			httpRoute:    createEmptyHTTPRoute("test-deployment-httproute", "default"),
+			expectResult: true,
+			expectError:  false,
+		},
+		{
+			name: "deployment route does not exist",
+			request: DeploymentRouteExistsRequest{
+				DeploymentName: "nonexistent-deployment",
+				Namespace:      "default",
+			},
+			httpRoute:    nil,
+			expectResult: false,
+			expectError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup fake client
+			var objects []runtime.Object
+			if tt.httpRoute != nil {
+				objects = append(objects, tt.httpRoute)
+			}
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, objects...)
+			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
+
+			// Execute
+			result, err := manager.DeploymentRouteExists(context.Background(), zap.NewNop(), tt.request)
+
+			// Validate
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.expectResult, result)
+		})
+	}
+}
+
+func TestDeleteDeploymentRoute(t *testing.T) {
+	tests := []struct {
+		name         string
+		request      DeleteDeploymentRouteRequest
+		httpRoute    *unstructured.Unstructured
+		expectError  bool
+		validateFunc func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
+	}{
+		{
+			name: "delete existing deployment httproute successfully",
+			request: DeleteDeploymentRouteRequest{
+				DeploymentName: "test-deployment",
+				Namespace:      "default",
+			},
+			httpRoute:   createEmptyHTTPRoute("test-deployment-httproute", "default"),
+			expectError: false,
+			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
+				require.NoError(t, err)
+
+				// Verify the HTTPRoute was deleted
+				_, getErr := fakeClient.Resource(httpRouteGVR).Namespace("default").Get(
+					context.Background(), "test-deployment-httproute", metav1.GetOptions{})
+				assert.Error(t, getErr)
+				assert.Contains(t, getErr.Error(), "not found")
+			},
+		},
+		{
+			name: "delete non-existent deployment httproute, does not return error",
+			request: DeleteDeploymentRouteRequest{
+				DeploymentName: "nonexistent-deployment",
+				Namespace:      "default",
+			},
+			httpRoute:   nil,
+			expectError: false,
+			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
+				require.NoError(t, err)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup fake client
+			var objects []runtime.Object
+			if tt.httpRoute != nil {
+				objects = append(objects, tt.httpRoute)
+			}
+			fakeClient := fake.NewSimpleDynamicClient(scheme.Scheme, objects...)
+			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
+
+			// Execute
+			err := manager.DeleteDeploymentRoute(context.Background(), zap.NewNop(), tt.request)
+
+			// Validate
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+
+			if tt.validateFunc != nil {
+				tt.validateFunc(t, fakeClient, err)
+			}
+		})
+	}
+}
+
+func TestDeleteInferenceServerRoute(t *testing.T) {
 	tests := []struct {
 		name              string
 		httpRouteName     string
@@ -435,7 +551,7 @@ func TestDeleteHTTPRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.DeleteRoute(context.Background(), zap.NewNop(), DeleteRouteRequest{
+			err := manager.DeleteInferenceServerRoute(context.Background(), zap.NewNop(), DeleteInferenceServerRouteRequest{
 				InferenceServer: tt.httpRouteName,
 				Namespace:       tt.namespace,
 			})
@@ -577,6 +693,76 @@ func createEmptyHTTPRoute(name, namespace string) *unstructured.Unstructured {
 			},
 			"spec": map[string]interface{}{
 				"rules": []interface{}{},
+			},
+		},
+	}
+}
+
+// Helper function to create HTTPRoute with multiple rules
+func createHTTPRouteWithMultipleRules() *unstructured.Unstructured {
+	return &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "gateway.networking.k8s.io/v1",
+			"kind":       "HTTPRoute",
+			"metadata": map[string]interface{}{
+				"name":      "multi-rule-httproute",
+				"namespace": "default",
+			},
+			"spec": map[string]interface{}{
+				"rules": []interface{}{
+					map[string]interface{}{
+						"matches": []interface{}{
+							map[string]interface{}{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": "/test-server",
+								},
+							},
+						},
+						"backendRefs": []interface{}{
+							map[string]interface{}{
+								"name": "backend1",
+							},
+						},
+						"filters": []interface{}{
+							map[string]interface{}{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/models/model1",
+									},
+								},
+							},
+						},
+					},
+					map[string]interface{}{
+						"matches": []interface{}{
+							map[string]interface{}{
+								"path": map[string]interface{}{
+									"type":  "PathPrefix",
+									"value": "/other-server",
+								},
+							},
+						},
+						"backendRefs": []interface{}{
+							map[string]interface{}{
+								"name": "backend2",
+							},
+						},
+						"filters": []interface{}{
+							map[string]interface{}{
+								"type": "URLRewrite",
+								"urlRewrite": map[string]interface{}{
+									"path": map[string]interface{}{
+										"type":               "ReplacePrefixMatch",
+										"replacePrefixMatch": "/v2/models/model2",
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
