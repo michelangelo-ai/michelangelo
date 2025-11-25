@@ -167,15 +167,9 @@ def generate_dev_run(
         yaml_path_string = _file
         yaml_path = Path(yaml_path_string).resolve()
         yaml_dict = yaml_to_dict(yaml_path_string)
-        yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
-
-        # Add resume_from to yaml_dict so it can be processed by the metadata converter
-        if _resume_from:
-            yaml_dict["resume_from"] = _resume_from
-
-        # Add file_sync to yaml_dict so it can be processed by the metadata converter
-        if _file_sync:
-            yaml_dict["file_sync"] = _file_sync
+        yaml_dict = _add_optional_params_to_yaml_dict(
+            yaml_dict, environment_variables, _resume_from, _file_sync
+        )
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
             yaml_dict, input_class, yaml_path
@@ -343,3 +337,31 @@ def _process_env_variables(env_variables: list[str]) -> dict:
             )
         env_dict[key_value_pair[0]] = key_value_pair[1]
     return env_dict
+
+
+def _add_optional_params_to_yaml_dict(
+    yaml_dict: dict,
+    environment_variables: dict,
+    resume_from: Optional[str],
+    file_sync: bool,
+) -> dict:
+    """Add optional parameters to yaml_dict for dev_run command.
+
+    Args:
+        yaml_dict: Base YAML configuration dictionary
+        environment_variables: Environment variables to add
+        resume_from: Optional resume specification
+        file_sync: Whether file sync is enabled
+
+    Returns:
+        Updated yaml_dict with optional parameters
+    """
+    yaml_dict[_ENV_VARIABLE_KEY] = environment_variables
+
+    if resume_from:
+        yaml_dict["resume_from"] = resume_from
+
+    if file_sync:
+        yaml_dict["file_sync"] = file_sync
+
+    return yaml_dict

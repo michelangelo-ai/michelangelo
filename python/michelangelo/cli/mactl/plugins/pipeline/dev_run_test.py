@@ -14,6 +14,17 @@ from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
 class PipelineDevRunTest(TestCase):
     """Tests for pipeline dev_run plugin."""
 
+    def test_module_imports(self):
+        """Test that the module imports successfully including all dependencies."""
+        # This test ensures all imports in dev_run.py are valid and covered
+        from michelangelo.cli.mactl.plugins.pipeline import dev_run
+
+        # Verify key attributes exist
+        self.assertTrue(hasattr(dev_run, "convert_crd_metadata_pipeline_dev_run"))
+        self.assertTrue(hasattr(dev_run, "generate_pipeline_dev_run_object"))
+        self.assertTrue(hasattr(dev_run, "_process_env_variables"))
+        self.assertTrue(hasattr(dev_run, "DefaultFileSync"))
+
     def test_process_env_variables_basic(self):
         """Test processing environment variables from list to dict."""
         env_list = ["KEY1=value1", "KEY2=value2", "KEY3=value3"]
@@ -315,3 +326,41 @@ class PipelineDevRunTest(TestCase):
                 "UF_FILE_SYNC_TARBALL_URL",
                 result["pipeline_run"]["spec"]["input"]["environ"],
             )
+
+    def test_add_optional_params_to_yaml_dict_with_file_sync(self):
+        """Test _add_optional_params_to_yaml_dict with file_sync=True."""
+        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+            _add_optional_params_to_yaml_dict,
+        )
+
+        yaml_dict = {"metadata": {"name": "test-pipeline"}}
+        env_vars = {"KEY1": "value1"}
+        resume_from = "old-run:step1"
+        file_sync = True
+
+        result = _add_optional_params_to_yaml_dict(
+            yaml_dict, env_vars, resume_from, file_sync
+        )
+
+        self.assertEqual(result["env"], {"KEY1": "value1"})
+        self.assertEqual(result["resume_from"], "old-run:step1")
+        self.assertEqual(result["file_sync"], True)
+
+    def test_add_optional_params_to_yaml_dict_without_file_sync(self):
+        """Test _add_optional_params_to_yaml_dict with file_sync=False."""
+        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+            _add_optional_params_to_yaml_dict,
+        )
+
+        yaml_dict = {"metadata": {"name": "test-pipeline"}}
+        env_vars = {}
+        resume_from = None
+        file_sync = False
+
+        result = _add_optional_params_to_yaml_dict(
+            yaml_dict, env_vars, resume_from, file_sync
+        )
+
+        self.assertEqual(result["env"], {})
+        self.assertNotIn("resume_from", result)
+        self.assertNotIn("file_sync", result)
