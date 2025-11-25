@@ -31,7 +31,6 @@ func (a *ResourceAcquisitionActor) Retrieve(ctx context.Context, resource *v2pb.
 	if healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
 		InferenceServer: resource.Spec.GetInferenceServer().Name,
 		Namespace:       resource.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON,
 	}); err != nil {
 		return &apipb.Condition{Type: a.GetType(), Status: apipb.CONDITION_STATUS_FALSE, Reason: "HealthCheckFailed", Message: fmt.Sprintf("Failed to check health of inference server: %v", err)}, nil
 	} else if !healthy {

@@ -285,8 +285,7 @@ func (r *Reconciler) reconcile(ctx context.Context, log logr.Logger, metrics *Co
 				deployment.Status.ConditionsSnapshot = deployment.Status.Conditions
 			}
 			fmt.Printf("DEBUG: Setting conditions to nil for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)
-			// TODO(GHOSH): Uncomment this
-			// deployment.Status.Conditions = nil
+			deployment.Status.Conditions = nil
 			fmt.Printf("DEBUG: UPDATED CONDITIONS FOR DEPLOYMENT %+v \n", deployment.Name)
 			if deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE || deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED {
 				fmt.Printf("DEBUG: Populating message for deployment %s during stage %s\n", deployment.Name, deployment.Status.Stage)

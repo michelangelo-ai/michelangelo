@@ -100,9 +100,12 @@ COPY . .
 # Install python dependencies
 RUN ls -alF ./
 
+# RUN poetry config virtualenvs.create false
+# RUN poetry lock
+# RUN poetry install -E example
 RUN poetry config virtualenvs.create false
-RUN poetry lock
-RUN poetry install -E example
+RUN rm -f poetry.lock
+RUN poetry install -E example --no-root
 
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"

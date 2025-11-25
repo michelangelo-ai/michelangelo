@@ -54,7 +54,6 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		ModelName:       currentModel,
 		InferenceServer: inferenceServerName,
 		Namespace:       resource.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON,
 	}
 
 	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)
@@ -122,7 +121,6 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		ModelName:       currentModel,
 		InferenceServer: inferenceServerName,
 		Namespace:       resource.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON,
 	}); err != nil {
 		a.Logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
 		// Don't fail the deployment if direct unload fails - ConfigMap update should handle it
@@ -136,7 +134,6 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 		ModelName:       currentModel,
 		InferenceServer: inferenceServerName,
 		Namespace:       resource.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON,
 	}
 
 	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)

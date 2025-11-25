@@ -7,7 +7,7 @@ metadata:
     app: bert-cola-29
 spec:
   desiredRevision:
-    name: bert-cola-36
+    name: bert-cola-38
     namespace: default
   inferenceServer:
     name: inference-server-bert-cola

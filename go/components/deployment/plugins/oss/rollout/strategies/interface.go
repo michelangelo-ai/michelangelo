@@ -40,21 +40,10 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 
 // getDeploymentStrategy determines the rollout strategy from deployment configuration
 func getDeploymentStrategy(deployment *v2pb.Deployment) string {
-	// TODO(GHOSH): Update this to use the deployment strategy field
-	// Check annotations for strategy override
-	if deployment.Annotations != nil {
-		if strategy, ok := deployment.Annotations["rollout.strategy"]; ok {
-			return strategy
-		}
+	switch deployment.Spec.GetStrategy().GetRolloutStrategy().(type) {
+	case *v2pb.DeploymentStrategy_Rolling:
+		return "rolling"
+	default:
+		return "rolling"
 	}
-
-	// Check labels for strategy
-	if deployment.Labels != nil {
-		if strategy, ok := deployment.Labels["rollout.strategy"]; ok {
-			return strategy
-		}
-	}
-
-	// Default to rolling strategy
-	return "rolling"
 }

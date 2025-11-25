@@ -2,7 +2,6 @@ package rollback
 
 import (
 	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -18,7 +17,6 @@ type conditionPlugin struct {
 
 // Params contains dependencies for rollback plugin
 type Params struct {
-	Client  client.Client
 	Gateway gateways.Gateway
 	Logger  *zap.Logger
 }

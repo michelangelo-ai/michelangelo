@@ -44,7 +44,6 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployme
 			InferenceServer: inferenceServerName,
 			DeploymentName:  deployment.Name, // Include deployment name for deployment-specific routing
 			Namespace:       deployment.Namespace,
-			BackendType:     v2pb.BACKEND_TYPE_TRITON,
 		}
 
 		// Implement retry logic with configurable timeout for health checks

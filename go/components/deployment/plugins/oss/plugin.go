@@ -207,7 +207,6 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 	healthy, err := p.gateway.IsHealthy(ctx, p.logger, gateways.HealthCheckRequest{
 		InferenceServer: deployment.Spec.GetInferenceServer().Name,
 		Namespace:       deployment.Namespace,
-		BackendType:     v2pb.BACKEND_TYPE_TRITON,
 	})
 	if err != nil {
 		return false, fmt.Errorf("failed to check health of inference server: %w", err)
