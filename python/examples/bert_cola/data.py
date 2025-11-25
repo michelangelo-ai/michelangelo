@@ -1,3 +1,8 @@
+"""Data loading utilities for BERT CoLA training.
+
+Loads and tokenizes the CoLA dataset from GLUE benchmark for BERT fine-tuning.
+"""
+
 import logging
 
 import datasets
@@ -28,6 +33,17 @@ def load_data(
     name: str,
     tokenizer_max_length: int = 128,
 ) -> tuple[Dataset, Dataset, Dataset]:
+    """Load and tokenize CoLA dataset from GLUE benchmark.
+
+    Args:
+        path: HuggingFace dataset path (e.g., "glue").
+        name: Dataset configuration name (e.g., "cola").
+        tokenizer_max_length: Maximum sequence length for tokenization. Defaults to 128.
+
+    Returns:
+        Tuple of (train_dataset, validation_dataset, test_dataset) as Ray Datasets,
+        each containing tokenized sentences with labels.
+    """
     tokenizer = transformers.AutoTokenizer.from_pretrained(tokenizer_path)
 
     def tokenize_sentence(batch):

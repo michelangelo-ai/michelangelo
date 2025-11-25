@@ -1,3 +1,9 @@
+"""BERT fine-tuning workflow for CoLA linguistic acceptability task.
+
+Example workflow demonstrating BERT fine-tuning on the Corpus of Linguistic
+Acceptability (CoLA) task from the GLUE benchmark.
+"""
+
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
 from examples.bert_cola.train import train
@@ -6,6 +12,11 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 @uniflow.workflow()
 def train_workflow():
+    """Training workflow for BERT model on CoLA dataset.
+
+    Loads CoLA dataset from GLUE benchmark, fine-tunes BERT for sequence
+    classification, and evaluates model performance.
+    """
     data_path = "glue"
     data_name = "cola"
     train_data, validation_data, test_data = load_data(
