@@ -88,8 +88,10 @@ class VLLMPredictor:
         head_memory="4Gi",
         worker_cpu=1,
         worker_memory="16Gi",
-        worker_instances=1,  # TODO: make this configurable from workflow after supported is added
-        worker_gpu=1,  # TODO: make this configurable from workflow after supported is added
+        # TODO: make this configurable from workflow after supported is added
+        worker_instances=1,
+        # TODO: make this configurable from workflow after supported is added
+        worker_gpu=1,
         # breakpoint=True,
     ),
 )
@@ -138,11 +140,11 @@ def predict(
             [{"GPU": 1, "CPU": 1}] * tensor_parallel_size,
             strategy="STRICT_PACK",
         )
-        return dict(
-            scheduling_strategy=PlacementGroupSchedulingStrategy(
+        return {
+            "scheduling_strategy": PlacementGroupSchedulingStrategy(
                 pg, placement_group_capture_child_tasks=True
             )
-        )
+        }
 
     resources_kwarg: dict[str, Any] = {}
     if tensor_parallel_size == 1:
@@ -156,7 +158,9 @@ def predict(
         resources_kwarg["ray_remote_args_fn"] = scheduling_strategy_fn
 
     log.info(
-        f"Starting prediction with batch_size {batch_size} concurrency {concurrency} tensor_parallel_size {tensor_parallel_size}"
+        f"Starting prediction with batch_size {batch_size} "
+        f"concurrency {concurrency} "
+        f"tensor_parallel_size {tensor_parallel_size}"
     )
     predict_data = predict_data.map_batches(
         VLLMPredictor,

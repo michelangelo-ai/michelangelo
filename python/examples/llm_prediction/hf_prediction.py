@@ -73,11 +73,13 @@ def llm_prediction_workflow(
 
 
 # For Local Run: poetry run python examples/llm_prediction/hf_prediction.py
-# For Remote Run: poetry run python examples/llm_prediction/hf_prediction.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Remote Run: poetry run python examples/llm_prediction/hf_prediction.py
+# remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
-    # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC docstring for more information.
+    # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC
+    # docstring for more information.
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"

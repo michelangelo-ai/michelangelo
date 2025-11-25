@@ -85,8 +85,10 @@ class HFPredictor:
         head_memory="4Gi",
         worker_cpu=1,
         worker_memory="4Gi",
-        worker_instances=1,  # TODO: make this configurable from workflow after supported is added
-        worker_gpu=0,  # TODO: make this configurable from workflow after supported is added
+        # TODO: make this configurable from workflow after supported is added
+        worker_instances=1,
+        # TODO: make this configurable from workflow after supported is added
+        worker_gpu=0,
         # breakpoint=True,
     ),
 )
@@ -119,7 +121,8 @@ def predict(
     """
     log.info("Starting offline prediction with HFPredictor...")
     log.info(
-        f"Starting prediction with batch_size {batch_size} concurrency {worker_instances}"
+        f"Starting prediction with batch_size {batch_size} and "
+        f"concurrency {worker_instances}"
     )
     predict_data = predict_data.map_batches(
         HFPredictor,

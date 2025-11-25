@@ -73,7 +73,8 @@ def write_data(
     Args:
         dataset: Ray Dataset to write.
         out_path: Output directory path for CSV files.
-        partitions: Optional number of partitions to repartition before writing. Defaults to None.
+        partitions: Optional number of partitions to repartition before writing.
+            Defaults to None.
     """
     if partitions:
         dataset = dataset.repartition(partitions)
