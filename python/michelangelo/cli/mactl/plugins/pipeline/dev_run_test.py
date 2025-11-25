@@ -210,13 +210,13 @@ class PipelineDevRunTest(TestCase):
         "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_dev_run_object"
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name"
     )
     @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.DefaultFileSync")
     def test_convert_crd_metadata_with_file_sync(
         self,
         mock_file_sync_class,
-        mock_generate_dev_run_obj,
+        mock_generate_run_name,
         mock_populate_spec,
         mock_handle_workflow,
         mock_repo,
@@ -229,23 +229,13 @@ class PipelineDevRunTest(TestCase):
 
         mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
         mock_populate_spec.return_value = {"spec": {"steps": []}}
+        mock_generate_run_name.return_value = "test-run-12345"
 
         mock_file_sync = MagicMock()
         mock_file_sync.create_and_upload_tarball.return_value = (
             "s3://bucket/file-sync.tar.gz"
         )
         mock_file_sync_class.return_value = mock_file_sync
-
-        mock_generate_dev_run_obj.return_value = {
-            "metadata": {"name": "test-run"},
-            "spec": {
-                "input": {
-                    "environ": {
-                        "UF_FILE_SYNC_TARBALL_URL": "s3://bucket/file-sync.tar.gz"
-                    }
-                }
-            },
-        }
 
         yaml_dict = {
             "metadata": {
@@ -269,6 +259,17 @@ class PipelineDevRunTest(TestCase):
 
         # Verify the result contains pipeline_run with file-sync URL
         self.assertIn("pipeline_run", result)
+        # Verify the file-sync URL is in the environment variables
+        self.assertIn(
+            "UF_FILE_SYNC_TARBALL_URL",
+            result["pipeline_run"]["spec"]["input"]["environ"],
+        )
+        self.assertEqual(
+            result["pipeline_run"]["spec"]["input"]["environ"][
+                "UF_FILE_SYNC_TARBALL_URL"
+            ],
+            "s3://bucket/file-sync.tar.gz",
+        )
 
     @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
     @patch(
@@ -278,11 +279,11 @@ class PipelineDevRunTest(TestCase):
         "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_dev_run_object"
+        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name"
     )
     def test_convert_crd_metadata_without_file_sync(
         self,
-        mock_generate_dev_run_obj,
+        mock_generate_run_name,
         mock_populate_spec,
         mock_handle_workflow,
         mock_repo,
@@ -295,11 +296,7 @@ class PipelineDevRunTest(TestCase):
 
         mock_handle_workflow.return_value = ({}, "/fake/tar/path", "workflow_func")
         mock_populate_spec.return_value = {"spec": {"steps": []}}
-
-        mock_generate_dev_run_obj.return_value = {
-            "metadata": {"name": "test-run"},
-            "spec": {},
-        }
+        mock_generate_run_name.return_value = "test-run-12345"
 
         yaml_dict = {
             "metadata": {"name": "test-pipeline", "namespace": "test-ns"},
@@ -311,11 +308,14 @@ class PipelineDevRunTest(TestCase):
             yaml_dict, MagicMock(), yaml_path
         )
 
-        # Verify generate_pipeline_dev_run_object was called with empty
-        # file_sync_tarball_url
-        mock_generate_dev_run_obj.assert_called_once()
-        call_args = mock_generate_dev_run_obj.call_args
-        # Fourth positional argument should be file_sync_tarball_url (empty string)
-        self.assertEqual(call_args[0][3], "")
-
+        # Verify the result contains pipeline_run
         self.assertIn("pipeline_run", result)
+        # Verify no file-sync URL in environment when file_sync is False
+        if (
+            "input" in result["pipeline_run"]["spec"]
+            and "environ" in result["pipeline_run"]["spec"]["input"]
+        ):
+            self.assertNotIn(
+                "UF_FILE_SYNC_TARBALL_URL",
+                result["pipeline_run"]["spec"]["input"]["environ"],
+            )
