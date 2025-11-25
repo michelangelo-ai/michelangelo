@@ -167,7 +167,10 @@ def generate_dev_run(
         yaml_path_string = _file
         yaml_path = Path(yaml_path_string).resolve()
         yaml_dict = _add_optional_params_to_yaml_dict(
-            yaml_to_dict(yaml_path_string), environment_variables, _resume_from, _file_sync
+            yaml_to_dict(yaml_path_string),
+            environment_variables,
+            _resume_from,
+            _file_sync,
         )
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
