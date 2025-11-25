@@ -30,7 +30,7 @@ def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
         artifact_uri: MLflow artifact URI (e.g., "runs://{run_id}/artifacts/checkpoint")
 
     Returns:
-        Local path to the downloaded checkpoint directory
+        Local path to the downloaded checkpoint directory.
     """
     log.info(f"Downloading checkpoint from MLflow: {artifact_uri}")
 
@@ -69,18 +69,18 @@ def evaluate_gpt_model(
     """Evaluate the fine-tuned GPT model.
 
     Args:
-        test_dv: Test dataset variable
-        checkpoint_path: Ray checkpoint path from training
-        model_name: Base model name (e.g., "gpt2")
-        use_lora: Whether LoRA was used in training
-        lora_rank: LoRA rank used in training
-        learning_rate: Learning rate used in training
-        max_length: Maximum sequence length for evaluation
-        batch_size: Batch size for evaluation
-        num_samples: Number of samples to evaluate
+        test_dv: Test dataset variable containing evaluation data.
+        checkpoint_path: Path to Ray checkpoint from training or MLflow URI.
+        model_name: Base model name (e.g., "gpt2").
+        use_lora: Whether LoRA was used in training.
+        lora_rank: LoRA rank used in training.
+        learning_rate: Learning rate used in training.
+        max_length: Maximum sequence length for evaluation.
+        batch_size: Batch size for evaluation.
+        num_samples: Number of samples to evaluate.
 
     Returns:
-        Dictionary with evaluation metrics
+        Dictionary with evaluation metrics including perplexity and generation scores.
     """
     log.info(f"Checkpoint: {checkpoint_path}")
     log.info(f"Model config: {model_name}, LoRA: {use_lora}, rank: {lora_rank}")

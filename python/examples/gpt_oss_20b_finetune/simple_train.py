@@ -29,14 +29,14 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
     """Log checkpoint to MLflow artifacts (automatically saved to S3).
 
     Args:
-        checkpoint_path: Local path to the checkpoint directory or file
-        run_id: MLflow run ID to log artifacts to
+        checkpoint_path: Local path to the checkpoint directory or file.
+        run_id: MLflow run ID to log artifacts to.
 
     Returns:
-        MLflow artifact URI for the checkpoint
+        MLflow artifact URI for the checkpoint.
 
     Raises:
-        Exception: If MLflow logging fails
+        Exception: If MLflow logging fails.
     """
     log.info(f"Logging checkpoint to MLflow artifacts: {checkpoint_path}")
     log.info(f"Using MLflow run ID: {run_id}")
@@ -83,7 +83,23 @@ def simple_train_gpt(
     num_workers: int = 2,
     use_gpu: bool = True,
 ):
-    """Distributed training function using Ray Lightning."""
+    """Distributed training function using Ray Lightning.
+
+    Args:
+        train_dv: Training dataset variable.
+        validation_dv: Validation dataset variable.
+        model_name: Base model name (e.g., "gpt2").
+        num_epochs: Number of training epochs.
+        batch_size: Training batch size.
+        learning_rate: Learning rate for optimization.
+        use_lora: Whether to use LoRA (Low-Rank Adaptation).
+        lora_rank: LoRA rank for parameter-efficient fine-tuning.
+        num_workers: Number of worker nodes for distributed training.
+        use_gpu: Whether to use GPU acceleration.
+
+    Returns:
+        Dictionary with checkpoint path and MLflow run ID.
+    """
     log.info(f"Starting distributed training with model: {model_name}")
     log.info(f"Training with {num_workers} workers, use_gpu: {use_gpu}")
 

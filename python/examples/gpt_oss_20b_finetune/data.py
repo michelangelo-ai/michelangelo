@@ -35,13 +35,13 @@ def prepare_finetune_dataset(
     """Prepare fine-tuning dataset for GPT-OSS-20B.
 
     Args:
-        dataset_name: Name of the dataset to use
-        max_length: Maximum sequence length
-        sample_size: Number of samples to use
-        model_name: Model name for tokenizer
+        dataset_name: Name of the dataset to use.
+        max_length: Maximum sequence length.
+        sample_size: Number of samples to use.
+        model_name: Model name for tokenizer.
 
     Returns:
-        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables
+        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables.
     """
     log.info(f"Preparing {dataset_name} dataset for GPT-OSS-20B fine-tuning")
 

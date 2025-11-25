@@ -32,7 +32,18 @@ class GPTLightningModule(pl.LightningModule):
         warmup_steps: int = 100,
         **kwargs,
     ):
-        """Initialize the GPT Lightning module."""
+        """Initialize the GPT Lightning module.
+
+        Args:
+            model_name: Name of the base model to use.
+            learning_rate: Learning rate for optimization.
+            use_lora: Whether to use LoRA (Low-Rank Adaptation).
+            lora_rank: LoRA rank for parameter-efficient fine-tuning.
+            lora_alpha: LoRA alpha parameter for scaling.
+            lora_dropout: Dropout rate for LoRA layers.
+            warmup_steps: Number of warmup steps for learning rate scheduler.
+            **kwargs: Additional keyword arguments.
+        """
         super().__init__()
         self.save_hyperparameters()
 
@@ -48,7 +59,7 @@ class GPTLightningModule(pl.LightningModule):
         self.setup_model_and_tokenizer()
 
     def setup_model_and_tokenizer(self):
-        """Setup the model and tokenizer."""
+        """Setup the model and tokenizer for training."""
         log.info(f"Loading model: {self.model_name}")
 
         # Load tokenizer
@@ -80,13 +91,30 @@ class GPTLightningModule(pl.LightningModule):
                 self.model.print_trainable_parameters()
 
     def forward(self, input_ids, attention_mask=None, labels=None):
-        """Forward pass."""
+        """Forward pass through the model.
+
+        Args:
+            input_ids: Token IDs for input sequences.
+            attention_mask: Attention mask for input sequences.
+            labels: Target labels for training.
+
+        Returns:
+            Model outputs with loss and logits.
+        """
         return self.model(
             input_ids=input_ids, attention_mask=attention_mask, labels=labels
         )
 
     def training_step(self, batch, batch_idx):
-        """Training step."""
+        """Training step for PyTorch Lightning.
+
+        Args:
+            batch: Training batch containing input_ids, attention_mask, and labels.
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Training loss tensor.
+        """
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -105,7 +133,15 @@ class GPTLightningModule(pl.LightningModule):
         return loss
 
     def validation_step(self, batch, batch_idx):
-        """Validation step."""
+        """Validation step for PyTorch Lightning.
+
+        Args:
+            batch: Validation batch containing input_ids, attention_mask, and labels.
+            batch_idx: Index of the current batch.
+
+        Returns:
+            Validation loss tensor.
+        """
         outputs = self.forward(
             input_ids=batch["input_ids"],
             attention_mask=batch["attention_mask"],
@@ -124,7 +160,11 @@ class GPTLightningModule(pl.LightningModule):
         return {"val_loss": loss, "val_perplexity": perplexity}
 
     def configure_optimizers(self):
-        """Configure optimizers and schedulers."""
+        """Configure optimizers and learning rate schedulers.
+
+        Returns:
+            Dictionary containing optimizer and scheduler configuration.
+        """
         # Create optimizer
         optimizer = torch.optim.AdamW(
             self.parameters(), lr=self.learning_rate, weight_decay=0.01
@@ -151,7 +191,11 @@ class GPTLightningModule(pl.LightningModule):
         }
 
     def get_model_info(self) -> dict[str, Any]:
-        """Get model information for logging."""
+        """Get model information for logging.
+
+        Returns:
+            Dictionary containing model statistics and configuration.
+        """
         if self.use_lora and hasattr(self.model, "peft_config"):
             # Get parameter counts for LoRA model
             total_params = sum(p.numel() for p in self.model.parameters())
@@ -192,6 +236,19 @@ def create_gpt_model(
     """Factory function to create GPT Lightning module.
 
     Compatible with internal training patterns.
+
+    Args:
+        model_name: Name of the base model to use.
+        learning_rate: Learning rate for optimization.
+        use_lora: Whether to use LoRA (Low-Rank Adaptation).
+        lora_rank: LoRA rank for parameter-efficient fine-tuning.
+        lora_alpha: LoRA alpha parameter for scaling.
+        lora_dropout: Dropout rate for LoRA layers.
+        warmup_steps: Number of warmup steps for learning rate scheduler.
+        **kwargs: Additional keyword arguments.
+
+    Returns:
+        Configured GPTLightningModule instance.
     """
     return GPTLightningModule(
         model_name=model_name,
