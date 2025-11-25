@@ -209,9 +209,7 @@ class PipelineDevRunTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name"
-    )
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.DefaultFileSync")
     def test_convert_crd_metadata_with_file_sync(
         self,
@@ -278,9 +276,7 @@ class PipelineDevRunTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name"
-    )
+    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     def test_convert_crd_metadata_without_file_sync(
         self,
         mock_generate_run_name,
