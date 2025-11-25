@@ -9,13 +9,15 @@ import tempfile
 import time
 import uuid
 from pathlib import Path
+from typing import Optional
 
 import yaml
 
 short_description = "Manage the sandbox cluster."
 
 description = """
-Michelangelo Sandbox is a lightweight version of the Michelangelo platform, tailored for local development and testing.
+Michelangelo Sandbox is a lightweight version of the Michelangelo platform,
+tailored for local development and testing.
 This tool helps you create and manage a sandbox cluster directly on your machine.
 """
 
@@ -52,12 +54,16 @@ _default_compute_kube_cluster_name = "michelangelo-compute-0"
 
 
 def init_arguments(p: argparse.ArgumentParser):
+    """Initialize command-line arguments for the sandbox CLI."""
     sp = p.add_subparsers(dest="action", required=True)
 
     create_p = sp.add_parser("create", help="Create and start the cluster.")
     create_p.add_argument(
         "--exclude",
-        help="Excludes specified services. Available options: apiserver, controllermgr, ui, worker",
+        help=(
+            "Excludes specified services. "
+            "Available options: apiserver, controllermgr, ui, worker"
+        ),
         nargs="+",
         default=[],
     )
@@ -81,8 +87,11 @@ def init_arguments(p: argparse.ArgumentParser):
     create_p.add_argument(
         "--compute-cluster-name",
         default=_default_compute_kube_cluster_name,
-        help="Name of the compute cluster to create when --create-compute-cluster is used (default: %s)."
-        % _default_compute_kube_cluster_name,
+        help=(
+            f"Name of the compute cluster to create when "
+            f"--create-compute-cluster is used "
+            f"(default: {_default_compute_kube_cluster_name})."
+        ),
     )
 
     _ = sp.add_parser(
@@ -92,14 +101,18 @@ def init_arguments(p: argparse.ArgumentParser):
     delete_p.add_argument(
         "--compute-cluster-name",
         default=_default_compute_kube_cluster_name,
-        help="Name of the compute cluster to delete when --create-compute-cluster is used (default: %s)."
-        % _default_compute_kube_cluster_name,
+        help=(
+            f"Name of the compute cluster to delete when "
+            f"--create-compute-cluster is used "
+            f"(default: {_default_compute_kube_cluster_name})."
+        ),
     )
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
 
 
 def main(args=None):
+    """Main entry point for the sandbox CLI."""
     p = argparse.ArgumentParser(description=description)
     init_arguments(p)
     ns = p.parse_args(args=args)
@@ -107,6 +120,7 @@ def main(args=None):
 
 
 def run(ns: argparse.Namespace):
+    """Run the sandbox command based on the parsed namespace."""
     # Assert prerequisites. Sandbox depends on the following tools:
     _assert_command("k3d", "k3d not found, please install it: https://k3d.io")
     _assert_command(
@@ -153,15 +167,23 @@ def _create(ns: argparse.Namespace):
     if not cr_pat:
         _err_exit(
             """
-CR_PAT environment variable is not set. To pull Michelangelo's containers from the GitHub Container Registry, please create a GitHub personal access token (classic) with the "read:packages" scope. Then, save this token to the CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
+CR_PAT environment variable is not set. To pull Michelangelo's containers
+from the GitHub Container Registry, please create a GitHub personal access
+token (classic) with the "read:packages" scope. Then, save this token to the
+CR_PAT environment variable, e.g.: `export CR_PAT=ghp_...`.
 
-For a detailed guide, check https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry#authenticating-with-a-personal-access-token-classic.
+For a detailed guide, check:
+https://docs.github.com/en/packages/working-with-a-github-packages-registry/
+working-with-the-container-registry#authenticating-with-a-personal-access-token-classic.
 
-Be aware that CR_PAT environment variable is required while Michelangelo is NOT publicly accessible. Once we become public, the token will no longer be necessary, and this assertion will be removed.
+Be aware that CR_PAT environment variable is required while Michelangelo is NOT
+publicly accessible. Once we become public, the token will no longer be
+necessary, and this assertion will be removed.
 """
         )
 
-    # Create a temporary registry file with the GitHub Container Registry authentication.
+    # Create a temporary registry file with the GitHub Container Registry
+    # authentication.
     registry = {
         "mirrors": {
             "ghcr.io": {
@@ -178,11 +200,10 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         },
     }
 
-    registry_file = tempfile.NamedTemporaryFile(mode="wt")
-    json.dump(registry, registry_file)
-    registry_file.flush()
-
-    args += ["--registry-config", registry_file.name]
+    with tempfile.NamedTemporaryFile(mode="wt", delete=False) as registry_file:
+        json.dump(registry, registry_file)
+        registry_file.flush()
+        args += ["--registry-config", registry_file.name]
 
     # BLOCK END ----------------------------------------------------------------------
 
@@ -299,7 +320,8 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     try:
         helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
     except subprocess.CalledProcessError:
-        # helm repo list returns non-zero exit status when no repositories are configured
+        # helm repo list returns non-zero exit status when no repositories
+        # are configured
         helm_existing_repos = ""
 
     if "ray" not in ns.exclude:
@@ -327,7 +349,9 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         _create_compute_cluster_crd(ns.compute_cluster_name)
         _apply_compute_cluster_rbac(ns.compute_cluster_name)
         _create_compute_cluster_secrets(ns.compute_cluster_name)
-    else:  # Use the control plane cluster as the default compute cluster if a dedicated compute cluster is not requested
+    else:
+        # Use the control plane cluster as the default compute cluster if a
+        # dedicated compute cluster is not requested
         _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
         _apply_compute_cluster_rbac(_michelangelo_sandbox_kube_cluster_name)
         _create_compute_cluster_secrets(_michelangelo_sandbox_kube_cluster_name)
@@ -335,7 +359,8 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     _kube_wait()
 
     print(
-        "\n🚀 Sandbox created successfully. To access the services, please use the following links:\n"
+        "\n🚀 Sandbox created successfully. "
+        "To access the services, please use the following links:\n"
     )
     for title, url, comment in links:
         print(f"  - {title}: {url} {comment}")
@@ -344,9 +369,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
 
 
 def _create_bucket_setup(bucket_names):
-    """
-    Create S3 bucket setup job with the provided bucket list.
-    """
+    """Create S3 bucket setup job with the provided bucket list."""
     bucket_names_str = ",".join(bucket_names)
 
     # Read the original bucket setup YAML
@@ -400,7 +423,10 @@ def _create_spark_operator(helm_existing_repos):
 
 def _create_kuberay_operator(helm_existing_repos):
     """Create the KubeRay operator using Helm.
-    Reference: https://docs.ray.io/en/releases-2.49.1/cluster/kubernetes/getting-started/kuberay-operator-installation.html#method-1-helm-recommended
+
+    Reference:
+    https://docs.ray.io/en/releases-2.49.1/cluster/kubernetes/getting-started/
+    kuberay-operator-installation.html#method-1-helm-recommended.
     """
     if "kuberay" not in helm_existing_repos:
         _exec(
@@ -531,7 +557,8 @@ def _create_demo_crs(_: argparse.Namespace):
         )
     except subprocess.CalledProcessError:
         _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. Please run 'ma sandbox create' first."
+            f"Cluster {_michelangelo_sandbox_kube_cluster_name} not found. "
+            "Please run 'ma sandbox create' first."
         )
 
     # Check if cluster is running
@@ -539,7 +566,8 @@ def _create_demo_crs(_: argparse.Namespace):
         _exec("kubectl", "cluster-info", raise_error=True)
     except subprocess.CalledProcessError:
         _err_exit(
-            f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. Please run 'ma sandbox start' first."
+            f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. "
+            "Please run 'ma sandbox start' first."
         )
 
     demo_dir = _dir / "demo"
@@ -645,7 +673,7 @@ def _apply_compute_cluster_rbac(cluster_name: str):
 def _kube_run(
     image: str,
     command: list[str],
-    env: dict[str, str] = None,
+    env: Optional[dict[str, str]] = None,
     retry_attempts: int = 0,
 ):
     assert image
@@ -657,7 +685,8 @@ def _kube_run(
         uuid.uuid4().hex,  # Pod's name.
         "--restart=Never",  # The restart policy for the Pod.
         "--rm",  # Delete the pod after it exits.
-        "--stdin",  # Keep stdin open on the container in the pod, allowing the command to block until completion.
+        "--stdin",  # Keep stdin open on the container in the pod,
+        # allowing the command to block until completion.
         "--image",
         image,
     ]
@@ -678,30 +707,39 @@ def _exec(
     retry_delay_seconds: int = 5,
     raise_error: bool = False,
 ):
-    """Execute a shell command with optional retries. If the command exits with a non-zero code, it will be retried up to
+    """Execute a shell command with optional retries.
+
+    If the command exits with a non-zero code, it will be retried up to
     retry_attempts times, waiting retry_delay_seconds between attempts.
 
     Parameters:
-        *args: Variable-length argument list representing the command to run and its arguments.
-        retry_attempts: Number of times to retry the command on failure. Defaults to 0 (no retry).
-        retry_delay_seconds: Number of seconds to wait between retries. Defaults to 5.
-        raise_error: Determines how to handle errors after the final retry. If True, the function will raise a
-            subprocess.CalledProcessError. If False, the function will terminate the program with the exit code of the
-            failed command. Defaults to False.
+        *args: Variable-length argument list representing the command to run
+            and its arguments.
+        retry_attempts: Number of times to retry the command on failure.
+            Defaults to 0 (no retry).
+        retry_delay_seconds: Number of seconds to wait between retries.
+            Defaults to 5.
+        raise_error: Determines how to handle errors after the final retry.
+            If True, the function will raise a subprocess.CalledProcessError.
+            If False, the function will terminate the program with the exit
+            code of the failed command. Defaults to False.
 
     Returns:
         None.
 
     Raises:
-        subprocess.CalledProcessError: If the command fails after all retries and raise_error is True.
+        subprocess.CalledProcessError: If the command fails after all retries
+            and raise_error is True.
 
     Examples:
         - Basic usage with a single command: _exec("ls", "-l", "~/bin")
-        - Run a script with retries: _exec("bash", "my_script.sh", retry_attempts=3, retry_delay_seconds=2)
+        - Run a script with retries: _exec("bash", "my_script.sh",
+          retry_attempts=3, retry_delay_seconds=2)
 
     Side Effects:
         - Prints the command being executed and retry messages if any.
-        - Terminates the program if raise_error is False and retries are exhausted.
+        - Terminates the program if raise_error is False and retries are
+          exhausted.
     """
     for i in range(retry_attempts + 1):
         try:
@@ -744,7 +782,8 @@ def _create_compute_cluster(cluster_name: str):
     - RBAC permissions for ray-manager service account
 
     Storage Components (required for Ray jobs):
-    TODO: remove this once we have a proper way to handle multicluster Object store access. Multi Cluster Logging & Monitoring.
+    TODO: remove this once we have a proper way to handle multicluster Object
+    store access. Multi Cluster Logging & Monitoring.
     - MinIO object storage (accessible on ports 9190-9191)
     - michelangelo-config ConfigMap (S3 endpoint and credentials)
     - aws-credentials Secret (for AWS CLI access)
@@ -762,7 +801,6 @@ def _create_compute_cluster(cluster_name: str):
     Args:
         cluster_name: Name of the k3d cluster to create
     """
-
     args = [
         "k3d",
         "cluster",
@@ -772,7 +810,8 @@ def _create_compute_cluster(cluster_name: str):
         "1",
         "--agents",
         "2",  # More worker nodes for Ray
-        "--kubeconfig-switch-context=false",  # Don't switch kubectl context to this cluster
+        # Don't switch kubectl context to this cluster
+        "--kubeconfig-switch-context=false",
     ]
 
     # Add port mappings for Ray
@@ -846,7 +885,8 @@ def _create_compute_cluster(cluster_name: str):
     )
 
     print(
-        f"\nJobs cluster '{cluster_name}' created successfully with MinIO and configurations."
+        f"\nJobs cluster '{cluster_name}' created successfully with MinIO "
+        "and configurations."
     )
 
 
@@ -1051,7 +1091,8 @@ def _create_compute_cluster_secrets(cluster_name: str):
                 "create",
                 "token",
                 "ray-manager",
-                # Required to override kubectl's 1h default token TTL; set ~10y to prevent frequent sandbox expirations
+                # Required to override kubectl's 1h default token TTL;
+                # set ~10y to prevent frequent sandbox expirations
                 "--duration=87600h",
             ]
         )

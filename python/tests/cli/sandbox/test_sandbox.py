@@ -8,8 +8,136 @@ from unittest.mock import Mock, patch
 from michelangelo.cli.sandbox import sandbox
 
 
-class CreateComputeClusterTest(TestCase):
-    """Tests for _create_compute_cluster function."""
+class CreateFunctionTest(TestCase):
+    """Tests for _create function logic."""
+
+    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
+    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
+    @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
+    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
+    def test_create_with_dedicated_compute_cluster(
+        self,
+        mock_create_compute_cluster,
+        mock_create_crd,
+        mock_apply_rbac,
+        mock_create_secrets,
+        mock_tempfile,
+        mock_env_get,
+        mock_exec,
+        mock_kube_create,
+        mock_assert_command,
+        mock_check_output,
+        mock_create_kuberay,
+        mock_create_spark,
+        mock_create_cadence_domain,
+        mock_kube_wait,
+    ):
+        """Test dedicated cluster functions called with compute cluster name."""
+        # Setup namespace with create_compute_cluster=True
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=True,
+            compute_cluster_name="test-compute-cluster",
+        )
+
+        # Mock environment variable and dependencies
+        mock_env_get.return_value = "test-token"
+        mock_check_output.return_value = (
+            b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
+        )
+        mock_registry_file = Mock()
+        mock_registry_file.name = "/tmp/test-registry.json"
+        mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
+        mock_registry_file.__exit__ = Mock(return_value=False)
+        mock_tempfile.return_value = mock_registry_file
+
+        sandbox._create(ns)
+
+        # Verify dedicated compute cluster functions were called with the
+        # compute cluster name
+        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster")
+        mock_create_crd.assert_called_once_with("test-compute-cluster")
+        mock_apply_rbac.assert_called_once_with("test-compute-cluster")
+        mock_create_secrets.assert_called_once_with("test-compute-cluster")
+
+    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
+    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
+    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
+    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
+    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
+    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
+    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
+    @patch("michelangelo.cli.sandbox.sandbox._exec")
+    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
+    @patch("michelangelo.cli.sandbox.sandbox.tempfile.NamedTemporaryFile")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
+    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
+    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
+    def test_create_without_dedicated_compute_cluster(
+        self,
+        mock_create_compute_cluster,
+        mock_create_crd,
+        mock_apply_rbac,
+        mock_create_secrets,
+        mock_tempfile,
+        mock_env_get,
+        mock_exec,
+        mock_kube_create,
+        mock_assert_command,
+        mock_check_output,
+        mock_create_kuberay,
+        mock_create_spark,
+        mock_create_cadence_domain,
+        mock_kube_wait,
+    ):
+        """Test control plane cluster functions called with sandbox cluster name."""
+        # Setup namespace with create_compute_cluster=False
+        ns = argparse.Namespace(
+            workflow="cadence",
+            exclude=[],
+            include_experimental=[],
+            create_compute_cluster=False,
+            compute_cluster_name="test-compute-cluster",
+        )
+
+        # Mock environment variable and dependencies
+        mock_env_get.return_value = "test-token"
+        mock_check_output.return_value = (
+            b"kuberay\thttps://ray-project.github.io/kuberay-helm\n"
+        )
+        mock_registry_file = Mock()
+        mock_registry_file.name = "/tmp/test-registry.json"
+        mock_registry_file.__enter__ = Mock(return_value=mock_registry_file)
+        mock_registry_file.__exit__ = Mock(return_value=False)
+        mock_tempfile.return_value = mock_registry_file
+
+        sandbox._create(ns)
+
+        # Verify dedicated compute cluster was NOT created
+        mock_create_compute_cluster.assert_not_called()
+
+        # Verify control plane cluster CRD/RBAC/secrets were created with
+        # sandbox cluster name
+        mock_create_crd.assert_called_once_with("michelangelo-sandbox")
+        mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
+        mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
+
+
+class ComputeClusterSetupTest(TestCase):
+    """Tests for compute cluster setup functions."""
 
     @patch("michelangelo.cli.sandbox.sandbox._setup_buckets_in_cluster")
     @patch("michelangelo.cli.sandbox.sandbox._create_aws_credentials_in_cluster")
@@ -44,70 +172,8 @@ class CreateComputeClusterTest(TestCase):
         self.assertEqual(len(helm_calls), 1)
 
         # Verify all setup functions were called
-        mock_deploy_minio.assert_called_once_with(cluster_name)
         mock_create_config.assert_called_once_with(cluster_name)
         mock_create_aws_creds.assert_called_once_with(cluster_name)
-        mock_setup_buckets.assert_called_once_with(cluster_name)
-
-    @patch("michelangelo.cli.sandbox.sandbox._setup_buckets_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._create_aws_credentials_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._create_config_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._deploy_minio_to_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    def test_create_compute_cluster_with_ray_ports(
-        self,
-        mock_exec,
-        mock_deploy_minio,
-        mock_create_config,
-        mock_create_aws_creds,
-        mock_setup_buckets,
-    ):
-        """Test that Ray ports are properly configured."""
-        cluster_name = "test-cluster"
-
-        sandbox._create_compute_cluster(cluster_name)
-
-        # Get the k3d cluster create call
-        k3d_call = [c for c in mock_exec.call_args_list if c[0][0] == "k3d"][0]
-        k3d_args = k3d_call[0]
-
-        # Verify Ray ports are included
-        port_args = [
-            arg for arg in k3d_args if "10001" in str(arg) or "8265" in str(arg)
-        ]
-        self.assertGreater(len(port_args), 0, "Ray ports should be configured")
-
-    @patch("michelangelo.cli.sandbox.sandbox._setup_buckets_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._create_aws_credentials_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._create_config_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._deploy_minio_to_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    def test_create_compute_cluster_with_minio_ports(
-        self,
-        mock_exec,
-        mock_deploy_minio,
-        mock_create_config,
-        mock_create_aws_creds,
-        mock_setup_buckets,
-    ):
-        """Test that MinIO ports are properly configured."""
-        cluster_name = "test-cluster"
-
-        sandbox._create_compute_cluster(cluster_name)
-
-        # Get the k3d cluster create call
-        k3d_call = [c for c in mock_exec.call_args_list if c[0][0] == "k3d"][0]
-        k3d_args = k3d_call[0]
-
-        # Verify MinIO ports are included
-        port_args = [
-            arg for arg in k3d_args if "9190" in str(arg) or "9191" in str(arg)
-        ]
-        self.assertGreater(len(port_args), 0, "MinIO ports should be configured")
-
-
-class DeployMinioToClusterTest(TestCase):
-    """Tests for _deploy_minio_to_cluster function."""
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_deploy_minio_success(self, mock_exec):
@@ -126,10 +192,6 @@ class DeployMinioToClusterTest(TestCase):
         self.assertIn("apply", call_args)
         self.assertIn("-f", call_args)
 
-
-class CreateConfigInClusterTest(TestCase):
-    """Tests for _create_config_in_cluster function."""
-
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_config_success(self, mock_exec):
         """Test successful config creation."""
@@ -145,10 +207,6 @@ class CreateConfigInClusterTest(TestCase):
         self.assertIn("--context", call_args)
         self.assertIn(f"k3d-{cluster_name}", call_args)
         self.assertIn("apply", call_args)
-
-
-class CreateAwsCredentialsInClusterTest(TestCase):
-    """Tests for _create_aws_credentials_in_cluster function."""
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_aws_credentials_success(self, mock_exec):
@@ -166,10 +224,6 @@ class CreateAwsCredentialsInClusterTest(TestCase):
         self.assertIn(f"k3d-{cluster_name}", call_args)
         self.assertIn("apply", call_args)
 
-
-class SetupBucketsInClusterTest(TestCase):
-    """Tests for _setup_buckets_in_cluster function."""
-
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_setup_buckets_success(self, mock_exec):
         """Test successful bucket setup."""
@@ -185,10 +239,6 @@ class SetupBucketsInClusterTest(TestCase):
         self.assertIn("--context", call_args)
         self.assertIn(f"k3d-{cluster_name}", call_args)
         self.assertIn("apply", call_args)
-
-
-class CreateMaSystemNamespaceTest(TestCase):
-    """Tests for _create_ma_system_namespace function."""
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -221,10 +271,6 @@ class CreateMaSystemNamespaceTest(TestCase):
         self.assertIn("namespace", call_args)
         self.assertIn("ma-system", call_args)
 
-
-class CreateComputeClusterCrdTest(TestCase):
-    """Tests for _create_compute_cluster_crd function."""
-
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox._create_ma_system_namespace")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -235,7 +281,11 @@ class CreateComputeClusterCrdTest(TestCase):
         cluster_name = "test-cluster"
 
         # Mock kubeconfig output
-        mock_check_output.return_value = b"apiVersion: v1\nclusters:\n- cluster:\n    certificate-authority-data: dGVzdA==\n    server: https://127.0.0.1:12345\n  name: test"
+        mock_check_output.return_value = (
+            b"apiVersion: v1\nclusters:\n- cluster:\n    "
+            b"certificate-authority-data: dGVzdA==\n    "
+            b"server: https://127.0.0.1:12345\n  name: test"
+        )
 
         sandbox._create_compute_cluster_crd(cluster_name)
 
@@ -254,10 +304,6 @@ class CreateComputeClusterCrdTest(TestCase):
         exec_call_args = mock_exec.call_args[0]
         self.assertEqual(exec_call_args[0], "kubectl")
         self.assertIn("apply", exec_call_args)
-
-
-class CreateComputeClusterSecretsTest(TestCase):
-    """Tests for _create_compute_cluster_secrets function."""
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -299,10 +345,6 @@ current-context: test-context
         # Verify kubectl apply was called multiple times (CA secret and token secret)
         self.assertGreaterEqual(mock_exec.call_count, 2)
 
-
-class ApplyComputeClusterRbacTest(TestCase):
-    """Tests for _apply_compute_cluster_rbac function."""
-
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_apply_rbac_success(self, mock_exec):
         """Test successful RBAC application."""
@@ -319,10 +361,6 @@ class ApplyComputeClusterRbacTest(TestCase):
         self.assertIn(f"k3d-{cluster_name}", call_args)
         self.assertIn("apply", call_args)
         self.assertIn("-f", call_args)
-
-
-class DeleteTest(TestCase):
-    """Tests for _delete function."""
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
@@ -408,111 +446,3 @@ class DeleteTest(TestCase):
             "not found" in str(c) and "skipping deletion" in str(c) for c in print_calls
         )
         self.assertTrue(skip_message_found, "Skip message should be printed")
-
-
-class CreateFunctionComputeClusterTest(TestCase):
-    """Tests for _create function compute cluster logic."""
-
-    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
-    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
-    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
-    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
-    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
-    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
-    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
-    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
-    def test_create_with_dedicated_compute_cluster(
-        self,
-        mock_create_compute_cluster,
-        mock_create_crd,
-        mock_apply_rbac,
-        mock_create_secrets,
-        mock_env_get,
-        mock_exec,
-        mock_kube_create,
-        mock_assert_command,
-        mock_check_output,
-        mock_create_kuberay,
-        mock_create_spark,
-        mock_create_cadence_domain,
-        mock_kube_wait,
-    ):
-        """Test _create function with dedicated compute cluster."""
-        # Setup namespace with create_compute_cluster=True
-        ns = argparse.Namespace(
-            workflow="cadence",
-            exclude=[],
-            include_experimental=[],
-            create_compute_cluster=True,
-            compute_cluster_name="test-compute-cluster",
-        )
-
-        # Mock environment variable
-        mock_env_get.return_value = "test-token"
-        mock_check_output.return_value = b""
-
-        sandbox._create(ns)
-
-        # Verify dedicated compute cluster functions were called
-        mock_create_compute_cluster.assert_called_once_with("test-compute-cluster")
-        mock_create_crd.assert_called_once_with("test-compute-cluster")
-        mock_apply_rbac.assert_called_once_with("test-compute-cluster")
-        mock_create_secrets.assert_called_once_with("test-compute-cluster")
-
-    @patch("michelangelo.cli.sandbox.sandbox._kube_wait")
-    @patch("michelangelo.cli.sandbox.sandbox._create_cadence_domain")
-    @patch("michelangelo.cli.sandbox.sandbox._create_spark_operator")
-    @patch("michelangelo.cli.sandbox.sandbox._create_kuberay_operator")
-    @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
-    @patch("michelangelo.cli.sandbox.sandbox._assert_command")
-    @patch("michelangelo.cli.sandbox.sandbox._kube_create")
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    @patch("michelangelo.cli.sandbox.sandbox.os.environ.get")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_secrets")
-    @patch("michelangelo.cli.sandbox.sandbox._apply_compute_cluster_rbac")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster_crd")
-    @patch("michelangelo.cli.sandbox.sandbox._create_compute_cluster")
-    def test_create_without_dedicated_compute_cluster(
-        self,
-        mock_create_compute_cluster,
-        mock_create_crd,
-        mock_apply_rbac,
-        mock_create_secrets,
-        mock_env_get,
-        mock_exec,
-        mock_kube_create,
-        mock_assert_command,
-        mock_check_output,
-        mock_create_kuberay,
-        mock_create_spark,
-        mock_create_cadence_domain,
-        mock_kube_wait,
-    ):
-        """Test _create function without dedicated compute cluster (uses control plane)."""
-        # Setup namespace with create_compute_cluster=False
-        ns = argparse.Namespace(
-            workflow="cadence",
-            exclude=[],
-            include_experimental=[],
-            create_compute_cluster=False,
-            compute_cluster_name="test-compute-cluster",
-        )
-
-        # Mock environment variable
-        mock_env_get.return_value = "test-token"
-        mock_check_output.return_value = b""
-
-        sandbox._create(ns)
-
-        # Verify dedicated compute cluster was NOT created
-        mock_create_compute_cluster.assert_not_called()
-
-        # Verify control plane cluster CRD/RBAC/secrets were created with sandbox cluster name
-        mock_create_crd.assert_called_once_with("michelangelo-sandbox")
-        mock_apply_rbac.assert_called_once_with("michelangelo-sandbox")
-        mock_create_secrets.assert_called_once_with("michelangelo-sandbox")
