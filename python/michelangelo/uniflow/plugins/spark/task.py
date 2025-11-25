@@ -1,12 +1,13 @@
 """Spark task configuration and execution for Uniflow workflows.
 
-This module provides task configuration for executing Uniflow workflows on Spark clusters.
-It handles Spark session initialization, resource allocation, and lifecycle management
-for distributed task execution.
+This module provides task configuration for executing Uniflow workflows on
+Spark clusters. It handles Spark session initialization, resource allocation,
+and lifecycle management for distributed task execution.
 
-Spark tasks support configurable resources for both driver and executor nodes, including
-CPU, memory, disk, and GPU allocations. The execution model initializes a Spark session
-with Hive support before running the task and properly stops it afterward.
+Spark tasks support configurable resources for both driver and executor nodes,
+including CPU, memory, disk, and GPU allocations. The execution model
+initializes a Spark session with Hive support before running the task and
+properly stops it afterward.
 """
 
 import logging
@@ -78,28 +79,30 @@ class SparkTask(TaskConfig):
     executor_instances: Optional[int] = None
 
     def get_binding(self) -> TaskBinding:
-        """Return the TaskBinding linking this config to its Starlark execution function.
+        """Return the TaskBinding linking this config to its Starlark function.
 
         Returns:
-            TaskBinding that specifies the Starlark file and function for Spark task execution.
+            TaskBinding that specifies the Starlark file and function for
+            Spark task execution.
         """
         return _binding
 
     @classmethod
-    def get_config_binding(self) -> TaskBinding:
+    def get_config_binding(cls) -> TaskBinding:
         """Return the TaskBinding for Spark configuration.
 
         Returns:
-            TaskBinding that specifies the Starlark file and function for Spark configuration.
+            TaskBinding that specifies the Starlark file and function for
+            Spark configuration.
         """
         return _config_binding
 
     def pre_run(self):
         """Initialize the Spark session before task execution.
 
-        Creates a Spark session with Hive support enabled. Additional Spark properties
-        can be specified via the _SPARK_PROPERTIES environment variable as comma-separated
-        key=value pairs.
+        Creates a Spark session with Hive support enabled. Additional Spark
+        properties can be specified via the _SPARK_PROPERTIES environment
+        variable as comma-separated key=value pairs.
         """
         sb = SparkSession.builder.enableHiveSupport()
 
@@ -114,7 +117,8 @@ class SparkTask(TaskConfig):
     def post_run(self):
         """Stop the Spark session after task execution.
 
-        Ensures proper cleanup of Spark resources by stopping the active session if one exists.
+        Ensures proper cleanup of Spark resources by stopping the active
+        session if one exists.
         """
         spark = SparkSession.getActiveSession()
         if spark:

@@ -63,7 +63,8 @@ class RayTask(TaskConfig):
         worker_object_store_memory: Object store memory per worker node in bytes.
         worker_instances: Number of worker instances to launch.
         breakpoint: If True, enables breakpoint debugging for the task.
-        runtime_env: Runtime environment configuration dict for Ray (packages, env vars, etc.).
+        runtime_env: Runtime environment configuration dict for Ray
+            (packages, env vars, etc.).
     """
 
     head_cpu: Optional[int] = None
@@ -81,10 +82,11 @@ class RayTask(TaskConfig):
     runtime_env: Optional[dict] = None
 
     def get_binding(self) -> TaskBinding:
-        """Return the TaskBinding linking this config to its Starlark execution function.
+        """Return the TaskBinding linking this config to its Starlark function.
 
         Returns:
-            TaskBinding that specifies the Starlark file and function for Ray task execution.
+            TaskBinding that specifies the Starlark file and function for
+            Ray task execution.
         """
         return _binding
 
@@ -93,15 +95,17 @@ class RayTask(TaskConfig):
         """Return the TaskBinding for Ray configuration.
 
         Returns:
-            TaskBinding that specifies the Starlark file and function for Ray configuration.
+            TaskBinding that specifies the Starlark file and function for
+            Ray configuration.
         """
         return _config_binding
 
     def pre_run(self):
         """Initialize the Ray cluster before task execution.
 
-        Reads Ray initialization parameters from the _RAY_INIT_KWARGS environment
-        variable and initializes the Ray runtime with those parameters.
+        Reads Ray initialization parameters from the _RAY_INIT_KWARGS
+        environment variable and initializes the Ray runtime with those
+        parameters.
         """
         ray_init_kwargs = eval(os.environ.get("_RAY_INIT_KWARGS", "{}"))
         log.info(f"_RAY_INIT_KWARGS: {ray_init_kwargs}")

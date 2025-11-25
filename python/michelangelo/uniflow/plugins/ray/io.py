@@ -14,8 +14,9 @@ from ray.data import Dataset
 
 UF_PLUGIN_RAY_USE_FSSPEC = "UF_PLUGIN_RAY_USE_FSSPEC"
 """
-UF_PLUGIN_RAY_USE_FSSPEC is an environment variable that controls whether the Ray Plugin uses fsspec instead of Ray's
-default filesystem - pyarrow. Possible values:
+UF_PLUGIN_RAY_USE_FSSPEC is an environment variable that controls whether the
+Ray Plugin uses fsspec instead of Ray's default filesystem - pyarrow.
+Possible values:
   - 1 to use fsspec
   - 0 to use Ray's default filesystem.
 
