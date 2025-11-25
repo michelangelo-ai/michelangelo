@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:main
+      image: ghcr.io/michelangelo-ai/controllermgr:grab-demo-job-controllers
       volumeMounts:
         - name: config-volume
           mountPath: /config
@@ -58,7 +58,7 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-    
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833

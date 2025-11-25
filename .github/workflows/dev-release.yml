@@ -3,7 +3,7 @@ name: Dev Release
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, grab-demo-job-controllers ]
 #  pull_request:
 #    branches: [ main ]
 

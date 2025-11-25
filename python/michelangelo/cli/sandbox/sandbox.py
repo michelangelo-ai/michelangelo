@@ -46,7 +46,7 @@ _ray_ports = [
 ]
 
 _cadence_domain = "default"
-_default_job_hosting_kube_cluster_name = "michelangelo-jobs-0"
+_default_compute_kube_cluster_name = "michelangelo-compute-0"
 
 
 def init_arguments(p: argparse.ArgumentParser):
@@ -66,7 +66,7 @@ def init_arguments(p: argparse.ArgumentParser):
         help="Choose workflow engine: cadence or temporal (default: cadence).",
     )
     create_p.add_argument(
-        "--create-jobs-cluster",
+        "--create-compute-cluster",
         action="store_true",
         help="Create an additional cluster for Ray jobs.",
     )
@@ -77,10 +77,10 @@ def init_arguments(p: argparse.ArgumentParser):
         default=[],
     )
     create_p.add_argument(
-        "--jobs-cluster-name",
-        default=_default_job_hosting_kube_cluster_name,
-        help="Name of the jobs cluster to create when --create-jobs-cluster is used (default: %s)."
-        % _default_job_hosting_kube_cluster_name,
+        "--compute-cluster-name",
+        default=_default_compute_kube_cluster_name,
+        help="Name of the compute cluster to create when --create-compute-cluster is used (default: %s)."
+        % _default_compute_kube_cluster_name,
     )
 
     _ = sp.add_parser(
@@ -88,10 +88,10 @@ def init_arguments(p: argparse.ArgumentParser):
     )
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
-        "--jobs-cluster-name",
-        default=_default_job_hosting_kube_cluster_name,
-        help="Name of the jobs cluster to delete when --create-jobs-cluster is used (default: %s)."
-        % _default_job_hosting_kube_cluster_name,
+        "--compute-cluster-name",
+        default=_default_compute_kube_cluster_name,
+        help="Name of the compute cluster to delete when --create-compute-cluster is used (default: %s)."
+        % _default_compute_kube_cluster_name,
     )
     _ = sp.add_parser("start", help="Start the cluster.")
     _ = sp.add_parser("stop", help="Stop the cluster.")
@@ -301,11 +301,16 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
     else:
         raise ValueError(f"Unsupported workflow engine: {ns.workflow}")
 
-    # Create the jobs cluster if requested
-    if ns.create_jobs_cluster:
-        _create_jobs_cluster(ns.jobs_cluster_name)
-        _create_cluster_crd(ns.jobs_cluster_name)
-        _create_cluster_secrets(ns.jobs_cluster_name)
+    # Create separate compute cluster if requested
+    if ns.create_compute_cluster:
+        _create_compute_cluster(ns.compute_cluster_name)
+        _create_compute_cluster_crd(ns.compute_cluster_name)
+        _apply_compute_cluster_rbac(ns.compute_cluster_name)
+        _create_compute_cluster_secrets(ns.compute_cluster_name)
+    else:  # Use the control plane cluster as the default compute cluster if a dedicated compute cluster is not requested
+        _create_compute_cluster_crd(_michelangelo_sandbox_kube_cluster_name)
+        _apply_compute_cluster_rbac(_michelangelo_sandbox_kube_cluster_name)
+        _create_compute_cluster_secrets(_michelangelo_sandbox_kube_cluster_name)
 
     _kube_wait()
 
@@ -338,6 +343,8 @@ def _create_spark_operator(helm_existing_repos):
         "spark-operator",
         "--create-namespace",
         "--wait",
+        "--timeout",
+        "20m",
     )
 
 
@@ -367,6 +374,8 @@ def _create_kuberay_operator(helm_existing_repos):
         "ray-system",
         "--create-namespace",
         "--wait",
+        "--timeout",
+        "20m",
     )
 
 
@@ -508,10 +517,25 @@ def _create_demo_crs(_: argparse.Namespace):
 
 def _delete(ns: argparse.Namespace):
     assert ns
-    if ns.jobs_cluster_name:
-        _exec("k3d", "cluster", "delete", ns.jobs_cluster_name)
-    else:
-        _exec("k3d", "cluster", "delete", _default_job_hosting_kube_cluster_name)
+    # Determine which compute cluster to check for
+    compute_cluster = (
+        ns.compute_cluster_name
+        if ns.compute_cluster_name
+        else _default_compute_kube_cluster_name
+    )
+
+    # Check if compute cluster exists before attempting to delete
+    try:
+        subprocess.check_output(
+            ["k3d", "cluster", "get", compute_cluster], stderr=subprocess.DEVNULL
+        )
+        # Cluster exists, delete it
+        _exec("k3d", "cluster", "delete", compute_cluster)
+    except subprocess.CalledProcessError:
+        # Cluster doesn't exist, skip deletion
+        print(f"Compute cluster '{compute_cluster}' not found, skipping deletion.")
+
+    # Always try to delete the main sandbox cluster
     _exec("k3d", "cluster", "delete", _michelangelo_sandbox_kube_cluster_name)
 
 
@@ -551,8 +575,8 @@ def _kube_wait(pods: bool = True, jobs: bool = True):
         )
 
 
-def _apply_jobs_rbac(cluster_name: str):
-    """Apply RBAC for Ray management in the jobs cluster.
+def _apply_compute_cluster_rbac(cluster_name: str):
+    """Apply RBAC for Ray management in the compute cluster.
 
     This creates the ServiceAccount `ray-manager`, a namespaced Role with permissions on
     Ray resources, and a RoleBinding to bind them, in the `default` namespace of the
@@ -660,8 +684,31 @@ def _err_exit(err_message: str, code: int = 1):
     sys.exit(code)
 
 
-def _create_jobs_cluster(cluster_name: str):
-    """Create a dedicated cluster for jobs."""
+def _create_compute_cluster(cluster_name: str):
+    """Create a dedicated compute cluster for running Ray jobs.
+
+    This function sets up a separate Kubernetes cluster specifically for executing
+    Ray workloads. The compute cluster includes:
+
+    Infrastructure Components:
+    - k3d cluster with 1 server and 2 agent nodes
+    - KubeRay operator for managing Ray clusters
+    - RBAC permissions for ray-manager service account
+
+    Storage Configuration (required for Ray jobs):
+    - michelangelo-config ConfigMap (S3 endpoint and credentials)
+    - aws-credentials Secret (for AWS CLI access)
+
+    Network Configuration:
+    - Ray client port: 10001
+    - Ray dashboard: 8265
+
+    Note: Ray pods reference the michelangelo-config ConfigMap via envFrom,
+    which is why storage must be set up in the compute cluster.
+
+    Args:
+        cluster_name: Name of the k3d cluster to create
+    """
 
     args = [
         "k3d",
@@ -673,6 +720,8 @@ def _create_jobs_cluster(cluster_name: str):
         "--agents",
         "2",  # More worker nodes for Ray
         "--kubeconfig-switch-context=false",  # Don't switch kubectl context to this cluster
+        "--network",
+        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",  # Use the same network as the control plane
     ]
 
     # Add port mappings for Ray
@@ -683,23 +732,112 @@ def _create_jobs_cluster(cluster_name: str):
 
     # Add kuberay operator to the jobs cluster
     _exec(
+        "helm",
+        "install",
+        "--kube-context",
+        f"k3d-{cluster_name}",
+        "kuberay-operator",
+        "kuberay/kuberay-operator",
+        "--version",
+        "1.4.2",
+        "--namespace",
+        "ray-system",
+        "--create-namespace",
+        "--wait",
+        "--timeout",
+        "20m",
+    )
+
+    # Create michelangelo-config ConfigMap pointing to control plane's MinIO
+    _create_config_in_compute_cluster(cluster_name)
+
+    # Create aws-credentials Secret
+    _create_aws_credentials_in_cluster(cluster_name)
+
+    print(
+        f"\nJobs cluster '{cluster_name}' created successfully configured to use control plane storage."
+    )
+
+
+def _create_config_in_compute_cluster(cluster_name: str):
+    """Create michelangelo-config ConfigMap in compute cluster."""
+    config_path = _dir / "resources" / "michelangelo-config.yaml"
+
+    with open(config_path) as f:
+        config_data = yaml.safe_load(f)
+
+    # Update MinIO endpoint to point to the control plane's MinIO within the shared network
+    # k3d-michelangelo-sandbox-agent-0 is the hostname of the control plane's agent node
+    # 30007 is the NodePort for MinIO API service
+    if "data" in config_data:
+        config_data["data"]["AWS_ENDPOINT_URL"] = (
+            f"http://k3d-{_michelangelo_sandbox_kube_cluster_name}-agent-0:30007"
+        )
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as temp_config:
+        yaml.dump(config_data, temp_config)
+        temp_config.flush()
+
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "apply",
+            "-f",
+            temp_config.name,
+        )
+
+    print(f"Created michelangelo-config ConfigMap in cluster '{cluster_name}'")
+
+
+def _create_aws_credentials_in_cluster(cluster_name: str):
+    """Create aws-credentials Secret in compute cluster."""
+    _exec(
         "kubectl",
         "--context",
         f"k3d-{cluster_name}",
-        "create",
-        "-k",
-        "github.com/ray-project/kuberay/ray-operator/config/default?ref=v1.0.0",
+        "apply",
+        "-f",
+        str(_dir / "resources" / "aws-credentials.yaml"),
     )
+    print(f"Created aws-credentials Secret in cluster '{cluster_name}'")
 
-    # Apply RBAC for ray-manager in the jobs cluster
-    _apply_jobs_rbac(cluster_name)
 
-    print(f"\nJobs cluster '{cluster_name}' created successfully.")
+def _create_ma_system_namespace():
+    """Create the ma-system namespace in the sandbox cluster if it doesn't exist."""
+    try:
+        # Check if namespace already exists
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+                "get",
+                "namespace",
+                "ma-system",
+            ],
+            stderr=subprocess.DEVNULL,
+        )
+        print("Namespace 'ma-system' already exists.")
+    except subprocess.CalledProcessError:
+        # Namespace doesn't exist, create it
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "create",
+            "namespace",
+            "ma-system",
+        )
+        print("Created namespace 'ma-system' in the sandbox cluster.")
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
-def _create_cluster_crd(cluster_name: str):
+def _create_compute_cluster_crd(cluster_name: str):
     """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
+    # Ensure ma-system namespace exists
+    _create_ma_system_namespace()
+
     # Get kubeconfig for the Ray jobs cluster
     kubeconfig = subprocess.check_output(
         ["k3d", "kubeconfig", "get", cluster_name]
@@ -726,7 +864,7 @@ def _create_cluster_crd(cluster_name: str):
     cluster_crd = {
         "apiVersion": "michelangelo.api/v2",
         "kind": "Cluster",
-        "metadata": {"name": cluster_name, "namespace": "default"},
+        "metadata": {"name": cluster_name, "namespace": "ma-system"},
         "spec": {
             "kubernetes": {
                 "rest": {
@@ -761,7 +899,7 @@ def _create_cluster_crd(cluster_name: str):
         print(f"Server URL: {server_url}")
 
 
-def _create_cluster_secrets(cluster_name: str):
+def _create_compute_cluster_secrets(cluster_name: str):
     """Create Kubernetes secrets for the kubeconfig of the given cluster name."""
     # Get kubeconfig for the cluster
     kubeconfig = subprocess.check_output(
