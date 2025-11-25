@@ -3,7 +3,9 @@ package deployment
 import (
 	"context"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/base/revision"
+	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -14,7 +16,20 @@ func UpsertDeploymentRevision(ctx context.Context, deployment *v2pb.Deployment, 
 }
 
 // removeConditionsForDeployment removes conditions that are no longer relevant
-func removeConditionsForDeployment(deployment *v2pb.Deployment, conditionPlugin interface{}) {
-	// In the simplified version, we don't need to remove specific conditions
-	// Just clear all conditions when moving to terminal states
+func removeConditionsForDeployment(
+	deployment *v2pb.Deployment,
+	plugin conditionInterfaces.Plugin[*v2pb.Deployment],
+) {
+	if plugin == nil {
+		return
+	}
+	newCondition := []*api.Condition{}
+	for _, condition := range deployment.Status.Conditions {
+		for _, actor := range plugin.GetActors() {
+			if condition.GetType() == actor.GetType() {
+				newCondition = append(newCondition, condition)
+			}
+		}
+	}
+	deployment.Status.Conditions = newCondition
 }

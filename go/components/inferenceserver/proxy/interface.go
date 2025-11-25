@@ -1,29 +1,34 @@
+//go:generate mamockgen ProxyProvider
+
 package proxy
 
 import (
 	"context"
 
 	"go.uber.org/zap"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Proxy Management Types
-type ConfigureProxyRequest struct {
+type EnsureInferenceServerRouteRequest struct {
 	InferenceServer string
 	Namespace       string
 	ModelName       string
-	DeploymentName  string
-	BackendType     v2pb.BackendType
 }
 
-// AddDeploymentRouteRequest contains information needed to add a deployment-specific route
-type AddDeploymentRouteRequest struct {
+// EnsureDeploymentRouteRequest contains information needed to ensure a deployment-specific route is present
+type EnsureDeploymentRouteRequest struct {
+	DeploymentName  string
+	Namespace       string
 	ModelName       string
 	InferenceServer string
-	Namespace       string
+}
+
+// CheckDeploymentRouteStatusRequest contains information needed to check the status of a deployment-specific route
+type CheckDeploymentRouteStatusRequest struct {
 	DeploymentName  string
-	BackendType     v2pb.BackendType
+	Namespace       string
+	InferenceServer string
+	ModelName       string
 }
 
 // GetProxyStatusRequest contains information needed to get the proxy status
@@ -52,16 +57,31 @@ type ActiveRoute struct {
 	Active      bool
 }
 
-// DeleteRouteRequest contains information needed to delete a network route
-type DeleteRouteRequest struct {
+// DeleteInferenceServerRouteRequest contains information needed to delete a inference server-specific route
+type DeleteInferenceServerRouteRequest struct {
 	InferenceServer string
 	Namespace       string
 }
 
+// DeleteDeploymentRouteRequest contains information needed to delete a deployment-specific route
+type DeleteDeploymentRouteRequest struct {
+	DeploymentName string
+	Namespace      string
+}
+
+// DeploymentRouteExistsRequest contains information needed to check if a deployment-specific route exists
+type DeploymentRouteExistsRequest struct {
+	DeploymentName string
+	Namespace      string
+}
+
 // ProxyProvider interface defines the methods for managing network routes and proxies.
 type ProxyProvider interface {
-	ConfigureProxy(ctx context.Context, logger *zap.Logger, request ConfigureProxyRequest) error
+	EnsureInferenceServerRoute(ctx context.Context, logger *zap.Logger, request EnsureInferenceServerRouteRequest) error
+	EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, request EnsureDeploymentRouteRequest) error
 	GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error)
-	AddDeploymentRoute(ctx context.Context, logger *zap.Logger, request AddDeploymentRouteRequest) error
-	DeleteRoute(ctx context.Context, logger *zap.Logger, request DeleteRouteRequest) error
+	CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, request CheckDeploymentRouteStatusRequest) (bool, error)
+	DeploymentRouteExists(ctx context.Context, logger *zap.Logger, request DeploymentRouteExistsRequest) (bool, error)
+	DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, request DeleteDeploymentRouteRequest) error
+	DeleteInferenceServerRoute(ctx context.Context, logger *zap.Logger, request DeleteInferenceServerRouteRequest) error
 }

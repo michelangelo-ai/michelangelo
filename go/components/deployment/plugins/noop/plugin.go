@@ -20,9 +20,9 @@ func NewNoOpPlugin() plugins.Plugin {
 }
 
 // GetState always returns success state
-func (p *NoOpPlugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, modelDeployment *v2pb.Deployment) (*v2pb.DeploymentStatus, error) {
+func (p *NoOpPlugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, modelDeployment *v2pb.Deployment) (v2pb.DeploymentStatus, error) {
 	// Return the current status unchanged
-	return &modelDeployment.Status, nil
+	return modelDeployment.Status, nil
 }
 
 // HealthCheckGate always returns healthy
@@ -56,12 +56,12 @@ func (p *NoOpPlugin) ParseStage(resource *v2pb.Deployment) v2pb.DeploymentStage 
 }
 
 // PopulateDeploymentLogs does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, modelDeployment *v2pb.Deployment) {
+func (p *NoOpPlugin) PopulateDeploymentLogs(ctx context.Context, runtimeContext plugins.RequestContext, modelDeployment *v2pb.Deployment) {
 	// No-op
 }
 
 // PopulateMessage does nothing in the no-op implementation
-func (p *NoOpPlugin) PopulateMessage(ctx context.Context, modelDeployment *v2pb.Deployment) {
+func (p *NoOpPlugin) PopulateMessage(ctx context.Context, runtimeContext plugins.RequestContext, modelDeployment *v2pb.Deployment) {
 	// No-op
 }
 
