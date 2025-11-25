@@ -1,0 +1,211 @@
+"""
+Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
+"""
+
+import logging
+import os
+from ray.data import Dataset
+from ray.train import CheckpointConfig
+from ray.train.lightning import RayFSDPStrategy
+from michelangelo.sdk.workflow.variables import DatasetVariable
+import michelangelo.uniflow.core as uniflow
+from michelangelo.maf.ray.train import create_run_config, create_scaling_config
+from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
+    LightningTrainer,
+    LightningTrainerParam,
+)
+from michelangelo.uniflow.plugins.ray import RayTask
+from examples.gpt_oss_20b_finetune.model import create_gpt_model
+from pytorch_lightning.loggers import MLFlowLogger
+
+log = logging.getLogger(__name__)
+
+
+# MLflow checkpoint logging removed - using local paths for simplicity
+
+
+@uniflow.task(
+    config=RayTask(
+        head_cpu=2,
+        head_memory="8Gi",
+        worker_cpu=2,
+        worker_memory="8Gi",
+        worker_instances=1,
+    )
+)
+def simple_train_gpt(
+    train_dv: DatasetVariable,
+    validation_dv: DatasetVariable,
+    model_name: str = "gpt2",
+    num_epochs: int = 1,
+    batch_size: int = 1,
+    learning_rate: float = 5e-5,
+    use_lora: bool = True,
+    lora_rank: int = 16,
+    num_workers: int = 2,
+    use_gpu: bool = True,
+):
+    """
+    Distributed training function using Ray Lightning
+    """
+    log.info(f"Starting distributed training with model: {model_name}")
+    log.info(f"Training with {num_workers} workers, use_gpu: {use_gpu}")
+
+    train_dv.load_ray_dataset()
+    train_data: Dataset = train_dv.value
+
+    validation_dv.load_ray_dataset()
+    validation_data: Dataset = validation_dv.value
+
+    # Detect accelerator type for proper configuration
+    import torch
+
+    # Detect accelerator type and choose appropriate strategy
+    if torch.backends.mps.is_available():
+        # Apple Silicon - use CPU to avoid MPS/FSDP conflicts
+        use_gpu = False
+        log.info("Detected Apple Silicon (MPS) - using CPU for compatibility")
+    elif not torch.cuda.is_available():
+        use_gpu = False
+        log.info("No CUDA available - using CPU")
+
+    # Create scaling configuration for Ray
+    scaling_config = create_scaling_config(
+        trainer_cpu=2,
+        cpu_per_worker=4,
+        num_workers=num_workers,
+        use_gpu=use_gpu,
+    )
+    log.info("scaling_config: %r", scaling_config)
+
+    # Setup MLflow environment for Ray Train
+
+    # Create run configuration with checkpointing (no MLflow callback needed)
+    run_config = create_run_config(
+        name=f"gpt-distributed-{model_name.replace('/', '-')}",
+        checkpoint_config=CheckpointConfig(
+            num_to_keep=1,
+            checkpoint_score_attribute="val_loss",
+            checkpoint_score_order="min",
+        ),
+    )
+    log.info("run_config: %r", run_config)
+
+    # Setup MLflow logger for Lightning training
+    experiment_name = "gpt-finetune-experiment"
+
+    # Create MLflow logger that will handle run creation automatically
+    mlflow_logger = MLFlowLogger(
+        experiment_name=experiment_name,
+        tracking_uri=os.getenv("MLFLOW_TRACKING_URI", "http://localhost:5001"),
+        run_name=f"training-{model_name}",
+        tags={
+            "model_name": model_name,
+            "use_lora": str(use_lora),
+            "lora_rank": str(lora_rank),
+            "training_type": "distributed",
+        },
+    )
+
+    # Log hyperparameters to MLflow
+    mlflow_logger.log_hyperparams(
+        {
+            "model_name": model_name,
+            "learning_rate": learning_rate,
+            "use_lora": use_lora,
+            "lora_rank": lora_rank,
+            "batch_size": batch_size,
+            "num_epochs": num_epochs,
+        }
+    )
+
+    # Lightning trainer configuration for distributed training
+    if torch.backends.mps.is_available():
+        # Apple Silicon - use CPU strategy to avoid MPS/FSDP conflicts
+        lightning_trainer_kwargs = {
+            "accelerator": "cpu",
+            "precision": 32,  # MPS doesn't support mixed precision well
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
+    elif use_gpu and torch.cuda.is_available():
+        # CUDA GPU - use FSDP
+        lightning_trainer_kwargs = {
+            "strategy": RayFSDPStrategy(
+                sharding_strategy="SHARD_GRAD_OP",
+            ),
+            "precision": "16-mixed",
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
+    else:
+        # CPU fallback
+        lightning_trainer_kwargs = {
+            "accelerator": "cpu",
+            "precision": 32,
+            "log_every_n_steps": 10,
+            "val_check_interval": 0.25,
+            "logger": mlflow_logger,
+        }
+
+    # Create Lightning trainer parameters
+    trainer_param = LightningTrainerParam(
+        create_model=create_gpt_model,
+        model_kwargs={
+            "model_name": model_name,
+            "learning_rate": learning_rate,
+            "use_lora": use_lora,
+            "lora_rank": lora_rank,
+        },
+        train_data=train_data,
+        validation_data=validation_data,
+        batch_size=batch_size,
+        num_epochs=num_epochs,
+        lightning_trainer_kwargs=lightning_trainer_kwargs,
+    )
+
+    # Create Lightning trainer
+    trainer = LightningTrainer(trainer_param)
+
+    # Log model information
+    log.info("Model configuration:")
+    log.info(f"  Model name: {model_name}")
+    log.info(f"  Learning rate: {learning_rate}")
+    log.info(f"  Use LoRA: {use_lora}")
+    log.info(f"  LoRA rank: {lora_rank}")
+    log.info(f"  Batch size: {batch_size}")
+    log.info(f"  Number of epochs: {num_epochs}")
+
+    # Start distributed training (MLflow logger will handle run creation)
+    log.info("Starting distributed Lightning training...")
+    result = trainer.train(run_config, scaling_config)
+    log.info("Distributed training completed successfully")
+
+    # Get the MLflow run ID from the logger
+    run_id = mlflow_logger.run_id
+    log.info(f"✅ Training completed, MLflow run: {run_id}")
+
+    # Return checkpoint path for evaluation (much simpler!)
+    checkpoint = (
+        result.get_best_checkpoint(metric="val_loss", mode="min") or result.checkpoint
+    )
+
+    # Convert Checkpoint object to directory path
+    if hasattr(checkpoint, "as_directory"):
+        # If it's a Checkpoint object, get the directory path
+        checkpoint_path = checkpoint.path
+    else:
+        # If it's already a path string
+        checkpoint_path = checkpoint
+
+    log.info(f"✅ Best checkpoint available at: {checkpoint_path}")
+
+    # For now, use local checkpoint path (simpler and reliable)
+    log.info("🔄 Using local checkpoint path for distributed access")
+
+    return {
+        "checkpoint_path": checkpoint_path,  # Local path
+        "mlflow_run_id": run_id,
+    }

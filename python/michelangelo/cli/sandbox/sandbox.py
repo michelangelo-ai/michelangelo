@@ -31,6 +31,7 @@ _kube_ports = [
     "8090:30011",  # Michelangelo UI
     "3000:30012",  # Grafana
     "9092:30015",  # Prometheus
+    "5001:30013",  # MLflow Tracking Server
 ]
 
 # Workflow engine ports
@@ -193,7 +194,6 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
         "yscope-log-viewer-deployment.yaml",
-        "sandbox-bucket-setup.yaml",
     ]
     links = []
 
@@ -269,6 +269,25 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
             ]
         )
 
+    if "mlflow" in ns.include_experimental:
+        resources.append("mlflow.yaml")
+        links.append(
+            (
+                "MLflow Tracking Server",
+                "http://localhost:5001",
+                "",
+            )
+        )
+
+    # Determine buckets to create based on enabled services
+    bucket_names = ["logs", "default"]
+    if "mlflow" in ns.include_experimental:
+        bucket_names.append("mlflow")
+        print("🪣 Adding MLflow bucket to S3 setup")
+
+    # Create bucket setup with dynamic bucket list
+    _create_bucket_setup(bucket_names)
+
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
@@ -317,6 +336,36 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         print(f"  - {title}: {url} {comment}")
 
     print()
+
+
+def _create_bucket_setup(bucket_names):
+    """
+    Create S3 bucket setup job with the provided bucket list.
+    """
+    bucket_names_str = ",".join(bucket_names)
+
+    # Read the original bucket setup YAML
+    original_bucket_setup_path = _dir / "resources" / "sandbox-bucket-setup.yaml"
+
+    with open(original_bucket_setup_path) as f:
+        content = f.read()
+
+    # Replace the hardcoded bucket names with our dynamic list
+    modified_content = content.replace(
+        'value: "logs,default"', f'value: "{bucket_names_str}"'
+    )
+
+    # Create temporary file with modified content
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".yaml", delete=False
+    ) as temp_file:
+        temp_file.write(modified_content)
+        temp_file.flush()
+
+        # Apply the modified bucket setup
+        _exec("kubectl", "create", "-f", temp_file.name)
+
+    print(f"📦 Created bucket setup job with buckets: {bucket_names_str}")
 
 
 def _create_spark_operator(helm_existing_repos):
