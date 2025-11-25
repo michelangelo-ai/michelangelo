@@ -86,7 +86,7 @@ func (m Mapper) GetLocalName(obj runtime.Object) (namespace, name string) {
 
 // MapLocalClusterStatusToGlobal converts a local (Kubernetes) cluster status object
 // to the global Michelangelo ClusterStatus representation.
-func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.ClusterStatus, error) {
+func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.JobClusterStatus, error) {
 	if localClusterObject == nil {
 		return nil, fmt.Errorf("localClusterObject cannot be nil")
 	}
@@ -95,11 +95,29 @@ func (m Mapper) MapLocalClusterStatusToGlobal(localClusterObject runtime.Object)
 	case *rayv1.RayCluster:
 		v2Status := convertRayV1ClusterStatusToV2(obj)
 		reason := obj.Status.Reason
-		return &types.ClusterStatus{
+		return &types.JobClusterStatus{
 			Ray:    v2Status,
 			Reason: reason,
 		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported cluster object type: %T", localClusterObject)
+	}
+}
+
+// MapLocalJobStatusToGlobal converts a local (Kubernetes) job status object
+// to the global Michelangelo JobStatus representation.
+func (m Mapper) MapLocalJobStatusToGlobal(localJobObject runtime.Object) (*types.JobStatus, error) {
+	if localJobObject == nil {
+		return nil, fmt.Errorf("localJobObject cannot be nil")
+	}
+
+	switch obj := localJobObject.(type) {
+	case *rayv1.RayJob:
+		v2Status := convertRayV1JobStatusToGlobal(obj)
+		return &types.JobStatus{
+			Ray: v2Status,
+		}, nil
+	default:
+		return nil, fmt.Errorf("unsupported job object type: %T", localJobObject)
 	}
 }

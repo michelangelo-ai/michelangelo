@@ -27,5 +27,10 @@ type MapperInterface interface {
 	// MapLocalClusterStatusToGlobal converts a local (Kubernetes) cluster status object
 	// to the global Michelangelo ClusterStatus representation.
 	// It returns the typed ClusterStatus and an error if the conversion fails.
-	MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.ClusterStatus, error)
+	MapLocalClusterStatusToGlobal(localClusterObject runtime.Object) (*types.JobClusterStatus, error)
+
+	// MapLocalJobStatusToGlobal converts a local (Kubernetes) job status object
+	// to the global Michelangelo RayJobStatus representation.
+	// It returns the Ray job status and an error if the conversion fails.
+	MapLocalJobStatusToGlobal(localJobObject runtime.Object) (*types.JobStatus, error)
 }

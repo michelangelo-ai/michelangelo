@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	client "github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
-	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	types "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/types"
 	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	v1 "k8s.io/api/core/v1"
@@ -168,10 +167,10 @@ func (mr *MockFederatedClientMockRecorder) GetClusterStatus(ctx, cluster interfa
 }
 
 // GetJobClusterStatus mocks base method.
-func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (*types.ClusterStatus, error) {
+func (m *MockFederatedClient) GetJobClusterStatus(ctx context.Context, jobClusterObject runtime.Object, cluster *v2.Cluster) (*types.JobClusterStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJobClusterStatus", ctx, jobClusterObject, cluster)
-	ret0, _ := ret[0].(*types.ClusterStatus)
+	ret0, _ := ret[0].(*types.JobClusterStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -183,10 +182,10 @@ func (mr *MockFederatedClientMockRecorder) GetJobClusterStatus(ctx, jobClusterOb
 }
 
 // GetJobStatus mocks base method.
-func (m *MockFederatedClient) GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2.Cluster) (constants.SparkJobStatus, error) {
+func (m *MockFederatedClient) GetJobStatus(ctx context.Context, jobObject runtime.Object, cluster *v2.Cluster) (*types.JobStatus, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetJobStatus", ctx, jobObject, cluster)
-	ret0, _ := ret[0].(constants.SparkJobStatus)
+	ret0, _ := ret[0].(*types.JobStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
