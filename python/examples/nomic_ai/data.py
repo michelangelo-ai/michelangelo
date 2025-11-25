@@ -38,7 +38,8 @@ def load_data(
     """Load and tokenize WikiText dataset for model training.
 
     Args:
-        model_name: HuggingFace model name for tokenizer. Defaults to "nomic-ai/nomic-bert-2048".
+        model_name: HuggingFace model name for tokenizer. Defaults to
+            "nomic-ai/nomic-bert-2048".
         dataset_name: Dataset name from HuggingFace. Defaults to "wikitext".
         tokenizer: Optional pre-loaded tokenizer. Defaults to None.
         max_length: Maximum sequence length for tokenization. Defaults to 512.

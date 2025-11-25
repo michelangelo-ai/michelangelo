@@ -12,8 +12,9 @@ from transformers import AutoModel, AutoTokenizer
 class HuggingFaceLightningModel(pl.LightningModule):
     """PyTorch Lightning module for training Nomic BERT models.
 
-    Wraps a HuggingFace transformer model for distributed training with PyTorch Lightning.
-    Supports DeepSpeed for efficient multi-GPU training and automatic mixed precision.
+    Wraps a HuggingFace transformer model for distributed training with
+    PyTorch Lightning. Supports DeepSpeed for efficient multi-GPU training
+    and automatic mixed precision.
 
     Attributes:
         model: Pretrained HuggingFace transformer model.

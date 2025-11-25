@@ -45,7 +45,8 @@ def train(
         train_data: Ray Dataset containing training data.
         validation_data: Ray Dataset containing validation data.
         test_data: Ray Dataset containing test data.
-        model_name: HuggingFace model identifier. Defaults to "nomic-ai/nomic-bert-2048".
+        model_name: HuggingFace model identifier. Defaults to
+            "nomic-ai/nomic-bert-2048".
 
     Returns:
         Dictionary with training status.
