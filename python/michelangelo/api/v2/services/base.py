@@ -38,8 +38,7 @@ _channel = None
 
 
 class HeaderProvider(ABC):
-    """
-    HeaderProvider appends or updates gRPC request headers before each gRPC call
+    """HeaderProvider appends or updates gRPC request headers before each gRPC call
 
     A custom HeaderProvider can be used to add additional headers for authentication,
     tracing, etc.
@@ -47,8 +46,7 @@ class HeaderProvider(ABC):
 
     @abstractmethod
     def get_headers(self, request_headers: Dict[str, str] = None):
-        """
-        Returns updated headers in a Dict[str, str]
+        """Returns updated headers in a Dict[str, str]
 
         :param request_headers: the original headers (e.g. specified when calling the
             service method)
@@ -197,7 +195,7 @@ class BaseService(object):
 
     @property
     def _stub(self):
-        """create stub lazily"""
+        """Create stub lazily"""
         if not self._service_stub:
             self._service_stub = self._stub_clz(self._context.channel)
         return self._service_stub

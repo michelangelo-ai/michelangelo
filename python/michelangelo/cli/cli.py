@@ -1,8 +1,9 @@
-import sys
 import argparse
 import logging
-from michelangelo.cli.sandbox import sandbox
+import sys
+
 from michelangelo.cli.mactl import mactl
+from michelangelo.cli.sandbox import sandbox
 
 description = """
 Michelangelo CLI is a command-line interface that enables seamless access to Michelangelo services directly from your terminal.

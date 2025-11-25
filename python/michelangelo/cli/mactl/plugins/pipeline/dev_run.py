@@ -1,5 +1,5 @@
 from argparse import ArgumentParser
-from inspect import Signature, Parameter
+from inspect import Parameter, Signature
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
@@ -9,7 +9,6 @@ from git import Repo
 from google.protobuf.json_format import ParseDict
 from google.protobuf.message import Message
 from grpc import Channel
-
 
 from michelangelo.cli.mactl.crd import (
     CRD,
@@ -23,15 +22,13 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-
 from michelangelo.cli.mactl.plugins.pipeline.create import (
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
 )
-
 from michelangelo.cli.mactl.plugins.pipeline.run import (
-    generate_pipeline_run_object,
     generate_pipeline_run_name,
+    generate_pipeline_run_object,
 )
 
 _ENV_VARIABLE_KEY = "env"
@@ -41,8 +38,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """
-    Add function signature for pipeline dev_run command.
+    """Add function signature for pipeline dev_run command.
     """
     inject_func_signature(
         crd,
@@ -105,8 +101,7 @@ def add_function_signature(crd: CRD) -> None:
 def generate_dev_run(
     crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None
 ):
-    """
-    Generate dev run function for pipeline CRD.
+    """Generate dev run function for pipeline CRD.
     """
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
 
@@ -193,8 +188,7 @@ def generate_dev_run(
 def convert_crd_metadata_pipeline_dev_run(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
-    """
-    Convert CRD metadata for pipeline dev-run command.
+    """Convert CRD metadata for pipeline dev-run command.
     This function generates a PipelineRunRequest object from command line arguments.
     """
     _LOG.info("Converting metadata for pipeline run command")
@@ -244,15 +238,13 @@ def convert_crd_metadata_pipeline_dev_run(
 def generate_pipeline_dev_run_object(
     yaml_dict: dict, pipeline_spec: dict, resume_from: str = None
 ) -> dict:
-    """
-    Generate Pipeline Dev Run CR as dictionary.
+    """Generate Pipeline Dev Run CR as dictionary.
 
     Args:
         yaml_dict: YAML configuration dictionary
         pipeline_spec: Pipeline specification dictionary
         resume_from: Optional resume specification in format "pipeline_run_name:step_name"
     """
-
     namespace = yaml_dict.get("metadata", {}).get("namespace", "")
     pipeline_name = yaml_dict.get("metadata", {}).get("name", "")
     pipeline_run_name = generate_pipeline_run_name()
@@ -291,8 +283,7 @@ def generate_pipeline_dev_run_object(
 
 
 def _process_env_variables(env_variables: list[str]) -> dict:
-    """
-    Process environment variables which are passed as a list of strings.
+    """Process environment variables which are passed as a list of strings.
     Format of the environment variables is "<ENV_VAR>=<VALUE>".
     """
     env_dict = {}

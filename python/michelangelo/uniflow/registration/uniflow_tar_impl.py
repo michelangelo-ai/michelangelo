@@ -1,5 +1,4 @@
-"""
-Storage-agnostic implementation for building and uploading Uniflow tarballs.
+"""Storage-agnostic implementation for building and uploading Uniflow tarballs.
 
 This module provides the core functionality for packaging Uniflow workflows
 into tarballs and uploading them to various storage backends using fsspec.
@@ -17,8 +16,7 @@ _logger = logging.getLogger(__name__)
 
 
 class UniflowTarBuilderImpl:
-    """
-    Storage-agnostic Uniflow tar builder implementation.
+    """Storage-agnostic Uniflow tar builder implementation.
 
     This class handles the core functionality of building Uniflow packages
     and uploading them to any fsspec-compatible storage backend.
@@ -33,8 +31,7 @@ class UniflowTarBuilderImpl:
         storage_base_path: str = "s3://default/uniflow",
         output_filename: str = "uniflow_tar_path.txt",
     ):
-        """
-        Initialize the Uniflow tar builder.
+        """Initialize the Uniflow tar builder.
 
         Args:
             project_name: Name of the project
@@ -70,8 +67,7 @@ class UniflowTarBuilderImpl:
         return f"{self.storage_base_path}/{self.get_random_tar_name()}"
 
     def build_and_upload_tarball(self) -> str:
-        """
-        Build the Uniflow package and upload it to storage.
+        """Build the Uniflow package and upload it to storage.
 
         Returns:
             str: The remote path where the tarball was uploaded

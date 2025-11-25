@@ -1,16 +1,18 @@
-import fsspec
 import ast
-import io
 import gzip
+import io
 import random
+import unittest
 from dataclasses import dataclass
 from typing import Optional
-import unittest
 from unittest import mock
-from michelangelo.uniflow.core.decorator import task, TaskFunction, workflow
-from michelangelo.uniflow.core.task_config import Dependencies
-from michelangelo.uniflow.core.ref import Ref
+
+import fsspec
+
+from michelangelo.uniflow.core.decorator import TaskFunction, task, workflow
 from michelangelo.uniflow.core.image_spec import ImageSpec
+from michelangelo.uniflow.core.ref import Ref
+from michelangelo.uniflow.core.task_config import Dependencies
 from tests.uniflow.core.test_task_config import TaskA, TaskB, a_environ, b_environ
 
 
@@ -31,8 +33,7 @@ class Data:
 
 @task(config=TaskA(cpu=2))
 def generate_random_text(spec: RandomTextSpec) -> Data:
-    """
-    Generates random text based on the given spec. Returns the generated text as bytes.
+    """Generates random text based on the given spec. Returns the generated text as bytes.
     """
     # Ensure that the task decorator has called the TaskA.pre_run hook which initializes the global a_environ.
     assert a_environ

@@ -4,9 +4,9 @@
 import importlib
 import os
 import sys
+
 import jinja2
 from template import INIT_TEMPLATE, SERVICE_TEMPLATE
-
 
 env = jinja2.Environment()
 init_template = env.from_string(INIT_TEMPLATE)

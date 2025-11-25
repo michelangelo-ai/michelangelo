@@ -1,8 +1,9 @@
 import ast
+import unittest
 from dataclasses import dataclass
 from pathlib import Path
-import unittest
-from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+
+from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 
 # Binding for TaskA. That's how we associate TaskConfig Python class with a corresponding Starlark function.
 _task_a_binding = TaskBinding(

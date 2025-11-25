@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from michelangelo.uniflow.core.task_config import TaskConfig, TaskBinding
+from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 
 _binding = TaskBinding(
     star_file=Path(__file__).resolve().parent / "task_a.star",

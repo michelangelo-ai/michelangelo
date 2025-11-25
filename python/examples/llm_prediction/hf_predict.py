@@ -1,9 +1,11 @@
 import logging
-from ray.data import Dataset
-from michelangelo.uniflow.plugins.ray import RayTask
-import michelangelo.uniflow.core as uniflow
+
 import numpy as np
+from ray.data import Dataset
 from transformers import pipeline
+
+import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 

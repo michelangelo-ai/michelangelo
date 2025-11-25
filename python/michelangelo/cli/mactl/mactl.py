@@ -1,18 +1,18 @@
-"""
-MaCTL - Michelangelo Command Line Tool
+"""MaCTL - Michelangelo Command Line Tool
 A command line interface to interact with the Michelangelo API server via gRPC.
 """
 
-from argparse import ArgumentParser
-from collections import defaultdict
-from importlib.util import spec_from_file_location, module_from_spec
-from logging import basicConfig, getLogger, WARNING
-from os import getenv, environ
-from pathlib import Path
-from typing import Union
+import configparser
 import logging
 import re
 import sys
+from argparse import ArgumentParser
+from collections import defaultdict
+from importlib.util import module_from_spec, spec_from_file_location
+from logging import WARNING, basicConfig, getLogger
+from os import environ, getenv
+from pathlib import Path
+from typing import Union
 
 from grpc import (
     Channel,
@@ -21,7 +21,6 @@ from grpc import (
     ssl_channel_credentials,
 )
 from yaml import safe_load as yaml_safe_load
-import configparser
 
 from michelangelo.cli.mactl.crd import CRD, yaml_to_dict
 from michelangelo.cli.mactl.grpc_tools import list_services
@@ -112,15 +111,13 @@ def camel_to_snake(name: str) -> str:
 
 
 def kebab_to_snake(name: str) -> str:
-    """
-    Converts kebab-case to snake_case (e.g., 'dev-run' -> 'dev_run').
+    """Converts kebab-case to snake_case (e.g., 'dev-run' -> 'dev_run').
     """
     return name.replace("-", "_")
 
 
 def read_module_from_file(crd_name: str) -> Union[object, None]:
-    """
-    Read and load a plugin module from a given file path.
+    """Read and load a plugin module from a given file path.
     """
     _LOG.info("Check Plugin directory: %r", DEFAULT_DIR_PLUGINS)
     plugin_dir = DEFAULT_DIR_PLUGINS / crd_name
@@ -156,8 +153,7 @@ def read_module_from_file(crd_name: str) -> Union[object, None]:
 
 
 def read_plugins(crd: CRD, channel: Channel) -> None:
-    """
-    Read and apply plugins for a given crd.
+    """Read and apply plugins for a given crd.
     """
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_module = read_module_from_file(crd.name)
@@ -172,8 +168,7 @@ def read_plugins(crd: CRD, channel: Channel) -> None:
 def read_plugin_command(
     crd: CRD, user_command_action: str, crds: dict[str, CRD], channel: Channel
 ) -> None:
-    """
-    Read and apply plugins for a given crd.
+    """Read and apply plugins for a given crd.
     """
     _LOG.info("Read plugins for crd: %r", crd)
     plugin_module = read_module_from_file(crd.name)
@@ -192,8 +187,7 @@ def read_plugin_command(
 
 
 def get_crd_name_from_yaml(yaml_path_string: str) -> str:
-    """
-    Reads a YAML file and returns its content as a dictionary.
+    """Reads a YAML file and returns its content as a dictionary.
     """
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
     yaml_dict = yaml_to_dict(yaml_path_string)
@@ -210,8 +204,7 @@ def get_crd_name_from_yaml(yaml_path_string: str) -> str:
 
 
 def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
-    """
-    Create service classes from a list of service names
+    """Create service classes from a list of service names
     """
     res = {}
     # TODO: we don't have to create all CRD instances for all services
@@ -224,8 +217,7 @@ def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
 
 
 def parse_args() -> tuple[list[str], dict[str, list[str]]]:
-    """
-    Parse command line arguments.
+    """Parse command line arguments.
     Returns a tuple of (args, kwargs).
     """
     args = []
@@ -267,8 +259,7 @@ def handle_args() -> tuple[str, str, dict[str, list[str]]]:
 
 
 def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
-    """
-    Print help message of available action command.
+    """Print help message of available action command.
     """
     if not actions:
         print("\nNo available actions.")
@@ -291,8 +282,7 @@ def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
 
 
 def main(channel: Channel):
-    """
-    Main function for mactl
+    """Main function for mactl
     """
     _LOG.debug("Starting mactl...")
 
@@ -427,8 +417,7 @@ def main(channel: Channel):
 
 
 def run():
-    """
-    Entry point for mactl
+    """Entry point for mactl
     """
     if USE_TLS:
         _LOG.info(

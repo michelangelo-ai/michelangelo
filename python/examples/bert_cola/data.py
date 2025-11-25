@@ -5,9 +5,8 @@ import ray
 import transformers
 from ray.data import Dataset
 
-from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
-
+from michelangelo.uniflow.plugins.ray import RayTask
 
 tokenizer_path = "bert-base-cased"
 

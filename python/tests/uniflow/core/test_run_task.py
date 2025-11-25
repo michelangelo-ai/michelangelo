@@ -1,19 +1,16 @@
-import unittest
-from unittest import mock
-from dataclasses import dataclass
 import json
+import unittest
 import uuid
+from dataclasses import dataclass
+from unittest import mock
 
 import fsspec
-
 
 from michelangelo.uniflow.core import task
 from michelangelo.uniflow.core.decorator import task_context
 from michelangelo.uniflow.core.run_task import main as run_task_main
-from michelangelo.uniflow.core.task_config import TaskConfig
+from michelangelo.uniflow.core.task_config import TaskBinding, TaskConfig
 from michelangelo.uniflow.core.utils import dot_path
-
-from michelangelo.uniflow.core.task_config import TaskBinding
 
 
 @dataclass

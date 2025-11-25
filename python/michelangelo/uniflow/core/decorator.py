@@ -1,19 +1,20 @@
 import ast
 import inspect
+import json
 import logging
 import sys
 import threading
-import json
-import fsspec
-from functools import wraps, update_wrapper
-from typing import Callable, Optional, TypeVar, Generic
+from functools import update_wrapper, wraps
+from typing import Callable, Generic, Optional, TypeVar
 
-from michelangelo.uniflow.core.io_registry import IORegistry, default_io
+import fsspec
+
 from michelangelo.uniflow.core.codec import encoder
-from michelangelo.uniflow.core.ref import ref, unref, Ref
-from michelangelo.uniflow.core.task_config import TaskConfig, Dependencies
-from michelangelo.uniflow.core.utils import dot_path
 from michelangelo.uniflow.core.image_spec import ImageSpec
+from michelangelo.uniflow.core.io_registry import IORegistry, default_io
+from michelangelo.uniflow.core.ref import Ref, ref, unref
+from michelangelo.uniflow.core.task_config import Dependencies, TaskConfig
+from michelangelo.uniflow.core.utils import dot_path
 
 if sys.version_info < (3, 10):
     from typing_extensions import ParamSpec
@@ -120,8 +121,7 @@ class TaskFunction(Generic[P, R]):
         config: Optional[TaskConfig] = None,
         retry_attempts: Optional[int] = None,
     ) -> "TaskFunction[P, R]":
-        """
-        Creates a new TaskFunction instance with overridden alias and/or config.
+        """Creates a new TaskFunction instance with overridden alias and/or config.
 
         This method allows you to create a new TaskFunction instance that shares the same
         function, IO registry, and cache settings as the original, but with a different
@@ -135,6 +135,7 @@ class TaskFunction(Generic[P, R]):
                                            and the new configuration specifies a CPU count of 8,
                                            the resulting configuration will have a head_cpu = 8 and a head_memory = 16GB.
             retry_attempts (Optional[int]): An optional retry attempts for the task. Default is 1 (no retries).
+
         Returns:
             TaskFunction[P, R]: A new TaskFunction instance with the specified overrides.
         """
@@ -149,8 +150,7 @@ class TaskFunction(Generic[P, R]):
         )
 
     def _transpile(self, dependencies: Dependencies) -> ast.AST:
-        """
-        Constructs and returns an AST expression that corresponds to a transpiled Starlark code representation of the task function.
+        """Constructs and returns an AST expression that corresponds to a transpiled Starlark code representation of the task function.
 
         The resulting expression follows the format: `<task-factory>([k=v, ...])`, which evaluates to a Starlark function encapsulating the orchestration
         logic for the specified configuration (task handler function).
@@ -169,7 +169,6 @@ class TaskFunction(Generic[P, R]):
         Returns:
             ast.AST: An AST node representing a call to the task's bound Starlark factory function.
         """
-
         # Register the task's Starlark Binding (Task Factory Function) in the Dependencies collection.
         binding = self._config.get_binding()
         dependencies.add_star_attribute(
@@ -223,8 +222,7 @@ def task(
     retry_attempts: int = DEFAULT_RETRY_ATTEMPTS,
     image_spec: Optional[ImageSpec] = None,
 ):
-    """
-    Decorator for defining a task function. Usage example:
+    """Decorator for defining a task function. Usage example:
 
         @task(config=Python(cpu=1), cache_enabled=True, cache_version="v0")
         def task_1(a, b):

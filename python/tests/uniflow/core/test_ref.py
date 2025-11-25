@@ -6,7 +6,7 @@ from unittest import TestCase
 import fsspec
 
 from michelangelo.uniflow.core.io_registry import default_io
-from michelangelo.uniflow.core.ref import ref, Ref, unref
+from michelangelo.uniflow.core.ref import Ref, ref, unref
 
 
 @dataclass

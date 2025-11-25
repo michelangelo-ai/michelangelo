@@ -1,12 +1,12 @@
 import logging
+from typing import Optional
 
 import datasets
 import ray
-from typing import Optional
 from ray.data import Dataset
 
-from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 

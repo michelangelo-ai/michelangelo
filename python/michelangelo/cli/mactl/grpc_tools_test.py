@@ -1,5 +1,4 @@
-"""
-Unit tests for grpc_tools package.
+"""Unit tests for grpc_tools package.
 """
 
 from unittest import TestCase
@@ -15,13 +14,11 @@ from michelangelo.cli.mactl.grpc_tools import (
 
 
 class GrpcReflectionTest(TestCase):
-    """
-    MaCTL gRPC Reflection feature related Tests
+    """MaCTL gRPC Reflection feature related Tests
     """
 
     def setUp(self):
-        """
-        Set up common test data
+        """Set up common test data
         """
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
@@ -30,8 +27,7 @@ class GrpcReflectionTest(TestCase):
         ]
 
     def test_list_services(self):
-        """
-        Test `list_services()` function
+        """Test `list_services()` function
         """
         # Create mock channel
         mock_channel = Mock()
@@ -99,8 +95,7 @@ class GrpcReflectionTest(TestCase):
         self.assertIn("metadata", call_kwargs)
 
     def test_list_services_no_services_found(self):
-        """
-        Test `list_services()` function when no services are found
+        """Test `list_services()` function when no services are found
         """
         # Create mock channel
         mock_channel = Mock()
@@ -122,8 +117,7 @@ class GrpcReflectionTest(TestCase):
 
 
 def _get_project_svc_mock() -> Mock:
-    """
-    Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
+    """Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
     """
     # Create mock fields for CreateProjectRequest
     mock_field_project = Mock()
@@ -236,13 +230,11 @@ def _get_project_svc_mock() -> Mock:
 
 
 class GetServiceDescriptorsTest(TestCase):
-    """
-    Tests for get_service_descriptors function
+    """Tests for get_service_descriptors function
     """
 
     def setUp(self):
-        """
-        Set up common test data
+        """Set up common test data
         """
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
@@ -255,8 +247,7 @@ class GetServiceDescriptorsTest(TestCase):
     def test_get_service_descriptors_success(
         self, mock_file_descriptor_proto_class, mock_stub_class
     ):
-        """
-        Test `get_service_descriptors()` function with valid service
+        """Test `get_service_descriptors()` function with valid service
         """
         # Create mock channel
         mock_channel = Mock()
@@ -311,12 +302,10 @@ class GetServiceDescriptorsTest(TestCase):
     def test_get_service_descriptors_multiple_descriptors(
         self, mock_file_descriptor_proto_class, mock_stub_class
     ):
-        """
-        Test `get_service_descriptors()` function with multiple file descriptors
+        """Test `get_service_descriptors()` function with multiple file descriptors
         Mimics the actual protobuf structure with message types, fields,
         service descriptors, and methods
         """
-
         # Create mock channel
         mock_channel = Mock()
         service_name = "michelangelo.api.v2.ProjectService"
@@ -400,8 +389,7 @@ class GetServiceDescriptorsTest(TestCase):
 
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     def test_get_service_descriptors_empty_response(self, mock_stub_class):
-        """
-        Test `get_service_descriptors()` function with empty response
+        """Test `get_service_descriptors()` function with empty response
         """
         # Create mock channel
         mock_channel = Mock()
@@ -422,13 +410,11 @@ class GetServiceDescriptorsTest(TestCase):
 
 
 class GetAllFileDescriptorsByFilenameTest(TestCase):
-    """
-    Tests for `get_all_file_descriptors_by_filename()` function
+    """Tests for `get_all_file_descriptors_by_filename()` function
     """
 
     def setUp(self):
-        """
-        Set up common test data
+        """Set up common test data
         """
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
@@ -439,8 +425,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.grpc_tools.FileDescriptorProto")
     def test_no_dependencies(self, mock_fd_proto_class, mock_stub_class):
-        """
-        Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies
+        """Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies
         """
         # Create mock channel
         mock_channel = Mock()
@@ -484,8 +469,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.grpc_tools.FileDescriptorProto")
     def test_with_dependencies(self, mock_fd_proto_class, mock_stub_class):
-        """
-        Test `get_all_file_descriptors_by_filename()` with recursive dependencies
+        """Test `get_all_file_descriptors_by_filename()` with recursive dependencies
         Mimics the actual behavior from the log where:
         - project_svc.proto depends on: k8s generated.proto, list.proto, project.proto
         - k8s generated.proto depends on: runtime/generated.proto,
@@ -693,8 +677,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.grpc_tools.FileDescriptorProto")
     def test_recursion_depth_limit(self, mock_fd_proto_class, mock_stub_class):
-        """
-        Test `get_all_file_descriptors_by_filename()` raises
+        """Test `get_all_file_descriptors_by_filename()` raises
         RecursionError when depth exceeds limit
         Starts at deps=999 and verifies it fails when processing
         a dependency (depth becomes 1000)
