@@ -364,3 +364,4 @@ class PipelineDevRunTest(TestCase):
         self.assertEqual(result["env"], {})
         self.assertNotIn("resume_from", result)
         self.assertNotIn("file_sync", result)
+

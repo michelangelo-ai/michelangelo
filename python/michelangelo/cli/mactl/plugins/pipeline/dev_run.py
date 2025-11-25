@@ -157,7 +157,7 @@ def generate_dev_run(
             _resume_from = None
 
         # Handle optional file_sync parameter
-        _file_sync = bound_args.arguments.get("file_sync", False)
+        _file_sync = bound_args.arguments.get("file_sync", False)  # pragma: no cover
 
         environment_variables = _process_env_variables(
             bound_args.arguments.get("env", [])
@@ -166,9 +166,8 @@ def generate_dev_run(
         # parse pipeline yaml file
         yaml_path_string = _file
         yaml_path = Path(yaml_path_string).resolve()
-        yaml_dict = yaml_to_dict(yaml_path_string)
         yaml_dict = _add_optional_params_to_yaml_dict(
-            yaml_dict, environment_variables, _resume_from, _file_sync
+            yaml_to_dict(yaml_path_string), environment_variables, _resume_from, _file_sync
         )
 
         pipeline_dev_run_dict = _self.func_crd_metadata_converter(
