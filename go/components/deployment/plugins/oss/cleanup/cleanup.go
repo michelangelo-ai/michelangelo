@@ -115,34 +115,9 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 		}, nil
 	}
 
-	// PHASE 2: Directly unload old model from Triton using API
-	a.logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))
-
-	if err := a.gateway.UnloadModel(ctx, a.logger, gateways.UnloadModelRequest{
-		ModelName:       currentModel,
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-	}); err != nil {
-		a.logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
-		// ConfigMap update should eventually unload the model automatically, hence we will not fail the deployment
-		a.logger.Info("ConfigMap update should eventually unload the model automatically")
-	}
-
-	// PHASE 3: Verify model is unloaded
-	a.logger.Info("Phase 3: Verifying old model is unloaded", zap.String("old_model", currentModel))
-
-	statusRequest := gateways.CheckModelStatusRequest{
-		ModelName:       currentModel,
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-	}
-
-	ready, err := a.gateway.CheckModelStatus(ctx, a.logger, statusRequest)
-	if err == nil && ready {
-		a.logger.Info("Old model still loaded, but ConfigMap update should unload it eventually", zap.String("model", currentModel))
-	} else {
-		a.logger.Info("Old model successfully unloaded", zap.String("model", currentModel))
-	}
+	// PHASE 2: Delete DeploymentRoute
+	// By removing the route, we will ensure that the model is no longer accessible.
+	a.logger.Info("Phase 2: Deleting DeploymentRoute", zap.String("deploymentRoute", fmt.Sprintf("%s-httproute", resource.Name)))
 
 	if err := a.proxyProvider.DeleteDeploymentRoute(ctx, a.logger, proxy.DeleteDeploymentRouteRequest{
 		DeploymentName: resource.Name,
