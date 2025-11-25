@@ -1,3 +1,9 @@
+"""XGBoost regression workflow for Boston Housing price prediction.
+
+Example workflow demonstrating XGBoost training with Ray for distributed model
+training on the Boston Housing dataset.
+"""
+
 import logging
 from dataclasses import dataclass
 from typing import Optional
@@ -27,12 +33,26 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class PreprocessResult:
+    """Container for preprocessing results.
+
+    Attributes:
+        train_data: Training dataset.
+        validation_data: Validation dataset.
+    """
+
     train_data: DatasetVariable
     validation_data: DatasetVariable
 
 
 @dataclass
 class TrainResult:
+    """Container for training results.
+
+    Attributes:
+        path: Path to saved model.
+        metrics: Optional dictionary of evaluation metrics.
+    """
+
     path: str
     metrics: Optional[dict] = None
 
@@ -55,6 +75,19 @@ def feature_prep(
     test_size: float = 0.25,
     seed: int = 1,
 ) -> tuple[DatasetVariable, DatasetVariable]:
+    """Prepare features from Boston Housing dataset.
+
+    Downloads the Boston Housing dataset, performs train/test split, and converts
+    to Ray Datasets for distributed processing.
+
+    Args:
+        columns: List of feature column names.
+        test_size: Fraction of data to use for validation. Defaults to 0.25.
+        seed: Random seed for reproducibility. Defaults to 1.
+
+    Returns:
+        Tuple of (train_dataset, validation_dataset) as DatasetVariables.
+    """
     data_url = "http://lib.stat.cmu.edu/datasets/boston"
     raw_df = pd.read_csv(data_url, sep="\s+", skiprows=22, header=None)
     X = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])
@@ -96,6 +129,16 @@ def preprocess(
     train_dv: DatasetVariable,
     validation_dv: DatasetVariable,
 ) -> PreprocessResult:
+    """Preprocess datasets using Spark to cast columns to float type.
+
+    Args:
+        cast_float_columns: List of column names to cast to float type.
+        train_dv: Training DatasetVariable containing Spark DataFrame.
+        validation_dv: Validation DatasetVariable containing Spark DataFrame.
+
+    Returns:
+        PreprocessResult containing preprocessed training and validation datasets.
+    """
     train_dv.load_spark_dataframe()
     train_data: DataFrame = train_dv.value
 
@@ -145,6 +188,18 @@ def train(
     pr: PreprocessResult,
     params: dict,
 ) -> TrainResult:
+    """Train XGBoost model using Ray for distributed training.
+
+    Trains an XGBoost regression model on preprocessed Boston Housing data using
+    Ray's distributed XGBoostTrainer with automatic hyperparameter tuning.
+
+    Args:
+        pr: PreprocessResult containing preprocessed training and validation datasets.
+        params: Dictionary of XGBoost hyperparameters (e.g., max_depth, learning_rate).
+
+    Returns:
+        TrainResult containing the path to saved model and training metrics.
+    """
     pr.train_data.load_ray_dataset()
     train_data: ray.data.Dataset = pr.train_data.value
 
@@ -170,6 +225,7 @@ def train(
         trainer_cpu: Optional[int] = None,
     ) -> ScalingConfig:
         """Creates a ScalingConfig object for a Ray trainer, optimized to utilize the maximum available resources of the cluster.
+
         Dynamically calculates the optimal number of workers based on the current Ray cluster's resources.
         The function assumes that if the cluster has GPUs, each worker should use one GPU. If no GPUs are available,
         workers are configured to run without GPU resources.
@@ -271,6 +327,15 @@ def train(
 def train_workflow(
     dataset_cols: str,
 ):
+    """Complete XGBoost training workflow for Boston Housing dataset.
+
+    Orchestrates the end-to-end ML workflow: feature preparation, preprocessing with Spark,
+    and distributed training with Ray XGBoost.
+
+    Args:
+        dataset_cols: Comma-separated string of column names including features and target.
+            Example: "feature1,feature2,feature3,target".
+    """
     _dataset_cols = dataset_cols.split(",")
     feature_prep_overrides = feature_prep.with_overrides(
         alias="feature_prep_overrides",
