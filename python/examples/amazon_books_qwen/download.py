@@ -148,9 +148,7 @@ def download_kaggle_dataset(
                 )
 
                 # Find the downloaded zip file
-                zip_files = [
-                    f for f in os.listdir(download_path) if f.endswith(".zip")
-                ]
+                zip_files = [f for f in os.listdir(download_path) if f.endswith(".zip")]
                 if not zip_files:
                     raise Exception("No zip file found after download")
 

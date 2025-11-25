@@ -523,8 +523,7 @@ def compute_chronon_features_with_spark(
     # Combine and prepare final dataset
     training_pairs = positive_pairs.union(negative_pairs).orderBy(rand())
     print(
-        f"📊 Created {training_pairs.count()} training pairs with REAL "
-        f"Chronon features"
+        f"📊 Created {training_pairs.count()} training pairs with REAL Chronon features"
     )
 
     # Create train/val/test splits as separate DataFrames
