@@ -139,18 +139,14 @@ class CreateFunctionTest(TestCase):
 class ComputeClusterSetupTest(TestCase):
     """Tests for compute cluster setup functions."""
 
-    @patch("michelangelo.cli.sandbox.sandbox._setup_buckets_in_cluster")
     @patch("michelangelo.cli.sandbox.sandbox._create_aws_credentials_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._create_config_in_cluster")
-    @patch("michelangelo.cli.sandbox.sandbox._deploy_minio_to_cluster")
+    @patch("michelangelo.cli.sandbox.sandbox._create_config_in_compute_cluster")
     @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_compute_cluster_success(
         self,
         mock_exec,
-        mock_deploy_minio,
         mock_create_config,
         mock_create_aws_creds,
-        mock_setup_buckets,
     ):
         """Test successful creation of compute cluster."""
         cluster_name = "test-compute-cluster"
@@ -176,28 +172,11 @@ class ComputeClusterSetupTest(TestCase):
         mock_create_aws_creds.assert_called_once_with(cluster_name)
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
-    def test_deploy_minio_success(self, mock_exec):
-        """Test successful MinIO deployment."""
-        cluster_name = "test-cluster"
-
-        sandbox._deploy_minio_to_cluster(cluster_name)
-
-        # Verify kubectl apply was called with correct context
-        mock_exec.assert_called_once()
-        call_args = mock_exec.call_args[0]
-
-        self.assertEqual(call_args[0], "kubectl")
-        self.assertIn("--context", call_args)
-        self.assertIn(f"k3d-{cluster_name}", call_args)
-        self.assertIn("apply", call_args)
-        self.assertIn("-f", call_args)
-
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
     def test_create_config_success(self, mock_exec):
-        """Test successful config creation."""
+        """Test successful config creation in compute cluster."""
         cluster_name = "test-cluster"
 
-        sandbox._create_config_in_cluster(cluster_name)
+        sandbox._create_config_in_compute_cluster(cluster_name)
 
         # Verify kubectl apply was called
         mock_exec.assert_called_once()
@@ -214,22 +193,6 @@ class ComputeClusterSetupTest(TestCase):
         cluster_name = "test-cluster"
 
         sandbox._create_aws_credentials_in_cluster(cluster_name)
-
-        # Verify kubectl apply was called
-        mock_exec.assert_called_once()
-        call_args = mock_exec.call_args[0]
-
-        self.assertEqual(call_args[0], "kubectl")
-        self.assertIn("--context", call_args)
-        self.assertIn(f"k3d-{cluster_name}", call_args)
-        self.assertIn("apply", call_args)
-
-    @patch("michelangelo.cli.sandbox.sandbox._exec")
-    def test_setup_buckets_success(self, mock_exec):
-        """Test successful bucket setup."""
-        cluster_name = "test-cluster"
-
-        sandbox._setup_buckets_in_cluster(cluster_name)
 
         # Verify kubectl apply was called
         mock_exec.assert_called_once()
