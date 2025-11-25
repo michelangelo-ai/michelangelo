@@ -68,8 +68,7 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
         worker_cpu=2,
         worker_memory="8Gi",
         worker_instances=2,
-    ),
-    cache_enabled=True,
+    )
 )
 def simple_train_gpt(
     train_dv: DatasetVariable,
