@@ -1,24 +1,23 @@
-"""
-GPT Lightning Module for distributed training with LoRA support
+"""GPT Lightning Module for distributed training with LoRA support
 """
 
 import logging
-import torch
+from typing import Any, Dict
+
 import pytorch_lightning as pl
+import torch
+from peft import LoraConfig, TaskType, get_peft_model
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from peft import LoraConfig, get_peft_model, TaskType
-from typing import Dict, Any
 
 log = logging.getLogger(__name__)
 
 
 class GPTLightningModule(pl.LightningModule):
-    """
-    Lightning module for GPT training with LoRA support
+    """Lightning module for GPT training with LoRA support
     Compatible with distributed training using Ray and PyTorch Lightning
     """
 
@@ -189,8 +188,7 @@ def create_gpt_model(
     warmup_steps: int = 100,
     **kwargs,
 ) -> pl.LightningModule:
-    """
-    Factory function to create GPT Lightning module
+    """Factory function to create GPT Lightning module
     Compatible with internal training patterns
     """
     return GPTLightningModule(

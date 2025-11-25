@@ -1,30 +1,32 @@
-"""
-Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
-"""
+"""Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning."""
 
 import logging
 import os
-from ray.data import Dataset
+from typing import TYPE_CHECKING
+
+import mlflow
+from pytorch_lightning.loggers import MLFlowLogger
 from ray.train import CheckpointConfig
 from ray.train.lightning import RayFSDPStrategy
-from michelangelo.sdk.workflow.variables import DatasetVariable
+
 import michelangelo.uniflow.core as uniflow
+from examples.gpt_oss_20b_finetune.model import create_gpt_model
 from michelangelo.maf.ray.train import create_run_config, create_scaling_config
 from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
 )
+from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
-from examples.gpt_oss_20b_finetune.model import create_gpt_model
-import mlflow
-from pytorch_lightning.loggers import MLFlowLogger
+
+if TYPE_CHECKING:
+    from ray.data import Dataset
 
 log = logging.getLogger(__name__)
 
 
 def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
-    """
-    Log checkpoint to MLflow artifacts (automatically saved to S3).
+    """Log checkpoint to MLflow artifacts (automatically saved to S3).
 
     Args:
         checkpoint_path: Local path to the checkpoint directory or file
@@ -40,7 +42,6 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
     log.info(f"Using MLflow run ID: {run_id}")
 
     # Use MLflow client to log to specific run
-    import mlflow
 
     # Log checkpoint as MLflow artifact (goes to S3 automatically)
     if os.path.isdir(checkpoint_path):
@@ -82,9 +83,7 @@ def simple_train_gpt(
     num_workers: int = 2,
     use_gpu: bool = True,
 ):
-    """
-    Distributed training function using Ray Lightning
-    """
+    """Distributed training function using Ray Lightning."""
     log.info(f"Starting distributed training with model: {model_name}")
     log.info(f"Training with {num_workers} workers, use_gpu: {use_gpu}")
 

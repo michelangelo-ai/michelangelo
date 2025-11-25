@@ -1,27 +1,30 @@
-"""
-Evaluation module for GPT-OSS-20B fine-tuning
-Handles model evaluation with perplexity and generation quality metrics
+"""Evaluation module for GPT-OSS-20B fine-tuning.
+
+Handles model evaluation with perplexity and generation quality metrics.
 """
 
-import logging
-import torch
-import numpy as np
-import os
-import shutil
 import inspect
-from transformers import AutoTokenizer
-from ray.data import Dataset
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import RayTask
-from michelangelo.sdk.workflow.variables import DatasetVariable
+import logging
+import os
+from typing import TYPE_CHECKING
+
 import mlflow
+import numpy as np
+import torch
+from transformers import AutoTokenizer
+
+import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
+
+if TYPE_CHECKING:
+    from ray.data import Dataset
 
 log = logging.getLogger(__name__)
 
 
 def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
-    """
-    Download a checkpoint from MLflow artifacts.
+    """Download a checkpoint from MLflow artifacts.
 
     Args:
         artifact_uri: MLflow artifact URI (e.g., "runs://{run_id}/artifacts/checkpoint")
@@ -63,8 +66,7 @@ def evaluate_gpt_model(
     batch_size=1,
     num_samples=100,
 ):
-    """
-    Evaluate the fine-tuned GPT model
+    """Evaluate the fine-tuned GPT model.
 
     Args:
         test_dv: Test dataset variable
@@ -88,8 +90,9 @@ def evaluate_gpt_model(
     test_data: Dataset = test_dv.value
 
     # Load Ray checkpoint directly (much simpler!)
-    from examples.gpt_oss_20b_finetune.model import create_gpt_model
     import glob
+
+    from examples.gpt_oss_20b_finetune.model import create_gpt_model
 
     log.info("✅ Modules imported successfully")
 
@@ -135,7 +138,7 @@ def evaluate_gpt_model(
     log.info(f"Base model type: {type(base_model)}")
     log.info(f"Base model class: {base_model.__class__}")
     log.info(f"Has generate method: {hasattr(base_model, 'generate')}")
-    if hasattr(base_model, 'generate'):
+    if hasattr(base_model, "generate"):
         sig = inspect.signature(base_model.generate)
         log.info(f"Generate method signature: {sig}")
 
@@ -213,9 +216,11 @@ def evaluate_gpt_model(
                         )
                     except TypeError as e:
                         log.warning(f"Standard generate failed: {e}")
-                        log.info(f"Trying generate with different approach...")
+                        log.info("Trying generate with different approach...")
                         # Fallback: Try with the main model if this is a LoRA model
-                        if hasattr(base_model, 'base_model') and hasattr(base_model.base_model, 'generate'):
+                        if hasattr(base_model, "base_model") and hasattr(
+                            base_model.base_model, "generate"
+                        ):
                             log.info("Using base_model.base_model for generation")
                             generated = base_model.base_model.generate(
                                 prompt_ids,
@@ -225,7 +230,7 @@ def evaluate_gpt_model(
                                 do_sample=True,
                                 pad_token_id=tokenizer.eos_token_id,
                             )
-                        elif hasattr(model, 'generate'):
+                        elif hasattr(model, "generate"):
                             log.info("Using main model for generation")
                             generated = model.generate(
                                 prompt_ids,
@@ -236,7 +241,7 @@ def evaluate_gpt_model(
                                 pad_token_id=tokenizer.eos_token_id,
                             )
                         else:
-                            log.error("No suitable generate method found, skipping generation")
+                            log.error("No suitable generate method found, skipping")
                             continue
 
                 # Calculate generation score (simple length-based metric)

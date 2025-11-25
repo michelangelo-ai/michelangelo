@@ -1,17 +1,18 @@
-"""
-Data preparation module for GPT-OSS-20B fine-tuning
+"""Data preparation module for GPT-OSS-20B fine-tuning
 Handles dataset loading, preprocessing, and tokenization
 """
 
 import logging
 from typing import Dict, Tuple
+
 import ray
-from datasets import load_dataset, Dataset as HFDataset
+from datasets import Dataset as HFDataset
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
@@ -31,8 +32,7 @@ def prepare_finetune_dataset(
     sample_size: int = 10000,
     model_name: str = "openai/gpt-oss-20b",
 ) -> Tuple[DatasetVariable, DatasetVariable, DatasetVariable]:
-    """
-    Prepare fine-tuning dataset for GPT-OSS-20B
+    """Prepare fine-tuning dataset for GPT-OSS-20B
 
     Args:
         dataset_name: Name of the dataset to use
@@ -162,8 +162,7 @@ def create_dummy_dataset(sample_size: int) -> HFDataset:
 
 
 def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFDataset:
-    """
-    Preprocess dataset for GPT-OSS-20B fine-tuning
+    """Preprocess dataset for GPT-OSS-20B fine-tuning
     Formats data in instruction-following format
     """
 
@@ -233,8 +232,7 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
 
 
 def create_data_collator(tokenizer, max_length: int):
-    """
-    Create data collator for dynamic padding
+    """Create data collator for dynamic padding
     """
     from transformers import DataCollatorForLanguageModeling
 
