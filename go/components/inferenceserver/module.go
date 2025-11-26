@@ -6,9 +6,9 @@ import (
 	"go.uber.org/config"
 	"go.uber.org/fx"
 	"go.uber.org/zap"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -39,6 +39,8 @@ var Module = fx.Module("inferenceserver",
 	fx.Provide(NewInferenceServerGateway),
 	fx.Provide(NewDynamicClient),
 	fx.Provide(proxy.NewHTTPRouteManager),
+	fx.Provide(configmap.NewDefaultModelConfigMapProvider),
+	fx.Provide(NewEventRecorder),
 	fx.Provide(NewPluginRegistry),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
@@ -73,17 +75,6 @@ func NewDynamicClient(restConfig *rest.Config) (dynamic.Interface, error) {
 
 // NewInferenceServerGateway creates a new inference server gateway with clients
 func NewInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.Interface, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
-	// // Create dynamic client from the same config as kube client
-	// restConfig, err := ctrl.GetConfig()
-	// if err != nil {
-	// 	panic(fmt.Errorf("failed to get REST config: %w", err))
-	// }
-
-	// dynamicClient, err := dynamic.NewForConfig(restConfig)
-	// if err != nil {
-	// 	panic(fmt.Errorf("failed to create dynamic client: %w", err))
-	// }
-
 	gateway := gateways.NewGatewayWithClients(gateways.Params{
 		KubeClient:             kubeClient,
 		DynamicClient:          dynamicClient,
@@ -105,25 +96,15 @@ func NewInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.I
 	return gateway
 }
 
-// NewPluginRegistry creates a new plugin registry with all OSS plugins registered
-func NewPluginRegistry(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider) plugins.PluginRegistry {
-	registry := plugins.NewPluginRegistry()
-	oss.RegisterPlugins(registry, gateway, proxyProvider)
-	return registry
+func NewEventRecorder(mgr ctrl.Manager) record.EventRecorder {
+	return mgr.GetEventRecorderFor(ControllerName)
 }
 
-// NewReconciler creates a new inference server reconciler
-func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, pluginRegistry plugins.PluginRegistry, logger *zap.Logger) *Reconciler {
-	logger = logger.With(zap.String("component", "inferenceserver"))
-	return &Reconciler{
-		Client:        mgr.GetClient(),
-		Scheme:        scheme,
-		Recorder:      mgr.GetEventRecorderFor(ControllerName),
-		Gateway:       gateway,
-		Plugins:       pluginRegistry,
-		ProxyProvider: proxyProvider,
-		logger:        logger,
-	}
+// NewPluginRegistry creates a new plugin registry with all OSS plugins registered
+func NewPluginRegistry(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.PluginRegistry {
+	registry := plugins.NewPluginRegistry()
+	oss.RegisterPlugins(registry, gateway, modelConfigMapProvider, proxyProvider, recorder, logger)
+	return registry
 }
 
 // register sets up the inference server controller with the manager

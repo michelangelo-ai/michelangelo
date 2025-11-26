@@ -537,33 +537,45 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 							Image:   "amazon/aws-cli:2.15.50",
 							Command: []string{"/bin/sh", "-c"},
 							Args: []string{
-								`yum install -y jq curl && \
+								`set -e
+echo "Installing jq and curl..."
+yum install -y jq curl
+if ! command -v jq >/dev/null 2>&1; then
+  echo "ERROR: jq installation failed. Please ensure network access"
+  exit 1
+fi
+echo "jq and curl installed successfully"
+
 CONFIG_FILE=/secret/localMinIO.json
 ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
 SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
 ENDPOINT=$(jq -r '.endpoint_url' $CONFIG_FILE)
 REGION=$(jq -r '.region' $CONFIG_FILE)
-aws configure set aws_access_key_id $ACCESS_KEY
-aws configure set aws_secret_access_key $SECRET_KEY
-aws configure set default.region $REGION
-aws configure set default.s3.endpoint_url $ENDPOINT
+echo "Configuring AWS with endpoint: $ENDPOINT"
+aws configure set aws_access_key_id "$ACCESS_KEY"
+aws configure set aws_secret_access_key "$SECRET_KEY"
+aws configure set default.region "$REGION"
+aws configure set default.s3.endpoint_url "$ENDPOINT"
 
 # Function to get currently loaded models from Triton
 get_loaded_models() {
-  curl -s http://localhost:8000/v2/models 2>/dev/null | jq -r '.models[]?.name // empty' 2>/dev/null || echo ""
-  # TODO(GHOSH): VERIFY THIS LOGIC: WE SHOULD USE THE REPOSITORY INDEX ENDPOINT TO GET THE LOADED MODELS
-  # curl -X POST -s http://localhost:8000/v2/repository/index 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
+  # Use repository index with ready filter to get only loaded models
+  curl -X POST -s http://localhost:8000/v2/repository/index -H "Content-Type: application/json" -d '{"ready": true}' 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
 }
 
 # Function to load model in Triton
 load_model() {
   local model_name=$1
   echo "Loading model $model_name in Triton"
-  curl -s -X POST "http://localhost:8000/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}'
-  if [ $? -eq 0 ]; then
+  response=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8000/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}')
+  http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
+  
+  if [ "$http_code" -eq 200 ]; then
     echo "Model $model_name loaded successfully"
   else
-    echo "Failed to load model $model_name"
+    echo "Failed to load model $model_name (HTTP $http_code)"
+    echo "Response: $body"
   fi
 }
 
@@ -601,6 +613,7 @@ while true; do
 
   # Get currently loaded models from Triton
   LOADED_MODELS=$(get_loaded_models)
+  echo "Currently loaded models in Triton: $LOADED_MODELS"
   
   # SYNC PATTERN: Sync models based on DESIRED_MODELS from shared ConfigMap
   for desired_model in $DESIRED_MODELS; do
