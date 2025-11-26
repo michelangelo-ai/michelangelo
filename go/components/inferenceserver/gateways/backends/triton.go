@@ -532,6 +532,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 								},
 							},
 						},
+						// TODO(#636): ghosharitra: replace this with daemonset
 						{
 							Name:    "model-sync",
 							Image:   "amazon/aws-cli:2.15.50",

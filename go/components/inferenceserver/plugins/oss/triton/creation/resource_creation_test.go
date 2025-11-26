@@ -209,6 +209,7 @@ func TestResourceCreationActor_Run(t *testing.T) {
 							Memory: "8Gi",
 							Gpu:    2,
 						},
+						NumInstances: 1,
 					},
 				},
 			},

@@ -83,13 +83,13 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton infrastructure creation")
 
-	// Convert proto ResourceSpec to gateway ResourceSpec
-	protoResources := resource.Spec.InitSpec.ResourceSpec
+	// Convert InferenceServer InitSpec to gateway ResourceSpec
+	initSpec := resource.Spec.InitSpec
 	resources := gateways.ResourceSpec{
-		CPU:      fmt.Sprintf("%d", protoResources.Cpu),
-		Memory:   protoResources.Memory,
-		GPU:      protoResources.Gpu,
-		Replicas: 1, // Default to 1 replica
+		CPU:      fmt.Sprintf("%d", initSpec.ResourceSpec.Cpu),
+		Memory:   initSpec.ResourceSpec.Memory,
+		GPU:      initSpec.ResourceSpec.Gpu,
+		Replicas: initSpec.NumInstances,
 	}
 
 	_, err := a.gateway.CreateInfrastructure(ctx, a.logger, gateways.CreateInfrastructureRequest{
