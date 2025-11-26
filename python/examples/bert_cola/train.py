@@ -1,5 +1,4 @@
-"""Training task for fine-tuning a BERT model on the CoLA dataset.
-"""
+"""Training task for fine-tuning a BERT model on the CoLA dataset."""
 
 import logging
 
@@ -19,6 +18,15 @@ log = logging.getLogger(__name__)
 def create_model(
     lr: float, eps: float
 ) -> transformers.AutoModelForSequenceClassification:
+    """Create BERT model for sequence classification.
+
+    Args:
+        lr: Learning rate (unused in current implementation).
+        eps: Epsilon parameter (unused in current implementation).
+
+    Returns:
+        BERT model initialized for binary classification with 2 labels.
+    """
     return transformers.AutoModelForSequenceClassification.from_pretrained(
         "bert-base-cased", num_labels=2
     )
@@ -39,6 +47,19 @@ def train(
     validation_data: Dataset,
     test_data: Dataset,
 ):
+    """Fine-tune BERT model on CoLA dataset.
+
+    Trains BERT for sequence classification on the linguistic acceptability task
+    using HuggingFace Trainer with automatic mixed precision if GPUs are available.
+
+    Args:
+        train_data: Ray Dataset containing training examples.
+        validation_data: Ray Dataset containing validation examples.
+        test_data: Ray Dataset containing test examples.
+
+    Returns:
+        Dictionary containing training metrics and model save path.
+    """
     log.info("Starting training...")
 
     # Training configuration
