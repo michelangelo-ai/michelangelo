@@ -110,8 +110,6 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // reconcile does the work of deciding if we wish to perform an action upon the
 // inference server to match our desired state.
 func (r *Reconciler) reconcile(ctx context.Context, inferenceServer *v2pb.InferenceServer) (ctrl.Result, error) {
-	fmt.Printf("DEBUG: reconcile is getting called for inference server %+v\n", &inferenceServer)
-
 	// Deep copy for change detection (Uber production pattern)
 	originalInferenceServer := inferenceServer.DeepCopy()
 
