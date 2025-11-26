@@ -1,3 +1,10 @@
+"""vLLM-based prediction module for high-performance LLM inference.
+
+This module implements distributed batch inference using vLLM for optimized
+throughput with tensor parallelism support. Significantly faster than standard
+HuggingFace transformers for production workloads.
+"""
+
 import logging
 from typing import Any
 
@@ -14,6 +21,18 @@ log = logging.getLogger(__name__)
 
 
 class VLLMPredictor:
+    """VLLM text generation predictor for high-performance batch inference.
+
+    Uses vLLM for optimized distributed text generation with tensor parallelism support.
+    Provides significantly faster inference than standard HuggingFace transformers
+    through PagedAttention and continuous batching optimizations.
+
+    Attributes:
+        tensor_parallel_size: Number of GPUs used for tensor parallelism.
+        llm: vLLM LLM instance with loaded model.
+        sampling_params: Sampling parameters for text generation.
+    """
+
     def __init__(
         self,
         model_name: str,
@@ -22,6 +41,15 @@ class VLLMPredictor:
         top_p: float,
         max_tokens: int,
     ):
+        """Initialize VLLM predictor.
+
+        Args:
+            model_name: HuggingFace model identifier.
+            tensor_parallel_size: Number of GPUs for tensor parallelism.
+            temperature: Sampling temperature for generation.
+            top_p: Nucleus sampling parameter.
+            max_tokens: Maximum tokens to generate.
+        """
         self.tensor_parallel_size = tensor_parallel_size
         self.llm = LLM(
             model=model_name,
@@ -34,6 +62,14 @@ class VLLMPredictor:
         )
 
     def __call__(self, batch: dict[str, np.ndarray]) -> dict[str, list]:
+        """Generate text for a batch of prompts using vLLM.
+
+        Args:
+            batch: Batch dictionary with 'text' key containing prompts.
+
+        Returns:
+            Dictionary with 'prompt' and 'generated_text' lists.
+        """
         outputs = self.llm.generate(batch["text"], self.sampling_params)
         prompt: list[str] = []
         generated_text: list[str] = []
@@ -52,8 +88,10 @@ class VLLMPredictor:
         head_memory="4Gi",
         worker_cpu=1,
         worker_memory="16Gi",
-        worker_instances=1,  # TODO: make this configurable from workflow after supported is added
-        worker_gpu=1,  # TODO: make this configurable from workflow after supported is added
+        # TODO: make this configurable from workflow after supported is added
+        worker_instances=1,
+        # TODO: make this configurable from workflow after supported is added
+        worker_gpu=1,
         # breakpoint=True,
     ),
 )
@@ -70,6 +108,22 @@ def predict(
     top_p: float,
     max_tokens: int,
 ) -> Dataset:
+    """Run distributed batch prediction using vLLM with tensor parallelism.
+
+    Args:
+        predict_data: Ray Dataset containing input prompts.
+        tensor_parallel_size: Number of GPUs for tensor parallelism per model instance.
+        worker_instances: Number of Ray workers.
+        worker_gpu: Number of GPUs per worker.
+        batch_size: Batch size for prediction.
+        model_name: HuggingFace model identifier.
+        temperature: Sampling temperature.
+        top_p: Nucleus sampling parameter.
+        max_tokens: Maximum tokens to generate.
+
+    Returns:
+        Ray Dataset with generated text results.
+    """
     log.info("Starting offline prediction...")
 
     if worker_gpu % tensor_parallel_size != 0:
@@ -86,11 +140,11 @@ def predict(
             [{"GPU": 1, "CPU": 1}] * tensor_parallel_size,
             strategy="STRICT_PACK",
         )
-        return dict(
-            scheduling_strategy=PlacementGroupSchedulingStrategy(
+        return {
+            "scheduling_strategy": PlacementGroupSchedulingStrategy(
                 pg, placement_group_capture_child_tasks=True
             )
-        )
+        }
 
     resources_kwarg: dict[str, Any] = {}
     if tensor_parallel_size == 1:
@@ -104,7 +158,9 @@ def predict(
         resources_kwarg["ray_remote_args_fn"] = scheduling_strategy_fn
 
     log.info(
-        f"Starting prediction with batch_size {batch_size} concurrency {concurrency} tensor_parallel_size {tensor_parallel_size}"
+        f"Starting prediction with batch_size {batch_size} "
+        f"concurrency {concurrency} "
+        f"tensor_parallel_size {tensor_parallel_size}"
     )
     predict_data = predict_data.map_batches(
         VLLMPredictor,
