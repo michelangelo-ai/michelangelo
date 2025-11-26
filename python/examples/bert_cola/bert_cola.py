@@ -21,8 +21,8 @@ def train_workflow():
         test_data,
     )
     deployed_model_name = "bert-cola-37"
-    model_name = pusher(model_uri, deployed_model_name)
-    deploy(namespace="default", name="bert-cola-deployment", model_name=model_name)
+    _ = pusher(model_uri, deployed_model_name)
+    # deploy(namespace="default", name="bert-cola-deployment", model_name=model_name)
     print("result:", train_result)
     print("ok.")
 

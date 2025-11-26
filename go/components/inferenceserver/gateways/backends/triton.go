@@ -495,7 +495,8 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app": deploymentName,
+						"app":       deploymentName,
+						"component": "triton-server", // Used by model-sync DaemonSet for pod affinity
 					},
 				},
 				Spec: corev1.PodSpec{
@@ -532,162 +533,168 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 								},
 							},
 						},
-						{
-							Name:    "model-sync",
-							Image:   "amazon/aws-cli:2.15.50",
-							Command: []string{"/bin/sh", "-c"},
-							Args: []string{
-								`set -e
-echo "Installing jq and curl..."
-yum install -y jq curl
-if ! command -v jq >/dev/null 2>&1; then
-  echo "ERROR: jq installation failed. Please ensure network access"
-  exit 1
-fi
-echo "jq and curl installed successfully"
+						// 						{
+						// 							Name:    "model-sync",
+						// 							Image:   "amazon/aws-cli:2.15.50",
+						// 							Command: []string{"/bin/sh", "-c"},
+						// 							Args: []string{
+						// 								`set -e
+						// echo "Installing jq and curl..."
+						// yum install -y jq curl
+						// if ! command -v jq >/dev/null 2>&1; then
+						//   echo "ERROR: jq installation failed. Please ensure network access"
+						//   exit 1
+						// fi
+						// echo "jq and curl installed successfully"
 
-CONFIG_FILE=/secret/localMinIO.json
-ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
-SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
-ENDPOINT=$(jq -r '.endpoint_url' $CONFIG_FILE)
-REGION=$(jq -r '.region' $CONFIG_FILE)
-echo "Configuring AWS with endpoint: $ENDPOINT"
-aws configure set aws_access_key_id "$ACCESS_KEY"
-aws configure set aws_secret_access_key "$SECRET_KEY"
-aws configure set default.region "$REGION"
-aws configure set default.s3.endpoint_url "$ENDPOINT"
+						// CONFIG_FILE=/secret/localMinIO.json
+						// ACCESS_KEY=$(jq -r '.access_key_id' $CONFIG_FILE)
+						// SECRET_KEY=$(jq -r '.secret_access_key' $CONFIG_FILE)
+						// ENDPOINT=$(jq -r '.endpoint_url' $CONFIG_FILE)
+						// REGION=$(jq -r '.region' $CONFIG_FILE)
+						// echo "Configuring AWS with endpoint: $ENDPOINT"
+						// aws configure set aws_access_key_id "$ACCESS_KEY"
+						// aws configure set aws_secret_access_key "$SECRET_KEY"
+						// aws configure set default.region "$REGION"
+						// aws configure set default.s3.endpoint_url "$ENDPOINT"
 
-# Function to get currently loaded models from Triton
-get_loaded_models() {
-  # Use repository index with ready filter to get only loaded models
-  curl -X POST -s http://localhost:8000/v2/repository/index -H "Content-Type: application/json" -d '{"ready": true}' 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
-}
+						// # Function to get currently loaded models from Triton
+						// get_loaded_models() {
+						//   # Use repository index with ready filter to get only loaded models
+						//   curl -X POST -s http://localhost:8000/v2/repository/index -H "Content-Type: application/json" -d '{"ready": true}' 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
+						// }
 
-# Function to load model in Triton
-load_model() {
-  local model_name=$1
-  echo "Loading model $model_name in Triton"
-  response=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8000/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}')
-  http_code=$(echo "$response" | tail -n1)
-  body=$(echo "$response" | sed '$d')
-  
-  if [ "$http_code" -eq 200 ]; then
-    echo "Model $model_name loaded successfully"
-  else
-    echo "Failed to load model $model_name (HTTP $http_code)"
-    echo "Response: $body"
-  fi
-}
+						// # Function to load model in Triton
+						// load_model() {
+						//   local model_name=$1
+						//   echo "Loading model $model_name in Triton"
+						//   response=$(curl -s -w "\n%{http_code}" -X POST "http://localhost:8000/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}')
+						//   http_code=$(echo "$response" | tail -n1)
+						//   body=$(echo "$response" | sed '$d')
 
-# Function to unload model in Triton
-unload_model() {
-  local model_name=$1
-  echo "Unloading model $model_name from Triton"
-  curl -s -X POST "http://localhost:8000/v2/repository/models/$model_name/unload" -H "Content-Type: application/json" -d '{}'
-  if [ $? -eq 0 ]; then
-    echo "Model $model_name unloaded successfully"
-  else
-    echo "Failed to unload model $model_name"
-  fi
-}
+						//   if [ "$http_code" -eq 200 ]; then
+						//     echo "Model $model_name loaded successfully"
+						//   else
+						//     echo "Failed to load model $model_name (HTTP $http_code)"
+						//     echo "Response: $body"
+						//   fi
+						// }
 
-# Wait for Triton to be ready
-echo "Waiting for Triton server to be ready..."
-while ! curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; do
-  echo "Triton not ready, waiting..."
-  sleep 5
-done
-echo "Triton server is ready"
+						// # Function to unload model in Triton
+						// unload_model() {
+						//   local model_name=$1
+						//   echo "Unloading model $model_name from Triton"
+						//   curl -s -X POST "http://localhost:8000/v2/repository/models/$model_name/unload" -H "Content-Type: application/json" -d '{}'
+						//   if [ $? -eq 0 ]; then
+						//     echo "Model $model_name unloaded successfully"
+						//   else
+						//     echo "Failed to unload model $model_name"
+						//   fi
+						// }
 
-while true; do
-  echo "Starting UCS-style model sync cycle"
+						// # Wait for Triton to be ready
+						// echo "Waiting for Triton server to be ready..."
+						// while ! curl -s http://localhost:8000/v2/health/ready > /dev/null 2>&1; do
+						//   echo "Triton not ready, waiting..."
+						//   sleep 5
+						// done
+						// echo "Triton server is ready"
 
-  # SIMPLIFIED PATTERN: Only read from shared model-config ConfigMap
-  # Read inference server model config (the only source of truth)
-  cp /config/model-list.json /tmp/model-list.json 2>/dev/null || echo "[]" > /tmp/model-list.json
+						// while true; do
+						//   echo "Starting UCS-style model sync cycle"
 
-  # Get models from shared inference server config
-  DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
+						//   # SIMPLIFIED PATTERN: Only read from shared model-config ConfigMap
+						//   # Read inference server model config (the only source of truth)
+						//   cp /config/model-list.json /tmp/model-list.json 2>/dev/null || echo "[]" > /tmp/model-list.json
 
-  echo "Active models from shared ConfigMap: $DESIRED_MODELS"
+						//   # Get models from shared inference server config
+						//   DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
 
-  # Get currently loaded models from Triton
-  LOADED_MODELS=$(get_loaded_models)
-  echo "Currently loaded models in Triton: $LOADED_MODELS"
-  
-  # SYNC PATTERN: Sync models based on DESIRED_MODELS from shared ConfigMap
-  for desired_model in $DESIRED_MODELS; do
-    if [ ! -z "$desired_model" ]; then
-      # Look up S3 path from inference server config for this model
-      s3_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
-      if [ "$s3_path" = "null" ] || [ -z "$s3_path" ]; then
-        s3_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
-      fi
+						//   echo "Active models from shared ConfigMap: $DESIRED_MODELS"
 
-      if [ ! -d "/mnt/models/$desired_model" ] || [ -z "$(ls -A /mnt/models/$desired_model)" ]; then
-        echo "SYNC: Syncing active model $desired_model from $s3_path to /mnt/models/$desired_model/"
-        mkdir -p "/mnt/models/$desired_model"
-        aws s3 sync "$s3_path" "/mnt/models/$desired_model/" --exact-timestamps --endpoint-url "$ENDPOINT"
-      else
-        echo "SYNC: Model $desired_model already synced locally, skipping download"
-      fi
-    fi
-  done
-  
-  # Unload models that are no longer in config
-  for loaded_model in $LOADED_MODELS; do
-    if ! echo "$DESIRED_MODELS" | grep -q "^$loaded_model$"; then
-      echo "Model $loaded_model no longer in config, unloading"
-      unload_model "$loaded_model"
-    fi
-  done
-  
-  # Load models from config ONLY if they're not already loaded
-  for desired_model in $DESIRED_MODELS; do
-    if [ ! -z "$desired_model" ]; then
-      # Get fresh list of loaded models before checking each model
-      CURRENT_LOADED_MODELS=$(get_loaded_models)
-      if ! echo "$CURRENT_LOADED_MODELS" | grep -q "^$desired_model$"; then
-        echo "Model $desired_model not loaded, loading now"
-        load_model "$desired_model"
-      else
-        echo "Model $desired_model already loaded, skipping"
-      fi
-    fi
-  done
-  
-  echo "Model sync cycle completed, sleeping for 60 seconds"
-  sleep 60
-done`,
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    parseQuantity("100m"),
-									corev1.ResourceMemory: parseQuantity("100Mi"),
-								},
-							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "workdir",
-									MountPath: "/mnt/models",
-								},
-								{
-									Name:      "model-config",
-									MountPath: "/config",
-								},
-								{
-									Name:      "storage-secret",
-									MountPath: "/secret",
-									ReadOnly:  true,
-								},
-							},
-						},
+						//   # Get currently loaded models from Triton
+						//   LOADED_MODELS=$(get_loaded_models)
+						//   echo "Currently loaded models in Triton: $LOADED_MODELS"
+
+						//   # SYNC PATTERN: Sync models based on DESIRED_MODELS from shared ConfigMap
+						//   for desired_model in $DESIRED_MODELS; do
+						//     if [ ! -z "$desired_model" ]; then
+						//       # Look up S3 path from inference server config for this model
+						//       s3_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
+						//       if [ "$s3_path" = "null" ] || [ -z "$s3_path" ]; then
+						//         s3_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
+						//       fi
+
+						//       if [ ! -d "/mnt/models/$desired_model" ] || [ -z "$(ls -A /mnt/models/$desired_model)" ]; then
+						//         echo "SYNC: Syncing active model $desired_model from $s3_path to /mnt/models/$desired_model/"
+						//         mkdir -p "/mnt/models/$desired_model"
+						//         aws s3 sync "$s3_path" "/mnt/models/$desired_model/" --exact-timestamps --endpoint-url "$ENDPOINT"
+						//       else
+						//         echo "SYNC: Model $desired_model already synced locally, skipping download"
+						//       fi
+						//     fi
+						//   done
+
+						//   # Unload models that are no longer in config
+						//   for loaded_model in $LOADED_MODELS; do
+						//     if ! echo "$DESIRED_MODELS" | grep -q "^$loaded_model$"; then
+						//       echo "Model $loaded_model no longer in config, unloading"
+						//       unload_model "$loaded_model"
+						//     fi
+						//   done
+
+						//   # Load models from config ONLY if they're not already loaded
+						//   for desired_model in $DESIRED_MODELS; do
+						//     if [ ! -z "$desired_model" ]; then
+						//       # Get fresh list of loaded models before checking each model
+						//       CURRENT_LOADED_MODELS=$(get_loaded_models)
+						//       if ! echo "$CURRENT_LOADED_MODELS" | grep -q "^$desired_model$"; then
+						//         echo "Model $desired_model not loaded, loading now"
+						//         load_model "$desired_model"
+						//       else
+						//         echo "Model $desired_model already loaded, skipping"
+						//       fi
+						//     fi
+						//   done
+
+						//   echo "Model sync cycle completed, sleeping for 60 seconds"
+						//   sleep 60
+						// done`,
+						// 							},
+						// 							Resources: corev1.ResourceRequirements{
+						// 								Requests: corev1.ResourceList{
+						// 									corev1.ResourceCPU:    parseQuantity("100m"),
+						// 									corev1.ResourceMemory: parseQuantity("100Mi"),
+						// 								},
+						// 							},
+						// 							VolumeMounts: []corev1.VolumeMount{
+						// 								{
+						// 									Name:      "workdir",
+						// 									MountPath: "/mnt/models",
+						// 								},
+						// 								{
+						// 									Name:      "model-config",
+						// 									MountPath: "/config",
+						// 								},
+						// 								{
+						// 									Name:      "storage-secret",
+						// 									MountPath: "/secret",
+						// 									ReadOnly:  true,
+						// 								},
+						// 							},
+						// 						},
 					},
 					Volumes: []corev1.Volume{
 						{
 							Name: "workdir",
 							VolumeSource: corev1.VolumeSource{
-								EmptyDir: &corev1.EmptyDirVolumeSource{},
+								HostPath: &corev1.HostPathVolumeSource{
+									Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", request.InferenceServer.Name),
+									Type: func() *corev1.HostPathType {
+										t := corev1.HostPathDirectoryOrCreate
+										return &t
+									}(),
+								},
 							},
 						},
 						{

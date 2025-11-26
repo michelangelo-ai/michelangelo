@@ -602,6 +602,31 @@ def _create_demo_crs(_: argparse.Namespace):
     else:
         _err_exit(f"❌ Inference server not found at {inference_server_path}, exiting...")
 
+    # 5.5. Deploy model-sync DaemonSet
+    model_sync_path = _dir / "resources" / "model-sync.yaml"
+    if model_sync_path.exists():
+        print("✅ Deploying model-sync DaemonSet...")
+        _kube_create(model_sync_path)
+        
+        # Wait for DaemonSet to be ready
+        print("⏳ Waiting for model-sync DaemonSet to be ready...")
+        try:
+            _exec(
+                "kubectl",
+                "rollout",
+                "status",
+                "daemonset/model-sync",
+                "-n",
+                "default",
+                "--timeout=60s",
+                raise_error=True,
+            )
+            print("✅ Model-sync DaemonSet is ready!")
+        except subprocess.CalledProcessError:
+            print("⚠️  Warning: Model-sync DaemonSet may not be fully ready yet, but continuing...")
+    else:
+        print(f"⚠️  Warning: Model-sync DaemonSet not found at {model_sync_path}, skipping...")
+
     # 6. Create deployment (this will trigger model deployment workflow)
     deployment_path = _dir / "resources" / "deployment.yaml"
     if deployment_path.exists():
@@ -620,6 +645,7 @@ def _create_demo_crs(_: argparse.Namespace):
     print("  • Gateway API with Istio integration")
     print("  • MinIO storage configuration")
     print("  • Triton Inference Server")
+    print("  • Model-sync DaemonSet (handles S3 sync and model loading)")
     print("  • BERT model deployment with HTTPRoute")
     print("  • Training pipelines and project resources")
 
