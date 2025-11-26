@@ -1,27 +1,65 @@
-"""
-Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning
-"""
+"""Distributed training for GPT-OSS-20B fine-tuning using Ray Lightning."""
 
 import logging
 import os
-from ray.data import Dataset
+from typing import TYPE_CHECKING
+
+import mlflow
+from pytorch_lightning.loggers import MLFlowLogger
 from ray.train import CheckpointConfig
 from ray.train.lightning import RayFSDPStrategy
-from michelangelo.sdk.workflow.variables import DatasetVariable
+
 import michelangelo.uniflow.core as uniflow
+from examples.gpt_oss_20b_finetune.model import create_gpt_model
 from michelangelo.maf.ray.train import create_run_config, create_scaling_config
 from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
 )
+from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
-from examples.gpt_oss_20b_finetune.model import create_gpt_model
-from pytorch_lightning.loggers import MLFlowLogger
+
+if TYPE_CHECKING:
+    from ray.data import Dataset
 
 log = logging.getLogger(__name__)
 
 
-# MLflow checkpoint logging removed - using local paths for simplicity
+def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
+    """Log checkpoint to MLflow artifacts (automatically saved to S3).
+
+    Args:
+        checkpoint_path: Local path to the checkpoint directory or file.
+        run_id: MLflow run ID to log artifacts to.
+
+    Returns:
+        MLflow artifact URI for the checkpoint.
+
+    Raises:
+        Exception: If MLflow logging fails.
+    """
+    log.info(f"Logging checkpoint to MLflow artifacts: {checkpoint_path}")
+    log.info(f"Using MLflow run ID: {run_id}")
+
+    # Use MLflow client to log to specific run
+
+    # Log checkpoint as MLflow artifact (goes to S3 automatically)
+    if os.path.isdir(checkpoint_path):
+        # Log entire directory
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_artifacts(checkpoint_path, "checkpoint")
+        artifact_path = "checkpoint"
+    else:
+        # Log single file
+        with mlflow.start_run(run_id=run_id):
+            mlflow.log_artifact(checkpoint_path, "checkpoint")
+        artifact_path = f"checkpoint/{os.path.basename(checkpoint_path)}"
+
+    # Get MLflow artifact URI
+    artifact_uri = f"runs:/{run_id}/{artifact_path}"
+
+    log.info(f"Checkpoint logged to MLflow: {artifact_uri}")
+    return artifact_uri
 
 
 @uniflow.task(
@@ -30,7 +68,7 @@ log = logging.getLogger(__name__)
         head_memory="8Gi",
         worker_cpu=2,
         worker_memory="8Gi",
-        worker_instances=1,
+        worker_instances=2,
     )
 )
 def simple_train_gpt(
@@ -45,8 +83,22 @@ def simple_train_gpt(
     num_workers: int = 2,
     use_gpu: bool = True,
 ):
-    """
-    Distributed training function using Ray Lightning
+    """Distributed training function using Ray Lightning.
+
+    Args:
+        train_dv: Training dataset variable.
+        validation_dv: Validation dataset variable.
+        model_name: Base model name (e.g., "gpt2").
+        num_epochs: Number of training epochs.
+        batch_size: Training batch size.
+        learning_rate: Learning rate for optimization.
+        use_lora: Whether to use LoRA (Low-Rank Adaptation).
+        lora_rank: LoRA rank for parameter-efficient fine-tuning.
+        num_workers: Number of worker nodes for distributed training.
+        use_gpu: Whether to use GPU acceleration.
+
+    Returns:
+        Dictionary with checkpoint path and MLflow run ID.
     """
     log.info(f"Starting distributed training with model: {model_name}")
     log.info(f"Training with {num_workers} workers, use_gpu: {use_gpu}")
@@ -200,12 +252,12 @@ def simple_train_gpt(
         # If it's already a path string
         checkpoint_path = checkpoint
 
-    log.info(f"✅ Best checkpoint available at: {checkpoint_path}")
-
-    # For now, use local checkpoint path (simpler and reliable)
-    log.info("🔄 Using local checkpoint path for distributed access")
+    # Log checkpoint to MLflow artifacts (automatically saved to S3)
+    log.info("🔄 Logging checkpoint to MLflow...")
+    mlflow_artifact_uri = log_checkpoint_to_mlflow(checkpoint_path, run_id)
+    log.info(f"✅ Checkpoint logged to MLflow: {mlflow_artifact_uri}")
 
     return {
-        "checkpoint_path": checkpoint_path,  # Local path
+        "checkpoint_path": mlflow_artifact_uri,
         "mlflow_run_id": run_id,
     }

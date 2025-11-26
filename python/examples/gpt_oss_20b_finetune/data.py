@@ -1,17 +1,18 @@
-"""
-Data preparation module for GPT-OSS-20B fine-tuning
-Handles dataset loading, preprocessing, and tokenization
+"""Data preparation module for GPT-OSS-20B fine-tuning.
+
+Handles dataset loading, preprocessing, and tokenization.
 """
 
 import logging
-from typing import Dict, Tuple
+
 import ray
-from datasets import load_dataset, Dataset as HFDataset
+from datasets import Dataset as HFDataset
+from datasets import load_dataset
 from transformers import AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import RayTask
 from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
@@ -30,18 +31,17 @@ def prepare_finetune_dataset(
     max_length: int = 2048,
     sample_size: int = 10000,
     model_name: str = "openai/gpt-oss-20b",
-) -> Tuple[DatasetVariable, DatasetVariable, DatasetVariable]:
-    """
-    Prepare fine-tuning dataset for GPT-OSS-20B
+) -> tuple[DatasetVariable, DatasetVariable, DatasetVariable]:
+    """Prepare fine-tuning dataset for GPT-OSS-20B.
 
     Args:
-        dataset_name: Name of the dataset to use
-        max_length: Maximum sequence length
-        sample_size: Number of samples to use
-        model_name: Model name for tokenizer
+        dataset_name: Name of the dataset to use.
+        max_length: Maximum sequence length.
+        sample_size: Number of samples to use.
+        model_name: Model name for tokenizer.
 
     Returns:
-        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables
+        Tuple of (train_dataset, validation_dataset, test_dataset) as DatasetVariables.
     """
     log.info(f"Preparing {dataset_name} dataset for GPT-OSS-20B fine-tuning")
 
@@ -85,7 +85,8 @@ def prepare_finetune_dataset(
     )
 
     log.info(
-        f"Split into {len(train_dataset)} train, {len(val_dataset)} validation, {len(test_dataset)} test samples"
+        f"Split into {len(train_dataset)} train, {len(val_dataset)} validation, "
+        f"{len(test_dataset)} test samples"
     )
 
     # Convert to Ray Datasets
@@ -108,7 +109,7 @@ def prepare_finetune_dataset(
 
 
 def load_alpaca_dataset(sample_size: int) -> HFDataset:
-    """Load Stanford Alpaca dataset"""
+    """Load Stanford Alpaca dataset."""
     try:
         dataset = load_dataset("tatsu-lab/alpaca", split="train")
         if sample_size < len(dataset):
@@ -121,7 +122,7 @@ def load_alpaca_dataset(sample_size: int) -> HFDataset:
 
 
 def load_dolly_dataset(sample_size: int) -> HFDataset:
-    """Load Databricks Dolly dataset"""
+    """Load Databricks Dolly dataset."""
     try:
         dataset = load_dataset("databricks/databricks-dolly-15k", split="train")
         if sample_size < len(dataset):
@@ -133,7 +134,7 @@ def load_dolly_dataset(sample_size: int) -> HFDataset:
 
 
 def load_oasst1_dataset(sample_size: int) -> HFDataset:
-    """Load OpenAssistant dataset"""
+    """Load OpenAssistant dataset."""
     try:
         dataset = load_dataset("OpenAssistant/oasst1", split="train")
         if sample_size < len(dataset):
@@ -145,7 +146,7 @@ def load_oasst1_dataset(sample_size: int) -> HFDataset:
 
 
 def create_dummy_dataset(sample_size: int) -> HFDataset:
-    """Create a dummy dataset for testing"""
+    """Create a dummy dataset for testing."""
     from datasets import Dataset as HFDataset
 
     dummy_data = []
@@ -162,13 +163,13 @@ def create_dummy_dataset(sample_size: int) -> HFDataset:
 
 
 def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFDataset:
-    """
-    Preprocess dataset for GPT-OSS-20B fine-tuning
-    Formats data in instruction-following format
+    """Preprocess dataset for GPT-OSS-20B fine-tuning.
+
+    Formats data in instruction-following format.
     """
 
     def format_sample(sample):
-        """Format sample for instruction fine-tuning"""
+        """Format sample for instruction fine-tuning."""
         if "instruction" in sample and "output" in sample:
             # Alpaca format
             instruction = sample["instruction"]
@@ -176,7 +177,10 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
             output = sample["output"]
 
             if input_text:
-                prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{input_text}\n\n### Response:\n"
+                prompt = (
+                    f"### Instruction:\n{instruction}\n\n"
+                    f"### Input:\n{input_text}\n\n### Response:\n"
+                )
             else:
                 prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
 
@@ -184,7 +188,10 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
 
         elif "question" in sample and "answer" in sample:
             # Q&A format
-            full_text = f"Question: {sample['question']}\nAnswer: {sample['answer']}{tokenizer.eos_token}"
+            full_text = (
+                f"Question: {sample['question']}\n"
+                f"Answer: {sample['answer']}{tokenizer.eos_token}"
+            )
 
         elif "text" in sample:
             # Raw text format
@@ -197,7 +204,7 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
         return {"text": full_text}
 
     def tokenize_sample(sample):
-        """Tokenize sample for training"""
+        """Tokenize sample for training."""
         # Tokenize the text
         tokenized = tokenizer(
             sample["text"],
@@ -233,9 +240,7 @@ def preprocess_dataset(dataset: HFDataset, tokenizer, max_length: int) -> HFData
 
 
 def create_data_collator(tokenizer, max_length: int):
-    """
-    Create data collator for dynamic padding
-    """
+    """Create data collator for dynamic padding."""
     from transformers import DataCollatorForLanguageModeling
 
     return DataCollatorForLanguageModeling(
@@ -246,8 +251,8 @@ def create_data_collator(tokenizer, max_length: int):
     )
 
 
-def get_dataset_stats(dataset: HFDataset) -> Dict:
-    """Get statistics about the dataset"""
+def get_dataset_stats(dataset: HFDataset) -> dict:
+    """Get statistics about the dataset."""
     if len(dataset) == 0:
         return {"num_samples": 0}
 

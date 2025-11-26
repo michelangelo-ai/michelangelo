@@ -1,23 +1,21 @@
-"""
-Simple GPT Fine-tuning Demo (Local Testing Version)
-"""
+"""Simple GPT Fine-tuning Demo (Local Testing Version)."""
 
 import os
+
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
+from examples.gpt_oss_20b_finetune.data import prepare_finetune_dataset
+from examples.gpt_oss_20b_finetune.eval import evaluate_gpt_model
 
 # Import simple functions
 from examples.gpt_oss_20b_finetune.simple_train import simple_train_gpt
-from examples.gpt_oss_20b_finetune.data import prepare_finetune_dataset
-from examples.gpt_oss_20b_finetune.eval import evaluate_gpt_model
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def simple_gpt_workflow(
     dataset_name="alpaca", num_epochs=1, sample_size=100, model_name="gpt2"
 ):
-    """Simple GPT fine-tuning workflow for testing"""
-
+    """Simple GPT fine-tuning workflow for testing."""
     # Prepare dataset
     train_dv, val_dv, test_dv = prepare_finetune_dataset(
         dataset_name=dataset_name,
@@ -98,7 +96,7 @@ if __name__ == "__main__":
     ctx.run(
         simple_gpt_workflow,
         dataset_name="alpaca",
-        num_epochs=1,
+        num_epochs=3,
         sample_size=50,
         model_name="gpt2",
     )
