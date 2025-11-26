@@ -8,6 +8,7 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -28,7 +29,7 @@ func NewResourceCreationActor(gateway gateways.Gateway, logger *zap.Logger) cond
 }
 
 func (a *ResourceCreationActor) GetType() string {
-	return "TritonResourceCreation"
+	return common.TritonResourceCreationConditionType
 }
 
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {

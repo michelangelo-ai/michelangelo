@@ -9,6 +9,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -34,7 +35,7 @@ func NewCleanupActor(gateway gateways.Gateway, modelConfigMapProvider configmap.
 }
 
 func (a *CleanupActor) GetType() string {
-	return "TritonCleanup"
+	return common.TritonCleanupConditionType
 }
 
 func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {

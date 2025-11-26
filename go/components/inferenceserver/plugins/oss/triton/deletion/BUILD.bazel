@@ -12,6 +12,7 @@ go_library(
         "//go/base/conditions/interfaces:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
+        "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//go/components/inferenceserver/proxy:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

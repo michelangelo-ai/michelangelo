@@ -8,6 +8,7 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -31,7 +32,7 @@ func NewProxyConfigurationActor(gateway gateways.Gateway, proxyProvider proxy.Pr
 }
 
 func (a *ProxyConfigurationActor) GetType() string {
-	return "TritonProxyConfiguration"
+	return common.TritonProxyConfigurationConditionType
 }
 
 func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {

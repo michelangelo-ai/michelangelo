@@ -8,6 +8,7 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -31,7 +32,7 @@ func NewValidationActor(gateway gateways.Gateway, logger *zap.Logger, proxyProvi
 }
 
 func (a *ValidationActor) GetType() string {
-	return "TritonValidation"
+	return common.TritonValidationConditionType
 }
 
 func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
