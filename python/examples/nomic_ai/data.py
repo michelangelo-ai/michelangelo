@@ -1,3 +1,8 @@
+"""Data loading utilities for Nomic BERT training workflow.
+
+Loads and tokenizes WikiText dataset for Nomic BERT model training.
+"""
+
 import logging
 
 import ray
@@ -30,6 +35,19 @@ def load_data(
     max_length: int = 512,
     dataset_size=200,
 ) -> tuple[Dataset, Dataset, Dataset]:
+    """Load and tokenize WikiText dataset for model training.
+
+    Args:
+        model_name: HuggingFace model name for tokenizer. Defaults to
+            "nomic-ai/nomic-bert-2048".
+        dataset_name: Dataset name from HuggingFace. Defaults to "wikitext".
+        tokenizer: Optional pre-loaded tokenizer. Defaults to None.
+        max_length: Maximum sequence length for tokenization. Defaults to 512.
+        dataset_size: Number of samples per split. Defaults to 200.
+
+    Returns:
+        Tuple of (train_dataset, validation_dataset, test_dataset) as Ray Datasets.
+    """
     tokenizer = AutoTokenizer.from_pretrained(model_name)
 
     dataset = load_dataset(dataset_name, "wikitext-2-raw-v1")
