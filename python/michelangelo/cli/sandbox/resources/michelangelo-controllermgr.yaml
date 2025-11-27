@@ -53,8 +53,8 @@ data:
         k8sQps: 300
         k8sBurst: 600
 
-    gateways:
-      inferenceServiceEndpoint: "http://istio-gateway.default.svc.cluster.local:80"
+    # gateways:
+    #   inferenceServiceEndpoint: "http://ma-istio-gateway.default.svc.cluster.local:80"
 
     minio:
       awsRegion: us-east-1
