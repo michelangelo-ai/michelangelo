@@ -2,20 +2,12 @@ package oss
 
 import (
 	"go.uber.org/fx"
-	"go.uber.org/zap"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Module for fx dependency injection
 var Module = fx.Options(
-	fx.Provide(inferenceserver.NewGatewayConfig),
-	fx.Provide(inferenceserver.NewDynamicClient),
-	fx.Provide(provideModelConfigMapProvider),
-	fx.Provide(inferenceserver.NewInferenceServerGateway),
 	fx.Invoke(Register),
 )
 
@@ -44,8 +36,4 @@ func registerPlugins(p Params) error {
 	}
 
 	return nil
-}
-
-func provideModelConfigMapProvider(client client.Client, logger *zap.Logger) configmap.ModelConfigMapProvider {
-	return configmap.NewDefaultModelConfigMapProvider(client, logger)
 }
