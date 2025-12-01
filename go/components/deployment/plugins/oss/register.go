@@ -11,11 +11,10 @@ import (
 // Module for fx dependency injection
 var Module = fx.Options(
 	fx.Invoke(Register),
-	fx.Provide(inferenceserver.NewInferenceServerGateway),
 	fx.Provide(inferenceserver.NewGatewayConfig),
-	fx.Provide(inferenceserver.NewInferenceServerGateway),
 	fx.Provide(inferenceserver.NewDynamicClient),
 	fx.Provide(proxy.NewHTTPRouteManager),
+	fx.Provide(inferenceserver.NewInferenceServerGateway),
 )
 
 // Register registers the OSS plugin for all target types and subtypes
