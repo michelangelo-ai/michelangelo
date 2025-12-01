@@ -2,8 +2,6 @@ package oss
 
 import (
 	"go.uber.org/fx"
-	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
@@ -18,7 +16,6 @@ var Module = fx.Options(
 	fx.Provide(inferenceserver.NewInferenceServerGateway),
 	fx.Provide(inferenceserver.NewDynamicClient),
 	fx.Provide(proxy.NewHTTPRouteManager),
-	fx.Provide(provideProxyProvider),
 )
 
 // Register registers the OSS plugin for all target types and subtypes
@@ -46,8 +43,4 @@ func registerPlugins(p Params) error {
 	}
 
 	return nil
-}
-
-func provideProxyProvider(dynamicClient dynamic.Interface, logger *zap.Logger) proxy.ProxyProvider {
-	return proxy.NewHTTPRouteManager(dynamicClient, logger)
 }
