@@ -14,9 +14,11 @@ import (
 var Module = fx.Options(
 	fx.Invoke(Register),
 	fx.Provide(inferenceserver.NewInferenceServerGateway),
-	fx.Provide(func(dynamicClient dynamic.Interface, logger *zap.Logger) proxy.ProxyProvider {
-		return proxy.NewHTTPRouteManager(dynamicClient, logger)
-	}),
+	fx.Provide(inferenceserver.NewGatewayConfig),
+	fx.Provide(inferenceserver.NewInferenceServerGateway),
+	fx.Provide(inferenceserver.NewDynamicClient),
+	fx.Provide(proxy.NewHTTPRouteManager),
+	fx.Provide(provideProxyProvider),
 )
 
 // Register registers the OSS plugin for all target types and subtypes
@@ -44,4 +46,8 @@ func registerPlugins(p Params) error {
 	}
 
 	return nil
+}
+
+func provideProxyProvider(dynamicClient dynamic.Interface, logger *zap.Logger) proxy.ProxyProvider {
+	return proxy.NewHTTPRouteManager(dynamicClient, logger)
 }
