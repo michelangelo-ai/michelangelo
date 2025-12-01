@@ -2,16 +2,12 @@ package oss
 
 import (
 	"go.uber.org/fx"
-	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Module for fx dependency injection
 var Module = fx.Options(
-	fx.Provide(provideProxyProvider),
 	fx.Invoke(Register),
 )
 
@@ -40,8 +36,4 @@ func registerPlugins(p Params) error {
 	}
 
 	return nil
-}
-
-func provideProxyProvider(dynamicClient dynamic.Interface, logger *zap.Logger) proxy.ProxyProvider {
-	return proxy.NewHTTPRouteManager(dynamicClient, logger)
 }

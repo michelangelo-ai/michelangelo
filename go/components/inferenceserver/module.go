@@ -7,7 +7,6 @@ import (
 	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,10 +33,10 @@ type GatewayConfig struct {
 }
 
 // Module provides the inference server controller with all dependencies
-var Module = fx.Module("inferenceserver",
+var Module = fx.Options(
 	fx.Provide(NewGatewayConfig),
-	fx.Provide(NewInferenceServerGateway),
 	fx.Provide(NewDynamicClient),
+	fx.Provide(NewInferenceServerGateway),
 	fx.Provide(proxy.NewHTTPRouteManager),
 	fx.Provide(configmap.NewDefaultModelConfigMapProvider),
 	fx.Provide(NewEventRecorder),
@@ -60,7 +59,8 @@ func NewGatewayConfig(provider config.Provider) (GatewayConfig, error) {
 	return conf, nil
 }
 
-func NewDynamicClient(restConfig *rest.Config) (dynamic.Interface, error) {
+// NewDynamicClient creates a Kubernetes dynamic client for working with unstructured resources
+func NewDynamicClient() (dynamic.Interface, error) {
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
 		panic(fmt.Errorf("failed to get REST config: %w", err))
