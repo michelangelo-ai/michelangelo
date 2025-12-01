@@ -18,7 +18,6 @@ go_library(
         "//go/components/deployment/plugins/oss/rollback:go_default_library",
         "//go/components/deployment/plugins/oss/rollout:go_default_library",
         "//go/components/deployment/plugins/oss/steadystate:go_default_library",
-        "//go/components/inferenceserver:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
         "//go/components/inferenceserver/proxy:go_default_library",

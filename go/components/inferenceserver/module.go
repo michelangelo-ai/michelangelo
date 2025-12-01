@@ -34,19 +34,19 @@ type GatewayConfig struct {
 
 // Module provides the inference server controller with all dependencies
 var Module = fx.Options(
-	fx.Provide(NewGatewayConfig),
-	fx.Provide(NewDynamicClient),
-	fx.Provide(NewInferenceServerGateway),
-	fx.Provide(proxy.NewHTTPRouteManager),
-	fx.Provide(configmap.NewDefaultModelConfigMapProvider),
-	fx.Provide(NewEventRecorder),
-	fx.Provide(NewPluginRegistry),
+	fx.Provide(newGatewayConfig),
+	fx.Provide(newDynamicClient),
+	fx.Provide(newInferenceServerGateway),
+	fx.Provide(newProxyProvider),
+	fx.Provide(newModelConfigMapProvider),
+	fx.Provide(newEventRecorder),
+	fx.Provide(newPluginRegistry),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
 )
 
-// NewGatewayConfig creates a new gateway configuration from the config provider
-func NewGatewayConfig(provider config.Provider) (GatewayConfig, error) {
+// newGatewayConfig creates a new gateway configuration from the config provider
+func newGatewayConfig(provider config.Provider) (GatewayConfig, error) {
 	var conf GatewayConfig
 	// Set default value if not configured
 	conf.InferenceServiceEndpoint = "http://localhost:8889"
@@ -59,8 +59,8 @@ func NewGatewayConfig(provider config.Provider) (GatewayConfig, error) {
 	return conf, nil
 }
 
-// NewDynamicClient creates a Kubernetes dynamic client for working with unstructured resources
-func NewDynamicClient() (dynamic.Interface, error) {
+// newDynamicClient creates a Kubernetes dynamic client for working with unstructured resources
+func newDynamicClient() (dynamic.Interface, error) {
 	restConfig, err := ctrl.GetConfig()
 	if err != nil {
 		panic(fmt.Errorf("failed to get REST config: %w", err))
@@ -73,8 +73,8 @@ func NewDynamicClient() (dynamic.Interface, error) {
 	return dynamicClient, nil
 }
 
-// NewInferenceServerGateway creates a new inference server gateway with clients
-func NewInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.Interface, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
+// newInferenceServerGateway creates a new inference server gateway with clients
+func newInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.Interface, gatewayConfig GatewayConfig, logger *zap.Logger) gateways.Gateway {
 	gateway := gateways.NewGatewayWithClients(gateways.Params{
 		KubeClient:             kubeClient,
 		DynamicClient:          dynamicClient,
@@ -96,12 +96,23 @@ func NewInferenceServerGateway(kubeClient client.Client, dynamicClient dynamic.I
 	return gateway
 }
 
-func NewEventRecorder(mgr ctrl.Manager) record.EventRecorder {
+// newProxyProvider creates a new proxy provider
+func newProxyProvider(dynamicClient dynamic.Interface, logger *zap.Logger) proxy.ProxyProvider {
+	return proxy.NewHTTPRouteManager(dynamicClient, logger)
+}
+
+// newModelConfigMapProvider creates a new model config map provider
+func newModelConfigMapProvider(client client.Client, logger *zap.Logger) configmap.ModelConfigMapProvider {
+	return configmap.NewDefaultModelConfigMapProvider(client, logger)
+}
+
+// newEventRecorder creates a new event recorder
+func newEventRecorder(mgr ctrl.Manager) record.EventRecorder {
 	return mgr.GetEventRecorderFor(ControllerName)
 }
 
-// NewPluginRegistry creates a new plugin registry with all OSS plugins registered
-func NewPluginRegistry(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.PluginRegistry {
+// newPluginRegistry creates a new plugin registry with all OSS plugins registered
+func newPluginRegistry(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.PluginRegistry {
 	registry := plugins.NewPluginRegistry()
 	oss.RegisterPlugins(registry, gateway, modelConfigMapProvider, proxyProvider, recorder, logger)
 	return registry
