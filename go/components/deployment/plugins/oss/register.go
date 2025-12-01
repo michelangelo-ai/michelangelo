@@ -5,17 +5,13 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/client-go/dynamic"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Module for fx dependency injection
 var Module = fx.Options(
-	fx.Provide(inferenceserver.NewGatewayConfig),
-	fx.Provide(inferenceserver.NewDynamicClient),
 	fx.Provide(provideProxyProvider),
-	fx.Provide(inferenceserver.NewInferenceServerGateway),
 	fx.Invoke(Register),
 )
 
