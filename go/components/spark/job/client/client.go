@@ -82,6 +82,7 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 }
 
 // GetJobStatus retrieves the status of the Spark job
+// Return values represent the state, url, error message, and error of job
 func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	result := &sparkv1beta2.SparkApplication{}
 	options := metav1.GetOptions{}

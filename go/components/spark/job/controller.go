@@ -13,6 +13,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -82,18 +83,16 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		*/
 		switch *stateStr {
 		case "RUNNING":
-			setCondition(&sparkJob.Status.StatusConditions, "SparkAppRunning", apipb.CONDITION_STATUS_TRUE, "Spark application is running", "Running")
+			setCondition(&sparkJob.Status.StatusConditions, constants.SparkAppRunningCondition, apipb.CONDITION_STATUS_TRUE, "Spark application is running", "Running")
 		case "COMPLETED":
-			setCondition(&sparkJob.Status.StatusConditions, "SparkAppRunning", apipb.CONDITION_STATUS_FALSE, "Spark application completed", "Completed")
-			setCondition(&sparkJob.Status.StatusConditions, "Succeeded", apipb.CONDITION_STATUS_TRUE, "Spark job succeeded", "Succeeded")
+			setCondition(&sparkJob.Status.StatusConditions, constants.SucceededCondition, apipb.CONDITION_STATUS_TRUE, "Spark job succeeded", "Succeeded")
 		case "FAILED":
-			setCondition(&sparkJob.Status.StatusConditions, "SparkAppRunning", apipb.CONDITION_STATUS_FALSE, "Spark application failed", "Failed")
 			// Use the error message from SparkApplication if available, otherwise use a default
 			failureMessage := "Spark job failed"
 			if errorMessage != "" {
 				failureMessage = errorMessage
 			}
-			setCondition(&sparkJob.Status.StatusConditions, "Succeeded", apipb.CONDITION_STATUS_FALSE, failureMessage, "Failed")
+			setCondition(&sparkJob.Status.StatusConditions, constants.SucceededCondition, apipb.CONDITION_STATUS_FALSE, failureMessage, "Failed")
 		}
 
 		res.RequeueAfter = requeueAfter
