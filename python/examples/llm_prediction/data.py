@@ -1,12 +1,18 @@
+"""Data loading utilities for LLM prediction workflows.
+
+This module provides functions to load datasets from HuggingFace and convert them
+to Ray Datasets for distributed processing.
+"""
+
 import logging
+from typing import Optional
 
 import datasets
 import ray
-from typing import Optional
 from ray.data import Dataset
 
-from michelangelo.uniflow.plugins.ray import RayTask
 import michelangelo.uniflow.core as uniflow
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
@@ -28,6 +34,18 @@ def load_data(
     predict_column: str,
     limit: Optional[int] = None,
 ) -> tuple[Dataset, Dataset, Dataset]:
+    """Load dataset from HuggingFace and convert to Ray Dataset.
+
+    Args:
+        path: HuggingFace dataset path.
+        name: Dataset configuration name.
+        data_slice: Dataset split to load (e.g., 'train', 'test').
+        predict_column: Column name to rename to 'text' for prediction.
+        limit: Optional row limit for testing. Defaults to None.
+
+    Returns:
+        Ray Dataset with renamed prediction column.
+    """
     hf_dataset = datasets.load_dataset(path=path, name=name)
     hf_dataset = hf_dataset.rename_column(predict_column, "text")
     if limit:
@@ -50,6 +68,14 @@ def write_data(
     out_path: str,
     partitions: Optional[int] = None,
 ):
+    """Write Ray Dataset to CSV files.
+
+    Args:
+        dataset: Ray Dataset to write.
+        out_path: Output directory path for CSV files.
+        partitions: Optional number of partitions to repartition before writing.
+            Defaults to None.
+    """
     if partitions:
         dataset = dataset.repartition(partitions)
     dataset.write_csv(out_path)

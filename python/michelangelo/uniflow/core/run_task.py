@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
-import sys
 import logging
+import sys
+
 from michelangelo.uniflow.core.codec import decoder
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, import_attribute
 

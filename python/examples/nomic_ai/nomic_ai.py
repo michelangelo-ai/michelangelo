@@ -1,11 +1,22 @@
+"""Nomic BERT training workflow.
+
+Example workflow for training Nomic BERT models on WikiText dataset using
+PyTorch Lightning and Ray for distributed training.
+"""
+
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 from examples.nomic_ai.data import load_data
 from examples.nomic_ai.train import train
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def train_workflow():
+    """Training workflow for Nomic BERT model.
+
+    Loads WikiText data, trains the model using PyTorch Lightning,
+    and saves the trained model.
+    """
     model_name = "nomic-ai/nomic-bert-2048"
 
     train_data, validation_data, test_data = load_data(model_name)

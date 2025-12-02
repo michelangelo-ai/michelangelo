@@ -1,6 +1,6 @@
 from typing import Optional
 
-from michelangelo.canvas.lib.shared.json_data.field import field, _OneOf, one_of
+from michelangelo.canvas.lib.shared.json_data.field import field, one_of
 from michelangelo.canvas.lib.shared.json_data.json_data import JSONData
 
 

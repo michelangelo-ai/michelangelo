@@ -2,6 +2,8 @@ package types
 
 import (
 	"errors"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ErrJobAlreadyExists indicates that the job is already present in the scheduler queue
@@ -39,6 +41,8 @@ const (
 	SparkJob JobType = iota + 1
 	// RayJob is the job type for Ray jobs
 	RayJob
+	// RayCluster is the job type for Ray clusters
+	RayCluster
 )
 
 // SchedulableJobParams is the param to NewScheduledJob
@@ -94,4 +98,27 @@ const (
 type MTLSHandler interface {
 	EnableMTLS(projectName string) (bool, error)
 	EnableMTLSRuntimeClass(projectName string) (bool, error)
+}
+
+// JobClusterStatus represents the status of a job cluster (Ray, Spark, etc.)
+// It wraps the concrete status types from different runtimes.
+type JobClusterStatus struct {
+	// Ray holds the status for Ray clusters
+	Ray *v2pb.RayClusterStatus
+
+	// Reason for the cluster status
+	Reason string
+
+	// Spark holds the status for Spark clusters (future support)
+	// Spark *v2pb.SparkClusterStatus
+}
+
+// JobStatus represents the status of a job (Ray, Spark, etc.)
+// It wraps the concrete status types from different runtimes.
+type JobStatus struct {
+	// Ray holds the status for Ray jobs
+	Ray *v2pb.RayJobStatus
+
+	// Spark holds the status for Spark jobs (future support)
+	// Spark *v2pb.SparkJobStatus
 }

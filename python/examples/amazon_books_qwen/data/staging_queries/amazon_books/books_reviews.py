@@ -1,9 +1,9 @@
-"""
-Staging query for Amazon Books dataset
+"""Staging query for Amazon Books dataset.
+
 Prepares base table by joining books and reviews for feature engineering
 """
 
-from ai.chronon.api.ttypes import StagingQuery, MetaData
+from ai.chronon.api.ttypes import MetaData, StagingQuery
 
 # REAL Chronon staging query for Amazon Books dataset
 # Uses SQL string format that Chronon can serialize properly

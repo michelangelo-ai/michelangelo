@@ -1,23 +1,22 @@
-"""
-Amazon Books Qwen Dual-Encoder Pipeline
+"""Amazon Books Qwen Dual-Encoder Pipeline.
+
 Main workflow entry point for training Qwen-based recommendation model
 """
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
+from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+from examples.amazon_books_qwen.download import download_kaggle_dataset
 
 # Import our local modules using direct file execution to avoid conflicts
-
 # Import workflow functions
 from examples.amazon_books_qwen.train import train_dual_encoder
-from examples.amazon_books_qwen.download import download_kaggle_dataset
-from examples.amazon_books_qwen.chronon_tasks import compute_chronon_features_with_spark
+from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def amazon_books_qwen_workflow(sample_size=100):
-    """
-    Complete workflow for training Qwen dual-encoder on Amazon Books data
+    """Complete workflow for training Qwen dual-encoder on Amazon Books data.
+
     Following GenRec+Qwen architecture (N3) specifications
     """
     # Step 1: Download dataset (can be cached/reused)
@@ -55,8 +54,11 @@ def amazon_books_qwen_workflow(sample_size=100):
     return model_result
 
 
-# For Local Run from python directory: PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
-# For Remote Run: python examples/amazon_books_qwen/amazon_books_qwen.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
+# For Local Run from python directory:
+# PYTHONPATH=examples python examples/amazon_books_qwen/amazon_books_qwen.py
+# For Remote Run:
+# python examples/amazon_books_qwen/amazon_books_qwen.py remote-run \
+#   --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
     print("=" * 80)
     print("Amazon Books Qwen Dual-Encoder Pipeline")
@@ -77,6 +79,8 @@ if __name__ == "__main__":
     ctx.environ["ENABLE_BF16"] = "False"
     ctx.environ["MAX_QUERY_LENGTH"] = "128"
     ctx.environ["MAX_DOC_LENGTH"] = "512"
+    ctx.environ["RAY_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
+    ctx.environ["SPARK_LOG_URL_PREFIX"] = "http://localhost:9091/logs"
 
     sample_size = 1000
     if ctx.is_local_run():

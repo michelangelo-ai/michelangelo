@@ -31,6 +31,9 @@ async function createHandlers() {
     CreatePipelineRun: services.PipelineRunService.createPipelineRun as ExtractUnaryRpc<
       typeof services.PipelineRunService.createPipelineRun
     >,
+    ListModel: services.ModelService.listModel as ExtractUnaryRpc<
+      typeof services.ModelService.listModel
+    >,
   } as const;
 }
 

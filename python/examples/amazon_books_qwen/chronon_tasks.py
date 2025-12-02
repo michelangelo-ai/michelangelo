@@ -1,5 +1,5 @@
-"""
-Chronon Integration Tasks for Uniflow Pipeline
+"""Chronon Integration Tasks for Uniflow Pipeline.
+
 End-to-end Chronon data preparation with local Spark
 """
 
@@ -7,32 +7,57 @@ import os
 import sys
 import urllib.request
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
-# Uniflow
-import michelangelo.uniflow.core as uniflow
-from michelangelo.uniflow.plugins.spark import SparkTask
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from ai.chronon.api.ttypes import GroupBy, StagingQuery
+
+# Ray for dataset conversion
+# Chronon SDK
+from ai.chronon.repo.compile import thrift_simple_json_protected
 
 # PySpark
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import (
-    col,
-    when,
-    lit,
-    concat_ws,
-    rand,
-    count,
     avg,
+    col,
+    concat_ws,
+    count,
+    lit,
+    rand,
+    when,
+)
+from pyspark.sql.functions import (
     max as spark_max,
+)
+from pyspark.sql.functions import (
     min as spark_min,
 )
+
+# Uniflow
+import michelangelo.uniflow.core as uniflow
+from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.uniflow.plugins.spark import SparkTask
+
+# Chronon definitions (moved to top level)
+try:
+    from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
+        book_popularity,
+        book_velocity,
+    )
+    from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (  # noqa: E501
+        base_table,
+    )
+except ModuleNotFoundError:
+    # Use relative imports
+    from data.group_bys.amazon_books.book_features import book_popularity, book_velocity
+    from data.staging_queries.amazon_books.books_reviews import base_table
 
 
 # Ray for dataset conversion
 def _setup_chronon_environment():
-    """
-    Set up Chronon environment with JAR and directories (integrated into SparkTask)
+    """Set up Chronon environment with JAR and directories.
+
+    Integrated into SparkTask.
     """
     print("🔧 Setting up Chronon environment...")
 
@@ -98,35 +123,14 @@ def _setup_chronon_environment():
     )
 )
 def compute_chronon_features_with_spark(
-    dataset_config: Dict[str, Any],
+    dataset_config: dict[str, Any],
     books_dv: DatasetVariable,
     reviews_dv: DatasetVariable,
 ) -> tuple:
+    """REAL Chronon feature computation.
+
+    Integrated compilation and dataset return.
     """
-    REAL Chronon feature computation with integrated compilation and dataset return
-    """
-
-    # Chronon SDK
-    from ai.chronon.repo.compile import thrift_simple_json_protected
-    from ai.chronon.api.ttypes import StagingQuery, GroupBy
-
-    # Chronon definitions (moved to top level)
-    try:
-        from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
-            base_table,
-        )
-        from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
-            book_popularity,
-            book_velocity,
-        )
-    except ModuleNotFoundError:
-        # Use relative imports
-        from data.staging_queries.amazon_books.books_reviews import base_table
-        from data.group_bys.amazon_books.book_features import (
-            book_popularity,
-            book_velocity,
-        )
-
     # Step 1: Setup Chronon environment (integrated)
     jar_path = _setup_chronon_environment()
 
@@ -274,7 +278,8 @@ def compute_chronon_features_with_spark(
     reviews_df = reviews_dv.value
 
     print(
-        f"📊 Using provided DataFrames: {books_df.count()} books, {reviews_df.count()} reviews"
+        f"📊 Using provided DataFrames: {books_df.count()} books, "
+        f"{reviews_df.count()} reviews"
     )
 
     # Register tables for Chronon
@@ -338,7 +343,7 @@ def compute_chronon_features_with_spark(
         book_velocity_windows = []
 
         # Operation mapping (from Chronon thrift definitions)
-        OPERATION_NAMES = {
+        operation_names = {
             0: "MIN",
             1: "MAX",
             2: "SUM",
@@ -353,35 +358,43 @@ def compute_chronon_features_with_spark(
         }
 
         # Time unit mapping
-        TIME_UNIT_NAMES = {0: "MILLIS", 1: "DAYS", 2: "HOURS"}
+        time_unit_names = {0: "MILLIS", 1: "DAYS", 2: "HOURS"}
 
         for agg in compiled_gb1_dict["aggregations"]:
-            operation_name = OPERATION_NAMES.get(
+            operation_name = operation_names.get(
                 agg["operation"], f"OP_{agg['operation']}"
             )
             for window in agg["windows"]:
-                time_unit_name = TIME_UNIT_NAMES.get(
+                time_unit_name = time_unit_names.get(
                     window["timeUnit"], f"UNIT_{window['timeUnit']}"
                 )
-                window_name = f"{operation_name.lower()}_{agg['inputColumn']}_{window['length']}{time_unit_name.lower()}"
+                window_name = (
+                    f"{operation_name.lower()}_{agg['inputColumn']}_"
+                    f"{window['length']}{time_unit_name.lower()}"
+                )
                 book_popularity_windows.append((window_name, agg, window))
 
         for agg in compiled_gb2_dict["aggregations"]:
-            operation_name = OPERATION_NAMES.get(
+            operation_name = operation_names.get(
                 agg["operation"], f"OP_{agg['operation']}"
             )
             for window in agg["windows"]:
-                time_unit_name = TIME_UNIT_NAMES.get(
+                time_unit_name = time_unit_names.get(
                     window["timeUnit"], f"UNIT_{window['timeUnit']}"
                 )
-                window_name = f"{operation_name.lower()}_{agg['inputColumn']}_{window['length']}{time_unit_name.lower()}"
+                window_name = (
+                    f"{operation_name.lower()}_{agg['inputColumn']}_"
+                    f"{window['length']}{time_unit_name.lower()}"
+                )
                 book_velocity_windows.append((window_name, agg, window))
 
         print(
-            f"📊 Extracted {len(book_popularity_windows)} temporal windows from book_popularity"
+            f"📊 Extracted {len(book_popularity_windows)} temporal windows "
+            f"from book_popularity"
         )
         print(
-            f"📊 Extracted {len(book_velocity_windows)} temporal windows from book_velocity"
+            f"📊 Extracted {len(book_velocity_windows)} temporal windows "
+            f"from book_velocity"
         )
 
         # Execute the staging query using the real Chronon definition
@@ -395,11 +408,11 @@ def compute_chronon_features_with_spark(
         agg_exprs = []
 
         # Process each temporal window from the real Chronon definitions
-        for window_name, agg, window in book_popularity_windows[:6]:  # Limit for demo
-            operation_name = OPERATION_NAMES.get(
+        for _window_name, agg, window in book_popularity_windows[:6]:  # Limit for demo
+            operation_name = operation_names.get(
                 agg["operation"], f"OP_{agg['operation']}"
             )
-            time_unit_name = TIME_UNIT_NAMES.get(
+            time_unit_name = time_unit_names.get(
                 window["timeUnit"], f"UNIT_{window['timeUnit']}"
             )
 
@@ -434,16 +447,19 @@ def compute_chronon_features_with_spark(
         ).agg(*agg_exprs)
 
         print(
-            f"✅ Computed features using REAL Chronon Runtime Engine: {book_features.count()} books"
+            f"✅ Computed features using REAL Chronon Runtime Engine: "
+            f"{book_features.count()} books"
         )
         print(
-            "✅ Features computed with actual temporal windows from Chronon GroupBy definitions"
+            "✅ Features computed with actual temporal windows from Chronon "
+            "GroupBy definitions"
         )
 
     except Exception as e:
         print(f"❌ Chronon Runtime Engine execution failed: {e}")
         print(
-            "❌ FAILURE: No fallback logic allowed - pipeline must use real Chronon Runtime Engine"
+            "❌ FAILURE: No fallback logic allowed - pipeline must use real "
+            "Chronon Runtime Engine"
         )
         print("💡 Please check Chronon configuration and JAR setup")
         raise RuntimeError(f"Chronon Runtime Engine failed: {e}") from e
@@ -524,7 +540,8 @@ def compute_chronon_features_with_spark(
     )
 
     print(
-        f"🎉 REAL Chronon execution completed: {train_df.count()} train, {val_df.count()} val, {test_df.count()} test"
+        f"🎉 REAL Chronon execution completed: {train_df.count()} train, "
+        f"{val_df.count()} val, {test_df.count()} test"
     )
 
     # Convert to DatasetVariable following boston_housing pattern

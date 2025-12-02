@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -13,7 +14,7 @@ import (
 type Plugin interface {
 	// GetState is unique to the other stages in that this will need to be run with every execution of the
 	// reconcile loops. The others are dependent on the stage.
-	GetState(ctx context.Context, observability ObservabilityContext, modelDeployment *v2pb.Deployment) (*v2pb.DeploymentStatus, error)
+	GetState(ctx context.Context, observability ObservabilityContext, modelDeployment *v2pb.Deployment) (v2pb.DeploymentStatus, error)
 
 	// HealthCheckGate is used to check if there are issues with the current model rollout. If the bool returned is false,
 	// this indicates a problem with the rollout. Else, the rollout should proceed as usual.
@@ -27,16 +28,21 @@ type Plugin interface {
 
 	// PopulateDeploymentLogs is used to populate the deployment logs with the necessary error logs when
 	// the deployment reaches a terminal state.
-	PopulateDeploymentLogs(ctx context.Context, modelDeployment *v2pb.Deployment)
+	PopulateDeploymentLogs(ctx context.Context, runtimeContext RequestContext, modelDeployment *v2pb.Deployment)
 
 	// PopulateMessage is used to populate the deployment status message with the error message when the
 	// deployment is rolled back or fails to roll out.
-	PopulateMessage(ctx context.Context, modelDeployment *v2pb.Deployment)
+	PopulateMessage(ctx context.Context, runtimeContext RequestContext, modelDeployment *v2pb.Deployment)
 }
 
-// ObservabilityContext is a wrapper for logging and metric collection containing the
-// tags injected from upstream components.
+// RequestContext contains the context for actor operations
+type RequestContext struct {
+	Deployment *v2pb.Deployment
+	Logger     logr.Logger
+}
+
+// ObservabilityContext is a wrapper for logging and metric collection
 type ObservabilityContext struct {
 	Logger logr.Logger
-	Scope  interface{} // Simplified scope
+	Scope  interface{}
 }

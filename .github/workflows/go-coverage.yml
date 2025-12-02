@@ -29,8 +29,18 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for coverage comparison
 
-      - name: Setup Bazelisk
-        uses: bazelbuild/setup-bazelisk@v3
+      - name: Free disk space for Bazel
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove large packages not needed for Go/Bazel builds
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/share/swift
+          echo "Disk space after cleanup:"
+          df -h
 
       - name: Mount bazel cache
         uses: actions/cache@v4
@@ -43,13 +53,13 @@ jobs:
 
       - name: Run tests with Bazel
         run: |
-          bazel test //go/... \
+          ./tools/bazel test //go/... \
             --test_output=errors \
             --test_summary=detailed
 
       - name: Generate coverage with Bazel
         run: |
-          bazel coverage //go/... \
+          ./tools/bazel coverage //go/... \
             --combined_report=lcov \
             --instrumentation_filter="//go/[^/]*" \
             --test_output=errors
@@ -72,6 +82,10 @@ jobs:
             echo "Found coverage file: $COVERAGE_FILE"
             cp "$COVERAGE_FILE" coverage.dat
 
+            # Remove external Bazel dependencies from coverage data (if any)
+            lcov --remove coverage.dat 'external/*' -o coverage-filtered.dat --ignore-errors unused
+            mv coverage-filtered.dat coverage.dat
+
             # Generate summary
             lcov --summary coverage.dat 2>&1 | tee coverage-summary.txt
 
@@ -83,7 +97,7 @@ jobs:
             echo "Go Coverage: $COVERAGE%"
 
             # Generate HTML report
-            genhtml coverage.dat -o coverage-html --ignore-errors source
+            genhtml coverage.dat -o coverage-html --ignore-errors source,unmapped
           else
             echo "⚠️  Coverage file not found"
             echo "COVERAGE=0" >> $GITHUB_ENV
@@ -96,7 +110,7 @@ jobs:
           echo "Attempting alternative coverage method..."
 
           # Run coverage and capture output
-          bazel coverage //go/... --combined_report=lcov || true
+          ./tools/bazel coverage //go/... --combined_report=lcov || true
 
           # Try to find any coverage data
           find bazel-out -name "*.dat" -o -name "*.lcov" | head -10
@@ -105,7 +119,7 @@ jobs:
           echo "COVERAGE=18.2" >> $GITHUB_ENV
           echo "⚠️  Using cached coverage estimate"
 
-      - name: Check coverage threshold (baseline: 53.1%)
+      - name: "Check coverage threshold (baseline: 53.1%)"
         run: |
           BASELINE=53
           COVERAGE=${{ env.COVERAGE }}
@@ -138,7 +152,7 @@ jobs:
           echo "Extracting test summary..."
 
           # Get number of passing tests
-          PASSED=$(bazel test //go/... --test_summary=short 2>&1 | \
+          PASSED=$(./tools/bazel test //go/... --test_summary=short 2>&1 | \
             grep "tests pass" | awk '{print $1}' || echo "unknown")
 
           echo "TESTS_PASSED=$PASSED" >> $GITHUB_ENV
@@ -157,7 +171,7 @@ jobs:
             **Coverage Policy:**
             - **Baseline (existing code):** ≥53.1% (current coverage)
             - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
-            - **Long-term goal:** Improve baseline to 70%
+            - **Long-term goal:** Improve baseline to 90%
 
             <details>
             <summary>Coverage Summary</summary>
@@ -208,7 +222,7 @@ jobs:
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
           echo "- **Baseline (existing code):** ≥53.1% (current coverage)" >> $GITHUB_STEP_SUMMARY
           echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
-          echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
+          echo "- **Long-term goal:** Improve baseline to 90%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Running Tests Locally" >> $GITHUB_STEP_SUMMARY
           echo '```bash' >> $GITHUB_STEP_SUMMARY
@@ -243,4 +257,4 @@ jobs:
           echo "📝 Coverage Policy:"
           echo "- Existing code must maintain baseline (53.1%)"
           echo "- New/changed code must meet 90% coverage"
-          echo "- Long-term goal: Improve baseline to 70%"
+          echo "- Long-term goal: Improve baseline to 90%"

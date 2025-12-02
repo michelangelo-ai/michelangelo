@@ -113,6 +113,9 @@ enum RayClusterState {
 
   // The cluster state is unknown.
   RAY_CLUSTER_STATE_UNKNOWN = 6;
+
+  // The cluster state is unhealthy.
+  RAY_CLUSTER_STATE_UNHEALTHY = 7;
 }
 
 // Specification for RayHeadNodeInfo

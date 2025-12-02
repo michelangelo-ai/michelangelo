@@ -4,8 +4,7 @@ import os
 
 @contextlib.contextmanager
 def cd(newdir: str):
-    """
-    Changes the working directory.
+    """Changes the working directory.
     The original working directory is restored when the context manager exits.
 
     Args:

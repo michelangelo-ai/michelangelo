@@ -52,6 +52,11 @@ xgboost = {version = "2.1.4", optional = true }
 kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
 
+# For MLflow model packaging
+mlflow = { version = "^2.0.0", optional = true }
+boto3 = { version = "^1.40.0", optional = true }
+peft = { version = "^0.3.0", optional = true }
+
 # For VLLM
 setuptools = { version = "74.1.1", optional = true }
 vllm = { version = "0.8.1", optional = true }
@@ -69,7 +74,7 @@ ma = 'michelangelo.cli.cli:main'
 [tool.poetry.extras]
 dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
-example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray"]
+example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
 mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 
@@ -77,7 +82,7 @@ mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 pythonpath = [
   "."
 ]
-testpaths = ["tests"]
+testpaths = ["tests", "michelangelo"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -139,11 +144,26 @@ indent-width = 4
 target-version = "py39"
 
 [tool.ruff.lint]
-# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default.
-select = ["E4", "E7", "E9", "F"]
-ignore = []
+# Comprehensive rule sets for code quality
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming
+    "D",      # pydocstyle (docstrings)
+    "UP",     # pyupgrade
+    "B",      # flake8-bugbear
+    "C4",     # flake8-comprehensions
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "RUF",    # Ruff-specific rules
+]
+
+ignore = [
+    "D100",   # Missing docstring in public module (gradually enable)
+    "D104",   # Missing docstring in public package
+]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 fixable = ["ALL"]
@@ -151,6 +171,15 @@ unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Per-file ignores for generated code
+[tool.ruff.lint.per-file-ignores]
+"**/gen/**/*.py" = ["ALL"]
+"**/api/v2/services/gen/**/*.py" = ["ALL"]
+
+# Google-style docstrings
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 # Like Black, use double quotes for strings.
@@ -192,6 +221,7 @@ style = "pep440"
 source = ["michelangelo"]
 branch = true
 parallel = true
+relative_files = true
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -201,6 +231,7 @@ omit = [
     "*/examples/*",
     "*/__pycache__/*",
     "*/site-packages/*",
+    "*/sandbox.py",
 ]
 
 [tool.coverage.report]

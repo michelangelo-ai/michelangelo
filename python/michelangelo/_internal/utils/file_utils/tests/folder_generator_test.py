@@ -1,7 +1,8 @@
 import os
 import tempfile
 from unittest import TestCase
-from michelangelo._internal.utils.file_utils import generate_folder, cd
+
+from michelangelo._internal.utils.file_utils import cd, generate_folder
 
 
 class FolderGeneratorTest(TestCase):

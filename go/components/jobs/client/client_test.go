@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	"go.uber.org/zap/zaptest"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -586,95 +587,90 @@ func TestCreateSecret(t *testing.T) {
 
 // TestGetJobStatus tests the GetJobStatus method
 func TestGetJobStatus(t *testing.T) {
-	sparkJob := &v2pb.SparkJob{
-		Spec: v2pb.SparkJobSpec{
-			SparkConf: map[string]string{
-				"spark.hadoop.fs.defaultFS": "hdfs://dca-neon-1:8020",
-			},
-			User: &v2pb.UserInfo{
-				Name: "test-user",
-			},
-			MainApplicationFile: "hdfs://dca-neon-1:8020/user/test-user/test-app.jar",
-			MainArgs:            []string{"--input", "hdfs://dca-neon-1:8020/user/test-user/input", "--output", "hdfs://dca-neon-1:8020/user/test-user/output"},
-			Deps: &v2pb.Dependencies{
-				Jars:  []string{"hdfs://dca-neon-1:8020/user/test-user/test-app.jar"},
-				Files: []string{"hdfs://dca-neon-1:8020/user/test-user/test-app.jar"},
-			},
-			SparkVersion: "spark_33",
-			MainClass:    "com.uber.test",
-			Driver: &v2pb.DriverSpec{
-				Pod: &v2pb.PodSpec{
-					Image: "uber/spark:spark_33",
-					Resource: &v2pb.ResourceSpec{
-						Cpu:    1,
-						Memory: "1GB",
-						Gpu:    0,
-					},
-				},
-			},
-			Executor: &v2pb.ExecutorSpec{
-				Pod: &v2pb.PodSpec{
-					Image: "uber/spark:spark_33",
-					Resource: &v2pb.ResourceSpec{
-						Cpu:    1,
-						Memory: "1GB",
-						Gpu:    0,
-					},
-				},
-				Instances: 1,
-			},
-			Scheduling: &v2pb.SchedulingSpec{
-				Preemptible: false,
-			},
-		},
-		Status: v2pb.SparkJobStatus{
-			ApplicationId: "123",
-		},
+	mkRayV2 := func(name string) *v2pb.RayJob { return &v2pb.RayJob{ObjectMeta: metav1.ObjectMeta{Name: name}} }
+	mkRayV1 := func(jobStatus string, deployStatus rayv1.JobDeploymentStatus, msg string) *rayv1.RayJob {
+		r := &rayv1.RayJob{}
+		r.Status.JobStatus = rayv1.JobStatus(jobStatus)
+		r.Status.JobDeploymentStatus = deployStatus
+		r.Status.Message = msg
+		return r
 	}
 
-	testCluster := &v2pb.Cluster{}
 	tests := []struct {
-		msg          string
-		jobInput     runtime.Object
-		clusterInput *v2pb.Cluster
-		expectErr    string
+		name string
+		// GetJobStatus inputs
+		useGetJobStatus bool
+		jobObject       runtime.Object
+		setupFactory    func(f *computemocks.MockFactory)
+		expectErr       string
+		expectStatus    string
+		expectMsg       string
 	}{
 		{
-			msg:          "Get status for Ray Job",
-			jobInput:     &v2pb.RayJob{},
-			clusterInput: testCluster,
-			expectErr:    "GetStatus of RayJob is not supported",
+			name:            "GetClientSetForCluster error",
+			useGetJobStatus: true,
+			jobObject:       mkRayV2("job-a"),
+			setupFactory: func(f *computemocks.MockFactory) {
+				f.EXPECT().GetClientSetForCluster(gomock.Any()).Return(nil, assert.AnError)
+			},
+			expectErr: "get client for cluster err",
 		},
 		{
-			msg:          "Get status for Spark Job",
-			jobInput:     sparkJob,
-			clusterInput: testCluster,
-			expectErr:    "GetStatus of SparkJob is not supported",
+			name:            "unsupported Spark job type",
+			useGetJobStatus: true,
+			jobObject:       &v2pb.SparkJob{},
+			setupFactory:    func(f *computemocks.MockFactory) {},
+			expectErr:       "Spark job status not implemented",
+			expectStatus:    "",
+			expectMsg:       "",
 		},
 		{
-			msg:          "Get status for unsupported job",
-			jobInput:     testCluster,
-			clusterInput: testCluster,
-			expectErr:    "the object must be a RayJob or a SparkJob, got:*v2.Cluster",
+			name:         "translate: running -> RUNNING",
+			jobObject:    mkRayV1(string(rayv1.JobStatusRunning), "", ""),
+			setupFactory: func(f *computemocks.MockFactory) {},
+			expectStatus: string(constants.RayJobStatusRunning),
+			expectMsg:    "",
 		},
 	}
 
-	for _, test := range tests {
-		gctrl := gomock.NewController(t)
-		provider := secrets.New(secrets.Params{}).SecretProvider
-		mockFactory := computemocks.NewMockFactory(gctrl)
-		client := NewClient(Params{
-			Factory: mockFactory,
-			Helper:  NewHelper(),
-			Logger:  zaptest.NewLogger(t),
-			Secrets: provider,
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.useGetJobStatus {
+				gctrl := gomock.NewController(t)
+				defer gctrl.Finish()
+				f := computemocks.NewMockFactory(gctrl)
+				cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper().Mapper, logger: zaptest.NewLogger(t)}
+				if tt.setupFactory != nil {
+					tt.setupFactory(f)
+				}
+				cluster := &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "c1"}}
+				js, err := cl.GetJobStatus(context.Background(), tt.jobObject, cluster)
+				if tt.expectErr != "" {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), tt.expectErr)
+					return
+				}
+				require.NoError(t, err)
+				var gotStatus, gotMsg string
+				if js != nil && js.Ray != nil {
+					gotStatus = js.Ray.JobStatus
+					gotMsg = js.Ray.Message
+				}
+				assert.Equal(t, tt.expectStatus, gotStatus)
+				assert.Equal(t, tt.expectMsg, gotMsg)
+				return
+			}
+			// When not using GetJobStatus path, validate mapper-based conversion on local RayJob object
+			js, err := k8sengine.NewMapper().Mapper.MapLocalJobStatusToGlobal(tt.jobObject)
+			require.NoError(t, err)
+			if js != nil && js.Ray != nil {
+				assert.Equal(t, tt.expectStatus, js.Ray.JobStatus)
+				assert.Equal(t, tt.expectMsg, js.Ray.Message)
+			} else {
+				assert.Equal(t, tt.expectStatus, "")
+				assert.Equal(t, tt.expectMsg, "")
+			}
 		})
-		_, err := client.GetJobStatus(context.Background(), test.jobInput, test.clusterInput)
-		if test.expectErr != "" {
-			require.Equal(t, test.expectErr, err.Error())
-		} else {
-			require.Nil(t, err)
-		}
 	}
 }
 
@@ -771,6 +767,19 @@ func TestCreateJob(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestGetJobClusterStatus_ClientSetError(t *testing.T) {
+	g := gomock.NewController(t)
+	f := computemocks.NewMockFactory(g)
+	cl := &Client{factory: f, helper: NewHelper(), mapper: k8sengine.NewMapper().Mapper}
+	jobCluster := &v2pb.RayCluster{ObjectMeta: metav1.ObjectMeta{Name: "rc1"}}
+	cluster := &v2pb.Cluster{ObjectMeta: metav1.ObjectMeta{Name: "c1"}}
+
+	f.EXPECT().GetClientSetForCluster(gomock.Any()).Return(nil, assert.AnError)
+	_, err := cl.GetJobClusterStatus(context.Background(), jobCluster, cluster)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "get client for cluster err")
 }
 
 func assertConditions(

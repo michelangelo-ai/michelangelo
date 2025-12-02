@@ -1,6 +1,6 @@
+import logging
 import os
 import uuid
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Optional
@@ -12,8 +12,7 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class Variable(ABC):
-    """
-    Variable is an abstraction for an intermediate result of a workflow.
+    """Variable is an abstraction for an intermediate result of a workflow.
     Variable should describe high level concepts, such as dataset and model.
 
     It contains metadata as a dataclass, which is visible to the workflow engine for control flow,
@@ -35,8 +34,7 @@ class Variable(ABC):
 
     @classmethod
     def create(cls, value) -> "Variable":
-        """
-        A factory method to create a variable with the given value.
+        """A factory method to create a variable with the given value.
         """
         path = (
             f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
@@ -47,8 +45,7 @@ class Variable(ABC):
 
     @abstractmethod
     def save(self):
-        """
-        Automatically find the IO class to save the value.
+        """Automatically find the IO class to save the value.
         It will be called by the workflow framework by the end of each task.
         This method should be implemented by subclasses.
         """
@@ -61,15 +58,13 @@ class Variable(ABC):
 
     @abstractmethod
     def _load(self):
-        """
-        Automatically find the IO class to load the value.
+        """Automatically find the IO class to load the value.
         Should not be called directly. Use `value` property instead.
         This method should be implemented by subclasses.
         """
 
     def _load_value_using_io(self, io_class: type):
-        """
-        A helper method to load the value located at the variable's path using the given IO.
+        """A helper method to load the value located at the variable's path using the given IO.
         IO can be given as either as a concrete instance, or as a string representing a dot-path to the IO's class.
         """
         _logger.info(f"loading value for {self.path}")
@@ -84,8 +79,7 @@ class Variable(ABC):
         self._saved = True  # the value is already saved on disk
 
     def _save_value_using_io(self, io_class: type):
-        """
-        A helper method to save the value using the given IO class.
+        """A helper method to save the value using the given IO class.
         IO can be given as either as a concrete instance, or as a string representing a dot-path to the IO's class.
         """
         _logger.info(f"saving value for {self.path}")
@@ -100,8 +94,7 @@ class Variable(ABC):
 
 
 def _create_io(io_class: type) -> IO:
-    """
-    A helper method to create IO from class.
+    """A helper method to create IO from class.
     """
     io = io_class()
     assert isinstance(io, IO)

@@ -19,6 +19,8 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 
 	headPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "head"}}}
 	workerPod := &corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Labels: map[string]string{"role": "worker"}}}
+	submitterPod := headPod.DeepCopy()
+	submitterPod.Spec.RestartPolicy = corev1.RestartPolicyNever
 
 	rayJob := &v2pb.RayJob{
 		ObjectMeta: metav1.ObjectMeta{Name: "test-job"},
@@ -70,7 +72,7 @@ func TestMapper_MapGlobalJobToLocal(t *testing.T) {
 						"ray.io/cluster":      rayCluster.Name,
 						"rayClusterNamespace": RayLocalNamespace,
 					},
-					SubmitterPodTemplate: headPod,
+					SubmitterPodTemplate: submitterPod,
 				},
 			},
 		},

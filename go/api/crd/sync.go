@@ -48,10 +48,11 @@ func ParseConfig(provider config.Provider) (*Configuration, error) {
 type SyncCRDsParams struct {
 	fx.In
 
-	Lifecycle fx.Lifecycle
-	Config    *Configuration
-	Logger    *zap.Logger
-	Gateway   Gateway
+	Lifecycle         fx.Lifecycle
+	Config            *Configuration
+	Logger            *zap.Logger
+	Gateway           Gateway
+	WebhookConversion *apiextv1.WebhookConversion `optional:"true"`
 }
 
 // SyncCRDs syncs CRDs in the specified k8s API group
@@ -83,7 +84,7 @@ func SyncCRDs(group string, incompatibleUpdateAllowList []string, yamlSchemas ..
 			p.Lifecycle.Append(fx.Hook{
 				OnStart: func(ctx context.Context) error {
 					return syncCRDs(ctx, logger, group, p.Config.EnableCRDDeletion,
-						p.Gateway, p.Config.CRDVersions, incompatibleUpdateAllowList, yamlSchemas...)
+						p.Gateway, p.Config.CRDVersions, p.WebhookConversion, incompatibleUpdateAllowList, yamlSchemas...)
 				},
 				OnStop: nil,
 			})
@@ -99,6 +100,7 @@ func syncCRDs(ctx context.Context,
 	enableCRDDeletion bool,
 	gateway Gateway,
 	crdVersions map[string]VersionConfig,
+	webhookConversion *apiextv1.WebhookConversion,
 	incompatibleUpdateAllowList []string,
 	yamlSchemas ...map[string]string) error {
 
@@ -154,7 +156,7 @@ func syncCRDs(ctx context.Context,
 		}
 	}
 
-	mergedCRDList, err := mergeCRDVersions(crdList, crdVersions)
+	mergedCRDList, err := mergeCRDVersions(crdList, crdVersions, webhookConversion)
 	if err != nil {
 		logger.Error("Failed to merge CRD versions", zap.Error(err))
 		return err
@@ -208,11 +210,15 @@ func upsertCRDs(ctx context.Context, logger *zap.Logger, gateway Gateway,
 // crdVersions[crd.Name].Versions, one of them must be specified as the storage version. If a CRD has only one version
 // in crdVersions[crd.Name], that version is automatically set as the storage version.
 //
+// webhookConversion is the webhook configuration for version conversion. If provided and the CRD has multiple versions,
+// the webhook strategy will be used. If nil, NoneConverter strategy will be used for multi-version CRDs.
+//
 // The function returns a list of merged CRDs, where all the versions of each CRD are combined into a single
 // CustomResourceDefinition object. If any of the rules are violated, an error is returned.
 func mergeCRDVersions(
 	crdList []*apiextv1.CustomResourceDefinition,
-	crdVersions map[string]VersionConfig) ([]*apiextv1.CustomResourceDefinition, error) {
+	crdVersions map[string]VersionConfig,
+	webhookConversion *apiextv1.WebhookConversion) ([]*apiextv1.CustomResourceDefinition, error) {
 	var result []*apiextv1.CustomResourceDefinition
 	// group CRDs by names and versions
 	crds := make(map[string]map[string]*apiextv1.CustomResourceDefinition)
@@ -252,6 +258,10 @@ func mergeCRDVersions(
 			}
 
 			storageVersion := versionConfig.StorageVersion
+			// Reset all storage flags to false before setting the desired one
+			for i := range mergedCRD.Spec.Versions {
+				mergedCRD.Spec.Versions[i].Storage = false
+			}
 			if storageVersion == "" {
 				if len(mergedCRD.Spec.Versions) == 1 {
 					mergedCRD.Spec.Versions[0].Storage = true // set storage version
@@ -276,10 +286,17 @@ func mergeCRDVersions(
 			}
 			// Only set conversion strategy when there are multiple versions
 			if len(mergedCRD.Spec.Versions) > 1 {
-				// TODO(#557): conversion strategy is set to NoneConverter for now,
-				// we will support webhook conversion in the next iteration
-				mergedCRD.Spec.Conversion = &apiextv1.CustomResourceConversion{
-					Strategy: apiextv1.NoneConverter,
+				if webhookConversion != nil {
+					// Use webhook conversion strategy
+					mergedCRD.Spec.Conversion = &apiextv1.CustomResourceConversion{
+						Strategy: apiextv1.WebhookConverter,
+						Webhook:  webhookConversion,
+					}
+				} else {
+					// Fall back to NoneConverter if no webhook is provided
+					mergedCRD.Spec.Conversion = &apiextv1.CustomResourceConversion{
+						Strategy: apiextv1.NoneConverter,
+					}
 				}
 			}
 		} else {

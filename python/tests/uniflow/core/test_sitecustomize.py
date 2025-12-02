@@ -1,16 +1,15 @@
-"""
-Unit tests for sitecustomize.py
+"""Unit tests for sitecustomize.py
 
 Note: These tests are simplified because sitecustomize.py is designed to run
 as a module initialization script with complex dependencies on file system,
 environment variables, and remote storage.
 """
 
-import unittest
-from unittest.mock import patch, MagicMock
-import tempfile
-from pathlib import Path
 import logging
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 class TestSitecustomize(unittest.TestCase):

@@ -1,0 +1,41 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "cluster_only_assignment_engine.go",
+        "default_options.go",
+        "interface.go",
+        "job.go",
+        "module.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/components/jobs/cluster:go_default_library",
+        "//go/components/jobs/common/constants:go_default_library",
+        "//go/components/jobs/common/types:go_default_library",
+        "//go/components/jobs/common/utils:go_default_library",
+        "//proto/api:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_api//core/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/api/resource:go_default_library",
+        "@io_k8s_apiserver//pkg/quota/v1:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+    ],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["cluster_only_assignment_engine_test.go"],
+    embed = [":go_default_library"],
+    deps = [
+        "//go/components/jobs/cluster:go_default_library",
+        "//go/components/jobs/common/constants:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+    ],
+)

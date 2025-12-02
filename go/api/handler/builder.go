@@ -1,3 +1,4 @@
+//go:generate mamockgen Factory
 package handler
 
 import (

@@ -1,21 +1,22 @@
-"""
-Join definition for Amazon Books recommendation features
+"""Join definition for Amazon Books recommendation features.
+
 Combines all feature GroupBys into a comprehensive feature set for ML training
 """
 
 from ai.chronon.join import Join, JoinPart
+
 from examples.amazon_books_qwen.data.group_bys.amazon_books.book_features import (
     book_popularity,
     book_velocity,
-)
-from examples.amazon_books_qwen.data.group_bys.amazon_books.user_features import (
-    user_reading_patterns,
-    user_genre_preferences,
 )
 from examples.amazon_books_qwen.data.group_bys.amazon_books.content_features import (
     author_features,
     category_features,
     publisher_features,
+)
+from examples.amazon_books_qwen.data.group_bys.amazon_books.user_features import (
+    user_genre_preferences,
+    user_reading_patterns,
 )
 from examples.amazon_books_qwen.data.sources.amazon_books.books import books_source
 

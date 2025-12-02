@@ -79,7 +79,7 @@ jobs:
           echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
           echo "JavaScript Coverage: $COVERAGE%"
 
-      - name: Check coverage threshold (baseline: 78.74%)
+      - name: "Check coverage threshold (baseline: 78.74%)"
         run: |
           BASELINE=78
           COVERAGE=${{ env.COVERAGE }}

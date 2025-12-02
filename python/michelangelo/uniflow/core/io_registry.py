@@ -1,8 +1,7 @@
 import logging
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import Callable, Union, Optional, Any
-from typing import TypeVar, Generic
+from typing import Any, Callable, Generic, Optional, TypeVar, Union
 
 import fsspec
 
@@ -12,14 +11,12 @@ T = TypeVar("T")
 
 
 class IO(ABC, Generic[T]):
-    """
-    Base class for IO Plugin.
+    """Base class for IO Plugin.
     """
 
     @abstractmethod
     def write(self, url: str, value: T) -> Optional[Any]:
-        """
-        Serializes the given value and saves it to the specified URL.
+        """Serializes the given value and saves it to the specified URL.
         Implementation classes should support URLs pointing to remote object stores
         (e.g., gcs://, s3://, hdfs://) as well as local disk paths (e.g., file:// or Unix paths like /home/user/data).
 
@@ -44,8 +41,7 @@ class IO(ABC, Generic[T]):
 
     @abstractmethod
     def read(self, url: str, metadata: Optional[Any]) -> T:
-        """
-        Deserializes and loads an object from the specified URL.
+        """Deserializes and loads an object from the specified URL.
         Implementation classes should support URLs pointing to remote object stores
         (e.g., gcs://, s3://, hdfs://) as well as local disk paths (e.g., file:// or Unix paths like /home/user/data).
 

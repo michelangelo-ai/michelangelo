@@ -4,33 +4,33 @@ import (
 	"go.uber.org/fx"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 
+	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	rayv1 "github.com/ray-project/kuberay/ray-operator/pkg/client/clientset/versioned/typed/ray/v1"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
+	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
 )
 
-var (
-	// Module FX
-	Module = fx.Options(
-		fx.Provide(newConfig),
-		fx.Invoke(register),
-	)
+// Module FX
+var Module = fx.Options(
+	fx.Provide(newConfig),
+	fx.Invoke(register),
 )
 
 func register(
 	conf Config,
 	env env.Context,
 	mgr manager.Manager,
+	schedulerQueue scheduler.JobQueue,
+	federatedClient client.FederatedClient,
+	clusterCache cluster.RegisteredClustersCache,
+	handler api.Handler,
 ) error {
-	restConfig := mgr.GetConfig()
-	restConfig.QPS = conf.QPS
-	restConfig.Burst = conf.Burst
-	rayClient, err := rayv1.NewForConfig(restConfig)
-	if err != nil {
-		return err
-	}
 	return (&Reconciler{
-		Client:         mgr.GetClient(),
-		env:            env,
-		RayV1Interface: rayClient,
+		Handler:         handler,
+		env:             env,
+		schedulerQueue:  schedulerQueue,
+		federatedClient: federatedClient,
+		clusterCache:    clusterCache,
 	}).Register(mgr)
 }

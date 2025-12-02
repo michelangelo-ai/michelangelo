@@ -1,15 +1,21 @@
+"""Training task for Nomic BERT models.
+
+Implements distributed training using PyTorch Lightning with DeepSpeed strategy
+for efficient multi-GPU training.
+"""
+
 import logging
-import torch
 
-import michelangelo.uniflow.core as uniflow
 import pytorch_lightning as pl
-
-from examples.nomic_ai.model import HuggingFaceLightningModel
-from michelangelo.uniflow.plugins.ray import RayTask
+import torch
 from pytorch_lightning.strategies import DeepSpeedStrategy
 from ray.data import Dataset
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+
+import michelangelo.uniflow.core as uniflow
+from examples.nomic_ai.model import HuggingFaceLightningModel
+from michelangelo.uniflow.plugins.ray import RayTask
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +36,21 @@ def train(
     model_name="nomic-ai/nomic-bert-2048",
     # breakpoint=True,
 ) -> dict:
+    """Train Nomic BERT model using PyTorch Lightning.
+
+    Trains the model with DeepSpeed strategy if GPUs are available,
+    otherwise uses CPU training.
+
+    Args:
+        train_data: Ray Dataset containing training data.
+        validation_data: Ray Dataset containing validation data.
+        test_data: Ray Dataset containing test data.
+        model_name: HuggingFace model identifier. Defaults to
+            "nomic-ai/nomic-bert-2048".
+
+    Returns:
+        Dictionary with training status.
+    """
     log.info("Starting training...")
 
     # Training configuration

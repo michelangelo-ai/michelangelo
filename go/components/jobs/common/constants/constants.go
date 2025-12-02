@@ -1,6 +1,8 @@
 package constants
 
 import (
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	rayv1 "github.com/ray-project/kuberay/ray-operator/apis/ray/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -140,6 +142,12 @@ const (
 	ResourceNvidiaGPU corev1.ResourceName = "nvidia.com/gpu"
 )
 
+// Scheduler default resource SKU constants (OSS)
+const (
+	// DefaultCPU is the default resource SKU key for CPU-only jobs
+	DefaultCPU string = "defaultCPU"
+)
+
 // secret related constants
 const (
 	SecretNamePrefix string = "ma-job-secret-"
@@ -270,3 +278,56 @@ const (
 	// JobStatusFailed indicates that the job has failed.
 	JobStatusFailed SparkJobStatus = "Failed"
 )
+
+// Affinity labels
+const (
+	ClusterAffinityLabelKey string = "ma/affinity-cluster"
+)
+
+// Assignment reasons
+const (
+	AssignmentReasonClusterMatchedByAffinity string = "cluster_matched_by_affinity"
+	AssignmentReasonClusterDefaultSelected   string = "cluster_default_selected"
+	AssignmentReasonNoClustersFound          string = "no_clusters_found"
+)
+
+// RayCluster String to CRD State Mapping
+var RayClusterStrStateToCRDStateMapping = map[string]v2pb.RayClusterState{
+	"":                      v2pb.RAY_CLUSTER_STATE_UNKNOWN,
+	string(rayv1.Unhealthy): v2pb.RAY_CLUSTER_STATE_UNHEALTHY,
+	string(rayv1.Failed):    v2pb.RAY_CLUSTER_STATE_FAILED,
+	string(rayv1.Ready):     v2pb.RAY_CLUSTER_STATE_READY,
+}
+
+// RayJobStatus captures the lifecycle states reported for Ray jobs by the Ray operator.
+type RayJobStatus string
+
+const (
+	// RayJobStatusInvalid indicates that the status is not set or invalid.
+	RayJobStatusInvalid RayJobStatus = "INVALID"
+	// RayJobStatusPending indicates that the job has been submitted but not yet started.
+	RayJobStatusPending RayJobStatus = RayJobStatus(rayv1.JobStatusPending)
+	// RayJobStatusInitializing indicates that the job is initializing.
+	RayJobStatusInitializing RayJobStatus = "INITIALIZING"
+	// RayJobStatusRunning indicates that the job is currently executing.
+	RayJobStatusRunning RayJobStatus = RayJobStatus(rayv1.JobStatusRunning)
+	// RayJobStatusSucceeded indicates that the job has completed successfully.
+	RayJobStatusSucceeded RayJobStatus = RayJobStatus(rayv1.JobStatusSucceeded)
+	// RayJobStatusFailed indicates that the job has failed.
+	RayJobStatusFailed RayJobStatus = RayJobStatus(rayv1.JobStatusFailed)
+	// RayJobStatusStopped indicates that the job was intentionally stopped.
+	RayJobStatusStopped RayJobStatus = RayJobStatus(rayv1.JobStatusStopped)
+	// RayJobStatusUnknown indicates that the status could not be determined.
+	RayJobStatusUnknown RayJobStatus = "UNKNOWN"
+)
+
+var RayJobStatusSet = map[RayJobStatus]struct{}{
+	RayJobStatusInvalid:      {},
+	RayJobStatusPending:      {},
+	RayJobStatusInitializing: {},
+	RayJobStatusRunning:      {},
+	RayJobStatusSucceeded:    {},
+	RayJobStatusFailed:       {},
+	RayJobStatusStopped:      {},
+	RayJobStatusUnknown:      {},
+}

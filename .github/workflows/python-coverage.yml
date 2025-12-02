@@ -87,6 +87,7 @@ jobs:
           VERBOSE: true
           COVERAGE_PATH: python
           COVERAGE_DATA_BRANCH: main
+        continue-on-error: true
 
       # Upload coverage to Codecov for tracking over time
       - name: Upload coverage to Codecov
@@ -99,7 +100,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       # Check overall coverage threshold (baseline: 34.94%)
-      - name: Check overall coverage threshold (baseline: 34.94%)
+      - name: "Check overall coverage threshold (baseline: 34.94%)"
         run: |
           # Baseline coverage is 34.94% - we don't fail on this
           # The goal is to maintain or improve from baseline

@@ -1,8 +1,8 @@
-from functools import wraps
 import logging
+from functools import wraps
 from typing import Callable
 
-from michelangelo.uniflow.core import workflow, task, image_spec
+from michelangelo.uniflow.core import image_spec, task, workflow
 from michelangelo.uniflow.core.lib.time import sleep
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT
 from tests.uniflow.core.demo_platform.test_conf.task_b import TaskB

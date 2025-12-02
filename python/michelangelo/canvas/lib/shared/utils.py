@@ -19,7 +19,9 @@ def get_class(full_obj_name: str) -> type:
     """
     if inspect.isclass(full_obj_name):
         # if full_obj_name is already a class, return directly
-        logger.warning(f"reflection::get_class full_obj_name is a class, return as is. {full_obj_name}")
+        logger.warning(
+            f"reflection::get_class full_obj_name is a class, return as is. {full_obj_name}"
+        )
         return full_obj_name
 
     groups = full_obj_name.split(".")

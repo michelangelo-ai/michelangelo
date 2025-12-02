@@ -1,0 +1,15 @@
+apiVersion: michelangelo.api/v2
+kind: Pipeline
+metadata:
+  namespace: "ma-dev-test"
+  name: "gpt-oss-20b-finetune"
+  annotations:
+    michelangelo/uniflow-image: docker.io/library/examples:latest
+spec:
+  type: "PIPELINE_TYPE_TRAIN"
+  manifest:
+    filePath: examples.gpt_oss_20b_finetune.simple_workflow
+    uniflowTar: s3://default/uniflow/ma-dev-test_gpt-oss-20b-finetune_ec512913.tar.gz
+  commit:
+    gitRef: "main"
+    branch: "main"

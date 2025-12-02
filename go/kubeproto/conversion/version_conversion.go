@@ -46,6 +46,9 @@ func collectTargets(gen *protogen.Plugin, pkg string, extTypes *protoregistry.Ty
 			cur := queue[0]
 			queue = queue[1:]
 			for _, f := range cur.Fields {
+				if fieldIgnored(extTypes, f) {
+					continue
+				}
 				if f.Desc.Kind() == protoreflect.MessageKind {
 					t := f.Message
 					if f.Desc.IsMap() {
@@ -495,6 +498,8 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 			hubTypeIndet := protogen.GoIdent{GoImportPath: "sigs.k8s.io/controller-runtime/pkg/conversion", GoName: "Hub"}
 			g.P("func (src *", g.QualifiedGoIdent(spokeMsg.GoIdent), ") ConvertTo(dstRaw ", hubTypeIndet, ") error {")
 			g.P("dst := dstRaw.(*", g.QualifiedGoIdent(hubMsg.GoIdent), ")")
+			g.P("// Preserve ObjectMeta (name, namespace, labels, annotations, etc.)")
+			g.P("dst.ObjectMeta = src.ObjectMeta")
 			g.P("if err := Convert", spokeMsg.GoIdent.GoName, "SpecToHub(&src.Spec, &dst.Spec); err != nil {")
 			g.P("return err")
 			g.P("}")
@@ -507,6 +512,8 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 
 			g.P("func (dst *", g.QualifiedGoIdent(spokeMsg.GoIdent), ") ConvertFrom(srcRaw ", hubTypeIndet, ") error {")
 			g.P("src := srcRaw.(*", g.QualifiedGoIdent(hubMsg.GoIdent), ")")
+			g.P("// Preserve ObjectMeta (name, namespace, labels, annotations, etc.)")
+			g.P("dst.ObjectMeta = src.ObjectMeta")
 			g.P("if err := Convert", spokeMsg.GoIdent.GoName, "SpecFromHub(&src.Spec, &dst.Spec); err != nil {")
 			g.P("return err")
 			g.P("}")

@@ -1,19 +1,20 @@
-"""
-Content-based features for Amazon Books recommendation system
+"""Content-based features for Amazon Books recommendation system.
+
 Computes features based on book content and metadata for enhanced recommendations
 """
 
-from ai.chronon.api.ttypes import Source, EventSource
-from ai.chronon.query import Query, select
+from ai.chronon.api.ttypes import EventSource, Source
 from ai.chronon.group_by import (
-    GroupBy,
-    Aggregation,
-    Operation,
-    Window,
-    TimeUnit,
     Accuracy,
+    Aggregation,
+    GroupBy,
+    Operation,
+    TimeUnit,
+    Window,
 )
+from ai.chronon.query import Query, select
 from ai.chronon.utils import get_staging_query_output_table_name
+
 from examples.amazon_books_qwen.data.staging_queries.amazon_books.books_reviews import (
     base_table,
 )

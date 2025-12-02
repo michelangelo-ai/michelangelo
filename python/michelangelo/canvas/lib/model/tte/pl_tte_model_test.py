@@ -9,7 +9,10 @@ import torch
 from torch.utils.data import DataLoader
 import pytorch_lightning as pl
 
-from michelangelo.canvas.lib.model.tte.pl_tte_model import create_model, TwoTowerPLModule
+from michelangelo.canvas.lib.model.tte.pl_tte_model import (
+    create_model,
+    TwoTowerPLModule,
+)
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
