@@ -18,7 +18,7 @@ spec:
             - name: "AWS_ENDPOINT_URL"
               value: "http://minio:9091"
             - name: "BUCKET_NAMES"
-              value: "logs,default"
+              value: "logs,default,deploy-models"
             - name: "PUBLIC"
               value: "true"
           volumeMounts:
@@ -42,7 +42,7 @@ data:
     #!/usr/bin/env bash
 
     # Sets up essential S3 buckets for the Michelangelo sandbox environment
-    # Creates both 'logs' and 'default' buckets with optional public read access
+    # Creates both 'logs', 'default' and 'deploy-models' buckets with optional public read access
     # on the MinIO S3-compatible object store
     #
     # Requirements:

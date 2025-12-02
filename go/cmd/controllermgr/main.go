@@ -8,22 +8,23 @@ import (
 	kubescheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/uber-go/tally"
+
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
 	"github.com/michelangelo-ai/michelangelo/go/components/ray"
 	"github.com/michelangelo-ai/michelangelo/go/components/spark"
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-	"github.com/uber-go/tally"
 )
 
 const serverName = "ma-controllermgr"
@@ -79,15 +80,15 @@ func options() fx.Option {
 		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
+		spark.Module,
 		ray.Module,
 		triggerrun.Module,
 		cadenceclient.Module,
-		spark.Module,
-		deployment.Module,
 		pipeline.Module,
-		inferenceserver.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
+		deployment.Module,
+		inferenceserver.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
@@ -100,6 +101,5 @@ func options() fx.Option {
 // and starts the application lifecycle. The application's lifecycle will continue to run until
 // an interrupt signal is received, at which point it will cleanly shut down all managed components.
 func main() {
-
 	fx.New(options()).Run()
 }
