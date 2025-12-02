@@ -2,7 +2,7 @@
 # This replaces the Istio-specific Gateway with a generic Kubernetes Gateway API setup
 
 ---
-# 1. GatewayClass - tells Kubernetes that Istio will handle Gateway resources
+# 1. GatewayClass: tells Kubernetes that Istio will handle Gateway resources
 apiVersion: gateway.networking.k8s.io/v1
 kind: GatewayClass
 metadata:
@@ -12,14 +12,14 @@ spec:
   description: Istio service mesh based gateway controller
 
 ---
-# 2. Gateway - replaces the Istio Gateway with generic Kubernetes Gateway API
+# 2. Gateway: replaces the Istio Gateway with generic Kubernetes Gateway API
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:
   name: ma-gateway
   namespace: default
   annotations:
-    networking.istio.io/service-type: LoadBalancer
+    networking.istio.io/service-type: ClusterIP
 spec:
   gatewayClassName: istio
   listeners:

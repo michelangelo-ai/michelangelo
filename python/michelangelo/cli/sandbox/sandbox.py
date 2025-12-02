@@ -308,7 +308,7 @@ Be aware that CR_PAT environment variable is required while Michelangelo is NOT 
         _create_cluster_secrets(ns.jobs_cluster_name)
 
     _kube_wait()
-    _setup_istio(helm_existing_repos)
+
 
     print(
         "\n🚀 Sandbox created successfully. To access the services, please use the following links:\n"
@@ -496,6 +496,7 @@ def _create_demo_crs(_: argparse.Namespace):
             f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. Please run 'ma sandbox start' first."
         )
 
+    # create CRs used by all demo resources
     demo_dir = _dir / "demo"
     project_yaml_path = demo_dir / "project.yaml"
 
@@ -508,144 +509,26 @@ def _create_demo_crs(_: argparse.Namespace):
     except subprocess.CalledProcessError:
         pass
 
-    print("🚀 Setting up Michelangelo AI Deployment Demo...")
-
-    # 1. Create Gateway API setup first (required for HTTPRoute)
-    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
-    if gateway_setup_path.exists():
-        print("✅ Setting up Gateway API and Istio Gateway...")
-        _kube_create(gateway_setup_path)
-        # Normalize Gateway service type for local clusters so Programmed becomes True
-        _exec(
-            "kubectl",
-            "annotate",
-            "gateway",
-            "ma-gateway",
-            "-n",
-            "default",
-            "networking.istio.io/service-type=ClusterIP",
-            "--overwrite",
-        )
-        # Wait for Gateway Programmed
-        _exec(
-            "kubectl",
-            "wait",
-            "--for=condition=Programmed",
-            "gateway/ma-gateway",
-            "-n",
-            "default",
-            "--timeout=300s",
-        )
-        # Print status for visibility
-        _exec(
-            "kubectl",
-            "get",
-            "gateway",
-            "ma-gateway",
-            "-n",
-            "default",
-            "-o",
-            "wide",
-        )
-    else:
-        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}, exiting...")
-
-    # 2. Create secrets and configmaps for model storage
-    print("✅ Creating storage configuration...")
-    secrets_configmaps_path = _dir / "resources" / "secret.yaml"
-    if secrets_configmaps_path.exists():
-        _kube_create(secrets_configmaps_path)
-    else:
-        _err_exit(f"❌ Secrets and configmaps not found at {secrets_configmaps_path}, exiting...")
-
-    # 3. Create project first. Project CRD is essentially the "parent" of other CRDs. Under
-    # normal circumstances, users must create a project before creating other CRDs.
+    # create Project CR
+    # Note: The Project CRD is essentially the "parent" of other CRDs. Under
+    # normal circumstances, users must create a project CR before creating other CRs.
     if project_yaml_path.exists():
         _kube_create(project_yaml_path)
     else:
         _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
-    # 4. Create inference server
-    inference_server_path = _dir / "resources" / "inferenceserver.yaml"
-    if inference_server_path.exists():
-        print("✅ Creating Triton Inference Server...")
-        _kube_create(inference_server_path)
+    # create Inference Server demo CRs
+    _create_inference_demo_crs()
 
-        # 5. Wait for inference server to reach SERVING state (image pull may take time)
-        # Extract inference server name and namespace from YAML
-        with open(inference_server_path) as f:
-            inference_server_yaml = yaml.safe_load(f)
-        inference_server_name = inference_server_yaml["metadata"]["name"]
-        inference_server_namespace = inference_server_yaml["metadata"].get("namespace", "default")
-
-        print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
-        print("   (This may take 5-10 minutes for first-time Triton image pull)")
-        
-        try:
-            _exec(
-                "kubectl",
-                "wait",
-                "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
-                f"inferenceservers.michelangelo.api/{inference_server_name}",
-                "-n",
-                inference_server_namespace,
-                "--timeout=720s",
-                raise_error=True,
-            )
-            print("✅ Inference server is ready!")
-        except subprocess.CalledProcessError:
-            _err_exit(
-                f"Inference server '{inference_server_name}' failed to become ready after 720s.\n"
-                f"Check status with: kubectl get inferenceservers.michelangelo.api {inference_server_name} -n {inference_server_namespace} -o yaml\n"
-                f"Check logs with: kubectl logs -l app=inference-server -n {inference_server_namespace}"
-            )
-    else:
-        _err_exit(f"❌ Inference server not found at {inference_server_path}, exiting...")
-
-    # 5.5. Deploy model-sync DaemonSet
-    model_sync_path = _dir / "resources" / "model-sync.yaml"
-    if model_sync_path.exists():
-        print("✅ Deploying model-sync DaemonSet...")
-        _kube_create(model_sync_path)
-        
-        # Wait for DaemonSet to be ready
-        print("⏳ Waiting for model-sync DaemonSet to be ready...")
-        try:
-            _exec(
-                "kubectl",
-                "rollout",
-                "status",
-                "daemonset/model-sync",
-                "-n",
-                "default",
-                "--timeout=60s",
-                raise_error=True,
-            )
-            print("✅ Model-sync DaemonSet is ready!")
-        except subprocess.CalledProcessError:
-            print("⚠️  Warning: Model-sync DaemonSet may not be fully ready yet, but continuing...")
-    else:
-        print(f"⚠️  Warning: Model-sync DaemonSet not found at {model_sync_path}, skipping...")
-
-    # 6. Create deployment (this will trigger model deployment workflow)
-    deployment_path = _dir / "resources" / "deployment.yaml"
-    if deployment_path.exists():
-        print("  ✅ Creating model deployment...")
-        _kube_create(deployment_path)
-    else:
-        _err_exit(f"❌ Deployment CR not found at {deployment_path}, exiting...")
-
-    # 7. Create all other YAML files in the demo directory (training pipelines, etc.)
-    for yaml_file in demo_dir.glob("*.yaml"):
-        if yaml_file.name not in ["project.yaml", "gateway-api-setup.yaml", "inferenceserver.yaml", "deployment.yaml"]:
-            _kube_create(yaml_file)
+    # create Pipeline demo CRs
+    _create_pipeline_demo_crs()
 
     print(f"\n🎉 Demo deployment created successfully in namespace {namespace}!")
     print("\n📋 What was set up:")
     print("  • Gateway API with Istio integration")
     print("  • MinIO storage configuration")
     print("  • Triton Inference Server")
-    print("  • Model-sync DaemonSet (handles S3 sync and model loading)")
+    print("  • Model-sync Deployment (handles S3 sync and model loading)")
     print("  • BERT model deployment with HTTPRoute")
     print("  • Training pipelines and project resources")
 
@@ -655,7 +538,6 @@ def _create_demo_crs(_: argparse.Namespace):
 
     print(f"\n📡 Port-forward setup (required for localhost access):")
     print(f"  kubectl -n default port-forward svc/ma-gateway-istio 8080:80 8889:8889")
-    print(f"  (Using port 8889 to avoid conflicts with Cursor IDE)")
 
     print(f"  bazel run //go/cmd/worker")
     print(f"  bazel run //go/cmd/apiserver")
@@ -815,93 +697,6 @@ def _assert_command(command: str, err_message: str):
         _err_exit(err_message)
 
 
-def _setup_istio(helm_existing_repos):
-    """Install and configure Istio service mesh using Helm."""
-    print("Setting up Istio service mesh...")
-
-    # Add Istio Helm repository if not already present
-    if "istio" not in helm_existing_repos:
-        _exec(
-            "helm",
-            "repo",
-            "add",
-            "istio",
-            "https://istio-release.storage.googleapis.com/charts",
-        )
-        _exec("helm", "repo", "update")
-
-    # Install Istio base (CRDs and cluster roles)
-    _exec(
-        "helm",
-        "install",
-        "istio-base",
-        "istio/base",
-        "--namespace",
-        "istio-system",
-        "--create-namespace",
-        "--wait",
-    )
-
-    # Install Gateway API CRDs (required for HTTPRoute support)
-    print("Installing Gateway API CRDs...")
-    _exec(
-        "kubectl",
-        "apply",
-        "-f",
-        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
-    )
-    # Wait for Gateway API CRDs to be established
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=Established",
-        "crd/gateways.gateway.networking.k8s.io",
-        "crd/httproutes.gateway.networking.k8s.io",
-        "crd/gatewayclasses.gateway.networking.k8s.io",
-        "--timeout=60s",
-    )
-
-    # Install Istio control plane (istiod)
-    _exec(
-        "helm",
-        "install",
-        "istiod",
-        "istio/istiod",
-        "--namespace",
-        "istio-system",
-        "--wait",
-    )
-
-    # Install Istio ingress gateway
-    # Use NodePort instead of LoadBalancer to avoid k3d port exhaustion with svclb pods
-    _exec(
-        "helm",
-        "install",
-        "istio-ingressgateway",
-        "istio/gateway",
-        "--namespace",
-        "istio-ingress",
-        "--create-namespace",
-        "--set",
-        "service.type=NodePort",
-        "--wait",
-    )
-
-    # Wait for Istio components to be ready
-    _exec(
-        "kubectl",
-        "wait",
-        "--for=condition=available",
-        "deployment",
-        "--namespace=istio-system",
-        "--all",
-        "--timeout=600s",
-    )
-
-    # Create the Istio Gateway for Michelangelo
-    _kube_create(_dir / "resources" / "istio-gateway.yaml")
-
-    print("✅ Istio service mesh installed successfully")
 
 
 def _err_exit(err_message: str, code: int = 1):
@@ -1100,6 +895,214 @@ def _create_cluster_secrets(cluster_name: str):
 
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
+
+def _create_inference_demo_crs():
+    """Create an inference server for the sandbox cluster for demo purposes."""
+
+    print("🚀 Setting up Michelangelo AI Inference Demo...")
+
+    # Setup istio with Gateway API
+    # This allows usage of HTTPRoutes to route traffic to the inference server.
+    _setup_istio_with_gateway_api()
+
+    inference_demo_dir = _dir / "demo" / "inference"
+    # Create inference server CR
+    inference_server_path = inference_demo_dir / "inferenceserver.yaml"
+    if not inference_server_path.exists():
+        _err_exit(f"❌ Inference server CR not found at {inference_server_path}, exiting...")
+
+    print("✅ Creating Triton Inference Server...")
+    _kube_create(inference_server_path)
+
+    # Wait for inference server to reach SERVING state (image pull may take time)
+    with open(inference_server_path) as f:
+        inference_server_yaml = yaml.safe_load(f)
+    inference_server_name = inference_server_yaml["metadata"]["name"]
+    inference_server_namespace = inference_server_yaml["metadata"].get("namespace", "default")
+
+    print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
+    print("   (This may take 5-10 minutes for first-time Triton image pull)")
+
+    try:
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+            f"inferenceservers.michelangelo.api/{inference_server_name}",
+            "-n",
+            inference_server_namespace,
+            "--timeout=720s",
+            raise_error=True,
+        )
+        print("✅ Inference server is ready!")
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Inference server '{inference_server_name}' failed to become ready after 720s.\n"
+            f"Check status with: kubectl get inferenceservers.michelangelo.api {inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check logs with: kubectl logs -l app=inference-server -n {inference_server_namespace}"
+        )
+
+    # Deploy model-sync Deployment
+    model_sync_deployment_path = inference_demo_dir / "model-sync.yaml"
+    if not model_sync_deployment_path.exists():
+        _err_exit(f"❌ Model-sync Deployment not found at {model_sync_deployment_path}, exiting...")
+
+    print("✅ Deploying model-sync Deployment...")
+    _kube_create(model_sync_deployment_path)
+
+    # Wait for Deployment to be ready
+    print("⏳ Waiting for model-sync Deployment to be ready...")
+    try:
+        _exec(
+            "kubectl",
+            "rollout",
+            "status",
+            "deployment/model-sync",
+            "-n",
+            "default",
+            "--timeout=60s",
+            raise_error=True,
+        )
+        print("✅ Model-sync Deployment is ready!")
+    except subprocess.CalledProcessError:
+        print("⚠️  Warning: Model-sync Deployment may not be fully ready yet, but continuing...")
+
+    print("✅ Inference demo resources created successfully")
+
+
+def _setup_istio_with_gateway_api():
+    """Install Istio service mesh with Kubernetes Gateway API support.
+    
+    This function:
+    1. Installs Istio base CRDs and cluster roles
+    2. Installs Kubernetes Gateway API CRDs
+    3. Installs Istio control plane (istiod)
+    4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
+    """
+    print("Setting up Istio service mesh with Gateway API...")
+
+    # Fetch existing Helm repositories
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    # Add Istio Helm repository if not already present
+    if "istio" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "istio",
+            "https://istio-release.storage.googleapis.com/charts",
+        )
+        _exec("helm", "repo", "update")
+
+    # Install or upgrade Istio base (CRDs and cluster roles)
+    print("Installing/upgrading Istio base...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istio-base",
+        "istio/base",
+        "--namespace",
+        "istio-system",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Install Gateway API CRDs (required for HTTPRoute support)
+    # kubectl apply is idempotent by default
+    print("Installing Gateway API CRDs...")
+    _exec(
+        "kubectl",
+        "apply",
+        "-f",
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
+    )
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=Established",
+        "crd/gateways.gateway.networking.k8s.io",
+        "crd/httproutes.gateway.networking.k8s.io",
+        "crd/gatewayclasses.gateway.networking.k8s.io",
+        "--timeout=60s",
+    )
+
+    # Install or upgrade Istio control plane (istiod)
+    print("Installing/upgrading Istio control plane...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istiod",
+        "istio/istiod",
+        "--namespace",
+        "istio-system",
+        "--wait",
+    )
+
+    # Wait for Istio control plane to be ready
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--namespace=istio-system",
+        "--all",
+        "--timeout=600s",
+    )
+
+    print("✅ Istio control plane installed successfully")
+
+    # Create Gateway CR (triggers Istio to auto-provision gateway deployment/service)
+    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
+    if not gateway_setup_path.exists():
+        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
+
+    print("Creating Gateway API Gateway CR...")
+    _exec("kubectl", "apply", "-f", str(gateway_setup_path))
+
+    # Wait for Gateway to be programmed (Istio provisions the gateway)
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=Programmed",
+        "gateway/ma-gateway",
+        "-n",
+        "default",
+        "--timeout=300s",
+    )
+
+    # Print status for visibility
+    _exec(
+        "kubectl",
+        "get",
+        "gateway",
+        "ma-gateway",
+        "-n",
+        "default",
+        "-o",
+        "wide",
+    )
+
+    # automatically perform port-forwarding in the background
+    subprocess.Popen(
+        ["kubectl","-n", "default", "port-forward", "svc/ma-gateway-istio", "8080:80", "8889:8889"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    print("✅ Istio with Gateway API setup complete")
+
+def _create_pipeline_demo_crs():
+   """Create a pipeline demo for the sandbox cluster for demo purposes."""
+   pipeline_demo_dir = _dir /"pipeline" / "demo"
+   for yaml_file in pipeline_demo_dir.glob("*.yaml"):
+        _kube_create(yaml_file)
+   print("✅ Pipeline demo resources created successfully")
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -1,3 +1,27 @@
+# =============================================================================
+# MODEL SYNC DAEMONSET
+# =============================================================================
+# Syncs ML models from S3 to local storage and loads them into Triton Inference Server pods.
+#
+# To add model-syncing for a new inference server (e.g., inference-server-foo):
+#
+# 1. Add server name to inference-servers-list ConfigMap (bottom of this file):
+#      servers.txt: |
+#        inference-server-bert-cola
+#        inference-server-foo          <-- add here
+#
+# 2. Add a volumeMount under spec.template.spec.containers[0].volumeMounts:
+#      - name: inference-server-foo-config
+#        mountPath: /config/inference-server-foo
+#        readOnly: true
+#
+# 3. Add a volume under spec.template.spec.volumes:
+#      - name: inference-server-foo-config
+#        configMap:
+#          name: inference-server-foo-model-config
+#          optional: true
+# =============================================================================
+
 apiVersion: v1
 kind: ConfigMap
 metadata:
