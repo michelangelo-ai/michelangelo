@@ -82,7 +82,8 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 }
 
 // GetJobStatus retrieves the status of the Spark job
-func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, error) {
+// Return values represent the state, url, error message, and error of job
+func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	result := &sparkv1beta2.SparkApplication{}
 	options := metav1.GetOptions{}
 	err := r.K8sClient.Get().
@@ -93,17 +94,18 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 		Do(ctx).
 		Into(result)
 	if err != nil {
-		return nil, "", err
+		return nil, "", "", err
 	}
 
-	appID := result.Status.AppState.State
+	state := result.Status.AppState.State
 	url := result.Status.DriverInfo.WebUIIngressAddress
+	errorMessage := result.Status.AppState.ErrorMessage
 
 	job.Status.ApplicationId = string(result.UID)
 	job.Status.JobUrl = url
 
-	appIDStr := string(appID)
-	return &appIDStr, url, nil
+	stateStr := string(state)
+	return &stateStr, url, errorMessage, nil
 }
 
 // toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec

@@ -40,8 +40,8 @@ func (m *mockSparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v
 	return m.createJobErr
 }
 
-func (m *mockSparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, error) {
-	return m.status, m.message, m.getStatusErr
+func (m *mockSparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
+	return m.status, m.message, "", m.getStatusErr
 }
 
 func TestReconciler_Reconcile(t *testing.T) {

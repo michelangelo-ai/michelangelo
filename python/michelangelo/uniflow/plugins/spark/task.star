@@ -319,72 +319,72 @@ def report_spark_job_terminated(job, task_name, task_path, start_time_formatted_
     if type(job) != "dict":
         return TASK_STATE_FAILED
 
-        conditions = job.get("status", {}).get("statusConditions", [])
-        driver_log_url = job.get("status", {}).get("jobUrl", "")
-        generated_log_url = get_spark_log_url(spark_job_name)
-        log_url = generated_log_url if generated_log_url else driver_log_url
-        end_time_seconds = time.time()
-        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-        killed_condition = None
-        succeeded_condition = None
+    conditions = job.get("status", {}).get("statusConditions", [])
+    driver_log_url = job.get("status", {}).get("jobUrl", "")
+    generated_log_url = get_spark_log_url(spark_job_name)
+    log_url = generated_log_url if generated_log_url else driver_log_url
+    end_time_seconds = time.time()
+    end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+    killed_condition = None
+    succeeded_condition = None
 
-        # we find the succeeded condition and the killed condition
-        for condition in conditions:
-            if condition == None:
-                continue
-            if condition["type"] == spark.succeeded_condition_type:
-                succeeded_condition = condition
-            if condition["type"] == spark.killed_condition_type:
-                killed_condition = condition
+    # we find the succeeded condition and the killed condition
+    for condition in conditions:
+        if condition == None:
+            continue
+        if condition["type"] == spark.succeeded_condition_type:
+            succeeded_condition = condition
+        if condition["type"] == spark.killed_condition_type:
+            killed_condition = condition
 
-        if killed_condition != None:
-            killed_status = killed_condition.get("status", "CONDITION_STATUS_UNKNOWN")
-            if killed_status == "CONDITION_STATUS_TRUE":
-                report_progress(
-                    task_name = task_name,
-                    task_path = task_path,
-                    task_state = TASK_STATE_KILLED,
-                    start_time = start_time_formatted_str,
-                    end_time = end_time_formated_str,
-                    task_message = "{}: {}".format(killed_condition.get("message", "Spark job killed"), killed_condition.get("reason", "unknown reason")),
-                    task_log = log_url,
-                    retry_attempt_id = retry_attempt_id,
-                )
-                return TASK_STATE_KILLED
+    if killed_condition != None:
+        killed_status = killed_condition.get("status", "CONDITION_STATUS_UNKNOWN")
+        if killed_status == "CONDITION_STATUS_TRUE":
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_KILLED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "{}: {}".format(killed_condition.get("message", "Spark job killed"), killed_condition.get("reason", "unknown reason")),
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+            )
+            return TASK_STATE_KILLED
 
-        if succeeded_condition != None:
-            succeeded_status = succeeded_condition.get("status", "CONDITION_STATUS_UNKNOWN")
-            if succeeded_status == "CONDITION_STATUS_TRUE":
-                report_progress(
-                    task_name = task_name,
-                    task_path = task_path,
-                    task_state = TASK_STATE_SUCCEEDED,
-                    start_time = start_time_formatted_str,
-                    end_time = end_time_formated_str,
-                    task_message = "Spark job succeeded",
-                    task_log = log_url,
-                    retry_attempt_id = retry_attempt_id,
-                )
-                return TASK_STATE_SUCCEEDED
+    if succeeded_condition != None:
+        succeeded_status = succeeded_condition.get("status", "CONDITION_STATUS_UNKNOWN")
+        if succeeded_status == "CONDITION_STATUS_TRUE":
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_SUCCEEDED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "Spark job succeeded",
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+            )
+            return TASK_STATE_SUCCEEDED
 
-            if succeeded_status == "CONDITION_STATUS_FALSE":
-                message = succeeded_condition.get("message", "Spark job failed")
-                reason = succeeded_condition.get("reason", "unknown reason")
-                report_progress(
-                    task_name = task_name,
-                    task_path = task_path,
-                    task_state = TASK_STATE_FAILED,
-                    start_time = start_time_formatted_str,
-                    end_time = end_time_formated_str,
-                    task_message = "{}:{}".format(reason, message),
-                    task_log = log_url,
-                    retry_attempt_id = retry_attempt_id,
-                )
-                if unexpected_exit == True:
-                    fail("spark job failed: {} {} driver url: {}".format(reason, message, driver_log_url))
-                return TASK_STATE_FAILED
+        if succeeded_status == "CONDITION_STATUS_FALSE":
+            message = succeeded_condition.get("message", "Spark job failed")
+            reason = succeeded_condition.get("reason", "unknown reason")
+            report_progress(
+                task_name = task_name,
+                task_path = task_path,
+                task_state = TASK_STATE_FAILED,
+                start_time = start_time_formatted_str,
+                end_time = end_time_formated_str,
+                task_message = "{}:{}".format(reason, message),
+                task_log = log_url,
+                retry_attempt_id = retry_attempt_id,
+            )
+            if unexpected_exit == True:
+                fail("spark job failed: {} {} driver url: {}".format(reason, message, driver_log_url))
+            return TASK_STATE_FAILED
 
-        return ""
+    return ""
 
 # TODO add env label for spark job
 # Get the match labels for the spark job.

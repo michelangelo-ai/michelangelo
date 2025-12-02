@@ -135,7 +135,18 @@ func (r *activities) SensorSparkJob(ctx context.Context, request v2pb.GetSparkJo
 }
 
 func hasSparkJobTerminalCondition(state v2pb.SparkJobStatus) bool {
-	return state.ApplicationId == "FAILED" || state.ApplicationId == "COMPLETED"
+	// Check if the job has a terminal condition (Succeeded or Killed)
+	succeeded := GetCondition(pluginutils.SucceededCondition, state.GetStatusConditions())
+	if succeeded != nil && succeeded.Status != apipb.CONDITION_STATUS_UNKNOWN {
+		return true
+	}
+
+	killed := GetCondition(pluginutils.KilledCondition, state.GetStatusConditions())
+	if killed != nil && killed.Status == apipb.CONDITION_STATUS_TRUE {
+		return true
+	}
+
+	return false
 }
 
 // TerminateSparkJob kills a spark job

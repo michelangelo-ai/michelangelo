@@ -13,6 +13,8 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
+	constants "github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
+	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -40,7 +42,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	}
 	original := sparkJob.DeepCopy()
 
-	status, message, err := r.getJobStatus(ctx, logger, &sparkJob)
+	stateStr, url, errorMessage, err := r.getJobStatus(ctx, logger, &sparkJob)
 	if err != nil {
 		if utils.IsNotFoundError(err) {
 			logger.Info("SparkApplication not found, creating new one")
@@ -62,10 +64,37 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			res.RequeueAfter = requeueAfter
 			return res, err
 		}
-	} else if status != nil {
-		logger.Info("Found SparkApplication", "ID", sparkJob.Status.ApplicationId, "status", *status)
-		sparkJob.Status.JobUrl = message
-		sparkJob.Status.ApplicationId = *status
+	} else if stateStr != nil {
+		logger.Info("Found SparkApplication", "ID", sparkJob.Status.ApplicationId, "status", *stateStr, "errorMessage", errorMessage)
+		sparkJob.Status.JobUrl = url
+		// go through all the status constants and set to running, succeeded, killed
+		/*
+			NewState              ApplicationStateType = ""
+			SubmittedState        ApplicationStateType = "SUBMITTED"
+			RunningState          ApplicationStateType = "RUNNING"
+			CompletedState        ApplicationStateType = "COMPLETED"
+			FailedState           ApplicationStateType = "FAILED"
+			FailedSubmissionState ApplicationStateType = "SUBMISSION_FAILED"
+			PendingRerunState     ApplicationStateType = "PENDING_RERUN"
+			InvalidatingState     ApplicationStateType = "INVALIDATING"
+			SucceedingState       ApplicationStateType = "SUCCEEDING"
+			FailingState          ApplicationStateType = "FAILING"
+			UnknownState          ApplicationStateType = "UNKNOWN"
+		*/
+		switch *stateStr {
+		case "RUNNING":
+			setCondition(&sparkJob.Status.StatusConditions, constants.SparkAppRunningCondition, apipb.CONDITION_STATUS_TRUE, "Spark application is running", "Running")
+		case "COMPLETED":
+			setCondition(&sparkJob.Status.StatusConditions, constants.SucceededCondition, apipb.CONDITION_STATUS_TRUE, "Spark job succeeded", "Succeeded")
+		case "FAILED":
+			// Use the error message from SparkApplication if available, otherwise use a default
+			failureMessage := "Spark job failed"
+			if errorMessage != "" {
+				failureMessage = errorMessage
+			}
+			setCondition(&sparkJob.Status.StatusConditions, constants.SucceededCondition, apipb.CONDITION_STATUS_FALSE, failureMessage, "Failed")
+		}
+
 		res.RequeueAfter = requeueAfter
 	} else {
 		logger.Info("No status for SparkApplication, retrying")
@@ -95,12 +124,41 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// setCondition sets or updates a condition in the status conditions slice.
+// If a condition with the same type already exists, it updates it only if the status changed.
+// Returns true if the condition was added or updated, false if it was already set to the same status.
+func setCondition(conditions *[]*apipb.Condition, conditionType string, status apipb.ConditionStatus, message string, reason string) bool {
+	// Check if condition already exists
+	for _, cond := range *conditions {
+		if cond.Type == conditionType {
+			if cond.Status != status || cond.Message != message || cond.Reason != reason {
+				// Update existing condition
+				cond.Status = status
+				cond.Message = message
+				cond.Reason = reason
+				return true
+			}
+			// Condition already exists with same status, message, and reason - no update needed
+			return false
+		}
+	}
+
+	// Condition doesn't exist, add it
+	*conditions = append(*conditions, &apipb.Condition{
+		Type:    conditionType,
+		Status:  status,
+		Message: message,
+		Reason:  reason,
+	})
+	return true
+}
+
 // createJob creates a new Spark job
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	return r.SparkClient.CreateJob(ctx, log, job)
 }
 
 // getJobStatus retrieves the status of the Spark job
-func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, error) {
+func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	return r.SparkClient.GetJobStatus(ctx, logger, job)
 }
