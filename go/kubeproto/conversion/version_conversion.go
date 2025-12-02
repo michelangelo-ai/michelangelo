@@ -46,6 +46,9 @@ func collectTargets(gen *protogen.Plugin, pkg string, extTypes *protoregistry.Ty
 			cur := queue[0]
 			queue = queue[1:]
 			for _, f := range cur.Fields {
+				if fieldIgnored(extTypes, f) {
+					continue
+				}
 				if f.Desc.Kind() == protoreflect.MessageKind {
 					t := f.Message
 					if f.Desc.IsMap() {
