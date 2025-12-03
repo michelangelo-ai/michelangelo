@@ -194,7 +194,6 @@ metadata:
     app: model-sync
 spec:
   # One replica per inference server
-  # TODO: Make this dynamic based on number of inference servers
   replicas: 1
   selector:
     matchLabels:
