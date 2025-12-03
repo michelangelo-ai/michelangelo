@@ -1,3 +1,26 @@
+"""Container image specifications for Uniflow tasks.
+
+This module provides the ImageSpec dataclass for defining custom container images
+and build recipes for task execution environments. ImageSpec allows tasks to specify
+their runtime environment independently from the default workflow container.
+
+Example:
+    Specifying a custom container image::
+
+        from michelangelo.uniflow.core.image_spec import ImageSpec
+        from michelangelo.uniflow.core.decorator import task
+
+        @task(
+            config=RayTask(head_cpu=4),
+            image_spec=ImageSpec(
+                container_image="docker.io/myorg/ml-tools:v1.2.3",
+                recipe="bazel://path/to:build_target"
+            )
+        )
+        def train_model(data):
+            # Runs in custom container with specific ML libraries
+            pass
+"""
 from dataclasses import dataclass
 from typing import Optional
 

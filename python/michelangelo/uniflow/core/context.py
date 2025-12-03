@@ -1,3 +1,41 @@
+r"""Workflow execution context for local and remote runs.
+
+This module provides the Context class and create_context() function for managing
+workflow execution environments. It handles both local execution (for development
+and testing) and remote execution (for production deployments on Cadence/Temporal).
+
+The context system provides:
+
+- Unified interface for local and remote workflow execution
+- Environment variable management
+- Command-line argument parsing
+- Workflow validation and packaging
+- Integration with Cadence and Temporal workflow engines
+
+Example:
+    Local workflow execution::
+
+        from michelangelo.uniflow.core.context import create_context
+        from michelangelo.uniflow.core.decorator import workflow
+
+        @workflow()
+        def my_workflow():
+            return "Hello, World!"
+
+        if __name__ == "__main__":
+            ctx = create_context()
+            ctx.run(my_workflow)
+
+    Remote workflow execution::
+
+        # Command line:
+        # python my_workflow.py remote-run \\
+        #     --storage-url s3://bucket/storage \\
+        #     --image my-image:latest
+
+        ctx = create_context()  # Automatically detects remote-run mode
+        ctx.run(my_workflow)
+"""
 import argparse
 import logging
 import os
@@ -33,6 +71,11 @@ class Context:
     environ: dict = field(default_factory=dict)
 
     def is_local_run(self):
+        """Check if the context is configured for local execution.
+
+        Returns:
+            True if running in local mode, False for remote execution.
+        """
         return self._target == "local-run"
 
     def run(self, fn, *args, **kwargs):
@@ -75,7 +118,31 @@ class Context:
 
 
 def create_context() -> Context:
-    """Creates and configures the execution context based on command-line arguments.
+    """Create and configure the execution context based on command-line arguments.
+
+    Parses sys.argv to determine execution mode (local-run or remote-run) and
+    constructs an appropriate Context instance. If no mode is specified, defaults
+    to local-run.
+
+    Returns:
+        A Context instance configured for the requested execution mode.
+
+    Raises:
+        AssertionError: If an unsupported execution target is specified.
+
+    Example:
+        Creating context for local execution::
+
+            # python my_workflow.py
+            # or: python my_workflow.py local-run
+            ctx = create_context()
+            assert ctx.is_local_run()
+
+        Creating context for remote execution::
+
+            # python my_workflow.py remote-run --storage-url s3://... --image ...
+            ctx = create_context()
+            assert not ctx.is_local_run()
     """
     logging.basicConfig(level=logging.INFO, format=LOGGING_FORMAT, force=True)
 
@@ -95,8 +162,19 @@ def create_context() -> Context:
 
 
 def _local_run(fn: Callable, *args, **kw):
-    """Execute a given workflow function in Local Mode. Sets up the necessary environment for running workflows locally
-    ensuring local storage and execution.
+    """Execute a workflow function in Local Mode.
+
+    Sets up the necessary environment for running workflows locally,
+    ensuring local storage and execution. Validates the workflow code
+    before execution.
+
+    Args:
+        fn: The workflow function to execute.
+        *args: Positional arguments to pass to the workflow function.
+        **kw: Keyword arguments to pass to the workflow function.
+
+    Raises:
+        RuntimeError: If the workflow function fails validation.
     """
     # Validate the function's code.
     try:
@@ -180,7 +258,10 @@ def _remote_run(
     workflow: str = cadence,
     file_sync: bool = False,
 ):
-    """Execute a given workflow function in Remote Mode.
+    """Execute a workflow function in Remote Mode.
+
+    Packages and submits the workflow for remote execution on Cadence or Temporal
+    workflow engines.
 
     Args:
         fn: The workflow function to be executed remotely.
@@ -189,9 +270,12 @@ def _remote_run(
         kwargs: Keyword arguments for the workflow function.
         execution_timeout_seconds: Execution timeout in seconds.
         cron: Cron expression for scheduling periodic workflow runs.
-        storage_url: Persistent storage URL for saving and loading workflow checkpoints.
+        storage_url: Persistent storage URL for saving and loading workflow
+            checkpoints.
         image: Container image to use for running workflow tasks.
         yes: Automatically answer yes to confirmation prompts.
+        workflow: Workflow engine to use ("cadence" or "temporal"). Defaults to
+            "cadence".
         file_sync: Sync local code changes to the remote run.
     """
     assert storage_url
