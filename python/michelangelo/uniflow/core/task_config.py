@@ -304,8 +304,10 @@ class TaskConfig(ABC):
             v = getattr(self, f.name)
             if v is not None:
                 # Exclude None-valued properties from the keyword list.
-                # Perhaps we should revise keyword exclusion logic. Instead of excluding None, we should exclude special "Undefined" values.
-                # TODO: andrii: Consider using special "Undefined" marker object for keyword exclusion.
+                # Perhaps we should revise keyword exclusion logic. Instead of
+                # excluding None, we should exclude special "Undefined" values.
+                # TODO: andrii: Consider using special "Undefined" marker object
+                # for keyword exclusion.
                 k = ast.keyword(f.name, ast.Constant(v))
                 res.append(k)
         return res

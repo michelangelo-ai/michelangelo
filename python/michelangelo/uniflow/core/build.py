@@ -1,9 +1,9 @@
 """Workflow transpilation and packaging for Uniflow.
 
-This module provides functionality to transpile Python workflow definitions into Starlark
-code and package them into tarball archives. The transpilation process converts Python
-task and workflow functions into Starlark equivalents, resolving dependencies and
-generating a self-contained executable package.
+This module provides functionality to transpile Python workflow definitions into
+Starlark code and package them into tarball archives. The transpilation process
+converts Python task and workflow functions into Starlark equivalents, resolving
+dependencies and generating a self-contained executable package.
 
 The build system supports:
 - Transpiling @task and @workflow decorated functions
@@ -35,7 +35,6 @@ import inspect
 import logging
 import sys
 import tarfile
-from abc import ABC
 from collections.abc import Iterator
 from dataclasses import dataclass
 from io import BytesIO
@@ -61,7 +60,7 @@ log = logging.getLogger(__name__)
 
 
 def main(args=None):
-    """Command-line interface for building workflow packages.
+    r"""Command-line interface for building workflow packages.
 
     Parses command-line arguments, builds a workflow package from the specified
     function, and writes the resulting tarball to the output destination.
@@ -285,7 +284,7 @@ class Package:
         return bb.getvalue()
 
 
-class TranspilerCallback(ABC):
+class TranspilerCallback:
     """Callback interface for observing the transpilation process.
 
     Users can extend this class and override its methods to act on transpilation
@@ -493,7 +492,7 @@ def _add_star_file(path: Path, files: dict[Path, ast.Module]):
 
 
 def _iter_top_level_calls(module: ast.Module) -> Iterator[ast.Call]:
-    """Find and yield all top-level function calls in an AST module.
+    r"""Find and yield all top-level function calls in an AST module.
 
     Iterates through module-level statements and yields Call nodes,
     primarily used to find `load` statements in Starlark source code.
@@ -570,7 +569,7 @@ class FunctionTransformer(ast.NodeTransformer):
         self._transpiler_callback = transpiler_callback
         self.deps = Dependencies()
 
-    def visit_AnnAssign(self, node):
+    def visit_AnnAssign(self, node):  # noqa: N802
         """Transform annotated assignments to simple assignments.
 
         Converts type-annotated assignments to plain assignments since
@@ -593,7 +592,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         return ast.Assign(value=node.value, targets=[node.target])
 
-    def visit_Is(self, _node):
+    def visit_Is(self, _node):  # noqa: N802
         """Reject 'is' operator.
 
         Raises:
@@ -601,7 +600,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         raise NameError("[is] is not supported, use == instead")
 
-    def visit_IsNot(self, _node):
+    def visit_IsNot(self, _node):  # noqa: N802
         """Reject 'is not' operator.
 
         Raises:
@@ -609,7 +608,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         raise NameError("[is not] is not supported, use != instead")
 
-    def visit_Import(self, _node):
+    def visit_Import(self, _node):  # noqa: N802
         """Reject import statements.
 
         Raises:
@@ -617,7 +616,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         raise NameError("[import] is not supported")
 
-    def visit_ImportFrom(self, _node):
+    def visit_ImportFrom(self, _node):  # noqa: N802
         """Reject from-import statements.
 
         Raises:
@@ -625,7 +624,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         raise NameError("[import] is not supported")
 
-    def visit_Try(self, _node):
+    def visit_Try(self, _node):  # noqa: N802
         """Reject try-except blocks.
 
         Raises:
@@ -633,7 +632,7 @@ class FunctionTransformer(ast.NodeTransformer):
         """
         raise NameError("[try] is not supported")
 
-    def visit_Name(self, node: ast.Name):
+    def visit_Name(self, node: ast.Name):  # noqa: N802
         """Transform name references to Starlark-compatible forms.
 
         Handles variable and function references, converting task references
@@ -662,12 +661,13 @@ class FunctionTransformer(ast.NodeTransformer):
         if node.id not in self._code.co_names:
             log_attributes(log, logging.ERROR, self._code)
             raise ValueError(
-                f"'{node.id}' is not found in the function's globals: {self._code.co_names}",
+                f"'{node.id}' is not found in the function's globals: "
+                f"{self._code.co_names}",
             )
 
         if not hasattr(self._module, node.id):
             # Global var is not defined by the module.
-            # Assumption: Global var is Starlark-compatible built-in functions. Keep it as-is.
+            # Assumption: Global var is Starlark-compatible built-in. Keep as-is.
             assert node.id in (
                 "abs",
                 "any",

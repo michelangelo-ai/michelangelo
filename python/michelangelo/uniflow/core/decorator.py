@@ -169,7 +169,7 @@ class TaskFunction(Generic[P, R]):
         """
         fn_path = dot_path(self._fn)
         if task_context.config is not None:
-            # Execute nested task call as a regular function without additional processing.
+            # Execute nested task call as a regular function without processing.
             log.info("run nested task: %s", fn_path)
             return self._fn(*args, **kwargs)
 
@@ -235,8 +235,9 @@ class TaskFunction(Generic[P, R]):
             alias: Optional alternative task name. If not provided, uses original alias.
             config: Optional task configuration. If provided, this configuration will be
                 merged with the original configuration. For example, if the original
-                config specifies head_cpu=4 and head_memory="16Gi", and the new config
-                specifies head_cpu=8, the result will have head_cpu=8 and head_memory="16Gi".
+                config specifies head_cpu=4 and head_memory="16Gi", and the new
+                config specifies head_cpu=8, the result will have head_cpu=8 and
+                head_memory="16Gi".
             retry_attempts: Optional retry count. If not provided, uses original value.
 
         Returns:
@@ -287,7 +288,8 @@ class TaskFunction(Generic[P, R]):
                     head_memory="8Gi"
                 )
         """
-        # Register the task's Starlark Binding (Task Factory Function) in the Dependencies collection.
+        # Register the task's Starlark Binding (Task Factory Function) in the
+        # Dependencies collection.
         binding = self._config.get_binding()
         dependencies.add_star_attribute(
             binding.export,
@@ -295,7 +297,8 @@ class TaskFunction(Generic[P, R]):
             binding.function,
         )
 
-        # Construct AST keywords that represent configuration properties for the Task Factory Function
+        # Construct AST keywords that represent configuration properties for
+        # the Task Factory Function
         keywords = []
         if self._alias:
             k = ast.keyword("alias", ast.Constant(self._alias))
@@ -322,7 +325,8 @@ class TaskFunction(Generic[P, R]):
                     ast.keyword("recipe", ast.Constant(self._image_spec.recipe))
                 )
 
-        # Construct and return AST Call node that calls the Task Factory Function with the keywords.
+        # Construct and return AST Call node that calls the Task Factory
+        # Function with the keywords.
         origin_fn = inspect.unwrap(self._fn)
         return ast.Call(
             func=ast.Name(id=binding.export, ctx=ast.Load()),

@@ -474,7 +474,8 @@ class CodecRegistry:
         codec_id = codec.id()
         assert codec_id
         assert codec_id not in self._registry, (
-            f"codec registry conflict: id={codec_id}, codec1={codec}, codec2={self._registry[codec_id]}"
+            f"codec registry conflict: id={codec_id}, codec1={codec}, "
+            f"codec2={self._registry[codec_id]}"
         )
         log.info("register codec: %r", codec)
         self._registry[codec_id] = codec
