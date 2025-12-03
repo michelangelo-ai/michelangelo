@@ -13,7 +13,7 @@ Simple demo for fine-tuning GPT models using Uniflow, PyTorch, and LoRA. Demonst
 ## How to Run
 
 ```bash
-cd /Users/weric/works/uber/michelangelo_ai/michelangelo/python
+cd michelangelo_ai/michelangelo/python
 source .venv/bin/activate
 PYTHONPATH=. poetry run python ./examples/gpt_oss_20b_finetune/simple_workflow.py
 ```
