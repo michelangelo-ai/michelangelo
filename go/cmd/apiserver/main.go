@@ -52,6 +52,7 @@ func opts() fx.Option {
 		v2pb.ProjectSvcModule,
 		v2pb.RayClusterSvcModule,
 		v2pb.RayJobSvcModule,
+		v2pb.RevisionSvcModule,
 		v2pb.SparkJobSvcModule,
 		v2pb.TriggerRunSvcModule,
 		crd.Module,

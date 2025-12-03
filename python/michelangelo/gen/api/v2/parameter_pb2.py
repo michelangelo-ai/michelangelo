@@ -22,9 +22,10 @@ _runtime_version.ValidateProtobufRuntimeVersion(
 _sym_db = _symbol_database.Default()
 
 
+from google.protobuf import struct_pb2 as google_dot_protobuf_dot_struct__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#michelangelo/api/v2/parameter.proto\x12\x13michelangelo.api.v2\"\xc7\x01\n\x1bPipelineExecutionParameters\x12g\n\rparameter_map\x18\x01 \x03(\x0b\x32\x42.michelangelo.api.v2.PipelineExecutionParameters.ParameterMapEntryR\x0cparameterMap\x1a?\n\x11ParameterMapEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n#michelangelo/api/v2/parameter.proto\x12\x13michelangelo.api.v2\x1a\x1cgoogle/protobuf/struct.proto\"\xbc\x05\n\x1bPipelineExecutionParameters\x12g\n\rparameter_map\x18\x01 \x03(\x0b\x32\x42.michelangelo.api.v2.PipelineExecutionParameters.ParameterMapEntryR\x0cparameterMap\x12@\n\x0fworkflow_config\x18\x02 \x01(\x0b\x32\x17.google.protobuf.StructR\x0eworkflowConfig\x12\x64\n\x0ctask_configs\x18\x03 \x03(\x0b\x32\x41.michelangelo.api.v2.PipelineExecutionParameters.TaskConfigsEntryR\x0btaskConfigs\x12W\n\x07\x65nviron\x18\x04 \x03(\x0b\x32=.michelangelo.api.v2.PipelineExecutionParameters.EnvironEntryR\x07\x65nviron\x12+\n\x04\x61rgs\x18\x05 \x03(\x0b\x32\x17.google.protobuf.StructR\x04\x61rgs\x12\x30\n\x07kw_args\x18\x06 \x01(\x0b\x32\x17.google.protobuf.StructR\x06kwArgs\x1a?\n\x11ParameterMapEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x1aW\n\x10TaskConfigsEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12-\n\x05value\x18\x02 \x01(\x0b\x32\x17.google.protobuf.StructR\x05value:\x02\x38\x01\x1a:\n\x0c\x45nvironEntry\x12\x10\n\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n\x05value\x18\x02 \x01(\tR\x05value:\x02\x38\x01\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,8 +35,16 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'Z\002v2'
   _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._loaded_options = None
   _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._serialized_options = b'8\001'
-  _globals['_PIPELINEEXECUTIONPARAMETERS']._serialized_start=61
-  _globals['_PIPELINEEXECUTIONPARAMETERS']._serialized_end=260
-  _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._serialized_start=197
-  _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._serialized_end=260
+  _globals['_PIPELINEEXECUTIONPARAMETERS_TASKCONFIGSENTRY']._loaded_options = None
+  _globals['_PIPELINEEXECUTIONPARAMETERS_TASKCONFIGSENTRY']._serialized_options = b'8\001'
+  _globals['_PIPELINEEXECUTIONPARAMETERS_ENVIRONENTRY']._loaded_options = None
+  _globals['_PIPELINEEXECUTIONPARAMETERS_ENVIRONENTRY']._serialized_options = b'8\001'
+  _globals['_PIPELINEEXECUTIONPARAMETERS']._serialized_start=91
+  _globals['_PIPELINEEXECUTIONPARAMETERS']._serialized_end=791
+  _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._serialized_start=579
+  _globals['_PIPELINEEXECUTIONPARAMETERS_PARAMETERMAPENTRY']._serialized_end=642
+  _globals['_PIPELINEEXECUTIONPARAMETERS_TASKCONFIGSENTRY']._serialized_start=644
+  _globals['_PIPELINEEXECUTIONPARAMETERS_TASKCONFIGSENTRY']._serialized_end=731
+  _globals['_PIPELINEEXECUTIONPARAMETERS_ENVIRONENTRY']._serialized_start=733
+  _globals['_PIPELINEEXECUTIONPARAMETERS_ENVIRONENTRY']._serialized_end=791
 # @@protoc_insertion_point(module_scope)

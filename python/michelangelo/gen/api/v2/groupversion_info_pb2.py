@@ -25,12 +25,12 @@ _sym_db = _symbol_database.Default()
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n+michelangelo/api/v2/groupversion_info.proto\x12\x13michelangelo.api.v2\x1a\x1emichelangelo/api/options.protoB\x1eZ\x02v2\x92\xe6\x02\x16\n\x10michelangelo.api\x12\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n+michelangelo/api/v2/groupversion_info.proto\x12\x13michelangelo.api.v2\x1a\x1emichelangelo/api/options.protoB\"Z\x02v2\x92\xe6\x02\x1a\n\x10michelangelo.api\x12\x02v2\x1a\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'michelangelo.api.v2.groupversion_info_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\002v2\222\346\002\026\n\020michelangelo.api\022\002v2'
+  _globals['DESCRIPTOR']._serialized_options = b'Z\002v2\222\346\002\032\n\020michelangelo.api\022\002v2\032\002v2'
 # @@protoc_insertion_point(module_scope)

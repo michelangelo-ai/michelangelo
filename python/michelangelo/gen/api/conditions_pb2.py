@@ -25,7 +25,7 @@ _sym_db = _symbol_database.Default()
 from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/conditions.proto\x12\x10michelangelo.api\x1a\x19google/protobuf/any.proto\"\xf4\x01\n\tCondition\x12\x12\n\x04type\x18\x01 \x01(\tR\x04type\x12\x39\n\x06status\x18\x02 \x01(\x0e\x32!.michelangelo.api.ConditionStatusR\x06status\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message\x12\x34\n\x16last_updated_timestamp\x18\x05 \x01(\x03R\x14lastUpdatedTimestamp\x12\x30\n\x08metadata\x18\x06 \x01(\x0b\x32\x14.google.protobuf.AnyR\x08metadata*f\n\x0f\x43onditionStatus\x12\x1c\n\x18\x43ONDITION_STATUS_UNKNOWN\x10\x00\x12\x19\n\x15\x43ONDITION_STATUS_TRUE\x10\x01\x12\x1a\n\x16\x43ONDITION_STATUS_FALSE\x10\x02\x42\x05Z\x03\x61pib\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/conditions.proto\x12\x10michelangelo.api\x1a\x19google/protobuf/any.proto\"\xa5\x02\n\tCondition\x12\x12\n\x04type\x18\x01 \x01(\tR\x04type\x12\x39\n\x06status\x18\x02 \x01(\x0e\x32!.michelangelo.api.ConditionStatusR\x06status\x12\x16\n\x06reason\x18\x03 \x01(\tR\x06reason\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message\x12\x34\n\x16last_updated_timestamp\x18\x05 \x01(\x03R\x14lastUpdatedTimestamp\x12\x30\n\x08metadata\x18\x06 \x01(\x0b\x32\x14.google.protobuf.AnyR\x08metadata\x12/\n\x13observed_generation\x18\x07 \x01(\x03R\x12observedGeneration*f\n\x0f\x43onditionStatus\x12\x1c\n\x18\x43ONDITION_STATUS_UNKNOWN\x10\x00\x12\x19\n\x15\x43ONDITION_STATUS_TRUE\x10\x01\x12\x1a\n\x16\x43ONDITION_STATUS_FALSE\x10\x02\x42\x05Z\x03\x61pib\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,8 +33,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'michelangelo.api.conditions
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\003api'
-  _globals['_CONDITIONSTATUS']._serialized_start=329
-  _globals['_CONDITIONSTATUS']._serialized_end=431
+  _globals['_CONDITIONSTATUS']._serialized_start=378
+  _globals['_CONDITIONSTATUS']._serialized_end=480
   _globals['_CONDITION']._serialized_start=83
-  _globals['_CONDITION']._serialized_end=327
+  _globals['_CONDITION']._serialized_end=376
 # @@protoc_insertion_point(module_scope)

@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n michelangelo/api/v2/schema.proto\x12\x13michelangelo.api.v2\"T\n\nDataSchema\x12\x46\n\x0cschema_items\x18\x01 \x03(\x0b\x32#.michelangelo.api.v2.DataSchemaItemR\x0bschemaItems\"v\n\x0e\x44\x61taSchemaItem\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12:\n\tdata_type\x18\x02 \x01(\x0e\x32\x1d.michelangelo.api.v2.DataTypeR\x08\x64\x61taType\x12\x14\n\x05shape\x18\x03 \x03(\x05R\x05shape*\xdd\x01\n\x08\x44\x61taType\x12\x15\n\x11\x44\x41TA_TYPE_INVALID\x10\x00\x12\x15\n\x11\x44\x41TA_TYPE_UNKNOWN\x10\x01\x12\x14\n\x10\x44\x41TA_TYPE_STRING\x10\x07\x12\x12\n\x0e\x44\x41TA_TYPE_BYTE\x10\x0f\x12\x12\n\x0e\x44\x41TA_TYPE_CHAR\x10\x10\x12\x13\n\x0f\x44\x41TA_TYPE_SHORT\x10\x11\x12\x11\n\rDATA_TYPE_INT\x10\x12\x12\x12\n\x0e\x44\x41TA_TYPE_LONG\x10\x13\x12\x13\n\x0f\x44\x41TA_TYPE_FLOAT\x10\x14\x12\x14\n\x10\x44\x41TA_TYPE_DOUBLE\x10\x15\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n michelangelo/api/v2/schema.proto\x12\x13michelangelo.api.v2\"T\n\nDataSchema\x12\x46\n\x0cschema_items\x18\x01 \x03(\x0b\x32#.michelangelo.api.v2.DataSchemaItemR\x0bschemaItems\"v\n\x0e\x44\x61taSchemaItem\x12\x12\n\x04name\x18\x01 \x01(\tR\x04name\x12:\n\tdata_type\x18\x02 \x01(\x0e\x32\x1d.michelangelo.api.v2.DataTypeR\x08\x64\x61taType\x12\x14\n\x05shape\x18\x03 \x03(\x05R\x05shape*\xf4\x01\n\x08\x44\x61taType\x12\x15\n\x11\x44\x41TA_TYPE_INVALID\x10\x00\x12\x15\n\x11\x44\x41TA_TYPE_UNKNOWN\x10\x01\x12\x15\n\x11\x44\x41TA_TYPE_BOOLEAN\x10\x04\x12\x14\n\x10\x44\x41TA_TYPE_STRING\x10\x07\x12\x12\n\x0e\x44\x41TA_TYPE_BYTE\x10\x0f\x12\x12\n\x0e\x44\x41TA_TYPE_CHAR\x10\x10\x12\x13\n\x0f\x44\x41TA_TYPE_SHORT\x10\x11\x12\x11\n\rDATA_TYPE_INT\x10\x12\x12\x12\n\x0e\x44\x41TA_TYPE_LONG\x10\x13\x12\x13\n\x0f\x44\x41TA_TYPE_FLOAT\x10\x14\x12\x14\n\x10\x44\x41TA_TYPE_DOUBLE\x10\x15\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'Z\002v2'
   _globals['_DATATYPE']._serialized_start=264
-  _globals['_DATATYPE']._serialized_end=485
+  _globals['_DATATYPE']._serialized_end=508
   _globals['_DATASCHEMA']._serialized_start=57
   _globals['_DATASCHEMA']._serialized_end=141
   _globals['_DATASCHEMAITEM']._serialized_start=143
