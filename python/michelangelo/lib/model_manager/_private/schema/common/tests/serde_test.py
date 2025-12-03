@@ -1,19 +1,24 @@
-import yaml
 from unittest import TestCase
+
+import yaml
+
+from michelangelo.lib.model_manager._private.schema.common import (
+    dict_to_schema,
+    schema_to_dict,
+    schema_to_yaml,
+)
 from michelangelo.lib.model_manager.schema import (
+    DataType,
     ModelSchema,
     ModelSchemaItem,
-    DataType,
-)
-from michelangelo.lib.model_manager._private.schema.common import (
-    schema_to_yaml,
-    schema_to_dict,
-    dict_to_schema,
 )
 
 
 class SerdeTest(TestCase):
+    """Tests serialization helpers for model schema objects."""
+
     def setUp(self):
+        """Build shared schema fixtures."""
         self.schema = ModelSchema(
             input_schema=[
                 ModelSchemaItem(
@@ -48,13 +53,16 @@ class SerdeTest(TestCase):
         }
 
     def test_schema_to_yaml(self):
+        """It converts schema objects to YAML."""
         schema_yaml = schema_to_yaml(self.schema)
         self.assertEqual(yaml.safe_load(schema_yaml), self.schema_dict)
 
     def test_schema_to_dict(self):
+        """It converts schema objects to dictionaries."""
         schema_dict = schema_to_dict(self.schema)
         self.assertEqual(schema_dict, self.schema_dict)
 
     def test_dict_to_schema(self):
+        """It materializes schema objects from dictionaries."""
         schema = dict_to_schema(self.schema_dict)
         self.assertEqual(schema, self.schema)

@@ -1,14 +1,13 @@
-from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager._private.schema.triton.data_type import (
     convert_data_type,
 )
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem
 
 
 def convert_model_schema(
     model_schema: ModelSchema,
 ) -> tuple[dict, dict]:
-    """
-    Convert a ModelSchema to input and output schema dictionaries for Triton models.
+    """Convert a ModelSchema to input and output schema dictionaries for Triton models.
 
     Args:
         model_schema (ModelSchema): Model schema to convert.
@@ -24,8 +23,7 @@ def convert_model_schema(
 
 
 def convert_schema_to_dict(schema: list[ModelSchemaItem]):
-    """
-    Convert a list of ModelSchemaItems to a dictionary.
+    """Convert a list of ModelSchemaItems to a dictionary.
 
     Args:
         schema (list[ModelSchemaItem]): List of ModelSchemaItems to convert.
@@ -44,8 +42,7 @@ def convert_schema_to_dict(schema: list[ModelSchemaItem]):
 
 
 def convert_shape(shape: list[int]) -> str:
-    """
-    Convert a shape to a string.
+    """Convert a shape to a string.
 
     Args:
         shape (list[int]): Shape to convert.
