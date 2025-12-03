@@ -99,13 +99,13 @@ jobs:
           fail_ci_if_error: false
           token: ${{ secrets.CODECOV_TOKEN }}
 
-      # Check overall coverage threshold (baseline: 34.94%)
-      - name: "Check overall coverage threshold (baseline: 34.94%)"
+      # Check overall coverage threshold (baseline: 66%)
+      - name: "Check overall coverage threshold (baseline: 66%)"
         run: |
-          # Baseline coverage is 34.94% - we don't fail on this
+          # Baseline coverage is 66% - we don't fail on this
           # The goal is to maintain or improve from baseline
-          poetry run coverage report --fail-under=34
-          echo "✅ Coverage meets baseline threshold (34.94%)"
+          poetry run coverage report --fail-under=66
+          echo "✅ Coverage meets baseline threshold (66%)"
           echo "📈 Goal: Maintain baseline and enforce 90% on new code"
         continue-on-error: true
 
@@ -156,7 +156,7 @@ jobs:
           echo "Overall coverage: **${{ env.COVERAGE }}%**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Baseline (existing code):** ≥34.94% (current coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline (existing code):** ≥66% (current coverage)" >> $GITHUB_STEP_SUMMARY
           echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
