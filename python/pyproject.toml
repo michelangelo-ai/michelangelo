@@ -72,7 +72,7 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
+dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
