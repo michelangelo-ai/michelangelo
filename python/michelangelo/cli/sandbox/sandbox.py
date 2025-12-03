@@ -83,9 +83,13 @@ def init_arguments(p: argparse.ArgumentParser):
         % _default_job_hosting_kube_cluster_name,
     )
 
-    _ = sp.add_parser(
+    demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
     )
+    demo_sp = demo_p.add_subparsers(dest="demo_action", required=True, help="Demo type to create")
+    _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
+    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
         "--jobs-cluster-name",
@@ -121,9 +125,7 @@ def run(ns: argparse.Namespace):
     if ns.action == "stop":
         return _stop(ns)
     if ns.action == "demo":
-        return _create_demo_crs(ns)
-
-    raise ValueError(f"Unsupported action: {ns.action}")
+        _create_demo_crs(ns)
 
 
 def _create(ns: argparse.Namespace):
@@ -472,8 +474,12 @@ def _create_cadence_domain(links):
     )
 
 
-def _create_demo_crs(_: argparse.Namespace):
+def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
+    assert ns
+    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
+
     # Check if cluster exists
     try:
         _exec(
@@ -496,7 +502,7 @@ def _create_demo_crs(_: argparse.Namespace):
             f"Cluster {_michelangelo_sandbox_kube_cluster_name} is not running. Please run 'ma sandbox start' first."
         )
 
-    # create CRs used by all demo resources
+    # Create CRs used by all demo resources
     demo_dir = _dir / "demo"
     project_yaml_path = demo_dir / "project.yaml"
 
@@ -509,43 +515,20 @@ def _create_demo_crs(_: argparse.Namespace):
     except subprocess.CalledProcessError:
         pass
 
-    # create Project CR
+    # Create Project CR
     # Note: The Project CRD is essentially the "parent" of other CRDs. Under
     # normal circumstances, users must create a project CR before creating other CRs.
     if project_yaml_path.exists():
-        _kube_create(project_yaml_path)
+        _kube_apply(project_yaml_path)
     else:
         _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
-    # create Inference Server demo CRs
-    _create_inference_demo_crs()
-
-    # create Pipeline demo CRs
-    _create_pipeline_demo_crs()
-
-    print(f"\n🎉 Demo deployment created successfully in namespace {namespace}!")
-    print("\n📋 What was set up:")
-    print("  • Gateway API with Istio integration")
-    print("  • MinIO storage configuration")
-    print("  • Triton Inference Server")
-    print("  • Model-sync Deployment (handles S3 sync and model loading)")
-    print("  • BERT model deployment with HTTPRoute")
-    print("  • Training pipelines and project resources")
-
-    print(f"\n🌐 Production endpoint (model-agnostic):")
-    print(f"  http://localhost:8080/inference-server-bert-cola-endpoint/bert-cola-deployment")
-    print(f"\n💡 This endpoint will always serve the current model version without URL changes!")
-
-    print(f"\n📡 Port-forward setup (required for localhost access):")
-    print(f"  kubectl -n default port-forward svc/ma-gateway-istio 8080:80 8889:8889")
-
-    print(f"  bazel run //go/cmd/worker")
-    print(f"  bazel run //go/cmd/apiserver")
-
-    print(f"\n🔧 Useful commands:")
-    print(f"  kubectl get deployments.michelangelo.api")
-    print(f"  kubectl get httproute")
-    print(f"  kubectl get pods -l app=inference-server")
+    if ns.demo_action == "pipeline":
+        _create_pipeline_demo_crs()
+    elif ns.demo_action == "inference":
+        _create_inference_demo_crs()
+    else:
+        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
 
 def _delete(ns: argparse.Namespace):
@@ -568,9 +551,10 @@ def _stop(ns: argparse.Namespace):
 
 
 def _kube_create(path: Path):
-    # Use apply instead of create for idempotency (creates if not exists, updates if exists)
-    _exec("kubectl", "apply", "-f", str(path))
+    _exec("kubectl", "create", "-f", str(path))
 
+def _kube_apply(path: Path):
+    _exec("kubectl", "apply", "-f", str(path))
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
     if pods:
@@ -912,7 +896,7 @@ def _create_inference_demo_crs():
         _err_exit(f"❌ Inference server CR not found at {inference_server_path}, exiting...")
 
     print("✅ Creating Triton Inference Server...")
-    _kube_create(inference_server_path)
+    _kube_apply(inference_server_path)
 
     # Wait for inference server to reach SERVING state (image pull may take time)
     with open(inference_server_path) as f:
@@ -948,7 +932,7 @@ def _create_inference_demo_crs():
         _err_exit(f"❌ Model-sync Deployment not found at {model_sync_deployment_path}, exiting...")
 
     print("✅ Deploying model-sync Deployment...")
-    _kube_create(model_sync_deployment_path)
+    _kube_apply(model_sync_deployment_path)
 
     # Wait for Deployment to be ready
     print("⏳ Waiting for model-sync Deployment to be ready...")
@@ -968,6 +952,36 @@ def _create_inference_demo_crs():
         print("⚠️  Warning: Model-sync Deployment may not be fully ready yet, but continuing...")
 
     print("✅ Inference demo resources created successfully")
+
+    print("🎉 Inference demo deployment created successfully!")
+    print("📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • HTTPRoute for traffic routing")
+    print("  • Triton Inference Server")
+    print("  • Model-sync Deployment (handles S3 sync and model loading)")
+
+    print("🌐 Deployment-agnostic endpoint: Use the following URL to test the inference server")
+    print("  http://localhost:8889/inference-server-bert-cola/v2")
+    print("  For example, to test inference of a model deployed to the above inference server, use the following command:\n")
+    print("  curl -X POST http://localhost:8889/inference-server-bert-cola/v2/models/<model-name>/infer \\")
+    print("  -H \"Content-Type: application/json\" \\")
+    print("  -d '{")
+    print("  \"inputs\": [")
+    print("    {")
+    print("      \"name\": \"input_ids\",")
+    print("      \"shape\": [1, 10],")
+    print("      \"datatype\": \"INT64\",")
+    print("      \"data\": [101, 7592, 999, 102, 0, 0, 0, 0, 0, 0]")
+    print("    },")
+    print("    {")
+    print("      \"name\": \"attention_mask\",")
+    print("      \"shape\": [1, 10],")
+    print("      \"datatype\": \"INT64\",")
+    print("      \"data\": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]")
+    print("    }")
+    print("  ]")
+    print("}'")
+
 
 
 def _setup_istio_with_gateway_api():
@@ -1063,7 +1077,7 @@ def _setup_istio_with_gateway_api():
         _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
 
     print("Creating Gateway API Gateway CR...")
-    _exec("kubectl", "apply", "-f", str(gateway_setup_path))
+    _kube_apply(gateway_setup_path)
 
     # Wait for Gateway to be programmed (Istio provisions the gateway)
     _exec(
@@ -1099,10 +1113,19 @@ def _setup_istio_with_gateway_api():
 
 def _create_pipeline_demo_crs():
    """Create a pipeline demo for the sandbox cluster for demo purposes."""
-   pipeline_demo_dir = _dir /"pipeline" / "demo"
+   pipeline_demo_dir = _dir / "demo" / "pipeline"
    for yaml_file in pipeline_demo_dir.glob("*.yaml"):
-        _kube_create(yaml_file)
+        _kube_apply(yaml_file)
+
    print("✅ Pipeline demo resources created successfully")
+   print("📋 What was set up:")
+   print("  • Training pipelines")
+   print("  • Pipeline triggers (cron and backfill)")
+   print("  • Evaluation pipeline")
+   print("  • Pipeline resources")
+   print("  • Pipeline triggers")
+   print("  • Pipeline evaluation")
+   print("The above pipelines can be verified in the Cadence Web UI at \"http://localhost:8088/domains/default/workflows\"")
 
 if __name__ == "__main__":
     sys.exit(main())
