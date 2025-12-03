@@ -1,10 +1,40 @@
+"""Workflow transpilation and packaging for Uniflow.
+
+This module provides functionality to transpile Python workflow definitions into
+Starlark code and package them into tarball archives. The transpilation process
+converts Python task and workflow functions into Starlark equivalents, resolving
+dependencies and generating a self-contained executable package.
+
+The build system supports:
+- Transpiling @task and @workflow decorated functions
+- Resolving and packaging Python dependencies
+- Including Starlark plugin bindings
+- Generating tarball packages for distribution
+
+Example:
+    Building a workflow package::
+
+        from michelangelo.uniflow.core.build import build
+
+        @workflow()
+        def my_workflow():
+            result = my_task()
+            return result
+
+        package = build(my_workflow)
+        tarball_bytes = package.to_tarball_bytes()
+
+        # Save to file
+        with open("workflow.tar.gz", "wb") as f:
+            f.write(tarball_bytes)
+"""
+
 import argparse
 import ast
 import inspect
 import logging
 import sys
 import tarfile
-from abc import ABC
 from collections.abc import Iterator
 from dataclasses import dataclass
 from io import BytesIO
@@ -30,6 +60,27 @@ log = logging.getLogger(__name__)
 
 
 def main(args=None):
+    r"""Command-line interface for building workflow packages.
+
+    Parses command-line arguments, builds a workflow package from the specified
+    function, and writes the resulting tarball to the output destination.
+
+    Args:
+        args: Optional list of command-line arguments. If None, uses sys.argv.
+
+    Example:
+        Command-line usage::
+
+            python -m michelangelo.uniflow.core.build \\
+                my.module.workflow_function \\
+                output.tar.gz
+
+        With dry-run::
+
+            python -m michelangelo.uniflow.core.build \\
+                my.module.workflow_function \\
+                - --dry-run
+    """
     p = argparse.ArgumentParser()
     p.add_argument("fn", type=import_attribute)
     p.add_argument("output")
@@ -51,11 +102,31 @@ def main(args=None):
 
 
 class File:
+    """Represents a Starlark file in the workflow package.
+
+    Accumulates Starlark function definitions and load statements for a single
+    file in the package. Ensures no duplicate functions or conflicting load
+    statements are added.
+
+    Attributes:
+        _functions: Dictionary mapping function names to AST FunctionDef nodes.
+        _loads: Dictionary mapping file paths to their exported symbols.
+    """
+
     def __init__(self):
+        """Initialize an empty Starlark file."""
         self._functions: dict[str, ast.FunctionDef] = {}
         self._loads: dict[str, dict[str, str]] = {}
 
     def add_function(self, v: ast.FunctionDef):
+        """Add a function definition to the file.
+
+        Args:
+            v: The AST FunctionDef node to add.
+
+        Raises:
+            AssertionError: If a different function with the same name exists.
+        """
         functions = self._functions
         if v.name in functions:
             assert functions[v.name] == v
@@ -63,6 +134,16 @@ class File:
             functions[v.name] = v
 
     def add_load(self, path: str, alias: str, attr: str):
+        """Add a load statement to import an attribute from another file.
+
+        Args:
+            path: The file path to load from.
+            alias: The alias name to use for the import.
+            attr: The attribute name to import.
+
+        Raises:
+            AssertionError: If the same alias is already used for a different attribute.
+        """
         loads = self._loads
         if path in loads:
             exports = loads[path]
@@ -74,9 +155,25 @@ class File:
             loads[path] = {alias: attr}
 
     def has_function(self, name) -> bool:
+        """Check if a function is already defined in this file.
+
+        Args:
+            name: Function name to check.
+
+        Returns:
+            True if the function is defined, False otherwise.
+        """
         return name in self._functions
 
     def as_ast(self) -> ast.Module:
+        """Generate the complete AST Module for this file.
+
+        Constructs an AST Module with all load statements followed by all
+        function definitions.
+
+        Returns:
+            An AST Module node representing the complete Starlark file.
+        """
         body = [
             self._ast_load_expr(path, exports) for path, exports in self._loads.items()
         ]
@@ -86,6 +183,20 @@ class File:
 
     @staticmethod
     def _ast_load_expr(path: str, exports: dict[str, str]) -> ast.Expr:
+        """Generate AST for a Starlark load statement.
+
+        Args:
+            path: Path to load from.
+            exports: Dictionary mapping aliases to attribute names.
+
+        Returns:
+            An AST Expr node representing the load statement.
+
+        Example:
+            Generates AST equivalent to::
+
+                load("path/to/file.star", alias1="attr1", alias2="attr2")
+        """
         call = ast.Call(
             func=ast.Name(
                 id="load",
@@ -104,11 +215,30 @@ class File:
 
 @dataclass
 class Package:
+    """A workflow package containing transpiled Starlark code.
+
+    Represents a complete, self-contained workflow package with all necessary
+    files and metadata. Can be serialized to a tarball for distribution.
+
+    Attributes:
+        files: Dictionary mapping file paths to their binary content.
+        main_file: Path to the main entry point file.
+        main_function: Name of the main workflow function.
+    """
+
     files: dict[str, bytes]
     main_file: str
     main_function: str
 
     def to_tarball(self, file_obj):
+        """Write the package to a tarball file object.
+
+        Creates a gzipped tarball containing all package files and writes it
+        to the provided file object. Logs the contents of each file for debugging.
+
+        Args:
+            file_obj: File-like object to write the tarball to.
+        """
         file_log = ""
         main_file_log = None
         with tarfile.open(fileobj=file_obj, mode="w:gz") as tar:
@@ -138,19 +268,45 @@ class Package:
         log.info("tarball: %s", file_log)
 
     def to_tarball_bytes(self) -> bytes:
+        """Serialize the package to tarball bytes.
+
+        Returns:
+            The complete package as gzipped tarball bytes.
+
+        Example:
+            >>> package = build(my_workflow)
+            >>> tarball_bytes = package.to_tarball_bytes()
+            >>> with open("workflow.tar.gz", "wb") as f:
+            ...     f.write(tarball_bytes)
+        """
         bb = BytesIO()
         self.to_tarball(bb)
         return bb.getvalue()
 
 
-class TranspilerCallback(ABC):
-    """Callback interface for the transpiler to make the transpilation process observable.
-    Users can extend this class and override its methods to act on transpilation events,
-    e.g., to collect additional metadata about the transpiled code.
+class TranspilerCallback:
+    """Callback interface for observing the transpilation process.
+
+    Users can extend this class and override its methods to act on transpilation
+    events, such as collecting metadata about transpiled tasks.
+
+    Example:
+        >>> class MyCallback(TranspilerCallback):
+        ...     def __init__(self):
+        ...         self.tasks = []
+        ...
+        ...     def on_task_function(self, task_fn):
+        ...         self.tasks.append(task_fn)
+        >>> callback = MyCallback()
+        >>> package = build(my_workflow, transpiler_callback=callback)
+        >>> print(f"Found {len(callback.tasks)} tasks")
     """
 
     def on_task_function(self, task_fn: TaskFunction):
-        """Called when a reference to the @task function is encountered during transpilation.
+        """Called when a @task function is encountered during transpilation.
+
+        Args:
+            task_fn: The TaskFunction instance being transpiled.
         """
         pass
 
@@ -159,6 +315,27 @@ def build(
     fn: Callable,
     transpiler_callback: Optional[TranspilerCallback] = None,
 ) -> Package:
+    """Build a workflow package from a Python function.
+
+    Transpiles the given workflow function and all its dependencies into Starlark
+    code, packaging them into a self-contained tarball. The function must be
+    decorated with @workflow.
+
+    Args:
+        fn: The workflow function to build. Must be decorated with @workflow.
+        transpiler_callback: Optional callback to observe transpilation events.
+
+    Returns:
+        A Package containing the transpiled workflow and all dependencies.
+
+    Example:
+        >>> @workflow()
+        ... def my_workflow():
+        ...     result = process_data_task()
+        ...     return result
+        >>> package = build(my_workflow)
+        >>> tarball = package.to_tarball_bytes()
+    """
     files = {}
     fn_path = _transpile_function(fn, files, transpiler_callback)
 
@@ -200,6 +377,20 @@ def _transpile_function(
     files: dict[Path, Any],
     transpiler_callback: Optional[TranspilerCallback],
 ) -> Path:
+    """Transpile a Python function to Starlark and add to package files.
+
+    Converts a Python workflow or task function into Starlark code, resolving
+    all dependencies and adding them to the package. Returns the file path
+    where the transpiled function is located.
+
+    Args:
+        fn: The Python function to transpile.
+        files: Dictionary to accumulate package files.
+        transpiler_callback: Optional callback for transpilation events.
+
+    Returns:
+        The Path where the transpiled function is located in the package.
+    """
     fn = inspect.unwrap(
         fn
     )  # Get the user function by unwrapping decorators such as @workflow.
@@ -256,6 +447,15 @@ def _transpile_function(
 
 
 def _add_star_file(path: Path, files: dict[Path, ast.Module]):
+    """Add a Starlark file and its dependencies to the package.
+
+    Reads a .star file, parses it, resolves its load dependencies recursively,
+    and adds everything to the package files.
+
+    Args:
+        path: Path to the Starlark file to add.
+        files: Dictionary to accumulate package files.
+    """
     if path in files:
         return
 
@@ -292,8 +492,22 @@ def _add_star_file(path: Path, files: dict[Path, ast.Module]):
 
 
 def _iter_top_level_calls(module: ast.Module) -> Iterator[ast.Call]:
-    """Utility function that finds and yields all top-level function call statements in the given AST module.
-    It is used to find `load` statements in the starlark source code.
+    r"""Find and yield all top-level function calls in an AST module.
+
+    Iterates through module-level statements and yields Call nodes,
+    primarily used to find `load` statements in Starlark source code.
+
+    Args:
+        module: The AST Module to search.
+
+    Yields:
+        AST Call nodes found at the top level of the module.
+
+    Example:
+        >>> tree = ast.parse("load('file.star', foo='bar')\\nresult = func()")
+        >>> calls = list(_iter_top_level_calls(tree))
+        >>> len(calls)
+        2
     """
     for node in module.body:
         if isinstance(node, ast.Expr):
@@ -307,42 +521,134 @@ def _iter_top_level_calls(module: ast.Module) -> Iterator[ast.Call]:
 
 
 def _fn_path(fn: Callable) -> Path:
-    """Function's definition path"""
+    """Get the absolute file path where a function is defined.
+
+    Args:
+        fn: The function to locate.
+
+    Returns:
+        Resolved absolute Path to the file containing the function.
+
+    Example:
+        >>> def my_func():
+        ...     pass
+        >>> path = _fn_path(my_func)
+        >>> path.is_absolute()
+        True
+    """
     return Path(inspect.getabsfile(fn)).resolve()
 
 
 class FunctionTransformer(ast.NodeTransformer):
+    """AST transformer for converting Python workflow code to Starlark.
+
+    Walks through the AST of a Python function and transforms it to be
+    Starlark-compatible. Resolves references to tasks, workflows, and
+    Starlark plugins, replacing them with appropriate Starlark constructs.
+
+    Attributes:
+        _code: The code object of the function being transformed.
+        _module: The module containing the function.
+        _transpiler_callback: Optional callback for transpilation events.
+        deps: Dependencies collection tracking all external references.
+    """
+
     def __init__(
         self,
         fn,
         transpiler_callback: Optional[TranspilerCallback],
     ):
+        """Initialize the transformer.
+
+        Args:
+            fn: The function to transform.
+            transpiler_callback: Optional callback for transpilation events.
+        """
         self._code = fn.__code__
         self._module = inspect.getmodule(fn)
         self._transpiler_callback = transpiler_callback
         self.deps = Dependencies()
 
-    def visit_AnnAssign(self, node):
-        # Replace annotated assignment with just assignment. Ex:
-        # a: dict = foo()  ->  a = foo()
+    def visit_AnnAssign(self, node):  # noqa: N802
+        """Transform annotated assignments to simple assignments.
+
+        Converts type-annotated assignments to plain assignments since
+        Starlark doesn't support type annotations.
+
+        Args:
+            node: The AnnAssign node to transform.
+
+        Returns:
+            An Assign node without type annotation.
+
+        Example:
+            Transforms::
+
+                a: dict = foo()
+
+            To::
+
+                a = foo()
+        """
         return ast.Assign(value=node.value, targets=[node.target])
 
-    def visit_Is(self, _node):
+    def visit_Is(self, _node):  # noqa: N802
+        """Reject 'is' operator.
+
+        Raises:
+            NameError: Always, as 'is' is not supported in Starlark.
+        """
         raise NameError("[is] is not supported, use == instead")
 
-    def visit_IsNot(self, _node):
+    def visit_IsNot(self, _node):  # noqa: N802
+        """Reject 'is not' operator.
+
+        Raises:
+            NameError: Always, as 'is not' is not supported in Starlark.
+        """
         raise NameError("[is not] is not supported, use != instead")
 
-    def visit_Import(self, _node):
+    def visit_Import(self, _node):  # noqa: N802
+        """Reject import statements.
+
+        Raises:
+            NameError: Always, as imports are not supported in Starlark.
+        """
         raise NameError("[import] is not supported")
 
-    def visit_ImportFrom(self, _node):
+    def visit_ImportFrom(self, _node):  # noqa: N802
+        """Reject from-import statements.
+
+        Raises:
+            NameError: Always, as imports are not supported in Starlark.
+        """
         raise NameError("[import] is not supported")
 
-    def visit_Try(self, _node):
+    def visit_Try(self, _node):  # noqa: N802
+        """Reject try-except blocks.
+
+        Raises:
+            NameError: Always, as try-except is not supported in Starlark.
+        """
         raise NameError("[try] is not supported")
 
-    def visit_Name(self, node: ast.Name):
+    def visit_Name(self, node: ast.Name):  # noqa: N802
+        """Transform name references to Starlark-compatible forms.
+
+        Handles variable and function references, converting task references
+        to Starlark task calls, workflow references to function calls, and
+        resolving Starlark plugins.
+
+        Args:
+            node: The Name node to transform.
+
+        Returns:
+            The transformed AST node, or the original node if no transformation needed.
+
+        Raises:
+            ValueError: If a global variable reference cannot be resolved.
+            NameError: If an unsupported global variable is referenced.
+        """
         if not isinstance(node.ctx, ast.Load):
             # Skip non load var context. I.e. keep var assignment code as-is.
             return node
@@ -355,12 +661,13 @@ class FunctionTransformer(ast.NodeTransformer):
         if node.id not in self._code.co_names:
             log_attributes(log, logging.ERROR, self._code)
             raise ValueError(
-                f"'{node.id}' is not found in the function's globals: {self._code.co_names}",
+                f"'{node.id}' is not found in the function's globals: "
+                f"{self._code.co_names}",
             )
 
         if not hasattr(self._module, node.id):
             # Global var is not defined by the module.
-            # Assumption: Global var is Starlark-compatible built-in functions. Keep it as-is.
+            # Assumption: Global var is Starlark-compatible built-in. Keep as-is.
             assert node.id in (
                 "abs",
                 "any",

@@ -11,12 +11,16 @@ _binding = TaskBinding(
 
 
 @dataclass
-class TaskB(TaskConfig):
-    def get_binding(self) -> TaskBinding:
+class TaskB(TaskConfig):  # noqa: D101
+    def get_binding(self) -> TaskBinding:  # noqa: D102
         return _binding
 
-    def pre_run(self):
+    @classmethod
+    def get_config_binding(cls) -> TaskBinding:  # noqa: D102
+        return _binding
+
+    def pre_run(self):  # noqa: D102
         pass
 
-    def post_run(self):
+    def post_run(self):  # noqa: D102
         pass
