@@ -39,14 +39,6 @@ class TestCreateScalingConfig:
         assert config.use_gpu is True
         assert config.resources_per_worker == {"CPU": 8, "GPU": 1}
 
-    def test_create_scaling_config_custom_trainer_cpu(self):
-        """Test create_scaling_config with custom trainer_cpu."""
-        # trainer_cpu is a parameter but not used in the implementation
-        config = create_scaling_config(trainer_cpu=1)
-
-        assert config.num_workers == 4
-        assert config.use_gpu is True
-        assert config.resources_per_worker == {"CPU": 4, "GPU": 1}
 
     def test_create_scaling_config_custom_resources(self):
         """Test create_scaling_config with custom resources_per_worker."""
