@@ -15,7 +15,7 @@ Batch inference with large language models using two execution backends: Hugging
 ### HuggingFace Transformers (CPU or GPU)
 
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
+cd michelangelo-ai/michelangelo/python
 source .venv/bin/activate
 poetry run python examples/llm_prediction/hf_prediction.py
 ```

@@ -13,7 +13,7 @@ Training Nomic BERT models on WikiText dataset using PyTorch Lightning and Ray. 
 ## How to Run
 
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
+cd michelangelo-ai/michelangelo/python
 source .venv/bin/activate
 poetry run python examples/nomic_ai/nomic_ai.py
 ```

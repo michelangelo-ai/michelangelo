@@ -13,7 +13,7 @@ Regression model demo using XGBoost to predict Boston housing prices. Demonstrat
 ## How to Run
 
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
+cd michelangelo-ai/michelangelo/python
 source .venv/bin/activate
 PYTHONPATH=. poetry run python examples/boston_housing_xgb/boston_housing_xgb.py
 ```

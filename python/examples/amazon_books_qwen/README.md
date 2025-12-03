@@ -13,7 +13,7 @@ Recommendation system demo using Qwen-based dual-encoder architecture for Amazon
 ## How to Run
 
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
+cd michelangelo-ai/michelangelo/python
 source .venv/bin/activate
 PYTHONPATH=examples poetry run python examples/amazon_books_qwen/amazon_books_qwen.py
 ```

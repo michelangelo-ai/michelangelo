@@ -13,7 +13,7 @@ Fine-tuning BERT for linguistic acceptability classification using the Corpus of
 ## How to Run
 
 ```bash
-cd /Users/sally.lee/Uber/michelangelo-ai/michelangelo/python
+cd michelangelo-ai/michelangelo/python
 source .venv/bin/activate
 poetry run python examples/bert_cola/bert_cola.py
 ```
