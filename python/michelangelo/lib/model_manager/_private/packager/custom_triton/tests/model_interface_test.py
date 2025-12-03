@@ -33,7 +33,7 @@ class ModelInterfaceTest(TestCase):
 
     def test_validate_model_class(self):
         """It validates the model class."""
-        valid, error = validate_model_class("michelangelo.lib.model_manager.interface.tests.fixtures.custom_model.CustomModel")
+        valid, error = validate_model_class("michelangelo.lib.model_manager.interface.tests.fixtures.custom_model.CustomModel") # noqa: E501
         self.assertTrue(valid)
         self.assertIsNone(error)
 
@@ -47,6 +47,6 @@ class ModelInterfaceTest(TestCase):
         self.assertFalse(valid)
         self.assertIsInstance(error, ValueError)
 
-        valid, error = validate_model_class("michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model.Model")
+        valid, error = validate_model_class("michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model.Model") # noqa: E501
         self.assertFalse(valid)
         self.assertIsInstance(error, TypeError)
