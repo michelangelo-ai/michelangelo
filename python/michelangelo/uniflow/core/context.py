@@ -181,7 +181,7 @@ def _local_run(fn: Callable, *args, **kw):
     # Validate the function's code.
     try:
         build(fn)
-    except Exception as err:
+    except Exception as err:  # pragma: no cover
         raise RuntimeError(
             "Error building @workflow. Ensure it meets workflow specifications."
         ) from err
