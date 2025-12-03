@@ -1,15 +1,13 @@
-"""
-Lightning trainer - compatible with internal SDK API
-"""
+"""Lightning trainer - compatible with internal SDK API."""
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, Any, Optional
+from typing import Any, Callable, Optional
 
 import pytorch_lightning as pl
 from ray.data import Dataset
 from ray.train import RunConfig, ScalingConfig
-from ray.train.lightning import RayLightningEnvironment, RayDDPStrategy
+from ray.train.lightning import RayDDPStrategy, RayLightningEnvironment
 from ray.train.torch import TorchTrainer
 
 log = logging.getLogger(__name__)
@@ -17,47 +15,49 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class LightningTrainerParam:
-    """
-    Parameters for LightningTrainer - matches internal API exactly
-    """
+    """Parameters for LightningTrainer - matches internal API exactly."""
     create_model: Callable[..., pl.LightningModule]
-    model_kwargs: Dict[str, Any]
+    model_kwargs: dict[str, Any]
     train_data: Dataset
     validation_data: Dataset
     batch_size: int
     num_epochs: int
-    lightning_trainer_kwargs: Optional[Dict[str, Any]] = None
+    lightning_trainer_kwargs: Optional[dict[str, Any]] = None
 
     def __post_init__(self):
+        """Initialize lightning_trainer_kwargs if not provided."""
         if self.lightning_trainer_kwargs is None:
             self.lightning_trainer_kwargs = {}
 
 
 class LightningTrainer:
-    """
-    Lightning trainer that wraps Ray Train
-    Compatible with internal uber.ai.michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer
+    """Lightning trainer that wraps Ray Train.
+
+    Compatible with internal
+    uber.ai.michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer.
     """
 
     def __init__(self, param: LightningTrainerParam):
+        """Initialize the Lightning trainer with parameters."""
         self.param = param
         self._setup_trainer()
 
     def _setup_trainer(self):
-        """Setup the Ray TorchTrainer with Lightning"""
+        """Setup the Ray TorchTrainer with Lightning."""
 
         def train_loop_per_worker(config):
-            """Training loop that runs on each worker"""
+            """Training loop that runs on each worker."""
             import os
+
             import torch
-            from ray.train import get_context
             from ray import train
+            from ray.train import get_context
 
             # Get Ray Train context
-            context = get_context()
+            get_context()
 
             # Setup Lightning environment
-            ray_env = RayLightningEnvironment()
+            RayLightningEnvironment()
 
             # Create model
             model = self.param.create_model(**self.param.model_kwargs)
@@ -68,8 +68,9 @@ class LightningTrainer:
 
             # Convert to PyTorch datasets
             def ray_dataset_to_torch(ray_ds, batch_size):
-                """Convert Ray dataset to PyTorch DataLoader"""
-                from torch.utils.data import DataLoader, Dataset as TorchDataset
+                """Convert Ray dataset to PyTorch DataLoader."""
+                from torch.utils.data import DataLoader
+                from torch.utils.data import Dataset as TorchDataset
 
                 class RayTorchDataset(TorchDataset):
                     def __init__(self, ray_dataset_iter):
@@ -94,7 +95,8 @@ class LightningTrainer:
                     def __getitem__(self, idx):
                         item = self.data[idx]
                         return {
-                            k: torch.tensor(v, dtype=torch.long) if isinstance(v, list) else v
+                            k: (torch.tensor(v, dtype=torch.long)
+                                if isinstance(v, list) else v)
                             for k, v in item.items()
                         }
 
@@ -106,8 +108,12 @@ class LightningTrainer:
                     num_workers=0,  # Ray handles the parallelism
                 )
 
-            train_dataloader = ray_dataset_to_torch(train_dataset, self.param.batch_size)
-            val_dataloader = ray_dataset_to_torch(val_dataset, self.param.batch_size)
+            train_dataloader = ray_dataset_to_torch(
+                train_dataset, self.param.batch_size
+            )
+            val_dataloader = ray_dataset_to_torch(
+                val_dataset, self.param.batch_size
+            )
 
             # Setup trainer kwargs - let Ray handle MLflow logging
             trainer_kwargs = {
@@ -137,7 +143,7 @@ class LightningTrainer:
 
             # Save model checkpoint for Ray to capture
             import tempfile
-            import os
+
             from ray import train as ray_train
 
             # Create checkpoint in temporary directory for Ray to capture
@@ -159,8 +165,12 @@ class LightningTrainer:
                     else:
                         final_metrics[key] = value
 
-            # Report checkpoint and metrics to Ray Train (this gets picked up by MLflow callback)
-            ray_train.report(final_metrics, checkpoint=ray_train.Checkpoint.from_directory(checkpoint_dir))
+            # Report checkpoint and metrics to Ray Train
+            # (this gets picked up by MLflow callback)
+            ray_train.report(
+                final_metrics,
+                checkpoint=ray_train.Checkpoint.from_directory(checkpoint_dir)
+            )
 
             return {"metrics": final_metrics}
 
@@ -175,9 +185,9 @@ class LightningTrainer:
         )
 
     def train(self, run_config: RunConfig, scaling_config: ScalingConfig):
-        """
-        Train the model using Ray
-        Returns Ray Result object compatible with internal API
+        """Train the model using Ray.
+
+        Returns Ray Result object compatible with internal API.
         """
         log.info("Starting distributed Lightning training...")
 
