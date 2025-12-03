@@ -39,7 +39,6 @@ class TestCreateScalingConfig:
         assert config.use_gpu is True
         assert config.resources_per_worker == {"CPU": 8, "GPU": 1}
 
-
     def test_create_scaling_config_custom_resources(self):
         """Test create_scaling_config with custom resources_per_worker."""
         custom_resources = {"CPU": 2, "GPU": 2, "memory": "16GiB"}
@@ -56,7 +55,7 @@ class TestCreateScalingConfig:
             cpu_per_worker=2,
             num_workers=6,
             use_gpu=False,
-            resources_per_worker={"CPU": 3, "memory": "8GiB"}
+            resources_per_worker={"CPU": 3, "memory": "8GiB"},
         )
 
         assert config.num_workers == 6
@@ -100,6 +99,7 @@ class TestCreateRunConfig:
     def test_create_run_config_with_checkpoint_config(self):
         """Test create_run_config with custom checkpoint_config."""
         from ray.train import CheckpointConfig
+
         checkpoint_config = CheckpointConfig(num_to_keep=3)
 
         config = create_run_config(checkpoint_config=checkpoint_config)
@@ -115,7 +115,7 @@ class TestCreateRunConfig:
             name="test",
             storage_path="/tmp",
             stop={"training_iteration": 10},  # ignored for compatibility
-            verbose=2  # ignored for compatibility
+            verbose=2,  # ignored for compatibility
         )
 
         assert config.name == "test"
@@ -127,6 +127,7 @@ class TestCreateRunConfig:
     def test_create_run_config_all_params(self):
         """Test create_run_config with all parameters."""
         from ray.train import CheckpointConfig
+
         checkpoint_config = CheckpointConfig(num_to_keep=5)
 
         config = create_run_config(
@@ -134,7 +135,7 @@ class TestCreateRunConfig:
             storage_path="/tmp/full_results",
             checkpoint_config=checkpoint_config,
             stop={"epochs": 20},
-            verbose=1
+            verbose=1,
         )
 
         assert config.name == "full_test"
