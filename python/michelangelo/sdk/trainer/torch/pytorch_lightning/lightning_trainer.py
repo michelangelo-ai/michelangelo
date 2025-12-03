@@ -16,6 +16,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class LightningTrainerParam:
     """Parameters for LightningTrainer - matches internal API exactly."""
+
     create_model: Callable[..., pl.LightningModule]
     model_kwargs: dict[str, Any]
     train_data: Dataset
@@ -86,7 +87,7 @@ class LightningTrainer:
                                     self.data.append(item)
                             else:
                                 # If not dict, try pandas conversion
-                                for item in batch.to_pandas().to_dict('records'):
+                                for item in batch.to_pandas().to_dict("records"):
                                     self.data.append(item)
 
                     def __len__(self):
@@ -95,8 +96,11 @@ class LightningTrainer:
                     def __getitem__(self, idx):
                         item = self.data[idx]
                         return {
-                            k: (torch.tensor(v, dtype=torch.long)
-                                if isinstance(v, list) else v)
+                            k: (
+                                torch.tensor(v, dtype=torch.long)
+                                if isinstance(v, list)
+                                else v
+                            )
                             for k, v in item.items()
                         }
 
@@ -111,16 +115,14 @@ class LightningTrainer:
             train_dataloader = ray_dataset_to_torch(
                 train_dataset, self.param.batch_size
             )
-            val_dataloader = ray_dataset_to_torch(
-                val_dataset, self.param.batch_size
-            )
+            val_dataloader = ray_dataset_to_torch(val_dataset, self.param.batch_size)
 
             # Setup trainer kwargs - let Ray handle MLflow logging
             trainer_kwargs = {
                 "max_epochs": self.param.num_epochs,
                 "enable_checkpointing": True,
                 "logger": False,  # Ray MLflow callback will handle logging
-                **self.param.lightning_trainer_kwargs
+                **self.param.lightning_trainer_kwargs,
             }
 
             # Use Ray strategy if specified
@@ -158,7 +160,7 @@ class LightningTrainer:
 
             # Report final metrics to Ray for MLflow logging
             final_metrics = {}
-            if hasattr(trainer, 'logged_metrics') and trainer.logged_metrics:
+            if hasattr(trainer, "logged_metrics") and trainer.logged_metrics:
                 for key, value in trainer.logged_metrics.items():
                     if isinstance(value, torch.Tensor):
                         final_metrics[key] = value.item()
@@ -169,7 +171,7 @@ class LightningTrainer:
             # (this gets picked up by MLflow callback)
             ray_train.report(
                 final_metrics,
-                checkpoint=ray_train.Checkpoint.from_directory(checkpoint_dir)
+                checkpoint=ray_train.Checkpoint.from_directory(checkpoint_dir),
             )
 
             return {"metrics": final_metrics}

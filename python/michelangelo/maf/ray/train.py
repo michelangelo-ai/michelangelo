@@ -37,7 +37,7 @@ def create_run_config(
     storage_path: Optional[str] = None,
     checkpoint_config: CheckpointConfig = None,
     stop: Optional[dict] = None,  # Keep parameter for compatibility but don't use it
-    verbose: int = 1,            # Keep parameter for compatibility but don't use it
+    verbose: int = 1,  # Keep parameter for compatibility but don't use it
 ) -> RunConfig:
     """Create Ray RunConfig for distributed training.
 
