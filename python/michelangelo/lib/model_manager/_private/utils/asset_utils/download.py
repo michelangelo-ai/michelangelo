@@ -1,5 +1,6 @@
 import os
 import shutil
+
 from michelangelo.lib.model_manager.constants import StorageType
 
 
@@ -8,8 +9,7 @@ def download_assets(
     des: str,
     source_type: str,
 ):
-    """
-    Download the assets from source to destination
+    """Download the assets from source to destination.
 
     Args:
         src: The path of the source
