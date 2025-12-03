@@ -12,8 +12,8 @@ import numpy as np
 import pandas as pd
 import ray
 import ray.data
-import xgboost
-import xgboost_ray
+import xgboost  # noqa: F401 - needed for metabuild dependency discovery
+import xgboost_ray  # noqa: F401 - needed for metabuild dependency discovery
 from pyspark.sql import DataFrame
 from ray.train import CheckpointConfig, RunConfig, ScalingConfig
 from ray.train.xgboost import XGBoostTrainer
