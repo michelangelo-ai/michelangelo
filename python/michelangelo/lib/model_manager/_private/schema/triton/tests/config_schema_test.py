@@ -1,17 +1,21 @@
 from unittest import TestCase
+
+from michelangelo.lib.model_manager._private.schema.triton import (
+    convert_model_schema,
+    convert_schema_to_dict,
+)
 from michelangelo.lib.model_manager.schema import (
     DataType,
     ModelSchema,
     ModelSchemaItem,
 )
-from michelangelo.lib.model_manager._private.schema.triton import (
-    convert_model_schema,
-    convert_schema_to_dict,
-)
 
 
 class ConfigSchemaTest(TestCase):
+    """Tests conversions between model schema representations."""
+
     def test_convert_model_schema(self):
+        """It splits model schema objects into Triton-ready dicts."""
         model_schema = ModelSchema(
             input_schema=[
                 ModelSchemaItem(name="input1", data_type=DataType.FLOAT, shape=[1]),
@@ -56,6 +60,7 @@ class ConfigSchemaTest(TestCase):
         )
 
     def test_convert_schema_to_dict(self):
+        """It converts schema items to Triton config dicts."""
         schema = [
             ModelSchemaItem(
                 name="ft1",
@@ -87,6 +92,7 @@ class ConfigSchemaTest(TestCase):
         self.assertEqual(schema_dict, expected_schema_dict)
 
     def test_convert_schema_to_dict_invalid_schema(self):
+        """It handles schema items with missing details gracefully."""
         invalid_schema = [
             ModelSchemaItem(
                 name="ft1",

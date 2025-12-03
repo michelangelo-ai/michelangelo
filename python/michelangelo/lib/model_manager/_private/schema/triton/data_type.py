@@ -1,6 +1,5 @@
 from michelangelo.lib.model_manager.schema import DataType
 
-
 # Mapping from ModelSchema data types to Triton data types.
 DATA_TYPE_MAPPING: "dict[DataType, str]" = {
     DataType.BOOLEAN: "BOOL",
@@ -16,8 +15,7 @@ DATA_TYPE_MAPPING: "dict[DataType, str]" = {
 
 
 def convert_data_type(data_type: DataType) -> str:
-    """
-    Convert a ModelSchema data type to a Triton data type.
+    """Convert a ModelSchema data type to a Triton data type.
 
     Args:
         data_type (DataType): Data type to convert.

@@ -1,13 +1,17 @@
 from unittest import TestCase
+
 from michelangelo.lib.model_manager.schema import (
+    DataType,
     ModelSchema,
     ModelSchemaItem,
-    DataType,
 )
 
 
 class ModelSchemaTest(TestCase):
+    """Tests default behaviours of the model schema dataclasses."""
+
     def test_model_schema(self):
+        """It populates schema collections with sensible defaults."""
         schema = ModelSchema()
         self.assertEqual(schema.input_schema, [])
         self.assertEqual(schema.feature_store_features_schema, [])

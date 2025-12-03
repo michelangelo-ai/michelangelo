@@ -1,6 +1,5 @@
 class RawModelType:
-    """
-    Raw model types for the raw model package
+    """Raw model types for the raw model package.
 
     We may move this class to public API in the future.
 

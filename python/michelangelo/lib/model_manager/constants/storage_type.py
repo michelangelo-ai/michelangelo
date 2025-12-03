@@ -1,6 +1,4 @@
 class StorageType:
-    """
-    Storage type constants
-    """
+    """Storage type constants."""
 
     LOCAL = "local"

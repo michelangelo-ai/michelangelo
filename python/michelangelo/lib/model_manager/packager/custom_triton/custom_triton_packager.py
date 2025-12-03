@@ -1,24 +1,28 @@
 from typing import Optional, Union
+
 from numpy import ndarray
-from michelangelo.lib.model_manager.schema import ModelSchema
-from michelangelo.lib.model_manager.constants import StorageType
+
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 class CustomTritonPackager:
+    """Packager for custom Triton Python models."""
+
     def __init__(self, custom_batch_processing: Optional[bool] = False):
-        """
-        Create a CustomTritonPackager instance
-        A packager for custom Triton Python models
+        """Create a CustomTritonPackager instance.
 
         Args:
             custom_batch_processing (Optional):
                 If to handle batch manually in the Triton model package.
-                Default is False. If set to True, the user is responsible for handling batch in the model class,
-                and the model input/output will have an additional batch dimension on top of the existing model schema.
-                For example, the schema shape [n, ..., m], the input dimension will be [batch_size, n, ..., m].
+                Default is False. If set to True, the user is responsible for handling
+                batch in the model class, and the model input/output will have an
+                additional batch dimension on top of the existing model schema.
+                For example, the schema shape [n, ..., m], the input dimension will
+                be [batch_size, n, ..., m].
         """
         self.gen = TritonTemplateRenderer()
         self.custom_batch_processing = custom_batch_processing
@@ -34,8 +38,7 @@ class CustomTritonPackager:
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
-        """
-        Create a Triton model package for custom Python model
+        """Create a Triton model package for custom Python model.
 
         Args:
             model_path: the path of the raw model
@@ -70,23 +73,26 @@ class CustomTritonPackager:
         requirements: Optional[Union[list[str], str]] = None,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
-        """
-        Create a raw model package for custom Python model
+        """Create a raw model package for custom Python model.
 
         Args:
             model_path: the path of the raw model
             model_class: the model class of the model
                 that contains the custom predict function
-            model_schema: the schema of the model, which specifies the input/palette/output features
-            sample_data: the sample data of the model. A list of input data for the predict function.
+            model_schema: the schema of the model, which specifies the
+                input/palette/output features
+            sample_data: the sample data of the model. A list of input data
+                for the predict function.
             dest_model_path: the path to save the model package
                 If not specified, a temporary directory will be created
             model_path_source_type: the source type of the model path,
                 e.g. 'hdfs', 'terrablob', default is 'hdfs'
-            requirements: the requirements of the model, which can be one of the following:
+            requirements: the requirements of the model, which can be one
+                of the following:
                 - a list of requirements
                 - a path to the requirements.txt file
-                If not specified, the requirements will not be included in the model package
+                If not specified, the requirements will not be included in
+                the model package
             include_import_prefixes (Optional): only save the imported
                 modules with the given prefixes in the model package,
                 e.g. ['uber', 'data.michelangelo'] only imports starting
