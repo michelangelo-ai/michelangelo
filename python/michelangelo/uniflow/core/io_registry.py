@@ -372,10 +372,7 @@ class IORegistry:
                 if BytesIO in default_io:
                     print("BytesIO handler is available")
         """
-        for t in _type.__mro__:
-            if t in self._registry:
-                return True
-        return False
+        return any(t in self._registry for t in _type.__mro__)
 
 
 # Default IO registry

@@ -62,7 +62,8 @@ class Context:
 
     Attributes:
         _args: Command-line arguments for the run.
-        _target: The mode of the workflow execution. It can be "local-run" or "remote-run"
+        _target: The mode of the workflow execution. It can be "local-run" or
+            "remote-run".
         environ: Environment variables to set during execution.
     """
 
@@ -180,7 +181,10 @@ def _local_run(fn: Callable, *args, **kw):
     try:
         build(fn)
     except Exception as err:
-        err_message = "Error in building the @workflow function. Ensure it meets all required workflow code specifications."
+        err_message = (
+            "Error in building the @workflow function. "
+            "Ensure it meets all required workflow code specifications."
+        )
         raise RuntimeError(err_message) from err
 
     os.environ["UF_LOCAL_RUN"] = "1"
@@ -188,7 +192,8 @@ def _local_run(fn: Callable, *args, **kw):
     # Set local storage path for execution checkpoints.
     os.environ["UF_STORAGE_URL"] = os.path.expanduser("~/uf_storage")
 
-    # Execute the provided workflow function with the specified arguments and keyword arguments.
+    # Execute the provided workflow function with the specified arguments
+    # and keyword arguments.
     fn(*args, **kw)
 
 
@@ -205,7 +210,10 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     p.add_argument(
         "--workflow",
         default=cadence,
-        help="The workflow engine to use for remote execution. Options: cadence, temporal. Default is cadence.",
+        help=(
+            "The workflow engine to use for remote execution. "
+            "Options: cadence, temporal. Default is cadence."
+        ),
     )
     p.add_argument(
         "--storage-url",
@@ -233,7 +241,10 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
     p.add_argument(
         "--file-sync",
         action="store_true",
-        help="Sync local code changes from the current git repository to the remote run.",
+        help=(
+            "Sync local code changes from the current git repository "
+            "to the remote run."
+        ),
     )
 
     if environ:
