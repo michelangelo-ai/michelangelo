@@ -5,10 +5,10 @@ from typing import Optional
 
 
 def get_imports(module: ModuleType) -> list[str]:
-    """
-    Extract the imported modules from the python module
+    """Extract the imported modules from the python module.
+
     Only the modules/packages right after the import/from statements
-    are considered, because the alias are not guaranteed to be a module
+    are considered, because the alias are not guaranteed to be a module.
 
     Args:
         module: the module object
@@ -37,6 +37,15 @@ def get_node_module(
     node: ast.ImportFrom,
     module: ModuleType,
 ) -> Optional[str]:
+    """Resolve the full module name from an ImportFrom node.
+
+    Args:
+        node: The AST ImportFrom node.
+        module: The module where the import occurs.
+
+    Returns:
+        The resolved absolute module name, or None if resolution fails.
+    """
     if not node.module:
         return None
 

@@ -1,12 +1,16 @@
 import os
 import tempfile
 from unittest import TestCase
-from michelangelo.lib.model_manager.constants import StorageType
+
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager.constants import StorageType
 
 
 class DownloadTest(TestCase):
+    """Tests asset download helpers."""
+
     def test_download_assets_local(self):
+        """It copies directory trees when source is local."""
         with (
             tempfile.TemporaryDirectory() as src_path,
             tempfile.TemporaryDirectory() as des_path,
@@ -41,6 +45,7 @@ class DownloadTest(TestCase):
             )
 
     def test_download_assets_local_single_file(self):
+        """It copies single files to the destination path."""
         with tempfile.TemporaryDirectory() as temp_dir:
             source = os.path.join(temp_dir, "source")
             with open(source, "w") as f:
@@ -54,6 +59,7 @@ class DownloadTest(TestCase):
                 self.assertEqual(f.read(), "content")
 
     def test_download_assets_unknown_source_type(self):
+        """It leaves destination untouched for unknown storage types."""
         with tempfile.TemporaryDirectory() as des_path:
             download_assets("src_path", des_path, "unknown")
             self.assertEqual(os.listdir(des_path), [])

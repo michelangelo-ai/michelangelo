@@ -1,8 +1,10 @@
 from __future__ import annotations
-import inspect
+
 import importlib
-import pkgutil
+import inspect
 import os
+import pkgutil
+
 from michelangelo.lib.model_manager._private.utils.module_finder.import_parser import (
     get_imports,
 )
@@ -13,8 +15,7 @@ def find_dependency_files(
     prefixes: list[str] | None = None,
     max_depth: int | None = 100,
 ) -> list[str]:
-    """
-    Recursively find the files of the imported modules
+    """Recursively find the files of the imported modules.
 
     Args:
         module_name: the module name
@@ -47,6 +48,15 @@ def find_dependency_files_internal(
     prefixes: list[str] | None = None,
     max_depth: int | None = None,
 ):
+    """Recursively find dependency files helper.
+
+    Args:
+        module_name: The name of the module to search.
+        files: A set to collect found file paths.
+        depth: The current recursion depth.
+        prefixes: Optional list of module prefixes to filter imports.
+        max_depth: Optional maximum recursion depth.
+    """
     if prefixes and not any(module_name.startswith(prefix) for prefix in prefixes):
         return None
 
