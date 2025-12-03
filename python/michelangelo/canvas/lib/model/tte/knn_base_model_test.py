@@ -1,15 +1,16 @@
 import os
 import unittest
 
+import numpy as np
+import pandas as pd
+import pyarrow as pa
 import torch
 from torch import nn
-import pandas as pd
-import numpy as np
-import pyarrow as pa
+
 from michelangelo.canvas.lib.model.tte.knn_base_model import (
     KNNModel,
-    MultiGPUKNNModel,
     MultiGPUKNNFFNModel,
+    MultiGPUKNNModel,
 )
 
 assert pa
@@ -468,9 +469,7 @@ class MultiGPUKNNFFNModelTest(unittest.TestCase):
                 self.projection = nn.Linear(input_dim, 1)
 
             def forward(self, inputs):
-                """
-                implements forward pass for task specific head
-                """
+                """Implements forward pass for task specific head."""
                 # Expecting inputs: [batch_size, input_dim]
                 out = inputs + self.ffn_model(inputs)
                 out = self.projection(out)
@@ -522,6 +521,7 @@ class MultiGPUKNNFFNModelTest(unittest.TestCase):
         assert torch.allclose(relevance_score, res)
 
     def test_similarity_score_v2(self):
+        """Test similarity score calculation v2 with deterministic neural network."""
         # Fix non-deterministic behavior by setting random seed
         torch.manual_seed(42)
 
@@ -538,9 +538,7 @@ class MultiGPUKNNFFNModelTest(unittest.TestCase):
                 self.projection = nn.Linear(input_dim, 1)
 
             def forward(self, query_embedding, item_embedding):
-                """
-                implements forward pass for task specific head
-                """
+                """Implements forward pass for task specific head."""
                 # Expecting inputs: [batch_size, input_dim]
                 inputs = torch.cat([query_embedding, item_embedding], dim=-1)
                 out = inputs + self.ffn_model(inputs)
