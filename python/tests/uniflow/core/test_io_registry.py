@@ -20,13 +20,17 @@ class CustomIO(IO[CustomType]):
     """Custom IO handler for testing."""
 
     def write(self, url: str, value: CustomType):
+        """Write custom type to storage."""
         return None
 
     def read(self, url: str, metadata):
+        """Read custom type from storage."""
         return CustomType()
 
 
 class TestIORegistry(unittest.TestCase):
+    """Test cases for IORegistry functionality."""
+
     def test_set_new_type(self):
         """Test registering a new type."""
         registry = IORegistry({})
