@@ -94,9 +94,15 @@ def init_arguments(p: argparse.ArgumentParser):
         ),
     )
 
-    _ = sp.add_parser(
+    demo_p = sp.add_parser(
         "demo", help="Create demo project and pipelines in the sandbox cluster."
     )
+    demo_sp = demo_p.add_subparsers(
+        dest="demo_action", required=True, help="Demo type to create"
+    )
+    _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
+    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
         "--compute-cluster-name",
@@ -308,7 +314,6 @@ necessary, and this assertion will be removed.
 
     # Create bucket setup with dynamic bucket list
     _create_bucket_setup(bucket_names)
-
     for r in resources:
         _kube_create(_dir / "resources" / r)
 
@@ -544,8 +549,12 @@ def _create_cadence_domain(links):
     )
 
 
-def _create_demo_crs(_: argparse.Namespace):
+def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
+    assert ns
+    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
+
     # Check if cluster exists
     try:
         _exec(
@@ -570,6 +579,7 @@ def _create_demo_crs(_: argparse.Namespace):
             "Please run 'ma sandbox start' first."
         )
 
+    # Create CRs used by all demo resources
     demo_dir = _dir / "demo"
     project_yaml_path = demo_dir / "project.yaml"
 
@@ -578,18 +588,23 @@ def _create_demo_crs(_: argparse.Namespace):
         project_yaml = yaml.safe_load(f)
     namespace = project_yaml.get("metadata", {}).get("namespace", "default")
 
-    _exec("kubectl", "create", "namespace", namespace)
+    # Ensure namespace exists
+    _ensure_namespace_exists(namespace)
 
-    # Create project first. Project CRD is essentially the "parent" of other CRDs. Under
-    # normal circumstances, users must create a project before creating other CRDs.
-    _kube_create(project_yaml_path)
+    # Create Project CR
+    # Note: The Project CRD is essentially the "parent" of other CRDs. Under
+    # normal circumstances, users must create a project CR before creating other CRs.
+    if project_yaml_path.exists():
+        _kube_apply(project_yaml_path)
+    else:
+        _err_exit(f"❌ Project CR not found at {project_yaml_path}, exiting...")
 
-    # Create all other YAML files in the demo directory
-    for yaml_file in demo_dir.glob("*.yaml"):
-        if yaml_file.name != "project.yaml":
-            _kube_create(yaml_file)
-
-    print(f"\nDemo CRs created in namespace {namespace}.")
+    if ns.demo_action == "pipeline":
+        _create_pipeline_demo_crs()
+    elif ns.demo_action == "inference":
+        _create_inference_demo_crs()
+    else:
+        raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
 
 def _delete(ns: argparse.Namespace):
@@ -628,6 +643,10 @@ def _stop(ns: argparse.Namespace):
 
 def _kube_create(path: Path):
     _exec("kubectl", "create", "-f", str(path))
+
+
+def _kube_apply(path: Path):
+    _exec("kubectl", "apply", "-f", str(path))
 
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
@@ -890,8 +909,8 @@ def _create_aws_credentials_in_cluster(cluster_name: str):
     print(f"Created aws-credentials Secret in cluster '{cluster_name}'")
 
 
-def _create_ma_system_namespace():
-    """Create the ma-system namespace in the sandbox cluster if it doesn't exist."""
+def _ensure_namespace_exists(namespace: str):
+    """Ensure the namespace exists in the sandbox cluster."""
     try:
         # Check if namespace already exists
         subprocess.check_output(
@@ -901,11 +920,11 @@ def _create_ma_system_namespace():
                 f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
                 "get",
                 "namespace",
-                "ma-system",
+                namespace,
             ],
             stderr=subprocess.DEVNULL,
         )
-        print("Namespace 'ma-system' already exists.")
+        print(f"Namespace '{namespace}' already exists.")
     except subprocess.CalledProcessError:
         # Namespace doesn't exist, create it
         _exec(
@@ -914,16 +933,16 @@ def _create_ma_system_namespace():
             f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
             "create",
             "namespace",
-            "ma-system",
+            namespace,
         )
-        print("Created namespace 'ma-system' in the sandbox cluster.")
+        print(f"Created namespace '{namespace}' in the sandbox cluster.")
 
 
 # Given a cluster name, create a Cluster CRD in the sandbox cluster
 def _create_compute_cluster_crd(cluster_name: str):
     """Create a Cluster CRD for the Ray jobs cluster in the sandbox cluster."""
     # Ensure ma-system namespace exists
-    _create_ma_system_namespace()
+    _ensure_namespace_exists("ma-system")
 
     # Get kubeconfig for the Ray jobs cluster
     kubeconfig = subprocess.check_output(
@@ -1075,6 +1094,287 @@ def _create_compute_cluster_secrets(cluster_name: str):
         )
 
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
+
+
+def _create_inference_demo_crs():
+    """Create an inference server for the sandbox cluster for demo purposes."""
+    print("🚀 Setting up Michelangelo AI Inference Demo...")
+
+    # Setup istio with Gateway API
+    # This allows usage of HTTPRoutes to route traffic to the inference server.
+    _setup_istio_with_gateway_api()
+
+    inference_demo_dir = _dir / "demo" / "inference"
+    # Create inference server CR
+    inference_server_path = inference_demo_dir / "inferenceserver.yaml"
+    if not inference_server_path.exists():
+        _err_exit(
+            f"❌ Inference server CR not found at {inference_server_path}, exiting..."
+        )
+
+    print("✅ Creating Triton Inference Server...")
+    _kube_apply(inference_server_path)
+
+    # Wait for inference server to reach SERVING state (image pull may take time)
+    with open(inference_server_path) as f:
+        inference_server_yaml = yaml.safe_load(f)
+    inference_server_name = inference_server_yaml["metadata"]["name"]
+    inference_server_namespace = inference_server_yaml["metadata"].get(
+        "namespace", "default"
+    )
+
+    print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
+    print("   (This may take 5-10 minutes for first-time Triton image pull)")
+
+    try:
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+            f"inferenceservers.michelangelo.api/{inference_server_name}",
+            "-n",
+            inference_server_namespace,
+            "--timeout=720s",
+            raise_error=True,
+        )
+        print("✅ Inference server is ready!")
+    except subprocess.CalledProcessError:
+        _err_exit(
+            f"Inference server '{inference_server_name}'\
+                failed to become ready after 720s.\n"
+            f"Check status with:\n"
+            f"kubectl get inferenceservers.michelangelo.api\
+                {inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check logs with:\
+                kubectl logs -l app=inference-server -n {inference_server_namespace}"
+        )
+
+    # Deploy model-sync Deployment
+    model_sync_deployment_path = _dir / "resources" / "model-sync.yaml"
+    if not model_sync_deployment_path.exists():
+        _err_exit(
+            f"❌ Model-sync Deployment not found at {model_sync_deployment_path},\
+                exiting..."
+        )
+
+    print("✅ Deploying model-sync Deployment...")
+    _kube_apply(model_sync_deployment_path)
+
+    # Wait for Deployment to be ready
+    print("⏳ Waiting for model-sync Deployment to be ready...")
+    try:
+        _exec(
+            "kubectl",
+            "rollout",
+            "status",
+            "deployment/model-sync",
+            "-n",
+            "default",
+            "--timeout=60s",
+            raise_error=True,
+        )
+        print("✅ Model-sync Deployment is ready!")
+    except subprocess.CalledProcessError:
+        _err_exit(
+            "Model-sync Deployment failed to become ready after 60s.\n"
+            "Check status with:\n"
+            "kubectl get deployments model-sync -n default -o yaml\n"
+            "Check logs with: kubectl logs deployment/model-sync -n default"
+        )
+
+    print("✅ Inference demo resources created successfully")
+
+    print("🎉 Inference demo deployment created successfully!")
+    print("📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • HTTPRoute for traffic routing")
+    print("  • Triton Inference Server")
+    print("  • Model-sync Deployment (handles S3 sync and model loading)")
+
+    print(
+        "🌐 Deployment-agnostic endpoint:\
+            Use the following URL to test the inference server"
+    )
+    print("  http://localhost:8889/inference-server-bert-cola/v2")
+    print(
+        "  For example,\
+            to test inference of a model deployed to the above inference server:\n"
+    )
+    print(
+        "  curl -X POST http://localhost:8889/inference-server-bert-cola/v2/models/<model-name>/infer \\"  # noqa: E501
+    )
+    print('  -H "Content-Type: application/json" \\')
+    print("  -d '{")
+    print('  "inputs": [')
+    print("    {")
+    print('      "name": "input_ids",')
+    print('      "shape": [1, 10],')
+    print('      "datatype": "INT64",')
+    print('      "data": [101, 7592, 999, 102, 0, 0, 0, 0, 0, 0]')
+    print("    },")
+    print("    {")
+    print('      "name": "attention_mask",')
+    print('      "shape": [1, 10],')
+    print('      "datatype": "INT64",')
+    print('      "data": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]')
+    print("    }")
+    print("  ]")
+    print("}'")
+
+
+def _setup_istio_with_gateway_api():
+    """Install Istio service mesh with Kubernetes Gateway API support.
+
+    This function:
+    1. Installs Istio base CRDs and cluster roles
+    2. Installs Kubernetes Gateway API CRDs
+    3. Installs Istio control plane (istiod)
+    4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
+    """
+    print("Setting up Istio service mesh with Gateway API...")
+
+    # Fetch existing Helm repositories
+    try:
+        helm_existing_repos = subprocess.check_output(["helm", "repo", "list"]).decode()
+    except subprocess.CalledProcessError:
+        helm_existing_repos = ""
+
+    # Add Istio Helm repository if not already present
+    if "istio" not in helm_existing_repos:
+        _exec(
+            "helm",
+            "repo",
+            "add",
+            "istio",
+            "https://istio-release.storage.googleapis.com/charts",
+        )
+        _exec("helm", "repo", "update")
+
+    # Install or upgrade Istio base (CRDs and cluster roles)
+    print("Installing/upgrading Istio base...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istio-base",
+        "istio/base",
+        "--namespace",
+        "istio-system",
+        "--create-namespace",
+        "--wait",
+    )
+
+    # Install Gateway API CRDs (required for HTTPRoute support)
+    # kubectl apply is idempotent by default
+    print("Installing Gateway API CRDs...")
+    _exec(
+        "kubectl",
+        "apply",
+        "-f",
+        "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
+    )
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=Established",
+        "crd/gateways.gateway.networking.k8s.io",
+        "crd/httproutes.gateway.networking.k8s.io",
+        "crd/gatewayclasses.gateway.networking.k8s.io",
+        "--timeout=60s",
+    )
+
+    # Install or upgrade Istio control plane (istiod)
+    print("Installing/upgrading Istio control plane...")
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istiod",
+        "istio/istiod",
+        "--namespace",
+        "istio-system",
+        "--wait",
+    )
+
+    # Wait for Istio control plane to be ready
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=available",
+        "deployment",
+        "--namespace=istio-system",
+        "--all",
+        "--timeout=600s",
+    )
+
+    print("✅ Istio control plane installed successfully")
+
+    # Create Gateway CR (triggers Istio to auto-provision gateway deployment/service)
+    gateway_setup_path = _dir / "resources" / "gateway-api-setup.yaml"
+    if not gateway_setup_path.exists():
+        _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
+
+    print("Creating Gateway API Gateway CR...")
+    _kube_apply(gateway_setup_path)
+
+    # Wait for Gateway to be programmed (Istio provisions the gateway)
+    _exec(
+        "kubectl",
+        "wait",
+        "--for=condition=Programmed",
+        "gateway/ma-gateway",
+        "-n",
+        "default",
+        "--timeout=300s",
+    )
+
+    # Print status for visibility
+    _exec(
+        "kubectl",
+        "get",
+        "gateway",
+        "ma-gateway",
+        "-n",
+        "default",
+        "-o",
+        "wide",
+    )
+
+    # automatically perform port-forwarding in the background
+    subprocess.Popen(
+        [
+            "kubectl",
+            "-n",
+            "default",
+            "port-forward",
+            "svc/ma-gateway-istio",
+            "8080:80",
+            "8889:8889",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    print("✅ Istio with Gateway API setup complete")
+
+
+def _create_pipeline_demo_crs():
+    """Create a pipeline demo for the sandbox cluster for demo purposes."""
+    pipeline_demo_dir = _dir / "demo" / "pipeline"
+    for yaml_file in pipeline_demo_dir.glob("*.yaml"):
+        _kube_apply(yaml_file)
+
+    print("✅ Pipeline demo resources created successfully")
+    print("📋 What was set up:")
+    print("  • Training pipelines")
+    print("  • Pipeline triggers (cron and backfill)")
+    print("  • Evaluation pipeline")
+    print("  • Pipeline resources")
+    print("  • Pipeline triggers")
+    print("  • Pipeline evaluation")
+    print(
+        'The above pipelines can be verified in the Cadence Web UI at "http://localhost:8088/domains/default/workflows"'
+    )
 
 
 if __name__ == "__main__":
