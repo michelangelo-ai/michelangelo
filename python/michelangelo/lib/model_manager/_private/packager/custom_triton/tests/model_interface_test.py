@@ -6,7 +6,13 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
     validate_model_class,
 )
 
-module_path = os.path.join("michelangelo", "lib", "model_manager", "interface", "custom_model.py")
+module_path = os.path.join(
+    "michelangelo", 
+    "lib", 
+    "model_manager", 
+    "interface", 
+    "custom_model.py"
+)
 
 
 class ModelInterfaceTest(TestCase):
@@ -33,7 +39,11 @@ class ModelInterfaceTest(TestCase):
 
     def test_validate_model_class(self):
         """It validates the model class."""
-        valid, error = validate_model_class("michelangelo.lib.model_manager.interface.tests.fixtures.custom_model.CustomModel") # noqa: E501
+        model_class_name = (
+            "michelangelo.lib.model_manager.interface.tests."
+            "fixtures.custom_model.CustomModel"
+        )
+        valid, error = validate_model_class(model_class_name)
         self.assertTrue(valid)
         self.assertIsNone(error)
 
@@ -47,6 +57,10 @@ class ModelInterfaceTest(TestCase):
         self.assertFalse(valid)
         self.assertIsInstance(error, ValueError)
 
-        valid, error = validate_model_class("michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model.Model") # noqa: E501
+        model_class_name = (
+            "michelangelo.lib.model_manager._private.packager.custom_triton."
+            "tests.fixtures.invalid_model.Model"
+        )
+        valid, error = validate_model_class(model_class_name)
         self.assertFalse(valid)
         self.assertIsInstance(error, TypeError)
