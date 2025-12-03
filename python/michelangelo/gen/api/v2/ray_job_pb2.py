@@ -25,10 +25,11 @@ _sym_db = _symbol_database.Default()
 from michelangelo.gen.k8s.io.apimachinery.pkg.apis.meta.v1 import generated_pb2 as k8s_dot_io_dot_apimachinery_dot_pkg_dot_apis_dot_meta_dot_v1_dot_generated__pb2
 from google.protobuf import any_pb2 as google_dot_protobuf_dot_any__pb2
 from michelangelo.gen.api import options_pb2 as michelangelo_dot_api_dot_options__pb2
+from michelangelo.gen.api import conditions_pb2 as michelangelo_dot_api_dot_conditions__pb2
 from michelangelo.gen.api.v2 import user_pb2 as michelangelo_dot_api_dot_v2_dot_user__pb2
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/v2/ray_job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x19google/protobuf/any.proto\x1a\x1emichelangelo/api/options.proto\x1a\x1emichelangelo/api/v2/user.proto\"\xc2\x02\n\nRayJobSpec\x12\x31\n\x04user\x18\x01 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x04user\x12\x1e\n\nentrypoint\x18\x02 \x01(\tR\nentrypoint\x12\x39\n\x19object_store_memory_ratio\x18\x03 \x01(\x01R\x16objectStoreMemoryRatio\x12\x15\n\x06job_id\x18\x04 \x01(\tR\x05jobId\x12\x66\n\x07\x63luster\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB&\xda\xe8\x02\"\n michelangelo.uber.com/RayClusterR\x07\x63luster\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\xc2\x02\n\x0cRayJobStatus\x12\x36\n\x05state\x18\x01 \x01(\x0e\x32 .michelangelo.api.v2.RayJobStateR\x05state\x12\x15\n\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x1d\n\njob_status\x18\x03 \x01(\tR\tjobStatus\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message\x12#\n\rdashboard_url\x18\x06 \x01(\tR\x0c\x64\x61shboardUrl\x12\x32\n\x15job_deployment_status\x18\x07 \x01(\tR\x13jobDeploymentStatus\x12(\n\x10ray_cluster_name\x18\x08 \x01(\tR\x0erayClusterName\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x98\x02\n\x06RayJob\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x33\n\x04spec\x18\x03 \x01(\x0b\x32\x1f.michelangelo.api.v2.RayJobSpecR\x04spec\x12\x39\n\x06status\x18\x04 \x01(\x0b\x32!.michelangelo.api.v2.RayJobStatusR\x06status:\x03\x82\x42\x00\"\xdd\x01\n\nRayJobList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x31\n\x05items\x18\x03 \x03(\x0b\x32\x1b.michelangelo.api.v2.RayJobR\x05items:\x03\xfa\x41\x00*\xb4\x01\n\x0bRayJobState\x12\x19\n\x15RAY_JOB_STATE_INVALID\x10\x00\x12\x1e\n\x1aRAY_JOB_STATE_INITIALIZING\x10\x01\x12\x19\n\x15RAY_JOB_STATE_RUNNING\x10\x02\x12\x1b\n\x17RAY_JOB_STATE_SUCCEEDED\x10\x03\x12\x18\n\x14RAY_JOB_STATE_FAILED\x10\x04\x12\x18\n\x14RAY_JOB_STATE_KILLED\x10\x05\x42\x04Z\x02v2b\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n!michelangelo/api/v2/ray_job.proto\x12\x13michelangelo.api.v2\x1a\x34k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto\x1a\x19google/protobuf/any.proto\x1a\x1emichelangelo/api/options.proto\x1a!michelangelo/api/conditions.proto\x1a\x1emichelangelo/api/v2/user.proto\"\xc2\x02\n\nRayJobSpec\x12\x31\n\x04user\x18\x01 \x01(\x0b\x32\x1d.michelangelo.api.v2.UserInfoR\x04user\x12\x1e\n\nentrypoint\x18\x02 \x01(\tR\nentrypoint\x12\x39\n\x19object_store_memory_ratio\x18\x03 \x01(\x01R\x16objectStoreMemoryRatio\x12\x15\n\x06job_id\x18\x04 \x01(\tR\x05jobId\x12\x66\n\x07\x63luster\x18\x05 \x01(\x0b\x32$.michelangelo.api.ResourceIdentifierB&\xda\xe8\x02\"\n michelangelo.uber.com/RayClusterR\x07\x63luster\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x8c\x03\n\x0cRayJobStatus\x12\x36\n\x05state\x18\x01 \x01(\x0e\x32 .michelangelo.api.v2.RayJobStateR\x05state\x12\x15\n\x06job_id\x18\x02 \x01(\tR\x05jobId\x12\x1d\n\njob_status\x18\x03 \x01(\tR\tjobStatus\x12\x18\n\x07message\x18\x04 \x01(\tR\x07message\x12#\n\rdashboard_url\x18\x06 \x01(\tR\x0c\x64\x61shboardUrl\x12\x32\n\x15job_deployment_status\x18\x07 \x01(\tR\x13jobDeploymentStatus\x12(\n\x10ray_cluster_name\x18\x08 \x01(\tR\x0erayClusterName\x12H\n\x11status_conditions\x18\t \x03(\x0b\x32\x1b.michelangelo.api.ConditionR\x10statusConditions\x12\'\n\x03\x65xt\x18\xe7\x07 \x01(\x0b\x32\x14.google.protobuf.AnyR\x03\x65xt\"\x98\x02\n\x06RayJob\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12L\n\x08metadata\x18\x02 \x01(\x0b\x32\x30.k8s.io.apimachinery.pkg.apis.meta.v1.ObjectMetaR\x08metadata\x12\x33\n\x04spec\x18\x03 \x01(\x0b\x32\x1f.michelangelo.api.v2.RayJobSpecR\x04spec\x12\x39\n\x06status\x18\x04 \x01(\x0b\x32!.michelangelo.api.v2.RayJobStatusR\x06status:\x03\x82\x42\x00\"\xdd\x01\n\nRayJobList\x12K\n\ttype_meta\x18\x01 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.TypeMetaR\x08typeMeta\x12J\n\x08metadata\x18\x02 \x01(\x0b\x32..k8s.io.apimachinery.pkg.apis.meta.v1.ListMetaR\x08metadata\x12\x31\n\x05items\x18\x03 \x03(\x0b\x32\x1b.michelangelo.api.v2.RayJobR\x05items:\x03\xfa\x41\x00*\xb4\x01\n\x0bRayJobState\x12\x19\n\x15RAY_JOB_STATE_INVALID\x10\x00\x12\x1e\n\x1aRAY_JOB_STATE_INITIALIZING\x10\x01\x12\x19\n\x15RAY_JOB_STATE_RUNNING\x10\x02\x12\x1b\n\x17RAY_JOB_STATE_SUCCEEDED\x10\x03\x12\x18\n\x14RAY_JOB_STATE_FAILED\x10\x04\x12\x18\n\x14RAY_JOB_STATE_KILLED\x10\x05\x42\x04Z\x02v2b\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -42,14 +43,14 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_RAYJOB']._serialized_options = b'\202B\000'
   _globals['_RAYJOBLIST']._loaded_options = None
   _globals['_RAYJOBLIST']._serialized_options = b'\372A\000'
-  _globals['_RAYJOBSTATE']._serialized_start=1361
-  _globals['_RAYJOBSTATE']._serialized_end=1541
-  _globals['_RAYJOBSPEC']._serialized_start=204
-  _globals['_RAYJOBSPEC']._serialized_end=526
-  _globals['_RAYJOBSTATUS']._serialized_start=529
-  _globals['_RAYJOBSTATUS']._serialized_end=851
-  _globals['_RAYJOB']._serialized_start=854
-  _globals['_RAYJOB']._serialized_end=1134
-  _globals['_RAYJOBLIST']._serialized_start=1137
-  _globals['_RAYJOBLIST']._serialized_end=1358
+  _globals['_RAYJOBSTATE']._serialized_start=1470
+  _globals['_RAYJOBSTATE']._serialized_end=1650
+  _globals['_RAYJOBSPEC']._serialized_start=239
+  _globals['_RAYJOBSPEC']._serialized_end=561
+  _globals['_RAYJOBSTATUS']._serialized_start=564
+  _globals['_RAYJOBSTATUS']._serialized_end=960
+  _globals['_RAYJOB']._serialized_start=963
+  _globals['_RAYJOB']._serialized_end=1243
+  _globals['_RAYJOBLIST']._serialized_start=1246
+  _globals['_RAYJOBLIST']._serialized_end=1467
 # @@protoc_insertion_point(module_scope)
