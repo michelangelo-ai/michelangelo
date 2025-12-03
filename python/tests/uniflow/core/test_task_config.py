@@ -35,6 +35,10 @@ class TaskA(TaskConfig):
     def get_binding(self) -> TaskBinding:
         return _task_a_binding
 
+    @classmethod
+    def get_config_binding(cls) -> TaskBinding:
+        return _task_a_binding
+
     def pre_run(self):
         # Initialize the test environment.
         assert not a_environ
@@ -54,6 +58,10 @@ class TaskB(TaskConfig):
     spot_instance: bool = False
 
     def get_binding(self) -> TaskBinding:
+        return _task_b_binding
+
+    @classmethod
+    def get_config_binding(cls) -> TaskBinding:
         return _task_b_binding
 
     def pre_run(self):

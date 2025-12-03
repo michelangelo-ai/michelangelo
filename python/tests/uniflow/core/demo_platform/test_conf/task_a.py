@@ -15,6 +15,10 @@ class TaskA(TaskConfig):
     def get_binding(self) -> TaskBinding:
         return _binding
 
+    @classmethod
+    def get_config_binding(cls) -> TaskBinding:
+        return _binding
+
     def pre_run(self):
         pass
 
