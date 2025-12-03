@@ -36,6 +36,7 @@ Example:
         ctx = create_context()  # Automatically detects remote-run mode
         ctx.run(my_workflow)
 """
+
 import argparse
 import logging
 import os
@@ -242,8 +243,7 @@ def _remote_run_argument_parser(environ=False) -> argparse.ArgumentParser:
         "--file-sync",
         action="store_true",
         help=(
-            "Sync local code changes from the current git repository "
-            "to the remote run."
+            "Sync local code changes from the current git repository to the remote run."
         ),
     )
 

@@ -37,6 +37,7 @@ Example:
         io_handler.write("s3://bucket/data.parquet", df)
         loaded_df = io_handler.read("s3://bucket/data.parquet", None)
 """
+
 import logging
 from abc import ABC, abstractmethod
 from io import BytesIO
@@ -247,9 +248,7 @@ class IORegistry:
         self._registry[t] = io
         return self
 
-    def update(
-        self, io_dict: dict[type, LazyIO], force: bool = False
-    ) -> "IORegistry":
+    def update(self, io_dict: dict[type, LazyIO], force: bool = False) -> "IORegistry":
         """Register multiple I/O handlers at once.
 
         Args:
