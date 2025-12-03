@@ -522,6 +522,9 @@ class MultiGPUKNNFFNModelTest(unittest.TestCase):
         assert torch.allclose(relevance_score, res)
 
     def test_similarity_score_v2(self):
+        # Fix non-deterministic behavior by setting random seed
+        torch.manual_seed(42)
+
         class FFNClass(nn.Module):
             def __init__(self):
                 super().__init__()
