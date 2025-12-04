@@ -1,2 +1,1 @@
 """Templates for model packaging."""
-
