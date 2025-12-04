@@ -1,3 +1,5 @@
+"""Serialize the pickle dependencies of a model to the target directory."""
+
 import logging
 from typing import Optional
 from michelangelo.lib.model_manager._private.utils.pickle_utils import (
