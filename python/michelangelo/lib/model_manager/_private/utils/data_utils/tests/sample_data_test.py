@@ -1,3 +1,5 @@
+"""Tests for sample data validation."""
+
 from typing import Optional
 from unittest import TestCase
 

@@ -1,3 +1,5 @@
+"""Tests for config schema conversion."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.schema.triton import (

@@ -1,3 +1,5 @@
+"""Model schema definition."""
+
 from dataclasses import dataclass, field
 
 from michelangelo.lib.model_manager.schema.model_schema_item import ModelSchemaItem

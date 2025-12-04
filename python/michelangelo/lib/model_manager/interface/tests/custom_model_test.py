@@ -1,3 +1,5 @@
+"""Tests for CustomModel interface."""
+
 import tempfile
 from unittest import TestCase
 

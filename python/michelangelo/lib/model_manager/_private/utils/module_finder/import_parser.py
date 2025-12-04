@@ -1,3 +1,5 @@
+"""Import parsing utilities."""
+
 import ast
 import inspect
 from types import ModuleType

@@ -1,3 +1,5 @@
+"""Tests for asset download utilities."""
+
 import os
 import tempfile
 from unittest import TestCase

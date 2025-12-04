@@ -1,3 +1,5 @@
+"""Tests for RawModelType constants."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager.constants import RawModelType

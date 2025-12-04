@@ -1,3 +1,5 @@
+"""Schema validation module."""
+
 from michelangelo.lib.model_manager._private.schema.triton.data_type import (
     DATA_TYPE_MAPPING,
 )
