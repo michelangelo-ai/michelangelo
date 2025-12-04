@@ -11,12 +11,24 @@ import (
 	k8stypes "k8s.io/apimachinery/pkg/types"
 )
 
+// backfillTrigger implements the Runner interface for one-time backfill workflows.
+//
+// This implementation manages workflows that execute once to process historical data
+// within a specified time range. Unlike cron triggers, backfill workflows complete
+// after successful execution rather than running continuously.
+//
+// The time range for backfill is specified in TriggerRun.Spec.StartTimestamp and
+// TriggerRun.Spec.EndTimestamp, which are passed to the workflow for processing.
 type backfillTrigger struct {
-	Log            logr.Logger
-	WorkflowClient clientInterface.WorkflowClient
+	Log            logr.Logger                    // Structured logger for trigger operations
+	WorkflowClient clientInterface.WorkflowClient // Workflow engine client (Cadence/Temporal)
 }
 
-// NewBackfillTrigger returns a new backfillTrigger
+// NewBackfillTrigger creates a new backfill trigger Runner.
+//
+// The returned Runner manages one-time workflows for historical data processing.
+// It requires a logger for structured logging and a workflow client for interacting
+// with the workflow engine.
 func NewBackfillTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClient) Runner {
 	return &backfillTrigger{
 		Log:            log,
@@ -24,7 +36,25 @@ func NewBackfillTrigger(log logr.Logger, workflowClient clientInterface.Workflow
 	}
 }
 
-// Run starts the backfill trigger
+// Run starts a one-time backfill workflow.
+//
+// This method performs the following operations:
+//  1. Generate deterministic workflow ID from namespace and name
+//  2. Check if workflow is already running (idempotent start)
+//  3. Configure workflow options without cron schedule
+//  4. Start workflow execution with "trigger.BackfillTrigger" workflow type
+//  5. Return status with workflow ID and URL for monitoring
+//
+// The workflow uses:
+//   - ID: <namespace>.<name> (deterministic for idempotency)
+//   - TaskList: "trigger_run"
+//   - ExecutionStartToCloseTimeout: 1 year (practically no timeout)
+//   - DecisionTaskStartToCloseTimeout: 30 seconds
+//   - No CronSchedule (one-time execution)
+//
+// Returns State=RUNNING if workflow starts successfully or is already running,
+// State=FAILED if workflow start fails. The ExecutionWorkflowId field is populated
+// with the workflow execution ID for status tracking.
 func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
@@ -96,7 +126,17 @@ func (r *backfillTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) 
 	}, nil
 }
 
-// Kill stops the backfill trigger
+// Kill terminates a running backfill workflow.
+//
+// This method stops the one-time workflow execution. It first validates that the
+// workflow is in RUNNING state before attempting termination, returning an error
+// if the workflow is not running.
+//
+// The workflow termination is handled by the shared killWorkflow utility function.
+//
+// Returns State=KILLED on success. Returns an error if the workflow is not in
+// RUNNING state. If no workflow is running, returns KILLED without error
+// (idempotent termination).
 func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
@@ -114,7 +154,20 @@ func (r *backfillTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun)
 	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
 
-// GetStatus gets the status of a running backfill trigger
+// GetStatus retrieves the execution status of a backfill workflow.
+//
+// This method queries the workflow engine for the specific workflow execution
+// identified by ExecutionWorkflowId in the TriggerRun status. It maps workflow
+// execution states to TriggerRun states.
+//
+// The status check is delegated to getAdhocRunWorkflowStatus which handles
+// state mapping for one-time workflows:
+//   - Running → RUNNING
+//   - Completed → SUCCEEDED
+//   - Failed/TimedOut/Canceled/Terminated → FAILED
+//
+// Returns an error if ExecutionWorkflowId is empty (workflow was never started)
+// or if the workflow execution cannot be described.
 func (r *backfillTrigger) GetStatus(
 	ctx context.Context, triggerRun *v2pb.TriggerRun,
 ) (v2pb.TriggerRunStatus, error) {
