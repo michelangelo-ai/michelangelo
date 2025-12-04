@@ -90,7 +90,7 @@ const (
 //   - Enqueuing clusters to the job scheduler
 //   - Monitoring cluster scheduling status
 //   - Creating clusters via federated client when scheduled
-//   - Polling cluster status from remote clusters (TODO: replace with watchers)
+//   - Polling cluster status from remote clusters (TODO(#605): replace with watchers)
 //   - Handling termination requests and cleanup
 type Reconciler struct {
 	api.Handler // API client for Kubernetes operations
