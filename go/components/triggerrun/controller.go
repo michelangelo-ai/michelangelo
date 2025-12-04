@@ -1,3 +1,31 @@
+// Package triggerrun implements a Kubernetes controller for managing TriggerRun resources.
+//
+// This package provides scheduled and event-driven workflow execution through a state machine
+// that manages the lifecycle of trigger runs. It supports multiple trigger types including
+// cron schedules, backfill operations, interval-based triggers, and batch reruns.
+//
+// Architecture:
+//
+// The controller uses a Runner interface abstraction to support different trigger types:
+//   - CronTrigger: Recurring scheduled workflows using cron expressions
+//   - BackfillTrigger: One-time workflows for historical data backfilling
+//   - IntervalTrigger: Workflows triggered at fixed intervals
+//   - BatchRerunTrigger: Bulk reprocessing of previously executed workflows
+//
+// State Machine:
+//
+// TriggerRun resources transition through the following states:
+//   - INVALID → RUNNING: Initial workflow start
+//   - RUNNING → SUCCEEDED/FAILED/KILLED: Terminal states based on execution outcome
+//
+// The controller reconciles resources every 60 seconds to check workflow status and handle
+// kill requests. Terminal states are marked immutable to prevent further modifications.
+//
+// Workflow Integration:
+//
+// The controller integrates with Cadence or Temporal workflow engines to execute
+// scheduled workflows. Each Runner implementation manages workflow lifecycle operations
+// including starting, monitoring, and terminating workflow executions.
 package triggerrun
 
 import (
@@ -20,11 +48,15 @@ import (
 )
 
 const (
-	// this is the concurrency reconcile loops for trigger run, it can be tuned if needed.
+	// maximumConcurrentReconciles defines the maximum number of concurrent reconcile loops
+	// for the TriggerRun controller. This value can be tuned based on cluster capacity.
 	maximumConcurrentReconciles = 10
 )
 
-// Params are the params for instantiating the reconciler.
+// Params contains the dependencies required to instantiate the TriggerRun Reconciler.
+//
+// This struct uses Uber FX dependency injection to wire controller dependencies.
+// The Runner implementations are tagged by name to inject the correct trigger type.
 type Params struct {
 	fx.In
 
@@ -32,13 +64,25 @@ type Params struct {
 	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner `name:"cron-trigger"`
-	IntervalTrigger   Runner `name:"interval-trigger"`
-	BackfillTrigger   Runner `name:"backfill-trigger"`
-	BatchRerunTrigger Runner `name:"batch-rerun-trigger"`
+	CronTrigger       Runner `name:"cron-trigger"`        // Handles cron-based recurring workflows
+	IntervalTrigger   Runner `name:"interval-trigger"`    // Handles interval-based workflows
+	BackfillTrigger   Runner `name:"backfill-trigger"`    // Handles backfill workflows
+	BatchRerunTrigger Runner `name:"batch-rerun-trigger"` // Handles batch rerun workflows
 }
 
-// Reconciler reconciles a TriggerRun object
+// Reconciler reconciles TriggerRun resources through a state machine.
+//
+// The reconciler manages the complete lifecycle of trigger runs, from initial workflow
+// start through terminal states (SUCCEEDED, FAILED, or KILLED). It delegates execution
+// to the appropriate Runner based on the trigger type.
+//
+// State transitions are handled through a labeled switch statement that allows
+// breaking out of the state machine once a terminal state is reached. The reconciler
+// persists status updates to Kubernetes and requeues resources every 60 seconds for
+// ongoing status checks.
+//
+// The reconciler supports concurrent processing of multiple TriggerRun resources
+// based on the maximumConcurrentReconciles setting.
 type Reconciler struct {
 	api.Handler
 	Log    logr.Logger
@@ -46,13 +90,16 @@ type Reconciler struct {
 
 	apiHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner
-	IntervalTrigger   Runner
-	BackfillTrigger   Runner
-	BatchRerunTrigger Runner
+	CronTrigger       Runner // Executes cron-scheduled workflows
+	IntervalTrigger   Runner // Executes interval-based workflows
+	BackfillTrigger   Runner // Executes backfill workflows
+	BatchRerunTrigger Runner // Executes batch rerun workflows
 }
 
-// NewReconciler returns a new TriggerRun Reconciler.
+// NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
+//
+// The reconciler is initialized with Runner implementations for each supported trigger type.
+// The API handler is configured during registration through the Register method.
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
@@ -63,7 +110,14 @@ func NewReconciler(p Params) *Reconciler {
 	}
 }
 
-// Reconcile reconciles the TriggerRun object
+// Reconcile implements the controller-runtime Reconciler interface for TriggerRun resources.
+//
+// This method is invoked by the controller framework whenever a TriggerRun resource is
+// created, updated, or periodically requeued. It fetches the resource from Kubernetes
+// and delegates to the reconcile helper method for state machine processing.
+//
+// If the resource has been deleted, reconciliation completes without error. Other fetch
+// errors are returned to be retried by the controller framework.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := r.Log.WithValues("triggerRun", req.NamespacedName)
 	triggerRun := &v2pb.TriggerRun{}
@@ -78,6 +132,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return r.reconcile(ctx, log, triggerRun)
 }
 
+// reconcile processes a TriggerRun through its state machine.
+//
+// State Machine Logic:
+//
+//   - Terminal states (SUCCEEDED/FAILED/KILLED): Mark resource immutable and stop reconciliation
+//   - INVALID: Start workflow execution using appropriate Runner, transition to RUNNING or FAILED
+//   - RUNNING: Check workflow status, handle kill requests if Spec.Kill is true
+//
+// The method performs the following operations:
+//  1. Check if resource is in terminal state and mark immutable if needed
+//  2. Create deep copy of resource to detect changes
+//  3. Execute state transitions through labeled StateMachine switch
+//  4. Persist status updates if resource changed
+//  5. Requeue after 60 seconds for continued monitoring
+//
+// Kill requests are processed by setting Spec.Kill=true, which causes the reconciler
+// to invoke the Runner's Kill method during the next reconciliation.
 func (r *Reconciler) reconcile(
 	ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun,
 ) (ctrl.Result, error) {
@@ -160,7 +231,15 @@ StateMachine:
 	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 }
 
-// Register is used to register the controller with the manager.
+// Register registers the TriggerRun controller with the controller manager.
+//
+// This method configures the controller with:
+//   - API handler for Kubernetes operations
+//   - Structured logger with "triggerRun" prefix
+//   - TriggerRun resource watch
+//   - Maximum concurrent reconciles setting
+//
+// Returns an error if API handler creation or controller registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	r.Scheme = mgr.GetScheme()
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
@@ -177,6 +256,11 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// getRunner selects the appropriate Runner implementation based on the TriggerRun's trigger type.
+//
+// The selection is made using GetTriggerType which examines the TriggerRun spec to determine
+// whether it's a batch rerun, backfill, interval, or cron trigger. The default is CronTrigger
+// if the type cannot be determined.
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
 	switch triggerType {

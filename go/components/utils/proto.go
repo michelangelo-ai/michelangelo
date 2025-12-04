@@ -1,3 +1,26 @@
+// Package utils provides utility functions for protobuf type conversions.
+//
+// This package offers bidirectional conversion between Protocol Buffer types
+// (proto.Value, proto.Struct, proto.ListValue) and Go's native interface{},
+// map[string]interface{}, and []interface{} types.
+//
+// The conversions support the full range of JSON-compatible types including:
+//   - Primitive types (string, bool, numbers)
+//   - Null values
+//   - Nested structures (maps and lists)
+//   - Binary data (encoded as base64 strings)
+//
+// These utilities are particularly useful when working with dynamic data that
+// needs to be passed between Go code and workflow engines (Cadence/Temporal) or
+// other systems that use Protocol Buffers for serialization.
+//
+// Usage:
+//
+//	// Convert proto.Value to Go interface{}
+//	goValue, err := MapProtoValueToInterface(protoValue)
+//
+//	// Convert Go interface{} to proto.Value
+//	protoValue, err := NewValue(goValue)
 package utils
 
 import (
@@ -8,7 +31,18 @@ import (
 	"github.com/gogo/protobuf/types"
 )
 
-// MapProtoValueToInterface transforms given proto Value to interface{} generic object representation
+// MapProtoValueToInterface converts a proto.Value to a Go interface{}.
+//
+// This function recursively converts Protocol Buffer Value types to their
+// corresponding Go representations:
+//   - StringValue → string
+//   - BoolValue → bool
+//   - NumberValue → float64
+//   - NullValue → nil
+//   - StructValue → map[string]interface{} (recursive)
+//   - ListValue → []interface{} (recursive)
+//
+// Returns an error if the proto.Value contains an unexpected or unsupported kind.
 func MapProtoValueToInterface(v *types.Value) (interface{}, error) {
 	if v == nil {
 		return nil, nil
@@ -35,7 +69,12 @@ func MapProtoValueToInterface(v *types.Value) (interface{}, error) {
 	return nil, fmt.Errorf("failed to map proto Value; unexpected kind: %#v", kind)
 }
 
-// MapProtoStructToInterface transforms given proto Struct to map[string]interface{} generic object representation
+// MapProtoStructToInterface converts a proto.Struct to a Go map[string]interface{}.
+//
+// This function recursively converts a Protocol Buffer Struct (similar to a JSON object)
+// to a Go map. Each field value is converted using MapProtoValueToInterface.
+//
+// Returns an error if any field value conversion fails.
 func MapProtoStructToInterface(v *types.Struct) (map[string]interface{}, error) {
 	if v == nil {
 		return nil, nil
@@ -51,7 +90,12 @@ func MapProtoStructToInterface(v *types.Struct) (map[string]interface{}, error) 
 	return r, nil
 }
 
-// MapProtoListValueToInterface transforms given proto ListValue to []interface{} generic object representation
+// MapProtoListValueToInterface converts a proto.ListValue to a Go []interface{}.
+//
+// This function recursively converts a Protocol Buffer ListValue (similar to a JSON array)
+// to a Go slice. Each element is converted using MapProtoValueToInterface.
+//
+// Returns an error if any element conversion fails.
 func MapProtoListValueToInterface(x *types.ListValue) ([]interface{}, error) {
 	if x == nil {
 		return nil, nil
@@ -73,25 +117,36 @@ func MapProtoListValueToInterface(x *types.ListValue) ([]interface{}, error) {
 
 // NewValue constructs a Value from a general-purpose Go interface.
 //
-//	╔════════════════════════╤════════════════════════════════════════════╗
-//	║ Go type                │ Conversion                                 ║
-//	╠════════════════════════╪════════════════════════════════════════════╣
-//	║ nil                    │ stored as NullValue                        ║
-//	║ bool                   │ stored as BoolValue                        ║
-//	║ int, int32, int64      │ stored as NumberValue                      ║
-//	║ uint, uint32, uint64   │ stored as NumberValue                      ║
-//	║ float32, float64       │ stored as NumberValue                      ║
-//	║ string                 │ stored as StringValue; must be valid UTF-8 ║
-//	║ []byte                 │ stored as StringValue; base64-encoded      ║
-//	║ map[string]interface{} │ stored as StructValue                      ║
-//	║ []interface{}          │ stored as ListValue                        ║
-//  ║ []map[string]interface{} | stored as ListValue					  ║
-//	╚════════════════════════╧════════════════════════════════════════════╝
+//		╔════════════════════════╤════════════════════════════════════════════╗
+//		║ Go type                │ Conversion                                 ║
+//		╠════════════════════════╪════════════════════════════════════════════╣
+//		║ nil                    │ stored as NullValue                        ║
+//		║ bool                   │ stored as BoolValue                        ║
+//		║ int, int32, int64      │ stored as NumberValue                      ║
+//		║ uint, uint32, uint64   │ stored as NumberValue                      ║
+//		║ float32, float64       │ stored as NumberValue                      ║
+//		║ string                 │ stored as StringValue; must be valid UTF-8 ║
+//		║ []byte                 │ stored as StringValue; base64-encoded      ║
+//		║ map[string]interface{} │ stored as StructValue                      ║
+//		║ []interface{}          │ stored as ListValue                        ║
+//	 ║ []map[string]interface{} | stored as ListValue					  ║
+//		╚════════════════════════╧════════════════════════════════════════════╝
 //
 // When converting an int64 or uint64 to a NumberValue, numeric precision loss
 // is possible since they are stored as a float64.
-
-// NewValue given interface{} type, produce *types.Value
+//
+// NewValue converts a Go interface{} to a proto.Value.
+//
+// This function performs type-based conversion from Go types to Protocol Buffer
+// Value types. It supports all primitive types, maps, slices, and byte arrays.
+//
+// Supported conversions are documented in the type table above. The function
+// recursively converts nested structures and validates UTF-8 encoding for strings.
+//
+// Returns an error if:
+//   - The input type is not supported
+//   - String values contain invalid UTF-8
+//   - Nested structure conversion fails
 func NewValue(v interface{}) (*types.Value, error) {
 	switch v := v.(type) {
 	case nil:
@@ -151,39 +206,46 @@ func NewValue(v interface{}) (*types.Value, error) {
 	}
 }
 
-// NewNullValue constructs a new null Value.
+// NewNullValue constructs a proto.Value representing a null value.
+//
+// This is equivalent to JSON's null value.
 func NewNullValue() *types.Value {
 	return &types.Value{Kind: &types.Value_NullValue{NullValue: types.NullValue_NULL_VALUE}}
 }
 
-// NewBoolValue constructs a new boolean Value.
+// NewBoolValue constructs a proto.Value representing a boolean.
 func NewBoolValue(v bool) *types.Value {
 	return &types.Value{Kind: &types.Value_BoolValue{BoolValue: v}}
 }
 
-// NewNumberValue constructs a new number Value.
+// NewNumberValue constructs a proto.Value representing a number.
+//
+// All numeric types are stored as float64 in Protocol Buffers.
 func NewNumberValue(v float64) *types.Value {
 	return &types.Value{Kind: &types.Value_NumberValue{NumberValue: v}}
 }
 
-// NewStringValue constructs a new string Value.
+// NewStringValue constructs a proto.Value representing a string.
 func NewStringValue(v string) *types.Value {
 	return &types.Value{Kind: &types.Value_StringValue{StringValue: v}}
 }
 
-// NewStructValue constructs a new struct Value.
+// NewStructValue constructs a proto.Value wrapping a proto.Struct.
 func NewStructValue(v *types.Struct) *types.Value {
 	return &types.Value{Kind: &types.Value_StructValue{StructValue: v}}
 }
 
-// NewListValue creates a new protobuf list value.
+// NewListValue constructs a proto.Value wrapping a proto.ListValue.
 func NewListValue(v *types.ListValue) *types.Value {
 	return &types.Value{Kind: &types.Value_ListValue{ListValue: v}}
 }
 
-// NewStruct constructs a Struct from a general-purpose Go map.
-// The map keys must be valid UTF-8.
-// The map values are converted using NewValue.
+// NewStruct constructs a proto.Struct from a Go map[string]interface{}.
+//
+// The map keys must be valid UTF-8 strings. The map values are recursively
+// converted using NewValue.
+//
+// Returns an error if any key is invalid UTF-8 or any value conversion fails.
 func NewStruct(v map[string]interface{}) (*types.Struct, error) {
 	x := &types.Struct{Fields: make(map[string]*types.Value, len(v))}
 	for k, v := range v {
@@ -199,8 +261,11 @@ func NewStruct(v map[string]interface{}) (*types.Struct, error) {
 	return x, nil
 }
 
-// NewList constructs a ListValue from a general-purpose Go slice.
-// The slice elements are converted using NewValue.
+// NewList constructs a proto.ListValue from a Go []interface{}.
+//
+// The slice elements are recursively converted using NewValue.
+//
+// Returns an error if any element conversion fails.
 func NewList(v []interface{}) (*types.ListValue, error) {
 	x := &types.ListValue{Values: make([]*types.Value, len(v))}
 	for i, v := range v {
@@ -213,7 +278,10 @@ func NewList(v []interface{}) (*types.ListValue, error) {
 	return x, nil
 }
 
-// NewStringList constructs a ListValue from a []string
+// NewStringList constructs a proto.ListValue from a Go []string.
+//
+// This is a specialized version of NewList optimized for string slices.
+// Each string is converted to a proto.Value using NewStringValue.
 func NewStringList(v []string) (*types.ListValue, error) {
 	x := &types.ListValue{Values: make([]*types.Value, len(v))}
 	for i, v := range v {
@@ -222,8 +290,12 @@ func NewStringList(v []string) (*types.ListValue, error) {
 	return x, nil
 }
 
-// NewListMap constructs a ListValue from a map[string]interface.
-// The slice elements are converted using NewStruct.
+// NewListMap constructs a proto.ListValue from a Go []map[string]interface{}.
+//
+// This is a specialized version of NewList for slices of maps. Each map is
+// converted to a proto.Struct using NewStruct.
+//
+// Returns an error if any map conversion fails.
 func NewListMap(v []map[string]interface{}) (*types.ListValue, error) {
 	x := &types.ListValue{Values: make([]*types.Value, len(v))}
 	for i, v := range v {

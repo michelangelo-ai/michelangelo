@@ -8,11 +8,33 @@ import (
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 )
 
-// Module provides fx Options for triggerrun controller.
+// Module provides Uber FX dependency injection options for the TriggerRun controller.
+//
+// This module registers the controller with the Kubernetes controller manager and
+// initializes Runner implementations for supported trigger types (cron and backfill).
+//
+// Usage:
+//
+//	fx.New(
+//	    triggerrun.Module,
+//	    // other modules...
+//	)
 var Module = fx.Options(
 	fx.Invoke(register),
 )
 
+// register initializes and registers the TriggerRun controller with the manager.
+//
+// This function is invoked by Uber FX during application startup. It creates Runner
+// implementations for cron and backfill triggers, constructs the reconciler with these
+// runners, and registers the controller with the Kubernetes controller manager.
+//
+// Currently supports:
+//   - CronTrigger: Recurring workflows based on cron expressions
+//   - BackfillTrigger: One-time workflows for historical data processing
+//
+// Additional trigger types (interval and batch rerun) are planned but not yet implemented.
+// See TODO(#548) for tracking remaining trigger type implementations.
 func register(
 	mgr manager.Manager,
 	apiHandlerFactory apiHandler.Factory,
