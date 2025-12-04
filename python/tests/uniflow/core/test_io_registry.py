@@ -64,10 +64,12 @@ class TestIORegistry(unittest.TestCase):
         io1 = CustomIO()
         io2 = BytesIOIO()
 
-        result = registry.update({
-            CustomType: io1,
-            BytesIO: io2,
-        })
+        result = registry.update(
+            {
+                CustomType: io1,
+                BytesIO: io2,
+            }
+        )
 
         # Should return self for chaining
         self.assertIs(result, registry)
@@ -106,6 +108,7 @@ class TestIORegistry(unittest.TestCase):
 
     def test_getitem_with_inheritance(self):
         """Test __getitem__ finds IO through inheritance."""
+
         class BaseType:
             pass
 
@@ -138,6 +141,7 @@ class TestIORegistry(unittest.TestCase):
 
     def test_contains_with_inheritance(self):
         """Test __contains__ checks through MRO."""
+
         class BaseType:
             pass
 
