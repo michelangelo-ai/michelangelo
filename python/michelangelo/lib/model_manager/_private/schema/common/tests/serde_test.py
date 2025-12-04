@@ -1,3 +1,5 @@
+"""Tests for schema serialization."""
+
 from unittest import TestCase
 
 import yaml

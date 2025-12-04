@@ -1,3 +1,5 @@
+"""Template renderer module."""
+
 from typing import Optional
 
 from jinja2 import (

@@ -1,3 +1,5 @@
+"""Tests for DataType enum."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager.schema.data_type import DataType

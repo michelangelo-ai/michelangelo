@@ -1,3 +1,5 @@
+"""Schema definitions for the model manager."""
+
 # flake8: noqa:F401
 from michelangelo.lib.model_manager.schema.data_type import DataType
 from michelangelo.lib.model_manager.schema.model_schema import ModelSchema

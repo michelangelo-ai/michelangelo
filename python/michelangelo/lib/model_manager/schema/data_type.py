@@ -1,3 +1,5 @@
+"""Data types for model schema features."""
+
 from enum import Enum
 
 

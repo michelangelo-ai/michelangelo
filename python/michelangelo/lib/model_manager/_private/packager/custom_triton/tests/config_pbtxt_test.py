@@ -1,3 +1,5 @@
+"""Tests for config.pbtxt template rendering."""
+
 from textwrap import dedent
 from unittest import TestCase
 

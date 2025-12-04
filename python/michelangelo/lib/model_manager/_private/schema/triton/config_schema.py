@@ -1,3 +1,5 @@
+"""Config schema conversion module."""
+
 from michelangelo.lib.model_manager._private.schema.triton.data_type import (
     convert_data_type,
 )

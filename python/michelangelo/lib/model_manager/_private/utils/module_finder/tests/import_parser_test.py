@@ -1,3 +1,5 @@
+"""Tests for import parsing."""
+
 import ast
 import importlib
 from unittest import TestCase

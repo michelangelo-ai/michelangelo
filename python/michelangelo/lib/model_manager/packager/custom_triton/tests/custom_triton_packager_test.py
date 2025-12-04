@@ -1,3 +1,5 @@
+"""Tests for CustomTritonPackager."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager

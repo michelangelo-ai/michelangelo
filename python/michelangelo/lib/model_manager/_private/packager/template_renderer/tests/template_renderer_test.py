@@ -1,3 +1,5 @@
+"""Tests for template renderer."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.packager.template_renderer import (

@@ -1,3 +1,5 @@
+"""Schema serialization and deserialization."""
+
 from dataclasses import asdict, fields
 
 import yaml
