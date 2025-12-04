@@ -1,9 +1,10 @@
 """Serialize the main module to the target dir."""
 
-import sys
 import inspect
 import logging
+import sys
 from typing import Optional
+
 from michelangelo.lib.model_manager._private.utils.module_finder import (
     find_dependency_files,
 )
@@ -15,8 +16,8 @@ _logger = logging.getLogger(__name__)
 def serialize_main_module(
     target_dir: str, include_import_prefixes: Optional[list[str]] = None
 ):
-    """
-    Serialize the main module to the target dir.
+    """Serialize the main module to the target dir.
+    
     The dependencies of the main module are also saved, excluding the third party dependencies
     All of the serialized files retain the original directory structure.
 

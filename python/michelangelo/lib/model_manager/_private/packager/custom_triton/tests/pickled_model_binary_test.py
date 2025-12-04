@@ -3,19 +3,21 @@
 import os
 import pickle
 import tempfile
-import numpy as np
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import patch
-from pathlib import Path
+
+import numpy as np
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import (
-    Predict,
-)
 from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import (
     Model,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import (
+    Predict,
 )
 
 

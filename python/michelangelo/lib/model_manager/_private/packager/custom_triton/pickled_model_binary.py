@@ -2,16 +2,17 @@
 
 import logging
 from typing import Optional
-from michelangelo.lib.model_manager._private.utils.pickle_utils import (
-    find_pickled_files,
-    find_pickle_definitions,
+
+from michelangelo.lib.model_manager._private.packager.custom_triton.main_module import (
+    serialize_main_module,
 )
 from michelangelo.lib.model_manager._private.utils.module_finder import (
     find_dependency_files,
 )
 from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
-from michelangelo.lib.model_manager._private.packager.custom_triton.main_module import (
-    serialize_main_module,
+from michelangelo.lib.model_manager._private.utils.pickle_utils import (
+    find_pickle_definitions,
+    find_pickled_files,
 )
 
 _logger = logging.getLogger(__name__)

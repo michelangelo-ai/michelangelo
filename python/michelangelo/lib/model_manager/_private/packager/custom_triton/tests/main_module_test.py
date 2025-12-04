@@ -4,6 +4,7 @@ import os
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_main_module,
 )
