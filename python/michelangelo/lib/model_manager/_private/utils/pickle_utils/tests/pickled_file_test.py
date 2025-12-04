@@ -1,3 +1,5 @@
+"""Tests for pickled file identification."""
+
 import os
 import pickle
 import tempfile

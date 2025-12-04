@@ -1,3 +1,5 @@
+"""Tests for pickle definition discovery."""
+
 import os
 import pickle
 import pickletools

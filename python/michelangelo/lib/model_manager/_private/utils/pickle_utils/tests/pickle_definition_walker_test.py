@@ -1,3 +1,5 @@
+"""Tests for pickle definition walking."""
+
 import os
 import pickle
 import tempfile

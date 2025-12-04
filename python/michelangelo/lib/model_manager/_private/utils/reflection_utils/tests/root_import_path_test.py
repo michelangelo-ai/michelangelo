@@ -1,3 +1,5 @@
+"""Tests for root import path utilities."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.utils.reflection_utils import (
