@@ -6,7 +6,10 @@ from michelangelo.lib.model_manager.constants import RawModelType
 
 
 def generate_type_yaml(batch_inference: Optional[bool] = False) -> str:
-    """Generate the type.yaml file content
+    """Generate the type.yaml file content.
+
+    Args:
+        batch_inference: Whether to enable batch inference.
 
     Returns:
         The type.yaml file content

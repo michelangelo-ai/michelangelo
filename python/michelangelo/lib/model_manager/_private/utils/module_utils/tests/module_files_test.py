@@ -25,7 +25,10 @@ class ModuleFilesTest(TestCase):
                     for filename in filenames
                 ]
             )
-            prefix = "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/"
+            prefix = (
+                "michelangelo/lib/model_manager/_private/utils/"
+                "module_finder/tests/fixtures/"
+            )
             self.assertEqual(
                 saved_files,
                 [

@@ -1,7 +1,7 @@
 import os
 from typing import Optional
 
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_interface import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_interface import ( # noqa: E501
     serialize_model_interface,
 )
 from michelangelo.lib.model_manager._private.utils.module_finder import (

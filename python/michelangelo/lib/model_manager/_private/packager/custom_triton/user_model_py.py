@@ -9,7 +9,7 @@ def generate_user_model_content(
     gen: TritonTemplateRenderer,
     process_batch: Optional[bool] = False,
 ) -> str:
-    """Generate the user_model.py content
+    """Generate the user_model.py content.
 
     Args:
         gen: The TritonTemplateRenderer instance

@@ -10,7 +10,7 @@ class RequirementsTxtTest(TestCase):
     """Tests requirements.txt file generation."""
 
     def test_generate_requirements_txt_with_list(self):
-        """It generates the requirements.txt file content with a list of requirements."""
+        """It generates the requirements.txt file content."""
         requirements = ["numpy==1.18.5", "pandas==2.0.0", "scikit-learn"]
         expected_requirements_txt = "numpy==1.18.5\npandas==2.0.0\nscikit-learn"
         self.assertEqual(
