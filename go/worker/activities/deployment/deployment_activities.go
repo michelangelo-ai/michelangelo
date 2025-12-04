@@ -72,14 +72,14 @@ func (r *activities) GetLatestDeploymentRevision(ctx context.Context, req GetLat
 					{
 						FieldName: "revision.spec.base_resource.name",
 						Operator:  apipb.CRITERION_OPERATOR_EQUAL,
-						MatchValue: &apipb.Any{
+						MatchValue: &types.Any{
 							Value: []byte(req.DeploymentName),
 						},
 					},
 					{
 						FieldName: "revision.spec.base_type.kind",
 						Operator:  apipb.CRITERION_OPERATOR_EQUAL,
-						MatchValue: &apipb.Any{
+						MatchValue: &types.Any{
 							Value: []byte("Deployment"),
 						},
 					},
