@@ -8,8 +8,9 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
 
 
 class ModelClassTest(TestCase):
+    """Tests model class serialization."""
     def test_serialize_model_class(self):
-        self.maxDiff = None
+        """It serializes the model class to the target directory."""
         model_class = (
             "michelangelo.lib.model_manager._private.packager.custom_triton."
             "tests.fixtures.predict.Predict"
