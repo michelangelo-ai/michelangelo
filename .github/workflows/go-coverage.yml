@@ -98,9 +98,13 @@ jobs:
 
             # Generate HTML report
             genhtml coverage.dat -o coverage-html --ignore-errors source,unmapped
+
+            # Create coverage.txt for combined workflow (compatible format)
+            echo "total: (statements) $COVERAGE%" > coverage.txt
           else
             echo "⚠️  Coverage file not found"
             echo "COVERAGE=0" >> $GITHUB_ENV
+            echo "total: (statements) 0%" > coverage.txt
           fi
 
       - name: Generate alternative coverage report
@@ -119,31 +123,35 @@ jobs:
           echo "COVERAGE=18.2" >> $GITHUB_ENV
           echo "⚠️  Using cached coverage estimate"
 
-      - name: "Check coverage threshold (baseline: 53.1%)"
+          # Create coverage.txt for combined workflow
+          echo "total: (statements) 18.2%" > coverage.txt
+
+      - name: "Check coverage threshold (baseline: 60%)"
         run: |
-          BASELINE=53
+          BASELINE=60
           COVERAGE=${{ env.COVERAGE }}
           COVERAGE_INT=${COVERAGE%.*}
 
-          echo "Coverage: $COVERAGE% (baseline: 53.1%)"
+          echo "Coverage: $COVERAGE% (baseline: 60%)"
 
           if [ "$COVERAGE_INT" -lt "$BASELINE" ]; then
             echo "❌ Coverage $COVERAGE% is below baseline $BASELINE%"
             echo "Coverage should not decrease from baseline"
             exit 1
           else
-            echo "✅ Coverage $COVERAGE% meets baseline threshold (53.1%)"
+            echo "✅ Coverage $COVERAGE% meets baseline threshold (60%)"
             echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.dat
-          flags: go
-          name: go-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # Codecov upload disabled - coverage is reported via PR comments and artifacts
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: ./coverage.dat
+      #     flags: go
+      #     name: go-coverage
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Get test results summary
         id: test_summary
@@ -169,7 +177,7 @@ jobs:
             **Tests Passed:** ${{ env.TESTS_PASSED }}
 
             **Coverage Policy:**
-            - **Baseline (existing code):** ≥53.1% (current coverage)
+            - **Baseline (existing code):** ≥60% (current coverage)
             - **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**
             - **Long-term goal:** Improve baseline to 90%
 
@@ -208,6 +216,7 @@ jobs:
           name: go-coverage-reports
           path: |
             coverage.dat
+            coverage.txt
             coverage-html/
             coverage-summary.txt
 
@@ -220,7 +229,7 @@ jobs:
           echo "**Tests Passed:** ${{ env.TESTS_PASSED }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Baseline (existing code):** ≥53.1% (current coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline (existing code):** ≥60% (current coverage)" >> $GITHUB_STEP_SUMMARY
           echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
           echo "- **Long-term goal:** Improve baseline to 90%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -251,10 +260,10 @@ jobs:
       - name: Check coverage meets requirements
         run: |
           echo "✅ Go coverage checks completed"
-          echo "- Baseline coverage: ≥53.1% (current coverage)"
+          echo "- Baseline coverage: ≥60% (current coverage)"
           echo "- New code coverage: ≥90% ✅ STRICTLY ENFORCED"
           echo ""
           echo "📝 Coverage Policy:"
-          echo "- Existing code must maintain baseline (53.1%)"
+          echo "- Existing code must maintain baseline (60%)"
           echo "- New/changed code must meet 90% coverage"
           echo "- Long-term goal: Improve baseline to 90%"
