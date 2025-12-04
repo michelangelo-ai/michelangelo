@@ -161,8 +161,8 @@ select = [
 ]
 
 ignore = [
-    "D100",   # Missing docstring in public module (gradually enable)
     "D104",   # Missing docstring in public package
+    # D100 (Missing docstring in public module) is now enforced for all new code
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
