@@ -15,7 +15,7 @@ import atexit
 import json
 import os
 from abc import ABC, abstractmethod
-from typing import Dict
+from typing import Optional
 
 import grpc
 from google.protobuf import any_pb2, json_format
@@ -58,7 +58,7 @@ class HeaderProvider(ABC):
     """
 
     @abstractmethod
-    def get_headers(self, request_headers: Dict[str, str] = None):
+    def get_headers(self, request_headers: Optional[dict[str, str]] = None):
         """Returns updated headers for gRPC requests.
 
         Args:
@@ -82,6 +82,7 @@ class DefaultHeaderProvider(HeaderProvider):
     """
 
     def __init__(self):
+        """Initialize DefaultHeaderProvider with no caller set."""
         self._caller = None
 
     @property
@@ -157,6 +158,7 @@ class Context:
     """
 
     def __init__(self):
+        """Initialize Context with no channel or header provider set."""
         self._channel = None
         self._header_provider = None
 
@@ -207,7 +209,8 @@ class Context:
 
             if ":" not in server_address:
                 raise ValueError(
-                    f"Invalid server address format in '{_MA_API_SERVER_ENV}'. Expected format: 'IP:PORT'"
+                    f"Invalid server address format in '{_MA_API_SERVER_ENV}'. "
+                    f"Expected format: 'IP:PORT'"
                 )
 
             channel = grpc.insecure_channel(
@@ -237,6 +240,12 @@ class BaseService:
     """
 
     def __init__(self, context, stub_clz):
+        """Initialize BaseService with context and stub class.
+
+        Args:
+            context: Context instance for managing gRPC connections.
+            stub_clz: gRPC stub class to instantiate for this service.
+        """
         self._context = context
         self._service_stub = None
         self._stub_clz = stub_clz
@@ -250,8 +259,9 @@ class BaseService:
             clz: Protobuf message class to instantiate if input is a dictionary.
 
         Returns:
-            A protobuf message instance. If input is None, returns empty instance.
-            If input is a dict, returns populated instance. Otherwise returns input as-is.
+            A protobuf message instance. If input is None, returns empty
+            instance. If input is a dict, returns populated instance.
+            Otherwise returns input as-is.
         """
         opts = clz()
         if message_or_dict is None:
@@ -348,7 +358,7 @@ def _keys_to_camel(d):
         joined = "".join([s.title() for s in splits[1:]])
         return splits[0] + joined
 
-    for key in d.keys():
+    for key in d:
         if isinstance(d[key], dict):
             res[to_camel_case(key)] = _keys_to_camel(d[key])
         else:

@@ -1,8 +1,8 @@
 """Michelangelo API v2 client implementation.
 
-This module provides the main APIClient class for interacting with Michelangelo services.
-The client is built on top of generated service stubs and provides a high-level interface
-for all Michelangelo API operations.
+This module provides the main APIClient class for interacting with
+Michelangelo services. The client is built on top of generated service
+stubs and provides a high-level interface for all API operations.
 """
 
 from .services.base import Context
@@ -15,7 +15,9 @@ class APIClient(ServicesGen):
     Example:
         >>> from michelangelo.api.v2 import APIClient
         >>> APIClient.set_caller('my-client')
-        >>> model = APIClient.ModelService.get_model(namespace='my-project', name='my-model')
+        >>> model = APIClient.ModelService.get_model(
+        ...     namespace='my-project', name='my-model'
+        ... )
     """
 
     _context = Context()

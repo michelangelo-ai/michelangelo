@@ -9,4 +9,4 @@ Example:
     >>> model = APIClient.ModelService.get_model(namespace='default', name='my-model')
 """
 
-from .client import APIClient
+from .client import APIClient as APIClient
