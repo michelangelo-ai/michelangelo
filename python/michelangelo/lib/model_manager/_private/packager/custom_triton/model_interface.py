@@ -36,11 +36,11 @@ def validate_model_class(model_class: str) -> tuple[bool, Exception]:
         and an exception if the model class is invalid
     """
     try:
-        Model = get_module_attr(model_class)
+        model_cls = get_module_attr(model_class)
     except (ValueError, ImportError) as e:
         return False, e
 
-    if not issubclass(Model, custom_model.Model):
+    if not issubclass(model_cls, custom_model.Model):
         return False, TypeError(
             f"Model class {model_class} must be a subclass of "
             "michelangelo.lib.model_manager.interface.custom_model.Model"
