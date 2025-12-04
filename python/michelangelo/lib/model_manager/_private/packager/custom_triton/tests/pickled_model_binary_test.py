@@ -1,3 +1,5 @@
+"""Tests for the pickle model binary serialization."""
+
 import os
 import pickle
 import tempfile
