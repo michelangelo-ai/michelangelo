@@ -1,12 +1,13 @@
 import os
 from typing import Optional
+
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_interface import (
+    serialize_model_interface,
+)
 from michelangelo.lib.model_manager._private.utils.module_finder import (
     find_dependency_files,
 )
 from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_interface import (
-    serialize_model_interface,
-)
 
 
 def serialize_model_class(
@@ -38,7 +39,6 @@ def serialize_model_class(
     Returns:
         None
     """
-
     os.makedirs(target_dir, exist_ok=True)
 
     module_def, _, _ = model_class.rpartition(".")

@@ -1,5 +1,7 @@
-import yaml
 from typing import Optional
+
+import yaml
+
 from michelangelo.lib.model_manager.constants import RawModelType
 
 

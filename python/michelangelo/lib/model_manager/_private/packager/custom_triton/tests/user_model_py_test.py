@@ -1,10 +1,11 @@
 import os
 from unittest import TestCase
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
-)
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_user_model_content,
+)
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
 )
 
 

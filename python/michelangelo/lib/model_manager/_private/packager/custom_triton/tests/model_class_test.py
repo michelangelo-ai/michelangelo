@@ -1,7 +1,8 @@
-from unittest import TestCase
 import os
 import tempfile
 from pathlib import Path
+from unittest import TestCase
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_model_class,
 )

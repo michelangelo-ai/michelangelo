@@ -1,5 +1,6 @@
 import tempfile
 from unittest import TestCase
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_requirements_txt,
 )

@@ -2,8 +2,7 @@ from typing import Union
 
 
 def generate_requirements_txt(requirements: Union[list[str], str]) -> str:
-    """
-    Generate the requirements.txt file content
+    """Generate the requirements.txt file content
 
     Args:
         requirements: The requirements can be one of the following:
