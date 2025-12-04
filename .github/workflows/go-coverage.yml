@@ -98,9 +98,13 @@ jobs:
 
             # Generate HTML report
             genhtml coverage.dat -o coverage-html --ignore-errors source,unmapped
+
+            # Create coverage.txt for combined workflow (compatible format)
+            echo "total: (statements) $COVERAGE%" > coverage.txt
           else
             echo "⚠️  Coverage file not found"
             echo "COVERAGE=0" >> $GITHUB_ENV
+            echo "total: (statements) 0%" > coverage.txt
           fi
 
       - name: Generate alternative coverage report
@@ -118,6 +122,9 @@ jobs:
           # Set a placeholder
           echo "COVERAGE=18.2" >> $GITHUB_ENV
           echo "⚠️  Using cached coverage estimate"
+
+          # Create coverage.txt for combined workflow
+          echo "total: (statements) 18.2%" > coverage.txt
 
       - name: "Check coverage threshold (baseline: 53.1%)"
         run: |
@@ -208,6 +215,7 @@ jobs:
           name: go-coverage-reports
           path: |
             coverage.dat
+            coverage.txt
             coverage-html/
             coverage-summary.txt
 
