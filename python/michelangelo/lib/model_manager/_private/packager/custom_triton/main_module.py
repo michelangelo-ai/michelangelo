@@ -17,8 +17,9 @@ def serialize_main_module(
     target_dir: str, include_import_prefixes: Optional[list[str]] = None
 ):
     """Serialize the main module to the target dir.
-    
-    The dependencies of the main module are also saved, excluding the third party dependencies
+
+    The dependencies of the main module are also saved,
+    excluding the third party dependencies
     All of the serialized files retain the original directory structure.
 
     Args:
@@ -36,8 +37,11 @@ def serialize_main_module(
     except TypeError:
         msg = (
             "Warning: Cannot serialize the __main__ module because it is not a file. "
-            "Most likely, you are running this code in an interactive shell or Jupyter notebook. "
-            "Please remove dependencies on the __main__ module or run this code in a Python script. "
+            "Most likely, you are running this code "
+            "in an interactive shell or Jupyter notebook. "
+            "Please remove dependencies on the __main__ module "
+            "and add them to the model class instead. "
+            "or run this code in a Python script. "
             "Refer to https://engwiki.uberinternal.com/display/TE0MICHELANGELO/Best+Practices+When+Packaging+the+Model#BestPracticesWhenPackagingtheModel-WhenPackagingaModelinJupyterNotebook"
         )
         _logger.warning(msg)

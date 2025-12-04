@@ -40,7 +40,8 @@ def serialize_pickle_dependencies(
     pickled_files = find_pickled_files(model_path)
     for pickled_file in pickled_files:
         _logger.info(
-            f"Serializing dependencies of the pickled file {pickled_file} to {target_dir}"
+            "Serializing dependencies of "
+            f"the pickled file {pickled_file} to {target_dir}"
         )
         pickle_definitions = find_pickle_definitions(pickled_file)
         if not need_main_module and any(

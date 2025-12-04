@@ -13,10 +13,10 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import (  # noqa: E501
     Model,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import (  # noqa: E501
     Predict,
 )
 
@@ -129,7 +129,7 @@ class PickledModelBinaryTest(TestCase):
             )
 
     def test_serialize_pickled_file_dependencies_skip(self):
-        """Tests that the pickle file dependencies are not serialized if they are not a pickle file."""
+        """Tests for non-pickle files."""
         with tempfile.TemporaryDirectory() as temp_dir:
             fn = os.path.join(temp_dir, "test.pkl")
             target_dir = os.path.join(temp_dir, "target")
