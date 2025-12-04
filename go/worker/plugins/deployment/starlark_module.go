@@ -8,7 +8,6 @@ import (
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"go.starlark.net/starlark"
-	"go.uber.org/cadence"
 
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -135,17 +134,13 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 	}
 
 	// Wait for the new deployment revision to be created and indexed.
-	retryPolicy := &cadence.RetryPolicy{
+	retryPolicy := workflow.RetryPolicy{
 		InitialInterval:    5 * time.Second,
 		BackoffCoefficient: 1.0,
 		MaximumInterval:    5 * time.Second,
 		MaximumAttempts:    5,
 	}
-	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
-		RetryPolicy:            retryPolicy,
-		ScheduleToStartTimeout: time.Minute,
-		StartToCloseTimeout:    time.Minute,
-	})
+	ctx = workflow.WithRetryPolicy(ctx, retryPolicy)
 
 	var latestRevisionName string
 	if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetLatestDeploymentRevision, deployment.GetLatestDeploymentRevisionRequest{
@@ -178,20 +173,16 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 		return nil, err
 	}
 
-	// Set up activity options with retry policy for polling the deployment status.
-	activityOptions := workflow.ActivityOptions{
-		ScheduleToStartTimeout: time.Minute,
-		StartToCloseTimeout:    time.Second * time.Duration(timeout),
-		RetryPolicy: &cadence.RetryPolicy{
-			InitialInterval:          time.Second * time.Duration(poll),
-			BackoffCoefficient:       1.0,
-			MaximumInterval:          time.Second * time.Duration(poll),
-			ExpirationInterval:       time.Second * time.Duration(timeout),
-			MaximumAttempts:          0, // Unlimited retries within timeout
-			NonRetriableErrorReasons: []string{"cadenceInternal:Generic", "not-found", "internal", "invalid-argument"},
-		},
+	// Set up retry policy for polling the deployment status.
+	retryPolicy := workflow.RetryPolicy{
+		InitialInterval:          time.Second * time.Duration(poll),
+		BackoffCoefficient:       1.0,
+		MaximumInterval:          time.Second * time.Duration(poll),
+		ExpirationInterval:       time.Second * time.Duration(timeout),
+		MaximumAttempts:          0, // Unlimited retries within timeout
+		NonRetriableErrorReasons: []string{"cadenceInternal:Generic", "not-found", "internal", "invalid-argument"},
 	}
-	ctx = workflow.WithActivityOptions(ctx, activityOptions)
+	ctx = workflow.WithRetryPolicy(ctx, retryPolicy)
 
 	var finalDeployment *v2pb.Deployment
 	if err := workflow.ExecuteActivity(ctx, deployment.Activities.SensorDeploymentRevision, deployment.SensorDeploymentRevisionRequest{
