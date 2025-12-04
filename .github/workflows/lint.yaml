@@ -57,7 +57,7 @@ jobs:
         id: changed-files
         run: |
           echo "Comparing changes from $BASE_SHA to HEAD"
-          CHANGED_FILES_PRE=$(git diff --name-only $BASE_SHA HEAD | grep -E '\.py$' || true)
+          CHANGED_FILES_PRE=$(git diff --name-only --diff-filter=ACMRT $BASE_SHA HEAD | grep -E '\.py$' || true)
           echo "Raw Changed files:"
           echo "$CHANGED_FILES_PRE"
 
