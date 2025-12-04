@@ -1,3 +1,5 @@
+"""Numpy data validation utilities."""
+
 from typing import Optional
 
 from numpy import ndarray

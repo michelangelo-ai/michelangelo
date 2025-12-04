@@ -1,3 +1,5 @@
+"""Triton data type conversion module."""
+
 from michelangelo.lib.model_manager.schema import DataType
 
 # Mapping from ModelSchema data types to Triton data types.
