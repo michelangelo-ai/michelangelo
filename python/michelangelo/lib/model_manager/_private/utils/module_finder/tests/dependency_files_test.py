@@ -1,3 +1,5 @@
+"""Tests for dependency file finding utilities."""
+
 import os
 from unittest import TestCase
 

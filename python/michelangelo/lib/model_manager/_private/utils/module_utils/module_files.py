@@ -1,3 +1,5 @@
+"""Save the module files to the target directory."""
+
 import os
 import shutil
 from pathlib import PurePath

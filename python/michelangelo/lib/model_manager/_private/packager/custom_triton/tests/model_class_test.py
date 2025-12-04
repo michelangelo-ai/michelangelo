@@ -1,3 +1,5 @@
+"""Tests for model class serialization."""
+
 import os
 import tempfile
 from pathlib import Path

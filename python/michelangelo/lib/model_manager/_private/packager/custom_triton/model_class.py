@@ -1,3 +1,5 @@
+"""Serialize the model class to the target dir."""
+
 import os
 from typing import Optional
 

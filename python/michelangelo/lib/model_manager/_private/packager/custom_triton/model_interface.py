@@ -1,3 +1,5 @@
+"""Serialize the model interface to the target dir."""
+
 import os
 import shutil
 

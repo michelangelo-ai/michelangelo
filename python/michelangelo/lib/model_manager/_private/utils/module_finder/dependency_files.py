@@ -1,3 +1,5 @@
+"""Find the dependency files of a module."""
+
 from __future__ import annotations
 
 import importlib

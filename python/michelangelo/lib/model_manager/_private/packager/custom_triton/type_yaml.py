@@ -1,3 +1,5 @@
+"""Generate the type.yaml file content."""
+
 from typing import Optional
 
 import yaml

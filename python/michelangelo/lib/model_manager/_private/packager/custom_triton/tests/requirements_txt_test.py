@@ -1,3 +1,5 @@
+"""Tests for requirements.txt file generation."""
+
 import tempfile
 from unittest import TestCase
 

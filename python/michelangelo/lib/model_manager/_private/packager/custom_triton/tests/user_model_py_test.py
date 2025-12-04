@@ -1,3 +1,5 @@
+"""Tests for user_model.py file generation."""
+
 import os
 from unittest import TestCase
 

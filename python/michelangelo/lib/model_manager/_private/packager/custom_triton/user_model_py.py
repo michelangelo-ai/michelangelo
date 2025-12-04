@@ -1,3 +1,5 @@
+"""Generate the user_model.py file content."""
+
 from typing import Optional
 
 from michelangelo.lib.model_manager._private.packager.template_renderer import (

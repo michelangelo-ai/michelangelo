@@ -1,3 +1,5 @@
+"""Tests for model interface serialization and validation."""
+
 import os
 import tempfile
 from unittest import TestCase

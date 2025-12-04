@@ -1,7 +1,5 @@
 # flake8: noqa:F401
-"""
-Custom Triton packager for custom models.
-"""
+"""Custom Triton packager for custom models."""
 
 from .config_pbtxt import generate_config_pbtxt_content
 from .model_class import serialize_model_class

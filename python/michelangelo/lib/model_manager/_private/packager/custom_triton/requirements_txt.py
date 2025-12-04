@@ -1,3 +1,5 @@
+"""Generate the requirements.txt file content."""
+
 from typing import Union
 
 

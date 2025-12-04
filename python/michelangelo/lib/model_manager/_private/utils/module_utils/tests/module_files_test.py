@@ -1,3 +1,5 @@
+"""Tests for saving module files to the target directory."""
+
 import os
 import tempfile
 from unittest import TestCase
