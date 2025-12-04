@@ -91,6 +91,7 @@ class PickledModelBinaryTest(TestCase):
             self.assertTrue(len(os.listdir(target_dir)) > 0)
 
     def test_serialize_pickled_file_dependencies(self):
+        """Tests that the pickle file dependencies are serialized."""
         with tempfile.TemporaryDirectory() as temp_dir:
             fn = os.path.join(temp_dir, "test.pkl")
             target_dir = os.path.join(temp_dir, "target")
