@@ -16,3 +16,6 @@ def test_wait_for_deployment():
         poll = 1,
     )
 
+def main():
+    return test_create_or_update_deployment()
+
