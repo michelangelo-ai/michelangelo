@@ -1,3 +1,5 @@
+"""Tests for saving module files to the target directory."""
+
 import os
 import tempfile
 from unittest import TestCase
@@ -25,17 +27,21 @@ class ModuleFilesTest(TestCase):
                     for filename in filenames
                 ]
             )
+            prefix = (
+                "michelangelo/lib/model_manager/_private/utils/"
+                "module_finder/tests/fixtures/"
+            )
             self.assertEqual(
                 saved_files,
                 [
-                    "fixtures/folder/fn1.py",
-                    "fixtures/folder/fn2.py",
-                    "fixtures/folder/fn3.py",
-                    "fixtures/folder/fn4.py",
-                    "fixtures/module_with_imports.py",
-                    "fixtures/package/__init__.py",
-                    "fixtures/package/fn1.py",
-                    "fixtures/package/fn2.py",
-                    "fixtures/simple_module.py",
+                    f"{prefix}folder/fn1.py",
+                    f"{prefix}folder/fn2.py",
+                    f"{prefix}folder/fn3.py",
+                    f"{prefix}folder/fn4.py",
+                    f"{prefix}module_with_imports.py",
+                    f"{prefix}package/__init__.py",
+                    f"{prefix}package/fn1.py",
+                    f"{prefix}package/fn2.py",
+                    f"{prefix}simple_module.py",
                 ],
             )
