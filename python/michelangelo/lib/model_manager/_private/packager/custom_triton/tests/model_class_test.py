@@ -2,7 +2,9 @@ from unittest import TestCase
 import os
 import tempfile
 from pathlib import Path
-from michelangelo.lib.model_manager._private.packager.custom_triton import serialize_model_class
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    serialize_model_class,
+)
 
 
 class ModelClassTest(TestCase):
@@ -15,7 +17,12 @@ class ModelClassTest(TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             target_dir = os.path.join(temp_dir, "package")
-            serialize_model_class(model_class, target_dir, "model_class.txt", include_import_prefixes=["michelangelo"])
+            serialize_model_class(
+                model_class,
+                target_dir,
+                "model_class.txt",
+                include_import_prefixes=["michelangelo"],
+            )
 
             # test we can load the model file
             with open(os.path.join(target_dir, "model_class.txt")) as f:
@@ -62,7 +69,7 @@ class ModelClassTest(TestCase):
                     f"{prefix}_private/utils/module_finder/tests/fixtures/package/__init__.py",
                     f"{prefix}_private/utils/module_finder/tests/fixtures/package/fn1.py",
                     f"{prefix}_private/utils/module_finder/tests/fixtures/package/fn2.py",
-                    f"{prefix}_private/utils/module_finder/tests/fixtures/simple_module.py",   
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/simple_module.py",
                     f"{prefix}interface/custom_model.py",
                     "model_class.txt",
                 ],

@@ -23,9 +23,9 @@ def find_dependency_files(
         max_depth: the maximum depth to search
 
     Returns:
-        The dictionary whose keys are the full module names 
+        The dictionary whose keys are the full module names
         and values are the module file paths
-        The __init__.py file is also included, 
+        The __init__.py file is also included,
         with the key being the package name with __init__ appended
 
         e.g. {

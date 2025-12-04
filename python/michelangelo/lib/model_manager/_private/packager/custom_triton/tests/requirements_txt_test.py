@@ -1,6 +1,8 @@
 import tempfile
 from unittest import TestCase
-from michelangelo.lib.model_manager._private.packager.custom_triton import generate_requirements_txt
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    generate_requirements_txt,
+)
 
 
 class RequirementsTxtTest(TestCase):
@@ -10,7 +12,9 @@ class RequirementsTxtTest(TestCase):
         """It generates the requirements.txt file content with a list of requirements."""
         requirements = ["numpy==1.18.5", "pandas==2.0.0", "scikit-learn"]
         expected_requirements_txt = "numpy==1.18.5\npandas==2.0.0\nscikit-learn"
-        self.assertEqual(generate_requirements_txt(requirements), expected_requirements_txt)
+        self.assertEqual(
+            generate_requirements_txt(requirements), expected_requirements_txt
+        )
 
     def test_generate_requirements_txt_with_file_path(self):
         """It generates the requirements.txt file content with a file path."""
@@ -18,7 +22,9 @@ class RequirementsTxtTest(TestCase):
             f.write("numpy==1.18.5\npandas==2.0.0\nscikit-learn")
             f.flush()
             expected_requirements_txt = "numpy==1.18.5\npandas==2.0.0\nscikit-learn"
-            self.assertEqual(generate_requirements_txt(f.name), expected_requirements_txt)
+            self.assertEqual(
+                generate_requirements_txt(f.name), expected_requirements_txt
+            )
 
     def test_generate_requirements_txt_with_invalid_input(self):
         """It raises a ValueError when the input is invalid."""

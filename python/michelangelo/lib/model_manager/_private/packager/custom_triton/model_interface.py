@@ -3,7 +3,9 @@ import shutil
 import michelangelo.lib.model_manager.interface.custom_model as custom_model
 from michelangelo._internal.utils.reflection_utils import get_module_attr
 
-module_path = os.path.join("michelangelo", "lib", "model_manager", "interface", "custom_model.py")
+module_path = os.path.join(
+    "michelangelo", "lib", "model_manager", "interface", "custom_model.py"
+)
 
 
 def serialize_model_interface(target_dir: str):
@@ -29,7 +31,7 @@ def validate_model_class(model_class: str) -> tuple[bool, Exception]:
         model_class: the model class
 
     Returns:
-        A tuple of a boolean indicating whether the model class is valid 
+        A tuple of a boolean indicating whether the model class is valid
         and an exception if the model class is invalid
     """
     try:

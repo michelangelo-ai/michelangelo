@@ -8,6 +8,7 @@ from michelangelo.lib.model_manager._private.utils.module_finder import (
 
 class DependencyFilesTest(TestCase):
     """Tests dependency file finding utilities."""
+
     def setUp(self):
         self.module_prefix = (
             "michelangelo.lib.model_manager._private.utils."
@@ -19,7 +20,7 @@ class DependencyFilesTest(TestCase):
         files = find_dependency_files(
             "michelangelo.lib.model_manager._private.utils.module_finder.tests.fixtures.module_with_imports"
         )
-        
+
         cleaned_files = {
             m: os.path.join("", *f.split("/")[-2:]) for m, f in files.items()
         }
@@ -37,7 +38,7 @@ class DependencyFilesTest(TestCase):
             f"{prefix}package.fn2": "package/fn2.py",
         }
         self.assertEqual(cleaned_files, expected_files)
-        
+
     def test_find_imported_module_files_with_prefixes(self):
         """It filters discovered files by prefix."""
         files = find_dependency_files(
@@ -167,7 +168,7 @@ class DependencyFilesTest(TestCase):
             f"{prefix}package.fn1": "package/fn1.py",
             f"{prefix}package.fn2": "package/fn2.py",
         }
-        self.assertEqual(cleaned_files, expected_files) 
+        self.assertEqual(cleaned_files, expected_files)
 
     def test_find_imported_module_files_with_multi_package_without_init(self):
         """It discovers files in implicit namespace packages."""

@@ -7,11 +7,7 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
 )
 
 module_path = os.path.join(
-    "michelangelo", 
-    "lib", 
-    "model_manager", 
-    "interface", 
-    "custom_model.py"
+    "michelangelo", "lib", "model_manager", "interface", "custom_model.py"
 )
 
 

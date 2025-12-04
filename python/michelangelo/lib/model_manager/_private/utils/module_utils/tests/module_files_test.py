@@ -38,5 +38,5 @@ class ModuleFilesTest(TestCase):
                     f"{prefix}package/fn1.py",
                     f"{prefix}package/fn2.py",
                     f"{prefix}simple_module.py",
-                ]
+                ],
             )
