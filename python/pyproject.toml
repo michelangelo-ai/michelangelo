@@ -259,10 +259,10 @@ exclude_lines = [
 ]
 
 # Overall coverage threshold (baseline for existing code)
-# Baseline: 34.94% (current coverage as of 2025-11-15)
+# Baseline: 66% (updated coverage as of 2025-12-02)
 # New code must meet 85% coverage (enforced in CI via diff-cover)
 # Long-term goal: Improve baseline to 70%
-fail_under = 34
+fail_under = 66
 
 [tool.coverage.html]
 directory = "htmlcov"
