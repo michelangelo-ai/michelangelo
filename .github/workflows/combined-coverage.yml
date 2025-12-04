@@ -110,7 +110,7 @@ jobs:
             | Component | Coverage | Baseline | New Code | Status |
             |-----------|----------|----------|----------|--------|
             | 🐍 Python | ${{ env.PYTHON_COVERAGE }}% | ≥34.94% | ≥90% ✅ | ${{ env.PYTHON_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
-            | 🐹 Go | ${{ env.GO_COVERAGE }}% | ≥53.1% | ≥90% ✅ | ${{ env.GO_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
+            | 🐹 Go | ${{ env.GO_COVERAGE }}% | ≥60% | ≥90% ✅ | ${{ env.GO_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
             | 📜 JavaScript | ${{ env.JS_COVERAGE }}% | ≥78.74% | ≥90% ✅ | ${{ env.JS_COVERAGE != 'N/A' && '✅' || '⏭️' }} |
 
             ---
@@ -119,7 +119,7 @@ jobs:
 
             **Baseline (Existing Code):**
             - Python: ≥34.94% (current coverage)
-            - Go: ≥53.1% (current coverage)
+            - Go: ≥60% (current coverage)
             - JavaScript: ≥78.74% (current coverage)
 
             **New/Changed Code:** ≥90% **STRICTLY ENFORCED**
@@ -164,7 +164,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Baseline (Existing Code)" >> $GITHUB_STEP_SUMMARY
           echo "- Python: ≥34.94%" >> $GITHUB_STEP_SUMMARY
-          echo "- Go: ≥53.1%" >> $GITHUB_STEP_SUMMARY
+          echo "- Go: ≥60%" >> $GITHUB_STEP_SUMMARY
           echo "- JavaScript: ≥78.74%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### New/Changed Code" >> $GITHUB_STEP_SUMMARY
