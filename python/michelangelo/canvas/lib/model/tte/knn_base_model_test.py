@@ -1,4 +1,5 @@
 """Tests for KNN base model module."""
+
 # ruff: noqa: D101, D102
 import os
 import unittest
