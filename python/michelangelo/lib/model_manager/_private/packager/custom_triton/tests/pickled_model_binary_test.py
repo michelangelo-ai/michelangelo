@@ -11,8 +11,12 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import Predict
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import Model
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict import (
+    Predict,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.invalid_model import (
+    Model,
+)
 
 
 class PickledModelBinaryTest(TestCase):
@@ -38,10 +42,14 @@ class PickledModelBinaryTest(TestCase):
             with open(fn3, "w") as f:
                 f.write("not a pickle")
 
-            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["michelangelo"])
+            serialize_pickle_dependencies(
+                model_path, target_dir, include_import_prefixes=["michelangelo"]
+            )
 
             files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir)) for dirpath, _, filenames in os.walk(target_dir) for file in filenames
+                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
+                for dirpath, _, filenames in os.walk(target_dir)
+                for file in filenames
             )
 
             prefix = "michelangelo/lib/model_manager/"
@@ -62,8 +70,12 @@ class PickledModelBinaryTest(TestCase):
                 ],
             )
 
-    @patch("michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary.find_pickle_definitions")
-    def test_serialize_pickle_dependencies_with_main(self, mock_find_pickle_definitions):
+    @patch(
+        "michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary.find_pickle_definitions"
+    )
+    def test_serialize_pickle_dependencies_with_main(
+        self, mock_find_pickle_definitions
+    ):
         """Tests that the main module is serialized if it is a pickle dependency."""
         mock_find_pickle_definitions.return_value = ["__main__.test"]
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -73,7 +85,9 @@ class PickledModelBinaryTest(TestCase):
             with open(os.path.join(model_path, "test.pkl"), "wb") as f:
                 pickle.dump({}, f)
 
-            serialize_pickle_dependencies(model_path, target_dir, include_import_prefixes=["michelangelo"])
+            serialize_pickle_dependencies(
+                model_path, target_dir, include_import_prefixes=["michelangelo"]
+            )
             self.assertTrue(len(os.listdir(target_dir)) > 0)
 
     def test_serialize_pickled_file_dependencies(self):
@@ -84,10 +98,14 @@ class PickledModelBinaryTest(TestCase):
             with open(fn, "wb") as f:
                 pickle.dump(Predict(), f)
 
-            serialize_pickled_file_dependencies(fn, target_dir, include_import_prefixes=["michelangelo"])
+            serialize_pickled_file_dependencies(
+                fn, target_dir, include_import_prefixes=["michelangelo"]
+            )
 
             files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir)) for dirpath, _, filenames in os.walk(target_dir) for file in filenames
+                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
+                for dirpath, _, filenames in os.walk(target_dir)
+                for file in filenames
             )
 
             prefix = "michelangelo/lib/model_manager/"
@@ -116,10 +134,14 @@ class PickledModelBinaryTest(TestCase):
             with open(fn, "wb") as f:
                 pickle.dump(np.array([]), f)
 
-            serialize_pickled_file_dependencies(fn, target_dir, include_import_prefixes=["michelangelo"])
+            serialize_pickled_file_dependencies(
+                fn, target_dir, include_import_prefixes=["michelangelo"]
+            )
 
             files = sorted(
-                str(Path(os.path.join(dirpath, file)).relative_to(target_dir)) for dirpath, _, filenames in os.walk(target_dir) for file in filenames
+                str(Path(os.path.join(dirpath, file)).relative_to(target_dir))
+                for dirpath, _, filenames in os.walk(target_dir)
+                for file in filenames
             )
 
             self.assertEqual(files, [])
