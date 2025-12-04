@@ -1,3 +1,12 @@
+// Package pipeline implements a Kubernetes controller for managing Pipeline resources.
+//
+// The controller watches Pipeline custom resources and reconciles their state by:
+//   - Updating the latest revision reference
+//   - Managing pipeline state transitions
+//   - Scheduling periodic reconciliation for non-terminal states
+//
+// The controller integrates with the Michelangelo API handler to perform CRUD
+// operations on Pipeline resources and updates their status accordingly.
 package pipeline
 
 import (
@@ -20,10 +29,15 @@ import (
 )
 
 const (
+	// reconcileInterval defines how frequently non-terminal pipelines are reconciled.
 	reconcileInterval = 10 * time.Second
 )
 
-// Reconciler is the output of NewReconciler.
+// Reconciler implements the controller-runtime Reconciler interface for Pipeline resources.
+//
+// It manages the reconciliation loop for Pipeline custom resources, handling state
+// updates and revision tracking. The reconciler uses an API handler for Kubernetes
+// operations and maintains environment context and logging capabilities.
 type Reconciler struct {
 	api.Handler
 	env               env.Context
@@ -31,7 +45,18 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 }
 
-// Reconcile is the main entrypoint for the controller.
+// Reconcile is the main reconciliation loop entry point for Pipeline resources.
+//
+// It processes reconciliation requests for Pipeline objects by:
+//   - Retrieving the Pipeline resource from Kubernetes
+//   - Updating the latest revision reference based on the pipeline's git commit
+//   - Transitioning the pipeline state to READY
+//   - Persisting status updates back to Kubernetes
+//
+// The reconcile loop will requeue non-terminal pipelines at regular intervals
+// to ensure continuous monitoring. Terminal states (READY, ERROR) do not requeue.
+//
+// Returns a Result indicating whether to requeue and an error if reconciliation failed.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))
 	logger.Info("Reconciling pipeline starts")
@@ -50,6 +75,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return r.updatePipelineStatus(ctx, pipeline, originalPipeline, logger)
 }
 
+// updatePipelineStatus persists pipeline status changes to Kubernetes.
+//
+// It compares the original and updated pipeline status and writes changes
+// to the API server if they differ. For non-terminal states, it schedules
+// requeue after the reconcileInterval to ensure continued reconciliation.
+//
+// Returns a Result with requeue information and an error if the update fails.
 func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pipeline, originalPipeline *v2pb.Pipeline, logger *zap.Logger) (ctrl.Result, error) {
 	result := ctrl.Result{}
 	if !isTerminatedState(pipeline.Status.State) {
@@ -71,16 +103,34 @@ func (r *Reconciler) updatePipelineStatus(ctx context.Context, pipeline *v2pb.Pi
 	return result, nil
 }
 
+// formatRevisionName generates a standardized revision name for a pipeline.
+//
+// The name format is: "pipeline-{lowercase-pipeline-name}-{git-ref-prefix}"
+// where git-ref-prefix is the first 12 characters (or less) of the git reference.
+//
+// For example: "pipeline-my-model-a1b2c3d4e5f6"
 func formatRevisionName(pipeline *v2pb.Pipeline) string {
 	return fmt.Sprintf("%s-%s-%s", "pipeline", strings.ToLower(pipeline.Name), pipeline.Spec.Commit.GitRef[:min(len(pipeline.Spec.Commit.GitRef), 12)])
 }
 
+// isTerminatedState checks if a pipeline state is terminal.
+//
+// Terminal states (READY, ERROR) indicate the pipeline has reached a final
+// state and does not require further reconciliation. Non-terminal states
+// will continue to be reconciled at regular intervals.
 func isTerminatedState(state v2pb.PipelineState) bool {
 	return state == v2pb.PIPELINE_STATE_READY ||
 		state == v2pb.PIPELINE_STATE_ERROR
 }
 
-// Register is used to register the controller with the manager.
+// Register sets up the Pipeline controller with the controller-runtime manager.
+//
+// It initializes the API handler from the factory and configures the controller
+// to watch Pipeline resources. The controller will reconcile all Pipeline objects
+// in the cluster whenever they are created, updated, or deleted.
+//
+// Returns an error if the API handler cannot be created or the controller
+// registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
 	if err != nil {
