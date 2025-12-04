@@ -371,26 +371,63 @@ do_deploy_inference() {
     done
 
     # Patch the deployment with GPU tolerations
+    # NOTE: THIS is a workaround to add GPU tolerations to the deployment. AKA HACKY.
     echo_info "Patching deployment with GPU tolerations..."
-    kubectl patch deployment $DEPLOYMENT_NAME -n $NAMESPACE --type='json' -p='[
-      {"op": "add", "path": "/spec/template/spec/tolerations", "value": [
-        {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
-      ]}
-    ]' || echo_warn "Tolerations patch failed (may already exist)"
+    # First check if tolerations already exist
+    if ! kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE -o jsonpath='{.spec.template.spec.tolerations}' | grep -q "nvidia.com/gpu"; then
+        kubectl patch deployment $DEPLOYMENT_NAME -n $NAMESPACE --type='json' -p='[
+          {"op": "add", "path": "/spec/template/spec/tolerations", "value": [
+            {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+          ]}
+        ]'
+        echo_info "GPU tolerations added"
+    else
+        echo_info "GPU tolerations already exist"
+    fi
 
     # Reduce resource requests to fit on dev cluster
     echo_info "Reducing resource requests for dev cluster..."
     kubectl patch deployment $DEPLOYMENT_NAME -n $NAMESPACE --type='json' -p='[
       {"op": "replace", "path": "/spec/template/spec/containers/0/resources/requests/cpu", "value": "100m"},
       {"op": "replace", "path": "/spec/template/spec/containers/0/resources/requests/memory", "value": "512Mi"}
-    ]' || echo_warn "Resource patch failed"
+    ]' 2>/dev/null || echo_info "Resource patch skipped (may already be set)"
 
-    # Wait a moment for patches to apply
-    sleep 5
-
-    # Wait for deployment to be ready
-    echo_info "Waiting for inference server pods to be ready..."
+    # Wait for deployment rollout
+    echo_info "Waiting for inference server deployment rollout..."
     kubectl rollout status deployment/$DEPLOYMENT_NAME -n $NAMESPACE --timeout=300s || echo_warn "Deployment rollout timed out"
+
+    # Wait for InferenceServer CR to reach SERVING state
+    INFERENCE_SERVER_NAME="inference-server-bert-cola"
+    echo_info "Waiting for InferenceServer '$INFERENCE_SERVER_NAME' to reach SERVING state..."
+    echo "   (This may take 5-10 minutes for first-time Triton image pull)"
+    
+    if kubectl wait --for=jsonpath='{.status.state}'=INFERENCE_SERVER_STATE_SERVING \
+        inferenceservers.michelangelo.api/$INFERENCE_SERVER_NAME \
+        -n $NAMESPACE \
+        --timeout=720s; then
+        echo_info "✅ Inference server is ready and serving!"
+    else
+        echo_warn "Inference server did not reach SERVING state within timeout"
+        echo_info "Check status with: kubectl get inferenceservers $INFERENCE_SERVER_NAME -n $NAMESPACE -o yaml"
+        echo_info "Check logs with: kubectl logs -n $NAMESPACE -l app=$DEPLOYMENT_NAME"
+    fi
+
+    # -------------------------------------------------------------------------
+    # Step 4: Fix HTTPRoute namespace reference
+    # TODO: This is a workaround for a bug in go/components/inferenceserver/gateways/backends/triton.go
+    #       The HTTPRoute is created with parentRefs.namespace="default" instead of the actual namespace.
+    #       Fix the Go code to use request.Namespace instead of hardcoded "default".
+    # -------------------------------------------------------------------------
+    HTTPROUTE_NAME="${INFERENCE_SERVER_NAME}-httproute"
+    echo_info "Patching HTTPRoute to fix gateway namespace reference..."
+    if kubectl get httproute $HTTPROUTE_NAME -n $NAMESPACE >/dev/null 2>&1; then
+        kubectl patch httproute $HTTPROUTE_NAME -n $NAMESPACE --type='json' -p="[
+          {\"op\": \"replace\", \"path\": \"/spec/parentRefs/0/namespace\", \"value\": \"$NAMESPACE\"}
+        ]"
+        echo_info "HTTPRoute patched successfully"
+    else
+        echo_warn "HTTPRoute $HTTPROUTE_NAME not found, skipping patch"
+    fi
 
     # Check InferenceServer status
     echo_info "Checking InferenceServer status..."

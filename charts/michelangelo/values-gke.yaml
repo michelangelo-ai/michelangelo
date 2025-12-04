@@ -4,6 +4,13 @@
 
 cloud: gcp
 
+# GCP-specific configuration
+gcp:
+  projectID: michelanglo-oss-196506
+  region: us-east1
+  zone: us-east1-d
+  clusterName: kubernetes-gke-dev01
+
 # Use GitHub Container Registry (pre-built images)
 # To use your own Artifact Registry, push images first then change this
 image:

@@ -118,6 +118,8 @@ while true; do
       echo "Triton server $triton_service not ready yet, skipping"
       continue
     fi
+    # TODO: remove this debug
+    echo "DEBUG: Triton server $triton_service ready is ready for serving models"
     
     CONFIG_FILE="/config/${INFERENCE_SERVER}/model-list.json"
     if [ -f "$CONFIG_FILE" ]; then
@@ -129,16 +131,23 @@ while true; do
     DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
     LOADED_MODELS=$(get_loaded_models "$triton_service")
     
+    # TODO: remove this debug
+    echo "DEBUG: Desired models: $DESIRED_MODELS"
+    echo "DEBUG: Loaded models: $LOADED_MODELS"
+    
     for desired_model in $DESIRED_MODELS; do
       if [ ! -z "$desired_model" ]; then
         storage_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
         
         # Handle different storage path formats
         if [ "$storage_path" = "null" ] || [ -z "$storage_path" ]; then
+          # Use MODELS_BUCKET env var, or default with GCP_PROJECT_ID prefix for GCS
           if [ "$STORAGE_TYPE" = "gcs" ] || [ "$CLOUD_PROVIDER" = "gcp" ]; then
-            storage_path="gs://deploy-models/$desired_model/"
+            MODELS_BUCKET="${MODELS_BUCKET:-${GCP_PROJECT_ID}-deploy-models}"
+            storage_path="gs://${MODELS_BUCKET}/$desired_model/"
           else
-            storage_path="s3://deploy-models/$desired_model/"
+            MODELS_BUCKET="${MODELS_BUCKET:-deploy-models}"
+            storage_path="s3://${MODELS_BUCKET}/$desired_model/"
           fi
         fi
         

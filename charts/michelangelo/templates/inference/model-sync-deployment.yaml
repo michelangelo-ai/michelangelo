@@ -38,6 +38,19 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      # Ensure model-sync runs on the same node as the inference server
+      # This is required because they share a hostPath volume
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - inference-server
+                - triton-inference-server-bert-cola
+            topologyKey: kubernetes.io/hostname
       containers:
       - name: model-sync
         image: {{ .Values.inference.modelSync.image }}
@@ -57,6 +70,9 @@ spec:
         - name: inference-servers-config
           mountPath: /config/inference-servers
           readOnly: true
+        - name: inference-server-bert-cola-config
+          mountPath: /config/inference-server-bert-cola
+          readOnly: true
         - name: sync-script
           mountPath: /scripts
           readOnly: true
@@ -75,6 +91,10 @@ spec:
       - name: inference-servers-config
         configMap:
           name: inference-servers-list
+          optional: true
+      - name: inference-server-bert-cola-config
+        configMap:
+          name: inference-server-bert-cola-model-config
           optional: true
       - name: sync-script
         configMap:

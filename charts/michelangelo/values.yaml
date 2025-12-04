@@ -155,6 +155,7 @@ controllermgr:
   replicaCount: 1
   image:
     repository: controllermgr
+    tag: ghosharitra-update-sandbox-for-inference
     pullPolicy: IfNotPresent
   service:
     metrics:

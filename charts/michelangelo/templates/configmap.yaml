@@ -14,4 +14,9 @@ data:
   {{- end }}
   STORAGE_TYPE: {{ include "michelangelo.storageType" . | quote }}
   CLOUD_PROVIDER: {{ .Values.cloud | quote }}
-
+  {{- if and (eq .Values.cloud "gcp") .Values.gcp }}
+  GCP_PROJECT_ID: {{ .Values.gcp.projectID | quote }}
+  MODELS_BUCKET: {{ .Values.gcp.projectID }}-deploy-models
+  {{- else }}
+  MODELS_BUCKET: deploy-models
+  {{- end }}

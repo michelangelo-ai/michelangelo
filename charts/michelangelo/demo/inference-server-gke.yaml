@@ -45,15 +45,4 @@ metadata:
 data:
   servers.txt: |
     inference-server-bert-cola
----
-# Optional: Model configuration for this inference server
-# Add models here that you want to be auto-loaded
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: inference-server-bert-cola-model-config
-  namespace: michelangelo
-data:
-  model-list.json: |
-    []
 
