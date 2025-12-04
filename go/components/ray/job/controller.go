@@ -1,3 +1,29 @@
+// Package job implements a Kubernetes controller for managing RayJob resources.
+//
+// This package provides a reconciler that manages Ray jobs executing on Ray clusters.
+// RayJob resources represent distributed computing jobs running on Ray, with automatic
+// dependency management between jobs and their associated Ray clusters.
+//
+// Job Lifecycle:
+//
+// RayJob resources progress through the following states:
+//   - INITIALIZING: Waiting for RayCluster to become ready
+//   - RUNNING: Job submitted and executing on Ray cluster
+//   - SUCCEEDED/FAILED/KILLED: Terminal states after job completion
+//
+// Cluster Dependency:
+//
+// Each RayJob requires a reference to a RayCluster resource via Spec.Cluster.
+// The controller ensures the cluster is ready before submitting the job and
+// continuously monitors job status by polling the remote cluster.
+//
+// Integration:
+//
+//   - RayCluster: Jobs wait for referenced cluster to reach READY state
+//   - Federated Client: Creates and monitors jobs on remote Kubernetes clusters
+//   - KubeRay: Underlying operator that executes Ray jobs
+//
+// TODO(#605): Implement federated watcher to eliminate polling for job status
 package job
 
 import (
@@ -25,20 +51,35 @@ import (
 )
 
 const (
+	// requeueAfter defines the delay before retrying reconciliation.
 	requeueAfter = time.Second * 10
-	apiVersion   = "ray.io/v1"
+	// apiVersion specifies the Ray API version used by KubeRay.
+	apiVersion = "ray.io/v1"
 )
 
-// Reconciler reconciles a Ray Job object
+// Reconciler manages the lifecycle of RayJob custom resources.
+//
+// The reconciler ensures jobs are submitted to ready Ray clusters and monitors
+// their execution status. It handles job creation via federated clients and
+// continuously polls remote clusters for status updates.
 type Reconciler struct {
-	client.Client
-	federatedClient jobsclient.FederatedClient
-	clusterCache    jobscluster.RegisteredClustersCache
-	env             env.Context
+	client.Client                                       // Kubernetes client for local operations
+	federatedClient jobsclient.FederatedClient          // Client for remote cluster operations
+	clusterCache    jobscluster.RegisteredClustersCache // Cache of available physical clusters
+	env             env.Context                         // Environment configuration context
 }
 
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
+// Reconcile implements the Kubernetes reconciliation loop for RayJob resources.
+//
+// This method handles the complete job lifecycle:
+//  1. Validate cluster reference exists
+//  2. Wait for referenced RayCluster to become ready
+//  3. Create job via federated client when cluster is ready
+//  4. Poll job status and update local resource
+//  5. Mark resource immutable when job reaches terminal state
+//
+// Returns ctrl.Result with RequeueAfter for ongoing monitoring, or an error
+// if reconciliation should be retried.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling ray job", "namespacedName", req.NamespacedName)
@@ -87,13 +128,23 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return res, nil
 }
 
+// Register registers the RayJob controller with the controller manager.
+//
+// This method configures the controller to watch RayJob custom resources and
+// trigger reconciliation when they are created, updated, or deleted.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.RayJob{}).
 		Complete(r)
 }
 
-// reconcileRayJobWithCluster handles the reconciliation logic when cluster spec is provided.
+// reconcileRayJobWithCluster processes a RayJob with valid cluster reference.
+//
+// This method orchestrates the job lifecycle:
+//  1. Fetch the referenced RayCluster
+//  2. Wait for cluster to reach READY state
+//  3. Create job if not already launched
+//  4. Poll and update job status if already launched
 func (r *Reconciler) reconcileRayJobWithCluster(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, res *ctrl.Result) {
 	rayCluster := r.fetchRayCluster(ctx, logger, rayJob, res)
 	if rayCluster == nil {
@@ -112,8 +163,10 @@ func (r *Reconciler) reconcileRayJobWithCluster(ctx context.Context, logger logr
 	}
 }
 
-// fetchRayCluster retrieves the RayCluster resource referenced by the RayJob.
-// Returns the cluster if found, nil otherwise (error handling is done internally).
+// fetchRayCluster retrieves the referenced RayCluster resource.
+//
+// Returns the RayCluster if found, or nil if not found or on error. When nil is
+// returned, the RayJob status is updated to reflect the error state.
 func (r *Reconciler) fetchRayCluster(ctx context.Context, logger logr.Logger, rayJob *v2pb.RayJob, res *ctrl.Result) *v2pb.RayCluster {
 	rayCluster := &v2pb.RayCluster{}
 	clusterRef := rayJob.GetSpec().Cluster

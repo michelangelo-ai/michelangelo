@@ -1,3 +1,34 @@
+// Package cluster implements a Kubernetes controller for managing RayCluster resources.
+//
+// This package provides a reconciler that manages the complete lifecycle of Ray clusters,
+// from initial creation through scheduling, provisioning, monitoring, and termination.
+// It integrates with the job scheduler and federated cluster clients to deploy Ray clusters
+// across multiple Kubernetes environments.
+//
+// Lifecycle States:
+//
+// RayCluster resources progress through the following states:
+//   - INVALID → PROVISIONING: Cluster scheduled and creation initiated
+//   - PROVISIONING → READY: Cluster fully provisioned and operational
+//   - READY → TERMINATED: Cluster terminated after completion or failure
+//   - Any State → FAILED/UNHEALTHY: Error conditions trigger termination
+//
+// Condition-Based Flow:
+//
+// The controller uses status conditions to track progress:
+//  1. Enqueued: Added to scheduler queue
+//  2. Scheduled: Assigned to a physical Kubernetes cluster
+//  3. Launched: Cluster created via federated client
+//  4. Succeeded/Failed: Final outcome (triggers termination)
+//  5. Killing → Killed: Cleanup and resource deletion
+//
+// Integration:
+//
+//   - Job Scheduler: Queues clusters for resource allocation
+//   - Federated Client: Creates/deletes clusters on remote Kubernetes clusters
+//   - KubeRay: Underlying operator that manages Ray cluster pods
+//
+// TODO(#605): Implement federated watcher to eliminate polling for status updates
 package cluster
 
 import (
@@ -29,33 +60,61 @@ import (
 )
 
 const (
-	// Defines the delay before retrying the reconciliation process
-	requeueAfter            = time.Second * 10
+	// requeueAfter defines the delay before retrying reconciliation after transient errors.
+	requeueAfter = time.Second * 10
+	// _updateStatusCtxTimeout specifies the timeout for status update operations.
 	_updateStatusCtxTimeout = time.Second * 10
 )
 
-// Condition constants for tracking RayCluster lifecycle
+// Condition constants for tracking RayCluster lifecycle stages.
+//
+// These conditions are used to manage the cluster's progression through its lifecycle,
+// from initial enqueueing through final termination. Conditions are generation-aware
+// to handle resource updates correctly.
 const (
-	EnqueuedCondition  = constants.EnqueuedCondition
-	ScheduledCondition = constants.ScheduledCondition
-	LaunchedCondition  = constants.LaunchedCondition
-	KillingCondition   = constants.KillingCondition
-	KilledCondition    = constants.KilledCondition
-	SucceededCondition = constants.SucceededCondition
+	EnqueuedCondition  = constants.EnqueuedCondition  // Cluster added to scheduler queue
+	ScheduledCondition = constants.ScheduledCondition // Cluster assigned to physical cluster
+	LaunchedCondition  = constants.LaunchedCondition  // Cluster created via federated client
+	KillingCondition   = constants.KillingCondition   // Cluster deletion in progress
+	KilledCondition    = constants.KilledCondition    // Cluster successfully deleted
+	SucceededCondition = constants.SucceededCondition // Cluster completed successfully or failed
 )
 
-// Reconciler handles the lifecycle of Ray Cluster objects in the Kubernetes cluster
+// Reconciler manages the lifecycle of RayCluster custom resources.
+//
+// The reconciler implements a state machine that handles cluster scheduling, provisioning,
+// monitoring, and termination. It coordinates between the job scheduler for resource
+// allocation and the federated client for cluster creation on remote Kubernetes clusters.
+//
+// Key responsibilities:
+//   - Enqueuing clusters to the job scheduler
+//   - Monitoring cluster scheduling status
+//   - Creating clusters via federated client when scheduled
+//   - Polling cluster status from remote clusters (TODO: replace with watchers)
+//   - Handling termination requests and cleanup
 type Reconciler struct {
-	api.Handler // API client for managing API objects
+	api.Handler // API client for Kubernetes operations
 
-	env             env.Context                         // Environment context for configuration
-	schedulerQueue  scheduler.JobQueue                  // Queue for enqueuing jobs to scheduler
-	federatedClient jobsclient.FederatedClient          // Client for creating clusters on remote K8s
-	clusterCache    jobscluster.RegisteredClustersCache // Cache for looking up assigned clusters
+	env             env.Context                         // Environment configuration context
+	schedulerQueue  scheduler.JobQueue                  // Job scheduler queue for resource allocation
+	federatedClient jobsclient.FederatedClient          // Client for remote cluster operations
+	clusterCache    jobscluster.RegisteredClustersCache // Cache of available physical clusters
 }
 
-// Reconcile ensures the desired state of the Ray Cluster matches the actual state in the cluster.
-// It implements the Kubernetes reconciliation loop.
+// Reconcile implements the Kubernetes reconciliation loop for RayCluster resources.
+//
+// This method is invoked whenever a RayCluster resource is created, updated, or periodically
+// requeued. It processes the cluster through its lifecycle stages:
+//
+//  1. Check for termination conditions (user-requested or failure)
+//  2. Enqueue cluster to scheduler if not already enqueued
+//  3. Wait for scheduler to assign a physical cluster
+//  4. Create cluster on assigned cluster via federated client
+//  5. Monitor cluster status and update local resource
+//  6. Handle termination and cleanup when requested
+//
+// Returns ctrl.Result with RequeueAfter set for ongoing monitoring, or an error
+// if reconciliation should be retried by the framework.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Initialize logger from the context for scoped logging
 	logger := log.FromContext(ctx)
@@ -201,14 +260,25 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return res, nil
 }
 
-// Register adds the Reconciler to the controller manager
+// Register registers the RayCluster controller with the controller manager.
+//
+// This method configures the controller to watch RayCluster custom resources and
+// trigger reconciliation when they are created, updated, or deleted.
+//
+// Returns an error if controller registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&v2pb.RayCluster{}). // Watch for changes in RayCluster custom resources
+		For(&v2pb.RayCluster{}).
 		Complete(r)
 }
 
-// shouldTerminateCluster checks if the cluster should be terminated
+// shouldTerminateCluster determines if the cluster should enter termination flow.
+//
+// Termination is triggered when:
+//  1. Spec.Termination is set (user-requested termination)
+//  2. Succeeded condition is set to TRUE or FALSE (completion or failure)
+//
+// Returns true if termination should proceed, false otherwise.
 func (r *Reconciler) shouldTerminateCluster(cluster *v2pb.RayCluster) bool {
 	shouldTerminate, _ := jobsutils.IsTerminationInfoSet(cluster)
 	if shouldTerminate {
@@ -220,7 +290,14 @@ func (r *Reconciler) shouldTerminateCluster(cluster *v2pb.RayCluster) bool {
 	return success.Status != apipb.CONDITION_STATUS_UNKNOWN
 }
 
-// processClusterTermination handles the full termination flow for a cluster
+// processClusterTermination orchestrates the complete cluster termination workflow.
+//
+// The termination process consists of three sequential steps:
+//  1. Set succeeded condition based on termination type (SUCCEEDED/FAILED)
+//  2. Set killing condition to indicate cleanup has started
+//  3. Delete cluster resources via federated client
+//
+// Returns an error if any step fails, causing reconciliation to retry.
 func (r *Reconciler) processClusterTermination(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -247,7 +324,13 @@ func (r *Reconciler) processClusterTermination(
 	return nil
 }
 
-// setClusterSuccessConditionIfRequired sets the succeeded condition based on termination type
+// setClusterSuccessConditionIfRequired sets the succeeded condition from termination info.
+//
+// This method maps termination type to condition status:
+//   - TERMINATION_TYPE_SUCCEEDED → CONDITION_STATUS_TRUE
+//   - TERMINATION_TYPE_FAILED → CONDITION_STATUS_FALSE
+//
+// The condition is only set if not already set (idempotent operation).
 func (r *Reconciler) setClusterSuccessConditionIfRequired(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -287,7 +370,10 @@ func (r *Reconciler) setClusterSuccessConditionIfRequired(
 	return nil
 }
 
-// setClusterKillIfRequired sets the killing condition if the cluster can be killed
+// setClusterKillIfRequired marks the cluster for deletion.
+//
+// The killing condition is set only if not already set and the cluster has not been
+// killed yet. This signals that cleanup should begin.
 func (r *Reconciler) setClusterKillIfRequired(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -321,7 +407,12 @@ func (r *Reconciler) setClusterKillIfRequired(
 	return nil
 }
 
-// cleanupCluster performs cleanup of cluster resources
+// cleanupCluster deletes cluster resources based on lifecycle stage.
+//
+// Cleanup behavior depends on cluster state:
+//   - Not scheduled: Mark as killed immediately
+//   - Scheduled but not launched: Mark as killed (no remote resources to delete)
+//   - Launched: Delete via federated client, then mark as killed
 func (r *Reconciler) cleanupCluster(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -422,7 +513,14 @@ func (r *Reconciler) cleanupCluster(
 	return nil
 }
 
-// enqueueIfRequired enqueues the cluster to the scheduler queue if not already enqueued
+// enqueueIfRequired adds the cluster to the scheduler queue if needed.
+//
+// Enqueuing behavior:
+//   - First time (Enqueued condition not set): Set condition and enqueue
+//   - Already enqueued but not scheduled: Re-enqueue (handles controller restarts)
+//   - Already enqueued and scheduled: No action needed
+//
+// The scheduler queue manages resource allocation across available Kubernetes clusters.
 func (r *Reconciler) enqueueIfRequired(
 	ctx context.Context,
 	cluster *v2pb.RayCluster,
@@ -492,7 +590,14 @@ func (r *Reconciler) enqueueIfRequired(
 	return nil
 }
 
-// getClusterIfScheduled returns the assigned cluster if the RayCluster has been scheduled
+// getClusterIfScheduled retrieves the physical cluster assignment if scheduling is complete.
+//
+// Returns the assigned v2pb.Cluster if:
+//  1. Scheduled condition is TRUE
+//  2. Status.Assignment.Cluster is set
+//  3. Cluster exists in the cluster cache
+//
+// Returns nil if any of these conditions are not met.
 func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Cluster {
 	isScheduled := jobsutils.IsJobScheduled(cluster.Status.StatusConditions, cluster.Generation)
 	if !isScheduled {
@@ -507,7 +612,12 @@ func (r *Reconciler) getClusterIfScheduled(cluster *v2pb.RayCluster) *v2pb.Clust
 	return assignedCluster
 }
 
-// getClusterStatus retrieves the current status of a RayCluster resource from the federated cluster
+// getClusterStatus polls the remote cluster for Ray cluster status.
+//
+// This method uses the federated client to query the assigned Kubernetes cluster
+// for the current state of the Ray cluster.
+//
+// TODO(#605): Replace polling with federated watcher for real-time status updates.
 func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assignedKubeCluster *v2pb.Cluster, rayCluster *v2pb.RayCluster) (*matypes.JobClusterStatus, error) {
 	// Use the federated client to get the status from the remote cluster
 	clusterStatus, err := r.federatedClient.GetJobClusterStatus(ctx, rayCluster, assignedKubeCluster)
@@ -523,7 +633,14 @@ func (r *Reconciler) getClusterStatus(ctx context.Context, log logr.Logger, assi
 	return clusterStatus, nil
 }
 
-// applyRayClusterStatus updates the RayCluster status and conditions based on the cluster state from KubeRay.
+// applyRayClusterStatus updates local status based on remote cluster state.
+//
+// This method processes the status received from the federated cluster and updates
+// the local RayCluster resource accordingly:
+//
+//   - READY: Mark launched condition as TRUE, stop requeuing
+//   - FAILED/UNHEALTHY: Mark succeeded condition as FALSE to trigger termination
+//   - Other states: Continue monitoring with requeue
 func (r *Reconciler) applyRayClusterStatus(
 	rayCluster *v2pb.RayCluster,
 	clusterStatus *matypes.JobClusterStatus,
