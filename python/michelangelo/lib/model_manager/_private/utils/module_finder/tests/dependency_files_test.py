@@ -113,7 +113,7 @@ class DependencyFilesTest(TestCase):
         prefix = self.module_prefix
 
         expected_files = {
-            f"{prefix}module_with_faulty_imports": "fixtures/module_with_faulty_imports.py", # noqa: E501
+            f"{prefix}module_with_faulty_imports": "fixtures/module_with_faulty_imports.py",  # noqa: E501
             f"{prefix}faulty_package.__init__": "faulty_package/__init__.py",
         }
 
@@ -131,7 +131,7 @@ class DependencyFilesTest(TestCase):
         prefix = self.module_prefix
 
         expected_files = {
-            f"{prefix}module_with_relative_imports": "fixtures/module_with_relative_imports.py", # noqa: E501
+            f"{prefix}module_with_relative_imports": "fixtures/module_with_relative_imports.py",  # noqa: E501
             f"{prefix}simple_module": "fixtures/simple_module.py",
             f"{prefix}folder.fn1": "folder/fn1.py",
             f"{prefix}folder.fn2": "folder/fn2.py",
@@ -160,7 +160,7 @@ class DependencyFilesTest(TestCase):
         prefix = self.module_prefix
 
         expected_files = {
-            f"{prefix}module_with_relative_imports": "fixtures/module_with_relative_imports.py", # noqa: E501
+            f"{prefix}module_with_relative_imports": "fixtures/module_with_relative_imports.py",  # noqa: E501
             f"{prefix}folder.fn1": "folder/fn1.py",
             f"{prefix}folder.fn2": "folder/fn2.py",
             f"{prefix}folder.fn3": "folder/fn3.py",
@@ -183,7 +183,7 @@ class DependencyFilesTest(TestCase):
         prefix = self.module_prefix
 
         expected_files = {
-            f"{prefix}module_with_imports_package_without_init": "fixtures/module_with_imports_package_without_init.py", # noqa: E501
+            f"{prefix}module_with_imports_package_without_init": "fixtures/module_with_imports_package_without_init.py",  # noqa: E501
             f"{prefix}simple_module": "fixtures/simple_module.py",
             f"{prefix}folder.fn1": "folder/fn1.py",
             f"{prefix}folder.fn2": "folder/fn2.py",
