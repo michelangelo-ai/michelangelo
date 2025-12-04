@@ -1,3 +1,8 @@
+// Package actors provides ConditionActors for different stages of pipeline run execution.
+//
+// Each actor implements the ConditionActor interface and is responsible for a specific
+// stage of the pipeline execution lifecycle. Actors are executed sequentially by the
+// condition engine to progress pipeline runs through their various states.
 package actors
 
 import (
@@ -17,11 +22,19 @@ import (
 )
 
 const (
+	// SourcePipelineType is the condition type for the source pipeline retrieval stage.
 	SourcePipelineType = "SourcePipeline"
 )
 
-// SourcePipelineActor handles retrieving and attaching the source pipeline definition
-// to a pipeline run.
+// SourcePipelineActor implements the first stage of pipeline run execution.
+//
+// This actor is responsible for retrieving and validating the Pipeline resource
+// referenced by the PipelineRun. It supports two modes:
+//   - Standard mode: Fetches Pipeline from Kubernetes using the pipeline reference
+//   - DevRun mode: Creates Pipeline from inline PipelineSpec for development workflows
+//
+// The actor populates the PipelineRun.Status.SourcePipeline field with the retrieved
+// or constructed pipeline definition for use by subsequent actors.
 type SourcePipelineActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	apiHandler api.Handler
@@ -38,6 +51,13 @@ func NewSourcePipelineActor(apiHandler api.Handler, logger *zap.Logger) *SourceP
 
 var _ conditionInterfaces.ConditionActor[*v2.PipelineRun] = &SourcePipelineActor{}
 
+// Retrieve checks if the source pipeline has already been retrieved.
+//
+// It examines the PipelineRun status to determine if the source pipeline needs
+// to be fetched. Returns a condition indicating whether the Run method should execute.
+//
+// The method returns TRUE status if the pipeline is already populated, otherwise
+// FALSE to trigger the Run method.
 func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
 
@@ -91,6 +111,16 @@ func (a *SourcePipelineActor) Retrieve(ctx context.Context, resource *v2.Pipelin
 	}, nil
 }
 
+// Run retrieves the pipeline definition and populates the PipelineRun status.
+//
+// For standard pipeline runs, it fetches the Pipeline resource from Kubernetes.
+// For DevRuns (indicated by inline pipeline_spec), it constructs a Pipeline from
+// the provided specification.
+//
+// The retrieved pipeline is stored in PipelineRun.Status.SourcePipeline for use
+// by subsequent actors.
+//
+// Returns a TRUE condition on success, FALSE on failure.
 func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 
@@ -160,11 +190,16 @@ func (a *SourcePipelineActor) Run(ctx context.Context, pipelineRun *v2.PipelineR
 	}, nil
 }
 
+// GetType returns the condition type identifier for this actor.
 func (a *SourcePipelineActor) GetType() string {
 	return SourcePipelineType
 }
 
-// createPipelineFromSpec creates a Pipeline CR from inline PipelineSpec for dev runs
+// createPipelineFromSpec creates a Pipeline custom resource from inline PipelineSpec.
+//
+// This is used for DevRun workflows where the pipeline specification is provided
+// inline rather than referencing an existing Pipeline resource. The created pipeline
+// includes metadata from the PipelineRun for proper tracking and annotation inheritance.
 func (a *SourcePipelineActor) createPipelineFromSpec(pipelineRunSpec v2.PipelineRunSpec, pipelineRun *v2.PipelineRun) (*v2.Pipeline, error) {
 	pipelineSpec := pipelineRunSpec.GetPipelineSpec()
 

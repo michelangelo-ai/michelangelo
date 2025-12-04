@@ -1,3 +1,13 @@
+// Package plugin provides the PipelineRun plugin and its dependencies.
+//
+// The plugin implements a condition-based execution model where pipeline runs
+// progress through multiple stages, each handled by a specialized actor:
+//   - SourcePipelineActor: Retrieves and validates the pipeline definition
+//   - ImageBuildActor: Manages container image resolution
+//   - ExecuteWorkflowActor: Orchestrates workflow execution via Cadence/Temporal
+//
+// The plugin integrates with the condition engine to coordinate actor execution
+// and manage pipeline run state transitions.
 package plugin
 
 import (
@@ -16,13 +26,21 @@ import (
 )
 
 var (
+	// Module is the Uber FX module for the PipelineRun plugin.
+	//
+	// It provides the Plugin instance which contains all ConditionActors
+	// needed for pipeline execution. The module is automatically included
+	// when using the pipelinerun.Module.
 	Module = fx.Options(
 		fx.Provide(NewPlugin),
 	)
 )
 
-// Plugin implements the PipelineRun plugin with a collection of condition actors
-// that execute different stages of the pipeline lifecycle.
+// Plugin implements the condition-based plugin interface for PipelineRun execution.
+//
+// It contains a collection of ConditionActors that handle different stages of
+// pipeline execution. The plugin is used by the condition engine to orchestrate
+// pipeline run progress through various states.
 type Plugin struct {
 	conditionsInterfaces.Plugin[*v2.PipelineRun]
 	Actors []conditionsInterfaces.ConditionActor[*v2.PipelineRun]
@@ -39,8 +57,16 @@ type PluginParams struct {
 	Logger         *zap.Logger
 }
 
-// NewPlugin creates a new PipelineRun plugin with all required actors for managing
-// pipeline execution stages.
+// NewPlugin creates a new PipelineRun plugin with all required actors.
+//
+// The plugin is initialized with three actors that execute in sequence:
+//  1. SourcePipelineActor: Retrieves the pipeline definition
+//  2. ImageBuildActor: Resolves container images for execution
+//  3. ExecuteWorkflowActor: Starts and monitors workflow execution
+//
+// Dependencies are injected via FX using the PluginParams struct.
+//
+// Returns a configured Plugin ready for use by the condition engine.
 func NewPlugin(params PluginParams) *Plugin {
 	logger := params.Logger.With(zap.String("plugin", "pipelinerun"))
 	return &Plugin{
@@ -53,18 +79,27 @@ func NewPlugin(params PluginParams) *Plugin {
 	}
 }
 
-// GetActors returns the list of ConditionActors for a particular plugin. The Engine will sequentially run through the
+// GetActors returns the ordered list of ConditionActors for pipeline execution.
+//
+// The condition engine executes these actors sequentially, with each actor
+// checking prerequisites and performing its stage of pipeline execution.
 func (p *Plugin) GetActors() []conditionsInterfaces.ConditionActor[*v2.PipelineRun] {
 	return p.Actors
 }
 
-// GetConditions gets the conditions for a particular Kubernetes custom resource.
+// GetConditions retrieves the current conditions from a PipelineRun resource.
+//
+// Conditions track the status of each actor's execution stage and are used
+// by the condition engine to determine which actors need to run.
 func (p *Plugin) GetConditions(pipelineRun *v2.PipelineRun) []*apipb.Condition {
 	return pipelineRun.Status.Conditions
 }
 
-// PutCondition puts a condition for a particular Kubernetes custom resource.
-// If the condition is not found, it will be added. If the condition is found, it will be updated.
+// PutCondition updates or adds a condition to a PipelineRun resource.
+//
+// If a condition with the same type already exists, it is updated with the new
+// values. Otherwise, the condition is appended to the conditions list. This
+// allows actors to persist their execution state.
 func (p *Plugin) PutCondition(pipelineRun *v2.PipelineRun, condition *apipb.Condition) {
 	conditionIndex := slices.IndexFunc(pipelineRun.Status.Conditions, func(c *apipb.Condition) bool {
 		return c.Type == condition.Type
