@@ -91,14 +91,15 @@ jobs:
           echo "GO_COVERAGE=$GO_COV" >> $GITHUB_ENV
           echo "JS_COVERAGE=$JS_COV" >> $GITHUB_ENV
 
-      - name: Upload combined coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage-reports/python/coverage.xml,./coverage-reports/go/coverage.out,./coverage-reports/javascript/lcov.info
-          flags: combined
-          name: combined-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # Codecov upload disabled - coverage is reported via PR comments and artifacts
+      # - name: Upload combined coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: ./coverage-reports/python/coverage.xml,./coverage-reports/go/coverage.out,./coverage-reports/javascript/lcov.info
+      #     flags: combined
+      #     name: combined-coverage
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Create combined coverage report
         uses: marocchino/sticky-pull-request-comment@v2
@@ -143,7 +144,7 @@ jobs:
 
             - [Python Coverage Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
             - [Go Coverage Details](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-            - [Codecov Dashboard](https://codecov.io/gh/${{ github.repository }})
+            - [Coverage Artifacts](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
 
             </details>
 

@@ -89,15 +89,15 @@ jobs:
           COVERAGE_DATA_BRANCH: main
         continue-on-error: true
 
-      # Upload coverage to Codecov for tracking over time
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./python/coverage.xml
-          flags: python
-          name: python-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # Codecov upload disabled - coverage is reported via PR comments and artifacts
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     file: ./python/coverage.xml
+      #     flags: python
+      #     name: python-coverage
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       # Check overall coverage threshold (baseline: 66%)
       - name: "Check overall coverage threshold (baseline: 66%)"

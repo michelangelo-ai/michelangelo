@@ -143,14 +143,15 @@ jobs:
             echo "📈 Goal: Maintain baseline and enforce 90% on new code"
           fi
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.dat
-          flags: go
-          name: go-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # Codecov upload disabled - coverage is reported via PR comments and artifacts
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     files: ./coverage.dat
+      #     flags: go
+      #     name: go-coverage
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Get test results summary
         id: test_summary
