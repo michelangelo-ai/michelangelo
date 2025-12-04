@@ -42,14 +42,6 @@ def serialize_model_class(
     # serialize the model class along with its dependencies
     # all of the serialized files retain the original directory structure
     files = find_dependency_files(module_def, prefixes=include_import_prefixes)
-    
-    print("++++++++++++++ files ++++++++++++++")
-    for file in files:
-        print(file)
-
-    print("++++++++++++++ target_dir ++++++++++++++")
-    print(target_dir)
-
     save_module_files(files, target_dir)
 
     # create the model class file

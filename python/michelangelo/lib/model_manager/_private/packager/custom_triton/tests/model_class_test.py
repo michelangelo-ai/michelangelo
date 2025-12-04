@@ -7,6 +7,7 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import seria
 
 class ModelClassTest(TestCase):
     def test_serialize_model_class(self):
+        self.maxDiff = None
         model_class = (
             "michelangelo.lib.model_manager._private.packager.custom_triton."
             "tests.fixtures.predict.Predict"
@@ -16,28 +17,28 @@ class ModelClassTest(TestCase):
             target_dir = os.path.join(temp_dir, "package")
             serialize_model_class(model_class, target_dir, "model_class.txt", include_import_prefixes=["michelangelo"])
 
-            # # test we can load the model file
-            # with open(os.path.join(target_dir, "model_class.txt")) as f:
-            #     content = f.read()
-            #     self.assertEqual(content, model_class)
+            # test we can load the model file
+            with open(os.path.join(target_dir, "model_class.txt")) as f:
+                content = f.read()
+                self.assertEqual(content, model_class)
 
-            # # test the dependencies are serialized
-            # with open(
-            #     os.path.join(
-            #         target_dir,
-            #         "michelangelo",
-            #         "lib",
-            #         "model_manager",
-            #         "_private",
-            #         "packager",
-            #         "custom_triton",
-            #         "tests",
-            #         "fixtures",
-            #         "predict.py",
-            #     ),
-            # ) as f:
-            #     content = f.read()
-            #     self.assertIn("class Predict(Model):", content)
+            # test the dependencies are serialized
+            with open(
+                os.path.join(
+                    target_dir,
+                    "michelangelo",
+                    "lib",
+                    "model_manager",
+                    "_private",
+                    "packager",
+                    "custom_triton",
+                    "tests",
+                    "fixtures",
+                    "predict.py",
+                ),
+            ) as f:
+                content = f.read()
+                self.assertIn("class Predict(Model):", content)
 
             files = sorted(
                 [
@@ -49,21 +50,20 @@ class ModelClassTest(TestCase):
                 ],
             )
 
-            print(files)
-
+            prefix = "michelangelo/lib/model_manager/"
             self.assertEqual(
                 files,
                 [
+                    f"{prefix}_private/packager/custom_triton/tests/fixtures/predict.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                    f"{prefix}_private/utils/module_finder/tests/fixtures/simple_module.py",   
+                    f"{prefix}interface/custom_model.py",
                     "model_class.txt",
-                    "michelangelo/lib/model_manager/_private/packager/custom_triton/tests/fixtures/predict.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py", # noqa: E501
-                    "michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py", # noqa: E501
-                    "michelangelo/lib/model_manager/interface/custom_model.py",
                 ],
             )
