@@ -7,6 +7,7 @@ from .model_interface import serialize_model_interface, validate_model_class
 from .requirements_txt import generate_requirements_txt
 from .type_yaml import generate_type_yaml
 from .user_model_py import generate_user_model_content
+from .main_module import serialize_main_module
 from .pickled_model_binary import (
     serialize_pickle_dependencies,
     serialize_pickle_definitions,
