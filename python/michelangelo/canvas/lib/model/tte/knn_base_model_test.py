@@ -1,3 +1,5 @@
+"""Tests for KNN base model module."""
+# ruff: noqa: D101, D102
 import os
 import unittest
 
@@ -351,7 +353,7 @@ class KNNModelTest(unittest.TestCase):
         knn_model.load_model(
             local_item_data_path="/tmp/item_embeddings", n_partitions=1, device="cpu"
         )
-        scores, indices, labels_tensor = knn_model._predict_batch_from_single_gpu(
+        scores, _, labels_tensor = knn_model._predict_batch_from_single_gpu(
             query_data,
             knn_model.item_emb,
             knn_model.labels_tensor,
@@ -393,7 +395,7 @@ class KNNModelTest(unittest.TestCase):
         knn_model.load_model(
             local_item_data_path="/tmp/item_embeddings", n_partitions=1, device="cpu"
         )
-        scores, indices, labels_tensor = knn_model._predict_batch_from_single_gpu(
+        scores, _, labels_tensor = knn_model._predict_batch_from_single_gpu(
             query_data,
             knn_model.item_emb,
             knn_model.labels_tensor,
