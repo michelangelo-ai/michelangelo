@@ -8,7 +8,7 @@ from michelangelo.lib.model_manager._private.utils.pickle_utils import (
 )
 from michelangelo.lib.model_manager._private.utils.module_finder import find_dependency_files
 from michelangelo.lib.model_manager._private.utils.module_utils import save_module_files
-from michelangelo.lib.model_manager._private.packager.python_triton.main_module import serialize_main_module
+from michelangelo.lib.model_manager._private.packager.custom_triton.main_module import serialize_main_module
 
 _logger = logging.getLogger(__name__)
 
