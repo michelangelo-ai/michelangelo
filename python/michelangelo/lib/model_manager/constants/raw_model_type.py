@@ -1,3 +1,5 @@
+"""Raw model type constants."""
+
 class RawModelType:
     """Raw model types for the raw model package.
 

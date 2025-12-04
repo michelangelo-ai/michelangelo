@@ -1,3 +1,5 @@
+"""Utilities for finding the root import path of a package."""
+
 import functools
 import os
 import sys

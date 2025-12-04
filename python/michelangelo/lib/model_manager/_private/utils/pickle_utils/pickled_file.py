@@ -1,3 +1,5 @@
+"""Utilities for identifying and finding pickled files."""
+
 from __future__ import annotations
 
 import io
