@@ -24,7 +24,7 @@ We are **incrementally open-sourcing Michelangelo’s core capabilities**, ensur
 
 ## Installation
 
-To install Michelangelo-AI, follow [Getting Started](https://github.com/michelangelo-ai/michelangelo/wiki/Getting-Started) guide until GitHub respository is public.
+To install Michelangelo-AI, follow [Sandbox Setup](https://github.com/michelangelo-ai/michelangelo/wiki/Sandbox-Setup) guide until GitHub respository is public.
 
 ## Usage
 
