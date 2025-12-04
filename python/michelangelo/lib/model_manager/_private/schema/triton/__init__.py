@@ -1,3 +1,5 @@
+"""Triton schema utilities."""
+
 # flake8: noqa:F401
 from .config_schema import convert_model_schema, convert_schema_to_dict, convert_shape
 from .data_type import DATA_TYPE_MAPPING, convert_data_type

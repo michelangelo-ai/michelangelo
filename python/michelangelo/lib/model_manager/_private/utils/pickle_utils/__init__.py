@@ -1,3 +1,5 @@
+"""Pickle processing utilities."""
+
 # flake8: noqa:F401
 from .pickle_definition import find_pickle_definitions
 from .pickle_definition_walker import walk_pickle_definitions_in_dir
