@@ -1,0 +1,271 @@
+# GKE-specific configuration overrides for Michelangelo
+# Project: michelanglo-oss-196506
+# Cluster: kubernetes-gke-dev01 (zonal, us-east1-d)
+
+cloud: gcp
+
+# Use GitHub Container Registry (pre-built images)
+# To use your own Artifact Registry, push images first then change this
+image:
+  registry: ghcr.io/michelangelo-ai
+  tag: "main"
+
+# Image pull secret for private GHCR registry
+# Create with: kubectl create secret docker-registry ghcr-secret --namespace michelangelo --docker-server=ghcr.io --docker-username=YOUR_GITHUB_USERNAME --docker-password=YOUR_CR_PAT
+imagePullSecrets:
+  - name: ghcr-secret
+
+# GKE-specific namespace
+# Set create: false since deploy-gke.sh creates the namespace via kubectl
+namespace:
+  create: false
+  name: michelangelo
+
+# Disable local-only components
+minio:
+  enabled: false
+
+mysql:
+  # Use Cloud SQL instead of in-cluster MySQL
+  # Set enabled: true to use in-cluster MySQL (simpler for dev)
+  # Set enabled: false and configure external for Cloud SQL (production)
+  enabled: true  # Using in-cluster MySQL for now
+  # Minimal resources for dev (fits on non-GPU node)
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Cadence - minimal resources for dev
+cadence:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Use GCS instead of MinIO
+storage:
+  storageClass: standard-rwo  # GCP Persistent Disk
+  s3:
+    type: gcs
+    endpoint: storage.googleapis.com
+    region: us-east1
+    # GCS uses Workload Identity, no static credentials
+    buckets:
+      - michelanglo-oss-196506-default
+      - michelanglo-oss-196506-deploy-models
+      - michelanglo-oss-196506-log-viewer
+      - michelanglo-oss-196506-logs
+
+# Enable Gateway API for inference routing
+gateway:
+  enabled: true
+  istio:
+    enabled: true
+    # Gateway configuration
+    hosts:
+      - "*.example.com"  # Replace with your domain
+    tls:
+      enabled: true
+      # Certificate from Google-managed cert or cert-manager
+
+# Service Account configuration
+# Option 1: Workload Identity (recommended for production, requires GCP SA setup)
+# Option 2: No Workload Identity - pods use node's default service account
+serviceAccount:
+  create: true
+  annotations: {}
+    # Uncomment below if you have Workload Identity set up:
+    # iam.gke.io/gcp-service-account: michelangelo@michelanglo-oss-196506.iam.gserviceaccount.com
+  name: michelangelo
+
+# API Server - expose via LoadBalancer or use Ingress
+apiserver:
+  replicaCount: 1  # Single replica for dev
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/load-balancer-type: "Internal"
+      cloud.google.com/backend-config: '{"default": "apiserver-backend-config"}'
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Enable autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# Controller Manager
+controllermgr:
+  replicaCount: 1  # Single replica for dev
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  config:
+    leaderElection: true  # Enable for HA
+
+# Worker - scale based on workload
+worker:
+  replicaCount: 1  # Single replica for dev
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 75
+
+# UI - public facing
+ui:
+  replicaCount: 2
+  service:
+    type: LoadBalancer
+    annotations:
+      cloud.google.com/load-balancer-type: "External"
+      cloud.google.com/neg: '{"ingress": true}'
+  ingress:
+    enabled: true
+    className: gce
+    annotations:
+      kubernetes.io/ingress.class: gce
+      kubernetes.io/ingress.global-static-ip-name: michelangelo-ui-ip
+    hosts:
+      - host: michelangelo.example.com
+        paths:
+          - path: /
+            pathType: Prefix
+    tls:
+      - secretName: michelangelo-ui-tls
+        hosts:
+          - michelangelo.example.com
+
+# Prometheus - disabled for now, enable later for monitoring
+# TODO: enable later for monitoring
+prometheus:
+  # persistence:
+  #   enabled: true
+  #   storageClass: standard-rwo
+  #   size: 10Gi
+  # resources:
+  #   requests:
+  #     cpu: 100m
+  #     memory: 256Mi
+  #   limits:
+  #     cpu: 500m
+  #     memory: 1Gi
+  enabled: false
+
+# Grafana - disabled for now
+# TODO: enable later for monitoring
+grafana:
+  # persistence:
+  #   enabled: true
+  #   storageClass: standard-rwo
+  #   size: 10Gi
+  enabled: false
+  # Integrate with Google OAuth (optional)
+  config:
+    auth:
+      google:
+        enabled: false  # Set to true and configure
+        client_id: YOUR_CLIENT_ID
+        client_secret: YOUR_CLIENT_SECRET
+        allowed_domains: example.com
+
+# Inference model sync - disabled by default, deploy with --deploy-inference
+inference:
+  modelSync:
+    enabled: false  # Deploy separately with ./deploy-gke.sh --deploy-inference
+    image: google/cloud-sdk:slim  # Use Google Cloud SDK image for gsutil
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Disable PVC for dev - uses hostPath instead
+    # Enable persistence and create PVC manually for production
+    persistence:
+      enabled: false
+      # storageClass: standard-rwo
+      # size: 500Gi
+
+# Use Cloud SQL Proxy sidecar for database connections
+# (Only needed if using external Cloud SQL)
+cloudSqlProxy:
+  enabled: false  # Set to true if using Cloud SQL
+  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.0
+  instances:
+    - michelanglo-oss-196506:us-east1:INSTANCE_NAME=tcp:3306
+
+# Node selector for GPU workloads
+nodeSelector:
+  # Uncomment for GPU nodes
+  # cloud.google.com/gke-accelerator: nvidia-tesla-t4
+
+# Global tolerations - keep empty, use component-specific tolerations below
+tolerations: []
+
+# GPU tolerations for specific components that need to run on GPU nodes
+gpuTolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Pod topology spread for HA
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: michelangelo
+
+# Network policies (optional, recommended for production)
+networkPolicies:
+  enabled: true
+
+# Pod Security Standards
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# RBAC - disable if you don't have cluster-admin permissions
+# Have your cluster admin create RBAC manually using:
+#   kubectl apply -f charts/michelangelo/templates/rbac.yaml
+rbac:
+  create: false
+

@@ -1,0 +1,59 @@
+# InferenceServer CR for GKE
+# 
+# Usage:
+#   1. Apply this file: kubectl apply -f charts/michelangelo/demo/inference-server-gke.yaml
+#   2. Wait for deployment to be created, then patch with tolerations:
+#      kubectl patch deployment triton-inference-server-bert-cola -n michelangelo --type='json' -p='[
+#        {"op": "add", "path": "/spec/template/spec/tolerations", "value": [
+#          {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+#        ]}
+#      ]'
+#   3. Check status: kubectl get inferenceservers -n michelangelo
+#
+apiVersion: michelangelo.api/v2
+kind: InferenceServer
+metadata:
+  name: inference-server-bert-cola
+  namespace: michelangelo
+  labels:
+    app: inference-server
+spec:
+  tenancyType: TENANCY_TYPE_DEDICATED
+  backendType: BACKEND_TYPE_TRITON
+  ownerSpec:
+    tier: 1
+  initSpec:
+    resourceSpec:
+      cpu: 2
+      memory: "4Gi"
+      # Uncomment below to request GPU
+      # gpu: 1
+    servingSpec:
+      version: "latest"
+    numInstances: 1
+  decomSpec:
+    decommission: false
+  owner:
+    name: "user-example"
+---
+# ConfigMap to register this inference server with model-sync
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-servers-list
+  namespace: michelangelo
+data:
+  servers.txt: |
+    inference-server-bert-cola
+---
+# Optional: Model configuration for this inference server
+# Add models here that you want to be auto-loaded
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-server-bert-cola-model-config
+  namespace: michelangelo
+data:
+  model-list.json: |
+    []
+

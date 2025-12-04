@@ -1,0 +1,49 @@
+# Gateway API Setup for Michelangelo on GKE
+# This configures Istio as the Gateway API implementation
+
+---
+# 1. GatewayClass: tells Kubernetes that Istio will handle Gateway resources
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: istio
+spec:
+  controllerName: istio.io/gateway-controller
+  description: Istio service mesh based gateway controller
+
+---
+# 2. Gateway: Kubernetes Gateway API Gateway (Istio will provision the actual gateway)
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ma-gateway
+  namespace: michelangelo
+  annotations:
+    # Use LoadBalancer for GKE (external access)
+    # Change to ClusterIP if you only need internal access
+    networking.istio.io/service-type: LoadBalancer
+spec:
+  gatewayClassName: istio
+  listeners:
+  # Standard HTTP port
+  - name: http
+    port: 80
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  # Triton inference server port
+  - name: triton-http
+    port: 8889
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+  # Cadence web UI port
+  - name: cadence-web
+    port: 8088
+    protocol: HTTP
+    allowedRoutes:
+      namespaces:
+        from: All
+

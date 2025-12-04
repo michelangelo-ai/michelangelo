@@ -1,0 +1,99 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+=================================================================================
+Michelangelo ML Platform - Version {{ .Chart.AppVersion }}
+=================================================================================
+
+Installed Components:
+{{- if .Values.components.apiserver.enabled }}
+  ✓ API Server
+{{- end }}
+{{- if .Values.components.controllermgr.enabled }}
+  ✓ Controller Manager
+{{- end }}
+{{- if .Values.components.worker.enabled }}
+  ✓ Workflow Worker ({{ .Values.workflow.engine }})
+{{- end }}
+{{- if .Values.components.ui.enabled }}
+  ✓ Web UI
+{{- end }}
+{{- if .Values.mysql.enabled }}
+  ✓ MySQL Database
+{{- end }}
+{{- if .Values.minio.enabled }}
+  ✓ MinIO Object Storage
+{{- end }}
+{{- if .Values.prometheus.enabled }}
+  ✓ Prometheus Monitoring
+{{- end }}
+{{- if .Values.grafana.enabled }}
+  ✓ Grafana Dashboard
+{{- end }}
+
+=================================================================================
+
+Getting Started:
+
+1. Check the status of your pods:
+
+   kubectl get pods -n {{ .Release.Namespace }}
+
+2. Wait for all pods to be ready:
+
+   kubectl wait --for=condition=ready pod --all -n {{ .Release.Namespace }} --timeout=600s
+
+{{- if eq .Values.cloud "local" }}
+
+3. Access services locally:
+
+   # API Server
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "michelangelo.fullname" . }}-apiserver {{ .Values.apiserver.service.port }}:{{ .Values.apiserver.service.port }}
+
+   # Web UI
+   kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "michelangelo.fullname" . }}-ui {{ .Values.ui.service.port }}:{{ .Values.ui.service.port }}
+   Then open: http://localhost:{{ .Values.ui.service.port }}
+
+   {{- if and .Values.cadence.enabled (eq .Values.workflow.engine "cadence") }}
+   # Cadence Web UI
+   kubectl port-forward -n {{ .Release.Namespace }} svc/cadence-web {{ .Values.cadence.service.web.port }}:{{ .Values.cadence.service.web.port }}
+   Then open: http://localhost:{{ .Values.cadence.service.web.port }}
+   {{- end }}
+
+   {{- if .Values.prometheus.enabled }}
+   # Prometheus
+   kubectl port-forward -n {{ .Release.Namespace }} svc/prometheus {{ .Values.prometheus.service.port }}:{{ .Values.prometheus.service.port }}
+   Then open: http://localhost:{{ .Values.prometheus.service.port }}
+   {{- end }}
+
+   {{- if .Values.grafana.enabled }}
+   # Grafana
+   kubectl port-forward -n {{ .Release.Namespace }} svc/grafana {{ .Values.grafana.service.port }}:{{ .Values.grafana.service.port }}
+   Then open: http://localhost:{{ .Values.grafana.service.port }}
+   Credentials: admin / {{ .Values.grafana.adminPassword }}
+   {{- end }}
+
+{{- else }}
+
+3. Get service endpoints:
+
+   kubectl get svc -n {{ .Release.Namespace }}
+   kubectl get ingress -n {{ .Release.Namespace }}
+
+{{- end }}
+
+=================================================================================
+
+Documentation: https://github.com/michelangelo-ai/michelangelo
+
+For support, please visit our GitHub issues:
+https://github.com/michelangelo-ai/michelangelo/issues
+
+=================================================================================
+

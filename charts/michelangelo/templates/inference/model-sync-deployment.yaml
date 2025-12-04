@@ -1,0 +1,102 @@
+{{- if .Values.inference.modelSync.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-sync-script
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+data:
+  sync-models.sh: {{ .Files.Get "scripts/sync-models.sh" | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-model-sync
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: model-sync
+spec:
+  replicas: {{ .Values.inference.modelSync.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "michelangelo.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: model-sync
+  template:
+    metadata:
+      labels:
+        {{- include "michelangelo.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: model-sync
+    spec:
+      serviceAccountName: {{ include "michelangelo.serviceAccountName" . }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.gpuTolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+      - name: model-sync
+        image: {{ .Values.inference.modelSync.image }}
+        command: ["/bin/sh"]
+        args: ["/scripts/sync-models.sh"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: michelangelo-config
+        volumeMounts:
+        - name: models
+          mountPath: /mnt/models
+        - name: inference-servers-config
+          mountPath: /config/inference-servers
+          readOnly: true
+        - name: sync-script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          {{- toYaml .Values.inference.modelSync.resources | nindent 10 }}
+      volumes:
+      - name: models
+        {{- if and (eq .Values.cloud "gcp") .Values.inference.modelSync.persistence.enabled }}
+        persistentVolumeClaim:
+          claimName: {{ include "michelangelo.fullname" . }}-models
+        {{- else }}
+        hostPath:
+          path: {{ .Values.inference.modelSync.hostPath }}
+          type: DirectoryOrCreate
+        {{- end }}
+      - name: inference-servers-config
+        configMap:
+          name: inference-servers-list
+          optional: true
+      - name: sync-script
+        configMap:
+          name: model-sync-script
+          defaultMode: 0755
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-sync
+  namespace: {{ .Values.namespace.name }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+

@@ -524,6 +524,13 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
+                        # TODO: Uncomment below to enable GPU node scheduling
+                        # "tolerations": [
+                        #     {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+                        # ] if support_gpu else [],
+                        # "nodeSelector": {
+                        #     "cloud.google.com/gke-accelerator": gpu_sku
+                        # } if support_gpu and gpu_sku else {},
                         "volumes": [
                             {
                                 "name": "ray",
@@ -583,6 +590,13 @@ def ray_cluster_spec(
                     "pod": {
                         "spec": {
                             "restartPolicy": "Never",
+                            # TODO: Uncomment below to enable GPU node scheduling
+                            # "tolerations": [
+                            #     {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+                            # ] if support_gpu else [],
+                            # "nodeSelector": {
+                            #     "cloud.google.com/gke-accelerator": gpu_sku
+                            # } if support_gpu and gpu_sku else {},
                             "containers": [
                                 {
                                     "name": "worker",

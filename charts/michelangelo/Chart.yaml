@@ -1,0 +1,15 @@
+apiVersion: v2
+name: michelangelo
+description: A Helm chart for deploying Michelangelo ML platform
+type: application
+version: 0.1.0
+appVersion: "main"
+keywords:
+  - machine-learning
+  - mlops
+  - inference
+  - training
+home: https://github.com/michelangelo-ai/michelangelo
+maintainers:
+  - name: Michelangelo Team
+

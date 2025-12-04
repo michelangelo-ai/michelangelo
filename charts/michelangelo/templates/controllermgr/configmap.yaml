@@ -1,0 +1,37 @@
+{{- if .Values.components.controllermgr.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-controllermgr-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controllermgr
+data:
+  base.yaml: |
+    controllermgr:
+      metricsBindAddress: {{ .Values.controllermgr.config.metricsBindAddress }}
+      healthProbeBindAddress: {{ .Values.controllermgr.config.healthProbeBindAddress }}
+      leaderElection: {{ .Values.controllermgr.config.leaderElection }}
+      leaderElectionID: decaf1259.michelangelo.uber.com
+    controllers:
+      rayCluster:
+        k8sQps: {{ .Values.controllermgr.config.controllers.rayCluster.k8sQps }}
+        k8sBurst: {{ .Values.controllermgr.config.controllers.rayCluster.k8sBurst }}
+    gateways:
+      inferenceServiceEndpoint: {{ include "michelangelo.gatewayEndpoint" . | quote }}
+    minio:
+      awsRegion: {{ .Values.storage.s3.region }}
+{{- if eq .Values.cloud "local" }}
+      awsAccessKeyId: {{ .Values.storage.s3.accessKeyId }}
+      awsSecretAccessKey: {{ .Values.storage.s3.secretAccessKey }}
+      awsEndpointUrl: {{ .Values.storage.s3.endpoint }}
+{{- else }}
+      awsEndpointUrl: {{ include "michelangelo.storageEndpoint" . }}
+{{- end }}
+    workflowClient:
+      service: {{ if eq .Values.workflow.engine "temporal" }}temporaltest-frontend{{ else }}cadence-frontend{{ end }}
+      host: {{ include "michelangelo.workflowEndpoint" . }}
+      transport: grpc
+      domain: {{ .Values.cadence.domain | default "default" }}
+{{- end }}
