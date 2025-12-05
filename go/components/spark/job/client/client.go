@@ -15,14 +15,31 @@ import (
 
 // SparkClient implements the Spark job client interface for creating and managing
 // Spark applications in Kubernetes.
+//
+// The client communicates with the Spark Operator by creating and monitoring
+// SparkApplication custom resources. It handles the conversion from SparkJob
+// specifications to Spark Operator format and extracts status information.
 type SparkClient struct {
-	K8sClient      rest.Interface
-	ParameterCodec runtime.ParameterCodec
+	K8sClient      rest.Interface         // REST client for sparkoperator.k8s.io/v1beta2 API
+	ParameterCodec runtime.ParameterCodec // Codec for query parameter encoding
 }
 
+// Compile-time assertion that SparkClient implements job.Client interface.
 var _ job.Client = &SparkClient{}
 
-// CreateJob creates a new Spark job
+// CreateJob creates a new SparkApplication from a SparkJob specification.
+//
+// This method:
+//  1. Converts SparkJob spec to SparkApplication format
+//  2. Configures driver and executor pods with resource requirements
+//  3. Sets up dependencies (JARs, Python files, etc.)
+//  4. Creates the SparkApplication via the Spark Operator API
+//  5. Updates the SparkJob status with application ID and URL
+//
+// The created SparkApplication triggers the Spark Operator to provision
+// driver and executor pods for running the Spark job.
+//
+// Returns an error if SparkApplication creation fails.
 func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	spec := job.Spec
 	serviceAcount := "spark-operator-spark"
@@ -81,8 +98,18 @@ func (r SparkClient) CreateJob(ctx context.Context, log logr.Logger, job *v2pb.S
 	return nil
 }
 
-// GetJobStatus retrieves the status of the Spark job
-// Return values represent the state, url, error message, and error of job
+// GetJobStatus retrieves the current status of a SparkApplication.
+//
+// This method queries the Spark Operator for the SparkApplication resource and
+// extracts its current state, web UI URL, and any error messages.
+//
+// Returns (in order):
+//   - State string pointer: Current application state (e.g., "SUBMITTED", "RUNNING", "COMPLETED", "FAILED")
+//   - Job URL: Web UI ingress address for accessing Spark UI
+//   - Error message: Error message if the application failed
+//   - Error: Error if status retrieval fails (e.g., not found, permission denied)
+//
+// The method also updates the SparkJob status with the application ID and URL.
 func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	result := &sparkv1beta2.SparkApplication{}
 	options := metav1.GetOptions{}
@@ -108,7 +135,17 @@ func (r SparkClient) GetJobStatus(ctx context.Context, logger logr.Logger, job *
 	return &stateStr, url, errorMessage, nil
 }
 
-// toSparkPodSpec converts a PodSpec from the v2pb package to a SparkPodSpec
+// toSparkPodSpec converts a Michelangelo PodSpec to Spark Operator SparkPodSpec.
+//
+// This method transforms the generic pod specification from the Michelangelo API
+// into the format required by the Spark Operator, including:
+//   - Resource requirements (CPU, memory, GPU)
+//   - Environment variables and config maps
+//   - Service account configuration
+//
+// The serviceAccount parameter is optional and only set for driver pods.
+//
+// Returns a configured SparkPodSpec for use in SparkApplication.
 func (r SparkClient) toSparkPodSpec(pod *v2pb.PodSpec, serviceAccount *string) sparkv1beta2.SparkPodSpec {
 	if pod == nil {
 		return sparkv1beta2.SparkPodSpec{}
