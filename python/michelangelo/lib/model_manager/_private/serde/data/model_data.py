@@ -27,7 +27,7 @@ def dump_model_data(
         indent: The number of spaces to indent the json data.
 
     Returns:
-        The encoded data in json format if fs is not specified. 
+        The encoded data in json format if fs is not specified.
         Otherwise, return None.
     """
     if fs:
@@ -46,7 +46,7 @@ def load_model_data(
 
     Returns:
         The loaded model data.
-        If the data is a single record, return a dictionary where the 
+        If the data is a single record, return a dictionary where the
             keys are the feature names and the values are the feature values.
         If the data is a list of records, return a list of the records.
     """

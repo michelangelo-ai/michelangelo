@@ -1,3 +1,5 @@
+"""Tests for model data serialization and deserialization."""
+
 import os
 import tempfile
 from unittest import TestCase
