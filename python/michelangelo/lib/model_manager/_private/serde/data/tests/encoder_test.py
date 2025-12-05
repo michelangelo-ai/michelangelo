@@ -24,7 +24,10 @@ class EncoderTest(TestCase):
 
         self.assertEqual(
             encoded_data,
-            '{"feature1": [1, 2, 3], "feature2": [4, 5, 6], "feature3": "test", "feature4": "test"}',
+            (
+                '{"feature1": [1, 2, 3], "feature2": [4, 5, 6], '
+                '"feature3": "test", "feature4": "test"}'
+            ),
         )
 
     def test_encoder_with_error(self):

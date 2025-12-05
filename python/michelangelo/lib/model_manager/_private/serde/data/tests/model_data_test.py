@@ -28,7 +28,10 @@ class ModelDataTest(TestCase):
                 "feature2": np.array(["d", "e", "f"]),
             },
         ]
-        self.json_data = r'[{"feature1": [1, 2, 3], "feature2": ["a", "b", "c"]}, {"feature1": [4, 5, 6], "feature2": ["d", "e", "f"]}]'
+        self.json_data = (
+            r'[{"feature1": [1, 2, 3], "feature2": ["a", "b", "c"]}, '
+            r'{"feature1": [4, 5, 6], "feature2": ["d", "e", "f"]}]'
+        )
 
     def assert_record_equal(self, record1, record2):
         """Assert that two records are equal."""

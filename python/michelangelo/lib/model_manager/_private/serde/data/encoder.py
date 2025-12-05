@@ -6,7 +6,7 @@ from numpy import ndarray
 
 
 class DataEncoder(JSONEncoder):
-    """Custom JSON encoder for model input/output data"""
+    """Custom JSON encoder for model input/output data."""
 
     def default(self, obj: any) -> any:
         """Encode the object to a JSON-serializable dictionary."""
