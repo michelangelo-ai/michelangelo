@@ -134,6 +134,117 @@ get_credentials() {
 }
 
 # ============================================================================
+# SETUP CLUSTER CRD (Required for Ray job scheduling)
+# ============================================================================
+setup_cluster_crd() {
+    echo_info "Setting up Cluster CRD for Ray job scheduling..."
+    
+    # Create ma-system namespace (where Cluster CRDs live)
+    echo_info "Creating ma-system namespace..."
+    kubectl create namespace ma-system 2>/dev/null || echo_info "ma-system namespace already exists"
+
+    # Create ray-manager ServiceAccount in default namespace
+    echo_info "Creating ray-manager ServiceAccount..."
+    kubectl create serviceaccount ray-manager -n default 2>/dev/null || echo_info "ray-manager ServiceAccount already exists"
+
+    # Apply RBAC for ray-manager to manage Ray resources
+    echo_info "Applying RBAC for ray-manager..."
+    kubectl apply -f - <<EOF
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ray-manager-role
+rules:
+- apiGroups: ["ray.io"]
+  resources: ["rayclusters", "rayjobs", "rayservices"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["pods", "pods/log", "services", "configmaps", "secrets"]
+  verbs: ["*"]
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ray-manager-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ray-manager-role
+subjects:
+- kind: ServiceAccount
+  name: ray-manager
+  namespace: default
+EOF
+
+    # Create a long-lived token for ray-manager
+    echo_info "Creating ray-manager token..."
+    TOKEN=$(kubectl create token ray-manager -n default --duration=87600h 2>/dev/null || echo "")
+    
+    if [ -z "$TOKEN" ]; then
+        echo_warn "Could not create token (may need newer kubectl version), trying alternative method..."
+        # Alternative: create a secret-based token
+        kubectl apply -f - <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ray-manager-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: ray-manager
+type: kubernetes.io/service-account-token
+EOF
+        sleep 2
+        TOKEN=$(kubectl get secret ray-manager-token -n default -o jsonpath='{.data.token}' | base64 -d)
+    fi
+
+    # Get cluster CA certificate
+    echo_info "Extracting cluster CA certificate..."
+    CA_DATA=$(kubectl config view --raw -o jsonpath='{.clusters[0].cluster.certificate-authority-data}' | base64 -d)
+
+    # Create secrets in default namespace for the Cluster CRD to reference
+    CLUSTER_ID="${CLUSTER_NAME}"
+    
+    echo_info "Creating cluster secrets..."
+    # Delete existing secrets if they exist, then recreate
+    kubectl delete secret "cluster-${CLUSTER_ID}-client-token" -n default 2>/dev/null || true
+    kubectl create secret generic "cluster-${CLUSTER_ID}-client-token" \
+        --from-literal=token="$TOKEN" \
+        -n default
+
+    kubectl delete secret "cluster-${CLUSTER_ID}-ca-data" -n default 2>/dev/null || true
+    kubectl create secret generic "cluster-${CLUSTER_ID}-ca-data" \
+        --from-literal=cadata="$CA_DATA" \
+        -n default
+
+    # Create the Cluster CRD
+    # This tells the scheduler where to run Ray jobs
+    echo_info "Creating Cluster CRD for ${CLUSTER_ID}..."
+    kubectl apply -f - <<EOF
+apiVersion: michelangelo.api/v2
+kind: Cluster
+metadata:
+  name: ${CLUSTER_ID}
+  namespace: ma-system
+spec:
+  kubernetes:
+    rest:
+      host: "https://kubernetes.default.svc"
+      port: "443"
+      tokenTag: "cluster-${CLUSTER_ID}-client-token"
+      caDataTag: "cluster-${CLUSTER_ID}-ca-data"
+    skus: []
+EOF
+
+    echo_info "✅ Cluster CRD '${CLUSTER_ID}' created successfully"
+    
+    # Verify
+    kubectl get clusters.michelangelo.api -n ma-system
+}
+
+# ============================================================================
 # CREATE COMMAND
 # ============================================================================
 do_create() {
@@ -171,9 +282,66 @@ do_create() {
     helm repo add spark-operator https://kubeflow.github.io/spark-operator 2>/dev/null || true
     helm repo update
 
+    # -------------------------------------------------------------------------
+    # Install KubeRay Operator (required for Ray cluster management)
+    # -------------------------------------------------------------------------
+    echo_info "Installing KubeRay operator..."
+    if ! kubectl get namespace ray-system >/dev/null 2>&1; then
+        kubectl create namespace ray-system
+    fi
+    helm upgrade --install kuberay-operator kuberay/kuberay-operator \
+        --namespace ray-system \
+        --set 'tolerations[0].key=nvidia.com/gpu' \
+        --set 'tolerations[0].operator=Exists' \
+        --set 'tolerations[0].effect=NoSchedule' \
+        --wait --timeout 5m || echo_warn "KubeRay operator installation may have issues, continuing..."
+    
+    echo_info "Waiting for KubeRay operator to be ready..."
+    kubectl rollout status deployment/kuberay-operator -n ray-system --timeout=120s || echo_warn "KubeRay operator rollout timed out"
+
+    # -------------------------------------------------------------------------
+    # Create Cluster CRD (required for scheduler to assign Ray jobs)
+    # The scheduler looks for Cluster resources to know where to run jobs
+    # -------------------------------------------------------------------------
+    setup_cluster_crd
+
     # Create namespace
     echo_info "Creating namespace: $NAMESPACE"
     kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
+
+    # -------------------------------------------------------------------------
+    # Check for GHCR image pull secret (required to pull images from ghcr.io)
+    # -------------------------------------------------------------------------
+    if ! kubectl get secret ghcr-secret -n $NAMESPACE >/dev/null 2>&1; then
+        echo ""
+        echo_warn "============================================================"
+        echo_warn "GHCR image pull secret 'ghcr-secret' not found!"
+        echo_warn "============================================================"
+        echo ""
+        echo "Container images are hosted on GitHub Container Registry (GHCR)"
+        echo "which requires authentication. Create the secret before continuing:"
+        echo ""
+        echo "  kubectl create secret docker-registry ghcr-secret \\"
+        echo "    --namespace $NAMESPACE \\"
+        echo "    --docker-server=ghcr.io \\"
+        echo "    --docker-username=YOUR_GITHUB_USERNAME \\"
+        echo "    --docker-password=YOUR_GITHUB_PAT"
+        echo ""
+        echo "To create a GitHub PAT:"
+        echo "  1. Go to https://github.com/settings/tokens"
+        echo "  2. Generate a new token (classic) with 'read:packages' scope"
+        echo "  3. Use that token as YOUR_GITHUB_PAT above"
+        echo ""
+        read -p "Press Enter after creating the secret, or Ctrl+C to abort..."
+        
+        # Verify secret was created
+        if ! kubectl get secret ghcr-secret -n $NAMESPACE >/dev/null 2>&1; then
+            echo_error "Secret 'ghcr-secret' still not found. Please create it and re-run the script."
+        fi
+        echo_info "Secret 'ghcr-secret' found!"
+    else
+        echo_info "GHCR image pull secret found ✓"
+    fi
 
     # Deploy Michelangelo
     echo_info "Installing Michelangelo Helm chart..."
@@ -238,6 +406,20 @@ do_delete() {
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo_info "Deleting namespace..."
         kubectl delete namespace $NAMESPACE 2>/dev/null || echo_warn "Namespace not found"
+    fi
+
+    # Optionally delete Cluster CRD and related resources
+    read -p "Delete Cluster CRD and ray-manager resources? (y/N) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo_info "Deleting Cluster CRD..."
+        kubectl delete clusters.michelangelo.api $CLUSTER_NAME -n ma-system 2>/dev/null || echo_warn "Cluster CRD not found"
+        kubectl delete secret "cluster-${CLUSTER_NAME}-client-token" -n default 2>/dev/null || true
+        kubectl delete secret "cluster-${CLUSTER_NAME}-ca-data" -n default 2>/dev/null || true
+        kubectl delete clusterrolebinding ray-manager-binding 2>/dev/null || true
+        kubectl delete clusterrole ray-manager-role 2>/dev/null || true
+        kubectl delete serviceaccount ray-manager -n default 2>/dev/null || true
+        kubectl delete namespace ma-system 2>/dev/null || true
     fi
 
     # Optionally delete Istio

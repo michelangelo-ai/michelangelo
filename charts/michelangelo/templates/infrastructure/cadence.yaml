@@ -37,6 +37,10 @@ spec:
           value: {{ .Values.mysql.rootPassword }}
         - name: STATSD_ENDPOINT
           value: "localhost:8125"
+        # Bind to all interfaces so port-forward works
+        # TODO: Revisit this
+        - name: BIND_ON_IP
+          value: "0.0.0.0"
         ports:
         - name: grpc
           containerPort: 7833

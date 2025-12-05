@@ -181,6 +181,8 @@ controllermgr:
 # Worker configuration
 worker:
   replicaCount: 1
+  # Enable GPU tolerations for Ray clusters (set to true for GKE with GPU taints)
+  enableGpuTolerations: false
   image:
     repository: worker
     pullPolicy: IfNotPresent

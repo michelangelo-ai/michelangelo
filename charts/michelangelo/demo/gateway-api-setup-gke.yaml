@@ -21,7 +21,11 @@ metadata:
   annotations:
     # Use LoadBalancer for GKE (external access)
     # Change to ClusterIP if you only need internal access
-    networking.istio.io/service-type: LoadBalancer
+    # networking.istio.io/service-type: LoadBalancer
+    
+    # Use ClusterIP for internal access only (no public IP)
+    # Change to LoadBalancer if you need external access
+    networking.istio.io/service-type: ClusterIP
 spec:
   gatewayClassName: istio
   listeners:

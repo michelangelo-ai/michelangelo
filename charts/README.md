@@ -124,3 +124,10 @@ For issues or questions:
 ## License
 
 See LICENSE file in the repository root.
+
+
+## TO run workflow
+PYTHONPATH="." poetry run python ./examples/gpt_oss_20b_finetune/simple_workflow.py \
+  remote-run \
+  --image us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest \
+  --storage-url gs://michelanglo-oss-196506-default/workflows

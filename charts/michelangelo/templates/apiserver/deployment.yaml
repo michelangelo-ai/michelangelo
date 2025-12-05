@@ -40,12 +40,19 @@ spec:
         envFrom:
         - configMapRef:
             name: michelangelo-config
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
         resources:
           {{- toYaml .Values.apiserver.resources | nindent 10 }}
         {{- with .Values.securityContext }}
         securityContext:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "michelangelo.fullname" . }}-apiserver-config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

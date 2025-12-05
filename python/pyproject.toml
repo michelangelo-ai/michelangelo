@@ -15,7 +15,7 @@ fsspec = ">=2023.10.0"
 grpcio = ">=1.66.1"
 protobuf = ">=5.27.1"
 pydantic = ">=2.10.6"
-python = "^3.9.0"
+python = "^3.10.0"
 pyspark = "3.5.5"
 typing-extensions = ">=4.12.2"
 pyyaml = "^6.0.1"
@@ -23,9 +23,10 @@ chronon-ai = "0.0.109"
 thrift = "0.13.0"
 sqlglot = "^27.29.0"
 
+
 ### Optional dependencies
 # For plugin
-ray = {extras = ["default"], version = "^2.41.0", optional = true }
+ray = {extras = ["default"], version = "2.50.0", optional = true }
 
 # For development
 pytest = { version = "^8.3.4", optional = true }
@@ -46,16 +47,15 @@ s3fs = { version = "2024.9.0", optional = true }
 torch = { version = "2.6.0", optional = true }
 pytorch_lightning = { version = "2.2.0", optional = true }
 einops = { version = "0.8.0", optional = true }
-transformers = { version = "4.48.2", optional = true }
+transformers = ">=4.40.0"
 xgboost_ray = {version = "0.1.19", optional = true }
 xgboost = {version = "2.1.4", optional = true }
 kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
-
-# For MLflow model packaging
-mlflow = { version = "^2.0.0", optional = true }
-boto3 = { version = "^1.40.0", optional = true }
-peft = { version = "^0.3.0", optional = true }
+mlflow = "2.22.0"
+mlflow-skinny = "2.22.0"
+boto3 = "1.28.0"  # Required for S3 access by MLflow
+pymysql = "1.1.1"
 
 # For VLLM
 setuptools = { version = "74.1.1", optional = true }
@@ -65,6 +65,7 @@ vllm = { version = "0.8.1", optional = true }
 grpcio-reflection = { version = ">=1.66.1", optional = true }
 PyYAML = { version = "6.0.2", optional = true }
 GitPython = { version = ">=3.1.44", optional = true }
+peft = { version = "^0.3.0", optional = true }
 
 
 [tool.poetry.scripts]
@@ -82,7 +83,7 @@ mactl = ["grpcio-reflection", "PyYAML", "GitPython"]
 pythonpath = [
   "."
 ]
-testpaths = ["tests", "michelangelo"]
+testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
@@ -226,7 +227,6 @@ style = "pep440"
 source = ["michelangelo"]
 branch = true
 parallel = true
-relative_files = true
 omit = [
     "*/tests/*",
     "*/test_*.py",
@@ -236,7 +236,6 @@ omit = [
     "*/examples/*",
     "*/__pycache__/*",
     "*/site-packages/*",
-    "*/sandbox.py",
 ]
 
 [tool.coverage.report]

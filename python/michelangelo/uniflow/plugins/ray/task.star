@@ -27,6 +27,10 @@ RAY_DEFAULT_WORKER_INSTANCES = os.environ.get("RAY_DEFAULT_WORKER_INSTANCES", "1
 RAY_DEFAULT_GPU_SKU = os.environ.get("RAY_DEFAULT_GPU_SKU", "")
 RAY_DEFAULT_ZONE = os.environ.get("RAY_DEFAULT_ZONE", "")
 
+# Enable GPU tolerations to schedule on nodes with GPU taints (e.g., GKE clusters with nvidia.com/gpu taint)
+# TOD: revisit this
+RAY_ENABLE_GPU_TOLERATIONS = os.environ.get("RAY_ENABLE_GPU_TOLERATIONS", "false").lower() == "true"
+
 USER_ID = os.environ.get("USER_ID", "default_user")
 IMAGE_PULL_POLICY = os.environ.get("IMAGE_PULL_POLICY", "Never")
 
@@ -501,6 +505,10 @@ def ray_cluster_spec(
     ]
 
     support_gpu = head_resource.get("gpu", 0) + worker_resource.get("gpu", 0) * worker_instances > 0
+    
+    # Enable GPU tolerations if explicitly enabled or if GPUs are requested
+    # TODO: revisit this
+    enable_gpu_tolerations = RAY_ENABLE_GPU_TOLERATIONS or support_gpu
 
     annotations = {}
     if debug_enabled:
@@ -524,10 +532,9 @@ def ray_cluster_spec(
                 },
                 "pod": {
                     "spec": {
-                        # TODO: Uncomment below to enable GPU node scheduling
-                        # "tolerations": [
-                        #     {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
-                        # ] if support_gpu else [],
+                        "tolerations": [
+                            {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+                        ] if enable_gpu_tolerations else [],
                         # "nodeSelector": {
                         #     "cloud.google.com/gke-accelerator": gpu_sku
                         # } if support_gpu and gpu_sku else {},
@@ -590,10 +597,9 @@ def ray_cluster_spec(
                     "pod": {
                         "spec": {
                             "restartPolicy": "Never",
-                            # TODO: Uncomment below to enable GPU node scheduling
-                            # "tolerations": [
-                            #     {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
-                            # ] if support_gpu else [],
+                            "tolerations": [
+                                {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
+                            ] if enable_gpu_tolerations else [],
                             # "nodeSelector": {
                             #     "cloud.google.com/gke-accelerator": gpu_sku
                             # } if support_gpu and gpu_sku else {},

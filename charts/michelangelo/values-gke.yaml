@@ -92,14 +92,15 @@ serviceAccount:
     # iam.gke.io/gcp-service-account: michelangelo@michelanglo-oss-196506.iam.gserviceaccount.com
   name: michelangelo
 
-# API Server - expose via LoadBalancer or use Ingress
+# API Server - ClusterIP for internal cluster access only
 apiserver:
   replicaCount: 1  # Single replica for dev
   service:
-    type: LoadBalancer
-    annotations:
-      cloud.google.com/load-balancer-type: "Internal"
-      cloud.google.com/backend-config: '{"default": "apiserver-backend-config"}'
+    # type: LoadBalancer
+    # annotations:
+    #   cloud.google.com/load-balancer-type: "Internal"
+    #   cloud.google.com/backend-config: '{"default": "apiserver-backend-config"}'
+    type: ClusterIP  # Changed from LoadBalancer for security
   resources:
     requests:
       cpu: 100m
@@ -130,6 +131,8 @@ controllermgr:
 # Worker - scale based on workload
 worker:
   replicaCount: 1  # Single replica for dev
+  # Enable GPU tolerations for Ray clusters on GKE with GPU taints
+  enableGpuTolerations: true
   resources:
     requests:
       cpu: 100m

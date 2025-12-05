@@ -294,6 +294,100 @@ worker:
       nvidia.com/gpu: 1
 ```
 
+## Running Uniflow Workflows on GKE
+
+Uniflow workflows execute task code in containers. To run workflows on GKE, you need to build and push a Docker image containing your task code.
+
+### Building the Task Image
+
+```bash
+# From the python/ directory
+cd python
+
+# Build the examples image (includes GPT fine-tuning, BERT, etc.)
+docker build -t michelangelo-examples:latest -f examples/Dockerfile .
+```
+
+### Pushing to Google Artifact Registry (Recommended for GKE)
+
+Using Artifact Registry is recommended for GKE deployments - it's private to your GCP project and GKE nodes can pull automatically without needing image pull secrets.
+
+```bash
+# Create repository (one-time setup)
+gcloud artifacts repositories create michelangelo-pipelines \
+  --repository-format=docker \
+  --location=us-east1 \
+  --project=michelanglo-oss-196506 \
+  --description="Pipeline task images for Cadence workflows"
+
+# Configure Docker to authenticate with Artifact Registry
+gcloud auth configure-docker us-east1-docker.pkg.dev
+
+# Tag the image
+docker tag michelangelo-examples:latest \
+  us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest
+
+# Push to Artifact Registry
+docker push us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest
+```
+
+### Alternative: Pushing to GHCR (GitHub Container Registry)
+
+If you prefer GHCR (e.g., for non-GCP deployments):
+
+```bash
+# Set your GitHub PAT (needs write:packages scope)
+export CR_PAT=<your_github_pat>
+
+# Login to GHCR
+echo $CR_PAT | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
+
+# Tag the image
+docker tag michelangelo-examples:latest ghcr.io/<YOUR_USERNAME>/michelangelo-examples:latest
+
+# Push to GHCR
+docker push ghcr.io/<YOUR_USERNAME>/michelangelo-examples:latest
+```
+
+> **Note:** GHCR requires an imagePullSecret in your cluster. See the "Image Pull Secret" section above.
+
+### Configuring Workflows for GKE
+
+Update your workflow to use GKE-specific endpoints:
+
+```python
+ctx = uniflow.create_context()
+
+# Container image for task execution (use Artifact Registry)
+ctx.environ["CONTAINER_IMAGE"] = "us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest"
+
+# GKE cluster services (internal DNS names)
+ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver:14566"
+ctx.environ["MA_NAMESPACE"] = "michelangelo"
+
+# Storage - use GCS instead of MinIO
+ctx.environ["AWS_ACCESS_KEY_ID"] = ""  # Use Workload Identity
+ctx.environ["AWS_SECRET_ACCESS_KEY"] = ""
+ctx.environ["MLFLOW_S3_ENDPOINT_URL"] = "https://storage.googleapis.com"
+ctx.environ["MLFLOW_DEFAULT_ARTIFACT_ROOT"] = "gs://PROJECT_ID-mlflow"
+
+# Database (MySQL in cluster)
+ctx.environ["MLFLOW_BACKEND_STORE_URI"] = "mysql+pymysql://root:root@mysql:3306/mlflow"
+
+# Run workflow
+ctx.run(my_workflow, ...)
+```
+
+### Image Pull Secret for Task Pods
+
+The Kubernetes cluster needs access to pull the task image. The `ghcr-secret` created during setup is used for this. Ensure it's configured in your workflow or values file:
+
+```yaml
+# values-gke.yaml
+imagePullSecrets:
+  - name: ghcr-secret
+```
+
 ## Contributing
 
 See the main [Michelangelo repository](https://github.com/michelangelo-ai/michelangelo) for contribution guidelines.

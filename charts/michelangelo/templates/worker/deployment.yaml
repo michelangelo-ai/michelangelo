@@ -38,12 +38,24 @@ spec:
         env:
         - name: CADENCE_CLI_ADDRESS
           value: {{ include "michelangelo.workflowEndpoint" . }}
+        {{- if .Values.worker.enableGpuTolerations }}
+        - name: RAY_ENABLE_GPU_TOLERATIONS
+          value: "true"
+        {{- end }}
+        volumeMounts:
+        - name: config-volume
+          mountPath: /config
         resources:
           {{- toYaml .Values.worker.resources | nindent 10 }}
         {{- with .Values.securityContext }}
         securityContext:
           {{- toYaml . | nindent 10 }}
         {{- end }}
+        # TODO: Revisit this
+      volumes:
+      - name: config-volume
+        configMap:
+          name: {{ include "michelangelo.fullname" . }}-worker-config
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
