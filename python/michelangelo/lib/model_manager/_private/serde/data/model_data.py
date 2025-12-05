@@ -1,4 +1,7 @@
-"""Model data serialization and deserialization."""
+"""Model data serialization and deserialization.
+
+Model data are data artifacts in the model package such as sample data, etc.
+"""
 
 import json
 import numpy as np
