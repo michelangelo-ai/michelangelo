@@ -205,11 +205,11 @@ class LightningTrainer:
 
 
 def create_run_config(
-        name: Optional[str] = None,
-        storage_path: Optional[str] = None,
-        checkpoint_config: CheckpointConfig = None,
-        stop: Optional[dict] = None,  # Keep for compatibility but don't use
-        verbose: int = 1,  # Keep parameter for compatibility but don't use it
+    name: Optional[str] = None,
+    storage_path: Optional[str] = None,
+    checkpoint_config: CheckpointConfig = None,
+    stop: Optional[dict] = None,  # Keep for compatibility but don't use
+    verbose: int = 1,  # Keep parameter for compatibility but don't use it
 ) -> RunConfig:
     """Create Ray RunConfig for distributed training."""
     return RunConfig(
@@ -218,12 +218,13 @@ def create_run_config(
         checkpoint_config=checkpoint_config,
     )
 
+
 def create_scaling_config(
-        trainer_cpu: int = 2,
-        cpu_per_worker: int = 4,
-        num_workers: Optional[int] = None,
-        use_gpu: bool = True,
-        resources_per_worker: Optional[dict] = None,
+    trainer_cpu: int = 2,
+    cpu_per_worker: int = 4,
+    num_workers: Optional[int] = None,
+    use_gpu: bool = True,
+    resources_per_worker: Optional[dict] = None,
 ) -> ScalingConfig:
     """Create Ray ScalingConfig for distributed training."""
     if num_workers is None:
