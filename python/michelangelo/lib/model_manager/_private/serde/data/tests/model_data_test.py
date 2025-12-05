@@ -28,17 +28,17 @@ class ModelDataTest(TestCase):
         ]
         self.json_data = r'[{"feature1": [1, 2, 3], "feature2": ["a", "b", "c"]}, {"feature1": [4, 5, 6], "feature2": ["d", "e", "f"]}]'
 
-    def assertRecordEqual(self, record1, record2):
+    def assert_record_equal(self, record1, record2):
         """Assert that two records are equal."""
         self.assertEqual(set(record1.keys()), set(record2.keys()))
         for key in record1:
             self.assertTrue(np.array_equal(record1[key], record2[key]))
 
-    def assertDataEqual(self, data1, data2):
+    def assert_data_equal(self, data1, data2):
         """Assert that two data are equal."""
         self.assertEqual(len(data1), len(data2))
         for record1, record2 in zip(data1, data2):
-            self.assertRecordEqual(record1, record2)
+            self.assert_record_equal(record1, record2)
 
     def test_dump_model_data_single_record(self):
         """Test that the model data is dumped correctly."""
@@ -47,7 +47,7 @@ class ModelDataTest(TestCase):
     def test_get_model_data_single_record(self):
         """Test that the model data is loaded correctly."""
         model_data = get_model_data(self.json_record)
-        self.assertRecordEqual(model_data, self.record)
+        self.assert_record_equal(model_data, self.record)
 
     def test_dump_model_data_single_record_to_file(self):
         """Test that the model data is dumped to a file correctly."""
@@ -69,7 +69,7 @@ class ModelDataTest(TestCase):
 
             with open(file) as f:
                 model_data = load_model_data(f)
-                self.assertRecordEqual(model_data, self.record)
+                self.assert_record_equal(model_data, self.record)
 
     def test_dump_model_data_multiple_records(self):
         """Test that the model data is dumped correctly."""
@@ -78,7 +78,7 @@ class ModelDataTest(TestCase):
     def test_get_model_data_multiple_records(self):
         """Test that the model data is loaded correctly."""
         model_data = get_model_data(self.json_data)
-        self.assertDataEqual(model_data, self.data)
+        self.assert_data_equal(model_data, self.data)
 
     def test_dump_model_data_multiple_records_to_file(self):
         """Test that the model data is dumped to a file correctly."""
@@ -100,4 +100,4 @@ class ModelDataTest(TestCase):
 
             with open(file) as f:
                 model_data = load_model_data(f)
-                self.assertDataEqual(model_data, self.data)
+                self.assert_data_equal(model_data, self.data)
