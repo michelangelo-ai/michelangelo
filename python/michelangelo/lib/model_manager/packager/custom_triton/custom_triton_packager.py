@@ -12,19 +12,39 @@ from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 class CustomTritonPackager:
-    """Packager for custom Triton Python models."""
+    """Packager for custom Triton Python models.
+
+    This class provides utilities to package custom Python models that implement
+    the Model interface into formats suitable for deployment with NVIDIA Triton
+    Inference Server. It handles the generation of required configuration files,
+    dependency management, and model artifact organization.
+
+    The packager supports two main workflows:
+    1. Creating Triton model packages for Michelangelo Studio deployment
+    2. Creating raw model packages with sample data for testing and validation
+
+    Attributes:
+        gen: The template renderer used to generate Triton configuration files.
+        custom_batch_processing: Whether batch processing is handled manually by
+            the model implementation.
+    """
 
     def __init__(self, custom_batch_processing: Optional[bool] = False):
         """Create a CustomTritonPackager instance.
 
         Args:
-            custom_batch_processing (Optional):
-                If to handle batch manually in the Triton model package.
-                Default is False. If set to True, the user is responsible for handling
-                batch in the model class, and the model input/output will have an
-                additional batch dimension on top of the existing model schema.
-                For example, the schema shape [n, ..., m], the input dimension will
-                be [batch_size, n, ..., m].
+            custom_batch_processing: Whether to handle batching manually in the
+                model implementation. Defaults to False.
+
+                If False (default), Triton automatically handles batching and
+                the model's predict method receives individual samples with
+                shapes matching the model schema exactly.
+
+                If True, the model implementation is responsible for handling
+                batches, and the predict method will receive inputs with an
+                additional leading batch dimension. For example, if the schema
+                specifies shape [n, ..., m], the actual input shape will be
+                [batch_size, n, ..., m].
         """
         self.gen = TritonTemplateRenderer()
         self.custom_batch_processing = custom_batch_processing
@@ -40,28 +60,42 @@ class CustomTritonPackager:
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
-        """Create a Triton model package for custom Python model.
+        """Create a Triton model package for deployment to Michelangelo Studio.
+
+        This method packages a custom Python model into a format suitable for
+        deployment on Triton Inference Server through Michelangelo Studio. It
+        generates the necessary configuration files, bundles dependencies, and
+        organizes model artifacts according to Triton's directory structure.
 
         Args:
-            model_path: the path of the raw model
-            model_class: the model class of the model
-                that contains the custom predict function
-            model_schema: the schema of the model
-            model_name: the name of model in MA Studio
-            dest_model_path: the path to save the model package
-                If not specified, a temporary directory will be created
-            model_revision: the revision of model in MA Studio
-            model_path_source_type: the source type of the model path,
-                e.g. 'hdfs', 'terrablob', default is 'hdfs'
-            include_import_prefixes (Optional): only save the imported
-                modules with the given prefixes in the model package,
-                e.g. ['uber', 'data.michelangelo'] only imports starting
-                with 'uber' or 'data.michelangelo' will be saved in the
-                model package.
-                and if the list is empty, save all imports
+            model_path: The path to the saved model artifacts. This should be
+                the directory containing the model files created by the Model's
+                save() method.
+            model_class: The fully qualified class name of the model
+                implementation (e.g., 'mypackage.models.MyModel'). This class
+                must implement the Model interface with save, load, and predict
+                methods.
+            model_schema: The schema defining the model's input and output
+                features, including their names, data types, and shapes.
+            model_name: The name to use for the model in Michelangelo Studio.
+                If not specified, a name will be derived from the model class.
+            dest_model_path: The directory path where the model package should
+                be saved. If not specified, a temporary directory will be
+                created and its path returned.
+            model_revision: The revision number for the model in Michelangelo
+                Studio. Defaults to "0".
+            model_path_source_type: The storage backend type where the model
+                artifacts are located. Should be a value from StorageType (e.g.,
+                StorageType.LOCAL). Defaults to StorageType.LOCAL.
+            include_import_prefixes: A list of module prefixes to include when
+                bundling dependencies. Only imported modules whose names start
+                with one of these prefixes will be included in the package. For
+                example, ['uber', 'data.michelangelo'] will only include modules
+                starting with 'uber' or 'data.michelangelo'. If None or empty,
+                all imported modules will be included.
 
         Returns:
-            The path of the model package
+            The absolute path to the generated model package directory.
         """
 
     def create_raw_model_package(
@@ -75,33 +109,55 @@ class CustomTritonPackager:
         requirements: Optional[Union[list[str], str]] = None,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
-        """Create a raw model package for custom Python model.
+        """Create a raw model package with sample data for testing.
+
+        This method creates a self-contained model package that includes sample
+        data for validation and testing. This is useful for verifying that the
+        model package works correctly before deployment, or for creating
+        shareable model artifacts for development and testing purposes.
+
+        The raw model package includes:
+        - Model artifacts and implementation code
+        - Sample input data for testing predictions
+        - Dependency specifications
+        - Triton configuration files
 
         Args:
-            model_path: the path of the raw model
-            model_class: the model class of the model
-                that contains the custom predict function
-            model_schema: the schema of the model, which specifies the
-                input/palette/output features
-            sample_data: the sample data of the model. A list of input data
-                for the predict function.
-            dest_model_path: the path to save the model package
-                If not specified, a temporary directory will be created
-            model_path_source_type: the source type of the model path,
-                e.g. 'hdfs', 'terrablob', default is 'hdfs'
-            requirements: the requirements of the model, which can be one
-                of the following:
-                - a list of requirements
-                - a path to the requirements.txt file
-                If not specified, the requirements will not be included in
-                the model package
-            include_import_prefixes (Optional): only save the imported
-                modules with the given prefixes in the model package,
-                e.g. ['uber', 'data.michelangelo'] only imports starting
-                with 'uber' or 'data.michelangelo' will be saved in the
-                model package.
-                and if the list is empty, save all imports
+            model_path: The path to the saved model artifacts. This should be
+                the directory containing the model files created by the Model's
+                save() method.
+            model_class: The fully qualified class name of the model
+                implementation (e.g., 'mypackage.models.MyModel'). This class
+                must implement the Model interface with save, load, and predict
+                methods.
+            model_schema: The schema defining the model's input, palette
+                (feature store), and output features, including their names,
+                data types, and shapes.
+            sample_data: A list of sample inputs for testing the model's
+                predict method. Each item should be a dictionary mapping input
+                feature names to numpy arrays, matching the format expected by
+                the model's predict method.
+            dest_model_path: The directory path where the model package should
+                be saved. If not specified, a temporary directory will be
+                created and its path returned.
+            model_path_source_type: The storage backend type where the model
+                artifacts are located. Should be a value from StorageType (e.g.,
+                StorageType.LOCAL). Defaults to StorageType.LOCAL.
+            requirements: The Python package dependencies required by the model.
+                This can be either:
+                - A list of requirement strings (e.g., ['numpy>=1.20.0',
+                  'scikit-learn==1.0.2'])
+                - A path to a requirements.txt file
+                If not specified, no additional requirements will be included in
+                the package (only the model code and its imports will be
+                bundled).
+            include_import_prefixes: A list of module prefixes to include when
+                bundling dependencies. Only imported modules whose names start
+                with one of these prefixes will be included in the package. For
+                example, ['uber', 'data.michelangelo'] will only include modules
+                starting with 'uber' or 'data.michelangelo'. If None or empty,
+                all imported modules will be included.
 
         Returns:
-            The path of the raw model package
+            The absolute path to the generated raw model package directory.
         """
