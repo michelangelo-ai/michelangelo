@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional
 
 import pytorch_lightning as pl
 from ray.data import Dataset
-from ray.train import RunConfig, ScalingConfig
+from ray.train import CheckpointConfig, RunConfig, ScalingConfig
 from ray.train.lightning import RayDDPStrategy, RayLightningEnvironment
 from ray.train.torch import TorchTrainer
 
@@ -202,3 +202,41 @@ class LightningTrainer:
 
         log.info("Distributed Lightning training completed")
         return result
+
+
+def create_run_config(
+        name: Optional[str] = None,
+        storage_path: Optional[str] = None,
+        checkpoint_config: CheckpointConfig = None,
+        stop: Optional[dict] = None,  # Keep for compatibility but don't use
+        verbose: int = 1,  # Keep parameter for compatibility but don't use it
+) -> RunConfig:
+    """Create Ray RunConfig for distributed training."""
+    return RunConfig(
+        name=name,
+        storage_path=storage_path,
+        checkpoint_config=checkpoint_config,
+    )
+
+def create_scaling_config(
+        trainer_cpu: int = 2,
+        cpu_per_worker: int = 4,
+        num_workers: Optional[int] = None,
+        use_gpu: bool = True,
+        resources_per_worker: Optional[dict] = None,
+) -> ScalingConfig:
+    """Create Ray ScalingConfig for distributed training."""
+    if num_workers is None:
+        # Infer from runtime or default
+        num_workers = 4
+
+    if resources_per_worker is None:
+        resources_per_worker = {"CPU": cpu_per_worker}
+        if use_gpu:
+            resources_per_worker["GPU"] = 1
+
+    return ScalingConfig(
+        num_workers=num_workers,
+        use_gpu=use_gpu,
+        resources_per_worker=resources_per_worker,
+    )
