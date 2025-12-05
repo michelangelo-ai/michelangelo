@@ -4,8 +4,10 @@ Model data are data artifacts in the model package such as sample data, etc.
 """
 
 import json
-import numpy as np
 from typing import Optional, TextIO, Union
+
+import numpy as np
+
 from .encoder import DataEncoder
 
 

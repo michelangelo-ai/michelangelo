@@ -1,8 +1,10 @@
 """Tests for the data encoder."""
 
 import json
-import numpy as np
 from unittest import TestCase
+
+import numpy as np
+
 from michelangelo.lib.model_manager._private.serde.data import DataEncoder
 
 
