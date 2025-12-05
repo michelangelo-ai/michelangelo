@@ -1,4 +1,5 @@
 """Custom JSON encoder for model input/output data."""
+
 from json import JSONEncoder
 from numpy import ndarray
 

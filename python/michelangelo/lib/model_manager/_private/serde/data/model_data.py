@@ -1,4 +1,5 @@
 """Model data serialization and deserialization."""
+
 import json
 import numpy as np
 from typing import Optional, TextIO, Union
@@ -27,7 +28,9 @@ def dump_model_data(
         return json.dumps(data, cls=DataEncoder, indent=indent)
 
 
-def load_model_data(fs: TextIO) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
+def load_model_data(
+    fs: TextIO,
+) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
     """Load data of the model data from a file
 
     Args:
@@ -42,7 +45,9 @@ def load_model_data(fs: TextIO) -> Union[dict[str, np.ndarray], list[dict[str, n
     return convert_data_items_to_numpy(data)
 
 
-def get_model_data(json_data: str) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
+def get_model_data(
+    json_data: str,
+) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
     """Get the a single record of the model data from the json string
 
     Args:
@@ -57,7 +62,9 @@ def get_model_data(json_data: str) -> Union[dict[str, np.ndarray], list[dict[str
     return convert_data_items_to_numpy(data)
 
 
-def convert_data_items_to_numpy(data: Union[dict[str, list], list[dict[str, list]]]) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
+def convert_data_items_to_numpy(
+    data: Union[dict[str, list], list[dict[str, list]]],
+) -> Union[dict[str, np.ndarray], list[dict[str, np.ndarray]]]:
     """Convert the data items to numpy arrays
 
     Args:
@@ -67,5 +74,7 @@ def convert_data_items_to_numpy(data: Union[dict[str, list], list[dict[str, list
         The data with the values converted to numpy arrays
     """
     if isinstance(data, list):
-        return [{key: np.array(value) for key, value in record.items()} for record in data]
+        return [
+            {key: np.array(value) for key, value in record.items()} for record in data
+        ]
     return {key: np.array(value) for key, value in data.items()}
