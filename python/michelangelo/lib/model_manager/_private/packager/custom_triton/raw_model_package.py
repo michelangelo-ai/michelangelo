@@ -12,7 +12,6 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml im
 from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import generate_requirements_txt
 from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import serialize_pickle_dependencies
 from michelangelo.lib.model_manager._private.packager.custom_triton.constants import MODEL_CLASS_FILE_NAME
-from michelangelo.lib.model_manager._private.packager.custom_triton.validation import validate_model_files
 
 
 def generate_raw_model_package_content(
@@ -68,9 +67,6 @@ def generate_raw_model_package_content(
     )
 
     os.makedirs(target_model_path, exist_ok=True)
-
-    # Validate that the model does not contain reserved files
-    validate_model_files(target_model_path)
 
     defs_path = os.path.join(root_path, "defs")
 
