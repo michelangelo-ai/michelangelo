@@ -1,1 +1,1 @@
-"""PyTorch Lightning trainer module."""
+# PyTorch Lightning trainer module
