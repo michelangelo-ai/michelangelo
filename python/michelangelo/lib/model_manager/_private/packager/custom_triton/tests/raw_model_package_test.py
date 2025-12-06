@@ -1,3 +1,4 @@
+"""Tests for raw model package generation."""
 import re
 import tempfile
 import numpy as np
@@ -7,7 +8,10 @@ from michelangelo.lib.model_manager._private.packager.custom_triton import gener
 
 
 class RawModelPackageTest(TestCase):
+    """Tests for raw model package generation."""
+
     def test_generate_raw_model_package_content(self):
+        """It generates the raw model package content."""
         with tempfile.TemporaryDirectory() as temp_dir:
             content = generate_raw_model_package_content(
                 temp_dir,
@@ -31,6 +35,7 @@ class RawModelPackageTest(TestCase):
         self.assertNotIn("dependencies", content)
 
     def test_generate_raw_model_package_content_with_batch_inference(self):
+        """It generates the raw model package content with batch inference."""
         with tempfile.TemporaryDirectory() as temp_dir:
             content = generate_raw_model_package_content(
                 temp_dir,
@@ -55,6 +60,7 @@ class RawModelPackageTest(TestCase):
         self.assertNotIn("dependencies", content)
 
     def test_generate_raw_model_package_content_with_requirements(self):
+        """It generates the raw model package content with requirements."""
         with tempfile.TemporaryDirectory() as temp_dir:
             content = generate_raw_model_package_content(
                 temp_dir,
