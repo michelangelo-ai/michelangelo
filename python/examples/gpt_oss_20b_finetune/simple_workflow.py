@@ -96,7 +96,7 @@ if __name__ == "__main__":
     ctx.run(
         simple_gpt_workflow,
         dataset_name="alpaca",
-        num_epochs=3,
+        num_epochs=1,
         sample_size=50,
         model_name="gpt2",
     )

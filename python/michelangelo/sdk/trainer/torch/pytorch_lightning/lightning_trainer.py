@@ -176,15 +176,8 @@ class LightningTrainer:
 
             return {"metrics": final_metrics}
 
-        # Create TorchTrainer with Lightning
-        self.torch_trainer = TorchTrainer(
-            train_loop_per_worker=train_loop_per_worker,
-            datasets={
-                "train": self.param.train_data,
-                "validation": self.param.validation_data,
-            },
-            train_loop_config={},
-        )
+        # Store the train loop function for later initialization
+        self._train_loop_per_worker = train_loop_per_worker
 
     def train(self, run_config: RunConfig, scaling_config: ScalingConfig):
         """Train the model using Ray.
@@ -192,13 +185,22 @@ class LightningTrainer:
         Returns Ray Result object compatible with internal API.
         """
         log.info("Starting distributed Lightning training...")
+        log.info(f"Using storage path: {run_config.storage_path}")
 
-        # Configure the trainer with scaling and run configs
-        self.torch_trainer._scaling_config = scaling_config
-        self.torch_trainer._run_config = run_config
+        # Create TorchTrainer with proper RunConfig and ScalingConfig
+        torch_trainer = TorchTrainer(
+            train_loop_per_worker=self._train_loop_per_worker,
+            datasets={
+                "train": self.param.train_data,
+                "validation": self.param.validation_data,
+            },
+            scaling_config=scaling_config,
+            run_config=run_config,
+            train_loop_config={},
+        )
 
         # Train and return result
-        result = self.torch_trainer.fit()
+        result = torch_trainer.fit()
 
         log.info("Distributed Lightning training completed")
         return result

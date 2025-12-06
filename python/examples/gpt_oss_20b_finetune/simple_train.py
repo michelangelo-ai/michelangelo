@@ -63,14 +63,16 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
     return artifact_uri
 
 
+
 @uniflow.task(
     config=RayTask(
         head_cpu=2,
         head_memory="8Gi",
-        worker_cpu=2,
-        worker_memory="8Gi",
-        worker_instances=2,
-    )
+        worker_cpu=1,
+        worker_memory="4Gi",
+        worker_instances=1,
+    ),
+    cache_enabled=False,
 )
 def simple_train_gpt(
     train_dv: DatasetVariable,
@@ -81,7 +83,7 @@ def simple_train_gpt(
     learning_rate: float = 5e-5,
     use_lora: bool = True,
     lora_rank: int = 16,
-    num_workers: int = 2,
+    num_workers: int = 1,
     use_gpu: bool = True,
 ):
     """Distributed training function using Ray Lightning.
@@ -124,8 +126,8 @@ def simple_train_gpt(
 
     # Create scaling configuration for Ray
     scaling_config = create_scaling_config(
-        trainer_cpu=2,
-        cpu_per_worker=4,
+        trainer_cpu=1,
+        cpu_per_worker=2,
         num_workers=num_workers,
         use_gpu=use_gpu,
     )
@@ -133,16 +135,22 @@ def simple_train_gpt(
 
     # Setup MLflow environment for Ray Train
 
-    # Create run configuration with checkpointing (no MLflow callback needed)
+    # Use the same S3 bucket that workers already have access to (s3://default)
+    # This avoids permission issues with creating separate buckets
+    storage_path = "s3://default/ray_checkpoints"
     run_config = create_run_config(
         name=f"gpt-distributed-{model_name.replace('/', '-')}",
+        storage_path=storage_path,
         checkpoint_config=CheckpointConfig(
             num_to_keep=1,
             checkpoint_score_attribute="val_loss",
             checkpoint_score_order="min",
         ),
     )
+    log.info(f"Using {storage_path} for Ray checkpoint storage")
     log.info("run_config: %r", run_config)
+    log.info(f"🔧 RunConfig storage_path: {run_config.storage_path}")
+    log.info(f"🔧 RunConfig checkpoint_config: {run_config.checkpoint_config}")
 
     # Setup MLflow logger for Lightning training
     experiment_name = "gpt-finetune-experiment"
@@ -253,10 +261,16 @@ def simple_train_gpt(
         # If it's already a path string
         checkpoint_path = checkpoint
 
-    # Log checkpoint to MLflow artifacts (automatically saved to S3)
-    log.info("🔄 Logging checkpoint to MLflow...")
-    mlflow_artifact_uri = log_checkpoint_to_mlflow(checkpoint_path, run_id)
-    log.info(f"✅ Checkpoint logged to MLflow: {mlflow_artifact_uri}")
+    log.info(f"🔍 Raw checkpoint path from Ray: {checkpoint_path}")
+
+    # Fix checkpoint path for S3 storage - simple!
+    if not checkpoint_path.startswith("s3://"):
+        checkpoint_path = f"s3://{checkpoint_path}"
+        log.info(f"🔧 Corrected checkpoint path for S3: {checkpoint_path}")
+
+    # Return S3 URI directly for eval step
+    log.info("✅ Checkpoint already saved to S3, using S3 URI directly")
+    mlflow_artifact_uri = checkpoint_path
 
     return {
         "checkpoint_path": mlflow_artifact_uri,
