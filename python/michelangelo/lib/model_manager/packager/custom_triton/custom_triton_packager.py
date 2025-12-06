@@ -1,14 +1,24 @@
 """Packager for custom Triton models."""
 
 from typing import Optional, Union
-
 from numpy import ndarray
-
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo._internal.utils.file_utils import generate_folder
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    generate_raw_model_package_content,
+)
+from michelangelo.lib.model_manager._private.schema.triton import (
+    validate_model_schema,
+    convert_model_schema,
+)
+from michelangelo.lib.model_manager._private.utils.data_utils import (
+    validate_sample_data,
+    validate_sample_data_with_model_schema,
+)
 
 
 class CustomTritonPackager:
@@ -120,7 +130,6 @@ class CustomTritonPackager:
         - Model artifacts and implementation code
         - Sample input data for testing predictions
         - Dependency specifications
-        - Triton configuration files
 
         Args:
             model_path: The path to the saved model artifacts. This should be
@@ -161,3 +170,56 @@ class CustomTritonPackager:
         Returns:
             The absolute path to the generated raw model package directory.
         """
+        if not model_class:
+            raise ValueError("model_class is required")
+
+        is_model_class_valid, error = validate_model_class(model_class)
+
+        if not is_model_class_valid:
+            raise error
+
+        if not model_schema:
+            raise ValueError("model_schema is required")
+
+        is_schema_valid, error = validate_model_schema(model_schema)
+
+        if not is_schema_valid:
+            raise error
+
+        is_sample_data_valid, error = validate_sample_data(sample_data)
+
+        if not is_sample_data_valid:
+            raise error
+
+        batch_inference = self.custom_batch_processing
+
+        (
+            is_sample_data_with_schema_valid, 
+            error,
+        ) = validate_sample_data_with_model_schema(
+            sample_data, 
+            model_schema, 
+            batch_inference
+        )
+
+        if not is_sample_data_with_schema_valid:
+            raise error
+
+        if not dest_model_path:
+            dest_model_path = tempfile.mkdtemp()
+
+        content = generate_raw_model_package_content(
+            model_path,
+            model_class,
+            model_schema,
+            sample_data,
+            model_path_source_type=model_path_source_type,
+            requirements=requirements,
+            root_path=dest_model_path,
+            include_import_prefixes=include_import_prefixes,
+            batch_inference=batch_inference,
+        )
+
+        generate_folder(content, dest_model_path)
+
+        return dest_model_path
