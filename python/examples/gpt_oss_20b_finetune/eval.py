@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
@@ -77,6 +76,7 @@ def evaluate_gpt_model(
     # Use fsspec to open S3 files properly
     if ckpt_path.startswith("s3://"):
         import fsspec
+
         with fsspec.open(ckpt_path, "rb") as f:
             checkpoint_data = torch.load(f, map_location="cpu")
     else:

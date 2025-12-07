@@ -96,39 +96,22 @@ class TestLightningTrainer:
             lightning_trainer_kwargs={"accelerator": "cpu"},
         )
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_lightning_trainer_initialization(self, mock_torch_trainer):
+    def test_lightning_trainer_initialization(self):
         """Test LightningTrainer initialization."""
         trainer = LightningTrainer(self.param)
 
         assert trainer.param == self.param
-        mock_torch_trainer.assert_called_once()
+        # In the new implementation, TorchTrainer is created only during train()
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
-        # Check that TorchTrainer was called with correct arguments
-        call_args = mock_torch_trainer.call_args
-        assert "train_loop_per_worker" in call_args[1]
-        assert "datasets" in call_args[1]
-        assert "train_loop_config" in call_args[1]
-
-        # Check datasets
-        datasets = call_args[1]["datasets"]
-        assert datasets["train"] == self.mock_train_data
-        assert datasets["validation"] == self.mock_validation_data
-
-        # Check train_loop_config
-        assert call_args[1]["train_loop_config"] == {}
-
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_setup_trainer_creates_torch_trainer(self, mock_torch_trainer):
-        """Test that _setup_trainer creates TorchTrainer instance."""
+    def test_setup_trainer_creates_train_loop_function(self):
+        """Test that initialization creates train_loop_per_worker function."""
         trainer = LightningTrainer(self.param)
 
-        assert hasattr(trainer, "torch_trainer")
-        assert trainer.torch_trainer == mock_torch_trainer.return_value
+        # In new implementation, train loop function is stored, not TorchTrainer
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
     @patch(
         "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
@@ -149,9 +132,17 @@ class TestLightningTrainer:
         # Call train method
         result = trainer.train(mock_run_config, mock_scaling_config)
 
-        # Verify scaling and run configs were set
-        assert trainer.torch_trainer._scaling_config == mock_scaling_config
-        assert trainer.torch_trainer._run_config == mock_run_config
+        # Verify TorchTrainer was created with correct configs
+        mock_torch_trainer.assert_called_once_with(
+            train_loop_per_worker=trainer._train_loop_per_worker,
+            datasets={
+                "train": self.mock_train_data,
+                "validation": self.mock_validation_data,
+            },
+            scaling_config=mock_scaling_config,
+            run_config=mock_run_config,
+            train_loop_config={},
+        )
 
         # Verify fit was called and result returned
         mock_trainer_instance.fit.assert_called_once()
@@ -174,31 +165,19 @@ class TestLightningTrainer:
         mock_log.info.assert_any_call("Distributed Lightning training completed")
 
     def test_train_loop_per_worker_function_exists(self):
-        """Test that train_loop_per_worker function is created in _setup_trainer."""
-        mock_path = (
-            "michelangelo.sdk.trainer.torch.pytorch_lightning"
-            ".lightning_trainer.TorchTrainer"
-        )
-        with patch(mock_path) as mock_torch_trainer:
-            LightningTrainer(self.param)
+        """Test that train_loop_per_worker function is created during initialization."""
+        trainer = LightningTrainer(self.param)
 
-            # Get the train_loop_per_worker function that was passed to TorchTrainer
-            call_args = mock_torch_trainer.call_args
-            train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Function should be stored directly and be callable
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
-            # Verify it's a callable function
-            assert callable(train_loop_func)
-
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_closure_captures_param(self, mock_torch_trainer):
+    def test_train_loop_per_worker_closure_captures_param(self):
         """Test that the train_loop_per_worker closure captures self.param."""
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # The closure should have access to self.param
         # We can't easily test the full execution without mocking many Ray components,
@@ -206,10 +185,7 @@ class TestLightningTrainer:
         assert hasattr(train_loop_func, "__closure__")
         assert train_loop_func.__closure__ is not None
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_execution(self, mock_torch_trainer):
+    def test_train_loop_per_worker_execution(self):
         """Test execution of the train_loop_per_worker function."""
         # Create a mock Lightning module
         mock_model = MagicMock()
@@ -218,11 +194,10 @@ class TestLightningTrainer:
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (
@@ -283,10 +258,7 @@ class TestLightningTrainer:
             # Check return value
             assert result == {"metrics": {"loss": 0.5, "accuracy": 0.8}}
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_with_custom_strategy(self, mock_torch_trainer):
+    def test_train_loop_per_worker_with_custom_strategy(self):
         """Test train_loop_per_worker with custom strategy."""
         # Update param to include custom strategy
         custom_param = LightningTrainerParam(
@@ -304,11 +276,10 @@ class TestLightningTrainer:
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(custom_param)
+        trainer = LightningTrainer(custom_param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (
@@ -358,21 +329,17 @@ class TestLightningTrainer:
             # Check return value has empty metrics when no logged_metrics
             assert result == {"metrics": {}}
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_with_pandas_batch_data(self, mock_torch_trainer):
+    def test_train_loop_per_worker_with_pandas_batch_data(self):
         """Test train_loop_per_worker with pandas-style batch data."""
         # Create a mock Lightning module
         mock_model = MagicMock()
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (

@@ -63,7 +63,6 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
     return artifact_uri
 
 
-
 @uniflow.task(
     config=RayTask(
         head_cpu=2,
