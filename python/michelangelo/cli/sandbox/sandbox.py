@@ -213,8 +213,7 @@ necessary, and this assertion will be removed.
         "boot.yaml",
         "mysql.yaml",
         "michelangelo-config.yaml",
-        "aws-credentials.yaml",
-        "yscope-log-viewer-deployment.yaml",
+        "aws-credentials.yaml"
     ]
     links = []
 

@@ -383,6 +383,7 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	var kwArgs []interface{} = []interface{}{}
 	var envs map[string]interface{} = make(map[string]interface{})
 
+	// Set default UF_STORAGE_URL if not provided in pipeline config
 	if pipelineRun.Spec.WorkspaceRootDir != "" {
 		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
 	} else {
