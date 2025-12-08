@@ -509,6 +509,9 @@ def ray_cluster_spec(
     # Enable GPU tolerations if explicitly enabled or if GPUs are requested
     # TODO: revisit this
     enable_gpu_tolerations = RAY_ENABLE_GPU_TOLERATIONS or support_gpu
+    
+    # Debug: Print GPU tolerations status
+    print("ray | GPU tolerations debug: RAY_ENABLE_GPU_TOLERATIONS=" + str(RAY_ENABLE_GPU_TOLERATIONS) + ", support_gpu=" + str(support_gpu) + ", enable_gpu_tolerations=" + str(enable_gpu_tolerations))
 
     annotations = {}
     if debug_enabled:

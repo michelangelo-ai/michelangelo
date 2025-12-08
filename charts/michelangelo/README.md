@@ -305,7 +305,10 @@ Uniflow workflows execute task code in containers. To run workflows on GKE, you 
 cd python
 
 # Build the examples image (includes GPT fine-tuning, BERT, etc.)
-docker build -t michelangelo-examples:latest -f examples/Dockerfile .
+# NOTE: GKE is amd64 but if you are on a mac, your architecture is probably arm64
+docker build --platform linux/amd64 \
+    -t us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest \
+    -f examples/Dockerfile .
 ```
 
 ### Pushing to Google Artifact Registry (Recommended for GKE)
@@ -331,25 +334,26 @@ docker tag michelangelo-examples:latest \
 docker push us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest
 ```
 
-### Alternative: Pushing to GHCR (GitHub Container Registry)
-
-If you prefer GHCR (e.g., for non-GCP deployments):
-
+## To Execute your workflow
 ```bash
-# Set your GitHub PAT (needs write:packages scope)
-export CR_PAT=<your_github_pat>
+cd python
 
-# Login to GHCR
-echo $CR_PAT | docker login ghcr.io -u <YOUR_GITHUB_USERNAME> --password-stdin
+# in a separate terminal
+kubectl port-forward -n default svc/cadence 7933:7933 -n michelangelo
 
-# Tag the image
-docker tag michelangelo-examples:latest ghcr.io/<YOUR_USERNAME>/michelangelo-examples:latest
-
-# Push to GHCR
-docker push ghcr.io/<YOUR_USERNAME>/michelangelo-examples:latest
+DEPLOY_ENV=gke PYTHONPATH="." poetry run python ./examples/gpt_oss_20b_finetune/simple_workflow.py \
+  remote-run \
+  --image us-east1-docker.pkg.dev/michelanglo-oss-196506/michelangelo-pipelines/examples:latest \
+  --storage-url gs://michelanglo-oss-196506-default/workflows
 ```
 
-> **Note:** GHCR requires an imagePullSecret in your cluster. See the "Image Pull Secret" section above.
+## To View Workflow
+```bash
+# in a separate terminal
+kubectl port-forward -n michelangelo svc/cadence-web 8088:8088
+
+http://localhost:8088/domains/default/workflows?range=last-30-days
+```
 
 ### Configuring Workflows for GKE
 

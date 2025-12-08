@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python version
-ENV PYTHON_VERSION=3.9.18
+# Set Python version (3.11 required for transformers, scikit-learn, etc.)
+ENV PYTHON_VERSION=3.11.9
 
 # Download and install Python from source
 RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz && \
@@ -35,9 +35,9 @@ RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSIO
     cd .. && \
     rm -rf Python-$PYTHON_VERSION*
 
-# Ensure python3.9 is the default
-RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
-    ln -sf /usr/local/bin/python3.9 /usr/bin/python
+# Ensure python3.11 is the default
+RUN ln -sf /usr/local/bin/python3.11 /usr/bin/python3 && \
+    ln -sf /usr/local/bin/python3.11 /usr/bin/python
 
 # Install pip and Poetry
 RUN python --version

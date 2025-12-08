@@ -26,7 +26,7 @@ imagePullSecrets:
 # Set create: false since deploy-gke.sh creates the namespace via kubectl
 namespace:
   create: false
-  name: michelangelo
+  name: default
 
 # Disable local-only components
 minio:
@@ -90,7 +90,7 @@ serviceAccount:
   annotations: {}
     # Uncomment below if you have Workload Identity set up:
     # iam.gke.io/gcp-service-account: michelangelo@michelanglo-oss-196506.iam.gserviceaccount.com
-  name: michelangelo
+  name: default
 
 # API Server - ClusterIP for internal cluster access only
 apiserver:
@@ -133,6 +133,11 @@ worker:
   replicaCount: 1  # Single replica for dev
   # Enable GPU tolerations for Ray clusters on GKE with GPU taints
   enableGpuTolerations: true
+  image:
+    # Use custom worker image with GPU tolerations support
+    # Update this tag after pushing your new worker image to GHCR
+    # needed to update this to accommodate GPU tolerations
+    tag: ghosharitra-deploy-gke-via-helm-charts  # Your branch name or custom tag
   resources:
     requests:
       cpu: 100m
