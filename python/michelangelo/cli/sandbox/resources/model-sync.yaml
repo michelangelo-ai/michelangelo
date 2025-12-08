@@ -72,7 +72,7 @@ data:
     # Main sync loop
     while true; do
       echo "========================================"
-      echo "Starting UCS-style model sync cycle"
+      echo "Starting model sync cycle"
       echo "========================================"
       
       # Loop through each configured inference server

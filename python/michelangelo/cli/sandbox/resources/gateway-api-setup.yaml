@@ -30,23 +30,3 @@ spec:
     allowedRoutes:
       namespaces:
         from: All
-  # Triton inference server port
-  - name: triton-http
-    port: 8889
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All
-  # Additional ports for other services
-  - name: cadence-web
-    port: 8088
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All
-  - name: envoy-admin
-    port: 8081
-    protocol: HTTP
-    allowedRoutes:
-      namespaces:
-        from: All

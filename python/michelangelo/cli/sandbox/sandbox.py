@@ -1,3 +1,5 @@
+"""Sandbox CLI for Michelangelo."""
+
 import argparse
 import base64
 import json
@@ -1349,7 +1351,6 @@ def _setup_istio_with_gateway_api():
             "port-forward",
             "svc/ma-gateway-istio",
             "8080:80",
-            "8889:8889",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
