@@ -1006,7 +1006,7 @@ func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.name, func(t *testing.T) {
-			args, kwArgs, envs, err := getWorkflowInputs(testCase.pipelineRun)
+			_, _, envs, err := getWorkflowInputs(testCase.pipelineRun)
 
 			require.NoError(t, err)
 			require.NotNil(t, envs)
