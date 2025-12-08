@@ -5,6 +5,3 @@ def test_model_search():
         namespace = "default",
         deployment_name = "test-model-deployment",
     )
-
-def main():
-    return test_model_search()
