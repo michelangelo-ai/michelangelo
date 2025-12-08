@@ -504,7 +504,7 @@ func getStepInfoByName(stepName string, steps []*v2.PipelineRunStepInfo) *v2.Pip
 
 func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{}) {
 	imageBuildStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ImageBuildStepName)
-	if imageBuildStep.Output != nil {
+	if imageBuildStep != nil && imageBuildStep.Output != nil {
 		for taskName, image := range imageBuildStep.Output.Fields {
 			taskImage := image.GetStringValue()
 			envName := "UF_TASK_IMAGE"
