@@ -954,8 +954,8 @@ func TestExecuteWorkflowActor(t *testing.T) {
 
 func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 	testCases := []struct {
-		name              string
-		pipelineRun       *v2.PipelineRun
+		name                 string
+		pipelineRun          *v2.PipelineRun
 		expectedUFStorageURL string
 	}{
 		{
