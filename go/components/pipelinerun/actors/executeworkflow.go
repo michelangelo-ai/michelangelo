@@ -383,6 +383,13 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	var kwArgs []interface{} = []interface{}{}
 	var envs map[string]interface{} = make(map[string]interface{})
 
+	// Set default UF_STORAGE_URL if not provided in pipeline config
+	if pipelineRun.Spec.WorkspaceRootDir != "" {
+		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
+	} else {
+		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
+	}
+
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
 			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
@@ -406,11 +413,6 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
-	if pipelineRun.Spec.WorkspaceRootDir != "" {
-		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
-	} else {
-		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
-	}
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
 }
@@ -502,7 +504,7 @@ func getStepInfoByName(stepName string, steps []*v2.PipelineRunStepInfo) *v2.Pip
 
 func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{}) {
 	imageBuildStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ImageBuildStepName)
-	if imageBuildStep.Output != nil {
+	if imageBuildStep != nil && imageBuildStep.Output != nil {
 		for taskName, image := range imageBuildStep.Output.Fields {
 			taskImage := image.GetStringValue()
 			envName := "UF_TASK_IMAGE"
