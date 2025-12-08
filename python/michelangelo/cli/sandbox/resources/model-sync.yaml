@@ -1,0 +1,328 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: model-sync-script
+  namespace: default
+data:
+  sync-models.sh: |
+    #!/bin/sh
+    set -e
+    
+    echo "Installing jq and curl..."
+    yum install -y jq curl
+    if ! command -v jq >/dev/null 2>&1; then
+      echo "ERROR: jq installation failed. Please ensure network access"
+      exit 1
+    fi
+    echo "jq and curl installed successfully"
+    
+    # Configure AWS CLI from environment variables (from michelangelo-config ConfigMap)
+    echo "Configuring AWS with endpoint: $AWS_ENDPOINT_URL"
+    aws configure set aws_access_key_id "$AWS_ACCESS_KEY_ID"
+    aws configure set aws_secret_access_key "$AWS_SECRET_ACCESS_KEY"
+    aws configure set default.s3.endpoint_url "$AWS_ENDPOINT_URL"
+    
+    MODEL_BASE_DIR="/mnt/models"
+    mkdir -p "$MODEL_BASE_DIR"
+    
+    echo "Model sync daemon started on node: $NODE_NAME"
+    
+    # Read inference servers list from mounted ConfigMap
+    INFERENCE_SERVERS_FILE="/config/inference-servers/servers.txt"
+    echo "Configured inference servers:"
+    cat "$INFERENCE_SERVERS_FILE"
+    
+    # Function to get currently loaded models from Triton
+    get_loaded_models() {
+      local triton_service=$1
+      # Use repository index with ready filter to get only loaded models
+      curl -X POST -s "http://${triton_service}:80/v2/repository/index" -H "Content-Type: application/json" -d '{"ready": true}' 2>/dev/null | jq -r '.[].name' 2>/dev/null || echo ""
+    }
+    
+    # Function to load model in Triton
+    load_model() {
+      local triton_service=$1
+      local model_name=$2
+      echo "Loading model $model_name in Triton at $triton_service"
+      response=$(curl -s -w "\n%{http_code}" -X POST "http://${triton_service}:80/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}')
+      http_code=$(echo "$response" | tail -n1)
+      body=$(echo "$response" | sed '$d')
+      
+      if [ "$http_code" -eq 200 ]; then
+        echo "Model $model_name loaded successfully"
+      else
+        echo "Failed to load model $model_name (HTTP $http_code)"
+        echo "Response: $body"
+      fi
+    }
+    
+    # Function to unload model in Triton
+    unload_model() {
+      local triton_service=$1
+      local model_name=$2
+      echo "Unloading model $model_name from Triton at $triton_service"
+      curl -s -X POST "http://${triton_service}:80/v2/repository/models/$model_name/unload" -H "Content-Type: application/json" -d '{}'
+      if [ $? -eq 0 ]; then
+        echo "Model $model_name unloaded successfully"
+      else
+        echo "Failed to unload model $model_name"
+      fi
+    }
+    
+    # Main sync loop
+    while true; do
+      echo "========================================"
+      echo "Starting model sync cycle"
+      echo "========================================"
+      
+      # Loop through each configured inference server
+      while IFS= read -r INFERENCE_SERVER || [ -n "$INFERENCE_SERVER" ]; do
+        # Skip empty lines and comments
+        [ -z "$INFERENCE_SERVER" ] && continue
+        echo "$INFERENCE_SERVER" | grep -q "^#" && continue
+        
+        echo ""
+        echo "--- Processing inference server: $INFERENCE_SERVER ---"
+        
+        # Set up paths for this inference server
+        SERVER_MODEL_DIR="$MODEL_BASE_DIR/$INFERENCE_SERVER"
+        mkdir -p "$SERVER_MODEL_DIR"
+        
+        # Triton service endpoint for this inference server (same namespace)
+        # Note: Service port is 80, which forwards to container port 8000
+        triton_service="${INFERENCE_SERVER}-inference-service"
+        
+        echo "Checking Triton server at http://${triton_service}:80/v2/health/ready"
+        
+        # Check if Triton server is ready
+        if ! curl -s -f "http://${triton_service}:80/v2/health/ready" > /dev/null 2>&1; then
+          echo "Triton server $triton_service not ready yet, skipping this server"
+          echo "This is normal if Triton is still starting up."
+          continue
+        fi
+        echo "✓ Triton server $triton_service is ready"
+        
+        # SIMPLIFIED PATTERN: Only read from shared model-config ConfigMap
+        # Each inference server has its own model config ConfigMap
+        CONFIG_FILE="/config/${INFERENCE_SERVER}/model-list.json"
+        if [ -f "$CONFIG_FILE" ]; then
+          cp "$CONFIG_FILE" /tmp/model-list.json
+        else
+          echo "No config file found at $CONFIG_FILE, using empty config"
+          echo "[]" > /tmp/model-list.json
+        fi
+        
+        echo "ConfigMap contents for $INFERENCE_SERVER:"
+        cat /tmp/model-list.json | jq '.' || cat /tmp/model-list.json
+        
+        # Get models from shared inference server config
+        DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
+        
+        echo "Active models from shared ConfigMap: $DESIRED_MODELS"
+        
+        # Get currently loaded models from Triton
+        LOADED_MODELS=$(get_loaded_models "$triton_service")
+        echo "Currently loaded models in Triton: $LOADED_MODELS"
+        
+        # SYNC PATTERN: Sync models based on DESIRED_MODELS from shared ConfigMap
+        for desired_model in $DESIRED_MODELS; do
+          if [ ! -z "$desired_model" ]; then
+            # Look up S3 path from inference server config for this model
+            s3_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
+            if [ "$s3_path" = "null" ] || [ -z "$s3_path" ]; then
+              s3_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
+            fi
+            
+            model_dir="$SERVER_MODEL_DIR/$desired_model"
+            
+            # Validate Triton model directory structure:
+            # model-name/
+            #   config.pbtxt (optional but recommended)
+            #   <version>/        (at least one numeric version directory)
+            #     model.pt
+            validate_model_structure() {
+              local dir=$1
+              
+              # Check if directory exists
+              if [ ! -d "$dir" ]; then
+                return 1
+              fi
+              
+              # Check for at least one version directory (numeric name like 1, 2, etc.)
+              local version_dirs=$(find "$dir" -maxdepth 1 -type d -regex '.*/[0-9]+' 2>/dev/null)
+              if [ -z "$version_dirs" ]; then
+                echo "  Invalid: No version directories found"
+                return 1
+              fi
+              
+              # Check each version directory has a valid model file
+              for version_dir in $version_dirs; do
+                if [ -f "$version_dir/model.pt" ]; then
+                  # Found valid model file
+                  return 0
+                fi
+              done
+              
+              echo "  Invalid: No model.pt found in version directories"
+              return 1
+            }
+            
+            # Check if model structure is valid
+            needs_sync=false
+            if ! validate_model_structure "$model_dir"; then
+              needs_sync=true
+              if [ -d "$model_dir" ]; then
+                echo "CLEANUP: Invalid model structure detected, removing and re-downloading: $model_dir"
+                rm -rf "$model_dir"
+              fi
+            fi
+            
+            if [ "$needs_sync" = true ]; then
+              echo "SYNC: Syncing model $desired_model from $s3_path to $model_dir/"
+              mkdir -p "$model_dir"
+              aws s3 sync "$s3_path" "$model_dir/" --exact-timestamps --endpoint-url "$AWS_ENDPOINT_URL"
+              
+              # Verify sync completed with valid structure
+              if validate_model_structure "$model_dir"; then
+                echo "✓ Model synced successfully with valid structure:"
+              else
+                echo "⚠ WARNING: Sync completed but model structure still invalid. Check S3 source."
+              fi
+              ls -la "$model_dir/" || echo "Directory is empty or doesn't exist"
+              # Show contents of version directories
+              for vdir in $(find "$model_dir" -maxdepth 1 -type d -regex '.*/[0-9]+' 2>/dev/null); do
+                echo "  Version $(basename $vdir) contents:"
+                ls -la "$vdir/" || true
+              done
+            else
+              echo "SYNC: Model $desired_model has valid structure, skipping download"
+            fi
+          fi
+        done
+        
+        # Unload models that are no longer in config
+        for loaded_model in $LOADED_MODELS; do
+          if ! echo "$DESIRED_MODELS" | grep -q "^$loaded_model$"; then
+            echo "Model $loaded_model no longer in config, unloading"
+            unload_model "$triton_service" "$loaded_model"
+          fi
+        done
+        
+        # Load models from config ONLY if they're not already loaded
+        for desired_model in $DESIRED_MODELS; do
+          if [ ! -z "$desired_model" ]; then
+            # Get fresh list of loaded models before checking each model
+            CURRENT_LOADED_MODELS=$(get_loaded_models "$triton_service")
+            if ! echo "$CURRENT_LOADED_MODELS" | grep -q "^$desired_model$"; then
+              echo "Model $desired_model not loaded, loading now"
+              load_model "$triton_service" "$desired_model"
+            else
+              echo "Model $desired_model already loaded, skipping"
+            fi
+          fi
+        done
+        
+        echo "--- Completed sync for $INFERENCE_SERVER ---"
+      done < "$INFERENCE_SERVERS_FILE"
+      
+      echo ""
+      echo "Model sync cycle completed for all servers, sleeping for 60 seconds"
+      sleep 60
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-sync
+  namespace: default
+  labels:
+    app: model-sync
+spec:
+  # One replica per inference server
+  replicas: 1
+  selector:
+    matchLabels:
+      app: model-sync
+  template:
+    metadata:
+      labels:
+        app: model-sync
+    spec:
+      # Schedule on the same node as the inference server pod
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - triton-inference-server-bert-cola
+            topologyKey: kubernetes.io/hostname
+            namespaces:
+            - default
+      
+      serviceAccountName: model-sync
+      containers:
+      - name: model-sync
+        image: amazon/aws-cli:2.15.50
+        command: ["/bin/sh"]
+        args: ["/scripts/sync-models.sh"]
+        env:
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - configMapRef:
+            name: michelangelo-config
+        volumeMounts:
+        - name: models
+          mountPath: /mnt/models
+        - name: inference-servers-config
+          mountPath: /config/inference-servers
+          readOnly: true
+        - name: inference-server-bert-cola-config
+          mountPath: /config/inference-server-bert-cola
+          readOnly: true
+        - name: sync-script
+          mountPath: /scripts
+          readOnly: true
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+      volumes:
+      - name: models
+        hostPath:
+          path: /var/lib/michelangelo/models
+          type: DirectoryOrCreate
+      - name: inference-servers-config
+        configMap:
+          name: inference-servers-list
+      - name: inference-server-bert-cola-config
+        configMap:
+          name: inference-server-bert-cola-model-config
+          optional: true
+      - name: sync-script
+        configMap:
+          name: model-sync-script
+          defaultMode: 0755
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: model-sync
+  namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: inference-servers-list
+  namespace: default
+data:
+  servers.txt: |
+    inference-server-bert-cola
