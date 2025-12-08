@@ -6,7 +6,7 @@ from typing import Any, Callable, Optional
 
 import pytorch_lightning as pl
 from ray.data import Dataset
-from ray.train import RunConfig, ScalingConfig
+from ray.train import CheckpointConfig, RunConfig, ScalingConfig
 from ray.train.lightning import RayDDPStrategy, RayLightningEnvironment
 from ray.train.torch import TorchTrainer
 
@@ -176,15 +176,8 @@ class LightningTrainer:
 
             return {"metrics": final_metrics}
 
-        # Create TorchTrainer with Lightning
-        self.torch_trainer = TorchTrainer(
-            train_loop_per_worker=train_loop_per_worker,
-            datasets={
-                "train": self.param.train_data,
-                "validation": self.param.validation_data,
-            },
-            train_loop_config={},
-        )
+        # Store the train loop function for later initialization
+        self._train_loop_per_worker = train_loop_per_worker
 
     def train(self, run_config: RunConfig, scaling_config: ScalingConfig):
         """Train the model using Ray.
@@ -192,13 +185,61 @@ class LightningTrainer:
         Returns Ray Result object compatible with internal API.
         """
         log.info("Starting distributed Lightning training...")
+        log.info(f"Using storage path: {run_config.storage_path}")
 
-        # Configure the trainer with scaling and run configs
-        self.torch_trainer._scaling_config = scaling_config
-        self.torch_trainer._run_config = run_config
+        # Create TorchTrainer with proper RunConfig and ScalingConfig
+        torch_trainer = TorchTrainer(
+            train_loop_per_worker=self._train_loop_per_worker,
+            datasets={
+                "train": self.param.train_data,
+                "validation": self.param.validation_data,
+            },
+            scaling_config=scaling_config,
+            run_config=run_config,
+            train_loop_config={},
+        )
 
         # Train and return result
-        result = self.torch_trainer.fit()
+        result = torch_trainer.fit()
 
         log.info("Distributed Lightning training completed")
         return result
+
+
+def create_run_config(
+    name: Optional[str] = None,
+    storage_path: Optional[str] = None,
+    checkpoint_config: CheckpointConfig = None,
+    stop: Optional[dict] = None,  # Keep for compatibility but don't use
+    verbose: int = 1,  # Keep parameter for compatibility but don't use it
+) -> RunConfig:
+    """Create Ray RunConfig for distributed training."""
+    return RunConfig(
+        name=name,
+        storage_path=storage_path,
+        checkpoint_config=checkpoint_config,
+    )
+
+
+def create_scaling_config(
+    trainer_cpu: int = 2,
+    cpu_per_worker: int = 4,
+    num_workers: Optional[int] = None,
+    use_gpu: bool = True,
+    resources_per_worker: Optional[dict] = None,
+) -> ScalingConfig:
+    """Create Ray ScalingConfig for distributed training."""
+    if num_workers is None:
+        # Infer from runtime or default
+        num_workers = 4
+
+    if resources_per_worker is None:
+        resources_per_worker = {"CPU": cpu_per_worker}
+        if use_gpu:
+            resources_per_worker["GPU"] = 1
+
+    return ScalingConfig(
+        num_workers=num_workers,
+        use_gpu=use_gpu,
+        resources_per_worker=resources_per_worker,
+    )

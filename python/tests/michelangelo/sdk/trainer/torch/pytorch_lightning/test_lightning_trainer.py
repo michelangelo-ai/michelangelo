@@ -7,6 +7,8 @@ import pytest
 from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
+    create_run_config,
+    create_scaling_config,
 )
 
 
@@ -94,39 +96,22 @@ class TestLightningTrainer:
             lightning_trainer_kwargs={"accelerator": "cpu"},
         )
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_lightning_trainer_initialization(self, mock_torch_trainer):
+    def test_lightning_trainer_initialization(self):
         """Test LightningTrainer initialization."""
         trainer = LightningTrainer(self.param)
 
         assert trainer.param == self.param
-        mock_torch_trainer.assert_called_once()
+        # In the new implementation, TorchTrainer is created only during train()
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
-        # Check that TorchTrainer was called with correct arguments
-        call_args = mock_torch_trainer.call_args
-        assert "train_loop_per_worker" in call_args[1]
-        assert "datasets" in call_args[1]
-        assert "train_loop_config" in call_args[1]
-
-        # Check datasets
-        datasets = call_args[1]["datasets"]
-        assert datasets["train"] == self.mock_train_data
-        assert datasets["validation"] == self.mock_validation_data
-
-        # Check train_loop_config
-        assert call_args[1]["train_loop_config"] == {}
-
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_setup_trainer_creates_torch_trainer(self, mock_torch_trainer):
-        """Test that _setup_trainer creates TorchTrainer instance."""
+    def test_setup_trainer_creates_train_loop_function(self):
+        """Test that initialization creates train_loop_per_worker function."""
         trainer = LightningTrainer(self.param)
 
-        assert hasattr(trainer, "torch_trainer")
-        assert trainer.torch_trainer == mock_torch_trainer.return_value
+        # In new implementation, train loop function is stored, not TorchTrainer
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
     @patch(
         "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
@@ -147,9 +132,17 @@ class TestLightningTrainer:
         # Call train method
         result = trainer.train(mock_run_config, mock_scaling_config)
 
-        # Verify scaling and run configs were set
-        assert trainer.torch_trainer._scaling_config == mock_scaling_config
-        assert trainer.torch_trainer._run_config == mock_run_config
+        # Verify TorchTrainer was created with correct configs
+        mock_torch_trainer.assert_called_once_with(
+            train_loop_per_worker=trainer._train_loop_per_worker,
+            datasets={
+                "train": self.mock_train_data,
+                "validation": self.mock_validation_data,
+            },
+            scaling_config=mock_scaling_config,
+            run_config=mock_run_config,
+            train_loop_config={},
+        )
 
         # Verify fit was called and result returned
         mock_trainer_instance.fit.assert_called_once()
@@ -172,31 +165,19 @@ class TestLightningTrainer:
         mock_log.info.assert_any_call("Distributed Lightning training completed")
 
     def test_train_loop_per_worker_function_exists(self):
-        """Test that train_loop_per_worker function is created in _setup_trainer."""
-        mock_path = (
-            "michelangelo.sdk.trainer.torch.pytorch_lightning"
-            ".lightning_trainer.TorchTrainer"
-        )
-        with patch(mock_path) as mock_torch_trainer:
-            LightningTrainer(self.param)
+        """Test that train_loop_per_worker function is created during initialization."""
+        trainer = LightningTrainer(self.param)
 
-            # Get the train_loop_per_worker function that was passed to TorchTrainer
-            call_args = mock_torch_trainer.call_args
-            train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Function should be stored directly and be callable
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
 
-            # Verify it's a callable function
-            assert callable(train_loop_func)
-
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_closure_captures_param(self, mock_torch_trainer):
+    def test_train_loop_per_worker_closure_captures_param(self):
         """Test that the train_loop_per_worker closure captures self.param."""
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # The closure should have access to self.param
         # We can't easily test the full execution without mocking many Ray components,
@@ -204,10 +185,7 @@ class TestLightningTrainer:
         assert hasattr(train_loop_func, "__closure__")
         assert train_loop_func.__closure__ is not None
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_execution(self, mock_torch_trainer):
+    def test_train_loop_per_worker_execution(self):
         """Test execution of the train_loop_per_worker function."""
         # Create a mock Lightning module
         mock_model = MagicMock()
@@ -216,11 +194,10 @@ class TestLightningTrainer:
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (
@@ -281,10 +258,7 @@ class TestLightningTrainer:
             # Check return value
             assert result == {"metrics": {"loss": 0.5, "accuracy": 0.8}}
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_with_custom_strategy(self, mock_torch_trainer):
+    def test_train_loop_per_worker_with_custom_strategy(self):
         """Test train_loop_per_worker with custom strategy."""
         # Update param to include custom strategy
         custom_param = LightningTrainerParam(
@@ -302,11 +276,10 @@ class TestLightningTrainer:
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(custom_param)
+        trainer = LightningTrainer(custom_param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (
@@ -356,21 +329,17 @@ class TestLightningTrainer:
             # Check return value has empty metrics when no logged_metrics
             assert result == {"metrics": {}}
 
-    @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
-    )
-    def test_train_loop_per_worker_with_pandas_batch_data(self, mock_torch_trainer):
+    def test_train_loop_per_worker_with_pandas_batch_data(self):
         """Test train_loop_per_worker with pandas-style batch data."""
         # Create a mock Lightning module
         mock_model = MagicMock()
         self.mock_create_model.return_value = mock_model
 
         # Create trainer to get the train_loop_per_worker function
-        LightningTrainer(self.param)
+        trainer = LightningTrainer(self.param)
 
-        # Get the train_loop_per_worker function
-        call_args = mock_torch_trainer.call_args
-        train_loop_func = call_args[1]["train_loop_per_worker"]
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
 
         # Mock all Ray components
         with (
@@ -546,3 +515,143 @@ class TestLightningTrainer:
             # Always cleanup Ray, regardless of success or failure
             with contextlib.suppress(Exception):
                 ray.shutdown()
+
+
+class TestCreateScalingConfig:
+    """Test create_scaling_config function."""
+
+    def test_create_scaling_config_defaults(self):
+        """Test create_scaling_config with default parameters."""
+        config = create_scaling_config()
+
+        assert config.num_workers == 4  # default when None
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 4, "GPU": 1}
+
+    def test_create_scaling_config_custom_workers(self):
+        """Test create_scaling_config with custom num_workers."""
+        config = create_scaling_config(num_workers=8)
+
+        assert config.num_workers == 8
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 4, "GPU": 1}
+
+    def test_create_scaling_config_without_gpu(self):
+        """Test create_scaling_config with GPU disabled."""
+        config = create_scaling_config(use_gpu=False)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is False
+        assert config.resources_per_worker == {"CPU": 4}
+        assert "GPU" not in config.resources_per_worker
+
+    def test_create_scaling_config_custom_cpu_per_worker(self):
+        """Test create_scaling_config with custom cpu_per_worker."""
+        config = create_scaling_config(cpu_per_worker=8)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 8, "GPU": 1}
+
+    def test_create_scaling_config_custom_resources(self):
+        """Test create_scaling_config with custom resources_per_worker."""
+        custom_resources = {"CPU": 2, "GPU": 2, "memory": "16GiB"}
+        config = create_scaling_config(resources_per_worker=custom_resources)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is True
+        assert config.resources_per_worker == custom_resources
+
+    def test_create_scaling_config_all_custom(self):
+        """Test create_scaling_config with all custom parameters."""
+        config = create_scaling_config(
+            trainer_cpu=1,
+            cpu_per_worker=2,
+            num_workers=6,
+            use_gpu=False,
+            resources_per_worker={"CPU": 3, "memory": "8GiB"},
+        )
+
+        assert config.num_workers == 6
+        assert config.use_gpu is False
+        assert config.resources_per_worker == {"CPU": 3, "memory": "8GiB"}
+
+
+class TestCreateRunConfig:
+    """Test create_run_config function."""
+
+    def test_create_run_config_defaults(self):
+        """Test create_run_config with default parameters."""
+        config = create_run_config()
+
+        # Ray automatically generates a default name and storage path
+        assert config.name is not None  # Ray generates default name
+        assert config.storage_path is not None  # Ray sets default storage path
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_name(self):
+        """Test create_run_config with custom name."""
+        config = create_run_config(name="test_run")
+
+        assert config.name == "test_run"
+        # Ray sets default storage path even when only name is provided
+        assert config.storage_path is not None
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_storage_path(self):
+        """Test create_run_config with custom storage_path."""
+        config = create_run_config(storage_path="/tmp/ray_results")
+
+        # Ray generates a default name even when only storage_path is provided
+        assert config.name is not None
+        assert config.storage_path == "/tmp/ray_results"
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_checkpoint_config(self):
+        """Test create_run_config with custom checkpoint_config."""
+        from ray.train import CheckpointConfig
+
+        checkpoint_config = CheckpointConfig(num_to_keep=3)
+
+        config = create_run_config(checkpoint_config=checkpoint_config)
+
+        # Ray generates defaults for name and storage path
+        assert config.name is not None
+        assert config.storage_path is not None
+        assert config.checkpoint_config == checkpoint_config
+
+    def test_create_run_config_compatibility_params(self):
+        """Test create_run_config with compatibility parameters that are ignored."""
+        config = create_run_config(
+            name="test",
+            storage_path="/tmp",
+            stop={"training_iteration": 10},  # ignored for compatibility
+            verbose=2,  # ignored for compatibility
+        )
+
+        assert config.name == "test"
+        assert config.storage_path == "/tmp"
+        # Ray creates default checkpoint config even with explicit params
+        assert config.checkpoint_config is not None
+        # stop and verbose params are kept for compatibility but not used
+
+    def test_create_run_config_all_params(self):
+        """Test create_run_config with all parameters."""
+        from ray.train import CheckpointConfig
+
+        checkpoint_config = CheckpointConfig(num_to_keep=5)
+
+        config = create_run_config(
+            name="full_test",
+            storage_path="/tmp/full_results",
+            checkpoint_config=checkpoint_config,
+            stop={"epochs": 20},
+            verbose=1,
+        )
+
+        assert config.name == "full_test"
+        assert config.storage_path == "/tmp/full_results"
+        assert config.checkpoint_config == checkpoint_config
