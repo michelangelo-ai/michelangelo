@@ -952,6 +952,108 @@ func TestExecuteWorkflowActor(t *testing.T) {
 	}
 }
 
+func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
+	testCases := []struct {
+		name              string
+		pipelineRun       *v2.PipelineRun
+		expectedUFStorageURL string
+	}{
+		{
+			name: "UF_STORAGE_URL from default when no pipelineConfigMap",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil, // No manifest content
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedUFStorageURL: DefaultWorkSpaceRootURL,
+		},
+		{
+			name: "UF_STORAGE_URL from pipelineConfigMap environ",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: createPipelineManifestWithEnviron(map[string]interface{}{
+										"UF_STORAGE_URL": "s3://pipeline-config-storage",
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedUFStorageURL: "s3://pipeline-config-storage",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			args, kwArgs, envs, err := getWorkflowInputs(testCase.pipelineRun)
+
+			require.NoError(t, err)
+			require.NotNil(t, envs)
+
+			// Verify UF_STORAGE_URL is set correctly
+			ufStorageURL, exists := envs["UF_STORAGE_URL"]
+			require.True(t, exists, "UF_STORAGE_URL should exist in environment variables")
+			require.Equal(t, testCase.expectedUFStorageURL, ufStorageURL)
+		})
+	}
+}
+
+// createPipelineManifestWithEnviron creates a protobuf Any containing a manifest with environment variables
+func createPipelineManifestWithEnviron(environ map[string]interface{}) *pbtypes.Any {
+	// Create a manifest structure with environment variables
+	manifestStruct := &pbtypes.Struct{
+		Fields: map[string]*pbtypes.Value{
+			"environ": {
+				Kind: &pbtypes.Value_StructValue{
+					StructValue: &pbtypes.Struct{
+						Fields: make(map[string]*pbtypes.Value),
+					},
+				},
+			},
+		},
+	}
+
+	// Add environment variables to the environ field
+	for key, value := range environ {
+		manifestStruct.Fields["environ"].GetStructValue().Fields[key] = &pbtypes.Value{
+			Kind: &pbtypes.Value_StringValue{
+				StringValue: value.(string),
+			},
+		}
+	}
+
+	// Create TypedStruct and marshal it
+	typedStruct := &apipb.TypedStruct{
+		TypeUrl: "type.googleapis.com/michelangelo.api.v2.PipelineManifest",
+		Value:   manifestStruct,
+	}
+
+	// Marshal to Any
+	anyValue, _ := pbtypes.MarshalAny(typedStruct)
+	return anyValue
+}
+
 func TestProcessJobTermination(t *testing.T) {
 	testCases := []struct {
 		name         string

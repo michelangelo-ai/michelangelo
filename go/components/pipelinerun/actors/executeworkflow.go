@@ -383,6 +383,12 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	var kwArgs []interface{} = []interface{}{}
 	var envs map[string]interface{} = make(map[string]interface{})
 
+	if pipelineRun.Spec.WorkspaceRootDir != "" {
+		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
+	} else {
+		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
+	}
+
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
 			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
@@ -406,11 +412,6 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
-	if pipelineRun.Spec.WorkspaceRootDir != "" {
-		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
-	} else {
-		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
-	}
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
 }
