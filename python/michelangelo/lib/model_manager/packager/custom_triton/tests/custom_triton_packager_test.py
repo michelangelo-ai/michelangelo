@@ -155,3 +155,71 @@ class CustomTritonPackagerTest(TestCase):
                 include_import_prefixes=["michelangelo"],
             )
             self.assert_raw_model_package(dest_model_path, batch_inference=True)
+
+    def test_create_raw_model_package_with_empty_model_schema(self):
+        packager = CustomTritonPackager()
+        with self.assertRaises(ValueError):
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class=model_class,
+                model_schema=None,
+                sample_data=self.sample_data,
+            )
+
+    def test_create_raw_model_package_with_invalid_model_schema(self):
+        model_schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(
+                    name="input",
+                    data_type=DataType.UNKNOWN,
+                ),
+            ],
+        )
+        packager = CustomTritonPackager()
+        with self.assertRaises(ValueError):
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class=model_class,
+                model_schema=model_schema,
+                sample_data=self.sample_data,
+            )
+
+    def test_create_raw_model_package_missing_model_class(self):
+        with self.assertRaises(ValueError):
+            packager = CustomTritonPackager()
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class=None,
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+            )
+
+    def test_create_raw_model_package_with_invalid_model_class(self):
+        with self.assertRaises(ValueError):
+            packager = CustomTritonPackager()
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class="invalid_class",
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+            )
+
+    def test_create_raw_model_package_with_invalid_sample_data(self):
+        with self.assertRaises(TypeError):
+            packager = CustomTritonPackager()
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=[{"a": "b"}],
+            )
+
+    def test_create_raw_model_package_with_mismatching_sample_data_and_model_schema(self):
+        with self.assertRaises(ValueError):
+            packager = CustomTritonPackager()
+            packager.create_raw_model_package(
+                "test_model_path",
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=[{"invalid": np.array([1])}],
+            )
