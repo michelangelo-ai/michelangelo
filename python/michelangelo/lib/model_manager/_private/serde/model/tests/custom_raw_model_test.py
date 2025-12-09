@@ -7,7 +7,7 @@ from unittest import TestCase
 from unittest.mock import patch
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from michelangelo.lib.model_manager.packager.python_triton import PythonTritonPackager
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
 from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
 from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict import Predict
@@ -83,7 +83,7 @@ class CustomRawModelTest(TestCase):
             with open(os.path.join(src_model_path, "test_file.txt"), "w") as f:
                 f.write("test_content")
 
-            packager = PythonTritonPackager()
+            packager = CustomTritonPackager()
 
             model_package = packager.create_raw_model_package(
                 model_path=src_model_path,
@@ -187,7 +187,7 @@ class CustomRawModelTest(TestCase):
             with open(os.path.join(src_model_path, "func.pkl"), "wb") as f:
                 pickle.dump(func, f)
 
-            packager = PythonTritonPackager()
+            packager = CustomTritonPackager()
 
             model_package = packager.create_raw_model_package(
                 model_path=src_model_path,
@@ -230,7 +230,7 @@ class CustomRawModelTest(TestCase):
             with open(os.path.join(src_model_path, "func.pkl"), "wb") as f:
                 pickle.dump(func, f)
 
-            packager = PythonTritonPackager()
+            packager = CustomTritonPackager()
 
             model_package = packager.create_raw_model_package(
                 model_path=src_model_path,
