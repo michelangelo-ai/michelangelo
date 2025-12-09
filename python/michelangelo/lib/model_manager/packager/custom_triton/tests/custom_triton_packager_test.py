@@ -42,7 +42,7 @@ class CustomTritonPackagerTest(TestCase):
 
     def test_custom_triton_packager(self):
         """It creates a packager instance with default settings."""
-        
+
         packager = CustomTritonPackager()
         self.assertIsNotNone(packager)
 
