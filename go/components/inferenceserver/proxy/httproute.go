@@ -131,7 +131,7 @@ func (h *httpRouteManager) CheckDeploymentRouteStatus(ctx context.Context, logge
 	}
 
 	// Verify the route matches the expected model and inference server configuration
-	expectedMatchPath := fmt.Sprintf("/%s/%s/models/%s", request.InferenceServer, request.DeploymentName, request.ModelName)
+	expectedMatchPath := fmt.Sprintf("/%s/%s", request.InferenceServer, request.DeploymentName)
 	expectedRewritePath := fmt.Sprintf("/v2/models/%s", request.ModelName)
 	expectedBackendService := addSuffixToString(request.InferenceServer, inferenceServiceSuffix)
 
@@ -259,7 +259,7 @@ func (h *httpRouteManager) EnsureDeploymentRoute(ctx context.Context, logger *za
 		"michelangelo.ai/inference-server": inferenceServerName,
 	}
 
-	matchPath := fmt.Sprintf("/%s/%s/models/%s", inferenceServerName, request.DeploymentName, request.ModelName)
+	matchPath := fmt.Sprintf("/%s/%s", inferenceServerName, request.DeploymentName)
 	rewritePath := fmt.Sprintf("/v2/models/%s", request.ModelName)
 
 	httpRoute := buildHTTPRoute(
