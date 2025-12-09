@@ -29,7 +29,9 @@ def get_raw_model_type(model_path: str) -> str:
 
     supported_raw_model_types = get_supported_raw_model_types()
     if model_type not in supported_raw_model_types:
-        raise ValueError(f"Invalid model type {model_type} in the type.yaml file. Supported model types are {', '.join(supported_raw_model_types)}.")
+        raise ValueError(
+            f"Invalid model type {model_type} in the type.yaml file. Supported model types are {', '.join(supported_raw_model_types)}."
+        )
 
     return model_type
 
@@ -41,4 +43,8 @@ def get_supported_raw_model_types() -> set[str]:
     Returns:
         The supported raw model types
     """
-    return {getattr(RawModelType, attr) for attr in dir(RawModelType) if not attr.startswith("__")}
+    return {
+        getattr(RawModelType, attr)
+        for attr in dir(RawModelType)
+        if not attr.startswith("__")
+    }

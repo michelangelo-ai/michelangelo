@@ -1,4 +1,5 @@
 """Tests for raw model type."""
+
 import os
 import tempfile
 from unittest import TestCase
