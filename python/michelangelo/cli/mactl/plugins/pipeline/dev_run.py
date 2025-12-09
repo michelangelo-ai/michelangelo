@@ -21,6 +21,7 @@ from michelangelo.cli.mactl.crd import (
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
+    get_service_name,
 )
 from michelangelo.cli.mactl.plugins.pipeline.create import (
     handle_workflow_inputs_retrieval,
@@ -118,7 +119,13 @@ def generate_dev_run(
     """Generate dev run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
 
-    pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
+    # Auto-detect PipelineRunService from server (e.g., v2 vs v2beta1)
+    pipeline_run_service = get_service_name(
+        channel,
+        crd.metadata,
+        "PipelineRunService",
+        fallback="michelangelo.api.v2.PipelineRunService",
+    )
     methods, method_pool = get_methods_from_service(
         channel, pipeline_run_service, crd.metadata
     )

@@ -20,6 +20,7 @@ from michelangelo.cli.mactl.crd import (
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
+    get_service_name,
 )
 
 _LOG = getLogger(__name__)
@@ -28,8 +29,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """Add function signature for pipeline run command.
-    """
+    """Add function signature for pipeline run command."""
     inject_func_signature(
         crd,
         "run",
@@ -80,11 +80,11 @@ def add_function_signature(crd: CRD) -> None:
 
 
 def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
-    """Generate run function for pipeline CRD.
-    """
+    """Generate run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
 
-    pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
+    # Auto-detect PipelineRunService name (supports v2 and v2beta1)
+    pipeline_run_service = get_service_name(channel, crd.metadata, "PipelineRunService")
     methods, method_pool = get_methods_from_service(
         channel, pipeline_run_service, crd.metadata
     )
@@ -132,8 +132,8 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
         request_input = input_class()
         ParseDict(pipeline_run_dict, request_input)
 
-        service_name = "michelangelo.api.v2.PipelineRunService"
-        method_fullname = f"/{service_name}/{method_name}"
+        # Use auto-detected service name
+        method_fullname = f"/{pipeline_run_service}/{method_name}"
         _LOG.info("Method fullname for gRPC call: %s", method_fullname)
 
         stub_method = channel.unary_unary(
@@ -194,7 +194,7 @@ def convert_crd_metadata_pipeline_run(
 
 
 def generate_pipeline_run_object(
-    run_name: str, pipeline_name: str, namespace: str, resume_from: str = None
+    run_name: str, pipeline_name: str, namespace: str, resume_from: Optional[str] = None
 ) -> dict:
     """Generate PipelineRun object as dictionary.
 
@@ -278,8 +278,7 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
 
 
 def generate_pipeline_run_name() -> str:
-    """Generates a pipeline-run name.
-    """
+    """Generates a pipeline-run name."""
     timestamp = int(time.time())
     uuid8 = str(uuid.uuid4())[:8]
     return f"run-{timestamp}-{uuid8}"

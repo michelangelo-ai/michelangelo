@@ -1,5 +1,4 @@
-"""Unit tests for grpc_tools package.
-"""
+"""Unit tests for grpc_tools package."""
 
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -9,17 +8,16 @@ from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
 from michelangelo.cli.mactl.grpc_tools import (
     get_all_file_descriptors_by_filename,
     get_service_descriptors,
+    get_service_name,
     list_services,
 )
 
 
 class GrpcReflectionTest(TestCase):
-    """MaCTL gRPC Reflection feature related Tests
-    """
+    """MaCTL gRPC Reflection feature related Tests"""
 
     def setUp(self):
-        """Set up common test data
-        """
+        """Set up common test data"""
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
             ("rpc-service", "ma-apiserver"),
@@ -27,8 +25,7 @@ class GrpcReflectionTest(TestCase):
         ]
 
     def test_list_services(self):
-        """Test `list_services()` function
-        """
+        """Test `list_services()` function"""
         # Create mock channel
         mock_channel = Mock()
 
@@ -95,8 +92,7 @@ class GrpcReflectionTest(TestCase):
         self.assertIn("metadata", call_kwargs)
 
     def test_list_services_no_services_found(self):
-        """Test `list_services()` function when no services are found
-        """
+        """Test `list_services()` function when no services are found"""
         # Create mock channel
         mock_channel = Mock()
 
@@ -115,10 +111,65 @@ class GrpcReflectionTest(TestCase):
         # Verify the error message
         self.assertEqual(str(context.exception), "No services found")
 
+    def test_get_service_name_found(self):
+        """Test `get_service_name()` when service is found"""
+        mock_channel = Mock()
+
+        # Mock list_services to return services with different API versions
+        with patch(
+            "michelangelo.cli.mactl.grpc_tools.list_services",
+            return_value=[
+                "grpc.reflection.v1alpha.ServerReflection",
+                "michelangelo.api.v2beta1.ProjectService",
+                "michelangelo.api.v2beta1.PipelineRunService",
+            ],
+        ):
+            result = get_service_name(mock_channel, self.metadata, "PipelineRunService")
+
+        self.assertEqual(result, "michelangelo.api.v2beta1.PipelineRunService")
+
+    def test_get_service_name_with_fallback(self):
+        """Test `get_service_name()` when service not found but fallback provided"""
+        mock_channel = Mock()
+
+        # Mock list_services to return services without PipelineRunService
+        with patch(
+            "michelangelo.cli.mactl.grpc_tools.list_services",
+            return_value=[
+                "grpc.reflection.v1alpha.ServerReflection",
+                "michelangelo.api.v2.ProjectService",
+            ],
+        ):
+            result = get_service_name(
+                mock_channel,
+                self.metadata,
+                "PipelineRunService",
+                fallback="michelangelo.api.v2.PipelineRunService",
+            )
+
+        self.assertEqual(result, "michelangelo.api.v2.PipelineRunService")
+
+    def test_get_service_name_not_found_no_fallback(self):
+        """Test `get_service_name()` when service not found and no fallback"""
+        mock_channel = Mock()
+
+        # Mock list_services to return services without PipelineRunService
+        with patch(
+            "michelangelo.cli.mactl.grpc_tools.list_services",
+            return_value=[
+                "grpc.reflection.v1alpha.ServerReflection",
+                "michelangelo.api.v2.ProjectService",
+            ],
+        ):
+            with self.assertRaises(ValueError) as context:
+                get_service_name(mock_channel, self.metadata, "PipelineRunService")
+
+        self.assertIn("PipelineRunService", str(context.exception))
+        self.assertIn("not found", str(context.exception))
+
 
 def _get_project_svc_mock() -> Mock:
-    """Helper to create a mock for `michelangelo/api/v2/project_svc.proto`
-    """
+    """Helper to create a mock for `michelangelo/api/v2/project_svc.proto`"""
     # Create mock fields for CreateProjectRequest
     mock_field_project = Mock()
     mock_field_project.name = "project"
@@ -230,12 +281,10 @@ def _get_project_svc_mock() -> Mock:
 
 
 class GetServiceDescriptorsTest(TestCase):
-    """Tests for get_service_descriptors function
-    """
+    """Tests for get_service_descriptors function"""
 
     def setUp(self):
-        """Set up common test data
-        """
+        """Set up common test data"""
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
             ("rpc-service", "ma-apiserver"),
@@ -247,8 +296,7 @@ class GetServiceDescriptorsTest(TestCase):
     def test_get_service_descriptors_success(
         self, mock_file_descriptor_proto_class, mock_stub_class
     ):
-        """Test `get_service_descriptors()` function with valid service
-        """
+        """Test `get_service_descriptors()` function with valid service"""
         # Create mock channel
         mock_channel = Mock()
         service_name = "michelangelo.api.v2.ModelService"
@@ -389,8 +437,7 @@ class GetServiceDescriptorsTest(TestCase):
 
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     def test_get_service_descriptors_empty_response(self, mock_stub_class):
-        """Test `get_service_descriptors()` function with empty response
-        """
+        """Test `get_service_descriptors()` function with empty response"""
         # Create mock channel
         mock_channel = Mock()
         service_name = "michelangelo.api.v2.EmptyService"
@@ -410,12 +457,10 @@ class GetServiceDescriptorsTest(TestCase):
 
 
 class GetAllFileDescriptorsByFilenameTest(TestCase):
-    """Tests for `get_all_file_descriptors_by_filename()` function
-    """
+    """Tests for `get_all_file_descriptors_by_filename()` function"""
 
     def setUp(self):
-        """Set up common test data
-        """
+        """Set up common test data"""
         self.metadata: list = [
             ("rpc-caller", "grpcurl"),
             ("rpc-service", "ma-apiserver"),
@@ -425,8 +470,7 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
     @patch("michelangelo.cli.mactl.grpc_tools.reflection_pb2_grpc.ServerReflectionStub")
     @patch("michelangelo.cli.mactl.grpc_tools.FileDescriptorProto")
     def test_no_dependencies(self, mock_fd_proto_class, mock_stub_class):
-        """Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies
-        """
+        """Test `get_all_file_descriptors_by_filename()` with a file that has no dependencies"""
         # Create mock channel
         mock_channel = Mock()
         filename = "simple.proto"
