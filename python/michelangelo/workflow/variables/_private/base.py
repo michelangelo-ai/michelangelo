@@ -34,8 +34,7 @@ class Variable(ABC):
 
     @classmethod
     def create(cls, value) -> "Variable":
-        """A factory method to create a variable with the given value.
-        """
+        """A factory method to create a variable with the given value."""
         path = (
             f"{os.environ.get('UF_STORAGE_URL', 'memory://storage')}/{uuid.uuid4().hex}"
         )
@@ -94,8 +93,7 @@ class Variable(ABC):
 
 
 def _create_io(io_class: type) -> IO:
-    """A helper method to create IO from class.
-    """
+    """A helper method to create IO from class."""
     io = io_class()
     assert isinstance(io, IO)
     return io
