@@ -1,3 +1,6 @@
+// Package apihook provides API hooks for project lifecycle management in Michelangelo.
+// It handles project creation validation and ensures that Kubernetes namespaces are
+// properly created and managed alongside Michelangelo projects.
 package apihook
 
 import (
@@ -22,7 +25,21 @@ const (
 	systemNamespacePrefix    = "kube-"
 )
 
-// RegisterProjectAPIHook returns the API hook for Project
+// RegisterProjectAPIHook registers the API hook for Project operations.
+// It initializes a Kubernetes client from the provided REST config and registers
+// the hook to intercept project API calls for validation and namespace management.
+//
+// The hook ensures that:
+//   - Project names match their namespace names (except for integration tests)
+//   - Projects are not created in default or system namespaces
+//   - Kubernetes namespaces are created before projects
+//
+// Parameters:
+//   - logger: zap logger for structured logging
+//   - apiHandler: API handler for processing Michelangelo API requests
+//   - k8sRestConfig: Kubernetes REST configuration for cluster access
+//
+// Returns an error if the Kubernetes client cannot be initialized.
 func RegisterProjectAPIHook(logger *zap.Logger, apiHandler api.Handler, k8sRestConfig *rest.Config) error {
 	k8sClient, err := k8sCoreClient.NewForConfig(k8sRestConfig)
 	if err != nil {
@@ -43,7 +60,21 @@ type apiHook struct {
 	k8sClient  k8sCoreClient.CoreV1Interface
 }
 
-// BeforeCreate creates a new namespace of the same name before creating a project
+// BeforeCreate is called before a project is created and handles namespace creation
+// and validation. It ensures that the project name matches the namespace name and
+// creates the corresponding Kubernetes namespace if it doesn't already exist.
+//
+// Validation rules:
+//   - Project name must match namespace name (except for ma-integration-test namespace)
+//   - Projects cannot be created in the default namespace
+//   - Projects cannot be created in system namespaces (prefixed with "kube-")
+//
+// If the namespace already exists, the method continues without error. This allows
+// for idempotent project creation and handles cases where namespaces are pre-created.
+//
+// Returns an error if:
+//   - The validation rules are violated (InvalidArgument or PermissionDenied)
+//   - The namespace creation fails for reasons other than AlreadyExists
 func (a apiHook) BeforeCreate(ctx context.Context, request *v2.CreateProjectRequest) error {
 	// Validate the request
 	if request.Project.Namespace != integrationTestNamespace && request.Project.Name != request.Project.Namespace {
