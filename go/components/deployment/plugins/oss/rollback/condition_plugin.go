@@ -11,17 +11,18 @@ import (
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
+// conditionPlugin orchestrates rollback actors to restore previous stable revision.
 type conditionPlugin struct {
 	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
-// Params contains dependencies for rollback plugin
+// Params contains dependencies injected for rollback plugin initialization.
 type Params struct {
 	Gateway gateways.Gateway
 	Logger  *zap.Logger
 }
 
-// NewRollbackPlugin creates a new rollback plugin following Uber patterns
+// NewRollbackPlugin creates a rollback workflow plugin.
 func NewRollbackPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollbackActor{
@@ -30,17 +31,17 @@ func NewRollbackPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	}}
 }
 
-// GetActors returns all actors for this plugin
+// GetActors returns the rollback actors.
 func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
-// GetConditions gets the conditions for a deployment
+// GetConditions retrieves the current conditions from the deployment status.
 func (p *conditionPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {
 	return resource.Status.Conditions
 }
 
-// PutCondition puts a condition for a deployment
+// PutCondition updates or adds a condition to the deployment status.
 func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb.Condition) {
 	for i, existingCondition := range resource.Status.Conditions {
 		if existingCondition.Type == condition.Type {

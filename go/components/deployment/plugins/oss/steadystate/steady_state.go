@@ -12,16 +12,18 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// SteadyStateActor handles steady state monitoring
+// SteadyStateActor monitors deployment health and maintains stable operation after rollout completion.
 type SteadyStateActor struct {
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }
 
+// GetType returns the condition type identifier for steady state.
 func (a *SteadyStateActor) GetType() string {
 	return common.ActorTypeSteadyState
 }
 
+// Retrieve checks if deployment has reached steady state (rollout or rollback complete).
 func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if deployment is in steady state (complete and healthy)
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE &&
@@ -50,6 +52,7 @@ func (a *SteadyStateActor) Retrieve(ctx context.Context, resource *v2pb.Deployme
 	}, nil
 }
 
+// Run continuously monitors inference server and model health to maintain steady state.
 func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// steady state plugin will only run if the deployment is in rollout/rollback complete stage.
 	a.logger.Info("Monitoring steady state for deployment", zap.String("deployment", resource.Name))

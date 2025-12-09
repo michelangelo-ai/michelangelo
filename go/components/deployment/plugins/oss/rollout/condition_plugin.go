@@ -18,11 +18,12 @@ import (
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
+// conditionPlugin orchestrates rollout actors in sequence: validation, preparation, placement, routing, completion.
 type conditionPlugin struct {
 	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
-// Params contains dependencies for rollout plugin
+// Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
 	Client                 client.Client
 	ProxyProvider          proxy.ProxyProvider
@@ -31,7 +32,7 @@ type Params struct {
 	Logger                 *zap.Logger
 }
 
-// NewRolloutPlugin creates a new rollout plugin following Uber patterns
+// NewRolloutPlugin creates a rollout workflow plugin with deployment-specific strategy actors.
 func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	logger := p.Logger.With(zap.String("deployment", fmt.Sprintf("%s/%s", deployment.GetNamespace(), deployment.GetName())))
 
@@ -87,17 +88,17 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 	}, nil
 }
 
-// GetActors returns all actors for this plugin
+// GetActors returns the ordered sequence of rollout actors.
 func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
-// GetConditions gets the conditions for a deployment
+// GetConditions retrieves the current conditions from the deployment status.
 func (p *conditionPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {
 	return resource.Status.Conditions
 }
 
-// PutCondition puts a condition for a deployment
+// PutCondition updates or adds a condition to the deployment status.
 func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb.Condition) {
 	for i, existingCondition := range resource.Status.Conditions {
 		if existingCondition.Type == condition.Type {

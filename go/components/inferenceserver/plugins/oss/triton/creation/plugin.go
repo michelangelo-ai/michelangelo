@@ -10,13 +10,14 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// TritonCreationPlugin implements the Plugin interface for creation lifecycle
+// TritonCreationPlugin orchestrates the condition actors for inference server creation.
 type TritonCreationPlugin struct {
 	gateway       gateways.Gateway
 	proxyProvider proxy.ProxyProvider
 	logger        *zap.Logger
 }
 
+// NewTritonCreationPlugin creates a plugin that manages validation, provisioning, health checks, and routing.
 func NewTritonCreationPlugin(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &TritonCreationPlugin{
 		gateway:       gateway,
@@ -25,6 +26,7 @@ func NewTritonCreationPlugin(gateway gateways.Gateway, proxyProvider proxy.Proxy
 	}
 }
 
+// GetActors returns the ordered list of condition actors for creation workflow.
 func (p *TritonCreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
 		NewValidationActor(p.gateway, p.logger, p.proxyProvider),
@@ -34,10 +36,12 @@ func (p *TritonCreationPlugin) GetActors() []conditionInterfaces.ConditionActor[
 	}
 }
 
+// GetConditions retrieves the current conditions from the inference server status.
 func (p *TritonCreationPlugin) GetConditions(resource *v2pb.InferenceServer) []*apipb.Condition {
 	return resource.Status.Conditions
 }
 
+// PutCondition updates or adds a condition to the inference server status.
 func (p *TritonCreationPlugin) PutCondition(resource *v2pb.InferenceServer, condition *apipb.Condition) {
 	if resource.Status.Conditions == nil {
 		resource.Status.Conditions = []*apipb.Condition{}

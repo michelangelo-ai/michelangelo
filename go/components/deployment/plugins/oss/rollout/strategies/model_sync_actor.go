@@ -14,21 +14,24 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// ModelSyncActor handles model synchronization to inference servers using deployment-level ConfigMap management
+// ModelSyncActor loads models to inference servers by updating ConfigMaps and verifying model readiness.
 type ModelSyncActor struct {
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
 }
 
+// GetType returns the condition type identifier for model sync.
 func (a *ModelSyncActor) GetType() string {
 	return common.ActorTypeModelSync
 }
 
+// GetLogger returns the logger instance for this actor.
 func (a *ModelSyncActor) GetLogger() *zap.Logger {
 	return a.logger
 }
 
+// Retrieve checks if the desired model is loaded and ready in Triton with retry timeout logic.
 func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if the desired model is actually loaded and ready in Triton
 	if deployment.Spec.DesiredRevision != nil {
@@ -96,6 +99,7 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployme
 	}, nil
 }
 
+// Run adds the model to the ConfigMap, triggering inference server to load it.
 func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running model sync for deployment", zap.String("deployment", deployment.Name))
 

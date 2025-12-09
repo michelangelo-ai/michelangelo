@@ -7,13 +7,13 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// InferenceServerPlugin defines the interface for backend-specific plugins
-// This provides higher-level plugin management for different lifecycle phases
+// InferenceServerPlugin defines the interface for backend-specific lifecycle management.
+// Implementations provide condition plugins for creation, deletion, and state management.
 type InferenceServerPlugin interface {
-	// GetCreationPlugin returns the plugin for infrastructure creation
+	// GetCreationPlugin returns the plugin for infrastructure creation.
 	GetCreationPlugin() conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
-	// GetDeletionPlugin returns the plugin for infrastructure cleanup
+	// GetDeletionPlugin returns the plugin for infrastructure cleanup.
 	GetDeletionPlugin(resource *v2pb.InferenceServer) conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
 	// ParseState provides the state based on the set of conditions for a given inference server.

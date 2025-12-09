@@ -15,7 +15,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// CleanupActor handles cleanup operations following Uber patterns
+// CleanupActor removes models from ConfigMap and deletes deployment HTTPRoutes during deletion.
 type CleanupActor struct {
 	proxyProvider          proxy.ProxyProvider
 	gateway                gateways.Gateway
@@ -23,10 +23,12 @@ type CleanupActor struct {
 	logger                 *zap.Logger
 }
 
+// GetType returns the condition type identifier for cleanup.
 func (a *CleanupActor) GetType() string {
 	return common.ActorTypeCleanup
 }
 
+// Retrieve checks if model ConfigMap entry and deployment HTTPRoute still exist.
 func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if cleanup is needed
 	// check if model still exists in ConfigMap
@@ -81,6 +83,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment
 	}, nil
 }
 
+// Run removes model from ConfigMap and deletes the deployment HTTPRoute.
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running cleanup for deployment", zap.String("deployment", resource.Name))
 

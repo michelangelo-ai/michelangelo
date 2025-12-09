@@ -13,11 +13,12 @@ import (
 
 var _ conditionInterfaces.Plugin[*v2pb.Deployment] = &conditionPlugin{}
 
+// conditionPlugin orchestrates cleanup actors to remove deployment resources.
 type conditionPlugin struct {
 	actors []conditionInterfaces.ConditionActor[*v2pb.Deployment]
 }
 
-// Params contains dependencies for cleanup plugin
+// Params contains dependencies injected for cleanup plugin initialization.
 type Params struct {
 	ProxyProvider          proxy.ProxyProvider
 	Gateway                gateways.Gateway
@@ -25,7 +26,7 @@ type Params struct {
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
-// NewCleanupPlugin creates a new cleanup plugin following Uber patterns
+// NewCleanupPlugin creates a cleanup workflow plugin.
 func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&CleanupActor{
@@ -37,17 +38,17 @@ func NewCleanupPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	}}
 }
 
-// GetActors returns all actors for this plugin
+// GetActors returns the cleanup actors.
 func (p *conditionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.Deployment] {
 	return p.actors
 }
 
-// GetConditions gets the conditions for a deployment
+// GetConditions retrieves the current conditions from the deployment status.
 func (p *conditionPlugin) GetConditions(resource *v2pb.Deployment) []*apipb.Condition {
 	return resource.Status.Conditions
 }
 
-// PutCondition puts a condition for a deployment
+// PutCondition updates or adds a condition to the deployment status.
 func (p *conditionPlugin) PutCondition(resource *v2pb.Deployment, condition *apipb.Condition) {
 	for i, existingCondition := range resource.Status.Conditions {
 		if existingCondition.Type == condition.Type {

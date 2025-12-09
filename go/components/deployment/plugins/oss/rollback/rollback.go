@@ -10,15 +10,17 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// RollbackActor handles rollback operations following Uber patterns
+// RollbackActor restores deployment to the previous stable revision when rollout fails.
 type RollbackActor struct {
 	logger *zap.Logger
 }
 
+// GetType returns the condition type identifier for rollback.
 func (a *RollbackActor) GetType() string {
 	return common.ActorTypeRollback
 }
 
+// Retrieve checks if rollback has completed by verifying CurrentRevision exists.
 func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if rollback is complete when we restore to the previous revision
 	if resource.Status.CurrentRevision != nil {
@@ -38,6 +40,7 @@ func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment,
 	}, nil
 }
 
+// Run reverts DesiredRevision to CurrentRevision to restore the previous stable state.
 func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running rollback for deployment", zap.String("deployment", resource.Name))
 

@@ -10,7 +10,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// CreateInfrastructureRequest contains information needed to create infrastructure
+// CreateInfrastructureRequest specifies the parameters for creating inference server infrastructure.
 type CreateInfrastructureRequest struct {
 	InferenceServer *v2pb.InferenceServer
 	BackendType     v2pb.BackendType
@@ -18,7 +18,7 @@ type CreateInfrastructureRequest struct {
 	Resources       ResourceSpec
 }
 
-// CreateInfrastructureResponse contains information about the created infrastructure
+// CreateInfrastructureResponse provides the result of infrastructure creation operations.
 type CreateInfrastructureResponse struct {
 	State     v2pb.InferenceServerState
 	Message   string
@@ -26,6 +26,7 @@ type CreateInfrastructureResponse struct {
 	Details   map[string]interface{}
 }
 
+// ResourceSpec defines the resource allocation for inference server infrastructure.
 type ResourceSpec struct {
 	CPU         string
 	Memory      string
@@ -35,14 +36,14 @@ type ResourceSpec struct {
 	ModelConfig map[string]string
 }
 
-// DeleteInfrastructureRequest contains information needed to delete infrastructure
+// DeleteInfrastructureRequest specifies the parameters for deleting inference server infrastructure.
 type DeleteInfrastructureRequest struct {
 	InferenceServer string
 	Namespace       string
 	BackendType     v2pb.BackendType
 }
 
-// LoadModelRequest contains information needed to load a model
+// LoadModelRequest specifies the parameters for loading a model into an inference server.
 type LoadModelRequest struct {
 	ModelName       string
 	ModelVersion    string
@@ -53,7 +54,7 @@ type LoadModelRequest struct {
 	Config          map[string]string
 }
 
-// UnloadModelRequest contains information needed to unload a model
+// UnloadModelRequest specifies the parameters for unloading a model from an inference server.
 type UnloadModelRequest struct {
 	ModelName       string
 	InferenceServer string
@@ -61,7 +62,7 @@ type UnloadModelRequest struct {
 	BackendType     v2pb.BackendType
 }
 
-// CheckModelStatusRequest contains information needed to check model status
+// CheckModelStatusRequest specifies the parameters for checking model readiness and health.
 type CheckModelStatusRequest struct {
 	ModelName       string
 	ModelVersion    string
@@ -71,30 +72,31 @@ type CheckModelStatusRequest struct {
 	BackendType     v2pb.BackendType
 }
 
+// CheckModelStatusResponse provides the model status check result.
 type CheckModelStatusResponse struct {
 	Status ModelStatus
 }
 
-// ModelStatus represents the status of a model
+// ModelStatus represents the current state and readiness of a loaded model.
 type ModelStatus struct {
 	State   v2pb.InferenceServerState
 	Message string
 	Ready   bool
 }
 
-// GetInfrastructureStatusRequest contains information needed to get infrastructure status
+// GetInfrastructureStatusRequest specifies the parameters for querying infrastructure status.
 type GetInfrastructureStatusRequest struct {
 	InferenceServer string
 	Namespace       string
 	BackendType     v2pb.BackendType
 }
 
-// GetInfrastructureStatusResponse contains information about the infrastructure status
+// GetInfrastructureStatusResponse provides the infrastructure status query result.
 type GetInfrastructureStatusResponse struct {
 	Status InfrastructureStatus
 }
 
-// InfrastructureStatus represents the status of the infrastructure
+// InfrastructureStatus represents the current state and health of inference server infrastructure.
 type InfrastructureStatus struct {
 	State     v2pb.InferenceServerState
 	Message   string
@@ -102,44 +104,62 @@ type InfrastructureStatus struct {
 	Endpoints []string
 }
 
-// HealthCheckRequest contains information needed to check the health of an inference server
+// HealthCheckRequest specifies the parameters for checking inference server health.
 type HealthCheckRequest struct {
 	InferenceServer string
 	Namespace       string
 	BackendType     v2pb.BackendType
 }
 
-// Gateway provides a unified interface for inference server operations across different providers
+// Gateway provides a unified interface for managing inference servers across different backend types.
+// It acts as a registry and dispatcher for backend-specific implementations.
 type Gateway interface {
-	// Inference Server Backend Management
+	// RegisterBackend associates a backend implementation with a specific backend type.
 	RegisterBackend(backendType v2pb.BackendType, backend Backend)
 
-	// Infrastructure Management
+	// CreateInfrastructure provisions the Kubernetes resources for an inference server.
 	CreateInfrastructure(ctx context.Context, logger *zap.Logger, request CreateInfrastructureRequest) (*CreateInfrastructureResponse, error)
+
+	// GetInfrastructureStatus queries the current state of inference server infrastructure.
 	GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, request GetInfrastructureStatusRequest) (*GetInfrastructureStatusResponse, error)
+
+	// DeleteInfrastructure removes all Kubernetes resources for an inference server.
 	DeleteInfrastructure(ctx context.Context, logger *zap.Logger, request DeleteInfrastructureRequest) error
 
-	// Model Management
+	// LoadModel initiates loading a model into an inference server.
 	LoadModel(ctx context.Context, logger *zap.Logger, request LoadModelRequest) error
+
+	// UnloadModel removes a model from an inference server.
 	UnloadModel(ctx context.Context, logger *zap.Logger, request UnloadModelRequest) error
+
+	// CheckModelStatus verifies if a model is ready to serve requests.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, request CheckModelStatusRequest) (bool, error)
 
-	// Health Check
+	// IsHealthy checks if the inference server infrastructure is operational.
 	IsHealthy(ctx context.Context, logger *zap.Logger, request HealthCheckRequest) (bool, error)
 }
 
-// Backend interface defines the methods for an inference server backend
+// Backend defines the interface for inference server backend implementations (Triton, vLLM, etc.).
+// Each backend provides platform-specific logic for infrastructure and model management.
 type Backend interface {
-	// Infrastructure Management
+	// CreateInfrastructure provisions backend-specific Kubernetes resources.
 	CreateInfrastructure(ctx context.Context, logger *zap.Logger, request CreateInfrastructureRequest) (*CreateInfrastructureResponse, error)
+
+	// GetInfrastructureStatus queries the backend-specific infrastructure state.
 	GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, request GetInfrastructureStatusRequest) (*GetInfrastructureStatusResponse, error)
+
+	// DeleteInfrastructure removes backend-specific Kubernetes resources.
 	DeleteInfrastructure(ctx context.Context, logger *zap.Logger, request DeleteInfrastructureRequest) error
 
-	// Health Check
+	// IsHealthy checks backend-specific health endpoints.
 	IsHealthy(ctx context.Context, logger *zap.Logger, request HealthCheckRequest) (bool, error)
 
-	// Model Management
+	// LoadModel loads a model using backend-specific APIs.
 	LoadModel(ctx context.Context, logger *zap.Logger, request LoadModelRequest) error
+
+	// UnloadModel unloads a model using backend-specific APIs.
 	UnloadModel(ctx context.Context, logger *zap.Logger, request UnloadModelRequest) error
+
+	// CheckModelStatus checks model readiness using backend-specific APIs.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, request CheckModelStatusRequest) (bool, error)
 }
