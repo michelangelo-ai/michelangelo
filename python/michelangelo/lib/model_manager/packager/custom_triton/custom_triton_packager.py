@@ -10,6 +10,7 @@ from michelangelo.lib.model_manager._private.packager.template_renderer import (
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_raw_model_package_content,
+    validate_model_class,
 )
 from michelangelo.lib.model_manager._private.schema.triton import (
     validate_model_schema,

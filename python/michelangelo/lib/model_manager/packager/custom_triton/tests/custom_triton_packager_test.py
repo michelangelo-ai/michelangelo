@@ -1,13 +1,14 @@
 """Tests for CustomTritonPackager."""
 
 import os
+import tempfile
 import numpy as np
 from pathlib import Path
 from unittest import TestCase
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 
-model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
 model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict_with_relative_import.Predict"
 
 
@@ -117,3 +118,18 @@ class CustomTritonPackagerTest(TestCase):
             files,
             expected_files,
         )
+
+    def test_create_raw_model_package(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "raw_model")
+            os.makedirs(model_path)
+            dest_model_path = packager.create_raw_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+                dest_model_path=dest_model_path,
+            )
+            self.assert_raw_model_package(dest_model_path)
