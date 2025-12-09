@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest import TestCase
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
+from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
 
 model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
 model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict_with_relative_import.Predict"
@@ -49,7 +50,7 @@ class CustomTritonPackagerTest(TestCase):
                 dest_model_path,
                 "defs",
                 "michelangelo",
-                "ai",
+                "lib",
                 "model_manager",
                 "packager",
                 "custom_triton",
@@ -94,7 +95,6 @@ class CustomTritonPackagerTest(TestCase):
         )
 
         expected_files = [
-            "defs/model_class.txt",
             "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
             "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
             "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
@@ -105,6 +105,7 @@ class CustomTritonPackagerTest(TestCase):
             "defs/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
             "defs/michelangelo/lib/model_manager/interface/custom_model.py",
             "defs/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict.py",
+            "defs/model_class.txt",
             "metadata/sample_data.json",
             "metadata/schema.yaml",
             "metadata/type.yaml",
@@ -125,11 +126,14 @@ class CustomTritonPackagerTest(TestCase):
             model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "raw_model")
             os.makedirs(model_path)
+            with open(os.path.join(model_path, "file.txt"), "w") as f:
+                f.write("file_content")
             dest_model_path = packager.create_raw_model_package(
                 model_path=model_path,
                 model_class=model_class,
                 model_schema=self.model_schema,
                 sample_data=self.sample_data,
                 dest_model_path=dest_model_path,
+                include_import_prefixes=["michelangelo"],
             )
             self.assert_raw_model_package(dest_model_path)
