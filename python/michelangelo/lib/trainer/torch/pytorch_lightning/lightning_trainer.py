@@ -35,7 +35,7 @@ class LightningTrainer:
     """Lightning trainer that wraps Ray Train.
 
     Compatible with internal
-    uber.ai.michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer.
+    uber.ai.michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.LightningTrainer.
     """
 
     def __init__(self, param: LightningTrainerParam):

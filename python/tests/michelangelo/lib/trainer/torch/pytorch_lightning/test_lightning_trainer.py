@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
+from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
     create_run_config,
@@ -114,7 +114,7 @@ class TestLightningTrainer:
         assert callable(trainer._train_loop_per_worker)
 
     @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
+        "michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
     )
     def test_train_method(self, mock_torch_trainer):
         """Test the train method."""
@@ -149,9 +149,9 @@ class TestLightningTrainer:
         assert result == mock_result
 
     @patch(
-        "michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
+        "michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
     )
-    @patch("michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer.log")
+    @patch("michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.log")
     def test_train_method_with_logging(self, mock_log, mock_torch_trainer):
         """Test that the train method includes proper logging."""
         mock_run_config = MagicMock()
