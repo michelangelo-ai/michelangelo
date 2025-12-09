@@ -51,7 +51,7 @@ class CustomRawModelTest(TestCase):
 
     @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_external(self, mock_logger_info):
-        model_path = "michelangelo/lib/model_manager/_private/serde/model/tests/testdata/external_custom_raw_model_package"
+        model_path = "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package"
         model = load_custom_raw_model(model_path)
 
         mock_logger_info.assert_called_with(
@@ -91,7 +91,7 @@ class CustomRawModelTest(TestCase):
                 model_schema=self.model_schema,
                 sample_data=self.sample_data,
                 dest_model_path=dest_model_path,
-                model_path_source_type=StorageType.LOCAL,
+                include_import_prefixes=["michelangelo"],
             )
 
             model = load_custom_raw_model(model_package)
@@ -113,7 +113,7 @@ class CustomRawModelTest(TestCase):
     @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_external_with_conflicting_imports(self, mock_logger_info):
         model_path = (
-            "michelangelo/lib/model_manager/_private/serde/model/tests/testdata/external_custom_raw_model_package_with_conflicting_imports"
+            "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package_with_conflicting_imports"
         )
         model = load_custom_raw_model(model_path)
 
@@ -144,11 +144,11 @@ class CustomRawModelTest(TestCase):
         with tempfile.TemporaryDirectory() as model_package:
             os.makedirs(os.path.join(model_package, "defs"))
             with open(os.path.join(model_package, "defs", "model_class.txt"), "w") as f:
-                f.write("michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.InvalidPredict")
+                f.write("michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.InvalidPredict")
 
             with self.assertRaisesRegex(
                 AttributeError,
-                "Class InvalidPredict not found in module michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.",
+                "Class InvalidPredict not found in module michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.",
             ):
                 load_custom_raw_model(model_package)
 
@@ -171,7 +171,7 @@ class CustomRawModelTest(TestCase):
                 load_custom_raw_model(model_package)
 
     def test_load_custom_raw_model_with_pickle(self):
-        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -195,7 +195,7 @@ class CustomRawModelTest(TestCase):
                 model_schema=self.model_schema,
                 sample_data=self.sample_data,
                 dest_model_path=dest_model_path,
-                model_path_source_type=StorageType.LOCAL,
+                include_import_prefixes=["michelangelo"],
             )
 
             model = load_custom_raw_model(model_package)
@@ -214,7 +214,7 @@ class CustomRawModelTest(TestCase):
     @patch("michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
     def test_load_custom_raw_model_with_pickle_def_in_main(self, mock_walk_pickle_definitions_in_dir):
         mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
-        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -238,7 +238,7 @@ class CustomRawModelTest(TestCase):
                 model_schema=self.model_schema,
                 sample_data=self.sample_data,
                 dest_model_path=dest_model_path,
-                model_path_source_type=StorageType.LOCAL,
+                include_import_prefixes=["michelangelo"],
             )
 
             model = load_custom_raw_model(model_package)
