@@ -1,9 +1,11 @@
 """Tests for CustomTritonPackager."""
 
 import os
+import numpy as np
 from pathlib import Path
 from unittest import TestCase
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
+from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 
 model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
 model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict_with_relative_import.Predict"
@@ -11,6 +13,25 @@ model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.cus
 
 class CustomTritonPackagerTest(TestCase):
     """Tests instantiation of the custom Triton packager."""
+    def setUp(self):
+        self.model_schema = ModelSchema(
+            input_schema=[
+                ModelSchemaItem(
+                    name="input",
+                    data_type=DataType.INT,
+                    shape=[1],
+                ),
+            ],
+            output_schema=[
+                ModelSchemaItem(
+                    name="response",
+                    data_type=DataType.INT,
+                    shape=[1],
+                ),
+            ],
+        )
+        self.sample_data = [{"input": np.array([1])}]
+        self.batch_sample_data = [{"input": np.array([[1], [2]])}]
 
     def test_custom_triton_packager(self):
         """It creates a packager instance with default settings."""
