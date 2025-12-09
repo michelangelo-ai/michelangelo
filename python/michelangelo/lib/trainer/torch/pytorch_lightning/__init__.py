@@ -1,1 +1,1 @@
-# PyTorch Lightning trainer module
+"""PyTorch Lightning trainers for Michelangelo ML training."""
