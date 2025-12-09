@@ -1,3 +1,5 @@
+"""Generate the raw model package content."""
+
 import os
 import tempfile
 from typing import Optional, Union
