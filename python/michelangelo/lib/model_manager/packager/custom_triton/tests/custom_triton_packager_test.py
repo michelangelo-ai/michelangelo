@@ -310,7 +310,7 @@ class CustomTritonPackagerTest(TestCase):
 
     def test_create_raw_model_package_with_pickle(self):
         packager = CustomTritonPackager()
-        
+
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "raw_model")
@@ -360,3 +360,21 @@ class CustomTritonPackagerTest(TestCase):
                     "model/file.txt",
                 ],
             )
+
+    def test_create_raw_model_package_with_empty_model(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "raw_model")
+            os.makedirs(model_path)
+            dest_model_path = packager.create_raw_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+                dest_model_path=dest_model_path,
+                include_import_prefixes=["michelangelo"],
+            )
+
+            self.assertTrue(os.path.exists(os.path.join(dest_model_path, "model")))
+            self.assertEqual(len(os.listdir(os.path.join(dest_model_path, "model"))), 0)
