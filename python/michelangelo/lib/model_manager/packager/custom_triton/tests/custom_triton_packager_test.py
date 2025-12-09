@@ -247,7 +247,6 @@ class CustomTritonPackagerTest(TestCase):
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
-            dest_model_path = os.path.join(temp_dir, "raw_model")
             os.makedirs(model_path)
             with open(os.path.join(model_path, "file.txt"), "w") as f:
                 f.write("file_content")
