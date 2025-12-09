@@ -35,6 +35,36 @@ Use this skill automatically when:
 - **Co-location**: Related code (types, context, hooks, tests, utils) should live together
 - **Flat over nested**: Prefer flat structures when file count is manageable (~10 files)
 
+### Import Ordering
+
+The project uses `eslint-plugin-simple-import-sort` with specific grouping rules. Imports should be organized in this order:
+
+1. **React and third-party packages** (React always first)
+   ```typescript
+   import React from 'react';
+   import { useState } from 'react';
+   import { Button } from 'baseui/button';
+   ```
+
+2. **Internal imports (#) and relative imports**
+   ```typescript
+   import { useAuth } from '#auth/hooks';
+   import { formatDate } from './utils';
+   ```
+
+3. **Type imports** (both third-party and local)
+   ```typescript
+   import type { User } from '#types';
+   import type { Props } from './types';
+   ```
+
+4. **Style imports**
+   ```typescript
+   import './styles.css';
+   ```
+
+**ESLint will automatically sort these groups for you.**
+
 ### Directory Patterns (Established in Codebase)
 
 - **Components**: Use `components/` for feature building blocks
@@ -96,6 +126,49 @@ const toggleMenu = () => { /* toggle menu */ };
 - **Create focused types**: Map from generated types, include only needed properties
 - **Avoid type suppression**: Unless stress testing with invalid input
 - **No T suffix**: Don't use `TProps`, `TUser`, etc. - just use `Props`, `User`
+
+### Unused Variables
+
+The project uses `@typescript-eslint/no-unused-vars` with special patterns:
+- **Prefix with underscore for intentionally unused variables**: `_unused`, `_param`
+  ```typescript
+  function handler(_event: Event, data: Data) {
+    // Only using data, event is required by signature
+  }
+  ```
+
+This allows function signatures to document all parameters while acknowledging some aren't used.
+
+---
+
+## React Best Practices
+
+### React Hooks
+
+The project enforces React Hooks rules (`eslint-plugin-react-hooks`):
+- **Follow Rules of Hooks**: Only call hooks at the top level
+- **Exhaustive dependencies**: Include all dependencies in `useEffect`, `useMemo`, `useCallback`
+- ESLint will error on violations to prevent bugs
+
+### Component Exports
+
+The project uses `eslint-plugin-react-refresh` for fast refresh compatibility:
+- **Only export components**: Keep non-component exports to a minimum in component files
+- **Constant exports allowed**: You can export constants alongside components
+- **Warning on violations**: ESLint warns when non-component exports might break fast refresh
+
+### BaseUI Guidelines
+
+The project uses BaseUI components and enforces specific patterns:
+- **No deep imports**: Import from `baseui/component-name`, not `baseui/component-name/subpath`
+  ```typescript
+  // ✅ Good
+  import { Button } from 'baseui/button';
+
+  // ❌ Avoid
+  import { SIZE } from 'baseui/button/constants';
+  ```
+- **Use `useStyletron` for custom styling**: Prefer BaseUI's theming system over custom CSS
 
 ---
 
@@ -217,6 +290,20 @@ export const TaskSeparator = styled('div', ({ $theme }) => ({
 
 ---
 
+## Code Formatting
+
+### Prettier Integration
+
+The project uses Prettier for automatic code formatting:
+- **Prettier errors fail builds**: `prettier/prettier` is set to `error` in ESLint
+- **Run Prettier before committing**: Use your IDE's format-on-save or run `npm run format`
+- **No manual formatting**: Let Prettier handle whitespace, line breaks, and semicolons
+- **Consistent style**: Prettier ensures consistent formatting across the entire codebase
+
+All Prettier style rules are automatically enforced by ESLint, so you don't need to manually follow formatting guidelines.
+
+---
+
 ## Performance
 
 ### Optimization Strategy
@@ -238,6 +325,11 @@ export const TaskSeparator = styled('div', ({ $theme }) => ({
 - ❌ Testing implementation details instead of user behavior
 - ❌ Obvious or redundant comments
 - ❌ Using `useStyletron` for complex multi-property styling (extract to styled component)
+- ❌ Deep imports from BaseUI packages (use top-level exports)
+- ❌ Exporting non-components from component files (breaks fast refresh)
+- ❌ Violating React Hooks rules (non-exhaustive dependencies, conditional hooks)
+- ❌ Unused variables without underscore prefix
+- ❌ Manual import ordering (let ESLint auto-sort)
 
 ---
 
@@ -247,12 +339,18 @@ When writing code in Michelangelo:
 
 - [ ] Examined existing patterns in the codebase
 - [ ] Used direct imports (no barrel exports)
+- [ ] Followed import ordering (React first, then third-party, internal, types, styles)
 - [ ] Followed established naming conventions (kebab-case files, PascalCase components)
 - [ ] Used semantic event handler names (no `handleOn*`)
+- [ ] Prefixed intentionally unused variables with underscore
 - [ ] Started with `useStyletron`, extracted to styled component when complex
 - [ ] Named styled components semantically (not generically)
+- [ ] Used top-level BaseUI imports (no deep imports)
+- [ ] Followed React Hooks rules (exhaustive dependencies, top-level only)
+- [ ] Exported only components from component files (for fast refresh)
 - [ ] Preferred `unknown` over `any`
 - [ ] Co-located related code (types, tests, utils)
 - [ ] Tested user behavior, not implementation details
 - [ ] Added JSDoc only for non-obvious or public APIs
 - [ ] Avoided premature optimization
+- [ ] Let Prettier handle all code formatting
