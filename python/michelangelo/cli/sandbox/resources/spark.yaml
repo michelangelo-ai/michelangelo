@@ -50,7 +50,7 @@ spec:
     - --args
     - '[]'
     - --kwargs
-    - '{"cast_float_columns":["age","b","chas","crim","dis","indus","lstat","nox","ptratio","rad","rm","tax","zn","medv"],"train_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/96ba8765ec3d450b94ad00377b580b72"},"validation_dv":{"__class__":"michelangelo.sdk.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/3db3242eeb7b4c1fa39f2f601afea20e"}}'
+    - '{"cast_float_columns":["age","b","chas","crim","dis","indus","lstat","nox","ptratio","rad","rm","tax","zn","medv"],"train_dv":{"__class__":"michelangelo.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/96ba8765ec3d450b94ad00377b580b72"},"validation_dv":{"__class__":"michelangelo.workflow.variables._private.dataset.DatasetVariable","__codec__":"dataclass","_io_metadata":null,"metadata":null,"path":"s3://default/3db3242eeb7b4c1fa39f2f601afea20e"}}'
     - --result-url
     - s3://default/e8f24f7434a34c7a913074f804305baf.json
   mainClass: org.apache.spark.deploy.PythonRunner

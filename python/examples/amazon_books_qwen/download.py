@@ -13,7 +13,7 @@ from pyspark.sql.functions import col
 
 # Uniflow
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
+from michelangelo.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.spark import SparkTask
 
 
