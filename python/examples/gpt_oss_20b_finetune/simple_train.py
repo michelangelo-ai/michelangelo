@@ -17,8 +17,8 @@ from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     create_run_config,
     create_scaling_config,
 )
-from michelangelo.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 if TYPE_CHECKING:
     from ray.data import Dataset

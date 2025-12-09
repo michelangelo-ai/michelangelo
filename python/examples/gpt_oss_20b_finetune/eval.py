@@ -12,8 +12,8 @@ import torch
 from transformers import AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 if TYPE_CHECKING:
     from ray.data import Dataset

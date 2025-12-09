@@ -11,8 +11,8 @@ from datasets import load_dataset
 from transformers import AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 log = logging.getLogger(__name__)
 
