@@ -15,8 +15,13 @@ from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.model 
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
-model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
-model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict_with_relative_import.Predict"
+model_class = (
+    "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
+)
+model_class_with_relative_imports = (
+    "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
+    "predict_with_relative_import.Predict"
+)
 
 
 class CustomTritonPackagerTest(TestCase):
@@ -51,6 +56,7 @@ class CustomTritonPackagerTest(TestCase):
     def assert_raw_model_package(
         self, dest_model_path, with_requirements=False, batch_inference=False
     ):
+        """Assert that the raw model package has the expected structure."""
         with open(os.path.join(dest_model_path, "defs", "model_class.txt")) as f:
             content = f.read()
             self.assertEqual(content, model_class)
@@ -236,7 +242,7 @@ class CustomTritonPackagerTest(TestCase):
     def test_create_raw_model_package_with_mismatching_sample_data_and_model_schema(
         self,
     ):
-        """It creates a raw model package with mismatching sample data and model schema."""
+        """It creates a raw model package with mismatching sample data and schema."""
         with self.assertRaises(ValueError):
             packager = CustomTritonPackager()
             packager.create_raw_model_package(

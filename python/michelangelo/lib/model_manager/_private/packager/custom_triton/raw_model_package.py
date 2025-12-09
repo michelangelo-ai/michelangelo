@@ -12,10 +12,10 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.constants im
 from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
     serialize_model_class,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (  # noqa: E501
     serialize_pickle_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (  # noqa: E501
     generate_requirements_txt,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
@@ -45,8 +45,10 @@ def generate_raw_model_package_content(
         model_path: the path of the raw model
         model_class: the model class of the model
             that contains the custom predict function
-        model_schema: the schema of the model, which specifies the input/palette/output features
-        sample_data: the sample data for the model. A list of input data for the predict function.
+        model_schema: the schema of the model, which specifies the
+            input/palette/output features
+        sample_data: the sample data for the model. A list of input data
+            for the predict function.
         model_path_source_type: the source type of the model path,
             e.g. 'hdfs', 'terrablob', default is 'hdfs'
         requirements: the requirements of the model, which can be one of the following:
@@ -61,9 +63,12 @@ def generate_raw_model_package_content(
             with 'uber' or 'data.michelangelo' will be saved in the
             model package. Default is ['uber'],
             and if the list is empty, save all imports
-        batch_inference (Optional): Specify if the prediction function in the model class handles batch inference.
-            Default is False. If set to True, the model input/output will have an additional batch dimension on top of the existing model schema.
-            For example, if the model schema specifies the input shape to be [n, m], the model expects the input shape to be [-1, n, m].
+        batch_inference (Optional): Specify if the prediction function in
+            the model class handles batch inference. Default is False.
+            If set to True, the model input/output will have an additional
+            batch dimension on top of the existing model schema.
+            For example, if the model schema specifies the input shape to be
+            [n, m], the model expects the input shape to be [-1, n, m].
 
     Returns:
         The raw model package content
