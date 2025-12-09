@@ -2,25 +2,26 @@
 
 import tempfile
 from typing import Optional, Union
+
 from numpy import ndarray
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema
+
 from michelangelo._internal.utils.file_utils import generate_folder
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
-)
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_raw_model_package_content,
     validate_model_class,
 )
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
+)
 from michelangelo.lib.model_manager._private.schema.triton import (
     validate_model_schema,
-    convert_model_schema,
 )
 from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_sample_data,
     validate_sample_data_with_model_schema,
 )
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 class CustomTritonPackager:

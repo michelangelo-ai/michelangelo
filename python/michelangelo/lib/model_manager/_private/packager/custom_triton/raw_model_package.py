@@ -3,27 +3,29 @@
 import os
 import tempfile
 from typing import Optional, Union
+
 from numpy import ndarray
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema
-from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
-from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
-from michelangelo.lib.model_manager._private.serde.data import dump_model_data
+
+from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
+    MODEL_CLASS_FILE_NAME,
+)
 from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
     serialize_model_class,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
-    generate_type_yaml,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (
-    generate_requirements_txt,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
     serialize_pickle_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
-    MODEL_CLASS_FILE_NAME,
+from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (
+    generate_requirements_txt,
 )
+from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
+    generate_type_yaml,
+)
+from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
+from michelangelo.lib.model_manager._private.serde.data import dump_model_data
+from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager.constants import StorageType
+from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 def generate_raw_model_package_content(
@@ -62,6 +64,7 @@ def generate_raw_model_package_content(
         batch_inference (Optional): Specify if the prediction function in the model class handles batch inference.
             Default is False. If set to True, the model input/output will have an additional batch dimension on top of the existing model schema.
             For example, if the model schema specifies the input shape to be [n, m], the model expects the input shape to be [-1, n, m].
+
     Returns:
         The raw model package content
     """

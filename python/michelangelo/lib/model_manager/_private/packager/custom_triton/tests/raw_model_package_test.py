@@ -2,12 +2,14 @@
 
 import re
 import tempfile
-import numpy as np
 from unittest import TestCase
-from michelangelo.lib.model_manager.schema import ModelSchema
+
+import numpy as np
+
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_raw_model_package_content,
 )
+from michelangelo.lib.model_manager.schema import ModelSchema
 
 
 class RawModelPackageTest(TestCase):
