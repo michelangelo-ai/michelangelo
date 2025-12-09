@@ -10,7 +10,7 @@ from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, 
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
 from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import Predict
 
 
 class CustomRawModelTest(TestCase):
@@ -73,7 +73,7 @@ class CustomRawModelTest(TestCase):
 
     @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
     def test_load_custom_raw_model_from_internal(self, mock_logger_info):
-        model_class = "michelangelo.lib.model_manager.packager.python_triton.tests.fixtures.predict.Predict"
+        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
