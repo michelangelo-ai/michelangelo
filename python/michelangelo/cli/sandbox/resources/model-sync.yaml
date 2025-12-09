@@ -257,7 +257,7 @@ spec:
               - key: app
                 operator: In
                 values:
-                - triton-inference-server-demo
+                - triton-inference-server-example
             topologyKey: kubernetes.io/hostname
             namespaces:
             - default
@@ -282,8 +282,8 @@ spec:
         - name: inference-servers-config
           mountPath: /config/inference-servers
           readOnly: true
-        - name: inference-server-demo-config
-          mountPath: /config/inference-server-demo
+        - name: inference-server-example-config
+          mountPath: /config/inference-server-example
           readOnly: true
         - name: sync-script
           mountPath: /scripts
@@ -303,9 +303,9 @@ spec:
       - name: inference-servers-config
         configMap:
           name: inference-servers-list
-      - name: inference-server-demo-config
+      - name: inference-server-example-config
         configMap:
-          name: inference-server-demo-model-config
+          name: inference-server-example-model-config
           optional: true
       - name: sync-script
         configMap:
@@ -325,4 +325,4 @@ metadata:
   namespace: default
 data:
   servers.txt: |
-    inference-server-demo
+    inference-server-example

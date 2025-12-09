@@ -59,6 +59,13 @@ func TestEnsureInferenceServerRoute(t *testing.T) {
 				backendMap := backendRefs[0].(map[string]interface{})
 				assert.Equal(t, "new-server-inference-service", backendMap["name"])
 				assert.Equal(t, int64(100), backendMap["weight"])
+
+				// Check URL rewrite filter
+				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
+				require.Len(t, filters, 1)
+				filterMap := filters[0].(map[string]interface{})
+				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
+				assert.Equal(t, "/v2", replacePrefixMatch)
 			},
 		},
 		{
@@ -68,7 +75,7 @@ func TestEnsureInferenceServerRoute(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "test-model",
 			},
-			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server", "/"),
+			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server", "/v2"),
 			expectError:       false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)

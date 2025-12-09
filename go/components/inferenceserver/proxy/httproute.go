@@ -95,7 +95,7 @@ func (h *httpRouteManager) getOrCreateHTTPRoute(ctx context.Context, logger *zap
 		fmt.Sprintf("/%s", request.InferenceServer),
 		addSuffixToString(request.InferenceServer, inferenceServiceSuffix),
 		&baselineWeight,
-		"/",
+		"/v2",
 	)
 
 	createdRoute, err := h.dynamicClient.Resource(httpRouteGVR).Namespace(request.Namespace).Create(ctx, httpRoute, metav1.CreateOptions{})
