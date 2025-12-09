@@ -11,14 +11,14 @@ from ray.train.lightning import RayFSDPStrategy
 
 import michelangelo.uniflow.core as uniflow
 from examples.gpt_oss_20b_finetune.model import create_gpt_model
-from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
+from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
     LightningTrainer,
     LightningTrainerParam,
     create_run_config,
     create_scaling_config,
 )
-from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 if TYPE_CHECKING:
     from ray.data import Dataset
