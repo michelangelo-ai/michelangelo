@@ -15,9 +15,7 @@ from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.model 
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
-model_class = (
-    "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
-)
+model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"  # noqa: E501
 model_class_with_relative_imports = (
     "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
     "predict_with_relative_import.Predict"
