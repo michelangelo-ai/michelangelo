@@ -1,4 +1,5 @@
 """Base classes for workflow variables."""
+
 import logging
 import os
 import uuid
