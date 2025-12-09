@@ -242,3 +242,20 @@ class CustomTritonPackagerTest(TestCase):
                 include_import_prefixes=["michelangelo"],
             )
             self.assert_raw_model_package(dest_model_path, with_requirements=True)
+
+    def test_create_raw_model_package_with_default_dest_model_path(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "raw_model")
+            os.makedirs(model_path)
+            with open(os.path.join(model_path, "file.txt"), "w") as f:
+                f.write("file_content")
+            dest_model_path = packager.create_raw_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+                include_import_prefixes=["michelangelo"],
+            )
+            self.assert_raw_model_package(dest_model_path)
