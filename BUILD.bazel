@@ -41,9 +41,3 @@ nogo(
     visibility = ["//visibility:public"],
     deps = TOOLS_NOGO,
 )
-
-py_library(
-    name = "michelangelo",
-    srcs = ["javascript/node_modules/flatted/python/flatted.py"],
-    visibility = ["//:__subpackages__"],
-)
