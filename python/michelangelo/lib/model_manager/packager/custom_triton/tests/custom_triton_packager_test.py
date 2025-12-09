@@ -9,7 +9,9 @@ from unittest import TestCase
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.model import Model
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.model import (
+    Model,
+)
 
 model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
 model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict_with_relative_import.Predict"
@@ -17,6 +19,7 @@ model_class_with_relative_imports = "michelangelo.lib.model_manager.packager.cus
 
 class CustomTritonPackagerTest(TestCase):
     """Tests instantiation of the custom Triton packager."""
+
     def setUp(self):
         self.model_schema = ModelSchema(
             input_schema=[
@@ -42,7 +45,9 @@ class CustomTritonPackagerTest(TestCase):
         packager = CustomTritonPackager()
         self.assertIsNotNone(packager)
 
-    def assert_raw_model_package(self, dest_model_path, with_requirements=False, batch_inference=False):
+    def assert_raw_model_package(
+        self, dest_model_path, with_requirements=False, batch_inference=False
+    ):
         with open(os.path.join(dest_model_path, "defs", "model_class.txt")) as f:
             content = f.read()
             self.assertEqual(content, model_class)
@@ -71,7 +76,9 @@ class CustomTritonPackagerTest(TestCase):
         with open(os.path.join(dest_model_path, "metadata", "type.yaml")) as f:
             content = f.read()
             if batch_inference:
-                self.assertEqual(content, "type: custom-python\nbatch_inference: true\n")
+                self.assertEqual(
+                    content, "type: custom-python\nbatch_inference: true\n"
+                )
             else:
                 self.assertEqual(content, "type: custom-python\n")
 
@@ -216,7 +223,9 @@ class CustomTritonPackagerTest(TestCase):
                 sample_data=[{"a": "b"}],
             )
 
-    def test_create_raw_model_package_with_mismatching_sample_data_and_model_schema(self):
+    def test_create_raw_model_package_with_mismatching_sample_data_and_model_schema(
+        self,
+    ):
         with self.assertRaises(ValueError):
             packager = CustomTritonPackager()
             packager.create_raw_model_package(
@@ -321,12 +330,12 @@ class CustomTritonPackagerTest(TestCase):
                 pickle.dump(Model(), f)
             dest_model_path = packager.create_raw_model_package(
                 model_path=model_path,
-                    model_class=model_class,
-                    model_schema=self.model_schema,
-                    sample_data=self.sample_data,
-                    dest_model_path=dest_model_path,
-                    include_import_prefixes=["michelangelo"],
-                )
+                model_class=model_class,
+                model_schema=self.model_schema,
+                sample_data=self.sample_data,
+                dest_model_path=dest_model_path,
+                include_import_prefixes=["michelangelo"],
+            )
 
             files = sorted(
                 [

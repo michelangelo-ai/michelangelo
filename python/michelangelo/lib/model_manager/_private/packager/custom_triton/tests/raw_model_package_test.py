@@ -1,10 +1,13 @@
 """Tests for raw model package generation."""
+
 import re
 import tempfile
 import numpy as np
 from unittest import TestCase
 from michelangelo.lib.model_manager.schema import ModelSchema
-from michelangelo.lib.model_manager._private.packager.custom_triton import generate_raw_model_package_content
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    generate_raw_model_package_content,
+)
 
 
 class RawModelPackageTest(TestCase):
@@ -64,12 +67,12 @@ class RawModelPackageTest(TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             content = generate_raw_model_package_content(
                 temp_dir,
-            "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
-            ModelSchema(),
-            [{"input": np.array([1, 2])}],
-            requirements=["numpy", "torch"],
-            include_import_prefixes=["michelangelo"],
-        )
+                "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.predict.Predict",
+                ModelSchema(),
+                [{"input": np.array([1, 2])}],
+                requirements=["numpy", "torch"],
+                include_import_prefixes=["michelangelo"],
+            )
 
         self.assertIsNotNone(content)
         self.assertIn("metadata", content)

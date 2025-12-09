@@ -196,12 +196,10 @@ class CustomTritonPackager:
         batch_inference = self.custom_batch_processing
 
         (
-            is_sample_data_with_schema_valid, 
+            is_sample_data_with_schema_valid,
             error,
         ) = validate_sample_data_with_model_schema(
-            sample_data, 
-            model_schema, 
-            batch_inference
+            sample_data, model_schema, batch_inference
         )
 
         if not is_sample_data_with_schema_valid:

@@ -1,4 +1,3 @@
-
 import os
 import tempfile
 from typing import Optional, Union
@@ -8,11 +7,21 @@ from michelangelo.lib.model_manager.schema import ModelSchema
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
 from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
 from michelangelo.lib.model_manager._private.serde.data import dump_model_data
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import serialize_model_class
-from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import generate_type_yaml
-from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import generate_requirements_txt
-from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import serialize_pickle_dependencies
-from michelangelo.lib.model_manager._private.packager.custom_triton.constants import MODEL_CLASS_FILE_NAME
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
+    serialize_model_class,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
+    generate_type_yaml,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.requirements_txt import (
+    generate_requirements_txt,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
+    serialize_pickle_dependencies,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
+    MODEL_CLASS_FILE_NAME,
+)
 
 
 def generate_raw_model_package_content(
