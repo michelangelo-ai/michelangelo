@@ -1,3 +1,4 @@
+"""Dataset variable implementation for workflow data handling."""
 import importlib
 from dataclasses import dataclass
 
@@ -12,6 +13,7 @@ from .base import Variable
 
 
 def has_pyspark() -> bool:
+    """Check if PySpark is available and has an active session."""
     try:
         pyspark_sql = importlib.import_module("pyspark.sql")
     except ModuleNotFoundError:
@@ -22,6 +24,7 @@ def has_pyspark() -> bool:
 
 
 def has_ray() -> bool:
+    """Check if Ray is available and initialized."""
     try:
         ray = importlib.import_module("ray")
     except ModuleNotFoundError:
@@ -31,7 +34,10 @@ def has_ray() -> bool:
 
 @dataclass
 class DatasetVariable(Variable):
-    """Represents a piece of data. Underlying it could be a Spark DataFrame, a Ray Dataset or a Pandas DataFrame."""
+    """Represents a piece of data.
+
+    Underlying it could be a Spark DataFrame, a Ray Dataset or a Pandas DataFrame.
+    """
 
     @classmethod
     def create(cls, value) -> "DatasetVariable":
@@ -41,6 +47,7 @@ class DatasetVariable(Variable):
 
     def _load(self):
         """Load value from variable path.
+
         Automatically find the value type based on sys modules.
         If it does not work out, please call the type specific APIs to load the value.
         """
@@ -61,6 +68,7 @@ class DatasetVariable(Variable):
 
     def save(self):
         """Save value to variable path.
+
         Automatically find the value type based on the class of the value.
         If it does not work out, please call the type specific APIs to save the value.
         """

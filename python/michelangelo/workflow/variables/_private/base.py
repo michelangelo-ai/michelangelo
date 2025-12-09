@@ -1,3 +1,4 @@
+"""Base classes for workflow variables."""
 import logging
 import os
 import uuid
@@ -13,15 +14,17 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class Variable(ABC):
     """Variable is an abstraction for an intermediate result of a workflow.
+
     Variable should describe high level concepts, such as dataset and model.
 
-    It contains metadata as a dataclass, which is visible to the workflow engine for control flow,
-    as well as subsquent tasks to pass meta information of the variable.
+    It contains metadata as a dataclass, which is visible to the workflow engine
+    for control flow, as well as subsquent tasks to pass meta information of the
+    variable.
 
-    It also contains generic methods for loading and saving a value, which is the actual data of the variable,
-    such as a Spark DataFrame or a PyTorch model.
-    Variable can invoke IO reflectively to load and save the value, which is used to avoid hard dependencies
-    on Ray or Spark.
+    It also contains generic methods for loading and saving a value, which is the
+    actual data of the variable, such as a Spark DataFrame or a PyTorch model.
+    Variable can invoke IO reflectively to load and save the value, which is used
+    to avoid hard dependencies on Ray or Spark.
     """
 
     path: str = None
@@ -29,6 +32,7 @@ class Variable(ABC):
     _io_metadata: Optional[Any] = None
 
     def __post_init__(self):
+        """Initialize transient fields after dataclass creation."""
         self._value = None  # transient
         self._saved = False  # transient
 
@@ -45,12 +49,14 @@ class Variable(ABC):
     @abstractmethod
     def save(self):
         """Automatically find the IO class to save the value.
+
         It will be called by the workflow framework by the end of each task.
         This method should be implemented by subclasses.
         """
 
     @property
     def value(self) -> Any:
+        """Get the variable value, loading it if necessary."""
         if self._value is None:
             self._load()
         return self._value
@@ -58,13 +64,16 @@ class Variable(ABC):
     @abstractmethod
     def _load(self):
         """Automatically find the IO class to load the value.
+
         Should not be called directly. Use `value` property instead.
         This method should be implemented by subclasses.
         """
 
     def _load_value_using_io(self, io_class: type):
-        """A helper method to load the value located at the variable's path using the given IO.
-        IO can be given as either as a concrete instance, or as a string representing a dot-path to the IO's class.
+        """A helper method to load the value from the variable's path using IO.
+
+        IO can be given as either as a concrete instance, or as a string
+        representing a dot-path to the IO's class.
         """
         _logger.info(f"loading value for {self.path}")
 
@@ -79,7 +88,9 @@ class Variable(ABC):
 
     def _save_value_using_io(self, io_class: type):
         """A helper method to save the value using the given IO class.
-        IO can be given as either as a concrete instance, or as a string representing a dot-path to the IO's class.
+
+        IO can be given as either as a concrete instance, or as a string
+        representing a dot-path to the IO's class.
         """
         _logger.info(f"saving value for {self.path}")
 
