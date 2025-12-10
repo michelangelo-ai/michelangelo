@@ -116,7 +116,6 @@ class CustomRawModelTest(TestCase):
             "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package_with_conflicting_imports"
         )
         model = load_custom_raw_model(model_path)
-
         mock_logger_info.assert_called_with(
             "Module uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.predict "
             "not found after appending the model package to the system path. "
