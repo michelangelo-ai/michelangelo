@@ -31,7 +31,7 @@ def main():
     """
     Main test flow:
     1. Create deployment with revision-1
-    2. Wait for deployment (will timeout in sandbox without patched status)
+    2. Wait for deployment to reach terminal state
     3. Update deployment to revision-2
     4. Wait for deployment again
     """
@@ -39,7 +39,7 @@ def main():
     create_result = test_create_deployment()
     print("Create result:", create_result)
     
-    # Test WAIT (may timeout if controller isn't updating status)
+    # Test WAIT - uncomment when testing with active deployment controller
     # wait_result = test_wait_for_deployment(create_result["model_revision_name"])
     # print("Wait result:", wait_result)
     

@@ -34,7 +34,6 @@ var Module = fx.Options(
 		NewPipelineRunServiceClient,
 		NewModelServiceClient,
 		NewDeploymentServiceClient,
-		NewRevisionServiceClient,
 		ProvidePluginRegistry,
 	),
 	workflowfx.Module,

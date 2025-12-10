@@ -122,11 +122,6 @@ func NewDeploymentServiceClient(p ClientParams) v2pb.DeploymentServiceYARPCClien
 	return v2pb.NewDeploymentServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
 }
 
-// NewRevisionServiceClient creates a RevisionService YARPC client.
-func NewRevisionServiceClient(p ClientParams) v2pb.RevisionServiceYARPCClient {
-	return v2pb.NewRevisionServiceYARPCClient(p.Dispatcher.ClientConfig(p.Config.MaAPIServiceName))
-}
-
 // extractServerName extracts the server name from an address for TLS SNI
 func extractServerName(address string) string {
 	// Extract hostname from "hostname:port" format
