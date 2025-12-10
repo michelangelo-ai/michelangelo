@@ -62,33 +62,22 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 		Name:      deploymentName,
 	}).Get(ctx, &existingDeployment)
 
-	var oldRevisionName string
-
 	if err == nil {
 		// Case 1: Deployment exists - Update path.
-		// Capture the current revision before updating so we can verify the change later.
-		if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetLatestDeploymentRevision, deployment.GetLatestDeploymentRevisionRequest{
-			Namespace:       namespace,
-			DeploymentName:  deploymentName,
-			OldRevisionName: "",
-		}).Get(ctx, &oldRevisionName); err != nil {
-			return nil, err
-		}
-
 		// Update the existing deployment with the new desired revision.
+		// For OSS, we must provide the complete existing deployment object
+		// (including metadata.resourceVersion) and only modify the desired revision.
 		updateReq := &v2pb.UpdateDeploymentRequest{
 			Deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      deploymentName,
-					Namespace: namespace,
-				},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &apipb.ResourceIdentifier{
-						Name:      modelRevisionName,
-						Namespace: namespace,
-					},
-				},
+				ObjectMeta: existingDeployment.ObjectMeta,
+				Spec:       existingDeployment.Spec,
+				Status:     existingDeployment.Status,
 			},
+		}
+		// Override only the desired revision with the new value.
+		updateReq.Deployment.Spec.DesiredRevision = &apipb.ResourceIdentifier{
+			Name:      modelRevisionName,
+			Namespace: namespace,
 		}
 		if err := workflow.ExecuteActivity(ctx, deployment.Activities.UpdateDeployment, updateReq).Get(ctx, nil); err != nil {
 			return nil, err
@@ -133,26 +122,25 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 		}
 	}
 
-	// Wait for the new deployment revision to be created and indexed.
-	retryPolicy := workflow.RetryPolicy{
-		InitialInterval:    5 * time.Second,
-		BackoffCoefficient: 1.0,
-		MaximumInterval:    5 * time.Second,
-		MaximumAttempts:    5,
-	}
-	ctx = workflow.WithRetryPolicy(ctx, retryPolicy)
+	// NOTE: Deployment revision tracking is commented out for OSS.
+	// OSS uses revision.NewNoOpManager() which disables deployment revision creation.
+	// Uncomment when revision service is enabled in OSS (see controller.go line 90).
+	//
+	// var latestRevisionName string
+	// if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetLatestDeploymentRevision,
+	// 	deployment.GetLatestDeploymentRevisionRequest{
+	// 		Namespace:       namespace,
+	// 		DeploymentName:  deploymentName,
+	// 		OldRevisionName: "",
+	// 	}).Get(ctx, &latestRevisionName); err != nil {
+	// 	return nil, err
+	// }
 
-	var latestRevisionName string
-	if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetLatestDeploymentRevision, deployment.GetLatestDeploymentRevisionRequest{
-		Namespace:       namespace,
-		DeploymentName:  deploymentName,
-		OldRevisionName: oldRevisionName,
-	}).Get(ctx, &latestRevisionName); err != nil {
-		return nil, err
-	}
-
-	result := starlark.NewDict(1)
-	result.SetKey(starlark.String("deployment_revision_name"), starlark.String(latestRevisionName))
+	// Return deployment information.
+	result := starlark.NewDict(3)
+	result.SetKey(starlark.String("deployment_name"), starlark.String(deploymentName))
+	result.SetKey(starlark.String("model_revision_name"), starlark.String(modelRevisionName))
+	// result.SetKey(starlark.String("deployment_revision_name"), starlark.String(latestRevisionName)) // Requires revision service
 	return result, nil
 }
 
@@ -160,12 +148,12 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var namespace, deploymentRevisionName string
+	var namespace, deploymentName string
 	var timeout, poll int64 = 31536000, 600 // Defaults: 1 year, 10 mins
 
 	if err := starlark.UnpackArgs("wait_for_deployment", args, kwargs,
 		"namespace", &namespace,
-		"deployment_revision_name", &deploymentRevisionName,
+		"deployment_name", &deploymentName,
 		"timeout?", &timeout,
 		"poll?", &poll,
 	); err != nil {
@@ -185,9 +173,9 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	ctx = workflow.WithRetryPolicy(ctx, retryPolicy)
 
 	var finalDeployment *v2pb.Deployment
-	if err := workflow.ExecuteActivity(ctx, deployment.Activities.SensorDeploymentRevision, deployment.SensorDeploymentRevisionRequest{
-		Namespace:    namespace,
-		RevisionName: deploymentRevisionName,
+	if err := workflow.ExecuteActivity(ctx, deployment.Activities.SensorDeployment, deployment.SensorDeploymentRequest{
+		Namespace:      namespace,
+		DeploymentName: deploymentName,
 	}).Get(ctx, &finalDeployment); err != nil {
 		return nil, err
 	}
