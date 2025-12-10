@@ -81,7 +81,8 @@ _rc_config = _load_rc_config()
 # This enables pointing the CLI to a k8s NodePort (e.g., 127.0.0.1:30009)
 ADDRESS = getenv("MACTL_ADDRESS", _rc_config.get("address", ADDRESS))
 # Allow overriding TLS usage via environment variable
-# Set to "true" to force TLS, "false" to force insecure, or leave unset for auto-detection
+# Set to "true" to force TLS, "false" to force insecure,
+# or leave unset for auto-detection
 USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lower() in (
     "true",
     "1",
@@ -91,7 +92,7 @@ USE_TLS: bool = getenv("MACTL_USE_TLS", _rc_config.get("use_tls", "false")).lowe
 if "metadata" in _rc_config:
     METADATA = list(_rc_config["metadata"].items())
 
-METADATA_STUB = METADATA + [("ttl", "600")]
+METADATA_STUB = [*METADATA, ("ttl", "600")]
 
 basicConfig(
     level=getattr(logging, getenv("LOG_LEVEL", "WARNING").upper(), WARNING),
@@ -201,7 +202,7 @@ def get_crd_name_from_yaml(yaml_path_string: str) -> str:
 
 
 def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
-    """Create service classes from a list of service names"""
+    """Create service classes from a list of service names."""
     res = {}
     # TODO: we don't have to create all CRD instances for all services
     for service in services:
@@ -214,6 +215,7 @@ def create_serivce_classes(services: list[str]) -> dict[str, CRD]:
 
 def parse_args() -> tuple[list[str], dict[str, list[str]]]:
     """Parse command line arguments.
+
     Returns a tuple of (args, kwargs).
     """
     args = []
@@ -234,13 +236,15 @@ def parse_args() -> tuple[list[str], dict[str, list[str]]]:
 
 
 def handle_args() -> tuple[str, str, dict[str, list[str]]]:
+    """(Legacy to be deprecated) Handle command line arguments."""
     args, kwargs = parse_args()
 
     # New syntax: mactl <resource> <action> [options]
     user_command_crd = args[0]
     user_command_action = args[1]
 
-    # For file-based actions, validate file parameter exists (preserving original validation)
+    # For file-based actions, validate file parameter exists
+    # (preserving original validation)
     if user_command_action in ["apply", "create", "dev-run"]:
         assert len(kwargs["file"]) == 1, f"exactly one yaml file is required! {kwargs}"
 
@@ -277,12 +281,12 @@ def print_help_available_actions(actions: list[tuple[str, str]]) -> None:
 
 
 def main(channel: Channel):
-    """Main function for mactl"""
+    """Main function for mactl."""
     _LOG.debug("Starting mactl...")
 
     # Load config and set environment variables
     if CONFIG_FILE.exists():
-        with open(CONFIG_FILE, "r") as f:
+        with open(CONFIG_FILE) as f:
             config = yaml_safe_load(f) or {}
         minio_config = config.get("minio", {})
         if not getenv("AWS_ACCESS_KEY_ID"):
@@ -307,7 +311,7 @@ def main(channel: Channel):
     )
     entity_subparsers = base_parser.add_subparsers(dest="entity", required=True)
 
-    for crd_name in crds.keys():
+    for crd_name in crds:
         entity_subparsers.add_parser(crd_name, add_help=False)
 
     # Parse only resource name, leave rest for later
@@ -411,7 +415,7 @@ def main(channel: Channel):
 
 
 def run():
-    """Entry point for mactl"""
+    """Entry point for mactl."""
     if USE_TLS:
         _LOG.info(
             "Using TLS (forced via MACTL_USE_TLS=%r) to connect to %r",

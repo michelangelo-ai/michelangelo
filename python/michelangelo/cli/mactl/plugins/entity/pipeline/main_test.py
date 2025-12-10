@@ -1,6 +1,7 @@
 """Unit tests for pipeline main plugin.
 
-Tests the apply_plugins function which configures the CRD with plugin-specific converters.
+Tests the apply_plugins function which configures the CRD with
+plugin-specific converters.
 """
 
 from unittest import TestCase

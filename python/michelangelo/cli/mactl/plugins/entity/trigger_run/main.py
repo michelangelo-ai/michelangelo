@@ -1,5 +1,6 @@
 """Trigger Run Plugin Application Module."""
 
+# ruff: noqa: I001 -- false positive
 from logging import getLogger
 from types import MethodType
 

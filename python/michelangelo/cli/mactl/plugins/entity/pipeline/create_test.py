@@ -228,7 +228,7 @@ class PipelineCreateTest(TestCase):
     def test_handle_workflow_inputs_retrieval_runtime_error_graceful_degradation(
         self, mock_get_config
     ):
-        """Test graceful degradation when registration fails with generic RuntimeError."""
+        """Graceful degradation when registration fails with generic RuntimeError."""
         repo_root = Path("/fake/repo")
         config_file_relative_path = "pipelines/pipeline.yaml"
         project = "test-project"

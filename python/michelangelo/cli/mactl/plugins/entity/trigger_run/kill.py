@@ -1,3 +1,5 @@
+"""TriggerRun `kill` function plugin module."""
+
 from argparse import ArgumentParser
 from inspect import Parameter, Signature
 from logging import getLogger

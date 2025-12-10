@@ -1,3 +1,5 @@
+"""Pipeline `dev_run` function plugin module."""
+
 from argparse import ArgumentParser
 from inspect import Parameter, Signature
 from logging import getLogger

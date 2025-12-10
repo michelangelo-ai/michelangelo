@@ -1,3 +1,5 @@
+"""Pipeline `apply` function plugin module."""
+
 from copy import deepcopy
 from logging import getLogger
 from pathlib import Path
@@ -39,7 +41,10 @@ def convert_crd_metadata_pipeline_apply(
     # "path": str(yaml_path.relative_to(PWD)),
     # TODO: retrieve path from Project.
     res["spec"]["manifest"] = {
-        "path": "platforms/uberai/michelangelo/ma_integration_test/pipelines/boston_housing/keras_workflow/pipeline.yaml",
+        "path": (
+            "platforms/uberai/michelangelo/ma_integration_test/pipelines"
+            "/boston_housing/keras_workflow/pipeline.yaml"
+        ),
         "revision_id": repo.head.commit.hexsha,
         "type": "PIPELINE_MANIFEST_TYPE_YAML",
     }

@@ -1,3 +1,5 @@
+"""Pipeline entity plugin module."""
+
 from logging import getLogger
 from types import MethodType
 
@@ -27,6 +29,7 @@ _LOG = getLogger(__name__)
 
 def apply_plugins(crd: CRD, channel: Channel):
     """Apply plugin entity function signatures to the CRD.
+
     It adds the necessary function signatures and methods for user commands
     """
     _LOG.info("Applying plugin entity to crd: %r", crd)
