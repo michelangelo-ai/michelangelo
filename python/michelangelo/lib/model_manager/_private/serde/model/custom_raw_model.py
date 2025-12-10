@@ -1,17 +1,18 @@
 """The Custom Raw Model Loader."""
 
 import ast
-import os
-import sys
-import logging
 import importlib
-import tempfile
+import logging
+import os
 import shutil
+import sys
+import tempfile
 import uuid
-from michelangelo.lib.model_manager.interface.custom_model import Model
+
 from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
     load_custom_model,
 )
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 _logger = logging.getLogger(__name__)
 

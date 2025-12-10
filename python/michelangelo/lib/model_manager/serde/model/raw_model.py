@@ -1,16 +1,17 @@
-import torch
 from typing import Union
-from michelangelo.lib.model_manager.interface.custom_model import Model
-from michelangelo.lib.model_manager.constants import RawModelType
+
+import torch
+
 from michelangelo.lib.model_manager._private.serde.model import (
     get_raw_model_type,
     load_custom_raw_model,
 )
+from michelangelo.lib.model_manager.constants import RawModelType
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 def load_raw_model(model_path: str) -> Union[Model, torch.nn.Module]:
-    """
-    Load the raw model from the model package
+    """Load the raw model from the model package
 
     Args:
         model_path: The model package path

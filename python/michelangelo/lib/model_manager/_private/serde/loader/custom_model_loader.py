@@ -1,13 +1,14 @@
-import sys
 import itertools
+import sys
 import traceback
-from michelangelo.lib.model_manager.interface.custom_model import Model
+
 from michelangelo.lib.model_manager._private.utils.pickle_utils import (
     walk_pickle_definitions_in_dir,
 )
 from michelangelo.lib.model_manager._private.utils.reflection_utils import (
     find_attr_from_dir,
 )
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 def load_custom_model(model_bin_path: str, ModelClass: type, defs_path: str) -> Model:
@@ -26,8 +27,8 @@ def load_custom_model(model_bin_path: str, ModelClass: type, defs_path: str) -> 
 
     def match(
         module_def: str,
-        attr_name: str,  # noqa: ARG001
-        file_path: str,  # noqa: ARG001
+        attr_name: str,
+        file_path: str,
     ) -> bool:
         return module_def == "__main__"
 

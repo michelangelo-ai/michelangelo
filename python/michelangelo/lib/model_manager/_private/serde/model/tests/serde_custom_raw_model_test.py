@@ -1,21 +1,22 @@
 import os
-import sys
 import pickle
+import sys
 import tempfile
-import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
+
+import numpy as np
+
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
 from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import (
     A,
     func,
 )
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
     Predict,
 )
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
 
 class CustomRawModelTest(TestCase):
@@ -23,7 +24,6 @@ class CustomRawModelTest(TestCase):
 
     def setUp(self):
         """Set up the test environment."""
-
         self.sys_path = sys.path.copy()
         self.main_dict = sys.modules["__main__"].__dict__.copy()
         self.model_schema = ModelSchema(
@@ -46,7 +46,6 @@ class CustomRawModelTest(TestCase):
 
     def tearDown(self):
         """Tear down the test environment."""
-
         sys.path = self.sys_path
         for key in list(sys.modules["__main__"].__dict__.keys()):
             if key not in self.main_dict:

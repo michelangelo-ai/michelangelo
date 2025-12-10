@@ -1,13 +1,12 @@
 import os
-import sys
 import pickle
+import sys
 import tempfile
-import numpy as np
 from unittest import TestCase
 from unittest.mock import patch
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
+
+import numpy as np
+
 from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
     load_custom_model,
 )
@@ -16,9 +15,11 @@ from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.p
     A,
     func,
 )
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
     Predict,
 )
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
 
 class CustomModelLoaderTest(TestCase):

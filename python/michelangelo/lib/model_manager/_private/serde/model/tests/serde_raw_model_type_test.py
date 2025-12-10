@@ -3,8 +3,9 @@
 import os
 import tempfile
 from unittest import TestCase
-from michelangelo.lib.model_manager.constants import RawModelType
+
 from michelangelo.lib.model_manager._private.serde.model import get_raw_model_type
+from michelangelo.lib.model_manager.constants import RawModelType
 
 
 def create_model_package(model_path: str, raw_model_type: str):

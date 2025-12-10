@@ -1,17 +1,16 @@
 import os
 import tempfile
-import numpy as np
-import torch
-import yaml
 from unittest import TestCase
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
-from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.model_manager.serde.model import load_raw_model
+
+import numpy as np
+
 from michelangelo.lib.model_manager.constants import RawModelType
+from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
     Predict,
 )
+from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+from michelangelo.lib.model_manager.serde.model import load_raw_model
 
 
 class RawModelTest(TestCase):
