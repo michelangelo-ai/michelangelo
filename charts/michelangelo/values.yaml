@@ -108,7 +108,7 @@ controllermgr:
   replicaCount: 1
   image:
     repository: controllermgr
-    tag: main
+    tag: ghosharitra-deploy-gke-via-helm-charts
     pullPolicy: IfNotPresent
   service:
     metrics:
