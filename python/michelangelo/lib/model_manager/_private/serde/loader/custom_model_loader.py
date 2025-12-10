@@ -13,9 +13,7 @@ from michelangelo.lib.model_manager._private.utils.reflection_utils import (
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
-def load_custom_model(
-    model_bin_path: str, model_class: type, defs_path: str
-) -> Model:
+def load_custom_model(model_bin_path: str, model_class: type, defs_path: str) -> Model:
     """Load the custom model binary into an instance of the custom model class.
 
     Args:
