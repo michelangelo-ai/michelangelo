@@ -1,9 +1,9 @@
 from __future__ import annotations
 import os
 import numpy as np
-import uber.ai.michelangelo.sdk.model_manager._private.serde.model.dummy_module as dummy_module
-from uber.ai.michelangelo.sdk.model_manager.interface.custom_model import Model
-from uber.ai.michelangelo.sdk.model_manager._private.serde.model.raw_model_type import dummy_type
+import michelangelo.lib.model_manager._private.serde.model.dummy_module as dummy_module
+from michelangelo.lib.model_manager.interface.custom_model import Model
+from michelangelo.lib.model_manager._private.serde.model.raw_model_type import dummy_type
 from uber.ai.michelangelo.sdk.model_manager._private.serde.model.tests.custom_raw_model_test import foo
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.package import fn1
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.folder.fn2 import fn2
