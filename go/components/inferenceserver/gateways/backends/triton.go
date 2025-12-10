@@ -25,6 +25,8 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
+// TODO(#689): ghosharitra: refactor this package to use httproute.go instead
+
 // Triton Infrastructure Management
 type tritonBackend struct {
 	kubeClient             client.Client
@@ -305,7 +307,7 @@ func (b *tritonBackend) LoadModel(ctx context.Context, logger *zap.Logger, reque
 	logger.Info("Loading Triton model explicitly", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// Use the service endpoint configured in the backend
-	loadURL := fmt.Sprintf("%s/%s/v2/repository/models/%s/load", b.serviceEndpoint, request.InferenceServer, request.ModelName)
+	loadURL := fmt.Sprintf("%s/%s/repository/models/%s/load", b.serviceEndpoint, request.InferenceServer, request.ModelName)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -372,7 +374,7 @@ func (b *tritonBackend) LoadModel(ctx context.Context, logger *zap.Logger, reque
 
 func (b *tritonBackend) UnloadModel(ctx context.Context, logger *zap.Logger, request gateways.UnloadModelRequest) error {
 	// Use the service endpoint configured in the backend
-	unloadURL := fmt.Sprintf("%s/%s/v2/repository/models/%s/unload", b.serviceEndpoint, request.InferenceServer, request.ModelName)
+	unloadURL := fmt.Sprintf("%s/%s/repository/models/%s/unload", b.serviceEndpoint, request.InferenceServer, request.ModelName)
 
 	logger.Info("Calling Triton unload API", zap.String("url", unloadURL), zap.String("model", request.ModelName))
 
@@ -425,7 +427,7 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger
 	logger.Info("Checking Triton model status", zap.String("model", request.ModelName), zap.String("server", request.InferenceServer))
 
 	// Use the service endpoint configured in the backend
-	readyURL := fmt.Sprintf("%s/%s/v2/models/%s/ready", b.serviceEndpoint, request.InferenceServer, request.ModelName)
+	readyURL := fmt.Sprintf("%s/%s/models/%s/ready", b.serviceEndpoint, request.InferenceServer, request.ModelName)
 
 	// Create HTTP client with timeout
 	client := &http.Client{
@@ -763,7 +765,7 @@ func (b *tritonBackend) createInferenceServerHTTPRoute(ctx context.Context, logg
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
+										"replacePrefixMatch": "/v2",
 									},
 								},
 							},
@@ -854,7 +856,7 @@ func (b *tritonBackend) updateHTTPRoute(ctx context.Context, logger *zap.Logger,
 								"urlRewrite": map[string]interface{}{
 									"path": map[string]interface{}{
 										"type":               "ReplacePrefixMatch",
-										"replacePrefixMatch": "/",
+										"replacePrefixMatch": "/v2",
 									},
 								},
 							},

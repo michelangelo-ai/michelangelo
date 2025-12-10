@@ -1196,13 +1196,13 @@ def _create_inference_demo_crs():
         "🌐 Deployment-agnostic endpoint:\
             Use the following URL to test the inference server"
     )
-    print("  http://localhost:8080/inference-server-bert-cola/v2")
+    print("  http://localhost:8080/inference-server-example")
     print(
         "  For example,\
             to test inference of a model deployed to the above inference server:\n"
     )
     print(
-        "  curl -X POST http://localhost:8080/inference-server-bert-cola/v2/models/<model-name>/infer \\"  # noqa: E501
+        "  curl -X POST http://localhost:8080/inference-server-example/models/<model-name>/infer \\"  # noqa: E501
     )
     print('  -H "Content-Type: application/json" \\')
     print("  -d '{")
