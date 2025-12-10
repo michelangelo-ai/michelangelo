@@ -105,6 +105,7 @@ CONFIG_FILE = PWD / "config.yaml"
 
 _LOG.info(f"Config: ADDRESS={ADDRESS}, USE_TLS={USE_TLS}, METADATA={METADATA}")
 
+
 def camel_to_snake(name: str) -> str:
     """Converts CamelCase to snake_case (e.g., 'DevRun' -> 'dev_run')."""
     res = re.sub("(.)([A-Z][a-z]+)", r"\1_\2", name)

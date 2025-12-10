@@ -28,8 +28,7 @@ _LOG = getLogger(__name__)
 
 
 def add_function_signature(crd: CRD) -> None:
-    """Add function signature for pipeline run command.
-    """
+    """Add function signature for pipeline run command."""
     inject_func_signature(
         crd,
         "run",
@@ -80,8 +79,7 @@ def add_function_signature(crd: CRD) -> None:
 
 
 def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
-    """Generate run function for pipeline CRD.
-    """
+    """Generate run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
 
     pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
@@ -278,8 +276,7 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
 
 
 def generate_pipeline_run_name() -> str:
-    """Generates a pipeline-run name.
-    """
+    """Generates a pipeline-run name."""
     timestamp = int(time.time())
     uuid8 = str(uuid.uuid4())[:8]
     return f"run-{timestamp}-{uuid8}"

@@ -140,8 +140,12 @@ class PipelineRunTest(TestCase):
 
         self.assertIn("--name is required", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object"
+    )
     def test_convert_crd_metadata_pipeline_run_basic(
         self, mock_generate_obj, mock_generate_name
     ):
@@ -176,8 +180,12 @@ class PipelineRunTest(TestCase):
             resume_from=None,
         )
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object"
+    )
     def test_convert_crd_metadata_pipeline_run_with_resume_from(
         self, mock_generate_obj, mock_generate_name
     ):

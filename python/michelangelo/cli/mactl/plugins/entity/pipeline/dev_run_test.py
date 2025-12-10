@@ -58,7 +58,9 @@ class PipelineDevRunTest(TestCase):
         self.assertIn("Invalid environment variable format", str(context.exception))
         self.assertIn("expected format is <ENV_VAR>=<VALUE>", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
@@ -102,7 +104,9 @@ class PipelineDevRunTest(TestCase):
             "custom-image:v1.0",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
@@ -127,7 +131,9 @@ class PipelineDevRunTest(TestCase):
             resume_from="old-run:step1",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
@@ -146,7 +152,9 @@ class PipelineDevRunTest(TestCase):
 
         self.assertNotIn("input", result["spec"])
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
@@ -176,7 +184,9 @@ class PipelineDevRunTest(TestCase):
             "s3://bucket/path/to/file-sync.tar.gz",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
@@ -220,7 +230,9 @@ class PipelineDevRunTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.DefaultFileSync")
     def test_convert_crd_metadata_with_file_sync(
         self,
@@ -287,7 +299,9 @@ class PipelineDevRunTest(TestCase):
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     def test_convert_crd_metadata_without_file_sync(
         self,
         mock_generate_run_name,
