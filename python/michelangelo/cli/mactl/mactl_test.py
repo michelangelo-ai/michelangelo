@@ -167,9 +167,8 @@ class TLSConnectionTest(TestCase):
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
     @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
-    @patch("builtins.print")
     def test_main_execution_with_tls_enabled(
-        self, mock_print, mock_ssl_creds, mock_secure_channel, mock_main
+        self, mock_ssl_creds, mock_secure_channel, mock_main
     ):
         """Test main execution path when TLS is enabled."""
         # Setup mocks
@@ -194,22 +193,17 @@ class TLSConnectionTest(TestCase):
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
                     mactl.main(channel)
             else:
-                with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                self.fail("TLS was expected to be enabled in this test.")
 
         # Verify TLS connection setup
         mock_ssl_creds.assert_called_once()
         mock_secure_channel.assert_called_once_with("test-server:443", mock_credentials)
         mock_main.assert_called_once_with(mock_channel)
-        mock_print.assert_called_once_with(
-            "Using TLS (forced via MACTL_USE_TLS=true) to connect to test-server:443"
-        )
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
-    @patch("builtins.print")
     def test_main_execution_with_tls_disabled(
-        self, mock_print, mock_insecure_channel, mock_main
+        self, mock_insecure_channel, mock_main
     ):
         """Test main execution path when TLS is disabled."""
         # Setup mocks
@@ -227,9 +221,7 @@ class TLSConnectionTest(TestCase):
 
             should_use_tls = bool(mactl.USE_TLS == "true")
             if should_use_tls:
-                credentials = mactl.ssl_channel_credentials()
-                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                self.fail("TLS was expected to be not enabled in this test.")
             else:
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
                     mactl.main(channel)
@@ -237,10 +229,6 @@ class TLSConnectionTest(TestCase):
         # Verify insecure connection setup
         mock_insecure_channel.assert_called_once_with("localhost:5435")
         mock_main.assert_called_once_with(mock_channel)
-        mock_print.assert_called_once_with(
-            "Using insecure connection (forced via MACTL_USE_TLS=false)"
-            " to connect to localhost:5435"
-        )
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
