@@ -202,9 +202,7 @@ class TLSConnectionTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
-    def test_main_execution_with_tls_disabled(
-        self, mock_insecure_channel, mock_main
-    ):
+    def test_main_execution_with_tls_disabled(self, mock_insecure_channel, mock_main):
         """Test main execution path when TLS is disabled."""
         # Setup mocks
         mock_channel = MagicMock()
