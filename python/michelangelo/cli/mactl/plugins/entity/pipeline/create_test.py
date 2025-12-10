@@ -3,6 +3,7 @@
 Tests the convert_crd_metadata_pipeline_create and related functions.
 """
 
+import json
 from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
@@ -11,6 +12,7 @@ from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline_create,
+    get_pipeline_config_and_tar,
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
 )
@@ -245,3 +247,208 @@ class PipelineCreateTest(TestCase):
         self.assertIsNone(result[0])
         self.assertEqual(result[1], "")
         self.assertEqual(result[2], "")
+
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
+    )
+    def test_get_pipeline_config_and_tar_subprocess_exception(
+        self, mock_run_subprocess
+    ):
+        """Test get_pipeline_config_and_tar when subprocess raises Exception (line 111).
+
+        TODO: This test is for coverage only and should be revised later.
+        """
+        repo_root = Path("/fake/repo")
+        config_file_relative_path = "pipelines/pipeline.yaml"
+        project = "test-project"
+        pipeline = "test-pipeline"
+
+        # Create a fake config file
+        with patch("pathlib.Path.exists") as mock_exists:
+            mock_exists.return_value = True
+
+            # Mock subprocess to raise a generic Exception
+            mock_run_subprocess.side_effect = Exception("Subprocess execution failed")
+
+            with self.assertRaises(RuntimeError) as context:
+                get_pipeline_config_and_tar(
+                    repo_root,
+                    config_file_relative_path,
+                    "",
+                    project,
+                    pipeline,
+                )
+
+            self.assertIn("Error running pipeline registration", str(context.exception))
+
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
+    )
+    def test_get_pipeline_config_and_tar_file_not_found_with_fallback(
+        self, mock_run_subprocess, mock_read_outputs
+    ):
+        """Test tar path FileNotFoundError with fallback to remote_path (line 127).
+
+        TODO: This test is for coverage only and should be revised later.
+        """
+        repo_root = Path("/fake/repo")
+        config_file_relative_path = "pipelines/pipeline.yaml"
+        project = "test-project"
+        pipeline = "test-pipeline"
+
+        with (
+            patch("pathlib.Path.exists") as mock_exists,
+            patch("pathlib.Path.read_text") as mock_read_text,
+            patch("builtins.open", create=True),
+            patch("json.loads") as mock_json_loads,
+        ):
+            mock_exists.return_value = True
+
+            # Mock successful subprocess
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            mock_run_subprocess.return_value = mock_result
+
+            # Mock read_subprocess_outputs to return success with remote_path
+            mock_read_outputs.return_value = (True, "Success", "s3://remote/path.tar")
+
+            # Mock tar path file read to raise FileNotFoundError
+            # But input file read succeeds
+            def read_text_side_effect():
+                # First call is for tar_path_file (raises error)
+                # Second call is for input_file_path (succeeds)
+                # Third call is for function_name_file (succeeds)
+                if not hasattr(read_text_side_effect, "call_count"):
+                    read_text_side_effect.call_count = 0
+                read_text_side_effect.call_count += 1
+
+                if read_text_side_effect.call_count == 1:
+                    raise FileNotFoundError("uniflow_tar_path.txt not found")
+                elif read_text_side_effect.call_count == 2:
+                    return '{"key": "value"}'
+                else:
+                    return "workflow_function"
+
+            mock_read_text.side_effect = read_text_side_effect
+            mock_json_loads.return_value = {"key": "value"}
+
+            result = get_pipeline_config_and_tar(
+                repo_root, config_file_relative_path, "", project, pipeline
+            )
+
+            # Should use remote_path from status file as fallback
+            self.assertEqual(result[1], "s3://remote/path.tar")
+
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
+    )
+    def test_get_pipeline_config_and_tar_input_file_not_found(
+        self, mock_run_subprocess, mock_read_outputs
+    ):
+        """Test input file FileNotFoundError (lines 142-143).
+
+        TODO: This test is for coverage only and should be revised later.
+        """
+        repo_root = Path("/fake/repo")
+        config_file_relative_path = "pipelines/pipeline.yaml"
+        project = "test-project"
+        pipeline = "test-pipeline"
+
+        with (
+            patch("pathlib.Path.exists") as mock_exists,
+            patch("pathlib.Path.read_text") as mock_read_text,
+        ):
+            mock_exists.return_value = True
+
+            # Mock successful subprocess
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            mock_run_subprocess.return_value = mock_result
+
+            # Mock read_subprocess_outputs
+            mock_read_outputs.return_value = (True, "Success", "s3://remote/path.tar")
+
+            # Mock read_text to succeed for tar file but fail for input file
+            def read_text_side_effect():
+                if not hasattr(read_text_side_effect, "call_count"):
+                    read_text_side_effect.call_count = 0
+                read_text_side_effect.call_count += 1
+
+                if read_text_side_effect.call_count == 1:
+                    return "s3://path/to/tar"
+                else:
+                    raise FileNotFoundError("uniflow_input.txt not found")
+
+            mock_read_text.side_effect = read_text_side_effect
+
+            with self.assertRaises(RuntimeError) as context:
+                get_pipeline_config_and_tar(
+                    repo_root, config_file_relative_path, "", project, pipeline
+                )
+
+            self.assertIn("Could not read uniflow input", str(context.exception))
+
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.read_subprocess_outputs"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.run_subprocess_registration"
+    )
+    def test_get_pipeline_config_and_tar_json_decode_error(
+        self, mock_run_subprocess, mock_read_outputs
+    ):
+        """Test JSON parsing error (line 147).
+
+        TODO: This test is for coverage only and should be revised later.
+        """
+        repo_root = Path("/fake/repo")
+        config_file_relative_path = "pipelines/pipeline.yaml"
+        project = "test-project"
+        pipeline = "test-pipeline"
+
+        with (
+            patch("pathlib.Path.exists") as mock_exists,
+            patch("pathlib.Path.read_text") as mock_read_text,
+            patch("json.loads") as mock_json_loads,
+        ):
+            mock_exists.return_value = True
+
+            # Mock successful subprocess
+            mock_result = Mock()
+            mock_result.returncode = 0
+            mock_result.stderr = ""
+            mock_run_subprocess.return_value = mock_result
+
+            # Mock read_subprocess_outputs
+            mock_read_outputs.return_value = (True, "Success", "s3://remote/path.tar")
+
+            # Mock read_text to succeed for both tar and input files
+            def read_text_side_effect():
+                if not hasattr(read_text_side_effect, "call_count"):
+                    read_text_side_effect.call_count = 0
+                read_text_side_effect.call_count += 1
+
+                if read_text_side_effect.call_count == 1:
+                    return "s3://path/to/tar"
+                else:
+                    return "invalid json {{"
+
+            mock_read_text.side_effect = read_text_side_effect
+            mock_json_loads.side_effect = json.JSONDecodeError(
+                "Invalid JSON", "invalid json {{", 0
+            )
+
+            with self.assertRaises(RuntimeError) as context:
+                get_pipeline_config_and_tar(
+                    repo_root, config_file_relative_path, "", project, pipeline
+                )
+
+            self.assertIn("Error parsing uniflow input JSON", str(context.exception))
