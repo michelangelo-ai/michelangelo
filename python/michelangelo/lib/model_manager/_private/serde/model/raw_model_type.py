@@ -8,7 +8,7 @@ from michelangelo.lib.model_manager.constants import RawModelType
 
 
 def get_raw_model_type(model_path: str) -> str:
-    """Get the raw model type from the model package
+    """Get the raw model type from the model package.
 
     Args:
         model_path: The model package path
@@ -38,7 +38,7 @@ def get_raw_model_type(model_path: str) -> str:
 
 
 def get_supported_raw_model_types() -> set[str]:
-    """Get the supported raw model types
+    """Get the supported raw model types.
 
     Returns:
         The supported raw model types

@@ -11,7 +11,7 @@ from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 def load_raw_model(model_path: str) -> Union[Model, torch.nn.Module]:
-    """Load the raw model from the model package
+    """Load the raw model from the model package.
 
     Args:
         model_path: The model package path
