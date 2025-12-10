@@ -22,8 +22,8 @@ RUN apt-get update && apt-get install -y \
     zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Set Python version (3.11 required for transformers, scikit-learn, etc.)
-ENV PYTHON_VERSION=3.11.9
+# Set Python version
+ENV PYTHON_VERSION=3.9.18
 
 # Download and install Python from source
 RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tgz && \
@@ -35,9 +35,9 @@ RUN wget https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSIO
     cd .. && \
     rm -rf Python-$PYTHON_VERSION*
 
-# Ensure python3.11 is the default
-RUN ln -sf /usr/local/bin/python3.11 /usr/bin/python3 && \
-    ln -sf /usr/local/bin/python3.11 /usr/bin/python
+# Ensure python3.9 is the default
+RUN ln -sf /usr/local/bin/python3.9 /usr/bin/python3 && \
+    ln -sf /usr/local/bin/python3.9 /usr/bin/python
 
 # Install pip and Poetry
 RUN python --version
@@ -80,13 +80,8 @@ RUN mkdir -p ${SPARK_HOME}/conf && \
 # Install OpenJDK 11 (multi-arch compatible and open-source)
 RUN apt-get update && apt-get install -y openjdk-11-jdk
 
-# Set JAVA_HOME dynamically based on architecture and update PATH
-RUN ARCH=$(dpkg --print-architecture) && \
-    echo "Architecture: $ARCH" && \
-    export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH} && \
-    echo "export JAVA_HOME=/usr/lib/jvm/java-11-openjdk-${ARCH}" >> /etc/environment
-RUN echo "JAVA_HOME=/usr/lib/jvm/java-11-openjdk-$(dpkg --print-architecture)" >> /etc/environment
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+# Set JAVA_HOME and update PATH
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-arm64
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 
 # Set working directory
@@ -100,12 +95,8 @@ COPY . .
 # Install python dependencies
 RUN ls -alF ./
 
-# RUN poetry config virtualenvs.create false
-# RUN poetry lock
-# RUN poetry install -E example
 RUN poetry config virtualenvs.create false
-RUN rm -f poetry.lock
-RUN poetry install -E example --no-root
+RUN poetry install -E example
 
 # Activate Poetry's virtual environment by default
 ENV PATH="/app/.venv/bin:$PATH"

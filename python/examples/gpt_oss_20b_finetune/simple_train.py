@@ -65,7 +65,7 @@ def log_checkpoint_to_mlflow(checkpoint_path: str, run_id: str) -> str:
 
 @uniflow.task(
     config=RayTask(
-        head_cpu=1,
+        head_cpu=2,
         head_memory="8Gi",
         worker_cpu=1,
         worker_memory="4Gi",
