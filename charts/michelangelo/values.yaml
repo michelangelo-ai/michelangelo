@@ -27,15 +27,6 @@ components:
     enabled: true
   controllermgr:
     enabled: true
-  worker:
-    enabled: true
-  ui:
-    enabled: true
-
-# Workflow engine selection
-workflow:
-  # Options: cadence, temporal
-  engine: cadence
 
 # Storage configuration
 storage:
@@ -46,19 +37,17 @@ storage:
   # Object storage configuration
   s3:
     # For local: use MinIO; for GCP: use GCS; for AWS: use S3
-    type: minio  # Options: minio, gcs, s3
-    endpoint: "minio:9091"
+    type: gcs  # Options: gcs, s3
+    endpoint: "storage.googleapis.com"
     region: us-east-1
-    accessKeyId: minioadmin
-    secretAccessKey: minioadmin
-    # Buckets to create (mirrors MinIO setup)
+    # Buckets to create
     buckets:
       - default
       - deploy-models
       - log-viewer
       - logs
 
-# MySQL database configuration
+# MySQL database configuration (required for Cadence)
 mysql:
   enabled: true
   image: mysql:8.0
@@ -72,65 +61,29 @@ mysql:
     size: 10Gi
   resources:
     requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
       cpu: 500m
       memory: 1Gi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
 
-# MinIO configuration (for local/testing)
-minio:
-  enabled: true
-  image: quay.io/minio/minio:RELEASE.2024-10-13T13-34-11Z
-  service:
-    api:
-      port: 9091
-      nodePort: 30007
-    console:
-      port: 9090
-      nodePort: 30008
-  persistence:
-    enabled: true
-    size: 50Gi
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-
-# Cadence workflow engine
+# Cadence workflow engine (required for controllermgr)
 cadence:
   enabled: true
   image: ubercadence/server:v1.2.14-auto-setup
-  webImage: ubercadence/web:v3.35.6
   domain: default
   service:
     grpc:
       port: 7833
-      nodePort: 30002
     tchannel:
       port: 7933
-      nodePort: 30003
-    web:
-      port: 8088
-      nodePort: 30004
   resources:
     requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
       cpu: 500m
       memory: 1Gi
-    limits:
-      cpu: 2000m
-      memory: 4Gi
-
-# Temporal workflow engine (alternative to Cadence)
-temporal:
-  enabled: false
-  # Temporal installed via official Helm chart
-  chart:
-    repository: https://go.temporal.io/helm-charts
-    version: latest
 
 # API Server configuration
 apiserver:
@@ -155,7 +108,7 @@ controllermgr:
   replicaCount: 1
   image:
     repository: controllermgr
-    tag: ghosharitra-update-sandbox-for-inference
+    tag: main
     pullPolicy: IfNotPresent
   service:
     metrics:
@@ -177,94 +130,6 @@ controllermgr:
     limits:
       cpu: 2000m
       memory: 4Gi
-
-# Worker configuration
-worker:
-  replicaCount: 1
-  # Enable GPU tolerations for Ray clusters (set to true for GKE with GPU taints)
-  enableGpuTolerations: false
-  image:
-    repository: worker
-    pullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 1000m
-      memory: 2Gi
-    limits:
-      cpu: 4000m
-      memory: 8Gi
-
-# UI configuration
-ui:
-  enabled: true
-  replicaCount: 1
-  image:
-    repository: ui
-    pullPolicy: IfNotPresent
-  service:
-    type: ClusterIP
-    port: 8090
-    nodePort: 30011
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 1Gi
-
-# Envoy proxy configuration
-envoy:
-  enabled: true
-  image: envoyproxy/envoy:v1.32.2
-  service:
-    type: ClusterIP
-    port: 8081
-    nodePort: 30010
-  resources:
-    requests:
-      cpu: 200m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 512Mi
-
-# Prometheus monitoring
-prometheus:
-  enabled: true
-  image: prom/prometheus:v3.0.1
-  service:
-    port: 9092
-    nodePort: 30015
-  persistence:
-    enabled: true
-    size: 10Gi
-  resources:
-    requests:
-      cpu: 500m
-      memory: 1Gi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-
-# Grafana monitoring
-grafana:
-  enabled: true
-  image: grafana/grafana:11.3.1
-  service:
-    port: 3000
-    nodePort: 30012
-  adminPassword: admin
-  persistence:
-    enabled: true
-    size: 5Gi
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
 
 # Inference server configuration
 inference:
@@ -293,42 +158,11 @@ gateway:
       repository: https://istio-release.storage.googleapis.com/charts
       version: latest
 
-# KubeRay operator
-kuberay:
-  enabled: true
-  chart:
-    repository: https://ray-project.github.io/kuberay-helm
-    version: 1.4.2
-  namespace: ray-system
-
-# Spark operator
-spark:
-  enabled: true
-  chart:
-    repository: https://kubeflow.github.io/spark-operator
-    version: latest
-  namespace: spark-operator
-
-# MLflow (experimental)
-mlflow:
-  enabled: false
-  image: ghcr.io/mlflow/mlflow:v2.18.0
-  service:
-    port: 5001
-    nodePort: 30013
-  resources:
-    requests:
-      cpu: 200m
-      memory: 512Mi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-
 # Service Account configuration
 serviceAccount:
   create: true
   annotations: {}
-  name: ""
+  name: "michelangelo"
 
 # RBAC configuration
 rbac:
@@ -345,4 +179,3 @@ gpuTolerations: []
 
 # Affinity for all pods
 affinity: {}
-

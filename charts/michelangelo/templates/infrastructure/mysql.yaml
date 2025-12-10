@@ -36,6 +36,10 @@ spec:
       labels:
         app: mysql
     spec:
+      {{- with .Values.gpuTolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name: mysql
         image: {{ .Values.mysql.image }}

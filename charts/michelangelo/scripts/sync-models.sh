@@ -55,6 +55,43 @@ sync_from_storage() {
   fi
 }
 
+# Validate Triton model directory structure:
+# model-name/
+#   config.pbtxt (optional but recommended)
+#   <version>/        (at least one numeric version directory)
+#     model.pt (or other model file)
+validate_model_structure() {
+  local dir=$1
+  
+  # Check if directory exists
+  if [ ! -d "$dir" ]; then
+    return 1
+  fi
+  
+  # Check for at least one version directory (numeric name like 1, 2, etc.)
+  local version_dirs=$(find "$dir" -maxdepth 1 -type d -regex '.*/[0-9]+' 2>/dev/null)
+  if [ -z "$version_dirs" ]; then
+    echo "  Invalid: No version directories found"
+    return 1
+  fi
+  
+  # Check each version directory has a valid model file
+  for version_dir in $version_dirs; do
+    # Check for common model file types
+    if [ -f "$version_dir/model.pt" ] || \
+       [ -f "$version_dir/model.onnx" ] || \
+       [ -f "$version_dir/model.plan" ] || \
+       [ -f "$version_dir/model.savedmodel" ] || \
+       [ -d "$version_dir/model.savedmodel" ]; then
+      # Found valid model file
+      return 0
+    fi
+  done
+  
+  echo "  Invalid: No model file found in version directories"
+  return 1
+}
+
 configure_storage
 
 # Read inference servers list from mounted ConfigMap
@@ -80,11 +117,13 @@ load_model() {
   echo "Loading model $model_name in Triton at $triton_service"
   response=$(curl -s -w "\n%{http_code}" -X POST "http://${triton_service}:80/v2/repository/models/$model_name/load" -H "Content-Type: application/json" -d '{}')
   http_code=$(echo "$response" | tail -n1)
+  body=$(echo "$response" | sed '$d')
   
   if [ "$http_code" -eq 200 ]; then
-    echo "Model $model_name loaded successfully"
+    echo "✓ Model $model_name loaded successfully"
   else
-    echo "Failed to load model $model_name (HTTP $http_code)"
+    echo "✗ Failed to load model $model_name (HTTP $http_code)"
+    echo "Response: $body"
   fi
 }
 
@@ -94,6 +133,11 @@ unload_model() {
   local model_name=$2
   echo "Unloading model $model_name from Triton at $triton_service"
   curl -s -X POST "http://${triton_service}:80/v2/repository/models/$model_name/unload" -H "Content-Type: application/json" -d '{}'
+  if [ $? -eq 0 ]; then
+    echo "✓ Model $model_name unloaded successfully"
+  else
+    echo "✗ Failed to unload model $model_name"
+  fi
 }
 
 # Main sync loop
@@ -114,27 +158,33 @@ while true; do
     
     triton_service="${INFERENCE_SERVER}-inference-service"
     
+    echo "Checking Triton server at http://${triton_service}:80/v2/health/ready"
+    
     if ! curl -s -f "http://${triton_service}:80/v2/health/ready" > /dev/null 2>&1; then
       echo "Triton server $triton_service not ready yet, skipping"
+      echo "This is normal if Triton is still starting up."
       continue
     fi
-    # TODO: remove this debug
-    echo "DEBUG: Triton server $triton_service ready is ready for serving models"
+    echo "✓ Triton server $triton_service is ready"
     
     CONFIG_FILE="/config/${INFERENCE_SERVER}/model-list.json"
     if [ -f "$CONFIG_FILE" ]; then
       cp "$CONFIG_FILE" /tmp/model-list.json
     else
+      echo "No config file found at $CONFIG_FILE, using empty config"
       echo "[]" > /tmp/model-list.json
     fi
+    
+    echo "ConfigMap contents for $INFERENCE_SERVER:"
+    cat /tmp/model-list.json | jq '.' 2>/dev/null || cat /tmp/model-list.json
     
     DESIRED_MODELS=$(jq -r '.[].name' /tmp/model-list.json 2>/dev/null | grep -v '^$' | sort -u || echo "")
     LOADED_MODELS=$(get_loaded_models "$triton_service")
     
-    # TODO: remove this debug
-    echo "DEBUG: Desired models: $DESIRED_MODELS"
-    echo "DEBUG: Loaded models: $LOADED_MODELS"
+    echo "Active models from ConfigMap: $DESIRED_MODELS"
+    echo "Currently loaded models in Triton: $LOADED_MODELS"
     
+    # Sync models from storage
     for desired_model in $DESIRED_MODELS; do
       if [ ! -z "$desired_model" ]; then
         storage_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
@@ -153,25 +203,57 @@ while true; do
         
         model_dir="$SERVER_MODEL_DIR/$desired_model"
         
-        if [ ! -d "$model_dir" ] || [ -z "$(ls -A $model_dir 2>/dev/null)" ]; then
+        # Check if model structure is valid
+        needs_sync=false
+        if ! validate_model_structure "$model_dir"; then
+          needs_sync=true
+          if [ -d "$model_dir" ]; then
+            echo "CLEANUP: Invalid model structure detected, removing and re-downloading: $model_dir"
+            rm -rf "$model_dir"
+          fi
+        fi
+        
+        if [ "$needs_sync" = true ]; then
           echo "SYNC: Syncing model $desired_model from $storage_path to $model_dir/"
           mkdir -p "$model_dir"
           sync_from_storage "$storage_path" "$model_dir/"
+          
+          # Verify sync completed with valid structure
+          if validate_model_structure "$model_dir"; then
+            echo "✓ Model synced successfully with valid structure:"
+          else
+            echo "⚠ WARNING: Sync completed but model structure still invalid. Check storage source."
+          fi
+          ls -la "$model_dir/" 2>/dev/null || echo "Directory is empty or doesn't exist"
+          # Show contents of version directories
+          for vdir in $(find "$model_dir" -maxdepth 1 -type d -regex '.*/[0-9]+' 2>/dev/null); do
+            echo "  Version $(basename $vdir) contents:"
+            ls -la "$vdir/" 2>/dev/null || true
+          done
+        else
+          echo "SKIP: Model $desired_model has valid structure, skipping download"
         fi
       fi
     done
     
+    # Unload models that are no longer in config
     for loaded_model in $LOADED_MODELS; do
       if ! echo "$DESIRED_MODELS" | grep -q "^$loaded_model$"; then
+        echo "Model $loaded_model no longer in config, unloading"
         unload_model "$triton_service" "$loaded_model"
       fi
     done
     
+    # Load models from config ONLY if they're not already loaded
     for desired_model in $DESIRED_MODELS; do
       if [ ! -z "$desired_model" ]; then
+        # Get fresh list of loaded models before checking each model
         CURRENT_LOADED_MODELS=$(get_loaded_models "$triton_service")
         if ! echo "$CURRENT_LOADED_MODELS" | grep -q "^$desired_model$"; then
+          echo "Model $desired_model not loaded, loading now"
           load_model "$triton_service" "$desired_model"
+        else
+          echo "Model $desired_model already loaded, skipping"
         fi
       fi
     done
@@ -180,6 +262,6 @@ while true; do
   done < "$INFERENCE_SERVERS_FILE"
   
   echo ""
-  echo "Model sync cycle completed, sleeping for 60 seconds"
+  echo "Model sync cycle completed for all servers, sleeping for 60 seconds"
   sleep 60
 done

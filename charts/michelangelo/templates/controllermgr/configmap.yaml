@@ -20,17 +20,21 @@ data:
         k8sBurst: {{ .Values.controllermgr.config.controllers.rayCluster.k8sBurst }}
     gateways:
       inferenceServiceEndpoint: {{ include "michelangelo.gatewayEndpoint" . | quote }}
+    # MinIO/S3 storage config (required by blobstore module)
     minio:
       awsRegion: {{ .Values.storage.s3.region }}
-{{- if eq .Values.cloud "local" }}
-      awsAccessKeyId: {{ .Values.storage.s3.accessKeyId }}
-      awsSecretAccessKey: {{ .Values.storage.s3.secretAccessKey }}
-      awsEndpointUrl: {{ .Values.storage.s3.endpoint }}
-{{- else }}
       awsEndpointUrl: {{ include "michelangelo.storageEndpoint" . }}
+{{- if eq .Values.cloud "gcp" }}
+      # GCS uses workload identity, no static credentials needed
+      awsAccessKeyId: ""
+      awsSecretAccessKey: ""
+{{- else }}
+      awsAccessKeyId: {{ .Values.storage.s3.accessKeyId | default "" }}
+      awsSecretAccessKey: {{ .Values.storage.s3.secretAccessKey | default "" }}
 {{- end }}
+    # Workflow client config (Cadence)
     workflowClient:
-      service: {{ if eq .Values.workflow.engine "temporal" }}temporaltest-frontend{{ else }}cadence-frontend{{ end }}
+      service: cadence-frontend
       host: {{ include "michelangelo.workflowEndpoint" . }}
       transport: grpc
       domain: {{ .Values.cadence.domain | default "default" }}

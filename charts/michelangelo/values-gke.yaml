@@ -23,40 +23,13 @@ imagePullSecrets:
   - name: ghcr-secret
 
 # GKE-specific namespace
-# Set create: false since deploy-gke.sh creates the namespace via kubectl
+# Set create: false - namespace is created by deploy-gke.sh via kubectl
+# This avoids Helm ownership conflicts with pre-existing namespaces
 namespace:
   create: false
-  name: default
+  name: michelangelo
 
-# Disable local-only components
-minio:
-  enabled: false
-
-mysql:
-  # Use Cloud SQL instead of in-cluster MySQL
-  # Set enabled: true to use in-cluster MySQL (simpler for dev)
-  # Set enabled: false and configure external for Cloud SQL (production)
-  enabled: true  # Using in-cluster MySQL for now
-  # Minimal resources for dev (fits on non-GPU node)
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
-# Cadence - minimal resources for dev
-cadence:
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
-# Use GCS instead of MinIO
+# Use GCS for object storage
 storage:
   storageClass: standard-rwo  # GCP Persistent Disk
   s3:
@@ -69,6 +42,28 @@ storage:
       - michelanglo-oss-196506-deploy-models
       - michelanglo-oss-196506-log-viewer
       - michelanglo-oss-196506-logs
+
+# MySQL - required for Cadence
+mysql:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Cadence workflow engine - required for controllermgr
+cadence:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
 
 # Enable Gateway API for inference routing
 gateway:
@@ -90,17 +85,13 @@ serviceAccount:
   annotations: {}
     # Uncomment below if you have Workload Identity set up:
     # iam.gke.io/gcp-service-account: michelangelo@michelanglo-oss-196506.iam.gserviceaccount.com
-  name: default
+  name: michelangelo
 
 # API Server - ClusterIP for internal cluster access only
 apiserver:
   replicaCount: 1  # Single replica for dev
   service:
-    # type: LoadBalancer
-    # annotations:
-    #   cloud.google.com/load-balancer-type: "Internal"
-    #   cloud.google.com/backend-config: '{"default": "apiserver-backend-config"}'
-    type: ClusterIP  # Changed from LoadBalancer for security
+    type: ClusterIP  # ClusterIP for security (no external access)
   resources:
     requests:
       cpu: 100m
@@ -128,86 +119,6 @@ controllermgr:
   config:
     leaderElection: true  # Enable for HA
 
-# Worker - scale based on workload
-worker:
-  replicaCount: 1  # Single replica for dev
-  # Enable GPU tolerations for Ray clusters on GKE with GPU taints
-  enableGpuTolerations: true
-  image:
-    # Use custom worker image with GPU tolerations support
-    # Update this tag after pushing your new worker image to GHCR
-    # needed to update this to accommodate GPU tolerations
-    tag: ghosharitra-deploy-gke-via-helm-charts  # Your branch name or custom tag
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 1000m
-      memory: 2Gi
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 20
-    targetCPUUtilizationPercentage: 75
-
-# UI - public facing
-ui:
-  replicaCount: 2
-  service:
-    type: LoadBalancer
-    annotations:
-      cloud.google.com/load-balancer-type: "External"
-      cloud.google.com/neg: '{"ingress": true}'
-  ingress:
-    enabled: true
-    className: gce
-    annotations:
-      kubernetes.io/ingress.class: gce
-      kubernetes.io/ingress.global-static-ip-name: michelangelo-ui-ip
-    hosts:
-      - host: michelangelo.example.com
-        paths:
-          - path: /
-            pathType: Prefix
-    tls:
-      - secretName: michelangelo-ui-tls
-        hosts:
-          - michelangelo.example.com
-
-# Prometheus - disabled for now, enable later for monitoring
-# TODO: enable later for monitoring
-prometheus:
-  # persistence:
-  #   enabled: true
-  #   storageClass: standard-rwo
-  #   size: 10Gi
-  # resources:
-  #   requests:
-  #     cpu: 100m
-  #     memory: 256Mi
-  #   limits:
-  #     cpu: 500m
-  #     memory: 1Gi
-  enabled: false
-
-# Grafana - disabled for now
-# TODO: enable later for monitoring
-grafana:
-  # persistence:
-  #   enabled: true
-  #   storageClass: standard-rwo
-  #   size: 10Gi
-  enabled: false
-  # Integrate with Google OAuth (optional)
-  config:
-    auth:
-      google:
-        enabled: false  # Set to true and configure
-        client_id: YOUR_CLIENT_ID
-        client_secret: YOUR_CLIENT_SECRET
-        allowed_domains: example.com
-
 # Inference model sync - disabled by default, deploy with --deploy-inference
 inference:
   modelSync:
@@ -227,14 +138,6 @@ inference:
       enabled: false
       # storageClass: standard-rwo
       # size: 500Gi
-
-# Use Cloud SQL Proxy sidecar for database connections
-# (Only needed if using external Cloud SQL)
-cloudSqlProxy:
-  enabled: false  # Set to true if using Cloud SQL
-  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.0
-  instances:
-    - michelanglo-oss-196506:us-east1:INSTANCE_NAME=tcp:3306
 
 # Node selector for GPU workloads
 nodeSelector:
@@ -283,4 +186,3 @@ securityContext:
 #   kubectl apply -f charts/michelangelo/templates/rbac.yaml
 rbac:
   create: false
-

@@ -1,4 +1,4 @@
-{{- if and .Values.cadence.enabled (eq .Values.workflow.engine "cadence") -}}
+{{- if .Values.cadence.enabled -}}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,8 +37,6 @@ spec:
           value: {{ .Values.mysql.rootPassword }}
         - name: STATSD_ENDPOINT
           value: "localhost:8125"
-        # Bind to all interfaces so port-forward works
-        # TODO: Revisit this
         - name: BIND_ON_IP
           value: "0.0.0.0"
         ports:
@@ -67,53 +65,4 @@ spec:
     targetPort: tchannel
   selector:
     app: cadence
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cadence-web
-  namespace: {{ .Values.namespace.name }}
-  labels:
-    {{- include "michelangelo.labels" . | nindent 4 }}
-    app.kubernetes.io/component: cadence-web
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: cadence-web
-  template:
-    metadata:
-      labels:
-        app: cadence-web
-    spec:
-      {{- with .Values.gpuTolerations }}
-      tolerations:
-        {{- toYaml . | nindent 8 }}
-      {{- end }}
-      containers:
-      - name: cadence-web
-        image: {{ .Values.cadence.webImage }}
-        env:
-        - name: CADENCE_TCHANNEL_PEERS
-          value: cadence:7933
-        ports:
-        - name: http
-          containerPort: 8088
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: cadence-web
-  namespace: {{ .Values.namespace.name }}
-  labels:
-    {{- include "michelangelo.labels" . | nindent 4 }}
-spec:
-  type: ClusterIP
-  ports:
-  - name: http
-    port: {{ .Values.cadence.service.web.port }}
-    targetPort: http
-  selector:
-    app: cadence-web
 {{- end }}
-

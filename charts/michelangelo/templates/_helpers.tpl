@@ -71,7 +71,6 @@ Return the proper image name for a component
 
 {{/*
 Return S3/Storage endpoint based on cloud provider
-MinIO client expects host:port format without scheme
 */}}
 {{- define "michelangelo.storageEndpoint" -}}
 {{- if eq .Values.cloud "gcp" -}}
@@ -81,7 +80,7 @@ MinIO client expects host:port format without scheme
 {{- else if eq .Values.cloud "azure" -}}
 {{- .Values.storage.s3.endpoint | default "blob.core.windows.net" -}}
 {{- else -}}
-{{- .Values.storage.s3.endpoint | default "minio:9091" -}}
+{{- .Values.storage.s3.endpoint | default "storage.googleapis.com" -}}
 {{- end -}}
 {{- end }}
 
@@ -101,14 +100,10 @@ azure
 {{- end }}
 
 {{/*
-Return workflow service endpoint
+Return workflow service endpoint (Cadence)
 */}}
 {{- define "michelangelo.workflowEndpoint" -}}
-{{- if eq .Values.workflow.engine "temporal" -}}
-temporaltest-frontend:7233
-{{- else -}}
 cadence:7833
-{{- end -}}
 {{- end }}
 
 {{/*
@@ -121,4 +116,3 @@ http://ma-gateway-istio.{{ .Values.namespace.name }}.svc.cluster.local:80
 ""
 {{- end -}}
 {{- end }}
-
