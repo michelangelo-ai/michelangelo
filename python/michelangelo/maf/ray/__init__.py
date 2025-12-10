@@ -1,1 +1,0 @@
-# MAF Ray module
