@@ -30,7 +30,7 @@ def create_or_update_deployment(
 ) -> Dict[str, str]:
     """Creates a new deployment or updates an existing one to deploy the specified model revision.
 
-    For existing deployments: updates the deployment to use the new revision and waits for the change to be applied.
+    For existing deployments: updates the deployment to use the new revision.
     For new deployments: clones from the specified template deployment with the desired revision.
 
     Args:
@@ -40,31 +40,12 @@ def create_or_update_deployment(
         deployment_template: Template deployment to clone from (required for new deployments)
 
     Returns:
-        dict: Dictionary containing the deployment_revision_name
+        dict: Dictionary containing deployment_name and model_revision_name
 
     Raises:
         ValueError: If deployment_template is required but not provided
-        RuntimeError: If no revisions are found or if the revision didn't update
         grpc.RpcError: For service call failures (network, auth, permissions, etc.)
     """
-    old_revision = None
-
-    # Configure query options for deployment revisions:
-    # 1. Filter by deployment name and kind="Deployment"
-    # 2. Order by most recent update timestamp
-    # 3. Limit to 1 result to get the latest revision
-    list_options_ext = {
-        "operation": {
-            "criterion": [
-                {"field_name": "revision.spec.base_resource.name", "match_value": deployment_name, "operator": "CRITERION_OPERATOR_EQUAL"},
-                {"field_name": "revision.spec.base_type.kind", "match_value": "Deployment", "operator": "CRITERION_OPERATOR_EQUAL"},
-            ],
-            "logical_operator": "LOGICAL_OPERATOR_AND",
-        },
-        "order_by": [{"field": "metadata.update_timestamp", "dir": "SORT_ORDER_DESC"}],
-        "pagination": {"offset": 0, "limit": 1},
-    }
-
     # Check if the deployment already exists to decide between update and create paths.
     try:
         existing_deployment = APIClient.DeploymentService.get_deployment(namespace=namespace, name=deployment_name)
@@ -77,13 +58,6 @@ def create_or_update_deployment(
 
     if deployment_exists:
         # Case 1: Deployment exists - Update path.
-        # Capture the current revision name before updating so we can verify the change later.
-        list_response = APIClient.RevisionService.list_revision(namespace=namespace, list_options_ext=list_options_ext)
-        if not list_response.items:
-            raise RuntimeError("deployment exists, but no deployment revisions found")
-
-        old_revision = list_response.items[0].metadata.name
-
         # Update existing deployment to use the new desired model revision.
         existing_deployment.status.CopyFrom(DeploymentStatus())
         existing_deployment.metadata.ClearField("managedFields")
@@ -99,8 +73,7 @@ def create_or_update_deployment(
         source_deployment = ResourceIdentifier(name=deployment_template, namespace=namespace)
         model_revision = ResourceIdentifier(name=model_revision_name, namespace=namespace)
 
-        # NOTE: OSS does not have DeploymentExtService.clone_deployment()
-        # Instead, we manually clone the template deployment by fetching it first.
+        # Retrieve the template deployment to clone from.
         template = APIClient.DeploymentService.get_deployment(namespace=namespace, name=source_deployment.name)
 
         # Clone the template and modify metadata for the new deployment.
@@ -122,78 +95,68 @@ def create_or_update_deployment(
 
         APIClient.DeploymentService.create_deployment(deployment=new_deployment)
 
-    # Wait for the new deployment revision to be created and indexed with retry logic.
-    for attempt in range(5):
-        list_response = APIClient.RevisionService.list_revision(namespace=namespace, list_options_ext=list_options_ext)
-
-        # Check if we found any revisions.
-        if not list_response.items:
-            if attempt < 4:
-                time.sleep(5)
-                continue
-            raise RuntimeError("no deployment revisions found")
-
-        latest_revision_name = list_response.items[0].metadata.name
-
-        # For updates, verify that the revision has actually changed from the old one.
-        if old_revision is not None and latest_revision_name == old_revision:
-            if attempt < 4:
-                time.sleep(5)
-                continue
-            raise RuntimeError("latest revision is the same as the old revision")
-
-        # Revision has been successfully created or updated.
-        return {"deployment_revision_name": latest_revision_name}
+    return {
+        "deployment_name": deployment_name,
+        "model_revision_name": model_revision_name,
+    }
 
 
 @star_plugin(binding="deployment.wait_for_deployment")
 def wait_for_deployment(
     namespace: str,
-    deployment_revision_name: str,
+    deployment_name: str,
+    expected_model_revision_name: str,
     timeout: int = 31536000,
     poll: int = 600
 ) -> Dict[str, str]:
-    """Waits for deployment revision to reach terminal state.
+    """Waits for deployment to reach terminal state by polling the live Deployment resource.
+
+    The expected_model_revision_name parameter ensures each workflow tracks its intended model,
+    preventing race conditions when multiple workflows update the same deployment concurrently.
 
     Args:
-        namespace: The Michelangelo namespace containing the revision
-        deployment_revision_name: The name of the deployment revision to wait for
-        timeout: Maximum time to wait in seconds (default: 1 year)
-        poll: Polling interval in seconds (default: 600 seconds)
+        namespace: The Michelangelo namespace containing the deployment
+        deployment_name: The name of the deployment to wait for
+        expected_model_revision_name: The model revision this workflow expects to be deployed.
+            If the deployment's desired revision changes to a different model, this will fail
+            immediately to prevent tracking the wrong deployment.
+        timeout: Maximum time to wait in seconds (default: 31536000 = 1 year)
+        poll: Polling interval in seconds (default: 600 = 10 minutes)
 
     Returns:
         dict: Dictionary containing the deployment stage {"stage": <stage_name>}
 
     Raises:
-        RuntimeError: If deployment fails or timeout occurs
+        RuntimeError: If deployment fails, timeout occurs, or deployment was updated by another workflow
         grpc.RpcError: For service call failures
     """
     start_time = time.time()
     attempt = 0
 
-    print(f"Waiting for deployment revision: {deployment_revision_name} | Timeout: {timeout}s | Poll: {poll}s")
+    print(f"Waiting for deployment: {deployment_name} | Expected model: {expected_model_revision_name} | Timeout: {timeout}s | Poll: {poll}s")
 
     while True:
         attempt += 1
         elapsed_time = time.time() - start_time
 
-        # Get the revision
-        revision_response = APIClient.RevisionService.get_revision(namespace=namespace, name=deployment_revision_name)
+        # Get the live deployment resource
+        deployment = APIClient.DeploymentService.get_deployment(namespace=namespace, name=deployment_name)
 
-        # Unmarshal the deployment from the revision content
-        deployment = Deployment()
-        revision_response.spec.content.Unpack(deployment)
-
-        # Check deployment stage
         stage = deployment.status.stage
+        desired_rev = deployment.spec.desired_revision.name
+        current_rev = deployment.status.current_revision.name if deployment.status.current_revision else None
         stage_name = DeploymentStage.Name(stage)
 
-        # Check if deployment reached a successful terminal state
+        # Check if deployment was updated by another workflow - fail immediately if expected revision doesn't match
+        if desired_rev != expected_model_revision_name:
+            print(f"Deployment was updated by another workflow | Expected: {expected_model_revision_name}, Current: {desired_rev} | Elapsed: {elapsed_time:.1f}s")
+            raise RuntimeError(f"deployment was updated by another workflow: expected model revision {expected_model_revision_name}, but deployment now targets {desired_rev}")
+
+        # Check if deployment reached terminal state (success or failure)
         if stage in _DEPLOYMENT_SUCCESS_STAGES:
             print(f"Deployment completed successfully | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s")
             return {"stage": stage_name}
 
-        # Check if deployment reached a failed terminal state
         if stage in _DEPLOYMENT_FAILED_STAGES:
             print(f"Deployment failed | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s")
             raise RuntimeError(f"deployment failed with stage: {stage_name}")
@@ -201,12 +164,10 @@ def wait_for_deployment(
         # Check if timeout has been exceeded
         if time.time() - start_time >= timeout:
             print(f"Deployment timeout | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s")
-            raise RuntimeError(f"timeout waiting for deployment revision {deployment_revision_name}")
+            raise RuntimeError(f"timeout waiting for deployment {deployment_name}")
 
-        # Log current deployment status and next retry
-        print(f"Attempt #{attempt} | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s | Sleeping {poll}s")
-
-        # Sleep before next poll
+        # Non-terminal state - log and retry
+        print(f"Attempt #{attempt} | Stage: {stage_name} | Current revision: {current_rev}, Desired revision: {desired_rev} | Elapsed: {elapsed_time:.1f}s | Sleeping {poll}s")
         time.sleep(poll)
 
 
@@ -235,7 +196,7 @@ def model_deployment(
         timeout: Maximum time to wait in seconds (default: 31536000 = 1 year)
 
     Returns:
-        dict: Results containing deployment_revision_name and final_stage
+        dict: Results containing deployment_name, model_revision_name, and final_stage
     """
     # Create or update the deployment
     create_result = create_or_update_deployment(
@@ -244,13 +205,13 @@ def model_deployment(
         model_revision_name=model_revision_name,
         deployment_template=deployment_template,
     )
-    actual_deployment_revision_name = create_result["deployment_revision_name"]
 
     # Wait for deployment completion (unless async deployment is enabled)
     if not async_deployment:
         wait_result = wait_for_deployment(
             namespace=namespace,
-            deployment_revision_name=actual_deployment_revision_name,
+            deployment_name=create_result["deployment_name"],
+            expected_model_revision_name=create_result["model_revision_name"],
             timeout=timeout,
         )
         final_stage = wait_result["stage"]
@@ -258,6 +219,7 @@ def model_deployment(
         final_stage = "ASYNC_DEPLOYMENT_STARTED"
 
     return {
-        "deployment_revision_name": actual_deployment_revision_name,
+        "deployment_name": create_result["deployment_name"],
+        "model_revision_name": create_result["model_revision_name"],
         "final_stage": final_stage,
     }
