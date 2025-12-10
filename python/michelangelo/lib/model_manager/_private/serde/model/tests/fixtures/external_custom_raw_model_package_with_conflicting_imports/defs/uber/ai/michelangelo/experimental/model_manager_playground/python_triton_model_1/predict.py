@@ -4,7 +4,6 @@ import numpy as np
 import michelangelo.lib.model_manager._private.serde.model.dummy_module as dummy_module
 from michelangelo.lib.model_manager.interface.custom_model import Model
 from michelangelo.lib.model_manager._private.serde.model.raw_model_type import dummy_type
-from uber.ai.michelangelo.sdk.model_manager._private.serde.model.tests.custom_raw_model_test import foo
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.package import fn1
 from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.folder.fn2 import fn2
 
@@ -12,7 +11,6 @@ from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_mo
 class Predict(Model):
     def __init__(self, content: str):
         self.content = content
-        self.foo = foo()
         self.dummy_f = dummy_module.dummy_function()
         self.dummy_t = dummy_type()
 
@@ -36,7 +34,7 @@ class Predict(Model):
     ) -> dict[str, np.ndarray]:
         feature = inputs.get("feature")[0]
         response = (
-            f"feature: {feature} and content: {self.content} and deps: {fn1()} and deps: {fn2()} and {self.dummy_f} and {self.dummy_t} and {self.foo}"
+            f"feature: {feature} and content: {self.content} and deps: {fn1()} and deps: {fn2()} and {self.dummy_f} and {self.dummy_t}"
         )
         array = np.array([response])
         return {"response": array}

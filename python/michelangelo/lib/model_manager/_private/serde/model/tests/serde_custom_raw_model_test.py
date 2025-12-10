@@ -135,7 +135,7 @@ class CustomRawModelTest(TestCase):
             (
                 "feature: test_feature and content: test_content "
                 "and deps: package.fn1 and package.fn2 and folder.fn1 and deps: folder.fn2 "
-                "and dummy_function and dummy_type and foo"
+                "and dummy_function and dummy_type"
             ),
         )
 
