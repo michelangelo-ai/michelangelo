@@ -1,3 +1,5 @@
+"""Tests for custom model loader."""
+
 import os
 import pickle
 import sys
@@ -11,19 +13,22 @@ from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader im
     load_custom_model,
 )
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
-from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import (
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import (  # noqa: E501
     A,
     func,
 )
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (  # noqa: E501
     Predict,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 
 
 class CustomModelLoaderTest(TestCase):
+    """Tests for custom model loader."""
+
     def setUp(self):
+        """Set up the test environment."""
         self.sys_path = sys.path.copy()
         self.main_dict = sys.modules["__main__"].__dict__.copy()
         self.model_schema = ModelSchema(
@@ -45,6 +50,7 @@ class CustomModelLoaderTest(TestCase):
         self.sample_data = [{"input": np.array([1])}]
 
     def tearDown(self):
+        """Tear down the test environment."""
         sys.path = self.sys_path
         for key in list(sys.modules["__main__"].__dict__.keys()):
             if key not in self.main_dict:
@@ -53,7 +59,11 @@ class CustomModelLoaderTest(TestCase):
                 sys.modules["__main__"].__dict__[key] = self.main_dict[key]
 
     def test_load_custom_raw_model_with_pickle(self):
-        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
+        """Test loading custom raw model with pickle files."""
+        model_class = (
+            "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
+            "predict.Predict"
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -99,12 +109,16 @@ class CustomModelLoaderTest(TestCase):
     def test_load_custom_raw_model_with_pickle_def_in_main(
         self, mock_walk_pickle_definitions_in_dir
     ):
+        """Test loading custom raw model with pickle definitions in __main__."""
         mock_walk_pickle_definitions_in_dir.return_value = [
             (None, "fn1", None),
             (None, "fn2", None),
             (None, "module_attr", None),
         ]
-        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
+        model_class = (
+            "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
+            "predict.Predict"
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
@@ -145,7 +159,11 @@ class CustomModelLoaderTest(TestCase):
             self.assertEqual(response, "test_feature")
 
     def test_load_custom_model_with_pickle_def_in_main_with_load_error(self):
-        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
+        """Test loading custom model with pickle def in __main__ with load error."""
+        model_class = (
+            "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
+            "predict.Predict"
+        )
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")

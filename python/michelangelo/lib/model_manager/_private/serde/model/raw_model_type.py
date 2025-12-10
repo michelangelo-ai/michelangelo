@@ -30,8 +30,10 @@ def get_raw_model_type(model_path: str) -> str:
 
     supported_raw_model_types = get_supported_raw_model_types()
     if model_type not in supported_raw_model_types:
+        supported_types_str = ", ".join(supported_raw_model_types)
         raise ValueError(
-            f"Invalid model type {model_type} in the type.yaml file. Supported model types are {', '.join(supported_raw_model_types)}."
+            f"Invalid model type {model_type} in the type.yaml file. "
+            f"Supported model types are {supported_types_str}."
         )
 
     return model_type

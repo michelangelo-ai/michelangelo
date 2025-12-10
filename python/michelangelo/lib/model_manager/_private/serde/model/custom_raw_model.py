@@ -43,21 +43,24 @@ def load_custom_raw_model(model_path: str) -> Model:
 
     if not module_def or not class_name:
         raise ValueError(
-            f"Invalid model class definition {model_class}. Please specify the full import path to the model class."
+            f"Invalid model class definition {model_class}. "
+            "Please specify the full import path to the model class."
         )
 
     try:
         module = importlib.import_module(module_def)
     except (ImportError, ModuleNotFoundError):
         _logger.info(
-            f"Module {module_def} not found in the system path. Trying to load from the model package."
+            f"Module {module_def} not found in the system path. "
+            "Trying to load from the model package."
         )
         sys.path.append(os.path.abspath(defs_path))
         try:
             module = importlib.import_module(module_def)
         except (ImportError, ModuleNotFoundError):
             _logger.info(
-                f"Module {module_def} not found after appending the model package to the system path. "
+                f"Module {module_def} not found after appending the model "
+                "package to the system path. "
                 "Trying to load model after modifying the import names."
             )
             new_defs_path, wrapper_name = create_alternative_defs(defs_path)
@@ -65,13 +68,13 @@ def load_custom_raw_model(model_path: str) -> Model:
             module = importlib.import_module(f"{wrapper_name}.defs." + module_def)
 
     try:
-        ModelClass = getattr(module, class_name)
+        model_class = getattr(module, class_name)
     except AttributeError as err:
         raise AttributeError(
             f"Class {class_name} not found in module {module_def}."
         ) from err
 
-    return load_custom_model(model_bin_path, ModelClass, defs_path)
+    return load_custom_model(model_bin_path, model_class, defs_path)
 
 
 def create_alternative_defs(defs_path: str) -> tuple[str, str]:
@@ -87,7 +90,8 @@ def create_alternative_defs(defs_path: str) -> tuple[str, str]:
         A tuple containing the alternative defs path and the wrapper name.
     """
     tmpdir = tempfile.mkdtemp()
-    # A unique wrapper to guarentee no conflicts between the import names and other packages
+    # A unique wrapper to guarentee no conflicts between the import names and
+    # other packages
     wrapper_name = f"package_{uuid.uuid4().hex}"
     wrapper_dir = os.path.join(tmpdir, wrapper_name)
     os.makedirs(wrapper_dir)
@@ -123,13 +127,13 @@ def create_import_rewriter(defs_path: str, prefix: str) -> ast.NodeTransformer:
     imports = os.listdir(defs_path)
 
     class ImportRewriter(ast.NodeTransformer):
-        def visit_Import(self, node):
+        def visit_Import(self, node):  # noqa: N802
             for alias in node.names:
                 if any(alias.name.startswith(import_name) for import_name in imports):
                     alias.name = prefix + alias.name
             return node
 
-        def visit_ImportFrom(self, node):
+        def visit_ImportFrom(self, node):  # noqa: N802
             if any(node.module.startswith(import_name) for import_name in imports):
                 node.module = prefix + node.module
             return node

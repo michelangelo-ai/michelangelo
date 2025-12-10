@@ -1,3 +1,5 @@
+"""Tests for raw model loader."""
+
 import os
 import tempfile
 from unittest import TestCase
@@ -6,7 +8,7 @@ import numpy as np
 
 from michelangelo.lib.model_manager.constants import RawModelType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (  # noqa: E501
     Predict,
 )
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
@@ -14,7 +16,10 @@ from michelangelo.lib.model_manager.serde.model import load_raw_model
 
 
 class RawModelTest(TestCase):
+    """Tests for raw model loader."""
+
     def setUp(self):
+        """Set up the test environment."""
         self.model_schema = ModelSchema(
             input_schema=[
                 ModelSchemaItem(
@@ -34,7 +39,11 @@ class RawModelTest(TestCase):
         self.sample_data = [{"input": np.array([1])}]
 
     def create_model_package(self, directory: str):
-        model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
+        """Create a model package for testing."""
+        model_class = (
+            "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures."
+            "predict.Predict"
+        )
         src_model_path = os.path.join(directory, "model")
         dest_model_path = os.path.join(directory, "model_package")
         os.makedirs(src_model_path)
@@ -57,6 +66,7 @@ class RawModelTest(TestCase):
         return model_package
 
     def test_load_raw_model(self):
+        """Test loading a raw model."""
         with tempfile.TemporaryDirectory() as temp_dir:
             model_package = self.create_model_package(temp_dir)
 
@@ -65,6 +75,7 @@ class RawModelTest(TestCase):
             self.assertIsInstance(model, Predict)
 
     def test_load_raw_model_loader_not_implemented(self):
+        """Test loading a raw model with unsupported loader."""
         with tempfile.TemporaryDirectory() as temp_dir:
             model_package = self.create_model_package(temp_dir)
 

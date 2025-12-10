@@ -1,3 +1,5 @@
+"""Raw model loader."""
+
 from typing import Union
 
 import torch
@@ -27,5 +29,6 @@ def load_raw_model(model_path: str) -> Union[Model, torch.nn.Module]:
         return load_custom_raw_model(model_path)
 
     raise NotImplementedError(
-        f"The loader for {raw_model_type} model is not supported yet. Please check back in future updates."
+        f"The loader for {raw_model_type} model is not supported yet. "
+        "Please check back in future updates."
     )

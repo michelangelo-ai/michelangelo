@@ -37,6 +37,7 @@ class RawModelTypeTest(TestCase):
 
     def test_get_raw_model_type_no_type_yaml(self):
         """Test getting the raw model type when no type.yaml file is present."""
-        with tempfile.TemporaryDirectory() as model_path:
-            with self.assertRaisesRegex(FileNotFoundError, "type.yaml file not found"):
-                get_raw_model_type(model_path)
+        with tempfile.TemporaryDirectory() as model_path, self.assertRaisesRegex(
+            FileNotFoundError, "type.yaml file not found"
+        ):
+            get_raw_model_type(model_path)
