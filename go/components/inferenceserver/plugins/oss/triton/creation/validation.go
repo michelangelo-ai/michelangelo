@@ -16,13 +16,14 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ValidationActor{}
 
-// ValidationActor validates Triton-specific configuration
+// ValidationActor validates that inference server configuration meets Triton requirements.
 type ValidationActor struct {
 	gateway       gateways.Gateway
 	proxyProvider proxy.ProxyProvider
 	logger        *zap.Logger
 }
 
+// NewValidationActor creates a condition actor for Triton configuration validation.
 func NewValidationActor(gateway gateways.Gateway, logger *zap.Logger, proxyProvider proxy.ProxyProvider) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ValidationActor{
 		gateway:       gateway,
@@ -31,10 +32,12 @@ func NewValidationActor(gateway gateways.Gateway, logger *zap.Logger, proxyProvi
 	}
 }
 
+// GetType returns the condition type identifier for validation.
 func (a *ValidationActor) GetType() string {
 	return common.TritonValidationConditionType
 }
 
+// Retrieve validates that the inference server configuration meets Triton backend requirements.
 func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton validation condition")
 
@@ -56,6 +59,7 @@ func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Inference
 	}, nil
 }
 
+// Run returns a failed condition since validation failures cannot be automatically fixed.
 func (a *ValidationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	// This method is only ran when Retrieve() fails.
 	// If Retrieve() failed, then there's nothing we can do here, simply return false condition.

@@ -29,7 +29,7 @@ const Subtype = "oss"
 
 var _ plugins.Plugin = &Plugin{}
 
-// Plugin is the OSS plugin implementation
+// Plugin implements deployment lifecycle management for open-source deployments.
 type Plugin struct {
 	client                 client.Client
 	proxyProvider          proxy.ProxyProvider
@@ -44,7 +44,7 @@ type Plugin struct {
 	steadyStatePlugin conditionInterfaces.Plugin[*v2pb.Deployment]
 }
 
-// Params contains dependencies for OSS plugin
+// Params contains dependencies injected via Fx for OSS plugin initialization.
 type Params struct {
 	fx.In
 
@@ -57,7 +57,7 @@ type Params struct {
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
-// NewPlugin creates a new instance of OSS plugin
+// NewPlugin creates an OSS deployment plugin with rollback, cleanup, and steady state workflows.
 func NewPlugin(params Params) *Plugin {
 	return &Plugin{
 		client:                 params.Client,
@@ -83,7 +83,7 @@ func NewPlugin(params Params) *Plugin {
 	}
 }
 
-// GetRolloutPlugin returns the rollout plugin using the OSS rollout conditions plugin
+// GetRolloutPlugin creates a deployment-specific rollout plugin with the appropriate strategy.
 func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error) {
 	rolloutPlugin, err := rollout.NewRolloutPlugin(ctx, rollout.Params{
 		Client:                 p.client,
@@ -105,22 +105,22 @@ func (p *Plugin) GetRolloutPlugin(ctx context.Context, deployment *v2pb.Deployme
 	return rolloutPlugin, nil
 }
 
-// GetRollbackPlugin returns the rollback plugin
+// GetRollbackPlugin returns the plugin for reverting to previous stable revision.
 func (p *Plugin) GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return p.rollbackPlugin
 }
 
-// GetCleanupPlugin returns the cleanup plugin
+// GetCleanupPlugin returns the plugin for removing deployment resources.
 func (p *Plugin) GetCleanupPlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return p.cleanupPlugin
 }
 
-// GetSteadyStatePlugin returns the steady state plugin
+// GetSteadyStatePlugin returns the plugin for monitoring stable deployment operation.
 func (p *Plugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return p.steadyStatePlugin
 }
 
-// ParseStage goes through all the conditions and determines the current deployment stage
+// ParseStage derives the current deployment stage from conditions and status.
 func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	// New rollout needed if desired revision differs from candidate revision
 	desired := deployment.Spec.DesiredRevision
@@ -184,13 +184,13 @@ func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
 	return v2pb.DEPLOYMENT_STAGE_VALIDATION
 }
 
-// GetState returns the current deployment state
+// GetState computes the current deployment state from the resource status.
 func (p *Plugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (v2pb.DeploymentStatus, error) {
 	// For OSS, we'll return the current status
 	return deployment.Status, nil
 }
 
-// HealthCheckGate checks if there are issues with the current model rollout
+// HealthCheckGate verifies the inference server is healthy before allowing rollout to proceed.
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
 	// For OSS, we'll do a basic health check
 
@@ -217,13 +217,13 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 	return healthy, nil
 }
 
-// PopulateDeploymentLogs populates the deployment logs with error logs
+// PopulateDeploymentLogs adds error logs to deployment status (no-op for OSS).
 func (p *Plugin) PopulateDeploymentLogs(ctx context.Context, runtimeContext plugins.RequestContext, deployment *v2pb.Deployment) {
 	// For OSS, this is a no-op since we don't have log aggregation
 	runtimeContext.Logger.Info("PopulateDeploymentLogs called", "deployment", deployment.Name)
 }
 
-// PopulateMessage populates the deployment message with error information
+// PopulateMessage sets the deployment status message if not already populated.
 func (p *Plugin) PopulateMessage(ctx context.Context, runtimeContext plugins.RequestContext, deployment *v2pb.Deployment) {
 	// For OSS, set a basic message
 	if deployment.Status.Message == "" {

@@ -15,12 +15,13 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ResourceCreationActor{}
 
-// ResourceCreationActor creates Triton infrastructure
+// ResourceCreationActor provisions Kubernetes resources for Triton inference servers.
 type ResourceCreationActor struct {
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }
 
+// NewResourceCreationActor creates a condition actor for Triton infrastructure provisioning.
 func NewResourceCreationActor(gateway gateways.Gateway, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ResourceCreationActor{
 		gateway: gateway,
@@ -28,10 +29,12 @@ func NewResourceCreationActor(gateway gateways.Gateway, logger *zap.Logger) cond
 	}
 }
 
+// GetType returns the condition type identifier for resource creation.
 func (a *ResourceCreationActor) GetType() string {
 	return common.TritonResourceCreationConditionType
 }
 
+// Retrieve checks if Kubernetes infrastructure exists and is ready.
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton infrastructure condition")
 
@@ -80,6 +83,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 	}, nil
 }
 
+// Run creates the Kubernetes deployment, service, and related resources for Triton.
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton infrastructure creation")
 

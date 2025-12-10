@@ -9,7 +9,10 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// UpsertDeploymentRevision upserts a deployment revision (simplified no-op version)
+// UpsertDeploymentRevision creates or updates a deployment revision in the revision management system.
+//
+// In the current simplified implementation, revision management is disabled and this
+// returns nil. Future implementations may add full revision tracking to a persistent store.
 func UpsertDeploymentRevision(ctx context.Context, deployment *v2pb.Deployment, revisionManager revision.Manager) error {
 	// In simplified version, revision management is disabled
 	return nil

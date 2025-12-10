@@ -12,20 +12,23 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// TrafficRoutingActor handles HTTPRoute management for deployment traffic routing
+// TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
 type TrafficRoutingActor struct {
 	ProxyProvider proxy.ProxyProvider
 	Logger        *zap.Logger
 }
 
+// GetType returns the condition type identifier for traffic routing.
 func (a *TrafficRoutingActor) GetType() string {
 	return common.ActorTypeTrafficRouting
 }
 
+// GetLogger returns the logger instance for this actor.
 func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
 	return a.Logger
 }
 
+// Retrieve checks if the Gateway API HTTPRoute is correctly configured for the deployment.
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
@@ -61,6 +64,7 @@ func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 	}, nil
 }
 
+// Run creates or updates the HTTPRoute to enable traffic routing to the deployed model.
 func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Running traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 

@@ -15,12 +15,13 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &HealthCheckActor{}
 
-// HealthCheckActor checks Triton server health
+// HealthCheckActor verifies inference server health by polling backend health endpoints.
 type HealthCheckActor struct {
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }
 
+// NewHealthCheckActor creates a condition actor for Triton health verification.
 func NewHealthCheckActor(gateway gateways.Gateway, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &HealthCheckActor{
 		gateway: gateway,
@@ -28,10 +29,12 @@ func NewHealthCheckActor(gateway gateways.Gateway, logger *zap.Logger) condition
 	}
 }
 
+// GetType returns the condition type identifier for health checks.
 func (a *HealthCheckActor) GetType() string {
 	return common.TritonHealthCheckConditionType
 }
 
+// Retrieve checks the current health status of the Triton server.
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton health condition")
 
@@ -70,6 +73,7 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 	}, nil
 }
 
+// Run returns a failed condition since health check failures cannot be automatically remediated.
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	// This method is only ran when Retrieve() fails
 	// If Retrieve() failed, then there's nothing we can do here, simply return false condition.

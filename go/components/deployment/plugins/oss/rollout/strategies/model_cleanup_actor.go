@@ -13,21 +13,24 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// ModelCleanupActor handles cleanup of old models after successful deployment
+// ModelCleanupActor unloads previous model versions from inference servers after successful rollout.
 type ModelCleanupActor struct {
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 	Gateway                gateways.Gateway
 	Logger                 *zap.Logger
 }
 
+// GetType returns the condition type identifier for model cleanup.
 func (a *ModelCleanupActor) GetType() string {
 	return common.ActorTypeModelCleanup
 }
 
+// GetLogger returns the logger instance for this actor.
 func (a *ModelCleanupActor) GetLogger() *zap.Logger {
 	return a.Logger
 }
 
+// Retrieve checks if old models are still loaded and require cleanup.
 func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	currentModel := resource.Status.GetCurrentRevision().GetName()
 	desiredModel := resource.Spec.GetDesiredRevision().GetName()
@@ -87,6 +90,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 	}, nil
 }
 
+// Run removes old model from ConfigMap and directly unloads it from Triton via API.
 func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Running model cleanup for deployment", zap.String("deployment", resource.Name))
 

@@ -11,7 +11,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// TritonDeletionPlugin implements the Plugin interface for deletion lifecycle
+// TritonDeletionPlugin orchestrates the condition actors for inference server deletion.
 type TritonDeletionPlugin struct {
 	gateway                gateways.Gateway
 	proxyProvider          proxy.ProxyProvider
@@ -19,6 +19,7 @@ type TritonDeletionPlugin struct {
 	logger                 *zap.Logger
 }
 
+// NewTritonDeletionPlugin creates a plugin that manages cleanup of all inference server resources.
 func NewTritonDeletionPlugin(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &TritonDeletionPlugin{
 		gateway:                gateway,
@@ -28,16 +29,19 @@ func NewTritonDeletionPlugin(gateway gateways.Gateway, proxyProvider proxy.Proxy
 	}
 }
 
+// GetActors returns the condition actors for deletion workflow.
 func (p *TritonDeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
 		NewCleanupActor(p.gateway, p.modelConfigMapProvider, p.proxyProvider, p.logger),
 	}
 }
 
+// GetConditions retrieves the current conditions from the inference server status.
 func (p *TritonDeletionPlugin) GetConditions(resource *v2pb.InferenceServer) []*apipb.Condition {
 	return resource.Status.Conditions
 }
 
+// PutCondition updates or adds a condition to the inference server status.
 func (p *TritonDeletionPlugin) PutCondition(resource *v2pb.InferenceServer, condition *apipb.Condition) {
 	if resource.Status.Conditions == nil {
 		resource.Status.Conditions = []*apipb.Condition{}

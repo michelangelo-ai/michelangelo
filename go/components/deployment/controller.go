@@ -14,6 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// Package deployment provides Kubernetes controller logic for managing ML model deployments.
+//
+// The deployment controller implements progressive rollout strategies for machine learning models,
+// enabling safe, gradual deployment of new models to production infrastructure.
+//
+// The controller uses a plugin-based architecture with lifecycle stages:
+//
+//	Rollout:     Validation → Asset Preparation → Resource Acquisition → Traffic Routing → Completion
+//	Rollback:    Triggered on failures or manual intervention
+//	Cleanup:     Resource deallocation on deletion
+//	Steady State: Ongoing monitoring and health checks
 package deployment
 
 import (
@@ -666,7 +677,17 @@ var _cleanUpCompleteStages = map[v2pb.DeploymentStage]bool{
 	v2pb.DEPLOYMENT_STAGE_CLEAN_UP_FAILED:   true,
 }
 
-// TriggerNewRollout determines if a new rollout should be triggered
+// TriggerNewRollout determines if a new rollout should be triggered based on the deployment state.
+//
+// A rollout is triggered when:
+//   - The desired revision differs from the candidate revision (indicating a model change)
+//   - AND the deployment is in a terminal stage (ROLLOUT_COMPLETE, ROLLBACK_COMPLETE, etc.) or initialization stage
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if a new rollout should be triggered, false otherwise
 func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	desiredRevision := deployment.Spec.DesiredRevision
 	candidateRevision := deployment.Status.CandidateRevision
@@ -677,7 +698,18 @@ func TriggerNewRollout(deployment v2pb.Deployment) bool {
 	return result
 }
 
-// ShouldRollback determines if a rollback should occur
+// ShouldRollback determines if the deployment should be rolled back to a previous version.
+//
+// A rollback is triggered when:
+//   - The desired revision differs from the candidate revision (user requested change mid-rollout)
+//   - AND the deployment is NOT in a terminal stage (rollout is in progress)
+//   - AND the deployment is NOT in initialization stage
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if a rollback should be initiated, false otherwise
 func ShouldRollback(deployment v2pb.Deployment) bool {
 	desiredRevision := deployment.Spec.DesiredRevision
 	candidateRevision := deployment.Status.CandidateRevision
@@ -687,7 +719,18 @@ func ShouldRollback(deployment v2pb.Deployment) bool {
 		!isInitializationStage(deployment.Status.Stage)
 }
 
-// RolloutInProgress checks if a rollout is in progress
+// RolloutInProgress checks if a model rollout is currently in progress.
+//
+// A rollout is considered in progress when:
+//   - The current revision differs from the candidate revision (models don't match)
+//   - AND the deployment is NOT in a terminal stage
+//   - AND the deployment is NOT in initialization stage
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if a rollout is actively in progress, false otherwise
 func RolloutInProgress(deployment v2pb.Deployment) bool {
 	currentRevision := deployment.Status.CurrentRevision
 	candidateRevision := deployment.Status.CandidateRevision
@@ -701,13 +744,38 @@ func RolloutInProgress(deployment v2pb.Deployment) bool {
 	return result
 }
 
-// InSteadyState checks if deployment needs to go through steady state plugin
+// InSteadyState checks if the deployment is in a steady state phase.
+//
+// A deployment is in steady state when it has completed a rollout or rollback and is now
+// in a stable operational phase. During steady state, the system performs maintenance tasks
+// like monitoring, metric collection, and health checks.
+//
+// Steady state stages include:
+//   - DEPLOYMENT_STAGE_ROLLOUT_COMPLETE: Rollout successfully completed
+//   - DEPLOYMENT_STAGE_ROLLBACK_COMPLETE: Rollback successfully completed
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if the deployment is in steady state, false otherwise
 func InSteadyState(deployment v2pb.Deployment) bool {
 	return deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE ||
 		deployment.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 }
 
-// ShouldCleanup determines if cleanup should occur
+// ShouldCleanup determines if the deployment resources should be cleaned up.
+//
+// Cleanup is initiated when:
+//   - The deployment is marked for deletion (deletion timestamp is set)
+//   - OR the deployment's deletion spec indicates it should be deleted
+//   - OR the desired revision is nil but there are still active current/candidate revisions
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if cleanup should be initiated, false otherwise
 func ShouldCleanup(deployment v2pb.Deployment) bool {
 	currentRevision := deployment.Status.GetCurrentRevision()
 	candidateRevision := deployment.Status.GetCandidateRevision()
@@ -718,25 +786,55 @@ func ShouldCleanup(deployment v2pb.Deployment) bool {
 			(currentRevision != nil || candidateRevision != nil))
 }
 
-// IsTerminalStage checks if the given stage is terminal
+// IsTerminalStage checks if the given deployment stage is terminal.
+//
+// Terminal stages represent stable states where the deployment has reached a final outcome:
+//   - Rollout completed successfully
+//   - Rollback completed successfully
+//   - Cleanup completed
+//   - Failed states
+//
+// Parameters:
+//   - stage: The deployment stage to check
+//
+// Returns:
+//   - true if the stage is terminal (no further automatic transitions), false otherwise
 func IsTerminalStage(stage v2pb.DeploymentStage) bool {
 	_, ok := _terminalStages[stage]
 	return ok
 }
 
-// IsRollbackStage checks if deployment is in rollback stage
+// IsRollbackStage checks if the deployment is currently in a rollback stage.
+//
+// Parameters:
+//   - stage: The deployment stage to check
+//
+// Returns:
+//   - true if the stage is a rollback stage, false otherwise
 func IsRollbackStage(stage v2pb.DeploymentStage) bool {
 	_, ok := _rollbackStages[stage]
 	return ok
 }
 
-// IsCleanupStage checks if deployment is in clean up stage
+// IsCleanupStage checks if the deployment is in a cleanup stage.
+//
+// Parameters:
+//   - stage: The deployment stage to check
+//
+// Returns:
+//   - true if the stage is a cleanup stage, false otherwise
 func IsCleanupStage(stage v2pb.DeploymentStage) bool {
 	_, ok := _cleanUpStages[stage]
 	return ok
 }
 
-// IsCleanupCompleteStage checks if deployment is in complete stage
+// IsCleanupCompleteStage checks if the deployment has completed cleanup operations.
+//
+// Parameters:
+//   - stage: The deployment stage to check
+//
+// Returns:
+//   - true if cleanup is complete, false otherwise
 func IsCleanupCompleteStage(stage v2pb.DeploymentStage) bool {
 	_, ok := _cleanUpCompleteStages[stage]
 	return ok
@@ -746,14 +844,31 @@ func isInitializationStage(stage v2pb.DeploymentStage) bool {
 	return stage == v2pb.DEPLOYMENT_STAGE_INVALID
 }
 
-// ShouldSkipRollout checks if current revision is already equal to candidate revision
+// ShouldSkipRollout checks if the rollout can be skipped because the target is already deployed.
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if the rollout can be skipped, false if it should proceed
 func ShouldSkipRollout(deployment v2pb.Deployment) bool {
 	candidateRevision := deployment.Status.GetCandidateRevision()
 	currentRevision := deployment.Status.GetCurrentRevision()
 	return candidateRevision != nil && revisionEqual(candidateRevision, currentRevision)
 }
 
-// IsEmergencyRollout checks if the deployment strategy is of blast type
+// IsEmergencyRollout checks if the deployment is configured for emergency/blast rollout.
+//
+// Emergency rollouts bypass normal progressive rollout safeguards for rapid deployment:
+//   - Immediate 100% traffic switch (no gradual ramp-up)
+//   - Reduced validation steps
+//   - Used for critical hotfixes or security patches
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if this is an emergency/blast deployment, false for normal progressive rollout
 func IsEmergencyRollout(deployment v2pb.Deployment) bool {
 	if strategy := deployment.Spec.GetStrategy(); strategy != nil {
 		isEmergency := strategy.GetBlast()
@@ -762,7 +877,13 @@ func IsEmergencyRollout(deployment v2pb.Deployment) bool {
 	return false
 }
 
-// RollbackAlertsEnabled checks if the deployment has the rollback alerts enabled
+// RollbackAlertsEnabled checks if automatic rollback based on alerts is enabled.
+//
+// Parameters:
+//   - deployment: The deployment resource to evaluate
+//
+// Returns:
+//   - true if alert-based rollback is enabled, false otherwise
 func RollbackAlertsEnabled(deployment v2pb.Deployment) bool {
 	if IsEmergencyRollout(deployment) {
 		withRollbackAlerts := deployment.Spec.Strategy.GetBlast().GetWithRollbackTrigger()

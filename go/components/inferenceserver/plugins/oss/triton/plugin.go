@@ -21,7 +21,7 @@ import (
 
 var _ plugins.InferenceServerPlugin = &TritonPlugin{}
 
-// TritonPlugin implements InferenceServerPlugin for Triton backend
+// TritonPlugin manages the full lifecycle of Triton inference servers including creation and deletion.
 type TritonPlugin struct {
 	creationPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 	deletionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
@@ -33,7 +33,7 @@ type TritonPlugin struct {
 	logger                 *zap.Logger
 }
 
-// NewPlugin creates a new Triton plugin
+// NewPlugin creates a Triton plugin with creation and deletion workflows.
 func NewPlugin(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
 		creationPlugin: creation.NewTritonCreationPlugin(gateway, proxyProvider, logger),
@@ -47,16 +47,17 @@ func NewPlugin(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelC
 	}
 }
 
-// GetCreationPlugin returns the plugin for infrastructure creation
+// GetCreationPlugin returns the plugin for provisioning new inference servers.
 func (p *TritonPlugin) GetCreationPlugin() conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return p.creationPlugin
 }
 
-// GetDeletionPlugin returns the plugin for infrastructure cleanup
+// GetDeletionPlugin returns the plugin for removing inference server resources.
 func (p *TritonPlugin) GetDeletionPlugin(resource *v2pb.InferenceServer) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return p.deletionPlugin
 }
 
+// ParseState derives the inference server state from conditions and deletion status.
 func (p *TritonPlugin) ParseState(inferenceServer *v2pb.InferenceServer) v2pb.InferenceServerState {
 	if !inferenceServer.GetDeletionTimestamp().IsZero() {
 		// Resource is being deleted
@@ -97,7 +98,7 @@ func (p *TritonPlugin) ParseState(inferenceServer *v2pb.InferenceServer) v2pb.In
 	return v2pb.INFERENCE_SERVER_STATE_CREATING
 }
 
-// UpdateDetails will retrieve and set the status that is relevant to the inference server plugin.
+// UpdateDetails updates status, annotations, and labels with backend-specific information from the gateway.
 func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.InferenceServer) error {
 	// Skip if resource is being deleted
 	if !resource.GetDeletionTimestamp().IsZero() {
@@ -145,8 +146,7 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	return nil
 }
 
-// UpdateConditions gets the list of conditions pertaining to a particular plugin
-// and for a particular resource instance.
+// UpdateConditions filters the resource conditions to only those relevant to the current plugin workflow.
 func (p *TritonPlugin) UpdateConditions(resource *v2pb.InferenceServer, conditionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]) {
 	actors := conditionPlugin.GetActors()
 	resource.Status.Conditions = p.getRelevantConditions(actors, resource.Status.Conditions)

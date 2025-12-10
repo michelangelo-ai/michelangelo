@@ -12,16 +12,18 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// AssetPreparationActor handles asset preparation following Uber patterns
+// AssetPreparationActor verifies model artifacts are available in storage before deployment.
 type AssetPreparationActor struct {
 	gateway gateways.Gateway
 	logger  *zap.Logger
 }
 
+// GetType returns the condition type identifier for asset preparation.
 func (a *AssetPreparationActor) GetType() string {
 	return common.ActorTypeAssetPreparation
 }
 
+// Retrieve checks if model assets are available in storage (MinIO/S3).
 func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Check if assets are prepared for the desired model
 	if deployment.Spec.DesiredRevision == nil {
@@ -48,6 +50,7 @@ func (a *AssetPreparationActor) Retrieve(ctx context.Context, deployment *v2pb.D
 	}, nil
 }
 
+// Run prepares model assets for deployment (placeholder for future implementation).
 func (a *AssetPreparationActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running asset preparation for deployment", zap.String("deployment", resource.Name))
 

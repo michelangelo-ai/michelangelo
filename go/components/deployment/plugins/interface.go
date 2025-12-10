@@ -20,10 +20,19 @@ type Plugin interface {
 	// this indicates a problem with the rollout. Else, the rollout should proceed as usual.
 	HealthCheckGate(ctx context.Context, observability ObservabilityContext, modelDeployment *v2pb.Deployment) (bool, error)
 
+	// GetRolloutPlugin returns the condition plugin for progressive rollout operations.
 	GetRolloutPlugin(ctx context.Context, resource *v2pb.Deployment) (conditionInterfaces.Plugin[*v2pb.Deployment], error)
+
+	// GetRollbackPlugin returns the condition plugin for rollback operations.
 	GetRollbackPlugin() conditionInterfaces.Plugin[*v2pb.Deployment]
+
+	// GetCleanupPlugin returns the condition plugin for resource cleanup operations.
 	GetCleanupPlugin() conditionInterfaces.Plugin[*v2pb.Deployment]
+
+	// GetSteadyStatePlugin returns the condition plugin for steady state monitoring.
 	GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deployment]
+
+	// ParseStage determines the current deployment stage from the resource state.
 	ParseStage(resource *v2pb.Deployment) v2pb.DeploymentStage
 
 	// PopulateDeploymentLogs is used to populate the deployment logs with the necessary error logs when
@@ -35,13 +44,13 @@ type Plugin interface {
 	PopulateMessage(ctx context.Context, runtimeContext RequestContext, modelDeployment *v2pb.Deployment)
 }
 
-// RequestContext contains the context for actor operations
+// RequestContext contains the context for actor operations.
 type RequestContext struct {
 	Deployment *v2pb.Deployment
 	Logger     logr.Logger
 }
 
-// ObservabilityContext is a wrapper for logging and metric collection
+// ObservabilityContext is a wrapper for logging and metric collection.
 type ObservabilityContext struct {
 	Logger logr.Logger
 	Scope  interface{}

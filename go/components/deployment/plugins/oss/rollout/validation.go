@@ -11,15 +11,17 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// ValidationActor validates deployment configuration
+// ValidationActor validates deployment configuration before rollout begins.
 type ValidationActor struct {
 	logger *zap.Logger
 }
 
+// GetType returns the condition type identifier for validation.
 func (a *ValidationActor) GetType() string {
 	return common.ActorTypeValidation
 }
 
+// Retrieve checks if deployment configuration has valid model and inference server references.
 func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	// Validate deployment configuration
 	if resource.Spec.DesiredRevision == nil {
@@ -68,6 +70,7 @@ func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Deploymen
 	}, nil
 }
 
+// Run performs comprehensive validation and updates deployment stage and state.
 func (a *ValidationActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running validation for deployment", zap.String("deployment", deployment.Name))
 
