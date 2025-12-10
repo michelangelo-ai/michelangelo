@@ -9,8 +9,13 @@ from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
-from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import (
+    A,
+    func,
+)
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
+    Predict,
+)
 
 
 class CustomRawModelTest(TestCase):
@@ -49,7 +54,9 @@ class CustomRawModelTest(TestCase):
             else:
                 sys.modules["__main__"].__dict__[key] = self.main_dict[key]
 
-    @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
+    @patch(
+        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+    )
     def test_load_custom_raw_model_from_external(self, mock_logger_info):
         model_path = "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package"
         model = load_custom_raw_model(model_path)
@@ -68,10 +75,13 @@ class CustomRawModelTest(TestCase):
         response = result.get("response")[0]
 
         self.assertEqual(
-            response, "feature: test_feature and content: test_content and deps: package.fn1 and package.fn2 and folder.fn1 and deps: folder.fn2"
+            response,
+            "feature: test_feature and content: test_content and deps: package.fn1 and package.fn2 and folder.fn1 and deps: folder.fn2",
         )
 
-    @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
+    @patch(
+        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+    )
     def test_load_custom_raw_model_from_internal(self, mock_logger_info):
         model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -110,11 +120,13 @@ class CustomRawModelTest(TestCase):
 
             self.assertEqual(response, "test_feature")
 
-    @patch("michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info")
-    def test_load_custom_raw_model_from_external_with_conflicting_imports(self, mock_logger_info):
-        model_path = (
-            "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package_with_conflicting_imports"
-        )
+    @patch(
+        "michelangelo.lib.model_manager._private.serde.model.custom_raw_model._logger.info"
+    )
+    def test_load_custom_raw_model_from_external_with_conflicting_imports(
+        self, mock_logger_info
+    ):
+        model_path = "michelangelo/lib/model_manager/_private/serde/model/tests/fixtures/external_custom_raw_model_package_with_conflicting_imports"
         model = load_custom_raw_model(model_path)
         mock_logger_info.assert_called_with(
             "Module uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.predict "
@@ -143,7 +155,9 @@ class CustomRawModelTest(TestCase):
         with tempfile.TemporaryDirectory() as model_package:
             os.makedirs(os.path.join(model_package, "defs"))
             with open(os.path.join(model_package, "defs", "model_class.txt"), "w") as f:
-                f.write("michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.InvalidPredict")
+                f.write(
+                    "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.InvalidPredict"
+                )
 
             with self.assertRaisesRegex(
                 AttributeError,
@@ -153,20 +167,26 @@ class CustomRawModelTest(TestCase):
 
     def test_load_custom_raw_model_invalid_model_class_file(self):
         with tempfile.TemporaryDirectory() as model_package:
-            with self.assertRaisesRegex(ValueError, "Missing defs/model_class.txt in the model package"):
+            with self.assertRaisesRegex(
+                ValueError, "Missing defs/model_class.txt in the model package"
+            ):
                 load_custom_raw_model(model_package)
 
             os.makedirs(os.path.join(model_package, "defs"))
             with open(os.path.join(model_package, "defs", "model_class.txt"), "w") as f:
                 f.write("")
 
-            with self.assertRaisesRegex(ValueError, "defs/model_class.txt is empty in the model package"):
+            with self.assertRaisesRegex(
+                ValueError, "defs/model_class.txt is empty in the model package"
+            ):
                 load_custom_raw_model(model_package)
 
             with open(os.path.join(model_package, "defs", "model_class.txt"), "w") as f:
                 f.write("foo")
 
-            with self.assertRaisesRegex(ValueError, "Invalid model class definition foo"):
+            with self.assertRaisesRegex(
+                ValueError, "Invalid model class definition foo"
+            ):
                 load_custom_raw_model(model_package)
 
     def test_load_custom_raw_model_with_pickle(self):
@@ -210,9 +230,17 @@ class CustomRawModelTest(TestCase):
 
             self.assertEqual(response, "test_feature")
 
-    @patch("michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
-    def test_load_custom_raw_model_with_pickle_def_in_main(self, mock_walk_pickle_definitions_in_dir):
-        mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
+    @patch(
+        "michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir"
+    )
+    def test_load_custom_raw_model_with_pickle_def_in_main(
+        self, mock_walk_pickle_definitions_in_dir
+    ):
+        mock_walk_pickle_definitions_in_dir.return_value = [
+            (None, "fn1", None),
+            (None, "fn2", None),
+            (None, "module_attr", None),
+        ]
         model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")

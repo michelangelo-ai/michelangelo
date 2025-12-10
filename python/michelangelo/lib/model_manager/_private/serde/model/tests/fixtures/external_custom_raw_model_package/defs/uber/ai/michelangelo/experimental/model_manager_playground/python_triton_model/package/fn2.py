@@ -1,4 +1,6 @@
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.folder.fn1 import fn1
+from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model.folder.fn1 import (
+    fn1,
+)
 
 
 def fn2():

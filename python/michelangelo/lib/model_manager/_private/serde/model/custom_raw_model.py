@@ -9,7 +9,9 @@ import tempfile
 import shutil
 import uuid
 from michelangelo.lib.model_manager.interface.custom_model import Model
-from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
+    load_custom_model,
+)
 
 _logger = logging.getLogger(__name__)
 
@@ -39,12 +41,16 @@ def load_custom_raw_model(model_path: str) -> Model:
     module_def, _, class_name = model_class.rpartition(".")
 
     if not module_def or not class_name:
-        raise ValueError(f"Invalid model class definition {model_class}. Please specify the full import path to the model class.")
+        raise ValueError(
+            f"Invalid model class definition {model_class}. Please specify the full import path to the model class."
+        )
 
     try:
         module = importlib.import_module(module_def)
     except (ImportError, ModuleNotFoundError):
-        _logger.info(f"Module {module_def} not found in the system path. Trying to load from the model package.")
+        _logger.info(
+            f"Module {module_def} not found in the system path. Trying to load from the model package."
+        )
         sys.path.append(os.path.abspath(defs_path))
         try:
             module = importlib.import_module(module_def)
@@ -60,15 +66,17 @@ def load_custom_raw_model(model_path: str) -> Model:
     try:
         ModelClass = getattr(module, class_name)
     except AttributeError as err:
-        raise AttributeError(f"Class {class_name} not found in module {module_def}.") from err
+        raise AttributeError(
+            f"Class {class_name} not found in module {module_def}."
+        ) from err
 
     return load_custom_model(model_bin_path, ModelClass, defs_path)
 
 
 def create_alternative_defs(defs_path: str) -> tuple[str, str]:
     """Create an alternative defs path.
-    
-    Alternative defs path is created with a unique wrapper 
+
+    Alternative defs path is created with a unique wrapper
     to guarentee no conflicts between the import names and other packages.
 
     Args:
@@ -99,9 +107,9 @@ def create_alternative_defs(defs_path: str) -> tuple[str, str]:
 
 
 def create_import_rewriter(defs_path: str, prefix: str) -> ast.NodeTransformer:
-    """Create an import rewriter. 
-    
-    The import writer is to modify the import names 
+    """Create an import rewriter.
+
+    The import writer is to modify the import names
     to avoid conflicts with other packages.
 
     Args:

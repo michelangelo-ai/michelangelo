@@ -3,9 +3,15 @@ import os
 import numpy as np
 import michelangelo.lib.model_manager._private.serde.model.dummy_module as dummy_module
 from michelangelo.lib.model_manager.interface.custom_model import Model
-from michelangelo.lib.model_manager._private.serde.model.raw_model_type import dummy_type
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.package import fn1
-from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.folder.fn2 import fn2
+from michelangelo.lib.model_manager._private.serde.model.raw_model_type import (
+    dummy_type,
+)
+from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.package import (
+    fn1,
+)
+from uber.ai.michelangelo.experimental.model_manager_playground.python_triton_model_1.folder.fn2 import (
+    fn2,
+)
 
 
 class Predict(Model):
@@ -33,8 +39,6 @@ class Predict(Model):
         inputs: dict[str, np.ndarray],
     ) -> dict[str, np.ndarray]:
         feature = inputs.get("feature")[0]
-        response = (
-            f"feature: {feature} and content: {self.content} and deps: {fn1()} and deps: {fn2()} and {self.dummy_f} and {self.dummy_t}"
-        )
+        response = f"feature: {feature} and content: {self.content} and deps: {fn1()} and deps: {fn2()} and {self.dummy_f} and {self.dummy_t}"
         array = np.array([response])
         return {"response": array}

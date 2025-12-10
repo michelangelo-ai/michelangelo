@@ -9,7 +9,9 @@ from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, 
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.serde.model import load_raw_model
 from michelangelo.lib.model_manager.constants import RawModelType
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
+    Predict,
+)
 
 
 class RawModelTest(TestCase):

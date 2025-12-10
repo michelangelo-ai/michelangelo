@@ -2,8 +2,12 @@ import sys
 import itertools
 import traceback
 from michelangelo.lib.model_manager.interface.custom_model import Model
-from michelangelo.lib.model_manager._private.utils.pickle_utils import walk_pickle_definitions_in_dir
-from michelangelo.lib.model_manager._private.utils.reflection_utils import find_attr_from_dir
+from michelangelo.lib.model_manager._private.utils.pickle_utils import (
+    walk_pickle_definitions_in_dir,
+)
+from michelangelo.lib.model_manager._private.utils.reflection_utils import (
+    find_attr_from_dir,
+)
 
 
 def load_custom_model(model_bin_path: str, ModelClass: type, defs_path: str) -> Model:
@@ -33,9 +37,21 @@ def load_custom_model(model_bin_path: str, ModelClass: type, defs_path: str) -> 
     # that the user defines many different class/functions with the same name as the one in __main__, and the
     # number of attributes needed in __main__ is usually small. The average time complexity of this approach
     # should approach O(n) where n is the number of the required attributes in __main__.
-    attr_names = [attr_name for _, attr_name, _ in walk_pickle_definitions_in_dir(model_bin_path, match=match)]
+    attr_names = [
+        attr_name
+        for _, attr_name, _ in walk_pickle_definitions_in_dir(
+            model_bin_path, match=match
+        )
+    ]
     attr_lists = [
-        [*([main_module.__dict__[attr_name]] if attr_name in main_module.__dict__ else []), *find_attr_from_dir(attr_name, defs_path)]
+        [
+            *(
+                [main_module.__dict__[attr_name]]
+                if attr_name in main_module.__dict__
+                else []
+            ),
+            *find_attr_from_dir(attr_name, defs_path),
+        ]
         for attr_name in attr_names
     ]
 

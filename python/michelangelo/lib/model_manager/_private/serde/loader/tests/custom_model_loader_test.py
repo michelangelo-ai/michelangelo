@@ -8,10 +8,17 @@ from unittest.mock import patch
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import load_custom_model
+from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
+    load_custom_model,
+)
 from michelangelo.lib.model_manager._private.serde.model import load_custom_raw_model
-from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import A, func
-from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import Predict
+from michelangelo.lib.model_manager._private.utils.pickle_utils.tests.fixtures.package import (
+    A,
+    func,
+)
+from michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict import (
+    Predict,
+)
 
 
 class CustomModelLoaderTest(TestCase):
@@ -85,9 +92,17 @@ class CustomModelLoaderTest(TestCase):
 
             self.assertEqual(response, "test_feature")
 
-    @patch("michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir")
-    def test_load_custom_raw_model_with_pickle_def_in_main(self, mock_walk_pickle_definitions_in_dir):
-        mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
+    @patch(
+        "michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir"
+    )
+    def test_load_custom_raw_model_with_pickle_def_in_main(
+        self, mock_walk_pickle_definitions_in_dir
+    ):
+        mock_walk_pickle_definitions_in_dir.return_value = [
+            (None, "fn1", None),
+            (None, "fn2", None),
+            (None, "module_attr", None),
+        ]
         model_class = "michelangelo.lib.model_manager.packager.custom_triton.tests.fixtures.predict.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
@@ -169,9 +184,15 @@ class CustomModelLoaderTest(TestCase):
                 patch(
                     "michelangelo.lib.model_manager._private.serde.loader.custom_model_loader.walk_pickle_definitions_in_dir"
                 ) as mock_walk_pickle_definitions_in_dir,
-                patch.object(Predict, "load", side_effect=AttributeError("error")) as mock_load,
+                patch.object(
+                    Predict, "load", side_effect=AttributeError("error")
+                ) as mock_load,
                 self.assertRaises(RuntimeError),
             ):
-                mock_walk_pickle_definitions_in_dir.return_value = [(None, "fn1", None), (None, "fn2", None), (None, "module_attr", None)]
+                mock_walk_pickle_definitions_in_dir.return_value = [
+                    (None, "fn1", None),
+                    (None, "fn2", None),
+                    (None, "module_attr", None),
+                ]
                 load_custom_model(model_bin_path, Predict, defs_path)
                 mock_load.assert_called()
