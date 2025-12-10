@@ -9,7 +9,7 @@ from unittest.mock import Mock, patch
 
 from google.protobuf.struct_pb2 import Struct
 
-from michelangelo.cli.mactl.plugins.pipeline.create import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     convert_crd_metadata_pipeline_create,
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
@@ -32,12 +32,12 @@ class PipelineCreateTest(TestCase):
 
         self.assertIn("Expected a dictionary", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.create.Repo")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.Repo")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.create.handle_workflow_inputs_retrieval"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.handle_workflow_inputs_retrieval"
     )
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.create.populate_pipeline_spec_with_workflow_inputs"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.create.populate_pipeline_spec_with_workflow_inputs"
     )
     def test_convert_crd_metadata_pipeline_create_basic(
         self, mock_populate, mock_handle_workflow, mock_repo_class
@@ -132,7 +132,7 @@ class PipelineCreateTest(TestCase):
         workflow_function_name = "my_workflow"
 
         with patch(
-            "michelangelo.cli.mactl.plugins.pipeline.create.getenv"
+            "michelangelo.cli.mactl.plugins.entity.pipeline.create.getenv"
         ) as mock_getenv:
             mock_getenv.return_value = "test-user"
 
@@ -165,7 +165,7 @@ class PipelineCreateTest(TestCase):
         )
         self.assertEqual(result["spec"]["owner"]["name"], "test-user")
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.create.get_pipeline_config_and_tar")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar")
     def test_handle_workflow_inputs_retrieval_success(self, mock_get_config):
         """Test successful workflow inputs retrieval."""
         repo_root = Path("/fake/repo")
@@ -200,7 +200,7 @@ class PipelineCreateTest(TestCase):
             pipeline=pipeline,
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.create.get_pipeline_config_and_tar")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar")
     def test_handle_workflow_inputs_retrieval_file_not_found(self, mock_get_config):
         """Test workflow inputs retrieval when config file not found."""
         repo_root = Path("/fake/repo")
@@ -218,7 +218,7 @@ class PipelineCreateTest(TestCase):
 
         self.assertIn("Pipeline configuration file is missing", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.create.get_pipeline_config_and_tar")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.create.get_pipeline_config_and_tar")
     def test_handle_workflow_inputs_retrieval_runtime_error_graceful_degradation(
         self, mock_get_config
     ):

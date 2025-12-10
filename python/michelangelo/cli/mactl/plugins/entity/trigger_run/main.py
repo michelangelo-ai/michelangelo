@@ -1,16 +1,23 @@
+"""Trigger Run Plugin Application Module."""
+
 from logging import getLogger
 from types import MethodType
 
 from grpc import Channel
-from plugins.trigger_run.kill import add_function_signature, generate_kill
 
 from michelangelo.cli.mactl.crd import CRD
+from michelangelo.cli.mactl.plugins.entity.trigger_run.kill import (
+    add_function_signature,
+    generate_kill,
+)
+
 
 _LOG = getLogger(__name__)
 
 
 def apply_plugins(crd: CRD, channel: Channel):
     """Apply plugin entity function signatures to the CRD.
+
     It adds the necessary function signatures and methods for user commands
     """
     _LOG.info("Applying plugin entity to crd: %r", crd)

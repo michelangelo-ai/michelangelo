@@ -22,11 +22,11 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
-from michelangelo.cli.mactl.plugins.pipeline.create import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.create import (
     handle_workflow_inputs_retrieval,
     populate_pipeline_spec_with_workflow_inputs,
 )
-from michelangelo.cli.mactl.plugins.pipeline.run import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     generate_pipeline_run_name,
     generate_pipeline_run_object,
 )

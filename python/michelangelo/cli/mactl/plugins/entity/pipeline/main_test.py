@@ -6,7 +6,7 @@ Tests the apply_plugins function which configures the CRD with plugin-specific c
 from unittest import TestCase
 from unittest.mock import Mock
 
-from michelangelo.cli.mactl.plugins.pipeline.main import apply_plugin_command
+from michelangelo.cli.mactl.plugins.entity.pipeline.main import apply_plugin_command
 
 
 class PipelineMainTest(TestCase):

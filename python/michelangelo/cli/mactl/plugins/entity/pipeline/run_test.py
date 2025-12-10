@@ -6,7 +6,7 @@ Tests helper functions for pipeline run generation.
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from michelangelo.cli.mactl.plugins.pipeline.run import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
@@ -17,8 +17,8 @@ from michelangelo.cli.mactl.plugins.pipeline.run import (
 class PipelineRunTest(TestCase):
     """Tests for pipeline run plugin."""
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.time")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.uuid")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.time")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.uuid")
     def test_generate_pipeline_run_name(self, mock_uuid, mock_time):
         """Test pipeline run name generation."""
         mock_time.time.return_value = 1705152000  # 2024-01-13 12:00:00
@@ -58,7 +58,7 @@ class PipelineRunTest(TestCase):
         # Verify no resume spec when resume_from not provided
         self.assertNotIn("resume", result["spec"])
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.parse_resume_from")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.parse_resume_from")
     def test_generate_pipeline_run_object_with_resume_from(self, mock_parse):
         """Test pipeline run object generation with resume_from."""
         mock_resume_spec = {
@@ -140,8 +140,8 @@ class PipelineRunTest(TestCase):
 
         self.assertIn("--name is required", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.generate_pipeline_run_object")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object")
     def test_convert_crd_metadata_pipeline_run_basic(
         self, mock_generate_obj, mock_generate_name
     ):
@@ -176,8 +176,8 @@ class PipelineRunTest(TestCase):
             resume_from=None,
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.generate_pipeline_run_object")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_name")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.generate_pipeline_run_object")
     def test_convert_crd_metadata_pipeline_run_with_resume_from(
         self, mock_generate_obj, mock_generate_name
     ):
