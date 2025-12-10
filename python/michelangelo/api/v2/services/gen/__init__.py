@@ -12,7 +12,6 @@ class ServicesGen(object):
     ProjectService = None
     RayClusterService = None
     RayJobService = None
-    RevisionService = None
     SparkJobService = None
     TriggerRunService = None
 
