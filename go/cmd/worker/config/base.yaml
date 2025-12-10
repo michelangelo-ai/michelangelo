@@ -30,3 +30,9 @@ minio:
   awsAccessKeyId: minioadmin
   awsSecretAccessKey: minioadmin
   awsEndpointUrl: localhost:9091
+
+# Azure Blob Storage configuration (uncomment to enable Azure support)
+# azure:
+#   storageAccount: "mystorageaccount"
+#   sasToken: "sv=2022-11-02&ss=b&srt=sco&sp=rwdlacupx&se=2024-12-31T23:59:59Z&st=2023-01-01T00:00:00Z&spr=https&sig=..."
+#   endpoint: ""  # Optional: Custom endpoint (defaults to https://{storageAccount}.blob.core.windows.net)
