@@ -65,8 +65,6 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 	if err == nil {
 		// Case 1: Deployment exists - Update path.
 		// Update the existing deployment with the new desired revision.
-		// For OSS, we must provide the complete existing deployment object
-		// (including metadata.resourceVersion) and only modify the desired revision.
 		updateReq := &v2pb.UpdateDeploymentRequest{
 			Deployment: &v2pb.Deployment{
 				ObjectMeta: existingDeployment.ObjectMeta,
@@ -122,25 +120,10 @@ func (r *module) createOrUpdateDeployment(t *starlark.Thread, _ *starlark.Builti
 		}
 	}
 
-	// NOTE: Deployment revision tracking is commented out for OSS.
-	// OSS uses revision.NewNoOpManager() which disables deployment revision creation.
-	// Uncomment when revision service is enabled in OSS (see controller.go line 90).
-	//
-	// var latestRevisionName string
-	// if err := workflow.ExecuteActivity(ctx, deployment.Activities.GetLatestDeploymentRevision,
-	// 	deployment.GetLatestDeploymentRevisionRequest{
-	// 		Namespace:       namespace,
-	// 		DeploymentName:  deploymentName,
-	// 		OldRevisionName: "",
-	// 	}).Get(ctx, &latestRevisionName); err != nil {
-	// 	return nil, err
-	// }
-
 	// Return deployment information.
-	result := starlark.NewDict(3)
+	result := starlark.NewDict(2)
 	result.SetKey(starlark.String("deployment_name"), starlark.String(deploymentName))
 	result.SetKey(starlark.String("model_revision_name"), starlark.String(modelRevisionName))
-	// result.SetKey(starlark.String("deployment_revision_name"), starlark.String(latestRevisionName)) // Requires revision service
 	return result, nil
 }
 
@@ -148,12 +131,13 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 	ctx := service.GetContext(t)
 	logger := workflow.GetLogger(ctx)
 
-	var namespace, deploymentName string
+	var namespace, deploymentName, expectedModelRevision string
 	var timeout, poll int64 = 31536000, 600 // Defaults: 1 year, 10 mins
 
 	if err := starlark.UnpackArgs("wait_for_deployment", args, kwargs,
 		"namespace", &namespace,
 		"deployment_name", &deploymentName,
+		"expected_model_revision_name", &expectedModelRevision,
 		"timeout?", &timeout,
 		"poll?", &poll,
 	); err != nil {
@@ -174,8 +158,9 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 
 	var finalDeployment *v2pb.Deployment
 	if err := workflow.ExecuteActivity(ctx, deployment.Activities.SensorDeployment, deployment.SensorDeploymentRequest{
-		Namespace:      namespace,
-		DeploymentName: deploymentName,
+		Namespace:             namespace,
+		DeploymentName:        deploymentName,
+		ExpectedModelRevision: expectedModelRevision,
 	}).Get(ctx, &finalDeployment); err != nil {
 		return nil, err
 	}

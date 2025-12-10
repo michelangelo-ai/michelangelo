@@ -38,23 +38,23 @@ func (r *Test) TearDownTest() {
 func (r *Test) TestCreateOrUpdateDeployment_Update() {
 	env := r.env.Cadence.GetTestWorkflowEnvironment()
 	env.RegisterActivity(deployment.Activities.GetDeployment)
-	env.RegisterActivity(deployment.Activities.GetLatestDeploymentRevision)
 	env.RegisterActivity(deployment.Activities.UpdateDeployment)
 
 	// Mock successful GetDeployment (deployment exists)
-	env.OnActivity(deployment.Activities.GetDeployment, mock.Anything, mock.Anything).Return(&v2pb.Deployment{}, nil)
-
-	// Mock GetLatestDeploymentRevision to return old revision
-	env.OnActivity(deployment.Activities.GetLatestDeploymentRevision, mock.Anything, mock.Anything).Return("old-revision-123", nil)
+	existingDeployment := &v2pb.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:            "test-deployment",
+			Namespace:       "test-namespace",
+			ResourceVersion: "12345",
+		},
+		Spec: v2pb.DeploymentSpec{},
+	}
+	env.OnActivity(deployment.Activities.GetDeployment, mock.Anything, mock.Anything).Return(existingDeployment, nil)
 
 	// Mock successful UpdateDeployment
 	env.OnActivity(deployment.Activities.UpdateDeployment, mock.Anything, mock.Anything).Return(&v2pb.Deployment{}, nil)
 
-	// Mock GetLatestDeploymentRevision with retry to return new revision
-	env.OnActivity(deployment.Activities.GetLatestDeploymentRevision, mock.Anything, mock.Anything).Return("new-revision-456", nil)
-
-	// Note: You need a test.star file in testdata/ that calls this function
-	// r.env.Cadence.ExecuteFunction("/test.star", "test_create_or_update_deployment", nil, nil, nil)
-	// Since we can't easily create the .star file and run it here, we assume basic compilation check is enough.
+	// Note: Full integration test would require executing test.star file
+	// This test verifies the basic activity mocking structure compiles correctly
 }
 
