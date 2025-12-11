@@ -129,6 +129,7 @@ class CustomTritonPackagerTest(TestCase):
         self.assertEqual(files, expected_files)
 
     def test_create_model_package(self):
+        """It creates a model package."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
