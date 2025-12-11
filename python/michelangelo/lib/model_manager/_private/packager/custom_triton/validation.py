@@ -2,15 +2,17 @@
 
 import os
 import tempfile
-from typing import Union, Optional
+from typing import Optional, Union
+
 from numpy import ndarray
-from michelangelo.lib.model_manager.schema import ModelSchema
-from michelangelo.lib.model_manager.serde.model import load_raw_model
+
+from michelangelo._internal.utils.reflection_utils import get_module_attr
 from michelangelo.lib.model_manager._private.utils.data_utils import (
     validate_output_data,
     validate_output_data_with_model_schema,
 )
-from michelangelo._internal.utils.reflection_utils import get_module_attr
+from michelangelo.lib.model_manager.schema import ModelSchema
+from michelangelo.lib.model_manager.serde.model import load_raw_model
 
 
 def validate_model_files(model_path: str):
