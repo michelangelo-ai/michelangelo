@@ -187,7 +187,7 @@ while true; do
     # Sync models from storage
     for desired_model in $DESIRED_MODELS; do
       if [ ! -z "$desired_model" ]; then
-        storage_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
+        storage_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .storage_path' /tmp/model-list.json 2>/dev/null)
         
         # Handle different storage path formats
         if [ "$storage_path" = "null" ] || [ -z "$storage_path" ]; then
