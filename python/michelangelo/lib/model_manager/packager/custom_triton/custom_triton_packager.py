@@ -6,7 +6,9 @@ from typing import Optional, Union
 from numpy import ndarray
 
 from michelangelo._internal.utils.file_utils import generate_folder
+from michelangelo.lib.model_manager._private.constants import Placeholder
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    generate_model_package_content,
     generate_raw_model_package_content,
     validate_model_class,
     validate_raw_model_package,
@@ -15,6 +17,7 @@ from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )
 from michelangelo.lib.model_manager._private.schema.triton import (
+    convert_model_schema,
     validate_model_schema,
 )
 from michelangelo.lib.model_manager._private.utils.data_utils import (
@@ -63,7 +66,7 @@ class CustomTritonPackager:
         self.gen = TritonTemplateRenderer()
         self.custom_batch_processing = custom_batch_processing
 
-    def generate_model_package(
+    def create_model_package(
         self,
         model_path: str,
         model_class: str,
@@ -111,6 +114,47 @@ class CustomTritonPackager:
         Returns:
             The absolute path to the generated model package directory.
         """
+        if not model_class:
+            raise ValueError("model_class is required")
+
+        is_model_class_valid, error = validate_model_class(model_class)
+
+        if not is_model_class_valid:
+            raise error
+
+        if not model_schema:
+            raise ValueError("model_schema is required")
+
+        is_schema_valid, error = validate_model_schema(model_schema)
+
+        if not is_schema_valid:
+            raise error
+
+        input_schema, output_schema = convert_model_schema(model_schema)
+
+        if not model_name:
+            model_name = Placeholder.MODEL_NAME
+
+        if not dest_model_path:
+            dest_model_path = tempfile.mkdtemp()
+
+        content = generate_model_package_content(
+            self.gen,
+            model_path,
+            model_name,
+            model_revision,
+            model_class,
+            input_schema,
+            output_schema,
+            model_path_source_type=model_path_source_type,
+            root_path=dest_model_path,
+            include_import_prefixes=include_import_prefixes,
+            custom_batch_processing=self.custom_batch_processing,
+        )
+
+        generate_folder(content, dest_model_path)
+
+        return dest_model_path
 
     def create_raw_model_package(
         self,
@@ -161,9 +205,6 @@ class CustomTritonPackager:
                 - A list of requirement strings (e.g., ['numpy>=1.20.0',
                   'scikit-learn==1.0.2'])
                 - A path to a requirements.txt file
-                If not specified, no additional requirements will be included in
-                the package (only the model code and its imports will be
-                bundled).
             include_import_prefixes: A list of module prefixes to include when
                 bundling dependencies. Only imported modules whose names start
                 with one of these prefixes will be included in the package. For
