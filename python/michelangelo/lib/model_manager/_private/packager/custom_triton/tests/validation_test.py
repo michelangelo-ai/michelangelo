@@ -129,7 +129,7 @@ class ValidationTest(TestCase):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_model_files_with_reserved_model_py(self):
-        """Test that validation rejects models with model.py in root folder"""
+        """Test that validation rejects models with model.py in root folder."""
         predict = Predict("test_content")
         model_class = "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation.Predict"
 
@@ -153,7 +153,7 @@ class ValidationTest(TestCase):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_model_files_without_reserved_model_py(self):
-        """Test that validation allows models without model.py in root folder"""
+        """Test that validation allows models without model.py in root folder."""
         predict = Predict("test_content")
         model_class = "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -165,7 +165,7 @@ class ValidationTest(TestCase):
             self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_model_files_with_model_py_in_subdirectory(self):
-        """Test that validation allows model.py in subdirectories"""
+        """Test that validation allows model.py in subdirectories."""
         predict = Predict("test_content")
         model_class = "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation.Predict"
         with tempfile.TemporaryDirectory() as temp_dir:
