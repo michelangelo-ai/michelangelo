@@ -1,22 +1,12 @@
-"""BERT fine-tuning workflow for CoLA linguistic acceptability task.
-
-Example workflow demonstrating BERT fine-tuning on the Corpus of Linguistic
-Acceptability (CoLA) task from the GLUE benchmark.
-"""
-
 import michelangelo.uniflow.core as uniflow
 from examples.bert_cola.data import load_data
+from examples.bert_cola.pusher import pusher
 from examples.bert_cola.train import train
 from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
 def train_workflow():
-    """Training workflow for BERT model on CoLA dataset.
-
-    Loads CoLA dataset from GLUE benchmark, fine-tunes BERT for sequence
-    classification, and evaluates model performance.
-    """
     data_path = "glue"
     data_name = "cola"
     train_data, validation_data, test_data = load_data(
@@ -24,31 +14,35 @@ def train_workflow():
         data_name,
         tokenizer_max_length=128,
     )
-    result = train(
+    model_uri, train_result, best_checkpoint = train(
         train_data,
         validation_data,
         test_data,
     )
-    print("result:", result)
+    deployed_model_name = "bert-cola-local-packager"
+    _ = pusher(model_uri, deployed_model_name)
+    print("result:", train_result)
     print("ok.")
 
 
 # For Local Run: python3 examples/bert_cola/bert_cola.py
-# For Remote Run: python3 examples/bert_cola/bert_cola.py remote-run
-# --storage-url <STORAGE_URL> --image <IMAGE>
+# For Remote Run: python3 examples/bert_cola/bert_cola.py remote-run --storage-url <STORAGE_URL> --image <IMAGE>
 if __name__ == "__main__":
     ctx = uniflow.create_context()
 
-    # Set the environment variable DATA_SIZE to let the load_data task
-    # know how much data to generate.
+    # Set the environment variable DATA_SIZE to let the load_data task know how much data to generate.
     ctx.environ["DATA_SIZE"] = "10"
 
-    # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC
-    # docstring for more information.
+    # Disable use of fsspec in Ray Plugin. See UF_PLUGIN_RAY_USE_FSSPEC docstring for more information.
     ctx.environ[UF_PLUGIN_RAY_USE_FSSPEC] = "0"
     ctx.environ["PYTORCH_MPS_HIGH_WATERMARK_RATIO"] = "0"
     ctx.environ["MA_NAMESPACE"] = "default"
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
+    ctx.environ["MA_API_SERVER"] = "michelangelo-apiserver.default:14566"
+    ctx.environ["MLFLOW_TRACKING_URI"] = (
+        "mysql+pymysql://root:root@mysql:3306/mlflow_db"
+    )
+
     ctx.run(train_workflow)

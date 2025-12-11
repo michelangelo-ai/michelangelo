@@ -53,8 +53,8 @@ kaggle = { version = "^1.6.17", optional = true }
 scikit-learn = { version = "^1.5.2", optional = true }
 
 # For MLflow model packaging
-mlflow = { version = "^2.0.0", optional = true }
-boto3 = { version = "^1.40.0", optional = true }
+mlflow = "2.22.0"
+boto3 = "1.28.0"
 peft = { version = "^0.3.0", optional = true }
 
 # For VLLM
@@ -65,6 +65,8 @@ vllm = { version = "0.8.1", optional = true }
 grpcio-reflection = { version = ">=1.66.1", optional = true }
 PyYAML = { version = "6.0.2", optional = true }
 GitPython = { version = ">=3.1.44", optional = true }
+pymysql = "^1.1.2"
+mlflow-skinny = "2.22.0"
 
 
 [tool.poetry.scripts]
