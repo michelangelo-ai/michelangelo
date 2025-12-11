@@ -131,9 +131,13 @@ class CustomTritonPackagerTest(TestCase):
     def test_create_model_package(self):
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
-            dest_model_path = os.path.join(temp_dir, "model")
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "deployable_model")
+            os.makedirs(model_path)
+            with open(os.path.join(model_path, "file.txt"), "w") as f:
+                f.write("file_content")
             dest_model_path = packager.create_model_package(
-                "test_model_path",
+                model_path=model_path,
                 dest_model_path=dest_model_path,
                 model_class=model_class,
                 model_schema=self.model_schema,
