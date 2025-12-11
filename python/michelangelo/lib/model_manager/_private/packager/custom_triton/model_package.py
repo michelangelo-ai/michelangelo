@@ -3,35 +3,36 @@
 import os
 import tempfile
 from typing import Optional
-from michelangelo.lib.model_manager.constants import StorageType
-from michelangelo.lib.model_manager._private.packager.template_renderer import (
-    TritonTemplateRenderer,
-)
+
 from michelangelo.lib.model_manager._private.packager.custom_triton.config_pbtxt import (
     generate_config_pbtxt_content,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_py import (
-    generate_model_py_content,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.user_model_py import (
-    generate_user_model_content,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
-    serialize_model_class,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
-    serialize_pickle_dependencies,
-)
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_loader import (
-    serialize_model_loader,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
     MODEL_CLASS_FILE_NAME,
 )
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
+    serialize_model_class,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_loader import (
+    serialize_model_loader,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_py import (
+    generate_model_py_content,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
+    serialize_pickle_dependencies,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton.user_model_py import (
+    generate_user_model_content,
+)
 from michelangelo.lib.model_manager._private.packager.custom_triton.validation import (
     validate_model_files,
 )
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
+)
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
+from michelangelo.lib.model_manager.constants import StorageType
 
 
 def generate_model_package_content(
@@ -69,6 +70,7 @@ def generate_model_package_content(
             Default is False. If set to True, the user is responsible for handling batch in the model class,
             and the model input/output will have an additional batch dimension on top of the existing model schema.
             For example, the schema shape [1] will be converted to [-1, 1].
+
     Returns:
         The model package content as a dictionary
     """

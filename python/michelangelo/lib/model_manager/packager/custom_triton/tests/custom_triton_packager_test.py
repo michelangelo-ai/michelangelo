@@ -1,9 +1,9 @@
 """Tests for CustomTritonPackager."""
 
+import importlib
 import os
 import pickle
 import tempfile
-import importlib
 from pathlib import Path
 from unittest import TestCase
 

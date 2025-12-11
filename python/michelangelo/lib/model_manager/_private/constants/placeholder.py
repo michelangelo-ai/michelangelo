@@ -1,6 +1,5 @@
 class Placeholder:
-    """
-    Placeholder for a value that is not yet known.
+    """Placeholder for a value that is not yet known.
     """
 
     # Used as a placeholder for model name in config.pbtxt file produced by triton packagers
