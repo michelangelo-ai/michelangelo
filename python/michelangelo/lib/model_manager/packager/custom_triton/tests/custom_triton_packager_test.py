@@ -3,6 +3,7 @@
 import os
 import pickle
 import tempfile
+import importlib
 from pathlib import Path
 from unittest import TestCase
 
@@ -53,7 +54,6 @@ class CustomTritonPackagerTest(TestCase):
             "0/michelangelo/lib/model_manager/_private/utils/pickle_utils/pickled_file.py",
             "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/__init__.py",
             "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/module.py",
-            "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/module_attr.py",
             "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/root_import_path.py",
         ]
 
