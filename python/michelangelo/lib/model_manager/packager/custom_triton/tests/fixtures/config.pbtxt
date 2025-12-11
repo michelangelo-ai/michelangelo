@@ -1,0 +1,29 @@
+name: "test_model_name-0"
+backend: "python"
+max_batch_size: 256
+dynamic_batching: {
+  preferred_batch_size: 10,
+  max_queue_delay_microseconds: 300,
+  preserve_ordering: true
+}
+input : [
+  {
+    name: "input",
+    data_type: TYPE_INT32,
+    dims: [ 1 ]
+  }
+]
+output: [
+  {
+    name: "response",
+    data_type: TYPE_INT32,
+    dims: [ 1 ]
+  }
+]
+instance_group: [
+  {
+    kind: KIND_CPU,
+    count: 1
+  }
+]
+
