@@ -10,6 +10,7 @@ log = logging.getLogger(__name__)
 
 
 def main():
+    """Entrypoint for running a Uniflow task."""
     for a in sys.argv:
         log.info("sys.argv: %s", a)
 
