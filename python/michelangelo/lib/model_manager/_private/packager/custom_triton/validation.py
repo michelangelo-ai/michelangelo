@@ -25,8 +25,8 @@ def validate_model_files(model_path: str):
     model_py_path = os.path.join(model_path, "__init__.py")
     if os.path.exists(model_py_path):
         raise ValueError(
-            "Custom model contains a reserved file '__init__.py' in the model assets folder. "
-            "This file conflicts with Triton's required model.py file and will break deployments. "
+            "Custom model contains the file'__init__.py' in the model assets folder. "
+            "This file conflicts with Triton's reserved model.py file and will break deployments. "
             "Please remove your __init__.py file from model_path."
         )
 
