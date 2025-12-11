@@ -64,7 +64,7 @@ class CustomTritonPackager:
         self.gen = TritonTemplateRenderer()
         self.custom_batch_processing = custom_batch_processing
 
-    def generate_model_package(
+    def create_model_package(
         self,
         model_path: str,
         model_class: str,

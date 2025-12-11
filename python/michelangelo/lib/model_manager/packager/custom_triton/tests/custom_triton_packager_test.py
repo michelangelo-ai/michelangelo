@@ -138,6 +138,7 @@ class CustomTritonPackagerTest(TestCase):
                 model_class=model_class,
                 model_schema=self.model_schema,
                 model_name="test_model_name",
+                include_import_prefixes=["michelangelo"],
             )
 
             self.assert_model_package(dest_model_path)
