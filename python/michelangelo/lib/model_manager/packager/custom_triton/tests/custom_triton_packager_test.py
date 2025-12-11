@@ -45,6 +45,17 @@ class CustomTritonPackagerTest(TestCase):
         )
         self.sample_data = [{"input": np.array([1])}]
         self.batch_sample_data = [{"input": np.array([[1], [2]])}]
+        self.model_loader_files = [
+            "0/michelangelo/lib/model_manager/_private/serde/loader/custom_model_loader.py",
+            "0/michelangelo/lib/model_manager/_private/utils/pickle_utils/__init__.py",
+            "0/michelangelo/lib/model_manager/_private/utils/pickle_utils/pickle_definition.py",
+            "0/michelangelo/lib/model_manager/_private/utils/pickle_utils/pickle_definition_walker.py",
+            "0/michelangelo/lib/model_manager/_private/utils/pickle_utils/pickled_file.py",
+            "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/__init__.py",
+            "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/module.py",
+            "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/module_attr.py",
+            "0/michelangelo/lib/model_manager/_private/utils/reflection_utils/root_import_path.py",
+        ]
 
     def test_custom_triton_packager(self):
         """It creates a packager instance with default settings."""
