@@ -47,44 +47,6 @@ storage:
       - log-viewer
       - logs
 
-# MySQL database configuration (required for Cadence)
-mysql:
-  enabled: true
-  image: mysql:8.0
-  rootPassword: root
-  database: michelangelo
-  service:
-    type: ClusterIP
-    port: 3306
-  persistence:
-    enabled: true
-    size: 10Gi
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
-# Cadence workflow engine (required for controllermgr)
-cadence:
-  enabled: true
-  image: ubercadence/server:v1.2.14-auto-setup
-  domain: default
-  service:
-    grpc:
-      port: 7833
-    tchannel:
-      port: 7933
-  resources:
-    requests:
-      cpu: 100m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
 # API Server configuration
 apiserver:
   replicaCount: 1

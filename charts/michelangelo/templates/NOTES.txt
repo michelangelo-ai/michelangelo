@@ -18,12 +18,6 @@ Installed Components:
 {{- if .Values.components.controllermgr.enabled }}
   ✓ Controller Manager
 {{- end }}
-{{- if .Values.mysql.enabled }}
-  ✓ MySQL Database
-{{- end }}
-{{- if .Values.cadence.enabled }}
-  ✓ Cadence Workflow Engine
-{{- end }}
 {{- if .Values.inference.modelSync.enabled }}
   ✓ Model Sync (Inference)
 {{- end }}

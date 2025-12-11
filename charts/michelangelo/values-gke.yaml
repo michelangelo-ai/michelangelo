@@ -43,28 +43,6 @@ storage:
       - michelanglo-oss-196506-log-viewer
       - michelanglo-oss-196506-logs
 
-# MySQL - required for Cadence
-mysql:
-  enabled: true
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
-# Cadence workflow engine - required for controllermgr
-cadence:
-  enabled: true
-  resources:
-    requests:
-      cpu: 50m
-      memory: 256Mi
-    limits:
-      cpu: 500m
-      memory: 1Gi
-
 # Enable Gateway API for inference routing
 gateway:
   enabled: true

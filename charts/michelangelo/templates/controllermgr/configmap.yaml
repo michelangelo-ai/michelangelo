@@ -32,10 +32,4 @@ data:
       awsAccessKeyId: {{ .Values.storage.s3.accessKeyId | default "" }}
       awsSecretAccessKey: {{ .Values.storage.s3.secretAccessKey | default "" }}
 {{- end }}
-    # Workflow client config (Cadence)
-    workflowClient:
-      service: cadence-frontend
-      host: {{ include "michelangelo.workflowEndpoint" . }}
-      transport: grpc
-      domain: {{ .Values.cadence.domain | default "default" }}
 {{- end }}

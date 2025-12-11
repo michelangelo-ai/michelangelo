@@ -100,13 +100,6 @@ azure
 {{- end }}
 
 {{/*
-Return workflow service endpoint (Cadence)
-*/}}
-{{- define "michelangelo.workflowEndpoint" -}}
-cadence:7833
-{{- end }}
-
-{{/*
 Return Gateway API endpoint for inference routing
 */}}
 {{- define "michelangelo.gatewayEndpoint" -}}
