@@ -10,6 +10,7 @@ from .pickled_model_binary import (
     serialize_pickle_dependencies,
     serialize_pickled_file_dependencies,
 )
+from .model_package import generate_model_package_content
 from .raw_model_package import generate_raw_model_package_content
 from .requirements_txt import generate_requirements_txt
 from .type_yaml import generate_type_yaml
