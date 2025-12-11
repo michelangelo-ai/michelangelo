@@ -78,7 +78,7 @@ def generate_model_package_content(
         root_path = tempfile.mkdtemp()
 
     model_py = generate_model_py_content(gen)
-    process_batch = False if custom_batch_processing else True
+    process_batch = not custom_batch_processing
     user_model_py = generate_user_model_content(gen, process_batch=process_batch)
     config_pbtxt = generate_config_pbtxt_content(
         gen,
