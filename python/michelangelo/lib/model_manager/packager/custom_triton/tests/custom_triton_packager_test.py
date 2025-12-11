@@ -128,6 +128,37 @@ class CustomTritonPackagerTest(TestCase):
         expected_files = sorted(package_files + self.model_loader_files)
         self.assertEqual(files, expected_files)
 
+    def test_create_model_package(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            dest_model_path = os.path.join(temp_dir, "model")
+            dest_model_path = packager.create_model_package(
+                "test_model_path",
+                dest_model_path=dest_model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                model_name="test_model_name",
+            )
+
+            self.assert_model_package(dest_model_path)
+
+            with open("michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt") as expected_f:
+                with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
+                    expected_config = expected_f.read()
+                    config = f.read()
+                    self.assertEqual(config, expected_config)
+
+            # running the predict function
+            loaded_model_class = None
+            with open(os.path.join(dest_model_path, "0", "model_class.txt")) as f:
+                loaded_model_class = f.read().strip()
+
+            module_def, _, class_name = loaded_model_class.rpartition(".")
+            module = importlib.import_module(module_def)
+            Predict = getattr(module, class_name)
+            predict_obj = Predict()
+            self.assertEqual(predict_obj.predict(self.sample_data[0]), {"response": self.sample_data[0].get("input")})
+
     def assert_raw_model_package(
         self, dest_model_path, with_requirements=False, batch_inference=False
     ):
