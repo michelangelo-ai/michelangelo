@@ -403,7 +403,7 @@ do_deploy_inference() {
 
     # Wait for the controller to create the deployment
     echo_info "Waiting for inference server deployment to be created..."
-    DEPLOYMENT_NAME="triton-inference-server-bert-cola"
+    DEPLOYMENT_NAME="triton-inference-server-gke"
     for i in {1..60}; do
         if kubectl get deployment $DEPLOYMENT_NAME -n $NAMESPACE >/dev/null 2>&1; then
             echo_info "Deployment found!"
@@ -443,7 +443,7 @@ do_deploy_inference() {
     kubectl rollout status deployment/$DEPLOYMENT_NAME -n $NAMESPACE --timeout=300s || echo_warn "Deployment rollout timed out"
 
     # Wait for InferenceServer CR to reach SERVING state
-    INFERENCE_SERVER_NAME="inference-server-bert-cola"
+    INFERENCE_SERVER_NAME="inference-server-gke"
     echo_info "Waiting for InferenceServer '$INFERENCE_SERVER_NAME' to reach SERVING state..."
     echo "   (This may take 5-10 minutes for first-time Triton image pull)"
     
@@ -498,7 +498,7 @@ do_deploy_inference() {
     echo "  ✅ Istio service mesh (istio-system namespace)"
     echo "  ✅ Gateway API CRDs"
     echo "  ✅ Gateway (ma-gateway)"
-    echo "  ✅ InferenceServer CR (inference-server-bert-cola)"
+    echo "  ✅ InferenceServer CR (inference-server-gke)"
     echo "  ✅ Triton deployment with GPU tolerations"
     echo "  ✅ Model-sync deployment"
     echo ""
@@ -513,7 +513,7 @@ do_deploy_inference() {
     echo ""
     echo_info "To access the inference server (if using ClusterIP):"
     echo "  kubectl port-forward svc/ma-gateway-istio -n michelangelo 8080:80"
-    echo "  curl -v http://localhost:8080/inference-server-bert-cola/v2/health/ready"
+    echo "  curl -v http://localhost:8080/inference-server-gke/v2/health/ready"
 }
 
 # ============================================================================

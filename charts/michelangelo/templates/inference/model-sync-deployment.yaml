@@ -49,7 +49,7 @@ spec:
                 operator: In
                 values:
                 - inference-server
-                - triton-inference-server-bert-cola
+                - triton-inference-server-gke
             topologyKey: kubernetes.io/hostname
       containers:
       - name: model-sync
@@ -70,8 +70,8 @@ spec:
         - name: inference-servers-config
           mountPath: /config/inference-servers
           readOnly: true
-        - name: inference-server-bert-cola-config
-          mountPath: /config/inference-server-bert-cola
+        - name: inference-server-gke-config
+          mountPath: /config/inference-server-gke
           readOnly: true
         - name: sync-script
           mountPath: /scripts
@@ -92,9 +92,9 @@ spec:
         configMap:
           name: inference-servers-list
           optional: true
-      - name: inference-server-bert-cola-config
+      - name: inference-server-gke-config
         configMap:
-          name: inference-server-bert-cola-model-config
+          name: inference-server-gke-model-config
           optional: true
       - name: sync-script
         configMap:

@@ -10,7 +10,7 @@ spec:
     name: bert-cola-37
     namespace: michelangelo
   inferenceServer:
-    name: inference-server-bert-cola
+    name: inference-server-gke
     namespace: michelangelo
   selector:
     matchLabels:

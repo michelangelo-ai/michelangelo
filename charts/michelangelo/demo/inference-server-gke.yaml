@@ -3,7 +3,7 @@
 # Usage:
 #   1. Apply this file: kubectl apply -f charts/michelangelo/demo/inference-server-gke.yaml
 #   2. Wait for deployment to be created, then patch with tolerations:
-#      kubectl patch deployment triton-inference-server-bert-cola -n michelangelo --type='json' -p='[
+#      kubectl patch deployment triton-inference-server-gke -n michelangelo --type='json' -p='[
 #        {"op": "add", "path": "/spec/template/spec/tolerations", "value": [
 #          {"key": "nvidia.com/gpu", "operator": "Exists", "effect": "NoSchedule"}
 #        ]}
@@ -13,7 +13,7 @@
 apiVersion: michelangelo.api/v2
 kind: InferenceServer
 metadata:
-  name: inference-server-bert-cola
+  name: inference-server-gke
   namespace: michelangelo
   labels:
     app: inference-server
@@ -44,5 +44,5 @@ metadata:
   namespace: michelangelo
 data:
   servers.txt: |
-    inference-server-bert-cola
+    inference-server-gke
 
