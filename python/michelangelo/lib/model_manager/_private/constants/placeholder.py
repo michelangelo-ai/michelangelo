@@ -1,5 +1,6 @@
 """Placeholder constants for model packaging."""
 
+
 class Placeholder:
     """Placeholder for a value that is not yet known."""
 
