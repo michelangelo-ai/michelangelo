@@ -71,7 +71,7 @@ controllermgr:
   image:
     repository: controllermgr
     tag: ghosharitra-deploy-gke-via-helm-charts
-    pullPolicy: IfNotPresent
+    pullPolicy: Always  # Force pull to get latest image
   service:
     metrics:
       port: 8091
