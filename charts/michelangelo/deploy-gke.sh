@@ -513,7 +513,7 @@ do_deploy_inference() {
     echo ""
     echo_info "To access the inference server (if using ClusterIP):"
     echo "  kubectl port-forward svc/ma-gateway-istio -n michelangelo 8080:80"
-    echo "  curl -v http://localhost:8080/inference-server-gke/v2/health/ready"
+    echo "  curl -v http://localhost:8080/inference-server-gke/health/ready"
 }
 
 # ============================================================================
