@@ -28,9 +28,7 @@ class ValidationTest(TestCase):
         )
         self.sample_data = [{"input": np.array(["test_input"])}]
 
-    def generate_package(
-        self, model_path: str, model_class: str, dest_model_path: str
-    ):
+    def generate_package(self, model_path: str, model_class: str, dest_model_path: str):
         """Generate a model package for testing."""
         packager = CustomTritonPackager()
         return packager.create_raw_model_package(

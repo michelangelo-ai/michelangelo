@@ -83,9 +83,7 @@ def validate_raw_model_package_internal(
         model_class_type = get_module_attr(model_class)
 
     if not isinstance(model, model_class_type):
-        raise TypeError(
-            f"The loaded model is not an instance of {model_class_type}"
-        )
+        raise TypeError(f"The loaded model is not an instance of {model_class_type}")
 
     # test predict
     if sample_data:
