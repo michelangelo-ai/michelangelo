@@ -21,6 +21,9 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.requirements
 from michelangelo.lib.model_manager._private.packager.custom_triton.type_yaml import (
     generate_type_yaml,
 )
+from michelangelo.lib.model_manager._private.packager.custom_triton.validation import (
+    validate_model_files,
+)
 from michelangelo.lib.model_manager._private.schema.common import schema_to_yaml
 from michelangelo.lib.model_manager._private.serde.data import dump_model_data
 from michelangelo.lib.model_manager._private.utils.asset_utils import download_assets
@@ -87,6 +90,8 @@ def generate_raw_model_package_content(
     )
 
     os.makedirs(target_model_path, exist_ok=True)
+
+    validate_model_files(target_model_path)
 
     defs_path = os.path.join(root_path, "defs")
 

@@ -9,6 +9,7 @@ from michelangelo._internal.utils.file_utils import generate_folder
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_raw_model_package_content,
     validate_model_class,
+    validate_raw_model_package,
 )
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
@@ -222,5 +223,9 @@ class CustomTritonPackager:
         )
 
         generate_folder(content, dest_model_path)
+
+        validate_raw_model_package(
+            dest_model_path, sample_data, model_schema, batch_inference
+        )
 
         return dest_model_path
