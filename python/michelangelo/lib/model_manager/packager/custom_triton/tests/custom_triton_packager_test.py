@@ -460,6 +460,32 @@ class CustomTritonPackagerTest(TestCase):
             expected_files = sorted(package_files + self.model_loader_files)
             self.assertEqual(files, expected_files)
 
+    def test_create_model_package_with_empty_model(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "deployable_model")
+            os.makedirs(model_path)
+            dest_model_path = packager.create_model_package(
+                model_path=model_path,
+                dest_model_path=dest_model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                model_name="test_model_name",
+                include_import_prefixes=["michelangelo"],
+            )
+
+            with (
+                open("michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt") as expected_f,
+                open(os.path.join(dest_model_path, "config.pbtxt")) as f,
+            ):
+                expected_config = expected_f.read()
+                config = f.read()
+                self.assertEqual(config, expected_config)
+
+            self.assertTrue(os.path.exists(os.path.join(dest_model_path, "0", "model")))
+            self.assertEqual(len(os.listdir(os.path.join(dest_model_path, "0", "model"))), 0)
+
     def assert_raw_model_package(
         self, dest_model_path, with_requirements=False, batch_inference=False
     ):
