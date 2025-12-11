@@ -407,6 +407,59 @@ class CustomTritonPackagerTest(TestCase):
             model_path = os.path.join(dest_model_path, "0", "model")
             self.assertEqual(predict_obj.predict(model_path), model_path)
 
+    def test_create_model_package_with_pickle(self):
+        packager = CustomTritonPackager()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "deployable_model")
+            os.makedirs(model_path)
+            with open(os.path.join(model_path, "file.txt"), "w+") as f:
+                f.write("file_content")
+
+            with open(os.path.join(model_path, "file.pkl"), "wb") as f:
+                pickle.dump(Model(), f)
+            dest_model_path = packager.create_model_package(
+                model_path=model_path,
+                model_class=model_class,
+                model_schema=self.model_schema,
+                model_name="test_model_name",
+                dest_model_path=dest_model_path,
+                include_import_prefixes=["michelangelo"],
+            )
+
+            files = sorted(
+                [
+                    str(
+                        Path(os.path.join(dirpath, file)).relative_to(dest_model_path),
+                    )
+                    for dirpath, _, filenames in os.walk(dest_model_path)
+                    for file in filenames
+                ],
+            )
+
+            package_files = [
+                "0/model.py",
+                "0/model/file.pkl",
+                "0/model/file.txt",
+                "0/model_class.txt",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn1.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn2.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn3.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/folder/fn4.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/__init__.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn1.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/package/fn2.py",
+                "0/michelangelo/lib/model_manager/_private/utils/module_finder/tests/fixtures/simple_module.py",
+                "0/michelangelo/lib/model_manager/interface/custom_model.py",
+                "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/model.py",
+                "0/michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/predict.py",
+                "0/user_model.py",
+                "config.pbtxt",
+            ]
+
+            expected_files = sorted(package_files + self.model_loader_files)
+            self.assertEqual(files, expected_files)
+
     def assert_raw_model_package(
         self, dest_model_path, with_requirements=False, batch_inference=False
     ):
