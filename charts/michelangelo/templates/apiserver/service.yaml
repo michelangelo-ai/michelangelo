@@ -1,0 +1,28 @@
+{{- if .Values.components.apiserver.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-apiserver
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+  {{- with .Values.apiserver.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.apiserver.service.type }}
+  ports:
+  - name: grpc
+    port: {{ .Values.apiserver.service.port }}
+    targetPort: grpc
+    protocol: TCP
+    {{- if and (eq .Values.apiserver.service.type "NodePort") .Values.apiserver.service.nodePort }}
+    nodePort: {{ .Values.apiserver.service.nodePort }}
+    {{- end }}
+  selector:
+    {{- include "michelangelo.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+{{- end }}
+

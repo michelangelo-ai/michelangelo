@@ -119,7 +119,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			ModelConfig: configmap.ModelConfigEntry{
 				Name: modelName,
 				// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-				StoragePath: fmt.Sprintf("s3://deploy-models/%s/", modelName),
+				StoragePath: fmt.Sprintf("gs://michelanglo-oss-196506-deploy-models/%s/", modelName),
 			},
 		}); err != nil {
 			a.logger.Error("Failed to update deployment via ConfigMapProvider", zap.Error(err))

@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+data:
+  AWS_ENDPOINT_URL: {{ include "michelangelo.storageEndpoint" . | quote }}
+  AWS_REGION: {{ .Values.storage.s3.region | quote }}
+  {{- if not (eq .Values.cloud "gcp") }}
+  AWS_ACCESS_KEY_ID: {{ .Values.storage.s3.accessKeyId | quote }}
+  AWS_SECRET_ACCESS_KEY: {{ .Values.storage.s3.secretAccessKey | quote }}
+  {{- end }}
+  STORAGE_TYPE: {{ include "michelangelo.storageType" . | quote }}
+  CLOUD_PROVIDER: {{ .Values.cloud | quote }}
+  {{- if and (eq .Values.cloud "gcp") .Values.gcp }}
+  GCP_PROJECT_ID: {{ .Values.gcp.projectID | quote }}
+  MODELS_BUCKET: {{ .Values.gcp.projectID }}-deploy-models
+  {{- else }}
+  MODELS_BUCKET: deploy-models
+  {{- end }}

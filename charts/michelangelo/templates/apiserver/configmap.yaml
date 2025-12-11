@@ -1,0 +1,30 @@
+{{- if .Values.components.apiserver.enabled -}}
+# TODO: revisit this config
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-apiserver-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: apiserver
+data:
+  base.yaml: |
+    apiserver:
+      yarpc:
+        host: "0.0.0.0"
+        port: 14566
+      crdSync:
+        enableCRDUpdate: true
+        enableCRDDeletion: true
+        crdVersions:
+          project:
+            versions: [v2]
+            storageVersion: v2
+    k8s:
+      qps: 300
+      burst: 600
+    metadataStorage:
+      enableMetadataStorage: false
+{{- end }}
+

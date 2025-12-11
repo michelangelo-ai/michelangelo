@@ -1,0 +1,25 @@
+{{- if .Values.components.controllermgr.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-controllermgr
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controllermgr
+spec:
+  type: ClusterIP
+  ports:
+  - name: metrics
+    port: {{ .Values.controllermgr.service.metrics.port }}
+    targetPort: metrics
+    protocol: TCP
+  - name: health
+    port: {{ .Values.controllermgr.service.health.port }}
+    targetPort: health
+    protocol: TCP
+  selector:
+    {{- include "michelangelo.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: controllermgr
+{{- end }}
+

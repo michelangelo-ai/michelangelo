@@ -1,0 +1,30 @@
+apiVersion: michelangelo.api/v2
+kind: Deployment
+metadata:
+  name: bert-cola-deployment
+  namespace: michelangelo
+  labels:
+    app: bert-cola-example
+spec:
+  desiredRevision:
+    name: bert-cola-37
+    namespace: michelangelo
+  inferenceServer:
+    name: inference-server-gke
+    namespace: michelangelo
+  selector:
+    matchLabels:
+      environment: production
+  deletionSpec:
+    deleted: false
+  strategy:
+    rolling:
+      incrementPercentage: 20
+  definition:
+    type: TARGET_TYPE_INFERENCE_SERVER
+    subType: realtime-serving
+  modelFamily:
+    name: bert-cola-family
+    namespace: michelangelo
+  owner:
+    name: "user-1234"

@@ -1,0 +1,166 @@
+# GKE-specific configuration overrides for Michelangelo
+# Project: michelanglo-oss-196506
+# Cluster: kubernetes-gke-dev01 (zonal, us-east1-d)
+
+cloud: gcp
+
+# GCP-specific configuration
+gcp:
+  projectID: michelanglo-oss-196506
+  region: us-east1
+  zone: us-east1-d
+  clusterName: kubernetes-gke-dev01
+
+# Use GitHub Container Registry (pre-built images)
+# To use your own Artifact Registry, push images first then change this
+image:
+  registry: ghcr.io/michelangelo-ai
+  tag: "main"
+
+# Image pull secret for private GHCR registry
+# Create with: kubectl create secret docker-registry ghcr-secret --namespace michelangelo --docker-server=ghcr.io --docker-username=YOUR_GITHUB_USERNAME --docker-password=YOUR_CR_PAT
+imagePullSecrets:
+  - name: ghcr-secret
+
+# GKE-specific namespace
+# Set create: false - namespace is created by deploy-gke.sh via kubectl
+# This avoids Helm ownership conflicts with pre-existing namespaces
+namespace:
+  create: false
+  name: michelangelo
+
+# Use GCS for object storage
+storage:
+  storageClass: standard-rwo  # GCP Persistent Disk
+  s3:
+    type: gcs
+    endpoint: storage.googleapis.com
+    region: us-east1
+    # GCS uses Workload Identity, no static credentials
+    buckets:
+      - michelanglo-oss-196506-default
+      - michelanglo-oss-196506-deploy-models
+      - michelanglo-oss-196506-log-viewer
+      - michelanglo-oss-196506-logs
+
+# Enable Gateway API for inference routing
+gateway:
+  enabled: true
+  istio:
+    enabled: true
+    # Gateway configuration
+    hosts:
+      - "*.example.com"  # Replace with your domain
+    tls:
+      enabled: true
+      # Certificate from Google-managed cert or cert-manager
+
+# Service Account configuration
+# Option 1: Workload Identity (recommended for production, requires GCP SA setup)
+# Option 2: No Workload Identity - pods use node's default service account
+serviceAccount:
+  create: true
+  annotations: {}
+    # Uncomment below if you have Workload Identity set up:
+    # iam.gke.io/gcp-service-account: michelangelo@michelanglo-oss-196506.iam.gserviceaccount.com
+  name: michelangelo
+
+# API Server - ClusterIP for internal cluster access only
+apiserver:
+  replicaCount: 1  # Single replica for dev
+  service:
+    type: ClusterIP  # ClusterIP for security (no external access)
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  # Enable autoscaling
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+
+# Controller Manager
+controllermgr:
+  replicaCount: 1  # Single replica for dev
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  config:
+    leaderElection: true  # Enable for HA
+
+# Inference model sync - disabled by default, deploy with --deploy-inference
+inference:
+  modelSync:
+    enabled: false  # Deploy separately with ./deploy-gke.sh --deploy-inference
+    image: google/cloud-sdk:slim  # Use Google Cloud SDK image for gsutil
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Disable PVC for dev - uses hostPath instead
+    # Enable persistence and create PVC manually for production
+    persistence:
+      enabled: false
+      # storageClass: standard-rwo
+      # size: 500Gi
+
+# Node selector for GPU workloads
+nodeSelector:
+  # Uncomment for GPU nodes
+  # cloud.google.com/gke-accelerator: nvidia-tesla-t4
+
+# Global tolerations - keep empty, use component-specific tolerations below
+tolerations: []
+
+# GPU tolerations for specific components that need to run on GPU nodes
+gpuTolerations:
+  - key: "nvidia.com/gpu"
+    operator: "Exists"
+    effect: "NoSchedule"
+
+# Pod topology spread for HA
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: DoNotSchedule
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/name: michelangelo
+
+# Network policies (optional, recommended for production)
+networkPolicies:
+  enabled: true
+
+# Pod Security Standards
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+# RBAC - disable if you don't have cluster-admin permissions
+# Have your cluster admin create RBAC manually using:
+#   kubectl apply -f charts/michelangelo/templates/rbac.yaml
+rbac:
+  create: false

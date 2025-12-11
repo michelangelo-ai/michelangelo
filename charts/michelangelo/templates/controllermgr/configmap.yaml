@@ -1,0 +1,35 @@
+{{- if .Values.components.controllermgr.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "michelangelo.fullname" . }}-controllermgr-config
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "michelangelo.labels" . | nindent 4 }}
+    app.kubernetes.io/component: controllermgr
+data:
+  base.yaml: |
+    controllermgr:
+      metricsBindAddress: {{ .Values.controllermgr.config.metricsBindAddress }}
+      healthProbeBindAddress: {{ .Values.controllermgr.config.healthProbeBindAddress }}
+      leaderElection: {{ .Values.controllermgr.config.leaderElection }}
+      leaderElectionID: decaf1259.michelangelo.uber.com
+    controllers:
+      rayCluster:
+        k8sQps: {{ .Values.controllermgr.config.controllers.rayCluster.k8sQps }}
+        k8sBurst: {{ .Values.controllermgr.config.controllers.rayCluster.k8sBurst }}
+    gateways:
+      inferenceServiceEndpoint: {{ include "michelangelo.gatewayEndpoint" . | quote }}
+    # MinIO/S3 storage config (required by blobstore module)
+    minio:
+      awsRegion: {{ .Values.storage.s3.region }}
+      awsEndpointUrl: {{ include "michelangelo.storageEndpoint" . }}
+{{- if eq .Values.cloud "gcp" }}
+      # GCS uses workload identity, no static credentials needed
+      awsAccessKeyId: ""
+      awsSecretAccessKey: ""
+{{- else }}
+      awsAccessKeyId: {{ .Values.storage.s3.accessKeyId | default "" }}
+      awsSecretAccessKey: {{ .Values.storage.s3.secretAccessKey | default "" }}
+{{- end }}
+{{- end }}

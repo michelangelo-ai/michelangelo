@@ -1,0 +1,63 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+To learn more about the release, try:
+
+  $ helm status {{ .Release.Name }} -n {{ .Release.Namespace }}
+  $ helm get all {{ .Release.Name }} -n {{ .Release.Namespace }}
+
+=================================================================================
+Michelangelo ML Platform - Version {{ .Chart.AppVersion }}
+=================================================================================
+
+Installed Components:
+{{- if .Values.components.apiserver.enabled }}
+  ✓ API Server
+{{- end }}
+{{- if .Values.components.controllermgr.enabled }}
+  ✓ Controller Manager
+{{- end }}
+{{- if .Values.inference.modelSync.enabled }}
+  ✓ Model Sync (Inference)
+{{- end }}
+{{- if .Values.gateway.enabled }}
+  ✓ Gateway API (Istio)
+{{- end }}
+
+=================================================================================
+
+Getting Started:
+
+1. Check the status of your pods:
+
+   kubectl get pods -n {{ .Release.Namespace }}
+
+2. Wait for all pods to be ready:
+
+   kubectl wait --for=condition=ready pod --all -n {{ .Release.Namespace }} --timeout=600s
+
+3. Get service endpoints:
+
+   kubectl get svc -n {{ .Release.Namespace }}
+
+{{- if .Values.gateway.enabled }}
+
+4. Check Gateway status:
+
+   kubectl get gateway -n {{ .Release.Namespace }}
+
+5. Check InferenceServer status:
+
+   kubectl get inferenceservers -n {{ .Release.Namespace }}
+
+{{- end }}
+
+=================================================================================
+
+Documentation: https://github.com/michelangelo-ai/michelangelo
+
+For support, please visit our GitHub issues:
+https://github.com/michelangelo-ai/michelangelo/issues
+
+=================================================================================

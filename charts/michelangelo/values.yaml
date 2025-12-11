@@ -1,0 +1,143 @@
+# Default values for Michelangelo ML Platform
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Cloud provider: gcp, aws, azure, or local
+cloud: local
+
+# Global image configuration
+image:
+  registry: ghcr.io/michelangelo-ai
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: "main"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Namespace configuration
+namespace:
+  create: true
+  name: michelangelo
+
+# Components to enable/disable
+components:
+  apiserver:
+    enabled: true
+  controllermgr:
+    enabled: true
+
+# Storage configuration
+storage:
+  # Storage class for persistent volumes
+  # Leave empty for default storage class
+  storageClass: ""
+  
+  # Object storage configuration
+  s3:
+    # For local: use MinIO; for GCP: use GCS; for AWS: use S3
+    type: gcs  # Options: gcs, s3
+    endpoint: "storage.googleapis.com"
+    region: us-east-1
+    # Buckets to create
+    buckets:
+      - default
+      - deploy-models
+      - log-viewer
+      - logs
+
+# API Server configuration
+apiserver:
+  replicaCount: 1
+  image:
+    repository: apiserver
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 14566
+    nodePort: 30009
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# Controller Manager configuration
+controllermgr:
+  replicaCount: 1
+  image:
+    repository: controllermgr
+    tag: ghosharitra-deploy-gke-via-helm-charts
+    pullPolicy: Always  # Force pull to get latest image
+  service:
+    metrics:
+      port: 8091
+    health:
+      port: 8081
+  config:
+    metricsBindAddress: "0.0.0.0:8091"
+    healthProbeBindAddress: "0.0.0.0:8081"
+    leaderElection: false
+    controllers:
+      rayCluster:
+        k8sQps: 300
+        k8sBurst: 600
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 4Gi
+
+# Inference server configuration
+inference:
+  # Model sync deployment
+  modelSync:
+    enabled: true
+    image: amazon/aws-cli:2.15.50
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    # Host path for model storage
+    hostPath: /var/lib/michelangelo/models
+
+# Gateway API configuration (for inference routing)
+gateway:
+  enabled: false  # Enable for GKE/cloud deployments
+  istio:
+    enabled: false
+    # Istio installed via Helm chart
+    chart:
+      repository: https://istio-release.storage.googleapis.com/charts
+      version: latest
+
+# Service Account configuration
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "michelangelo"
+
+# RBAC configuration
+rbac:
+  create: true
+
+# Node selector for all pods
+nodeSelector: {}
+
+# Tolerations for all pods
+tolerations: []
+
+# GPU tolerations for components that need GPU node access
+gpuTolerations: []
+
+# Affinity for all pods
+affinity: {}

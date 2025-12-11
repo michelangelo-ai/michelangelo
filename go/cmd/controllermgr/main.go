@@ -13,18 +13,9 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
-	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
-	"github.com/michelangelo-ai/michelangelo/go/components/jobs/cluster"
-	"github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler"
-	"github.com/michelangelo-ai/michelangelo/go/components/pipeline"
-	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun"
-	"github.com/michelangelo-ai/michelangelo/go/components/ray"
-	"github.com/michelangelo-ai/michelangelo/go/components/spark"
-	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
 	"github.com/michelangelo-ai/michelangelo/go/controllermgr"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/metrics"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -80,21 +71,11 @@ func options() fx.Option {
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
-		fx.Provide(baseconfig.GetWorkflowClientConfig),
 		fx.Provide(getTallyScope),
 		apiHandler.CtrlMgrModule,
-		spark.Module,
-		ray.Module,
-		triggerrun.Module,
-		cadenceclient.Module,
-		pipeline.Module,
-		pipelinerun.Module,
 		controllermgr.Module,
 		deployment.Module,
 		inferenceserver.Module,
-		scheduler.Module,
-		cluster.Module,
-		client.Module,
 		fx.Invoke(func(logger *zap.Logger) {
 			ctrl.SetLogger(zapr.NewLogger(logger))
 		}),
