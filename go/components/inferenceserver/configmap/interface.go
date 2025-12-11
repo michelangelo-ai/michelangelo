@@ -8,8 +8,8 @@ import (
 
 // ModelConfigEntry represents a model configuration with name and storage location.
 type ModelConfigEntry struct {
-	Name   string `json:"name"`
-	S3Path string `json:"s3_path"`
+	Name        string `json:"name"`
+	StoragePath string `json:"storage_path"`
 }
 
 // CreateModelConfigMapRequest specifies parameters for creating a model configuration ConfigMap.

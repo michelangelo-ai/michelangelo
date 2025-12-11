@@ -156,7 +156,7 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	found := false
 	for i, config := range currentConfigs {
 		if config.Name == request.ModelConfig.Name {
-			currentConfigs[i].S3Path = request.ModelConfig.S3Path
+			currentConfigs[i].StoragePath = request.ModelConfig.StoragePath
 			found = true
 			break
 		}
@@ -164,8 +164,8 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 
 	if !found {
 		currentConfigs = append(currentConfigs, ModelConfigEntry{
-			Name:   request.ModelConfig.Name,
-			S3Path: request.ModelConfig.S3Path,
+			Name:        request.ModelConfig.Name,
+			StoragePath: request.ModelConfig.StoragePath,
 		})
 	}
 
