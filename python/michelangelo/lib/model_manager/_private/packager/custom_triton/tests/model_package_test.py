@@ -4,8 +4,12 @@ import re
 import tempfile
 from unittest import TestCase
 from unittest.mock import patch
-from michelangelo.lib.model_manager._private.packager.template_renderer import TritonTemplateRenderer
-from michelangelo.lib.model_manager._private.packager.custom_triton import generate_model_package_content
+from michelangelo.lib.model_manager._private.packager.template_renderer import (
+    TritonTemplateRenderer,
+)
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    generate_model_package_content,
+)
 
 
 class ModelPackageTest(TestCase):
@@ -45,6 +49,8 @@ class ModelPackageTest(TestCase):
             self.assertIn("model.py", content["0"])
             self.assertIn("user_model.py", content["0"])
             predict = content["0"]["model_class.txt"]
-            self.assertIsNotNone(re.fullmatch(r"file://(?:/.+)*/model_class.txt", predict))
+            self.assertIsNotNone(
+                re.fullmatch(r"file://(?:/.+)*/model_class.txt", predict)
+            )
             model = content["0"]["model"]
             self.assertIsNotNone(re.fullmatch(r"dir://(?:/.+)*/model", model))
