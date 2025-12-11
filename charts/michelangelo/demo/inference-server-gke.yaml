@@ -27,7 +27,7 @@ spec:
       cpu: 2
       memory: "4Gi"
       # Uncomment below to request GPU
-      # gpu: 1
+      gpu: 1
     servingSpec:
       version: "latest"
     numInstances: 1
