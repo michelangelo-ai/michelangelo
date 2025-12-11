@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+"""Entrypoint for running a Uniflow task."""
 import argparse
 import logging
 import sys
