@@ -16,20 +16,25 @@ from michelangelo.lib.model_manager.serde.model import load_raw_model
 
 
 def validate_model_files(model_path: str):
-    """Validate that the model does not contain reserved filenames that conflict with Triton.
+    """Validate that the model does not contain reserved filenames.
+
+    Validates that the model does not contain reserved filenames that conflict
+    with Triton.
 
     Args:
         model_path: The path to the model directory
 
     Raises:
-        ValueError: If the model contains a reserved file '__init__.py' in the model assets folder
+        ValueError: If the model contains a reserved file '__init__.py' in the
+            model assets folder
     """
     model_py_path = os.path.join(model_path, "__init__.py")
     if os.path.exists(model_py_path):
         raise ValueError(
-            "Custom model contains the file'__init__.py' in the model assets folder. "
-            "This file conflicts with Triton's reserved model.py file and will break deployments. "
-            "Please remove your __init__.py file from model_path."
+            "Custom model contains the file'__init__.py' in the model assets "
+            "folder. This file conflicts with Triton's reserved model.py file "
+            "and will break deployments. Please remove your __init__.py file "
+            "from model_path."
         )
 
 
@@ -75,10 +80,12 @@ def validate_raw_model_package_internal(
 
     with open(os.path.join(model_path, "defs", "model_class.txt")) as f:
         model_class = f.read().strip()
-        ModelClass = get_module_attr(model_class)
+        model_class_type = get_module_attr(model_class)
 
-    if not isinstance(model, ModelClass):
-        raise TypeError(f"The loaded model is not an instance of {ModelClass}")
+    if not isinstance(model, model_class_type):
+        raise TypeError(
+            f"The loaded model is not an instance of {model_class_type}"
+        )
 
     # test predict
     if sample_data:
@@ -111,8 +118,9 @@ def validate_raw_model_package_internal(
             raise RuntimeError(f"Error when test saving the model. Error: {e}") from e
 
         try:
-            ModelClass.load(temp_dir)
+            model_class_type.load(temp_dir)
         except Exception as e:
             raise RuntimeError(
-                f"Error when test reloading the saved model, please double check the save function. Error: {e}"
+                "Error when test reloading the saved model, please double "
+                f"check the save function. Error: {e}"
             ) from e
