@@ -1,3 +1,5 @@
+"""Serialize the custom model loader for deployment."""
+
 from michelangelo.lib.model_manager._private.serde.loader.custom_model_loader import (
     load_custom_model,
 )

@@ -1,3 +1,5 @@
+"""Generate model.py file content for Triton deployment."""
+
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TritonTemplateRenderer,
 )

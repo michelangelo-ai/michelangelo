@@ -4,7 +4,7 @@ import os
 import tempfile
 from typing import Optional
 
-from michelangelo.lib.model_manager._private.packager.custom_triton.config_pbtxt import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.config_pbtxt import (  # noqa: E501
     generate_config_pbtxt_content,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.constants import (
@@ -13,16 +13,16 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.constants im
 from michelangelo.lib.model_manager._private.packager.custom_triton.model_class import (
     serialize_model_class,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.model_loader import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.model_loader import (  # noqa: E501
     serialize_model_loader,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.model_py import (
     generate_model_py_content,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.pickled_model_binary import (  # noqa: E501
     serialize_pickle_dependencies,
 )
-from michelangelo.lib.model_manager._private.packager.custom_triton.user_model_py import (
+from michelangelo.lib.model_manager._private.packager.custom_triton.user_model_py import (  # noqa: E501
     generate_user_model_content,
 )
 from michelangelo.lib.model_manager._private.packager.custom_triton.validation import (
@@ -66,10 +66,12 @@ def generate_model_package_content(
             e.g. ['uber', 'data.michelangelo'] only imports starting
             with 'uber' or 'data.michelangelo' will be saved in the
             model package. If not specified, save all imports
-        custom_batch_processing (Optional): If to inject batch processing code to automatically handle batch.
-            Default is False. If set to True, the user is responsible for handling batch in the model class,
-            and the model input/output will have an additional batch dimension on top of the existing model schema.
-            For example, the schema shape [1] will be converted to [-1, 1].
+        custom_batch_processing (Optional): If to inject batch processing
+            code to automatically handle batch. Default is False. If set to
+            True, the user is responsible for handling batch in the model
+            class, and the model input/output will have an additional batch
+            dimension on top of the existing model schema. For example, the
+            schema shape [1] will be converted to [-1, 1].
 
     Returns:
         The model package content as a dictionary
@@ -124,7 +126,9 @@ def generate_model_package_content(
         "0": {
             "model.py": model_py,
             "user_model.py": user_model_py,
-            MODEL_CLASS_FILE_NAME: f"file://{os.path.join(model_0_dir, MODEL_CLASS_FILE_NAME)}",
+            MODEL_CLASS_FILE_NAME: (
+                f"file://{os.path.join(model_0_dir, MODEL_CLASS_FILE_NAME)}"
+            ),
             "model": f"dir://{target_model_path}",
         },
     }

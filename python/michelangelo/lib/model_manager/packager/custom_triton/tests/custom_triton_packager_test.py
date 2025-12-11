@@ -148,13 +148,15 @@ class CustomTritonPackagerTest(TestCase):
 
             self.assert_model_package(dest_model_path)
 
-            with open(
-                "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
-            ) as expected_f:
-                with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
-                    expected_config = expected_f.read()
-                    config = f.read()
-                    self.assertEqual(config, expected_config)
+            with (
+                open(
+                    "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
+                ) as expected_f,
+                open(os.path.join(dest_model_path, "config.pbtxt")) as f,
+            ):
+                expected_config = expected_f.read()
+                config = f.read()
+                self.assertEqual(config, expected_config)
 
             # running the predict function
             loaded_model_class = None
@@ -163,14 +165,15 @@ class CustomTritonPackagerTest(TestCase):
 
             module_def, _, class_name = loaded_model_class.rpartition(".")
             module = importlib.import_module(module_def)
-            Predict = getattr(module, class_name)
-            predict_obj = Predict()
+            predict_class = getattr(module, class_name)
+            predict_obj = predict_class()
             self.assertEqual(
                 predict_obj.predict(self.sample_data[0]),
                 {"response": self.sample_data[0].get("input")},
             )
 
     def test_create_model_package_with_custom_batch_processing(self):
+        """It creates a model package with custom batch processing."""
         packager = CustomTritonPackager(custom_batch_processing=True)
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
@@ -189,13 +192,15 @@ class CustomTritonPackagerTest(TestCase):
 
             self.assert_model_package(dest_model_path)
 
-            with open(
-                "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
-            ) as expected_f:
-                with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
-                    expected_config = expected_f.read()
-                    config = f.read()
-                    self.assertEqual(config, expected_config)
+            with (
+                open(
+                    "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
+                ) as expected_f,
+                open(os.path.join(dest_model_path, "config.pbtxt")) as f,
+            ):
+                expected_config = expected_f.read()
+                config = f.read()
+                self.assertEqual(config, expected_config)
 
             # running the predict function
             loaded_model_class = None
@@ -204,14 +209,15 @@ class CustomTritonPackagerTest(TestCase):
 
             module_def, _, class_name = loaded_model_class.rpartition(".")
             module = importlib.import_module(module_def)
-            Predict = getattr(module, class_name)
-            predict_obj = Predict()
+            predict_class = getattr(module, class_name)
+            predict_obj = predict_class()
             self.assertEqual(
                 predict_obj.predict(self.batch_sample_data[0]),
                 {"response": self.batch_sample_data[0].get("input")},
             )
 
     def test_create_model_package_with_empty_model_schema(self):
+        """It raises ValueError when model schema is empty."""
         packager = CustomTritonPackager()
         with self.assertRaises(ValueError):
             packager.create_model_package(
@@ -221,6 +227,7 @@ class CustomTritonPackagerTest(TestCase):
             )
 
     def test_create_model_package_with_invalid_model_schema(self):
+        """It raises ValueError when model schema is invalid."""
         model_schema = ModelSchema(
             input_schema=[
                 ModelSchemaItem(
@@ -238,6 +245,7 @@ class CustomTritonPackagerTest(TestCase):
             )
 
     def test_create_model_package_with_default_dest_model_path(self):
+        """It creates a model package with default destination path."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
@@ -256,6 +264,7 @@ class CustomTritonPackagerTest(TestCase):
             self.assert_model_package(dest_model_path)
 
     def test_missing_model_class(self):
+        """It raises ValueError when model class is missing."""
         with self.assertRaises(ValueError):
             packager = CustomTritonPackager()
             packager.create_model_package(
@@ -265,6 +274,7 @@ class CustomTritonPackagerTest(TestCase):
             )
 
     def test_with_invalid_model_class(self):
+        """It raises ValueError when model class is invalid."""
         with self.assertRaises(ValueError):
             packager = CustomTritonPackager()
             packager.create_model_package(
@@ -274,6 +284,7 @@ class CustomTritonPackagerTest(TestCase):
             )
 
     def test_create_model_package_with_altered_include_import_prefixes(self):
+        """It creates a model package with altered import prefixes."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
@@ -320,6 +331,7 @@ class CustomTritonPackagerTest(TestCase):
             self.assertEqual(files, expected_files)
 
     def test_create_model_package_with_relative_imports(self):
+        """It creates a model package with relative imports."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
@@ -400,13 +412,15 @@ class CustomTritonPackagerTest(TestCase):
             expected_files = sorted(package_files + self.model_loader_files)
             self.assertEqual(files, expected_files)
 
-            with open(
-                "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
-            ) as expected_f:
-                with open(os.path.join(dest_model_path, "config.pbtxt")) as f:
-                    expected_config = expected_f.read()
-                    config = f.read()
-                    self.assertEqual(config, expected_config)
+            with (
+                open(
+                    "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config.pbtxt"
+                ) as expected_f,
+                open(os.path.join(dest_model_path, "config.pbtxt")) as f,
+            ):
+                expected_config = expected_f.read()
+                config = f.read()
+                self.assertEqual(config, expected_config)
 
             # running the predict function
             loaded_model_class = None
@@ -415,12 +429,13 @@ class CustomTritonPackagerTest(TestCase):
 
             module_def, _, class_name = loaded_model_class.rpartition(".")
             module = importlib.import_module(module_def)
-            Predict = getattr(module, class_name)
-            predict_obj = Predict()
+            predict_class = getattr(module, class_name)
+            predict_obj = predict_class()
             model_path = os.path.join(dest_model_path, "0", "model")
             self.assertEqual(predict_obj.predict(model_path), model_path)
 
     def test_create_model_package_with_pickle(self):
+        """It creates a model package with pickle files."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
@@ -474,6 +489,7 @@ class CustomTritonPackagerTest(TestCase):
             self.assertEqual(files, expected_files)
 
     def test_create_model_package_with_empty_model(self):
+        """It creates a model package with an empty model directory."""
         packager = CustomTritonPackager()
         with tempfile.TemporaryDirectory() as temp_dir:
             model_path = os.path.join(temp_dir, "model")
