@@ -128,9 +128,9 @@ data:
         for desired_model in $DESIRED_MODELS; do
           if [ ! -z "$desired_model" ]; then
             # Look up S3 path from inference server config for this model
-            s3_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .s3_path' /tmp/model-list.json 2>/dev/null)
-            if [ "$s3_path" = "null" ] || [ -z "$s3_path" ]; then
-              s3_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
+            storage_path=$(jq -r --arg model "$desired_model" '.[] | select(.name == $model) | .storage_path' /tmp/model-list.json 2>/dev/null)
+            if [ "$storage_path" = "null" ] || [ -z "$storage_path" ]; then
+              storage_path="s3://deploy-models/$desired_model/"  # Default S3 path pattern
             fi
             
             model_dir="$SERVER_MODEL_DIR/$desired_model"
@@ -178,9 +178,9 @@ data:
             fi
             
             if [ "$needs_sync" = true ]; then
-              echo "SYNC: Syncing model $desired_model from $s3_path to $model_dir/"
+              echo "SYNC: Syncing model $desired_model from $storage_path to $model_dir/"
               mkdir -p "$model_dir"
-              aws s3 sync "$s3_path" "$model_dir/" --exact-timestamps --endpoint-url "$AWS_ENDPOINT_URL"
+              aws s3 sync "$storage_path" "$model_dir/" --exact-timestamps --endpoint-url "$AWS_ENDPOINT_URL"
               
               # Verify sync completed with valid structure
               if validate_model_structure "$model_dir"; then

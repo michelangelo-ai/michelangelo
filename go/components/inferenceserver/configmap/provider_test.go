@@ -29,8 +29,8 @@ func TestCreateModelConfigMap(t *testing.T) {
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelConfigs: []ModelConfigEntry{
-					{Name: "model1", S3Path: "s3://bucket/model1"},
-					{Name: "model2", S3Path: "s3://bucket/model2"},
+					{Name: "model1", StoragePath: "s3://bucket/model1"},
+					{Name: "model2", StoragePath: "s3://bucket/model2"},
 				},
 				Labels: map[string]string{
 					"custom-label": "custom-value",
@@ -78,7 +78,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 				InferenceServer: "existing-server",
 				Namespace:       "default",
 				ModelConfigs: []ModelConfigEntry{
-					{Name: "new-model", S3Path: "s3://bucket/new-model"},
+					{Name: "new-model", StoragePath: "s3://bucket/new-model"},
 				},
 				Labels:      nil,
 				Annotations: nil,
@@ -94,7 +94,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 						},
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"old-model","s3_path":"s3://bucket/old-model"}]`,
+						modelListKey: `[{"name":"old-model","storage_path":"s3://bucket/old-model"}]`,
 					},
 				},
 			},
@@ -114,7 +114,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 
 				// Should still have the old model, not the new one
 				expectedOldModels := []ModelConfigEntry{
-					{Name: "old-model", S3Path: "s3://bucket/old-model"},
+					{Name: "old-model", StoragePath: "s3://bucket/old-model"},
 				}
 				assert.Equal(t, expectedOldModels, actualModels)
 
@@ -169,19 +169,19 @@ func TestGetModelConfigMap(t *testing.T) {
 						modelListKey: `[
   {
     "name": "model1",
-    "s3_path": "s3://bucket/model1"
+    "storage_path": "s3://bucket/model1"
   },
   {
     "name": "model2",
-    "s3_path": "s3://bucket/model2"
+    "storage_path": "s3://bucket/model2"
   }
 ]`,
 					},
 				},
 			},
 			expectedResponse: []ModelConfigEntry{
-				{Name: "model1", S3Path: "s3://bucket/model1"},
-				{Name: "model2", S3Path: "s3://bucket/model2"},
+				{Name: "model1", StoragePath: "s3://bucket/model1"},
+				{Name: "model2", StoragePath: "s3://bucket/model2"},
 			},
 			expectError: false,
 		},
@@ -299,8 +299,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelConfig: ModelConfigEntry{
-					Name:   "new-model",
-					S3Path: "s3://bucket/new-model",
+					Name:        "new-model",
+					StoragePath: "s3://bucket/new-model",
 				},
 			},
 			existingConfigMaps: []runtime.Object{
@@ -310,7 +310,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/existing-model"}]`,
+						modelListKey: `[{"name":"existing-model","storage_path":"s3://bucket/existing-model"}]`,
 					},
 				},
 			},
@@ -330,8 +330,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				require.NoError(t, err)
 
 				expectedModels := []ModelConfigEntry{
-					{Name: "existing-model", S3Path: "s3://bucket/existing-model"},
-					{Name: "new-model", S3Path: "s3://bucket/new-model"},
+					{Name: "existing-model", StoragePath: "s3://bucket/existing-model"},
+					{Name: "new-model", StoragePath: "s3://bucket/new-model"},
 				}
 				assert.Equal(t, expectedModels, actualModels)
 			},
@@ -342,8 +342,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelConfig: ModelConfigEntry{
-					Name:   "existing-model",
-					S3Path: "s3://bucket/updated-path",
+					Name:        "existing-model",
+					StoragePath: "s3://bucket/updated-path",
 				},
 			},
 			existingConfigMaps: []runtime.Object{
@@ -353,7 +353,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/old-path"}]`,
+						modelListKey: `[{"name":"existing-model","storage_path":"s3://bucket/old-path"}]`,
 					},
 				},
 			},
@@ -373,7 +373,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 				require.NoError(t, err)
 
 				expectedModels := []ModelConfigEntry{
-					{Name: "existing-model", S3Path: "s3://bucket/updated-path"},
+					{Name: "existing-model", StoragePath: "s3://bucket/updated-path"},
 				}
 				assert.Equal(t, expectedModels, actualModels)
 			},
@@ -384,8 +384,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				InferenceServer: "test-server",
 				Namespace:       "default",
 				ModelConfig: ModelConfigEntry{
-					Name:   "first-model",
-					S3Path: "s3://bucket/first-model",
+					Name:        "first-model",
+					StoragePath: "s3://bucket/first-model",
 				},
 			},
 			existingConfigMaps: []runtime.Object{
@@ -415,7 +415,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 				require.NoError(t, err)
 
 				expectedModels := []ModelConfigEntry{
-					{Name: "first-model", S3Path: "s3://bucket/first-model"},
+					{Name: "first-model", StoragePath: "s3://bucket/first-model"},
 				}
 				assert.Equal(t, expectedModels, actualModels)
 			},
@@ -426,8 +426,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				InferenceServer: "non-existent-server",
 				Namespace:       "default",
 				ModelConfig: ModelConfigEntry{
-					Name:   "model",
-					S3Path: "s3://bucket/model",
+					Name:        "model",
+					StoragePath: "s3://bucket/model",
 				},
 			},
 			existingConfigMaps: []runtime.Object{},
@@ -489,11 +489,11 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 						modelListKey: `[
   {
     "name": "model-to-keep",
-    "s3_path": "s3://bucket/model-to-keep"
+    "storage_path": "s3://bucket/model-to-keep"
   },
   {
     "name": "model-to-remove",
-    "s3_path": "s3://bucket/model-to-remove"
+    "storage_path": "s3://bucket/model-to-remove"
   }
 ]`,
 					},
@@ -515,7 +515,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				require.NoError(t, err)
 
 				expectedModels := []ModelConfigEntry{
-					{Name: "model-to-keep", S3Path: "s3://bucket/model-to-keep"},
+					{Name: "model-to-keep", StoragePath: "s3://bucket/model-to-keep"},
 				}
 				assert.Equal(t, expectedModels, actualModels)
 			},
@@ -534,7 +534,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"existing-model","s3_path":"s3://bucket/existing-model"}]`,
+						modelListKey: `[{"name":"existing-model","storage_path":"s3://bucket/existing-model"}]`,
 					},
 				},
 			},
@@ -554,7 +554,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				require.NoError(t, err)
 
 				expectedModels := []ModelConfigEntry{
-					{Name: "existing-model", S3Path: "s3://bucket/existing-model"},
+					{Name: "existing-model", StoragePath: "s3://bucket/existing-model"},
 				}
 				assert.Equal(t, expectedModels, actualModels)
 			},
@@ -573,7 +573,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"only-model","s3_path":"s3://bucket/only-model"}]`,
+						modelListKey: `[{"name":"only-model","storage_path":"s3://bucket/only-model"}]`,
 					},
 				},
 			},
@@ -657,7 +657,7 @@ func TestDeleteModelConfigMap(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string]string{
-						modelListKey: `[{"name":"model","s3_path":"s3://bucket/model"}]`,
+						modelListKey: `[{"name":"model","storage_path":"s3://bucket/model"}]`,
 					},
 				},
 			},
