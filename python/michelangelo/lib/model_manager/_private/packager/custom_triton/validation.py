@@ -46,7 +46,9 @@ def validate_raw_model_package(
         batch_inference: Optional flag for batch inference validation
     """
     try:
-        validate_raw_model_package_internal(model_path, sample_data, model_schema, batch_inference)
+        validate_raw_model_package_internal(
+            model_path, sample_data, model_schema, batch_inference
+        )
     except Exception as e:
         raise RuntimeError(f"Error when validating the raw model package. {e}") from e
 
@@ -83,14 +85,18 @@ def validate_raw_model_package_internal(
         try:
             output = model.predict(data)
         except Exception as e:
-            raise RuntimeError(f"Error when test prediction with the model. Error: {e}") from e
+            raise RuntimeError(
+                f"Error when test prediction with the model. Error: {e}"
+            ) from e
 
         is_valid, err = validate_output_data(output)
 
         if not is_valid:
             raise err
 
-        is_valid, err = validate_output_data_with_model_schema(output, model_schema, batch_inference)
+        is_valid, err = validate_output_data_with_model_schema(
+            output, model_schema, batch_inference
+        )
 
         if not is_valid:
             raise err
@@ -105,4 +111,6 @@ def validate_raw_model_package_internal(
         try:
             ModelClass.load(temp_dir)
         except Exception as e:
-            raise RuntimeError(f"Error when test reloading the saved model, please double check the save function. Error: {e}") from e
+            raise RuntimeError(
+                f"Error when test reloading the saved model, please double check the save function. Error: {e}"
+            ) from e

@@ -5,7 +5,9 @@ from unittest import TestCase
 from michelangelo.lib.model_manager.constants import StorageType
 from michelangelo.lib.model_manager.schema import ModelSchema, ModelSchemaItem, DataType
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
-from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation import Predict
+from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation import (
+    Predict,
+)
 
 
 class ValidationTest(TestCase):
@@ -49,7 +51,10 @@ class ValidationTest(TestCase):
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
-            with self.assertRaisesRegex(RuntimeError, "Error when validating the raw model package. Error when test prediction with the model"):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Error when validating the raw model package. Error when test prediction with the model",
+            ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_raw_model_package_invalid_output(self):
@@ -60,21 +65,23 @@ class ValidationTest(TestCase):
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
-            with self.assertRaisesRegex(RuntimeError, "Error when validating the raw model package. Error validating model output data"):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Error when validating the raw model package. Error validating model output data",
+            ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_raw_model_package_output_not_matching_schema(self):
         predict = Predict("test_content")
-        model_class = (
-            "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation.ModelWithOutputNotMatchingSchema"
-        )
+        model_class = "michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation.ModelWithOutputNotMatchingSchema"
         with tempfile.TemporaryDirectory() as temp_dir:
             src_model_path = os.path.join(temp_dir, "model")
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
             with self.assertRaisesRegex(
-                RuntimeError, "Error when validating the raw model package. Error validating model output data. Data fields do not match schema"
+                RuntimeError,
+                "Error when validating the raw model package. Error validating model output data. Data fields do not match schema",
             ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
@@ -86,7 +93,10 @@ class ValidationTest(TestCase):
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
-            with self.assertRaisesRegex(RuntimeError, "Error when validating the raw model package. Error when test saving the model"):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Error when validating the raw model package. Error when test saving the model",
+            ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_raw_model_package_with_reload_error(self):
@@ -98,7 +108,8 @@ class ValidationTest(TestCase):
             os.makedirs(src_model_path)
             predict.save(src_model_path)
             with self.assertRaisesRegex(
-                RuntimeError, "Error when validating the raw model package. Error when test reloading the saved model, please double check"
+                RuntimeError,
+                "Error when validating the raw model package. Error when test reloading the saved model, please double check",
             ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
@@ -110,7 +121,10 @@ class ValidationTest(TestCase):
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
-            with self.assertRaisesRegex(RuntimeError, "Error when validating the raw model package. The loaded model is not an instance of"):
+            with self.assertRaisesRegex(
+                RuntimeError,
+                "Error when validating the raw model package. The loaded model is not an instance of",
+            ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_model_files_with_reserved_model_py(self):
@@ -131,7 +145,10 @@ class ValidationTest(TestCase):
 
             dest_model_path = os.path.join(temp_dir, "model_package")
 
-            with self.assertRaisesRegex(ValueError, "Custom model contains the file'__init__.py' in the model assets folder."):
+            with self.assertRaisesRegex(
+                ValueError,
+                "Custom model contains the file'__init__.py' in the model assets folder.",
+            ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
 
     def test_validate_model_files_without_reserved_model_py(self):
