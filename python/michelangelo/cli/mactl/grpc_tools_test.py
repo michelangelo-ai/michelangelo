@@ -7,6 +7,7 @@ from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
 
 from michelangelo.cli.mactl.grpc_tools import (
     get_all_file_descriptors_by_filename,
+    get_methods_from_service,
     get_service_descriptors,
     get_service_name,
     list_services,
@@ -774,3 +775,58 @@ class GetAllFileDescriptorsByFilenameTest(TestCase):
 
         # Verify the error message
         self.assertIn("Maximum recursion depth exceeded", str(context.exception))
+
+
+class GetMethodsFromServiceTest(TestCase):
+    """Tests for get_methods_from_service function."""
+
+    def setUp(self):
+        """Set up common test data."""
+        self.metadata: list = [
+            ("rpc-caller", "grpcurl"),
+            ("rpc-service", "ma-apiserver"),
+            ("rpc-encoding", "proto"),
+        ]
+
+    def test_get_methods_from_service_success(self):
+        """Test get_methods_from_service returns methods and pool."""
+        # Don't mock internal functions to get code coverage
+        mock_channel = Mock()
+        service_name = "michelangelo.api.v2beta1.PipelineRunService"
+
+        # Create mock method
+        mock_method = Mock()
+        mock_method.name = "CreatePipelineRun"
+        mock_method.input_type = ".michelangelo.api.v2beta1.CreatePipelineRunRequest"
+        mock_method.output_type = ".michelangelo.api.v2beta1.PipelineRun"
+
+        # Create mock service with methods
+        mock_service = Mock()
+        mock_service.name = "PipelineRunService"
+        mock_service.method = [mock_method]
+
+        # Create mock file descriptor
+        mock_fd = Mock()
+        mock_fd.name = "pipeline_run_svc.proto"
+        mock_fd.service = [mock_service]
+
+        # Mock only the dependencies, not the function under test
+        with patch(
+            "michelangelo.cli.mactl.grpc_tools.get_service_descriptors"
+        ) as mock_get_descriptors, patch(
+            "michelangelo.cli.mactl.grpc_tools.retrieve_full_descriptor_pool"
+        ) as mock_retrieve_pool:
+            mock_get_descriptors.return_value = [mock_fd]
+            mock_pool = Mock()
+            mock_retrieve_pool.return_value = mock_pool
+
+            # Call the function - this will execute the actual code
+            methods, pool = get_methods_from_service(
+                mock_channel, service_name, self.metadata
+            )
+
+            # Verify results
+            self.assertEqual(len(methods), 1)
+            self.assertIn("CreatePipelineRun", methods)
+            self.assertEqual(methods["CreatePipelineRun"], mock_method)
+            self.assertEqual(pool, mock_pool)
