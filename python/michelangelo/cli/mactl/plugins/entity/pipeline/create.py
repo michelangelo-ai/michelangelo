@@ -1,9 +1,12 @@
+"""Pipeline `create` function plugin module."""
+
 import json
 import tempfile
 from copy import deepcopy
 from logging import getLogger
 from os import getenv
 from pathlib import Path
+from typing import Optional
 from uuid import uuid4
 
 from git import Repo
@@ -19,7 +22,8 @@ from michelangelo.gen.api.typed_struct_pb2 import TypedStruct
 
 _LOG = getLogger(__name__)
 
-# TODO: Add end-to-end tests for get_pipeline_config_and_tar() with real config files and subprocess execution
+# TODO: Add end-to-end tests for get_pipeline_config_and_tar()
+# with real config files and subprocess execution
 
 # Constants for registration output files
 _UNIFLOW_TAR_PATH_FILENAME = "uniflow_tar_path.txt"
@@ -32,7 +36,7 @@ def get_pipeline_config_and_tar(
     bazel_target: str,
     project: str,
     pipeline: str,
-    yaml_dict: dict = None,
+    yaml_dict: Optional[dict] = None,
 ) -> tuple[Struct, str, str]:
     """Run pipeline registration via subprocess to get uniflow artifacts.
 
@@ -49,9 +53,11 @@ def get_pipeline_config_and_tar(
         bazel_target: Bazel target (unused)
         project: Project name
         pipeline: Pipeline name
+        yaml_dict: Optional YAML dictionary (unused)
 
     Returns:
-        tuple: (workflow_inputs as Struct, uniflow_tar_path as string, workflow_function_name as string)
+        tuple: (workflow_inputs as Struct, uniflow_tar_path as string,
+            workflow_function_name as string)
 
     Raises:
         FileNotFoundError: If config file doesn't exist
@@ -75,7 +81,8 @@ def get_pipeline_config_and_tar(
 
         try:
             # Execute registration in subprocess (user's Python environment)
-            # The subprocess will read the config file and discover the workflow function
+            # The subprocess will read the config file and discover
+            # the workflow function
             result = run_subprocess_registration(
                 project=project,
                 pipeline=pipeline,
@@ -101,7 +108,7 @@ def get_pipeline_config_and_tar(
 
         except Exception as e:
             _LOG.error("Failed to execute registration subprocess: %s", e)
-            raise RuntimeError(f"Error running pipeline registration: {e}")
+            raise RuntimeError(f"Error running pipeline registration: {e}") from e
 
         # Read subprocess outputs using status files
         success, message, remote_path = read_subprocess_outputs(str(tmp_path))
@@ -117,7 +124,7 @@ def get_pipeline_config_and_tar(
         try:
             uniflow_tar_path = tar_path_file.read_text().strip()
             _LOG.info("Read uniflow tar path: %s", uniflow_tar_path)
-        except FileNotFoundError:
+        except FileNotFoundError as e:
             # Use remote path from status file if direct file read fails
             if remote_path:
                 uniflow_tar_path = remote_path
@@ -125,17 +132,19 @@ def get_pipeline_config_and_tar(
             else:
                 raise RuntimeError(
                     f"Could not read uniflow tar path from {tar_path_file}"
-                )
+                ) from e
 
         # Read uniflow workflow input
         input_file_path = tmp_path / _UNIFLOW_INPUT_FILENAME
         try:
             content = input_file_path.read_text()
             input_data = json.loads(content)
-        except FileNotFoundError:
-            raise RuntimeError(f"Could not read uniflow input from {input_file_path}")
+        except FileNotFoundError as e:
+            raise RuntimeError(
+                f"Could not read uniflow input from {input_file_path}"
+            ) from e
         except json.JSONDecodeError as e:
-            raise RuntimeError(f"Error parsing uniflow input JSON: {e}")
+            raise RuntimeError(f"Error parsing uniflow input JSON: {e}") from e
 
         # Convert to protobuf Struct
         workflow_inputs = Struct()
@@ -157,6 +166,7 @@ def convert_crd_metadata_pipeline_create(
     yaml_dict: dict, crd_class: type[Message], yaml_path: Path
 ) -> dict:
     """Convert CRD metadata for pipeline create crd.
+
     Integrates pipeline registration to get uniflow artifacts.
     """
     _LOG.info("Convert CRD metadata for class %r", crd_class)
@@ -210,8 +220,7 @@ def convert_crd_metadata_pipeline_create(
 def handle_workflow_inputs_retrieval(
     repo_root: Path, config_file_relative_path: str, project: str, pipeline: str
 ) -> tuple[dict, str, str]:
-    """Handle workflow inputs retrieval from subprocess registration.
-    """
+    """Handle workflow inputs retrieval from subprocess registration."""
     workflow_inputs = None
     uniflow_tar_path = ""
     workflow_function_name = ""
@@ -230,7 +239,7 @@ def handle_workflow_inputs_retrieval(
         _LOG.info("Successfully obtained pipeline config and tar")
     except FileNotFoundError as e:
         _LOG.error("Config file not found: %s", e)
-        raise ValueError(f"Pipeline configuration file is missing: {e}")
+        raise ValueError(f"Pipeline configuration file is missing: {e}") from e
     except RuntimeError as e:
         _LOG.error("Registration subprocess failed: %s", e)
         # Check if this is a critical failure or can be handled gracefully
@@ -238,12 +247,12 @@ def handle_workflow_inputs_retrieval(
             raise ValueError(
                 f"Could not detect suitable Python environment for registration: {e}. "
                 "Please ensure you're in a valid Python project environment."
-            )
+            ) from e
         elif "workflow function" in str(e).lower():
             raise ValueError(
                 f"Workflow function not found: {e}. "
                 f"Please ensure {project}.{pipeline}_workflow exists and is importable."
-            )
+            ) from e
         else:
             # For other registration failures, continue with graceful degradation
             _LOG.warning(
@@ -269,8 +278,7 @@ def populate_pipeline_spec_with_workflow_inputs(
     uniflow_tar_path: str,
     workflow_function_name: str,
 ) -> dict:
-    """Populate pipeline spec with workflow inputs.
-    """
+    """Populate pipeline spec with workflow inputs."""
     res["spec"] = deepcopy(yaml_dict["spec"])
     res["spec"]["commit"] = {
         "branch": repo.active_branch.name,

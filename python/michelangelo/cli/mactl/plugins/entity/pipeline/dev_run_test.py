@@ -4,7 +4,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
-from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
     _process_env_variables,
     convert_crd_metadata_pipeline_dev_run,
     generate_pipeline_dev_run_object,
@@ -17,7 +17,7 @@ class PipelineDevRunTest(TestCase):
     def test_module_imports(self):
         """Test that the module imports successfully including all dependencies."""
         # This test ensures all imports in dev_run.py are valid and covered
-        from michelangelo.cli.mactl.plugins.pipeline import dev_run
+        from michelangelo.cli.mactl.plugins.entity.pipeline import dev_run
 
         # Verify key attributes exist
         self.assertTrue(hasattr(dev_run, "convert_crd_metadata_pipeline_dev_run"))
@@ -58,9 +58,11 @@ class PipelineDevRunTest(TestCase):
         self.assertIn("Invalid environment variable format", str(context.exception))
         self.assertIn("expected format is <ENV_VAR>=<VALUE>", str(context.exception))
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
     def test_generate_pipeline_dev_run_object_comprehensive(
         self, mock_generate_run_obj, mock_generate_name
@@ -102,9 +104,11 @@ class PipelineDevRunTest(TestCase):
             "custom-image:v1.0",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
     def test_generate_pipeline_dev_run_object_passes_resume_from(
         self, mock_generate_run_obj, mock_generate_name
@@ -127,9 +131,11 @@ class PipelineDevRunTest(TestCase):
             resume_from="old-run:step1",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
     def test_generate_pipeline_dev_run_object_without_env_variables(
         self, mock_generate_run_obj, mock_generate_name
@@ -146,9 +152,11 @@ class PipelineDevRunTest(TestCase):
 
         self.assertNotIn("input", result["spec"])
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
     def test_generate_pipeline_dev_run_object_with_file_sync(
         self, mock_generate_run_obj, mock_generate_name
@@ -176,9 +184,11 @@ class PipelineDevRunTest(TestCase):
             "s3://bucket/path/to/file-sync.tar.gz",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_object"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_object"
     )
     def test_generate_pipeline_dev_run_object_with_file_sync_and_env_vars(
         self, mock_generate_run_obj, mock_generate_name
@@ -213,15 +223,17 @@ class PipelineDevRunTest(TestCase):
             },
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.Repo")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.handle_workflow_inputs_retrieval"
     )
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.DefaultFileSync")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.DefaultFileSync")
     def test_convert_crd_metadata_with_file_sync(
         self,
         mock_file_sync_class,
@@ -280,14 +292,16 @@ class PipelineDevRunTest(TestCase):
             "s3://bucket/file-sync.tar.gz",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.Repo")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.Repo")
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.handle_workflow_inputs_retrieval"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.handle_workflow_inputs_retrieval"
     )
     @patch(
-        "michelangelo.cli.mactl.plugins.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.populate_pipeline_spec_with_workflow_inputs"
     )
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.generate_pipeline_run_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.generate_pipeline_run_name"
+    )
     def test_convert_crd_metadata_without_file_sync(
         self,
         mock_generate_run_name,
@@ -329,7 +343,7 @@ class PipelineDevRunTest(TestCase):
 
     def test_add_optional_params_to_yaml_dict_with_file_sync(self):
         """Test _add_optional_params_to_yaml_dict with file_sync=True."""
-        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             _add_optional_params_to_yaml_dict,
         )
 
@@ -348,7 +362,7 @@ class PipelineDevRunTest(TestCase):
 
     def test_add_optional_params_to_yaml_dict_without_file_sync(self):
         """Test _add_optional_params_to_yaml_dict with file_sync=False."""
-        from michelangelo.cli.mactl.plugins.pipeline.dev_run import (
+        from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
             _add_optional_params_to_yaml_dict,
         )
 

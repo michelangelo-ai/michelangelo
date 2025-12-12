@@ -1,0 +1,1 @@
+"""MaCTL Plugin definitions."""

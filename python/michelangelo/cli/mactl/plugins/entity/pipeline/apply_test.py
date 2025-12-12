@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
-from michelangelo.cli.mactl.plugins.pipeline.apply import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.apply import (
     convert_crd_metadata_pipeline_apply,
 )
 
@@ -36,7 +36,7 @@ class PipelineApplyTest(TestCase):
         mock_repo.head.commit.hexsha = "abc123"
 
         with patch(
-            "michelangelo.cli.mactl.plugins.pipeline.apply.Repo"
+            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.Repo"
         ) as mock_repo_class:
             mock_repo_class.return_value = mock_repo
 
@@ -76,7 +76,7 @@ class PipelineApplyTest(TestCase):
         mock_repo.head.commit.hexsha = "abc123"
 
         with patch(
-            "michelangelo.cli.mactl.plugins.pipeline.apply.Repo"
+            "michelangelo.cli.mactl.plugins.entity.pipeline.apply.Repo"
         ) as mock_repo_class:
             mock_repo_class.return_value = mock_repo
 
