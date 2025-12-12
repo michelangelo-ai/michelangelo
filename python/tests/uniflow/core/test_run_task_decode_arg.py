@@ -40,8 +40,10 @@ class TestDecodeArg(unittest.TestCase):
         """Test that decoding errors are logged with stack trace."""
         value = "invalid json"
 
-        with self.assertRaises(argparse.ArgumentTypeError), \
-             self.assertLogs(level=logging.ERROR) as cm:
+        with (
+            self.assertRaises(argparse.ArgumentTypeError),
+            self.assertLogs(level=logging.ERROR) as cm,
+        ):
             _decode_arg(value)
 
         # Verify log record
