@@ -165,8 +165,20 @@ func (r *module) waitForDeployment(t *starlark.Thread, _ *starlark.Builtin, args
 		return nil, err
 	}
 
-	result := starlark.NewDict(1)
+	// Extract revision information
+	currentRev := ""
+	if finalDeployment.Status.GetCurrentRevision() != nil {
+		currentRev = finalDeployment.Status.GetCurrentRevision().GetName()
+	}
+	desiredRev := ""
+	if finalDeployment.Spec.GetDesiredRevision() != nil {
+		desiredRev = finalDeployment.Spec.GetDesiredRevision().GetName()
+	}
+
+	result := starlark.NewDict(3)
 	result.SetKey(starlark.String("stage"), starlark.String(finalDeployment.Status.Stage.String()))
+	result.SetKey(starlark.String("current_revision"), starlark.String(currentRev))
+	result.SetKey(starlark.String("desired_revision"), starlark.String(desiredRev))
 	return result, nil
 }
 

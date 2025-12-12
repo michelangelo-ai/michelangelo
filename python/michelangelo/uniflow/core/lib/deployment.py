@@ -124,7 +124,10 @@ def wait_for_deployment(
         poll: Polling interval in seconds (default: 600 = 10 minutes)
 
     Returns:
-        dict: Dictionary containing the deployment stage {"stage": <stage_name>}
+        dict: Dictionary containing:
+            - stage: The terminal deployment stage name
+            - current_revision: The currently deployed model revision (empty string if not set)
+            - desired_revision: The desired model revision
 
     Raises:
         RuntimeError: If deployment fails, timeout occurs, or deployment was updated by another workflow
@@ -155,7 +158,11 @@ def wait_for_deployment(
         # Check if deployment reached terminal state (success or failure)
         if stage in _DEPLOYMENT_SUCCESS_STAGES:
             print(f"Deployment completed successfully | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s")
-            return {"stage": stage_name}
+            return {
+                "stage": stage_name,
+                "current_revision": current_rev or "",
+                "desired_revision": desired_rev,
+            }
 
         if stage in _DEPLOYMENT_FAILED_STAGES:
             print(f"Deployment failed | Stage: {stage_name} | Elapsed: {elapsed_time:.1f}s")

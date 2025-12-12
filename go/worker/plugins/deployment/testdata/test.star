@@ -40,18 +40,20 @@ def main():
     print("Create result:", create_result)
     
     # Test WAIT - uncomment when testing with active deployment controller
-    # wait_result = test_wait_for_deployment(create_result["model_revision_name"])
-    # print("Wait result:", wait_result)
+    wait_result = test_wait_for_deployment(create_result["model_revision_name"])
+    print("Wait result:", wait_result)
     
     # Test UPDATE path
     update_result = test_update_deployment()
     print("Update result:", update_result)
     
-    # wait_result2 = test_wait_for_deployment(update_result["model_revision_name"])
-    # print("Wait result 2:", wait_result2)
+    wait_result2 = test_wait_for_deployment(update_result["model_revision_name"])
+    print("Wait result 2:", wait_result2)
 
     return {
         "create_result": create_result,
+        "wait_result": wait_result,
         "update_result": update_result,
+        "wait_result2": wait_result2,
     }
 
