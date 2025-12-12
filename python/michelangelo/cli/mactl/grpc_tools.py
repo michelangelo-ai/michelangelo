@@ -1,9 +1,10 @@
-"""gRPC Tools for dynamic service introspection and method retrieval
-using gRPC reflection.
+"""gRPC Tools for dynamic service introspection and method retrieval.
+
+Using gRPC reflection.
 """
 
 from logging import getLogger
-from typing import Union
+from typing import Optional, Union
 
 from google.protobuf import message_factory
 from google.protobuf.descriptor_pb2 import (
@@ -19,8 +20,7 @@ _LOG = getLogger(__name__)
 
 
 def list_services(channel, metadata: list) -> list[str]:
-    """List the services available on a gRPC server using reflection.
-    """
+    """List the services available on a gRPC server using reflection."""
     stub = reflection_pb2_grpc.ServerReflectionStub(channel)
 
     request = reflection_pb2.ServerReflectionRequest(list_services="")
@@ -36,13 +36,54 @@ def list_services(channel, metadata: list) -> list[str]:
     raise ValueError("No services found")
 
 
+def get_service_name(
+    channel: Channel,
+    metadata: list,
+    service_suffix: str,
+    fallback: Optional[str] = None,
+) -> str:
+    """Auto-detect service name from server reflection.
+
+    Args:
+        channel: gRPC channel
+        metadata: gRPC metadata
+        service_suffix: Service name suffix (e.g., "PipelineRunService")
+        fallback: Fallback service name if auto-detection fails
+    Returns:
+        Full service name (e.g., "michelangelo.api.v2beta1.PipelineRunService")
+
+    Raises:
+        ValueError: If service not found and no fallback provided.
+    """
+    _LOG.info("Auto-detecting service name for suffix: %s", service_suffix)
+    services = list_services(channel, metadata)
+    _LOG.debug("Available services: %r", services)
+    service_name = next(
+        (s for s in services if s.endswith(service_suffix)),
+        None,
+    )
+    if service_name:
+        _LOG.info("Auto-detected service name: %s", service_name)
+        return service_name
+    if fallback:
+        _LOG.warning(
+            "Service with suffix '%s' not found. Using fallback: %s",
+            service_suffix,
+            fallback,
+        )
+        return fallback
+    raise ValueError(
+        f"Service with suffix '{service_suffix}' not found in "
+        f"available services: {services}"
+    )
+
+
 def get_methods_from_service(
     channel: Channel,
     service: str,
     metadata: list,
 ) -> tuple[dict[str, MethodDescriptorProto], DescriptorPool]:
-    """Get methods from a service descriptor.
-    """
+    """Get methods from a service descriptor."""
     methods = list(get_service_descriptors(channel, service, metadata))
     _LOG.info("Succeed to retireve %d methods", len(methods))
     _LOG.debug("Detailed Method information: %r", methods)
@@ -53,7 +94,7 @@ def get_methods_from_service(
     _LOG.info("Method list for service: %r", [m.name for m in methods])
     # Assume only one method matching
     pool = retrieve_full_descriptor_pool(channel, methods[0].name, metadata)
-    method_services = [m for m in methods[0].service]
+    method_services = list(methods[0].service)
     _LOG.info(
         "Method service list for %d service: %r / %r",
         len(method_services),
@@ -75,6 +116,7 @@ def get_methods_from_service(
 def get_service_descriptors(
     channel, service_name, metadata: list
 ) -> list[FileDescriptorProto]:
+    """Get service descriptors for a given service name."""
     _LOG.info(
         "Start to get service descriptors for %r / %r",
         channel,
@@ -100,6 +142,7 @@ def retrieve_full_descriptor_pool(
     channel: Channel, filename: str, metadata: list
 ) -> DescriptorPool:
     """Retrieve the full descriptor pool for a given filename.
+
     This is useful for introspection and understanding the service's API.
     """
     _LOG.info("Start retrieve full descriptor pool for %r / %r", channel, filename)
@@ -120,8 +163,7 @@ def get_all_file_descriptors_by_filename(
     deps: int = 0,
     visited: Union[None, set[str]] = None,
 ):
-    """Get all file descriptors recursively by filename using ServerReflection.
-    """
+    """Get all file descriptors recursively by filename using ServerReflection."""
     _LOG.debug(
         "Start to get all descriptors with deps %2d for %r / %r / %r",
         deps,
@@ -157,10 +199,9 @@ def get_all_file_descriptors_by_filename(
 
 
 def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[Message]:
-    """message_name example: "michelangelo.api.v2beta1.Pipeline"
-    """
+    """message_name example: "michelangelo.api.v2beta1.Pipeline"."""
     descriptor = pool.FindMessageTypeByName(message_name)
     # factory = message_factory.MessageFactory(pool)
     # MessageClass = factory.GetPrototype(descriptor)
-    MessageClass = message_factory.GetMessageClass(descriptor)
-    return MessageClass
+    message_class = message_factory.GetMessageClass(descriptor)
+    return message_class

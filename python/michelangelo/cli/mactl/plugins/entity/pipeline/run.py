@@ -22,6 +22,7 @@ from michelangelo.cli.mactl.crd import (
 from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
+    get_service_name,
 )
 
 _LOG = getLogger(__name__)
@@ -76,8 +77,8 @@ def add_function_signature(crd: CRD) -> None:
                         "required": False,
                         "default": None,
                         "help": (
-                            "Resume from a previous pipeline run. Format:"
-                            " 'pipeline_run_name[:step_name]'"
+                            "Resume from a previous pipeline run. Format: "
+                            "'pipeline_run_name[:step_name]'"
                         ),
                     },
                 },
@@ -89,8 +90,12 @@ def add_function_signature(crd: CRD) -> None:
 def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = None):
     """Generate run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` crd for: %s", crd)
-
-    pipeline_run_service = "michelangelo.api.v2.PipelineRunService"
+    pipeline_run_service = get_service_name(
+        channel,
+        crd.metadata,
+        "PipelineRunService",
+        fallback="michelangelo.api.v2.PipelineRunService",
+    )
     methods, method_pool = get_methods_from_service(
         channel, pipeline_run_service, crd.metadata
     )
@@ -138,8 +143,8 @@ def generate_run(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] = 
         request_input = input_class()
         ParseDict(pipeline_run_dict, request_input)
 
-        service_name = "michelangelo.api.v2.PipelineRunService"
-        method_fullname = f"/{service_name}/{method_name}"
+        # Use auto-detected service name
+        method_fullname = f"/{pipeline_run_service}/{method_name}"
         _LOG.info("Method fullname for gRPC call: %s", method_fullname)
 
         stub_method = channel.unary_unary(
@@ -164,8 +169,8 @@ def convert_crd_metadata_pipeline_run(
 ) -> dict:
     """Convert CRD metadata for pipeline run command.
 
-    This function generates a CreatePipelineRunRequest object from
-    command line arguments.
+    This function generates a CreatePipelineRunRequest object from command line
+    arguments.
     """
     _LOG.info("Converting metadata for pipeline run command")
 
@@ -253,8 +258,8 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
     """Parse the resume_from parameter and return a resume spec.
 
     Args:
-        resume_from: Resume specification in format "pipeline_run_name"
-            or "pipeline_run_name:step_name"
+        resume_from: Resume specification in format "pipeline_run_name" or
+            "pipeline_run_name:step_name"
         namespace: Kubernetes namespace for the pipeline run reference
 
     Returns:
@@ -262,10 +267,8 @@ def parse_resume_from(resume_from: str, namespace: str) -> dict:
     """
     if not resume_from:
         _LOG.error(
-            (
-                "Invalid resume_from format. Expected 'pipeline_run_name'"
-                " or 'pipeline_run_name:step_name', got: %r"
-            ),
+            "Invalid resume_from format. Expected 'pipeline_run_name' or "
+            "'pipeline_run_name:step_name', got: %r",
             resume_from,
         )
         return None
