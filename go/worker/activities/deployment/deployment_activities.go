@@ -67,8 +67,14 @@ func (r *activities) SensorDeployment(ctx context.Context, req SensorDeploymentR
 	}
 
 	stage := deployment.Status.GetStage()
-	desiredRev := deployment.Spec.GetDesiredRevision().GetName()
-	currentRev := deployment.Status.GetCurrentRevision().GetName()
+	desiredRev := ""
+	if deployment.Spec.GetDesiredRevision() != nil {
+		desiredRev = deployment.Spec.GetDesiredRevision().GetName()
+	}
+	currentRev := ""
+	if deployment.Status.GetCurrentRevision() != nil {
+		currentRev = deployment.Status.GetCurrentRevision().GetName()
+	}
 
 	// Check if deployment was updated by another workflow - fail immediately if expected revision doesn't match
 	// This error is non-retriable since retrying won't change the fact that another workflow updated the deployment
