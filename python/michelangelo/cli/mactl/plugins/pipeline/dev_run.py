@@ -118,8 +118,6 @@ def generate_dev_run(
 ):
     """Generate dev run function for pipeline CRD."""
     _LOG.info("Generating `pipeline run` cr for dev-run: %s", crd)
-
-    # Auto-detect PipelineRunService from server (e.g., v2 vs v2beta1)
     pipeline_run_service = get_service_name(
         channel,
         crd.metadata,

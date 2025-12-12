@@ -10,6 +10,7 @@ from michelangelo.cli.mactl.plugins.pipeline.run import (
     convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
+    generate_run,
     parse_resume_from,
 )
 
@@ -201,4 +202,35 @@ class PipelineRunTest(TestCase):
             pipeline_name="test-pipeline",
             namespace="test-ns",
             resume_from="previous-run:step-1",
+        )
+
+    @patch("michelangelo.cli.mactl.plugins.pipeline.run.get_methods_from_service")
+    @patch("michelangelo.cli.mactl.plugins.pipeline.run.get_service_name")
+    def test_generate_run_with_auto_detection(
+        self, mock_get_service_name, mock_get_methods
+    ):
+        """Test generate_run uses get_service_name for auto-detection."""
+        mock_crd = MagicMock()
+        mock_crd.metadata = [("rpc-caller", "test")]
+        mock_channel = MagicMock()
+        mock_get_service_name.return_value = (
+            "michelangelo.api.v2beta1.PipelineRunService"
+        )
+        mock_method = MagicMock()
+        mock_method.input_type = ".michelangelo.api.v2beta1.CreatePipelineRunRequest"
+        mock_method.output_type = ".michelangelo.api.v2beta1.PipelineRun"
+        mock_methods = {"CreatePipelineRun": mock_method}
+        mock_pool = MagicMock()
+        mock_get_methods.return_value = (mock_methods, mock_pool)
+        generate_run(mock_crd, mock_channel)
+        mock_get_service_name.assert_called_once_with(
+            mock_channel,
+            mock_crd.metadata,
+            "PipelineRunService",
+            fallback="michelangelo.api.v2.PipelineRunService",
+        )
+        mock_get_methods.assert_called_once_with(
+            mock_channel,
+            "michelangelo.api.v2beta1.PipelineRunService",
+            mock_crd.metadata,
         )

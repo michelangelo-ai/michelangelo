@@ -1,5 +1,6 @@
-"""gRPC Tools for dynamic service introspection and method retrieval
-using gRPC reflection.
+"""gRPC Tools for dynamic service introspection and method retrieval.
+
+Using gRPC reflection.
 """
 
 from logging import getLogger
@@ -36,7 +37,10 @@ def list_services(channel, metadata: list) -> list[str]:
 
 
 def get_service_name(
-    channel: Channel, metadata: list, service_suffix: str, fallback: Optional[str] = None
+    channel: Channel,
+    metadata: list,
+    service_suffix: str,
+    fallback: Optional[str] = None,
 ) -> str:
     """Auto-detect service name from server reflection.
 
@@ -45,27 +49,22 @@ def get_service_name(
         metadata: gRPC metadata
         service_suffix: Service name suffix (e.g., "PipelineRunService")
         fallback: Fallback service name if auto-detection fails
-
     Returns:
         Full service name (e.g., "michelangelo.api.v2beta1.PipelineRunService")
 
     Raises:
-        ValueError: If service not found and no fallback provided
+        ValueError: If service not found and no fallback provided.
     """
     _LOG.info("Auto-detecting service name for suffix: %s", service_suffix)
     services = list_services(channel, metadata)
     _LOG.debug("Available services: %r", services)
-
-    # Find service ending with the suffix
     service_name = next(
         (s for s in services if s.endswith(service_suffix)),
         None,
     )
-
     if service_name:
         _LOG.info("Auto-detected service name: %s", service_name)
         return service_name
-
     if fallback:
         _LOG.warning(
             "Service with suffix '%s' not found. Using fallback: %s",
@@ -73,9 +72,9 @@ def get_service_name(
             fallback,
         )
         return fallback
-
     raise ValueError(
-        f"Service with suffix '{service_suffix}' not found in available services: {services}"
+        f"Service with suffix '{service_suffix}' not found in "
+        f"available services: {services}"
     )
 
 
@@ -95,7 +94,7 @@ def get_methods_from_service(
     _LOG.info("Method list for service: %r", [m.name for m in methods])
     # Assume only one method matching
     pool = retrieve_full_descriptor_pool(channel, methods[0].name, metadata)
-    method_services = [m for m in methods[0].service]
+    method_services = list(methods[0].service)
     _LOG.info(
         "Method service list for %d service: %r / %r",
         len(method_services),
@@ -117,6 +116,7 @@ def get_methods_from_service(
 def get_service_descriptors(
     channel, service_name, metadata: list
 ) -> list[FileDescriptorProto]:
+    """Get service descriptors for a given service name."""
     _LOG.info(
         "Start to get service descriptors for %r / %r",
         channel,
@@ -142,6 +142,7 @@ def retrieve_full_descriptor_pool(
     channel: Channel, filename: str, metadata: list
 ) -> DescriptorPool:
     """Retrieve the full descriptor pool for a given filename.
+
     This is useful for introspection and understanding the service's API.
     """
     _LOG.info("Start retrieve full descriptor pool for %r / %r", channel, filename)
@@ -198,9 +199,9 @@ def get_all_file_descriptors_by_filename(
 
 
 def get_message_class_by_name(pool: DescriptorPool, message_name: str) -> type[Message]:
-    """message_name example: "michelangelo.api.v2beta1.Pipeline" """
+    """message_name example: "michelangelo.api.v2beta1.Pipeline"."""
     descriptor = pool.FindMessageTypeByName(message_name)
     # factory = message_factory.MessageFactory(pool)
     # MessageClass = factory.GetPrototype(descriptor)
-    MessageClass = message_factory.GetMessageClass(descriptor)
-    return MessageClass
+    message_class = message_factory.GetMessageClass(descriptor)
+    return message_class
