@@ -6,12 +6,14 @@ from unittest import TestCase
 
 import numpy as np
 
+from michelangelo.lib.model_manager._private.packager.custom_triton import (
+    validate_raw_model_package,
+)
 from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtures.model_for_validation import (  # noqa: E501
     Predict,
 )
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
-from michelangelo.lib.model_manager._private.packager.custom_triton import validate_raw_model_package
 
 
 class ValidationTest(TestCase):
@@ -181,7 +183,7 @@ class ValidationTest(TestCase):
                 ),
             ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
-    
+
     def test_validate_raw_model_package_without_sample_data(self):
         """Test validation of a raw model package without sample data."""
         predict = Predict("test_content")
@@ -194,7 +196,9 @@ class ValidationTest(TestCase):
             dest_model_path = os.path.join(temp_dir, "model_package")
             os.makedirs(src_model_path)
             predict.save(src_model_path)
-            package = self.generate_package(src_model_path, model_class, dest_model_path)
+            package = self.generate_package(
+                src_model_path, model_class, dest_model_path
+            )
             validate_raw_model_package(package, None, self.schema)
 
     def test_validate_model_files_with_reserved_model_py(self):
