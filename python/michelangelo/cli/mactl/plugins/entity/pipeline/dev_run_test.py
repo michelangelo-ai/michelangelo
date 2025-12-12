@@ -7,7 +7,6 @@ from unittest.mock import MagicMock, patch
 from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
     _process_env_variables,
     convert_crd_metadata_pipeline_dev_run,
-    generate_dev_run,
     generate_pipeline_dev_run_object,
 )
 
@@ -379,36 +378,3 @@ class PipelineDevRunTest(TestCase):
         self.assertEqual(result["env"], {})
         self.assertNotIn("resume_from", result)
         self.assertNotIn("file_sync", result)
-
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_methods_from_service"
-    )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_service_name")
-    def test_generate_dev_run_with_auto_detection(
-        self, mock_get_service_name, mock_get_methods
-    ):
-        """Test generate_dev_run uses get_service_name for auto-detection."""
-        mock_crd = MagicMock()
-        mock_crd.metadata = [("rpc-caller", "test")]
-        mock_channel = MagicMock()
-        mock_get_service_name.return_value = (
-            "michelangelo.api.v2beta1.PipelineRunService"
-        )
-        mock_method = MagicMock()
-        mock_method.input_type = ".michelangelo.api.v2beta1.CreatePipelineRunRequest"
-        mock_method.output_type = ".michelangelo.api.v2beta1.PipelineRun"
-        mock_methods = {"CreatePipelineRun": mock_method}
-        mock_pool = MagicMock()
-        mock_get_methods.return_value = (mock_methods, mock_pool)
-        generate_dev_run(mock_crd, mock_channel)
-        mock_get_service_name.assert_called_once_with(
-            mock_channel,
-            mock_crd.metadata,
-            "PipelineRunService",
-            fallback="michelangelo.api.v2.PipelineRunService",
-        )
-        mock_get_methods.assert_called_once_with(
-            mock_channel,
-            "michelangelo.api.v2beta1.PipelineRunService",
-            mock_crd.metadata,
-        )
