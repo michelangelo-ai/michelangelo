@@ -1,8 +1,9 @@
-"""Unit tests for mactl CLI functions.
-"""
+"""Unit tests for mactl CLI functions."""
 
 import os
+import tempfile
 from importlib import reload
+from pathlib import Path
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
@@ -10,16 +11,18 @@ from michelangelo.cli.mactl import mactl
 from michelangelo.cli.mactl.mactl import (
     ADDRESS,
     create_serivce_classes,
+    read_module_from_file,
 )
 
 
 class ServiceClassCreationTest(TestCase):
-    """Tests for create_serivce_classes function
-    """
+    """Tests for create_serivce_classes function."""
 
     @patch("michelangelo.cli.mactl.mactl.CRD")
     def test_create_serivce_classes_with_various_service_lists(self, mock_crd_class):
-        """Test `create_serivce_classes()` function with both v2 and v2beta1 service lists
+        """Test `create_serivce_classes()` function.
+
+        with both v2 and v2beta1 service lists
         """
         services = [
             "grpc.health.v1.Health",
@@ -71,12 +74,14 @@ class ServiceClassCreationTest(TestCase):
         self.assertEqual(mock_crd_class.call_count, 13)
 
     def test_create_serivce_classes_filters_out_non_service_entries(self):
-        """Test that non-Service entries are filtered out correctly
-        """
+        """Test that non-Service entries are filtered out correctly."""
         services = [
-            "grpc.reflection.v1alpha.ServerReflection",  # Should be filtered out (not ending with Service)
-            "michelangelo.api.v2.ProjectService",  # Should be included
-            "michelangelo.api.v2.SomeExtService",  # Should be filtered out (ends with ExtService)
+            # Should be filtered out (not ending with Service)
+            "grpc.reflection.v1alpha.ServerReflection",
+            # Should be included
+            "michelangelo.api.v2.ProjectService",
+            # Should be filtered out (ends with ExtService)
+            "michelangelo.api.v2.SomeExtService",
             "michelangelo.api.v2.ModelService",  # Should be included
             "some.random.endpoint",  # Should be filtered out (not ending with Service)
         ]
@@ -93,8 +98,7 @@ class ServiceClassCreationTest(TestCase):
         self.assertEqual(mock_crd_class.call_count, 2)
 
     def test_create_serivce_classes_empty_list(self):
-        """Test `create_serivce_classes()` function with empty service list
-        """
+        """Test `create_serivce_classes()` function with empty service list."""
         services = []
 
         result = create_serivce_classes(services)
@@ -105,18 +109,17 @@ class ServiceClassCreationTest(TestCase):
 
 
 class TLSConfigurationTest(TestCase):
-    """Tests for TLS configuration functionality added to mactl
-    """
+    """Tests for TLS configuration functionality added to mactl."""
 
     def setUp(self):
-        """Set up test environment variables"""
+        """Set up test environment variables."""
         # Store original environment variables
         self.original_env = {}
         for key in ["MACTL_USE_TLS", "MACTL_ADDRESS"]:
             self.original_env[key] = os.environ.get(key)
 
     def tearDown(self):
-        """Restore original environment variables"""
+        """Restore original environment variables."""
         for key, value in self.original_env.items():
             if value is not None:
                 os.environ[key] = value
@@ -125,26 +128,26 @@ class TLSConfigurationTest(TestCase):
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "true"}, clear=False)
     def test_use_tls_environment_variable_true(self):
-        """Test that MACTL_USE_TLS=true is properly parsed"""
+        """Test that MACTL_USE_TLS=true is properly parsed."""
         # Need to reload the module to pick up new environment variable
         reload(mactl)
         self.assertEqual(mactl.USE_TLS, True)
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "TRUE"}, clear=False)
     def test_use_tls_environment_variable_case_insensitive(self):
-        """Test that MACTL_USE_TLS is case insensitive and converts to lowercase"""
+        """Test that MACTL_USE_TLS is case insensitive and converts to lowercase."""
         reload(mactl)
         self.assertEqual(mactl.USE_TLS, True)
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "false"}, clear=False)
     def test_use_tls_environment_variable_false(self):
-        """Test that MACTL_USE_TLS=false is properly parsed"""
+        """Test that MACTL_USE_TLS=false is properly parsed."""
         reload(mactl)
         self.assertEqual(mactl.USE_TLS, False)
 
     @patch.dict(os.environ, {}, clear=False)
     def test_use_tls_default_value(self):
-        """Test that USE_TLS defaults to 'true' when not set"""
+        """Test that USE_TLS defaults to 'true' when not set."""
         # Remove MACTL_USE_TLS if it exists
         if "MACTL_USE_TLS" in os.environ:
             del os.environ["MACTL_USE_TLS"]
@@ -153,23 +156,21 @@ class TLSConfigurationTest(TestCase):
 
     @patch.dict(os.environ, {"MACTL_USE_TLS": "invalid"}, clear=False)
     def test_use_tls_invalid_value(self):
-        """Test that invalid values for MACTL_USE_TLS are handled"""
+        """Test that invalid values for MACTL_USE_TLS are handled."""
         reload(mactl)
         self.assertEqual(mactl.USE_TLS, False)
 
 
 class TLSConnectionTest(TestCase):
-    """Tests for TLS connection functionality in main execution
-    """
+    """Tests for TLS connection functionality in main execution."""
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
     @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
-    @patch("builtins.print")
     def test_main_execution_with_tls_enabled(
-        self, mock_print, mock_ssl_creds, mock_secure_channel, mock_main
+        self, mock_ssl_creds, mock_secure_channel, mock_main
     ):
-        """Test main execution path when TLS is enabled"""
+        """Test main execution path when TLS is enabled."""
         # Setup mocks
         mock_channel = MagicMock()
         mock_secure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
@@ -186,40 +187,23 @@ class TLSConnectionTest(TestCase):
             from michelangelo.cli.mactl import mactl
 
             # Execute the main block logic directly
-            if mactl.USE_TLS == "true":
-                should_use_tls = True
-                print(
-                    f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {mactl.ADDRESS}"
-                )
-            else:
-                should_use_tls = False
-                print(
-                    f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {mactl.ADDRESS}"
-                )
-
+            should_use_tls = bool(mactl.USE_TLS == "true")
             if should_use_tls:
                 credentials = mactl.ssl_channel_credentials()
                 with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
                     mactl.main(channel)
             else:
-                with mactl.insecure_channel(mactl.ADDRESS) as channel:
-                    mactl.main(channel)
+                self.fail("TLS was expected to be enabled in this test.")
 
         # Verify TLS connection setup
         mock_ssl_creds.assert_called_once()
         mock_secure_channel.assert_called_once_with("test-server:443", mock_credentials)
         mock_main.assert_called_once_with(mock_channel)
-        mock_print.assert_called_once_with(
-            "Using TLS (forced via MACTL_USE_TLS=true) to connect to test-server:443"
-        )
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.insecure_channel")
-    @patch("builtins.print")
-    def test_main_execution_with_tls_disabled(
-        self, mock_print, mock_insecure_channel, mock_main
-    ):
-        """Test main execution path when TLS is disabled"""
+    def test_main_execution_with_tls_disabled(self, mock_insecure_channel, mock_main):
+        """Test main execution path when TLS is disabled."""
         # Setup mocks
         mock_channel = MagicMock()
         mock_insecure_channel.return_value.__enter__ = Mock(return_value=mock_channel)
@@ -233,22 +217,9 @@ class TLSConnectionTest(TestCase):
             # Import and run the main block
             from michelangelo.cli.mactl import mactl
 
-            # Execute the main block logic directly
-            if mactl.USE_TLS == "true":
-                should_use_tls = True
-                print(
-                    f"Using TLS (forced via MACTL_USE_TLS=true) to connect to {mactl.ADDRESS}"
-                )
-            else:
-                should_use_tls = False
-                print(
-                    f"Using insecure connection (forced via MACTL_USE_TLS=false) to connect to {mactl.ADDRESS}"
-                )
-
+            should_use_tls = bool(mactl.USE_TLS == "true")
             if should_use_tls:
-                credentials = mactl.ssl_channel_credentials()
-                with mactl.secure_channel(mactl.ADDRESS, credentials) as channel:
-                    mactl.main(channel)
+                self.fail("TLS was expected to be not enabled in this test.")
             else:
                 with mactl.insecure_channel(mactl.ADDRESS) as channel:
                     mactl.main(channel)
@@ -256,9 +227,6 @@ class TLSConnectionTest(TestCase):
         # Verify insecure connection setup
         mock_insecure_channel.assert_called_once_with("localhost:5435")
         mock_main.assert_called_once_with(mock_channel)
-        mock_print.assert_called_once_with(
-            "Using insecure connection (forced via MACTL_USE_TLS=false) to connect to localhost:5435"
-        )
 
     @patch("michelangelo.cli.mactl.mactl.main")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
@@ -267,7 +235,7 @@ class TLSConnectionTest(TestCase):
     def test_channel_context_manager_usage(
         self, mock_insecure_channel, mock_ssl_creds, mock_secure_channel, mock_main
     ):
-        """Test that channels are properly used as context managers"""
+        """Test that channels are properly used as context managers."""
         mock_channel = MagicMock()
 
         # Test TLS channel context manager
@@ -320,7 +288,7 @@ class TLSConnectionTest(TestCase):
         mock_main.assert_called_once_with(mock_channel)
 
     def test_address_environment_variable_integration(self):
-        """Test that MACTL_ADDRESS works with TLS configuration"""
+        """Test that MACTL_ADDRESS works with TLS configuration."""
         test_address = "custom-server:9999"
 
         with patch.dict(
@@ -335,13 +303,12 @@ class TLSConnectionTest(TestCase):
 
 
 class TLSErrorHandlingTest(TestCase):
-    """Tests for TLS error handling scenarios
-    """
+    """Tests for TLS error handling scenarios."""
 
     @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
     @patch("michelangelo.cli.mactl.mactl.secure_channel")
     def test_tls_connection_failure_handling(self, mock_secure_channel, mock_ssl_creds):
-        """Test handling of TLS connection failures"""
+        """Test handling of TLS connection failures."""
         # Mock TLS connection failure
         mock_ssl_creds.return_value = MagicMock()
         mock_secure_channel.side_effect = Exception("TLS connection failed")
@@ -360,7 +327,7 @@ class TLSErrorHandlingTest(TestCase):
 
     @patch("michelangelo.cli.mactl.mactl.ssl_channel_credentials")
     def test_ssl_credentials_creation_failure(self, mock_ssl_creds):
-        """Test handling of SSL credentials creation failure"""
+        """Test handling of SSL credentials creation failure."""
         # Mock SSL credentials creation failure
         mock_ssl_creds.side_effect = Exception("Failed to create SSL credentials")
 
@@ -370,3 +337,59 @@ class TLSErrorHandlingTest(TestCase):
                 mactl.ssl_channel_credentials()
 
             self.assertEqual(str(context.exception), "Failed to create SSL credentials")
+
+
+class ReadModuleFromFileTest(TestCase):
+    """Tests for read_module_from_file function."""
+
+    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
+    def test_successful_module_loading(self, mock_default_dir_plugins):
+        """Test successful loading of a plugin module."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create plugin directory structure
+            plugin_dir = Path(tmpdir) / "entity" / "test_entity"
+            plugin_dir.mkdir(parents=True)
+
+            # Create a simple main.py
+            main_py = plugin_dir / "main.py"
+            main_py.write_text("test_var = 'hello'")
+
+            # Mock DEFAULT_DIR_PLUGINS to point to our temp directory
+            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
+
+            # Execute
+            result = read_module_from_file("test_entity")
+
+            # Verify module was loaded and has the expected attribute
+            self.assertIsNotNone(result)
+            self.assertEqual(result.test_var, "hello")
+
+    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
+    def test_plugin_directory_does_not_exist(self, mock_default_dir_plugins):
+        """Test when plugin directory does not exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Mock DEFAULT_DIR_PLUGINS but don't create the directory
+            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
+
+            # Execute
+            result = read_module_from_file("nonexistent_entity")
+
+            # Verify returns None
+            self.assertIsNone(result)
+
+    @patch("michelangelo.cli.mactl.mactl.DEFAULT_DIR_PLUGINS")
+    def test_main_py_does_not_exist(self, mock_default_dir_plugins):
+        """Test when main.py file does not exist in plugin directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create plugin directory but no main.py
+            plugin_dir = Path(tmpdir) / "entity" / "test_entity"
+            plugin_dir.mkdir(parents=True)
+
+            # Mock DEFAULT_DIR_PLUGINS
+            mock_default_dir_plugins.__truediv__.return_value = Path(tmpdir) / "entity"
+
+            # Execute
+            result = read_module_from_file("test_entity")
+
+            # Verify returns None
+            self.assertIsNone(result)

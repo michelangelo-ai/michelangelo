@@ -1,3 +1,30 @@
+// Package inferenceserver provides Kubernetes controller logic for managing ML inference servers.
+//
+// The inferenceserver controller manages the complete lifecycle of inference serving infrastructure,
+// including provisioning, model management, network routing, and cleanup. It provides a unified
+// interface for multiple inference backends through a plugin architecture.
+//
+//   - NVIDIA Triton Inference Server
+//
+// Infrastructure Management:
+//   - Creates Kubernetes Deployments, Services, and ConfigMaps
+//   - Manages resource allocation (CPU, GPU, memory)
+//   - Handles scaling and replica management
+//
+// Network Routing:
+//   - Configures Gateway API HTTPRoutes
+//   - Sets up URL rewriting rules
+//   - Manages traffic routing for deployments
+//
+// Health & Status:
+//   - Performs health checks on inference servers
+//   - Reports infrastructure and model status
+//   - Updates CRD status with current state
+//
+// The controller follows a condition-based lifecycle model:
+//
+//	Creation:  Validation → Resource Creation → Proxy Configuration → Health Check
+//	Deletion:  Cleanup → Resource Removal
 package inferenceserver
 
 import (
@@ -26,7 +53,13 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// Reconciler reconciles InferenceServer objects
+// Reconciler reconciles InferenceServer custom resources and manages their lifecycle.
+//
+// The Reconciler handles:
+//   - Infrastructure provisioning (Kubernetes deployments, services, configmaps)
+//   - Network routing and proxy configuration (HTTPRoute/Gateway API)
+//   - Health checking and status reporting
+//   - Cleanup and finalization on deletion
 type Reconciler struct {
 	api.Handler
 
@@ -39,7 +72,22 @@ type Reconciler struct {
 	apiHandlerFactory apiHandler.Factory
 }
 
-// NewReconciler creates a new inference server reconciler
+// NewReconciler creates a new InferenceServer reconciler with the required dependencies.
+//
+// The reconciler manages the complete lifecycle of inference servers including infrastructure
+// creation, model management, and network routing configuration.
+//
+// Parameters:
+//   - mgr: The controller-runtime manager providing Kubernetes client access
+//   - scheme: Kubernetes runtime scheme with registered CRD types
+//   - gateway: Gateway interface for backend-specific operations (Triton, vLLM, etc.)
+//   - proxyProvider: Provider for network routing management (HTTPRoute/Istio)
+//   - pluginRegistry: Registry of backend-specific plugins
+//   - apiHandlerFactory: Factory for creating API handlers
+//   - logger: Structured logger for observability
+//
+// Returns:
+//   - *Reconciler: Configured reconciler ready to be registered with the manager
 func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, pluginRegistry plugins.PluginRegistry, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
 	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
@@ -53,8 +101,19 @@ func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Ga
 	}
 }
 
-// SetupWithManager sets up the controller with the Manager
-// Following production pattern: lower concurrency for stability
+// SetupWithManager registers the reconciler with the controller manager.
+//
+// This method:
+//   - Initializes the API handler for Kubernetes operations
+//   - Configures the controller to watch InferenceServer resources
+//   - Sets concurrency limits (3 concurrent reconciles for stability)
+//   - Registers event handlers and predicates
+//
+// Parameters:
+//   - mgr: The controller-runtime manager to register with
+//
+// Returns:
+//   - error: nil on success, error if registration fails
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 	// Initialize the Handler using the apiHandlerFactory
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
@@ -71,8 +130,27 @@ func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// Reconcile handles InferenceServer CRD reconciliation
-// Following production patterns: timeout management, structured logging, change detection
+// Reconcile implements the main reconciliation loop for InferenceServer resources.
+//
+// The reconciliation process handles:
+//  1. Resource retrieval and validation
+//  2. Plugin selection based on backend type
+//  3. Deletion handling (cleanup phase) OR Creation/Update handling (provision phase)
+//  4. Condition engine execution for lifecycle management
+//  5. Status updates and condition synchronization
+//
+// Parameters:
+//   - ctx: Context for cancellation and deadlines
+//   - req: Reconciliation request with namespaced name
+//
+// Returns:
+//   - ctrl.Result: Requeue configuration (duration, immediate, etc.)
+//   - error: nil on success, error if reconciliation fails
+//
+// Requeue behavior:
+//   - Active operations: Requeue after 1 minute
+//   - Steady state: Requeue after 10 minutes
+//   - Errors: Exponential backoff via controller-runtime
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	// Setup structured logging with trace context
 	r.logger = r.logger.With(zap.String("namespace-name", req.NamespacedName.String()))

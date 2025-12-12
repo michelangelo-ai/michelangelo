@@ -1,3 +1,5 @@
+"""Tests for module reflection utilities."""
+
 import os
 import shutil
 import sys

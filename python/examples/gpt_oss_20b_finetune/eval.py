@@ -5,45 +5,20 @@ Handles model evaluation with perplexity and generation quality metrics.
 
 import inspect
 import logging
-import os
 from typing import TYPE_CHECKING
 
-import mlflow
 import numpy as np
 import torch
 from transformers import AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 if TYPE_CHECKING:
     from ray.data import Dataset
 
 log = logging.getLogger(__name__)
-
-
-def download_checkpoint_from_mlflow(artifact_uri: str) -> str:
-    """Download a checkpoint from MLflow artifacts.
-
-    Args:
-        artifact_uri: MLflow artifact URI (e.g., "runs://{run_id}/artifacts/checkpoint")
-
-    Returns:
-        Local path to the downloaded checkpoint directory.
-    """
-    log.info(f"Downloading checkpoint from MLflow: {artifact_uri}")
-
-    # Extract run_id from the URI and download specific checkpoint file
-    run_id = artifact_uri.split("/")[1]
-    checkpoint_file_uri = f"runs:/{run_id}/checkpoint/model_checkpoint.ckpt"
-    log.info(f"Downloading specific checkpoint file: {checkpoint_file_uri}")
-
-    checkpoint_file_path = mlflow.artifacts.download_artifacts(checkpoint_file_uri)
-    checkpoint_dir = os.path.dirname(checkpoint_file_path)
-    log.info(f"Successfully downloaded checkpoint file to: {checkpoint_file_path}")
-    log.info(f"Using checkpoint directory: {checkpoint_dir}")
-    return checkpoint_dir
 
 
 @uniflow.task(
@@ -90,33 +65,22 @@ def evaluate_gpt_model(
     test_data: Dataset = test_dv.value
 
     # Load Ray checkpoint directly (much simpler!)
-    import glob
-
     from examples.gpt_oss_20b_finetune.model import create_gpt_model
 
     log.info("✅ Modules imported successfully")
 
-    # Use checkpoint path directly (local path) or download from MLflow
-    if os.path.exists(checkpoint_path):
-        local_checkpoint_path = checkpoint_path
-        log.info(f"Using local checkpoint path: {local_checkpoint_path}")
-    elif checkpoint_path.startswith("runs:/"):
-        log.info("Downloading checkpoint from MLflow...")
-        local_checkpoint_path = download_checkpoint_from_mlflow(checkpoint_path)
+    # Super simple: just try to load the checkpoint directly
+    log.info(f"Loading checkpoint: {checkpoint_path}")
+    ckpt_path = f"{checkpoint_path}/model_checkpoint.ckpt"  # Ray Lightning saves here
+
+    # Use fsspec to open S3 files properly
+    if ckpt_path.startswith("s3://"):
+        import fsspec
+
+        with fsspec.open(ckpt_path, "rb") as f:
+            checkpoint_data = torch.load(f, map_location="cpu")
     else:
-        raise FileNotFoundError(f"Checkpoint path not found: {checkpoint_path}")
-
-    # Find checkpoint file
-    checkpoint_files = glob.glob(os.path.join(local_checkpoint_path, "*.ckpt"))
-    log.info(f"Found {len(checkpoint_files)} checkpoint files: {checkpoint_files}")
-
-    if not checkpoint_files:
-        raise FileNotFoundError(f"No .ckpt files found in {local_checkpoint_path}")
-
-    ckpt_path = checkpoint_files[0]
-    log.info(f"Using checkpoint: {ckpt_path}")
-
-    checkpoint_data = torch.load(ckpt_path, map_location="cpu")
+        checkpoint_data = torch.load(ckpt_path, map_location="cpu")
     log.info(f"Checkpoint loaded, keys: {list(checkpoint_data.keys())}")
 
     model = create_gpt_model(

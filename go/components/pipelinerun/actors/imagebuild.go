@@ -14,10 +14,18 @@ import (
 )
 
 const (
+	// ImageBuildType is the condition type for the image build stage.
 	ImageBuildType = "Image Build"
 )
 
-// ImageBuildActor handles the image building stage of pipeline execution.
+// ImageBuildActor implements the image resolution stage of pipeline execution.
+//
+// This actor retrieves the container image ID from the source pipeline's annotations
+// and makes it available to the workflow execution stage. The image ID is expected
+// to be stored in the pipeline's "michelangelo/uniflow-image" annotation.
+//
+// The actor updates the pipeline run step with the resolved image ID in its output,
+// which is later used by the ExecuteWorkflowActor to configure task execution.
 type ImageBuildActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger *zap.Logger
@@ -32,6 +40,10 @@ func NewImageBuildActor(logger *zap.Logger) *ImageBuildActor {
 
 var _ conditionInterfaces.ConditionActor[*v2.PipelineRun] = &ImageBuildActor{}
 
+// Retrieve checks if the image build step has completed or if prerequisites are met.
+//
+// Returns TRUE if the image is already resolved, FALSE if the step needs to run,
+// or an error condition if the source pipeline or image annotation is missing.
 func (a *ImageBuildActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
 
@@ -84,6 +96,13 @@ func (a *ImageBuildActor) Retrieve(ctx context.Context, resource *v2.PipelineRun
 	}, nil
 }
 
+// Run retrieves the image ID from the source pipeline and updates the step status.
+//
+// The actor extracts the image ID from the source pipeline's annotations and
+// stores it in the step's output. This image ID is used by ExecuteWorkflowActor
+// to configure the container environment for task execution.
+//
+// Returns TRUE condition if successful, FALSE if the image ID is missing or invalid.
 func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 
@@ -140,6 +159,7 @@ func (a *ImageBuildActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, 
 	}, nil
 }
 
+// GetType returns the condition type identifier for this actor.
 func (a *ImageBuildActor) GetType() string {
 	return ImageBuildType
 }

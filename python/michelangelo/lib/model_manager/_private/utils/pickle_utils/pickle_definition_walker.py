@@ -1,3 +1,5 @@
+"""Utilities for walking pickle definitions in directories."""
+
 from __future__ import annotations
 
 from collections.abc import Iterator  # noqa: TC003

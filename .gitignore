@@ -69,6 +69,7 @@ __pycache__/
 /python/develop-eggs/
 /python/dist/
 /python/downloads/
+/python/lightning_logs/
 eggs/
 .eggs/
 /python/lib/

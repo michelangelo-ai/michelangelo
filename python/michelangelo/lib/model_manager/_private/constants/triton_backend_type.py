@@ -1,3 +1,6 @@
+"""Triton backend type constants."""
+
+
 class TritonBackendType:
     """Triton Inference Server backend types for deployable model packages.
 

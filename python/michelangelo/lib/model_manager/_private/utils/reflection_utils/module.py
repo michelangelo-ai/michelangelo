@@ -1,3 +1,5 @@
+"""Utilities for module reflection and attribute discovery."""
+
 from __future__ import annotations
 
 import importlib

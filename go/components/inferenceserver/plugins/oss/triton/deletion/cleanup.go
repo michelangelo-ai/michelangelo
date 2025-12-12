@@ -17,7 +17,7 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &CleanupActor{}
 
-// CleanupActor cleans up Triton infrastructure
+// CleanupActor removes all Kubernetes resources associated with a Triton inference server.
 type CleanupActor struct {
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
@@ -25,6 +25,7 @@ type CleanupActor struct {
 	logger                 *zap.Logger
 }
 
+// NewCleanupActor creates a condition actor for infrastructure cleanup during deletion.
 func NewCleanupActor(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &CleanupActor{
 		gateway:                gateway,
@@ -34,10 +35,12 @@ func NewCleanupActor(gateway gateways.Gateway, modelConfigMapProvider configmap.
 	}
 }
 
+// GetType returns the condition type identifier for cleanup.
 func (a *CleanupActor) GetType() string {
 	return common.TritonCleanupConditionType
 }
 
+// Retrieve checks if all infrastructure has been successfully deleted.
 func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton cleanup condition")
 
@@ -65,6 +68,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 	}, nil
 }
 
+// Run deletes the deployment, service, ConfigMaps, and HTTPRoute for the inference server.
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton infrastructure cleanup with ConfigMap and HTTPRoute cleanup")
 

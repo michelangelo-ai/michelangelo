@@ -1,3 +1,5 @@
+"""Asset download module."""
+
 import os
 import shutil
 

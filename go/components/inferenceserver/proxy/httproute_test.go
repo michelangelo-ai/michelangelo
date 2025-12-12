@@ -59,6 +59,13 @@ func TestEnsureInferenceServerRoute(t *testing.T) {
 				backendMap := backendRefs[0].(map[string]interface{})
 				assert.Equal(t, "new-server-inference-service", backendMap["name"])
 				assert.Equal(t, int64(100), backendMap["weight"])
+
+				// Check URL rewrite filter
+				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
+				require.Len(t, filters, 1)
+				filterMap := filters[0].(map[string]interface{})
+				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
+				assert.Equal(t, "/v2", replacePrefixMatch)
 			},
 		},
 		{
@@ -68,7 +75,7 @@ func TestEnsureInferenceServerRoute(t *testing.T) {
 				Namespace:       "default",
 				ModelName:       "test-model",
 			},
-			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server", "/"),
+			existingHTTPRoute: createHTTPRouteWithProductionRoute("test-server-httproute", "default", "/test-server", "/v2"),
 			expectError:       false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
@@ -231,7 +238,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 				matches, _, _ := unstructured.NestedSlice(firstRule, "matches")
 				firstMatch := matches[0].(map[string]interface{})
 				pathValue, _, _ := unstructured.NestedString(firstMatch, "path", "value")
-				assert.Equal(t, "/test-server/test-deployment/models/new-model", pathValue)
+				assert.Equal(t, "/test-server/test-deployment", pathValue)
 
 				// Verify the filter
 				filters, _, _ := unstructured.NestedSlice(firstRule, "filters")
@@ -254,7 +261,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 				DeploymentName:  "existing-deployment",
 				ModelName:       "updated-model",
 			},
-			httpRoute:   createHTTPRouteWithProductionRoute("existing-deployment-httproute", "default", "/test-server/existing-deployment/models/old-model", "/v2/models/old-model"),
+			httpRoute:   createHTTPRouteWithProductionRoute("existing-deployment-httproute", "default", "/test-server/existing-deployment", "/v2/models/old-model"),
 			expectError: false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
@@ -274,7 +281,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 				matches, _, _ := unstructured.NestedSlice(ruleMap, "matches")
 				matchMap := matches[0].(map[string]interface{})
 				pathValue, _, _ := unstructured.NestedString(matchMap, "path", "value")
-				assert.Equal(t, "/test-server/existing-deployment/models/updated-model", pathValue)
+				assert.Equal(t, "/test-server/existing-deployment", pathValue)
 
 				// Check filter was updated
 				filters, _, _ := unstructured.NestedSlice(ruleMap, "filters")
@@ -328,7 +335,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 				InferenceServer: "test-server",
 				ModelName:       "test-model",
 			},
-			httpRoute:    createHTTPRouteWithProductionRoute("test-deployment-httproute", "default", "/test-server/test-deployment/models/test-model", "/v2/models/test-model"),
+			httpRoute:    createHTTPRouteWithProductionRoute("test-deployment-httproute", "default", "/test-server/test-deployment", "/v2/models/test-model"),
 			expectResult: true,
 			expectError:  false,
 		},

@@ -35,8 +35,8 @@ from pyspark.sql.functions import (
 
 # Uniflow
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.spark import SparkTask
+from michelangelo.workflow.variables import DatasetVariable
 
 # Chronon definitions (moved to top level)
 try:

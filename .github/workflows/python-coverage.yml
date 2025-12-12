@@ -89,23 +89,23 @@ jobs:
           COVERAGE_DATA_BRANCH: main
         continue-on-error: true
 
-      # Upload coverage to Codecov for tracking over time
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
-        with:
-          file: ./python/coverage.xml
-          flags: python
-          name: python-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # Codecov upload disabled - coverage is reported via PR comments and artifacts
+      # - name: Upload coverage to Codecov
+      #   uses: codecov/codecov-action@v4
+      #   with:
+      #     file: ./python/coverage.xml
+      #     flags: python
+      #     name: python-coverage
+      #     fail_ci_if_error: false
+      #     token: ${{ secrets.CODECOV_TOKEN }}
 
-      # Check overall coverage threshold (baseline: 34.94%)
-      - name: "Check overall coverage threshold (baseline: 34.94%)"
+      # Check overall coverage threshold (baseline: 70%)
+      - name: "Check overall coverage threshold (baseline: 70%)"
         run: |
-          # Baseline coverage is 34.94% - we don't fail on this
+          # Baseline coverage is 70% - we don't fail on this
           # The goal is to maintain or improve from baseline
-          poetry run coverage report --fail-under=34
-          echo "✅ Coverage meets baseline threshold (34.94%)"
+          poetry run coverage report --fail-under=70
+          echo "✅ Coverage meets baseline threshold (70%)"
           echo "📈 Goal: Maintain baseline and enforce 90% on new code"
         continue-on-error: true
 
@@ -156,8 +156,7 @@ jobs:
           echo "Overall coverage: **${{ env.COVERAGE }}%**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Coverage Policy" >> $GITHUB_STEP_SUMMARY
-          echo "- **Baseline (existing code):** ≥34.94% (current coverage)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Baseline (existing code):** ≥70% (current coverage)" >> $GITHUB_STEP_SUMMARY
           echo "- **New/changed code:** ≥90% ✅ **STRICTLY ENFORCED**" >> $GITHUB_STEP_SUMMARY
-          echo "- **Long-term goal:** Improve baseline to 70%" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "[View detailed HTML report in artifacts]" >> $GITHUB_STEP_SUMMARY

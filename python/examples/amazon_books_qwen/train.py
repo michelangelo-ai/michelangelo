@@ -19,8 +19,8 @@ from ray.train.torch import TorchTrainer
 from transformers import AutoModel, AutoTokenizer
 
 import michelangelo.uniflow.core as uniflow
-from michelangelo.sdk.workflow.variables import DatasetVariable
 from michelangelo.uniflow.plugins.ray import RayTask
+from michelangelo.workflow.variables import DatasetVariable
 
 log = logging.getLogger(__name__)
 

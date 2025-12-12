@@ -1,0 +1,657 @@
+"""Tests for Lightning trainer module."""
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer import (
+    LightningTrainer,
+    LightningTrainerParam,
+    create_run_config,
+    create_scaling_config,
+)
+
+
+class TestLightningTrainerParam:
+    """Test LightningTrainerParam dataclass."""
+
+    def test_lightning_trainer_param_creation(self):
+        """Test basic creation of LightningTrainerParam."""
+        create_model = MagicMock()
+        model_kwargs = {"param1": "value1"}
+        train_data = MagicMock()
+        validation_data = MagicMock()
+
+        param = LightningTrainerParam(
+            create_model=create_model,
+            model_kwargs=model_kwargs,
+            train_data=train_data,
+            validation_data=validation_data,
+            batch_size=32,
+            num_epochs=10,
+        )
+
+        assert param.create_model == create_model
+        assert param.model_kwargs == model_kwargs
+        assert param.train_data == train_data
+        assert param.validation_data == validation_data
+        assert param.batch_size == 32
+        assert param.num_epochs == 10
+        assert param.lightning_trainer_kwargs == {}  # default from __post_init__
+
+    def test_lightning_trainer_param_with_lightning_kwargs(self):
+        """Test LightningTrainerParam with custom lightning_trainer_kwargs."""
+        create_model = MagicMock()
+        train_data = MagicMock()
+        validation_data = MagicMock()
+        lightning_kwargs = {"accelerator": "gpu", "devices": 2}
+
+        param = LightningTrainerParam(
+            create_model=create_model,
+            model_kwargs={},
+            train_data=train_data,
+            validation_data=validation_data,
+            batch_size=16,
+            num_epochs=5,
+            lightning_trainer_kwargs=lightning_kwargs,
+        )
+
+        assert param.lightning_trainer_kwargs == lightning_kwargs
+
+    def test_lightning_trainer_param_post_init_none(self):
+        """Test __post_init__ when lightning_trainer_kwargs is None."""
+        create_model = MagicMock()
+        train_data = MagicMock()
+        validation_data = MagicMock()
+
+        param = LightningTrainerParam(
+            create_model=create_model,
+            model_kwargs={},
+            train_data=train_data,
+            validation_data=validation_data,
+            batch_size=8,
+            num_epochs=3,
+            lightning_trainer_kwargs=None,
+        )
+
+        assert param.lightning_trainer_kwargs == {}
+
+
+class TestLightningTrainer:
+    """Test LightningTrainer class."""
+
+    def setup_method(self):
+        """Setup test fixtures."""
+        self.mock_create_model = MagicMock()
+        self.mock_train_data = MagicMock()
+        self.mock_validation_data = MagicMock()
+
+        self.param = LightningTrainerParam(
+            create_model=self.mock_create_model,
+            model_kwargs={"test_param": "test_value"},
+            train_data=self.mock_train_data,
+            validation_data=self.mock_validation_data,
+            batch_size=32,
+            num_epochs=10,
+            lightning_trainer_kwargs={"accelerator": "cpu"},
+        )
+
+    def test_lightning_trainer_initialization(self):
+        """Test LightningTrainer initialization."""
+        trainer = LightningTrainer(self.param)
+
+        assert trainer.param == self.param
+        # In the new implementation, TorchTrainer is created only during train()
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
+
+    def test_setup_trainer_creates_train_loop_function(self):
+        """Test that initialization creates train_loop_per_worker function."""
+        trainer = LightningTrainer(self.param)
+
+        # In new implementation, train loop function is stored, not TorchTrainer
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
+
+    @patch(
+        "michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
+    )
+    def test_train_method(self, mock_torch_trainer):
+        """Test the train method."""
+        mock_run_config = MagicMock()
+        mock_scaling_config = MagicMock()
+        mock_result = MagicMock()
+
+        # Setup the mock torch trainer
+        mock_trainer_instance = MagicMock()
+        mock_trainer_instance.fit.return_value = mock_result
+        mock_torch_trainer.return_value = mock_trainer_instance
+
+        trainer = LightningTrainer(self.param)
+
+        # Call train method
+        result = trainer.train(mock_run_config, mock_scaling_config)
+
+        # Verify TorchTrainer was created with correct configs
+        mock_torch_trainer.assert_called_once_with(
+            train_loop_per_worker=trainer._train_loop_per_worker,
+            datasets={
+                "train": self.mock_train_data,
+                "validation": self.mock_validation_data,
+            },
+            scaling_config=mock_scaling_config,
+            run_config=mock_run_config,
+            train_loop_config={},
+        )
+
+        # Verify fit was called and result returned
+        mock_trainer_instance.fit.assert_called_once()
+        assert result == mock_result
+
+    @patch(
+        "michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.TorchTrainer"
+    )
+    @patch("michelangelo.lib.trainer.torch.pytorch_lightning.lightning_trainer.log")
+    def test_train_method_with_logging(self, mock_log, mock_torch_trainer):
+        """Test that the train method includes proper logging."""
+        mock_run_config = MagicMock()
+        mock_scaling_config = MagicMock()
+
+        trainer = LightningTrainer(self.param)
+        trainer.train(mock_run_config, mock_scaling_config)
+
+        # Verify logging calls
+        mock_log.info.assert_any_call("Starting distributed Lightning training...")
+        mock_log.info.assert_any_call("Distributed Lightning training completed")
+
+    def test_train_loop_per_worker_function_exists(self):
+        """Test that train_loop_per_worker function is created during initialization."""
+        trainer = LightningTrainer(self.param)
+
+        # Function should be stored directly and be callable
+        assert hasattr(trainer, "_train_loop_per_worker")
+        assert callable(trainer._train_loop_per_worker)
+
+    def test_train_loop_per_worker_closure_captures_param(self):
+        """Test that the train_loop_per_worker closure captures self.param."""
+        trainer = LightningTrainer(self.param)
+
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
+
+        # The closure should have access to self.param
+        # We can't easily test the full execution without mocking many Ray components,
+        # but we can verify the function was created correctly
+        assert hasattr(train_loop_func, "__closure__")
+        assert train_loop_func.__closure__ is not None
+
+    def test_train_loop_per_worker_execution(self):
+        """Test execution of the train_loop_per_worker function."""
+        # Create a mock Lightning module
+        mock_model = MagicMock()
+
+        # Mock the create_model function to return our mock model
+        self.mock_create_model.return_value = mock_model
+
+        # Create trainer to get the train_loop_per_worker function
+        trainer = LightningTrainer(self.param)
+
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
+
+        # Mock all Ray components
+        with (
+            patch("ray.train.get_context"),
+            patch("ray.train.lightning.RayLightningEnvironment"),
+            patch("ray.train.get_dataset_shard") as mock_get_shard,
+            patch("pytorch_lightning.Trainer") as mock_pl_trainer,
+            patch("torch.save"),
+            patch("tempfile.mkdtemp", return_value="/tmp/test"),
+            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
+            patch("ray.train.report") as mock_ray_report,
+            patch("ray.train.Checkpoint.from_directory"),
+        ):
+            # Setup mock dataset shards
+            mock_train_shard = MagicMock()
+            mock_val_shard = MagicMock()
+            mock_get_shard.side_effect = lambda name: {
+                "train": mock_train_shard,
+                "validation": mock_val_shard,
+            }[name]
+
+            # Mock the iter_batches method to return test data
+            mock_train_shard.iter_batches.return_value = [
+                {"feature1": [1, 2], "label": [0, 1]}
+            ]
+            mock_val_shard.iter_batches.return_value = [
+                {"feature1": [3, 4], "label": [1, 0]}
+            ]
+
+            # Setup Lightning trainer mock
+            mock_trainer_instance = MagicMock()
+            mock_pl_trainer.return_value = mock_trainer_instance
+            mock_trainer_instance.logged_metrics = {"loss": 0.5, "accuracy": 0.8}
+            mock_trainer_instance.save_checkpoint = MagicMock()
+
+            # Execute the train loop function
+            result = train_loop_func({})
+
+            # Verify that the model was created with correct kwargs
+            self.mock_create_model.assert_called_once_with(**self.param.model_kwargs)
+
+            # Verify Lightning trainer was configured correctly
+            mock_pl_trainer.assert_called_once()
+            trainer_kwargs = mock_pl_trainer.call_args[1]
+            assert trainer_kwargs["max_epochs"] == self.param.num_epochs
+            assert trainer_kwargs["enable_checkpointing"] is True
+            assert trainer_kwargs["logger"] is False
+
+            # Verify trainer.fit was called
+            mock_trainer_instance.fit.assert_called_once()
+
+            # Verify checkpointing
+            mock_trainer_instance.save_checkpoint.assert_called_once()
+
+            # Verify Ray reporting
+            mock_ray_report.assert_called_once()
+
+            # Check return value
+            assert result == {"metrics": {"loss": 0.5, "accuracy": 0.8}}
+
+    def test_train_loop_per_worker_with_custom_strategy(self):
+        """Test train_loop_per_worker with custom strategy."""
+        # Update param to include custom strategy
+        custom_param = LightningTrainerParam(
+            create_model=self.mock_create_model,
+            model_kwargs={"test_param": "test_value"},
+            train_data=self.mock_train_data,
+            validation_data=self.mock_validation_data,
+            batch_size=32,
+            num_epochs=10,
+            lightning_trainer_kwargs={"strategy": "ddp", "devices": 2},
+        )
+
+        # Create a mock Lightning module
+        mock_model = MagicMock()
+        self.mock_create_model.return_value = mock_model
+
+        # Create trainer to get the train_loop_per_worker function
+        trainer = LightningTrainer(custom_param)
+
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
+
+        # Mock all Ray components
+        with (
+            patch("ray.train.get_context"),
+            patch("ray.train.lightning.RayLightningEnvironment"),
+            patch("ray.train.get_dataset_shard") as mock_get_shard,
+            patch("pytorch_lightning.Trainer") as mock_pl_trainer,
+            patch("torch.save"),
+            patch("tempfile.mkdtemp", return_value="/tmp/test"),
+            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
+            patch("ray.train.report") as mock_ray_report,
+            patch("ray.train.Checkpoint.from_directory"),
+        ):
+            # Setup mock dataset shards
+            mock_train_shard = MagicMock()
+            mock_val_shard = MagicMock()
+            mock_get_shard.side_effect = lambda name: {
+                "train": mock_train_shard,
+                "validation": mock_val_shard,
+            }[name]
+
+            # Mock the iter_batches method to return test data
+            mock_train_shard.iter_batches.return_value = [
+                {"feature1": [1, 2], "label": [0, 1]}
+            ]
+            mock_val_shard.iter_batches.return_value = [
+                {"feature1": [3, 4], "label": [1, 0]}
+            ]
+
+            # Setup Lightning trainer mock
+            mock_trainer_instance = MagicMock()
+            mock_pl_trainer.return_value = mock_trainer_instance
+            mock_trainer_instance.logged_metrics = {}
+
+            # Execute the train loop function
+            result = train_loop_func({})
+
+            # Verify Lightning trainer was configured with custom strategy
+            mock_pl_trainer.assert_called_once()
+            trainer_kwargs = mock_pl_trainer.call_args[1]
+            assert trainer_kwargs["strategy"] == "ddp"
+            assert trainer_kwargs["devices"] == 2
+
+            # Verify Ray reporting with empty metrics
+            mock_ray_report.assert_called_once()
+
+            # Check return value has empty metrics when no logged_metrics
+            assert result == {"metrics": {}}
+
+    def test_train_loop_per_worker_with_pandas_batch_data(self):
+        """Test train_loop_per_worker with pandas-style batch data."""
+        # Create a mock Lightning module
+        mock_model = MagicMock()
+        self.mock_create_model.return_value = mock_model
+
+        # Create trainer to get the train_loop_per_worker function
+        trainer = LightningTrainer(self.param)
+
+        # Get the train_loop_per_worker function directly from the trainer
+        train_loop_func = trainer._train_loop_per_worker
+
+        # Mock all Ray components
+        with (
+            patch("ray.train.get_context"),
+            patch("ray.train.lightning.RayLightningEnvironment"),
+            patch("ray.train.get_dataset_shard") as mock_get_shard,
+            patch("pytorch_lightning.Trainer") as mock_pl_trainer,
+            patch("torch.save"),
+            patch("tempfile.mkdtemp", return_value="/tmp/test"),
+            patch("os.path.join", side_effect=lambda *args: "/".join(args)),
+            patch("ray.train.report"),
+            patch("ray.train.Checkpoint.from_directory"),
+        ):
+            # Setup mock dataset shards with non-dict data that needs pandas conversion
+            mock_train_shard = MagicMock()
+            mock_val_shard = MagicMock()
+            mock_get_shard.side_effect = lambda name: {
+                "train": mock_train_shard,
+                "validation": mock_val_shard,
+            }[name]
+
+            # Create a mock pandas DataFrame-like batch
+            mock_batch = MagicMock()
+            mock_batch.to_pandas.return_value.to_dict.return_value = [
+                {"feature1": 1, "label": 0},
+                {"feature1": 2, "label": 1},
+            ]
+
+            # Mock iter_batches to return non-dict data (triggers pandas path)
+            mock_train_shard.iter_batches.return_value = [mock_batch]
+            mock_val_shard.iter_batches.return_value = [mock_batch]
+
+            # Setup Lightning trainer mock
+            mock_trainer_instance = MagicMock()
+            mock_pl_trainer.return_value = mock_trainer_instance
+            mock_trainer_instance.logged_metrics = {"loss": 0.3}
+
+            # Execute the train loop function
+            result = train_loop_func({})
+
+            # Verify the pandas conversion path was used
+            mock_batch.to_pandas.assert_called()
+            mock_batch.to_pandas.return_value.to_dict.assert_called_with("records")
+
+            # Verify training completed
+            mock_trainer_instance.fit.assert_called_once()
+
+            # Check return value
+            assert result == {"metrics": {"loss": 0.3}}
+
+    def test_lightning_trainer_real_integration(self):
+        """Integration test with real Ray and Lightning training."""
+        import contextlib
+        import tempfile
+
+        import pytorch_lightning as pl
+        import ray
+        import torch
+        import torch.nn as nn
+        from ray.data import from_items
+        from ray.train import CheckpointConfig, RunConfig, ScalingConfig
+
+        # Skip ONLY if Ray is not available for setup
+        try:
+            # Use real Ray with minimal resources (not local_mode - async actor issue)
+            ray.init(
+                num_cpus=2,
+                ignore_reinit_error=True,
+                configure_logging=False,
+                log_to_driver=False,
+            )
+        except Exception as e:
+            pytest.skip(f"Ray not available for integration test: {e}")
+
+        # From here on, let real failures be test failures, not skips
+        try:
+            # Simple Lightning module for testing
+            class SimpleModel(pl.LightningModule):
+                def __init__(self):
+                    super().__init__()
+                    self.linear = nn.Linear(2, 1)
+
+                def forward(self, x):
+                    return self.linear(x)
+
+                def training_step(self, batch, batch_idx):
+                    x1 = torch.tensor(batch["x1"], dtype=torch.float32)
+                    x2 = torch.tensor(batch["x2"], dtype=torch.float32)
+                    x = torch.stack([x1, x2], dim=1)
+                    y = torch.tensor(batch["y"], dtype=torch.float32).unsqueeze(1)
+                    y_hat = self(x)
+                    loss = nn.MSELoss()(y_hat, y)
+                    self.log("train_loss", loss)
+                    return loss
+
+                def validation_step(self, batch, batch_idx):
+                    x1 = torch.tensor(batch["x1"], dtype=torch.float32)
+                    x2 = torch.tensor(batch["x2"], dtype=torch.float32)
+                    x = torch.stack([x1, x2], dim=1)
+                    y = torch.tensor(batch["y"], dtype=torch.float32).unsqueeze(1)
+                    y_hat = self(x)
+                    loss = nn.MSELoss()(y_hat, y)
+                    self.log("val_loss", loss)
+
+                def configure_optimizers(self):
+                    return torch.optim.Adam(self.parameters(), lr=0.1)
+
+            # Create simple synthetic datasets
+            train_data = [
+                {"x1": 1.0, "x2": 2.0, "y": 3.0},
+                {"x1": 2.0, "x2": 3.0, "y": 5.0},
+                {"x1": 3.0, "x2": 1.0, "y": 4.0},
+                {"x1": 1.0, "x2": 1.0, "y": 2.0},
+            ]
+
+            val_data = [
+                {"x1": 2.0, "x2": 2.0, "y": 4.0},
+                {"x1": 3.0, "x2": 3.0, "y": 6.0},
+            ]
+
+            train_dataset = from_items(train_data)
+            val_dataset = from_items(val_data)
+
+            # Create Lightning trainer parameters
+            param = LightningTrainerParam(
+                create_model=SimpleModel,
+                model_kwargs={},
+                train_data=train_dataset,
+                validation_data=val_dataset,
+                batch_size=2,
+                num_epochs=1,  # Just 1 epoch for speed
+                lightning_trainer_kwargs={
+                    "accelerator": "cpu",
+                    "devices": 1,
+                    "enable_progress_bar": False,
+                    "enable_model_summary": False,
+                },
+            )
+
+            # Create trainer
+            trainer = LightningTrainer(param)
+
+            # Create configs for local training
+            scaling_config = ScalingConfig(
+                num_workers=1,  # Single worker for simplicity
+                use_gpu=False,
+                resources_per_worker={"CPU": 1},
+            )
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                run_config = RunConfig(
+                    name="test_integration",
+                    storage_path=temp_dir,
+                    checkpoint_config=CheckpointConfig(num_to_keep=1),
+                )
+
+                # Run actual training
+                result = trainer.train(run_config, scaling_config)
+
+                # Verify training completed successfully
+                assert result is not None
+                assert hasattr(result, "metrics")
+
+                # Check that we have some metrics (loss should be present)
+                final_metrics = result.metrics
+                assert isinstance(final_metrics, dict)
+
+                # Training should have produced some loss values
+                # We don't assert specific values since they can vary
+                print(f"Training completed with metrics: {final_metrics}")
+
+        finally:
+            # Always cleanup Ray, regardless of success or failure
+            with contextlib.suppress(Exception):
+                ray.shutdown()
+
+
+class TestCreateScalingConfig:
+    """Test create_scaling_config function."""
+
+    def test_create_scaling_config_defaults(self):
+        """Test create_scaling_config with default parameters."""
+        config = create_scaling_config()
+
+        assert config.num_workers == 4  # default when None
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 4, "GPU": 1}
+
+    def test_create_scaling_config_custom_workers(self):
+        """Test create_scaling_config with custom num_workers."""
+        config = create_scaling_config(num_workers=8)
+
+        assert config.num_workers == 8
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 4, "GPU": 1}
+
+    def test_create_scaling_config_without_gpu(self):
+        """Test create_scaling_config with GPU disabled."""
+        config = create_scaling_config(use_gpu=False)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is False
+        assert config.resources_per_worker == {"CPU": 4}
+        assert "GPU" not in config.resources_per_worker
+
+    def test_create_scaling_config_custom_cpu_per_worker(self):
+        """Test create_scaling_config with custom cpu_per_worker."""
+        config = create_scaling_config(cpu_per_worker=8)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is True
+        assert config.resources_per_worker == {"CPU": 8, "GPU": 1}
+
+    def test_create_scaling_config_custom_resources(self):
+        """Test create_scaling_config with custom resources_per_worker."""
+        custom_resources = {"CPU": 2, "GPU": 2, "memory": "16GiB"}
+        config = create_scaling_config(resources_per_worker=custom_resources)
+
+        assert config.num_workers == 4
+        assert config.use_gpu is True
+        assert config.resources_per_worker == custom_resources
+
+    def test_create_scaling_config_all_custom(self):
+        """Test create_scaling_config with all custom parameters."""
+        config = create_scaling_config(
+            trainer_cpu=1,
+            cpu_per_worker=2,
+            num_workers=6,
+            use_gpu=False,
+            resources_per_worker={"CPU": 3, "memory": "8GiB"},
+        )
+
+        assert config.num_workers == 6
+        assert config.use_gpu is False
+        assert config.resources_per_worker == {"CPU": 3, "memory": "8GiB"}
+
+
+class TestCreateRunConfig:
+    """Test create_run_config function."""
+
+    def test_create_run_config_defaults(self):
+        """Test create_run_config with default parameters."""
+        config = create_run_config()
+
+        # Ray automatically generates a default name and storage path
+        assert config.name is not None  # Ray generates default name
+        assert config.storage_path is not None  # Ray sets default storage path
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_name(self):
+        """Test create_run_config with custom name."""
+        config = create_run_config(name="test_run")
+
+        assert config.name == "test_run"
+        # Ray sets default storage path even when only name is provided
+        assert config.storage_path is not None
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_storage_path(self):
+        """Test create_run_config with custom storage_path."""
+        config = create_run_config(storage_path="/tmp/ray_results")
+
+        # Ray generates a default name even when only storage_path is provided
+        assert config.name is not None
+        assert config.storage_path == "/tmp/ray_results"
+        # Ray creates default checkpoint config
+        assert config.checkpoint_config is not None
+
+    def test_create_run_config_with_checkpoint_config(self):
+        """Test create_run_config with custom checkpoint_config."""
+        from ray.train import CheckpointConfig
+
+        checkpoint_config = CheckpointConfig(num_to_keep=3)
+
+        config = create_run_config(checkpoint_config=checkpoint_config)
+
+        # Ray generates defaults for name and storage path
+        assert config.name is not None
+        assert config.storage_path is not None
+        assert config.checkpoint_config == checkpoint_config
+
+    def test_create_run_config_compatibility_params(self):
+        """Test create_run_config with compatibility parameters that are ignored."""
+        config = create_run_config(
+            name="test",
+            storage_path="/tmp",
+            stop={"training_iteration": 10},  # ignored for compatibility
+            verbose=2,  # ignored for compatibility
+        )
+
+        assert config.name == "test"
+        assert config.storage_path == "/tmp"
+        # Ray creates default checkpoint config even with explicit params
+        assert config.checkpoint_config is not None
+        # stop and verbose params are kept for compatibility but not used
+
+    def test_create_run_config_all_params(self):
+        """Test create_run_config with all parameters."""
+        from ray.train import CheckpointConfig
+
+        checkpoint_config = CheckpointConfig(num_to_keep=5)
+
+        config = create_run_config(
+            name="full_test",
+            storage_path="/tmp/full_results",
+            checkpoint_config=checkpoint_config,
+            stop={"epochs": 20},
+            verbose=1,
+        )
+
+        assert config.name == "full_test"
+        assert config.storage_path == "/tmp/full_results"
+        assert config.checkpoint_config == checkpoint_config

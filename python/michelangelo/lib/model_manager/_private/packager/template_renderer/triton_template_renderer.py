@@ -1,3 +1,5 @@
+"""Triton template renderer module."""
+
 from michelangelo.lib.model_manager._private.packager.template_renderer import (
     TemplateRenderer,
 )

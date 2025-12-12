@@ -25,18 +25,30 @@ import (
 )
 
 const (
-	ExecuteWorkflowType        = "Execute Workflow"
+	// ExecuteWorkflowType is the condition type for the workflow execution stage.
+	ExecuteWorkflowType = "Execute Workflow"
+
+	// UniflowCadenceWorkflowName is the workflow type name registered in Cadence/Temporal.
 	UniflowCadenceWorkflowName = "starlark-workflow" // TODO(#546): fix the typo and make this configurable
-	DefaultWorkSpaceRootURL    = "s3://default"      // TODO(#547): make this configurable
-	WorkflowEnvironKey         = "environ"
-	WorkflowKWArgsKey          = "kwargs"
-	WorkflowArgsKey            = "args"
-	cacheEnabledVarName        = "CACHE_ENABLED"
-	cacheVersionVarName        = "CACHE_VERSION"
-	cacheOperationGet          = "GET"
+
+	// DefaultWorkSpaceRootURL is the default S3 location for workflow artifacts.
+	DefaultWorkSpaceRootURL = "s3://default" // TODO(#547): make this configurable
+
+	// Workflow input parameter keys.
+	WorkflowEnvironKey = "environ"
+	WorkflowKWArgsKey  = "kwargs"
+	WorkflowArgsKey    = "args"
+
+	// Cache-related environment variable names.
+	cacheEnabledVarName = "CACHE_ENABLED"
+	cacheVersionVarName = "CACHE_VERSION"
+	cacheOperationGet   = "GET"
 )
 
-// TaskProgress is the struct for the task progress queried from Cadence Workflow
+// TaskProgress represents the execution state of a workflow task.
+//
+// This struct is populated from Cadence/Temporal workflow queries and provides
+// detailed information about individual task execution within a pipeline run.
 type TaskProgress struct {
 	TaskPath       string `json:"task_path"`        // full hierarchical path of the task within the workflow execution tree
 	TaskName       string `json:"task_name"`        // name of task
@@ -49,8 +61,17 @@ type TaskProgress struct {
 	RetryAttemptID string `json:"retry_attempt_id"` // identifies the specific retry attempt for this task execution
 }
 
-// ExecuteWorkflowActor handles the execution of workflows for pipeline runs by starting
-// and monitoring workflow executions in Cadence/Temporal.
+// ExecuteWorkflowActor implements the workflow execution stage of pipeline runs.
+//
+// This actor is responsible for:
+//   - Starting Cadence/Temporal workflows with pipeline configuration
+//   - Monitoring workflow execution status
+//   - Querying and updating task-level progress
+//   - Handling workflow termination and cancellation
+//   - Managing task caching for pipeline run resumption
+//
+// The actor integrates with the workflow client to execute Starlark-based ML workflows
+// and tracks detailed execution progress including individual task states, logs, and outputs.
 type ExecuteWorkflowActor struct {
 	conditionInterfaces.ConditionActor[*v2.PipelineRun]
 	logger         *zap.Logger
@@ -72,6 +93,13 @@ func NewExecuteWorkflowActor(logger *zap.Logger, workflowClient clientInterfaces
 	}
 }
 
+// Retrieve checks the current state of workflow execution.
+//
+// It examines the workflow execution step to determine if the workflow has completed,
+// is running, or needs to be started. The method returns TRUE if execution is complete,
+// FALSE if it's in progress or needs to start.
+//
+// Returns an appropriate condition based on the workflow execution state.
 func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", resource.Namespace, resource.Name)))
 
@@ -119,6 +147,19 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 	}, nil
 }
 
+// Run executes and monitors the workflow for a pipeline run.
+//
+// This method handles the complete lifecycle of workflow execution:
+//   - Starting new workflows with configured inputs and environment
+//   - Monitoring ongoing workflow execution status
+//   - Querying and updating task-level progress
+//   - Handling workflow termination requests
+//   - Managing state transitions based on workflow outcomes
+//
+// The workflow is executed using Cadence/Temporal with the Starlark workflow type.
+// Task progress is continuously queried and reflected in the pipeline run status.
+//
+// Returns a condition indicating the workflow state (RUNNING, SUCCEEDED, FAILED, KILLED).
 func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.PipelineRun, previousCondition *apipb.Condition) (*apipb.Condition, error) {
 	logger := a.logger.With(zap.String("pipelineRun", fmt.Sprintf("%s/%s", pipelineRun.Namespace, pipelineRun.Name)))
 	executeWorkflowStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ExecuteWorkflowStepName)
@@ -286,6 +327,13 @@ func (a *ExecuteWorkflowActor) processJobTermination(ctx context.Context, pipeli
 	return false, nil
 }
 
+// StartWorkflow initiates a new workflow execution in Cadence/Temporal.
+//
+// The method prepares workflow inputs from the pipeline specification, including
+// args, kwargs, and environment variables. It retrieves the pipeline manifest from
+// blob storage and starts the workflow with configured timeouts and task list.
+//
+// Returns the workflow execution details (ID and RunID) or an error if startup fails.
 func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v2.PipelineRun, taskList string) (*clientInterfaces.WorkflowExecution, error) {
 	args, kwArgs, envs, err := getWorkflowInputs(pipelineRun)
 	if err != nil {
@@ -335,6 +383,13 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	var kwArgs []interface{} = []interface{}{}
 	var envs map[string]interface{} = make(map[string]interface{})
 
+	// Set default UF_STORAGE_URL if not provided in pipeline config
+	if pipelineRun.Spec.WorkspaceRootDir != "" {
+		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
+	} else {
+		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
+	}
+
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
 			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
@@ -358,11 +413,6 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
-	if pipelineRun.Spec.WorkspaceRootDir != "" {
-		envs["UF_STORAGE_URL"] = pipelineRun.Spec.WorkspaceRootDir
-	} else {
-		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
-	}
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
 }
@@ -454,7 +504,7 @@ func getStepInfoByName(stepName string, steps []*v2.PipelineRunStepInfo) *v2.Pip
 
 func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{}) {
 	imageBuildStep := pipelinerunutils.GetStep(pipelineRun, pipelinerunutils.ImageBuildStepName)
-	if imageBuildStep.Output != nil {
+	if imageBuildStep != nil && imageBuildStep.Output != nil {
 		for taskName, image := range imageBuildStep.Output.Fields {
 			taskImage := image.GetStringValue()
 			envName := "UF_TASK_IMAGE"
@@ -466,11 +516,13 @@ func addTaskImageToEnv(pipelineRun *v2.PipelineRun, envs map[string]interface{})
 	}
 }
 
+// GetType returns the condition type identifier for this actor.
 func (a *ExecuteWorkflowActor) GetType() string {
 	return ExecuteWorkflowType
 }
 
-// propagateTerminalStateToSubsteps updates substep states when the parent workflow reaches a terminal state
+// propagateTerminalStateToSubsteps updates substep states when the parent workflow reaches a terminal state.
+//
 // This ensures no substeps remain in RUNNING or PENDING state when the workflow has ended
 // - PENDING substeps become INVALID (never started execution)
 // - RUNNING substeps become the specified terminal state (FAILED, KILLED, etc.)

@@ -13,21 +13,38 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// TriggerType constants for different trigger types
+// TriggerType constants define the supported trigger types.
+//
+// These constants are used by GetTriggerType to determine which Runner implementation
+// should handle a specific TriggerRun resource.
 const (
-	TriggerTypeCron       = "cron"
-	TriggerTypeBackfill   = "backfill"
-	TriggerTypeBatchRerun = "batch_rerun"
-	TriggerTypeInterval   = "interval"
-	TriggerTypeUnknown    = "unknown"
+	TriggerTypeCron       = "cron"        // Recurring workflows based on cron expressions
+	TriggerTypeBackfill   = "backfill"    // One-time workflows for historical data processing
+	TriggerTypeBatchRerun = "batch_rerun" // Bulk reprocessing of previously executed workflows
+	TriggerTypeInterval   = "interval"    // Workflows triggered at fixed intervals
+	TriggerTypeUnknown    = "unknown"     // Unknown or unsupported trigger type
 )
 
-// CreateTriggerRequest DTO for the CreateTrigger workflow
+// CreateTriggerRequest is a data transfer object for trigger workflow execution.
+//
+// This struct is passed as the workflow input when starting trigger workflows
+// (both cron and backfill). It contains the complete TriggerRun specification
+// needed for workflow execution.
 type CreateTriggerRequest struct {
-	TriggerRun *v2pb.TriggerRun
+	TriggerRun *v2pb.TriggerRun // The TriggerRun resource containing execution parameters
 }
 
-// util function to kill workflow execution for cron trigger
+// killWorkflow terminates a running workflow execution.
+//
+// This shared utility function is used by all Runner implementations to stop
+// workflow execution. It performs the following operations:
+//  1. Generate workflow ID from TriggerRun namespace and name
+//  2. Query for open workflow execution using workflow client
+//  3. Call TerminateWorkflow if execution is running
+//  4. Return KILLED status regardless of whether workflow was running (idempotent)
+//
+// Returns State=KILLED on success. If no workflow is running, returns KILLED
+// without error (idempotent behavior).
 func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
 	wid := generateWorkflowID(triggerRun)
 	rid, err := getWorkflowOpenRunID(ctx, wid, workflowClient, domain)
@@ -61,7 +78,21 @@ func killWorkflow(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Log
 	return triggerRun.Status, nil
 }
 
-// util function to get workflow execution status for recurring run trigger
+// getRecurringRunWorkflowStatus retrieves workflow status for recurring triggers (cron/interval).
+//
+// This function checks for open workflow executions and maps workflow states to
+// TriggerRun states. For recurring triggers, workflows should remain running until
+// explicitly terminated.
+//
+// State mapping:
+//   - Open execution with valid timestamp → RUNNING
+//   - Terminated/Canceled → KILLED (user-initiated termination)
+//   - Failed/TimedOut → FAILED (execution failure)
+//
+// The function uses ListOpenWorkflow to find active executions, examining the
+// execution time and status to determine the current state.
+//
+// Returns TriggerRunStatus with the current state and error message if applicable.
 func getRecurringRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
 	wid := generateWorkflowID(triggerRun)
 	execInfo, err := getWorkflowOpenExecution(ctx, wid, workflowClient, domain)
@@ -114,7 +145,22 @@ func getRecurringRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.Trigger
 	return v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_RUNNING}, nil
 }
 
-// util function to get workflow execution status for adhoc run trigger
+// getAdhocRunWorkflowStatus retrieves workflow status for one-time triggers (backfill/batch rerun).
+//
+// This function queries the workflow engine for a specific workflow execution identified
+// by ExecutionWorkflowId in the TriggerRun status. It maps workflow execution states to
+// TriggerRun states.
+//
+// State mapping:
+//   - Running → RUNNING
+//   - Completed → SUCCEEDED
+//   - Failed/TimedOut/Canceled/Terminated → FAILED
+//
+// The function uses GetWorkflowExecutionInfo to describe the workflow execution and
+// determine its current state. Unlike recurring workflows, one-time workflows are
+// expected to complete or fail rather than run indefinitely.
+//
+// Returns an error if ExecutionWorkflowId is empty or if the workflow cannot be described.
 func getAdhocRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun, log logr.Logger, workflowClient clientInterface.WorkflowClient, domain string) (v2pb.TriggerRunStatus, error) {
 	var (
 		execResponse *clientInterface.WorkflowExecutionInfo
@@ -166,7 +212,16 @@ func getAdhocRunWorkflowStatus(ctx context.Context, triggerRun *v2pb.TriggerRun,
 	}
 }
 
-// util function to get workflow open execution runID
+// getWorkflowOpenRunID retrieves the run ID of an open workflow execution.
+//
+// This function queries for open workflow executions matching the provided workflow ID
+// and extracts the run ID if an execution is found. The run ID uniquely identifies a
+// specific execution instance of a workflow.
+//
+// Returns:
+//   - Non-nil string pointer: Run ID of the open execution
+//   - nil: No open execution found (workflow not running or completed)
+//   - error: Failed to query workflow engine
 func getWorkflowOpenRunID(ctx context.Context, wid string, workflowClient clientInterface.WorkflowClient, domain string) (*string, error) {
 	execution, err := getWorkflowOpenExecution(ctx, wid, workflowClient, domain)
 	if err != nil {
@@ -178,7 +233,19 @@ func getWorkflowOpenRunID(ctx context.Context, wid string, workflowClient client
 	return &execution.Execution.RunID, nil
 }
 
-// util function to get workflow open execution
+// getWorkflowOpenExecution retrieves open workflow execution information.
+//
+// This function queries the workflow engine for open (currently running) workflow
+// executions matching the provided workflow ID. It uses ListOpenWorkflow with a time
+// filter from epoch start to present to find matching executions.
+//
+// The function uses exponential backoff retry (max 3 attempts) to handle transient
+// workflow engine errors.
+//
+// Returns:
+//   - Non-nil WorkflowExecutionInfo: Information about the open execution
+//   - nil: No open execution found (workflow not running or completed)
+//   - error: Failed to query workflow engine after retries
 func getWorkflowOpenExecution(ctx context.Context, wid string, workflowClient clientInterface.WorkflowClient, domain string) (*clientInterface.WorkflowExecutionInfo, error) {
 	var (
 		err      error
@@ -210,12 +277,34 @@ func getWorkflowOpenExecution(ctx context.Context, wid string, workflowClient cl
 	return &response.Executions[0], nil
 }
 
-// util function to generate workflow ID
+// generateWorkflowID creates a deterministic workflow ID from a TriggerRun resource.
+//
+// The workflow ID is constructed as "<namespace>.<name>" which ensures uniqueness
+// within the workflow engine domain and allows idempotent workflow starts. Using
+// the same workflow ID for repeated starts prevents duplicate workflow executions.
+//
+// Returns a string in the format "namespace.name".
 func generateWorkflowID(tr *v2pb.TriggerRun) string {
 	return tr.Namespace + "." + tr.Name
 }
 
-// util function to get workflow URL based on provider
+// getWorkflowURL constructs a web UI URL for workflow monitoring.
+//
+// This function generates URLs to access workflow execution details in either
+// Cadence Web or Temporal Web UI. The URL format differs between providers:
+//
+// Temporal:
+//   - Base URL: http://localhost:8080
+//   - Path: /namespaces/{domain}/workflows/{workflowId}
+//
+// Cadence (default):
+//   - Base URL: http://localhost:8088
+//   - Path: /domains/{domain}/workflows/{workflowId}
+//
+// Note: These URLs are configured for local development. In production environments,
+// the base URLs should be configured based on the actual Cadence/Temporal deployment.
+//
+// Returns a complete URL string for workflow monitoring.
 func getWorkflowURL(wid string, provider string) string {
 	domain := "default" // Default domain for both Cadence and Temporal
 	var (
@@ -237,12 +326,34 @@ func getWorkflowURL(wid string, provider string) string {
 	return logURL + path
 }
 
-// util function to check if the trigger run is in a terminate state
+// isTerminateState checks if a TriggerRun is in a terminal state.
+//
+// Terminal states are SUCCEEDED, FAILED, or KILLED. Once a TriggerRun reaches
+// a terminal state, it should be marked immutable and no further reconciliation
+// is required.
+//
+// Returns true if the TriggerRun is in a terminal state, false otherwise.
 func isTerminateState(tr *v2pb.TriggerRun) bool {
 	return tr.Status.State == v2pb.TRIGGER_RUN_STATE_FAILED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_KILLED || tr.Status.State == v2pb.TRIGGER_RUN_STATE_SUCCEEDED
 }
 
-// GetTriggerType returns the trigger type for a given triggerRun
+// GetTriggerType determines the trigger type from a TriggerRun specification.
+//
+// This function examines the TriggerRun spec to identify which trigger type should
+// handle the resource. The determination is made by checking for specific fields
+// in priority order:
+//
+//  1. BatchRerun: Spec.Trigger.BatchRerun is set
+//  2. Backfill: Both Spec.StartTimestamp and Spec.EndTimestamp are set
+//  3. Interval: Spec.Trigger.IntervalSchedule is set
+//  4. Cron: Spec.Trigger.CronSchedule is set
+//  5. Unknown: None of the above conditions match
+//
+// The returned type string is used by the Reconciler to select the appropriate
+// Runner implementation.
+//
+// Returns one of the TriggerType constants (TriggerTypeCron, TriggerTypeBackfill,
+// TriggerTypeInterval, TriggerTypeBatchRerun, or TriggerTypeUnknown).
 func GetTriggerType(tr *v2pb.TriggerRun) string {
 	if tr.Spec.Trigger.GetBatchRerun() != nil {
 		return TriggerTypeBatchRerun

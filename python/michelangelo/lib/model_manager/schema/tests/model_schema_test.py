@@ -1,3 +1,5 @@
+"""Tests for ModelSchema."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager.schema import (

@@ -210,7 +210,7 @@ class ComputeClusterSetupTest(TestCase):
         # Simulate namespace exists
         mock_check_output.return_value = b"ma-system"
 
-        sandbox._create_ma_system_namespace()
+        sandbox._ensure_namespace_exists("ma-system")
 
         # Verify check was called but create was not
         mock_check_output.assert_called_once()
@@ -223,7 +223,7 @@ class ComputeClusterSetupTest(TestCase):
         # Simulate namespace doesn't exist
         mock_check_output.side_effect = subprocess.CalledProcessError(1, "kubectl")
 
-        sandbox._create_ma_system_namespace()
+        sandbox._ensure_namespace_exists("ma-system")
 
         # Verify create was called
         mock_exec.assert_called_once()
@@ -235,7 +235,7 @@ class ComputeClusterSetupTest(TestCase):
         self.assertIn("ma-system", call_args)
 
     @patch("michelangelo.cli.sandbox.sandbox._exec")
-    @patch("michelangelo.cli.sandbox.sandbox._create_ma_system_namespace")
+    @patch("michelangelo.cli.sandbox.sandbox._ensure_namespace_exists")
     @patch("michelangelo.cli.sandbox.sandbox.subprocess.check_output")
     def test_create_cluster_crd_success(
         self, mock_check_output, mock_create_ns, mock_exec

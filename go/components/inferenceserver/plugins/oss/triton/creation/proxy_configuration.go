@@ -16,13 +16,14 @@ import (
 
 var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ProxyConfigurationActor{}
 
-// ProxyConfigurationActor configures Istio proxy
+// ProxyConfigurationActor configures HTTP routing for inference server traffic.
 type ProxyConfigurationActor struct {
 	gateway       gateways.Gateway
 	proxyProvider proxy.ProxyProvider
 	logger        *zap.Logger
 }
 
+// NewProxyConfigurationActor creates a condition actor for configuring Gateway API HTTPRoutes.
 func NewProxyConfigurationActor(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ProxyConfigurationActor{
 		gateway:       gateway,
@@ -31,10 +32,12 @@ func NewProxyConfigurationActor(gateway gateways.Gateway, proxyProvider proxy.Pr
 	}
 }
 
+// GetType returns the condition type identifier for proxy configuration.
 func (a *ProxyConfigurationActor) GetType() string {
 	return common.TritonProxyConfigurationConditionType
 }
 
+// Retrieve checks if the Gateway API HTTPRoute is configured for the inference server.
 func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton proxy configuration condition")
 
@@ -72,6 +75,7 @@ func (a *ProxyConfigurationActor) Retrieve(ctx context.Context, resource *v2pb.I
 	}, nil
 }
 
+// Run creates or updates the HTTPRoute to enable external traffic routing.
 func (a *ProxyConfigurationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton proxy configuration")
 

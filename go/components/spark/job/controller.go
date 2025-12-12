@@ -1,3 +1,25 @@
+// Package job implements a Kubernetes controller for managing SparkJob resources.
+//
+// This package provides a reconciler that manages Spark jobs executing on Kubernetes
+// via the Spark Operator. SparkJob resources represent distributed data processing
+// jobs running on Apache Spark, with automatic creation and monitoring of
+// SparkApplication custom resources.
+//
+// Job Lifecycle:
+//
+// SparkJob resources progress through the following states:
+//   - NOT_FOUND: SparkApplication doesn't exist, will be created
+//   - SUBMITTED/RUNNING: Job is executing on Spark cluster
+//   - COMPLETED/FAILED: Terminal states after job completion
+//
+// Integration:
+//
+//   - Spark Operator: Creates and monitors SparkApplication CRDs
+//   - Spark Client: Interfaces with Spark Operator for job management
+//   - SparkApplication: Underlying resource that manages Spark driver and executor pods
+//
+// The controller continuously polls SparkApplication status and updates the local
+// SparkJob resource with current state and conditions.
 package job
 
 import (
@@ -18,16 +40,44 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-const requeueAfter = 10 * time.Second
+const (
+	// requeueAfter defines the delay before retrying reconciliation.
+	requeueAfter = 10 * time.Second
+)
 
-// Reconciler reconciles SparkJob objects by creating and monitoring Spark applications
-// in the cluster and updating their status accordingly.
+// Reconciler manages the lifecycle of SparkJob custom resources.
+//
+// The reconciler ensures Spark jobs are submitted to the Spark Operator and monitors
+// their execution status. It handles job creation via the Spark client and continuously
+// polls SparkApplication resources for status updates.
+//
+// Key responsibilities:
+//   - Creating SparkApplication resources when SparkJob is submitted
+//   - Monitoring SparkApplication status (SUBMITTED, RUNNING, COMPLETED, FAILED)
+//   - Updating SparkJob status conditions based on application state
+//   - Handling job failures and error messages
 type Reconciler struct {
-	client.Client
-	SparkClient Client
-	env         env.Context
+	client.Client             // Kubernetes client for local operations
+	SparkClient   Client      // Client for Spark Operator interactions
+	env           env.Context // Environment configuration context
 }
 
+// Reconcile implements the Kubernetes reconciliation loop for SparkJob resources.
+//
+// This method handles the complete job lifecycle:
+//  1. Retrieve SparkJob resource
+//  2. Check if SparkApplication exists via Spark client
+//  3. Create SparkApplication if not found
+//  4. Poll SparkApplication status and update conditions
+//  5. Update SparkJob status with current state
+//
+// State mapping from SparkApplication to SparkJob conditions:
+//   - RUNNING → SparkAppRunningCondition = TRUE
+//   - COMPLETED → SucceededCondition = TRUE
+//   - FAILED → SucceededCondition = FALSE (with error message)
+//
+// Returns ctrl.Result with RequeueAfter for ongoing monitoring, or an error
+// if reconciliation should be retried.
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 	res := ctrl.Result{}
@@ -118,6 +168,10 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	return res, nil
 }
 
+// Register registers the SparkJob controller with the controller manager.
+//
+// This method configures the controller to watch SparkJob custom resources and
+// trigger reconciliation when they are created, updated, or deleted.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.SparkJob{}).
@@ -125,8 +179,13 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 }
 
 // setCondition sets or updates a condition in the status conditions slice.
-// If a condition with the same type already exists, it updates it only if the status changed.
-// Returns true if the condition was added or updated, false if it was already set to the same status.
+//
+// This function manages SparkJob status conditions by:
+//   - Adding a new condition if it doesn't exist
+//   - Updating an existing condition if status, message, or reason changed
+//   - Preserving existing condition if all fields match
+//
+// Returns true if the condition was added or updated, false if no change was needed.
 func setCondition(conditions *[]*apipb.Condition, conditionType string, status apipb.ConditionStatus, message string, reason string) bool {
 	// Check if condition already exists
 	for _, cond := range *conditions {
@@ -153,12 +212,26 @@ func setCondition(conditions *[]*apipb.Condition, conditionType string, status a
 	return true
 }
 
-// createJob creates a new Spark job
+// createJob creates a new SparkApplication for the given SparkJob.
+//
+// This method delegates to the Spark client to create a SparkApplication custom
+// resource in the cluster. The Spark Operator then provisions driver and executor
+// pods to run the Spark job.
+//
+// Returns an error if creation fails.
 func (r *Reconciler) createJob(ctx context.Context, log logr.Logger, job *v2pb.SparkJob) error {
 	return r.SparkClient.CreateJob(ctx, log, job)
 }
 
-// getJobStatus retrieves the status of the Spark job
+// getJobStatus retrieves the current status of a SparkApplication.
+//
+// This method polls the Spark Operator for the current state of the job.
+//
+// Returns:
+//   - State string pointer (e.g., "RUNNING", "COMPLETED", "FAILED")
+//   - Job URL for accessing Spark UI
+//   - Error message if job failed
+//   - Error if status retrieval fails
 func (r *Reconciler) getJobStatus(ctx context.Context, logger logr.Logger, job *v2pb.SparkJob) (*string, string, string, error) {
 	return r.SparkClient.GetJobStatus(ctx, logger, job)
 }

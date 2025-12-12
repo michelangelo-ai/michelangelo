@@ -43,7 +43,7 @@ func TestRetrieve(t *testing.T) {
 			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
 				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
 					[]configmap.ModelConfigEntry{
-						{Name: "old-model", S3Path: "s3://bucket/old-model"},
+						{Name: "old-model", StoragePath: "s3://bucket/old-model"},
 					}, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,

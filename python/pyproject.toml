@@ -72,7 +72,7 @@ ma = 'michelangelo.cli.cli:main'
 
 
 [tool.poetry.extras]
-dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "grpcio-reflection", "PyYAML", "GitPython"]
+dev = ["pytest", "pytest-cov", "coverage", "ruff", "jinja2", "pre-commit", "docker", "torch", "pandas", "numpy", "transformers", "pyarrow", "pytorch_lightning", "ray", "grpcio-reflection", "PyYAML", "GitPython"]
 plugin = ["ray", "pyspark"]
 example = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "xgboost", "xgboost_ray", "kaggle", "scikit-learn", "chronon-ai", "thrift", "sqlglot", "pyspark", "ray", "mlflow", "boto3", "peft"]
 vllm = ["accelerate", "datasets", "numpy", "pandas", "pyarrow", "ray", "s3fs", "torch", "transformers", "pytorch_lightning", "einops", "vllm", "setuptools"]
@@ -161,8 +161,12 @@ select = [
 ]
 
 ignore = [
-    "D100",   # Missing docstring in public module (gradually enable)
-    "D104",   # Missing docstring in public package
+    # All docstring rules are now enforced for new code:
+    # D100 - Missing docstring in public module
+    # D101 - Missing docstring in public class
+    # D102 - Missing docstring in public method
+    # D103 - Missing docstring in public function
+    # D104 - Missing docstring in public package
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
@@ -233,6 +237,7 @@ omit = [
     "*/__pycache__/*",
     "*/site-packages/*",
     "*/sandbox.py",
+    "*/*.tmpl",    
 ]
 
 [tool.coverage.report]
@@ -259,10 +264,10 @@ exclude_lines = [
 ]
 
 # Overall coverage threshold (baseline for existing code)
-# Baseline: 34.94% (current coverage as of 2025-11-15)
+# Baseline: 66% (updated coverage as of 2025-12-02)
 # New code must meet 85% coverage (enforced in CI via diff-cover)
 # Long-term goal: Improve baseline to 70%
-fail_under = 34
+fail_under = 66
 
 [tool.coverage.html]
 directory = "htmlcov"

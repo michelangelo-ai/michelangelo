@@ -1,3 +1,5 @@
+"""Find the dependency files of a module."""
+
 from __future__ import annotations
 
 import importlib
@@ -14,7 +16,7 @@ def find_dependency_files(
     module_name: str,
     prefixes: list[str] | None = None,
     max_depth: int | None = 100,
-) -> list[str]:
+) -> dict[str, str]:
     """Recursively find the files of the imported modules.
 
     Args:
@@ -23,9 +25,19 @@ def find_dependency_files(
         max_depth: the maximum depth to search
 
     Returns:
-        The list of files
+        The dictionary whose keys are the full module names
+        and values are the module file paths
+        The __init__.py file is also included,
+        with the key being the package name with __init__ appended
+
+        e.g. {
+            "foo.bar.baz": "/path/to/foo/bar/baz.py",
+            "foo.bar": "/path/to/foo/bar.py",
+            "foo": "/path/to/foo.py",
+            "foo.__init__": "/path/to/foo/__init__.py",
+        }
     """
-    files = set()
+    files = {}
 
     if prefixes and module_name not in prefixes:
         prefixes.append(module_name)
@@ -38,7 +50,7 @@ def find_dependency_files(
         max_depth,
     )
 
-    return list(files)
+    return files
 
 
 def find_dependency_files_internal(
@@ -75,13 +87,13 @@ def find_dependency_files_internal(
 
             try:
                 sub_module = importlib.import_module(full_name)
-                files.add(inspect.getfile(sub_module))
+                files[full_name] = inspect.getfile(sub_module)
             except (ImportError, TypeError):
                 pass
 
             init_file = os.path.join(importer.path, "__init__.py")
             if os.path.exists(init_file):
-                files.add(init_file)
+                files[f"{module_name}.__init__"] = init_file
 
             find_dependency_files_internal(
                 full_name,
@@ -92,7 +104,7 @@ def find_dependency_files_internal(
             )
     # if the module is a file
     elif hasattr(package, "__file__"):
-        files.add(package.__file__)
+        files[module_name] = package.__file__
         modules = get_imports(package)
         for module in modules:
             find_dependency_files_internal(

@@ -1,3 +1,5 @@
+"""Tests for TritonBackendType constants."""
+
 from unittest import TestCase
 
 from michelangelo.lib.model_manager._private.constants import TritonBackendType

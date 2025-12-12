@@ -13,17 +13,19 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// RolloutCompletionActor handles post-rollout completion tasks
+// RolloutCompletionActor finalizes deployment by updating CurrentRevision and cleaning up rollout metadata.
 type RolloutCompletionActor struct {
 	gateway                gateways.Gateway
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
 }
 
+// GetType returns the condition type identifier for rollout completion.
 func (a *RolloutCompletionActor) GetType() string {
 	return common.ActorTypeRolloutCompletion
 }
 
+// Retrieve checks if the deployment has reached rollout complete stage with healthy state.
 func (a *RolloutCompletionActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	if resource.Status.Stage == v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE &&
 		resource.Status.State == v2pb.DEPLOYMENT_STATE_HEALTHY {
@@ -43,6 +45,7 @@ func (a *RolloutCompletionActor) Retrieve(ctx context.Context, resource *v2pb.De
 	}, nil
 }
 
+// Run updates CurrentRevision to DesiredRevision and removes temporary rollout annotations.
 func (a *RolloutCompletionActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running rollout completion tasks for deployment", zap.String("deployment", deployment.Name))
 

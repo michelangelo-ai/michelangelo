@@ -1,9 +1,28 @@
+"""Utility functions for Michelangelo API operations.
+
+This module provides helper functions for common API operations, including
+name generation following Kubernetes and Michelangelo conventions.
+"""
+
 import uuid
 from datetime import datetime, timezone
 
 
 def generate_random_name(prefix):
-    """Generate object name following k8s and Michelangelo api conventions
+    """Generate a unique object name following Kubernetes naming conventions.
+
+    Creates a name with format: {prefix}-{timestamp}-{random_chars}
+    where prefix is normalized to lowercase with underscores replaced by hyphens.
+
+    Args:
+        prefix: Name prefix for the generated name. Must be 1-128 characters.
+
+    Returns:
+        A unique name string combining the prefix, UTC timestamp (YYYYMMDD-HHMMSS),
+        and the first segment of a random UUID.
+
+    Raises:
+        RuntimeError: If prefix is empty or exceeds 128 characters.
     """
     if len(prefix) == 0:
         raise RuntimeError("Prefix cannot be empty.")

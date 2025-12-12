@@ -8,14 +8,14 @@ import (
 	"go.uber.org/zap"
 )
 
-// Proxy Management Types
+// EnsureInferenceServerRouteRequest specifies parameters for creating baseline inference server routes.
 type EnsureInferenceServerRouteRequest struct {
 	InferenceServer string
 	Namespace       string
 	ModelName       string
 }
 
-// EnsureDeploymentRouteRequest contains information needed to ensure a deployment-specific route is present
+// EnsureDeploymentRouteRequest specifies parameters for creating deployment-specific routes.
 type EnsureDeploymentRouteRequest struct {
 	DeploymentName  string
 	Namespace       string
@@ -23,7 +23,7 @@ type EnsureDeploymentRouteRequest struct {
 	InferenceServer string
 }
 
-// CheckDeploymentRouteStatusRequest contains information needed to check the status of a deployment-specific route
+// CheckDeploymentRouteStatusRequest specifies parameters for validating deployment route configuration.
 type CheckDeploymentRouteStatusRequest struct {
 	DeploymentName  string
 	Namespace       string
@@ -31,25 +31,25 @@ type CheckDeploymentRouteStatusRequest struct {
 	ModelName       string
 }
 
-// GetProxyStatusRequest contains information needed to get the proxy status
+// GetProxyStatusRequest specifies parameters for querying proxy routing configuration.
 type GetProxyStatusRequest struct {
 	InferenceServer string
 	Namespace       string
 }
 
-// GetProxyStatusResponse contains information about the proxy status
+// GetProxyStatusResponse provides the proxy routing configuration and status.
 type GetProxyStatusResponse struct {
 	Status ProxyStatus
 }
 
-// ProxyStatus represents the status of the proxy
+// ProxyStatus represents the current routing configuration and active routes.
 type ProxyStatus struct {
 	Configured bool
 	Routes     []ActiveRoute
 	Message    string
 }
 
-// ActiveRoute represents an active route
+// ActiveRoute represents a configured HTTP route with path matching and rewriting rules.
 type ActiveRoute struct {
 	Path        string
 	Destination string
@@ -57,31 +57,45 @@ type ActiveRoute struct {
 	Active      bool
 }
 
-// DeleteInferenceServerRouteRequest contains information needed to delete a inference server-specific route
+// DeleteInferenceServerRouteRequest specifies parameters for removing inference server routes.
 type DeleteInferenceServerRouteRequest struct {
 	InferenceServer string
 	Namespace       string
 }
 
-// DeleteDeploymentRouteRequest contains information needed to delete a deployment-specific route
+// DeleteDeploymentRouteRequest specifies parameters for removing deployment-specific routes.
 type DeleteDeploymentRouteRequest struct {
 	DeploymentName string
 	Namespace      string
 }
 
-// DeploymentRouteExistsRequest contains information needed to check if a deployment-specific route exists
+// DeploymentRouteExistsRequest specifies parameters for checking deployment route existence.
 type DeploymentRouteExistsRequest struct {
 	DeploymentName string
 	Namespace      string
 }
 
-// ProxyProvider interface defines the methods for managing network routes and proxies.
+// ProxyProvider manages HTTP routing configuration for inference servers and deployments.
+// Implementations handle Gateway API HTTPRoute resources or alternative routing mechanisms.
 type ProxyProvider interface {
+	// EnsureInferenceServerRoute creates or updates the baseline route for an inference server.
 	EnsureInferenceServerRoute(ctx context.Context, logger *zap.Logger, request EnsureInferenceServerRouteRequest) error
+
+	// EnsureDeploymentRoute creates or updates a deployment-specific route with model targeting.
 	EnsureDeploymentRoute(ctx context.Context, logger *zap.Logger, request EnsureDeploymentRouteRequest) error
+
+	// GetProxyStatus retrieves the current routing configuration and active routes.
 	GetProxyStatus(ctx context.Context, logger *zap.Logger, request GetProxyStatusRequest) (*GetProxyStatusResponse, error)
+
+	// CheckDeploymentRouteStatus validates that a deployment route is correctly configured.
 	CheckDeploymentRouteStatus(ctx context.Context, logger *zap.Logger, request CheckDeploymentRouteStatusRequest) (bool, error)
+
+	// DeploymentRouteExists checks if a deployment-specific route has been created.
 	DeploymentRouteExists(ctx context.Context, logger *zap.Logger, request DeploymentRouteExistsRequest) (bool, error)
+
+	// DeleteDeploymentRoute removes a deployment-specific route.
 	DeleteDeploymentRoute(ctx context.Context, logger *zap.Logger, request DeleteDeploymentRouteRequest) error
+
+	// DeleteInferenceServerRoute removes the baseline route for an inference server.
 	DeleteInferenceServerRoute(ctx context.Context, logger *zap.Logger, request DeleteInferenceServerRouteRequest) error
 }
