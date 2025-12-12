@@ -10,6 +10,7 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     convert_crd_metadata_pipeline_run,
     generate_pipeline_run_name,
     generate_pipeline_run_object,
+    generate_run,
     parse_resume_from,
 )
 
@@ -209,4 +210,60 @@ class PipelineRunTest(TestCase):
             pipeline_name="test-pipeline",
             namespace="test-ns",
             resume_from="previous-run:step-1",
+        )
+
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_methods_from_service"
+    )
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_message_class_by_name"
+    )
+    def test_generate_run_executes_auto_detection(
+        self, mock_get_message_class, mock_get_methods, mock_get_service_name
+    ):
+        """Test that generate_run() executes get_service_name with fallback."""
+        # Create mock CRD
+        mock_crd = MagicMock()
+        mock_crd.metadata = [("rpc-caller", "test")]
+
+        # Create mock channel
+        mock_channel = MagicMock()
+
+        # Mock get_service_name to return a service name
+        mock_get_service_name.return_value = (
+            "michelangelo.api.v2.PipelineRunService"
+        )
+
+        # Create mock method
+        mock_method = MagicMock()
+        mock_method.input_type = ".michelangelo.api.v2.CreatePipelineRunRequest"
+        mock_method.output_type = ".michelangelo.api.v2.CreatePipelineRunResponse"
+
+        # Mock get_methods_from_service
+        mock_methods = {"CreatePipelineRun": mock_method}
+        mock_pool = MagicMock()
+        mock_get_methods.return_value = (mock_methods, mock_pool)
+
+        # Mock get_message_class_by_name
+        mock_input_class = MagicMock()
+        mock_output_class = MagicMock()
+        mock_get_message_class.side_effect = [mock_input_class, mock_output_class]
+
+        # Call generate_run - this will execute lines 93 and 147
+        generate_run(mock_crd, mock_channel)
+
+        # Verify get_service_name was called with correct parameters
+        mock_get_service_name.assert_called_once_with(
+            mock_channel,
+            mock_crd.metadata,
+            "PipelineRunService",
+            fallback="michelangelo.api.v2.PipelineRunService",
+        )
+
+        # Verify get_methods_from_service was called
+        mock_get_methods.assert_called_once_with(
+            mock_channel, "michelangelo.api.v2.PipelineRunService", mock_crd.metadata
         )

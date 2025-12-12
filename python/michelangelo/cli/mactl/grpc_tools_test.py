@@ -3,10 +3,12 @@
 from unittest import TestCase
 from unittest.mock import Mock, patch
 
+from google.protobuf.descriptor_pool import DescriptorPool
 from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
 
 from michelangelo.cli.mactl.grpc_tools import (
     get_all_file_descriptors_by_filename,
+    get_message_class_by_name,
     get_service_descriptors,
     get_service_name,
     list_services,
@@ -170,6 +172,28 @@ class GrpcReflectionTest(TestCase):
 
         self.assertIn("PipelineRunService", str(context.exception))
         self.assertIn("not found", str(context.exception))
+
+    def test_get_message_class_by_name_integration(self):
+        """Test `get_message_class_by_name()` with real DescriptorPool."""
+        from google.protobuf import any_pb2
+        from google.protobuf.descriptor_pb2 import FileDescriptorProto
+
+        # Create a real DescriptorPool
+        pool = DescriptorPool()
+
+        # Import the Any proto and add its file descriptor to the pool
+        any_file_descriptor = FileDescriptorProto()
+        any_pb2.Any.DESCRIPTOR.file.CopyToProto(any_file_descriptor)
+        pool.Add(any_file_descriptor)
+
+        # Call function with a well-known type - this executes the real code
+        message_class = get_message_class_by_name(pool, "google.protobuf.Any")
+
+        # Verify result
+        self.assertIsNotNone(message_class)
+        # The returned class should be able to create instances
+        instance = message_class()
+        self.assertIsNotNone(instance)
 
 
 def _get_project_svc_mock() -> Mock:
