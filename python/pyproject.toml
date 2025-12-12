@@ -237,6 +237,7 @@ omit = [
     "*/__pycache__/*",
     "*/site-packages/*",
     "*/sandbox.py",
+    "*/*.tmpl",    
 ]
 
 [tool.coverage.report]
