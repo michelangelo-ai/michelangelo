@@ -212,8 +212,10 @@ class PipelineRunTest(TestCase):
             resume_from="previous-run:step-1",
         )
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.get_methods_from_service")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.run.get_service_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_methods_from_service"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name")
     def test_generate_run_with_auto_detection(
         self, mock_get_service_name, mock_get_methods
     ):

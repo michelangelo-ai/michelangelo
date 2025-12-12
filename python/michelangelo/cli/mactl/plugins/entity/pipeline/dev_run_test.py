@@ -380,8 +380,10 @@ class PipelineDevRunTest(TestCase):
         self.assertNotIn("resume_from", result)
         self.assertNotIn("file_sync", result)
 
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.get_methods_from_service")
-    @patch("michelangelo.cli.mactl.plugins.pipeline.dev_run.get_service_name")
+    @patch(
+        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_methods_from_service"
+    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_service_name")
     def test_generate_dev_run_with_auto_detection(
         self, mock_get_service_name, mock_get_methods
     ):
