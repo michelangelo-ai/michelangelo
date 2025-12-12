@@ -380,9 +380,7 @@ class PipelineDevRunTest(TestCase):
         self.assertNotIn("resume_from", result)
         self.assertNotIn("file_sync", result)
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_service_name"
-    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_service_name")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.dev_run.get_methods_from_service"
     )
@@ -401,9 +399,7 @@ class PipelineDevRunTest(TestCase):
         mock_channel = MagicMock()
 
         # Mock get_service_name to return a service name
-        mock_get_service_name.return_value = (
-            "michelangelo.api.v2.PipelineRunService"
-        )
+        mock_get_service_name.return_value = "michelangelo.api.v2.PipelineRunService"
 
         # Create mock method
         mock_method = MagicMock()

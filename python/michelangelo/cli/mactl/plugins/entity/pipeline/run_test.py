@@ -212,9 +212,7 @@ class PipelineRunTest(TestCase):
             resume_from="previous-run:step-1",
         )
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name"
-    )
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_service_name")
     @patch(
         "michelangelo.cli.mactl.plugins.entity.pipeline.run.get_methods_from_service"
     )
@@ -233,9 +231,7 @@ class PipelineRunTest(TestCase):
         mock_channel = MagicMock()
 
         # Mock get_service_name to return a service name
-        mock_get_service_name.return_value = (
-            "michelangelo.api.v2.PipelineRunService"
-        )
+        mock_get_service_name.return_value = "michelangelo.api.v2.PipelineRunService"
 
         # Create mock method
         mock_method = MagicMock()
@@ -252,7 +248,7 @@ class PipelineRunTest(TestCase):
         mock_output_class = MagicMock()
         mock_get_message_class.side_effect = [mock_input_class, mock_output_class]
 
-        # Call generate_run - this will execute lines 93 and 147
+        # Call generate_run - this will execute line 93
         generate_run(mock_crd, mock_channel)
 
         # Verify get_service_name was called with correct parameters

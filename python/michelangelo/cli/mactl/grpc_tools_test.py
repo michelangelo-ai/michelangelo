@@ -9,6 +9,7 @@ from grpc_reflection.v1alpha.reflection_pb2 import ServerReflectionRequest
 from michelangelo.cli.mactl.grpc_tools import (
     get_all_file_descriptors_by_filename,
     get_message_class_by_name,
+    get_methods_from_service,
     get_service_descriptors,
     get_service_name,
     list_services,
@@ -194,6 +195,50 @@ class GrpcReflectionTest(TestCase):
         # The returned class should be able to create instances
         instance = message_class()
         self.assertIsNotNone(instance)
+
+    @patch("michelangelo.cli.mactl.grpc_tools.get_service_descriptors")
+    @patch("michelangelo.cli.mactl.grpc_tools.retrieve_full_descriptor_pool")
+    def test_get_methods_from_service_extracts_methods(
+        self, mock_retrieve_pool, mock_get_descriptors
+    ):
+        """Test that get_methods_from_service extracts methods from service."""
+        mock_channel = Mock()
+
+        # Create mock methods
+        mock_method1 = Mock()
+        mock_method1.name = "CreateProject"
+
+        mock_method2 = Mock()
+        mock_method2.name = "GetProject"
+
+        # Create mock service descriptor with methods
+        mock_service = Mock()
+        mock_service.method = [mock_method1, mock_method2]
+
+        # Create mock file descriptor with service
+        mock_fd = Mock()
+        mock_fd.name = "test.proto"
+        mock_fd.service = [mock_service]
+
+        # Setup get_service_descriptors to return the file descriptor
+        mock_get_descriptors.return_value = [mock_fd]
+
+        # Setup retrieve_full_descriptor_pool
+        mock_pool = Mock()
+        mock_retrieve_pool.return_value = mock_pool
+
+        # Call the function - this executes line 97
+        methods, pool = get_methods_from_service(
+            mock_channel, "test.Service", self.metadata
+        )
+
+        # Verify the methods were extracted correctly
+        self.assertEqual(len(methods), 2)
+        self.assertIn("CreateProject", methods)
+        self.assertIn("GetProject", methods)
+        self.assertEqual(methods["CreateProject"], mock_method1)
+        self.assertEqual(methods["GetProject"], mock_method2)
+        self.assertEqual(pool, mock_pool)
 
 
 def _get_project_svc_mock() -> Mock:
