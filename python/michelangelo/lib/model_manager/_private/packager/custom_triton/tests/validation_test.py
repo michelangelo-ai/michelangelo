@@ -11,6 +11,7 @@ from michelangelo.lib.model_manager._private.packager.custom_triton.tests.fixtur
 )
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
+from michelangelo.lib.model_manager._private.packager.custom_triton import validate_raw_model_package
 
 
 class ValidationTest(TestCase):
@@ -180,6 +181,21 @@ class ValidationTest(TestCase):
                 ),
             ):
                 self.generate_package(src_model_path, model_class, dest_model_path)
+    
+    def test_validate_raw_model_package_without_sample_data(self):
+        """Test validation of a raw model package without sample data."""
+        predict = Predict("test_content")
+        model_class = (
+            "michelangelo.lib.model_manager._private.packager.custom_triton."
+            "tests.fixtures.model_for_validation.Predict"
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            src_model_path = os.path.join(temp_dir, "model")
+            dest_model_path = os.path.join(temp_dir, "model_package")
+            os.makedirs(src_model_path)
+            predict.save(src_model_path)
+            package = self.generate_package(src_model_path, model_class, dest_model_path)
+            validate_raw_model_package(package, None, self.schema)
 
     def test_validate_model_files_with_reserved_model_py(self):
         """Test that validation rejects models with model.py in root folder."""
