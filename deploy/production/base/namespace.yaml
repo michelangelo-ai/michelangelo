@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: michelangelo
+  labels:
+    app.kubernetes.io/name: michelangelo
+    app.kubernetes.io/part-of: michelangelo-platform
+    name: michelangelo
+  annotations:
+    kubernetes.io/managed-by: kustomize

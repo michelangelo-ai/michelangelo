@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-apiserver-config
+  namespace: michelangelo
+  labels:
+    app.kubernetes.io/name: michelangelo-apiserver
+    app.kubernetes.io/component: apiserver
+    app.kubernetes.io/part-of: michelangelo-platform
+data:
+  config.yaml: |
+    apiserver:
+      yarpc:
+        host: 0.0.0.0
+        port: 14566
+        tls:
+          enabled: false  # Enable in production overlays
+          certFile: /etc/tls/tls.crt
+          keyFile: /etc/tls/tls.key
+      k8s:
+        qps: 300
+        burst: 600
+        # Increase for production workloads
+        resync: 30m
+      metadataStorage:
+        enableMetadataStorage: true  # Enable for production
+        driver: mysql
+        host: ${DB_HOST}
+        port: ${DB_PORT:3306}
+        database: ${DB_NAME}
+        username: ${DB_USER}
+        # password comes from secret
+      crdSync:
+        enableCRDUpdate: true
+        enableIncompatibleUpdate: false  # Safety first in production
+      metrics:
+        enabled: true
+        port: 8080
+        path: /metrics
+      health:
+        enabled: true
+        port: 8081
+        path: /health
+        readinessPath: /ready
+      logging:
+        level: info  # Change to debug for troubleshooting
+        format: json  # Structured logging for production
+        development: false
+      auth:
+        enabled: false  # Configure authentication in production overlays
+        # oidc:
+        #   issuer: https://your-oidc-provider.com
+        #   clientId: michelangelo
+        #   audience: michelangelo-api
