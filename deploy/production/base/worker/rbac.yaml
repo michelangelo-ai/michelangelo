@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+rules: []
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: michelangelo-worker
+subjects:
+- kind: ServiceAccount
+  name: michelangelo-worker
+  namespace: michelangelo
