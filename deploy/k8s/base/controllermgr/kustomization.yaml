@@ -5,3 +5,5 @@ resources:
   - deployment.yaml
   - service.yaml
   - rbac.yaml
+
+namespace: michelangelo

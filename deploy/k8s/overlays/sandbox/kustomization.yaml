@@ -1,0 +1,75 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Sandbox overlay - extends base with infrastructure components
+resources:
+  # Use base Michelangelo components (Deployments with RBAC)
+  - ../../base
+
+  # Add sandbox-specific infrastructure components only
+  - resources/temporal.mysql.yaml
+  - resources/mysql.yaml
+  - resources/minio.yaml
+  - resources/envoy.yaml
+  - resources/aws-credentials.yaml
+  - resources/sandbox-bucket-setup.yaml
+
+  # Optional: Monitoring (uncomment if needed)
+  # - resources/prometheus.yaml
+  # - resources/grafana.yaml
+
+  # Optional: Ray/Spark support (uncomment if needed)
+  # - resources/rbac-ray.yaml
+  # - resources/spark.yaml
+
+namePrefix: sandbox-
+
+commonLabels:
+  environment: sandbox
+  deployment-type: development
+
+namespace: michelangelo
+
+# Override image tags to use main for development
+images:
+  - name: ghcr.io/michelangelo-ai/apiserver
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/controllermgr
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/worker
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/ui
+    newTag: main
+
+# Set development-appropriate replica counts
+replicas:
+  - name: michelangelo-apiserver
+    count: 1
+  - name: michelangelo-controllermgr
+    count: 1
+  - name: michelangelo-worker
+    count: 1
+
+# Patch base configs to work with sandbox infrastructure
+patches:
+  # Replace apiserver config to use sandbox infrastructure
+  - path: patches/apiserver-config.yaml
+    target:
+      kind: ConfigMap
+      name: michelangelo-apiserver-config
+
+  # Add sandbox environment variables to deployments
+  - path: patches/apiserver-env.yaml
+    target:
+      kind: Deployment
+      name: michelangelo-apiserver
+
+  - path: patches/controllermgr-env.yaml
+    target:
+      kind: Deployment
+      name: michelangelo-controllermgr
+
+  - path: patches/worker-env.yaml
+    target:
+      kind: Deployment
+      name: michelangelo-worker

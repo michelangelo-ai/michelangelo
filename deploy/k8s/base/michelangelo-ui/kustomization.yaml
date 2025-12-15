@@ -6,3 +6,5 @@ resources:
   - ui-service.yaml
   - envoy-deployment.yaml
   - envoy-service.yaml
+
+namespace: michelangelo

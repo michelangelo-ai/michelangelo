@@ -1,0 +1,33 @@
+# Patch environment variables for controller manager
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-controllermgr
+spec:
+  template:
+    spec:
+      containers:
+      - name: michelangelo-controllermgr
+        env:
+        # Database connection for sandbox MySQL
+        - name: DB_HOST
+          value: "sandbox-mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_NAME
+          value: "michelangelo"
+        - name: DB_USER
+          value: "root"
+        - name: DB_PASSWORD
+          value: "root"
+        # S3/MinIO configuration for sandbox
+        - name: MA_FILE_SYSTEM
+          value: "s3://default"
+        - name: MA_FILE_SYSTEM_S3_SCHEME
+          value: "http"
+        - name: AWS_ACCESS_KEY_ID
+          value: "minioadmin"
+        - name: AWS_SECRET_ACCESS_KEY
+          value: "minioadmin"
+        - name: AWS_ENDPOINT_URL
+          value: "http://sandbox-minio:9000"

@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: michelangelo-apiserver-config
+data:
+  config.yaml: |
+    apiserver:
+      yarpc:
+        host: 0.0.0.0
+        port: 14566
+        tls:
+          enabled: false  # Sandbox uses HTTP
+      k8s:
+        qps: 300
+        burst: 600
+        resync: 30m
+      metadataStorage:
+        enableMetadataStorage: true
+        driver: mysql
+        host: sandbox-mysql  # Sandbox MySQL service
+        port: 3306
+        database: michelangelo
+        username: root
+        # password comes from secret
+      crdSync:
+        enableCRDUpdate: true
+        enableIncompatibleUpdate: true  # Allow for sandbox flexibility
+      metrics:
+        enabled: true
+        port: 8080
+        path: /metrics
+      health:
+        enabled: true
+        port: 8081
+        path: /health
+        readinessPath: /ready
+      logging:
+        level: debug  # More verbose for sandbox debugging
+        format: console  # Human-readable for sandbox
+        development: true  # Development mode for sandbox
+      auth:
+        enabled: false  # No auth in sandbox

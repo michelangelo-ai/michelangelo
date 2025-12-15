@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
   - deployment.yaml
   - rbac.yaml
+
+namespace: michelangelo
