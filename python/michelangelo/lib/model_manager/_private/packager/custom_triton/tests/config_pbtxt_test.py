@@ -13,6 +13,7 @@ from michelangelo.lib.model_manager._private.packager.template_renderer import (
 
 class ConfigPbtxtTest(TestCase):
     """Tests config.pbtxt template rendering."""
+
     def setUp(self):
         self.maxDiff = None
 

@@ -231,7 +231,7 @@ class CustomTritonPackagerTest(TestCase):
                 include_import_prefixes=["michelangelo"],
             )
             self.assert_model_package(dest_model_path)
-            
+
             with (
                 open(
                     "michelangelo/lib/model_manager/packager/custom_triton/tests/fixtures/config_no_name.pbtxt"
