@@ -73,7 +73,7 @@ class CustomTritonPackager:
         model_schema: ModelSchema,
         model_name: Optional[str] = None,
         dest_model_path: Optional[str] = None,
-        model_revision: Optional[str] = "0",
+        model_revision: Optional[str] = None,
         model_path_source_type: Optional[str] = StorageType.LOCAL,
         include_import_prefixes: Optional[list[str]] = None,
     ) -> str:
@@ -100,7 +100,7 @@ class CustomTritonPackager:
                 be saved. If not specified, a temporary directory will be
                 created and its path returned.
             model_revision: The revision number for the model in Michelangelo
-                Studio. Defaults to "0".
+                Studio. Defaults to None.
             model_path_source_type: The storage backend type where the model
                 artifacts are located. Should be a value from StorageType (e.g.,
                 StorageType.LOCAL). Defaults to StorageType.LOCAL.
