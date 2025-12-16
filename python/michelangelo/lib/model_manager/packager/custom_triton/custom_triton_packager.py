@@ -6,7 +6,6 @@ from typing import Optional, Union
 from numpy import ndarray
 
 from michelangelo._internal.utils.file_utils import generate_folder
-from michelangelo.lib.model_manager._private.constants import Placeholder
 from michelangelo.lib.model_manager._private.packager.custom_triton import (
     generate_model_package_content,
     generate_raw_model_package_content,
@@ -131,9 +130,6 @@ class CustomTritonPackager:
             raise error
 
         input_schema, output_schema = convert_model_schema(model_schema)
-
-        if not model_name:
-            model_name = Placeholder.MODEL_NAME
 
         if not dest_model_path:
             dest_model_path = tempfile.mkdtemp()
