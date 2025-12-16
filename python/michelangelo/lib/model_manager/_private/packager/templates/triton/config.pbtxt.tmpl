@@ -1,4 +1,6 @@
+{% if model_name is defined and model_name is not none and model_name != "" -%}
 name: "{{model_name}}"
+{% endif -%}
 backend: "{{backend}}"
 max_batch_size: 256
 {%- if enable_dynamic_batching %}

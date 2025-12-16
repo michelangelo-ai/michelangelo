@@ -27,13 +27,18 @@ def generate_config_pbtxt_content(
     Returns:
         The config.pbtxt file content
     """
-    if model_revision:
+    if (
+        model_name is not None
+        and model_name != ""
+        and model_revision is not None
+        and model_revision != ""
+    ):
         model_name = f"{model_name}-{model_revision}"
 
     return gen.render(
         "config.pbtxt.tmpl",
         {
-            "model_name": f"{model_name}",
+            "model_name": model_name,
             "backend": TritonBackendType.PYTHON,
             "max_batch_size": 256,
             "enable_dynamic_batching": True,
