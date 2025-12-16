@@ -14,9 +14,6 @@ from michelangelo.lib.model_manager._private.packager.template_renderer import (
 class ConfigPbtxtTest(TestCase):
     """Tests config.pbtxt template rendering."""
 
-    def setUp(self):
-        self.maxDiff = None
-
     def test_generate_config_pbtxt_content(self):
         """It renders the expected config.pbtxt contents."""
         gen = TritonTemplateRenderer()
