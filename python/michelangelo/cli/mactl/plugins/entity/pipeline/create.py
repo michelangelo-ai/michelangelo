@@ -4,7 +4,6 @@ import json
 import tempfile
 from copy import deepcopy
 from logging import getLogger
-from os import getenv
 from pathlib import Path
 from typing import Optional
 from uuid import uuid4
@@ -15,6 +14,7 @@ from google.protobuf.message import Message
 from google.protobuf.struct_pb2 import Struct
 
 from michelangelo.cli.mactl.utils import (
+    get_user_name,
     read_subprocess_outputs,
     run_subprocess_registration,
 )
@@ -292,7 +292,7 @@ def populate_pipeline_spec_with_workflow_inputs(
         "filePath": config_file_relative_path,
         "type": "PIPELINE_MANIFEST_TYPE_UNIFLOW",
     }
-    res["spec"]["owner"] = {"name": getenv("UBER_LDAP_UID")}
+    res["spec"]["owner"] = {"name": get_user_name()}
 
     # Add uniflow artifacts if registration succeeded
     if workflow_inputs is not None:

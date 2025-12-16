@@ -134,9 +134,9 @@ class PipelineCreateTest(TestCase):
         workflow_function_name = "my_workflow"
 
         with patch(
-            "michelangelo.cli.mactl.plugins.entity.pipeline.create.getenv"
-        ) as mock_getenv:
-            mock_getenv.return_value = "test-user"
+            "michelangelo.cli.mactl.plugins.entity.pipeline.create.get_user_name"
+        ) as mock_get_user_name:
+            mock_get_user_name.return_value = "test-user"
 
             result = populate_pipeline_spec_with_workflow_inputs(
                 res,

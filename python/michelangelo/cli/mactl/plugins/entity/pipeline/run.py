@@ -24,6 +24,7 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_methods_from_service,
     get_service_name,
 )
+from michelangelo.cli.mactl.utils import get_user_name
 
 _LOG = getLogger(__name__)
 
@@ -236,7 +237,7 @@ def generate_pipeline_run_object(
                 "namespace": namespace,
             },
             "actor": {
-                "name": "mactl-user",
+                "name": get_user_name(),
             },
         },
     }

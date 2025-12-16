@@ -34,8 +34,11 @@ class PipelineRunTest(TestCase):
         mock_time.time.assert_called_once()
         mock_uuid.uuid4.assert_called_once()
 
-    def test_generate_pipeline_run_object_basic(self):
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.run.get_user_name")
+    def test_generate_pipeline_run_object_basic(self, mock_get_user_name):
         """Test basic pipeline run object generation."""
+        mock_get_user_name.return_value = "test-user"
+
         result = generate_pipeline_run_object(
             run_name="run-123-abc",
             pipeline_name="test-pipeline",
@@ -54,7 +57,8 @@ class PipelineRunTest(TestCase):
         self.assertIn("spec", result)
         self.assertEqual(result["spec"]["pipeline"]["name"], "test-pipeline")
         self.assertEqual(result["spec"]["pipeline"]["namespace"], "test-ns")
-        self.assertEqual(result["spec"]["actor"]["name"], "mactl-user")
+        self.assertEqual(result["spec"]["actor"]["name"], "test-user")
+        mock_get_user_name.assert_called_once()
 
         # Verify no resume spec when resume_from not provided
         self.assertNotIn("resume", result["spec"])

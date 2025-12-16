@@ -1,5 +1,4 @@
-"""Utility functions for MaCTL subprocess management and environment detection.
-"""
+"""Utility functions for MaCTL subprocess management and environment detection."""
 
 import os
 import shutil
@@ -10,6 +9,24 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 _logger = getLogger(__name__)
+
+
+def get_user_name() -> str:
+    """Auto-detect user name from environment variables.
+
+    Returns:
+        str: User name from environment variables with fallback chain:
+            1. UBER_LDAP_UID (Uber internal)
+            2. USER (Unix/Linux)
+            3. USERNAME (Windows)
+            4. "mactl-user" (default)
+    """
+    return (
+        os.getenv("UBER_LDAP_UID")
+        or os.getenv("USER")
+        or os.getenv("USERNAME")
+        or "mactl-user"
+    )
 
 
 def detect_user_python_interpreter() -> str:
