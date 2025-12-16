@@ -12,9 +12,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap/configmapmocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -23,7 +22,7 @@ func TestRetrieve(t *testing.T) {
 	tests := []struct {
 		name                     string
 		deployment               *v2pb.Deployment
-		setupMocks               func(*configmapmocks.MockModelConfigMapProvider, *proxymocks.MockProxyProvider)
+		setupMocks               func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
@@ -31,6 +30,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "model still exists in ConfigMap, cleanup required",
 			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -40,11 +40,8 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
-					[]configmap.ModelConfigEntry{
-						{Name: "old-model", StoragePath: "s3://bucket/old-model"},
-					}, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "ModelStillExistsInConfigMap",
@@ -53,6 +50,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "unable to check model in ConfigMap",
 			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -62,9 +60,8 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
-					nil, errors.New("connection error"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "UnableToCheckModelInConfigMap",
@@ -72,7 +69,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "HTTPRoute still exists, cleanup required",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -82,10 +79,9 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
-					[]configmap.ModelConfigEntry{}, nil)
-				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "HTTPRouteStillExists",
@@ -94,7 +90,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "unable to check HTTPRoute exists",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -104,10 +100,9 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
-					[]configmap.ModelConfigEntry{}, nil)
-				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "UnableToCheckHTTPRouteExists",
@@ -115,6 +110,7 @@ func TestRetrieve(t *testing.T) {
 		{
 			name: "cleanup completed, all resources cleaned up",
 			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -124,10 +120,9 @@ func TestRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-model"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().GetModelsFromConfigMap(gomock.Any(), gomock.Any()).Return(
-					[]configmap.ModelConfigEntry{}, nil)
-				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -140,15 +135,15 @@ func TestRetrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockConfigMap := configmapmocks.NewMockModelConfigMapProvider(ctrl)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
 			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
 
-			tt.setupMocks(mockConfigMap, mockProxy)
+			tt.setupMocks(mockGateway, mockProxy)
 
 			actor := &CleanupActor{
-				modelConfigMapProvider: mockConfigMap,
-				proxyProvider:          mockProxy,
-				logger:                 zap.NewNop(),
+				gateway:       mockGateway,
+				proxyProvider: mockProxy,
+				logger:        zap.NewNop(),
 			}
 
 			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
@@ -168,7 +163,7 @@ func TestRun(t *testing.T) {
 	tests := []struct {
 		name                     string
 		deployment               *v2pb.Deployment
-		setupMocks               func(*configmapmocks.MockModelConfigMapProvider, *proxymocks.MockProxyProvider)
+		setupMocks               func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
@@ -177,7 +172,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "successful cleanup, all operations complete",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -188,9 +183,9 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -198,8 +193,9 @@ func TestRun(t *testing.T) {
 			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
 		},
 		{
-			name: "ConfigMap cleanup fails",
+			name: "model unloading fails",
 			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -210,18 +206,18 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(errors.New("configmap update failed"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload failed"))
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "ConfigMapCleanupFailed",
-			expectedConditionMessage: "Failed to remove old model old-model from ConfigMap",
+			expectedConditionReason:  "ModelUnloadingFailed",
+			expectedConditionMessage: "Failed to unload old model old-model from inference server",
 			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS,
 		},
 		{
 			name: "HTTPRoute deletion fails with error",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -232,9 +228,9 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("deletion failed"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(errors.New("deletion failed"))
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "HTTPRouteCleanupFailed",
@@ -244,7 +240,7 @@ func TestRun(t *testing.T) {
 		{
 			name: "HTTPRoute not found during deletion, continues successfully",
 			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
 					Target: &v2pb.DeploymentSpec_InferenceServer{
 						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
@@ -255,10 +251,10 @@ func TestRun(t *testing.T) {
 					Stage:           v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, pp *proxymocks.MockProxyProvider) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				notFoundErr := kerrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "test-deployment-httproute")
-				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(notFoundErr)
+				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(notFoundErr)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -272,15 +268,15 @@ func TestRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockConfigMap := configmapmocks.NewMockModelConfigMapProvider(ctrl)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
 			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
 
-			tt.setupMocks(mockConfigMap, mockProxy)
+			tt.setupMocks(mockGateway, mockProxy)
 
 			actor := &CleanupActor{
-				modelConfigMapProvider: mockConfigMap,
-				proxyProvider:          mockProxy,
-				logger:                 zap.NewNop(),
+				gateway:       mockGateway,
+				proxyProvider: mockProxy,
+				logger:        zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, nil)

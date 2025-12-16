@@ -6,7 +6,7 @@ go_library(
         "httproute.go",
         "interface.go",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy",
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy",
     visibility = ["//visibility:public"],
     deps = [
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",

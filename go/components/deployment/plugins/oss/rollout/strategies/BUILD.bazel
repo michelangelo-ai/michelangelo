@@ -13,9 +13,8 @@ go_library(
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
-        "//go/components/inferenceserver/configmap:go_default_library",
+        "//go/components/deployment/proxy:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
-        "//go/components/inferenceserver/proxy:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
@@ -32,7 +31,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//go/components/inferenceserver/configmap/configmapmocks:go_default_library",
         "//go/components/inferenceserver/gateways/gatewaysmocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

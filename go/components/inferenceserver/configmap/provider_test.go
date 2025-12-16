@@ -18,49 +18,51 @@ import (
 func TestCreateModelConfigMap(t *testing.T) {
 	tests := []struct {
 		name               string
-		request            CreateModelConfigMapRequest
+		inferenceServer    string
+		namespace          string
+		modelConfigs       []ModelConfigEntry
+		labels             map[string]string
+		annotations        map[string]string
 		existingConfigMaps []runtime.Object
 		expectError        bool
-		validateFunc       func(t *testing.T, client client.Client, request CreateModelConfigMapRequest)
+		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string)
 	}{
 		{
-			name: "create call on new configmap",
-			request: CreateModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelConfigs: []ModelConfigEntry{
-					{Name: "model1", StoragePath: "s3://bucket/model1"},
-					{Name: "model2", StoragePath: "s3://bucket/model2"},
-				},
-				Labels: map[string]string{
-					"custom-label": "custom-value",
-				},
-				Annotations: map[string]string{
-					"custom-annotation": "annotation-value",
-				},
+			name:            "create call on new configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelConfigs: []ModelConfigEntry{
+				{Name: "model1", StoragePath: "s3://bucket/model1"},
+				{Name: "model2", StoragePath: "s3://bucket/model2"},
+			},
+			labels: map[string]string{
+				"custom-label": "custom-value",
+			},
+			annotations: map[string]string{
+				"custom-annotation": "annotation-value",
 			},
 			existingConfigMaps: []runtime.Object{},
-			validateFunc: func(t *testing.T, c client.Client, request CreateModelConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify the configmap was created with correct name and namespace
 				assert.Equal(t, configMapName, cm.Name)
-				assert.Equal(t, request.Namespace, cm.Namespace)
+				assert.Equal(t, namespace, cm.Namespace)
 
 				// Verify labels
 				expectedLabels := map[string]string{
 					"app.kubernetes.io/component":      "model-config",
 					"app.kubernetes.io/part-of":        "michelangelo",
-					"michelangelo.ai/inference-server": request.InferenceServer,
+					"michelangelo.ai/inference-server": inferenceServer,
 					"custom-label":                     "custom-value",
 				}
 				assert.Equal(t, expectedLabels, cm.Labels)
 
 				// Verify annotations
-				assert.Equal(t, request.Annotations, cm.Annotations)
+				assert.Equal(t, annotations, cm.Annotations)
 
 				// Verify model-list.json data
 				modelListJSON, exists := cm.Data[modelListKey]
@@ -69,20 +71,18 @@ func TestCreateModelConfigMap(t *testing.T) {
 				var actualModels []ModelConfigEntry
 				err = json.Unmarshal([]byte(modelListJSON), &actualModels)
 				require.NoError(t, err)
-				assert.Equal(t, request.ModelConfigs, actualModels)
+				assert.Equal(t, modelConfigs, actualModels)
 			},
 		},
 		{
-			name: "create call on configmap that already exists",
-			request: CreateModelConfigMapRequest{
-				InferenceServer: "existing-server",
-				Namespace:       "default",
-				ModelConfigs: []ModelConfigEntry{
-					{Name: "new-model", StoragePath: "s3://bucket/new-model"},
-				},
-				Labels:      nil,
-				Annotations: nil,
+			name:            "create call on configmap that already exists",
+			inferenceServer: "existing-server",
+			namespace:       "default",
+			modelConfigs: []ModelConfigEntry{
+				{Name: "new-model", StoragePath: "s3://bucket/new-model"},
 			},
+			labels:      nil,
+			annotations: nil,
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -98,10 +98,10 @@ func TestCreateModelConfigMap(t *testing.T) {
 					},
 				},
 			},
-			validateFunc: func(t *testing.T, c client.Client, request CreateModelConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify the configmap was NOT modified (old data should remain)
@@ -137,10 +137,10 @@ func TestCreateModelConfigMap(t *testing.T) {
 			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
 
 			// Execute
-			err := provider.CreateModelConfigMap(context.Background(), tt.request)
+			err := provider.CreateModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.labels, tt.annotations)
 
 			assert.NoError(t, err)
-			tt.validateFunc(t, fakeClient, tt.request)
+			tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.annotations)
 		})
 	}
 }
@@ -148,17 +148,16 @@ func TestCreateModelConfigMap(t *testing.T) {
 func TestGetModelConfigMap(t *testing.T) {
 	tests := []struct {
 		name               string
-		request            GetModelConfigMapRequest
+		inferenceServer    string
+		namespace          string
 		existingConfigMaps []runtime.Object
 		expectedResponse   []ModelConfigEntry
 		expectError        bool
 	}{
 		{
-			name: "get call on existing configmap with multiple models",
-			request: GetModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-			},
+			name:            "get call on existing configmap with multiple models",
+			inferenceServer: "test-server",
+			namespace:       "default",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -186,21 +185,17 @@ func TestGetModelConfigMap(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "get call on non-existent configmap",
-			request: GetModelConfigMapRequest{
-				InferenceServer: "non-existent-server",
-				Namespace:       "default",
-			},
+			name:               "get call on non-existent configmap",
+			inferenceServer:    "non-existent-server",
+			namespace:          "default",
 			existingConfigMaps: []runtime.Object{},
 			expectedResponse:   nil,
 			expectError:        true,
 		},
 		{
-			name: "get models from configmap with empty model list",
-			request: GetModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-			},
+			name:            "get models from configmap with empty model list",
+			inferenceServer: "test-server",
+			namespace:       "default",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -216,11 +211,9 @@ func TestGetModelConfigMap(t *testing.T) {
 			expectError:      false,
 		},
 		{
-			name: "get models from configmap with no model-list.json key",
-			request: GetModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-			},
+			name:            "get models from configmap with no model-list.json key",
+			inferenceServer: "test-server",
+			namespace:       "default",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -236,11 +229,9 @@ func TestGetModelConfigMap(t *testing.T) {
 			expectError:      false,
 		},
 		{
-			name: "get models from configmap with invalid json",
-			request: GetModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-			},
+			name:            "get models from configmap with invalid json",
+			inferenceServer: "test-server",
+			namespace:       "default",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -270,7 +261,7 @@ func TestGetModelConfigMap(t *testing.T) {
 			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
 
 			// Execute
-			actualResponse, err := provider.GetModelsFromConfigMap(context.Background(), tt.request)
+			actualResponse, err := provider.GetModelsFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace)
 
 			// Assert
 			if tt.expectError {
@@ -288,20 +279,20 @@ func TestGetModelConfigMap(t *testing.T) {
 func TestAddModelToConfigMap(t *testing.T) {
 	tests := []struct {
 		name               string
-		request            AddModelToConfigMapRequest
+		inferenceServer    string
+		namespace          string
+		modelConfig        ModelConfigEntry
 		existingConfigMaps []runtime.Object
 		expectError        bool
-		validateFunc       func(t *testing.T, client client.Client, request AddModelToConfigMapRequest)
+		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string)
 	}{
 		{
-			name: "add new model to existing configmap",
-			request: AddModelToConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelConfig: ModelConfigEntry{
-					Name:        "new-model",
-					StoragePath: "s3://bucket/new-model",
-				},
+			name:            "add new model to existing configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelConfig: ModelConfigEntry{
+				Name:        "new-model",
+				StoragePath: "s3://bucket/new-model",
 			},
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
@@ -315,10 +306,10 @@ func TestAddModelToConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify model was added
@@ -337,14 +328,12 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "update existing model in configmap",
-			request: AddModelToConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelConfig: ModelConfigEntry{
-					Name:        "existing-model",
-					StoragePath: "s3://bucket/updated-path",
-				},
+			name:            "update existing model in configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelConfig: ModelConfigEntry{
+				Name:        "existing-model",
+				StoragePath: "s3://bucket/updated-path",
 			},
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
@@ -358,10 +347,10 @@ func TestAddModelToConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify model was updated (not duplicated)
@@ -379,14 +368,12 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "add model to empty configmap",
-			request: AddModelToConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelConfig: ModelConfigEntry{
-					Name:        "first-model",
-					StoragePath: "s3://bucket/first-model",
-				},
+			name:            "add model to empty configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelConfig: ModelConfigEntry{
+				Name:        "first-model",
+				StoragePath: "s3://bucket/first-model",
 			},
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
@@ -400,10 +387,10 @@ func TestAddModelToConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request AddModelToConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify model was added
@@ -421,14 +408,12 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "add model to non-existent configmap returns error",
-			request: AddModelToConfigMapRequest{
-				InferenceServer: "non-existent-server",
-				Namespace:       "default",
-				ModelConfig: ModelConfigEntry{
-					Name:        "model",
-					StoragePath: "s3://bucket/model",
-				},
+			name:            "add model to non-existent configmap returns error",
+			inferenceServer: "non-existent-server",
+			namespace:       "default",
+			modelConfig: ModelConfigEntry{
+				Name:        "model",
+				StoragePath: "s3://bucket/model",
 			},
 			existingConfigMaps: []runtime.Object{},
 			expectError:        true,
@@ -449,7 +434,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
 
 			// Execute
-			err := provider.AddModelToConfigMap(context.Background(), tt.request)
+			err := provider.AddModelToConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfig)
 
 			// Assert
 			if tt.expectError {
@@ -457,7 +442,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				if tt.validateFunc != nil {
-					tt.validateFunc(t, fakeClient, tt.request)
+					tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace)
 				}
 			}
 		})
@@ -467,18 +452,18 @@ func TestAddModelToConfigMap(t *testing.T) {
 func TestRemoveModelFromConfigMap(t *testing.T) {
 	tests := []struct {
 		name               string
-		request            RemoveModelFromConfigMapRequest
+		inferenceServer    string
+		namespace          string
+		modelName          string
 		existingConfigMaps []runtime.Object
 		expectError        bool
-		validateFunc       func(t *testing.T, client client.Client, request RemoveModelFromConfigMapRequest)
+		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string)
 	}{
 		{
-			name: "remove existing model from configmap",
-			request: RemoveModelFromConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "model-to-remove",
-			},
+			name:            "remove existing model from configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelName:       "model-to-remove",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -500,10 +485,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify model was removed
@@ -521,12 +506,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "remove non-existent model from configmap (no error, no change)",
-			request: RemoveModelFromConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "non-existent-model",
-			},
+			name:            "remove non-existent model from configmap (no error, no change)",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelName:       "non-existent-model",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -539,10 +522,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify nothing was removed
@@ -560,12 +543,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "remove last model from configmap (results in empty list)",
-			request: RemoveModelFromConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-				ModelName:       "only-model",
-			},
+			name:            "remove last model from configmap (results in empty list)",
+			inferenceServer: "test-server",
+			namespace:       "default",
+			modelName:       "only-model",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -578,10 +559,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request RemoveModelFromConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
 
 				// Verify list is now empty
@@ -596,12 +577,10 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 		},
 		{
-			name: "remove model from non-existent configmap returns error",
-			request: RemoveModelFromConfigMapRequest{
-				InferenceServer: "non-existent-server",
-				Namespace:       "default",
-				ModelName:       "model",
-			},
+			name:               "remove model from non-existent configmap returns error",
+			inferenceServer:    "non-existent-server",
+			namespace:          "default",
+			modelName:          "model",
 			existingConfigMaps: []runtime.Object{},
 			expectError:        true,
 			validateFunc:       nil,
@@ -621,7 +600,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
 
 			// Execute
-			err := provider.RemoveModelFromConfigMap(context.Background(), tt.request)
+			err := provider.RemoveModelFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelName)
 
 			// Assert
 			if tt.expectError {
@@ -629,7 +608,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				if tt.validateFunc != nil {
-					tt.validateFunc(t, fakeClient, tt.request)
+					tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace)
 				}
 			}
 		})
@@ -639,17 +618,16 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 func TestDeleteModelConfigMap(t *testing.T) {
 	tests := []struct {
 		name               string
-		request            DeleteModelConfigMapRequest
+		inferenceServer    string
+		namespace          string
 		existingConfigMaps []runtime.Object
 		expectError        bool
-		validateFunc       func(t *testing.T, client client.Client, request DeleteModelConfigMapRequest)
+		validateFunc       func(t *testing.T, client client.Client, inferenceServer string, namespace string)
 	}{
 		{
-			name: "delete call on existing configmap",
-			request: DeleteModelConfigMapRequest{
-				InferenceServer: "test-server",
-				Namespace:       "default",
-			},
+			name:            "delete call on existing configmap",
+			inferenceServer: "test-server",
+			namespace:       "default",
 			existingConfigMaps: []runtime.Object{
 				&corev1.ConfigMap{
 					ObjectMeta: metav1.ObjectMeta{
@@ -662,21 +640,19 @@ func TestDeleteModelConfigMap(t *testing.T) {
 				},
 			},
 			expectError: false,
-			validateFunc: func(t *testing.T, c client.Client, request DeleteModelConfigMapRequest) {
-				configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
+				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 				cm := &corev1.ConfigMap{}
-				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, cm)
+				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				// ConfigMap should not exist after deletion
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "not found")
 			},
 		},
 		{
-			name: "delete non-existent configmap returns error",
-			request: DeleteModelConfigMapRequest{
-				InferenceServer: "non-existent-server",
-				Namespace:       "default",
-			},
+			name:               "delete non-existent configmap returns error",
+			inferenceServer:    "non-existent-server",
+			namespace:          "default",
 			existingConfigMaps: []runtime.Object{},
 			expectError:        true,
 			validateFunc:       nil,
@@ -696,7 +672,7 @@ func TestDeleteModelConfigMap(t *testing.T) {
 			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
 
 			// Execute
-			err := provider.DeleteModelConfigMap(context.Background(), tt.request)
+			err := provider.DeleteModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace)
 
 			// Assert
 			if tt.expectError {
@@ -704,7 +680,7 @@ func TestDeleteModelConfigMap(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				if tt.validateFunc != nil {
-					tt.validateFunc(t, fakeClient, tt.request)
+					tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace)
 				}
 			}
 		})

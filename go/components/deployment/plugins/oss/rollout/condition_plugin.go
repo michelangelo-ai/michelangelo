@@ -9,9 +9,8 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -25,11 +24,10 @@ type conditionPlugin struct {
 
 // Params contains dependencies injected for rollout plugin initialization.
 type Params struct {
-	Client                 client.Client
-	ProxyProvider          proxy.ProxyProvider
-	ModelConfigMapProvider configmap.ModelConfigMapProvider
-	Gateway                gateways.Gateway
-	Logger                 *zap.Logger
+	Client        client.Client
+	ProxyProvider proxy.ProxyProvider
+	Gateway       gateways.Gateway
+	Logger        *zap.Logger
 }
 
 // NewRolloutPlugin creates a rollout workflow plugin with deployment-specific strategy actors.
@@ -53,11 +51,10 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 
 	// Placement strategy actors (rolling strategy for OSS)
 	placementActors, err := strategies.GetActorsForStrategy(ctx, strategies.Params{
-		Client:                 p.Client,
-		ProxyProvider:          p.ProxyProvider,
-		ModelConfigMapProvider: p.ModelConfigMapProvider,
-		Gateway:                p.Gateway,
-		Logger:                 p.Logger,
+		Client:        p.Client,
+		ProxyProvider: p.ProxyProvider,
+		Gateway:       p.Gateway,
+		Logger:        p.Logger,
 	}, deployment)
 	if err != nil {
 		return nil, err
@@ -70,9 +67,8 @@ func NewRolloutPlugin(ctx context.Context, p Params, deployment *v2pb.Deployment
 			Logger:        p.Logger,
 		},
 		&RolloutCompletionActor{
-			gateway:                p.Gateway,
-			modelConfigMapProvider: p.ModelConfigMapProvider,
-			logger:                 p.Logger,
+			gateway: p.Gateway,
+			logger:  p.Logger,
 		},
 	}
 

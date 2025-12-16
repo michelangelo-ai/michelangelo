@@ -11,12 +11,9 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	configmapmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap/configmapmocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	gatewaysmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
-	proxymocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy/proxymocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -24,7 +21,7 @@ import (
 func TestCleanupActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name            string
-		setupMocks      func(*gatewaysmocks.MockGateway)
+		setupMocks      func(*backendsmocks.MockBackend)
 		expectedStatus  apipb.ConditionStatus
 		expectedReason  string
 		expectedMessage string
@@ -32,18 +29,10 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 	}{
 		{
 			name: "infrastructure exists, cleanup not completed",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
-					GetInfrastructureStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
-					Return(&gateways.GetInfrastructureStatusResponse{}, nil)
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					GetInfrastructureStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
+					Return(&backends.InfrastructureStatus{}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
 			expectedReason:  "CleanupInProgress",
@@ -52,17 +41,9 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "infrastructure does not exist, cleanup completed",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
-					GetInfrastructureStatus(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
+					GetInfrastructureStatus(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil, errors.New("infrastructure not found"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
@@ -77,13 +58,12 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			mockConfigMapProvider := configmapmocks.NewMockModelConfigMapProvider(ctrl)
-			mockProxyProvider := proxymocks.NewMockProxyProvider(ctrl)
 
-			tt.setupMocks(mockGateway)
+			tt.setupMocks(mockBackend)
 
-			actor := NewCleanupActor(mockGateway, mockConfigMapProvider, mockProxyProvider, zap.NewNop())
+			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -117,7 +97,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 func TestCleanupActor_Run(t *testing.T) {
 	tests := []struct {
 		name                    string
-		setupMocks              func(*gatewaysmocks.MockGateway, *configmapmocks.MockModelConfigMapProvider, *proxymocks.MockProxyProvider)
+		setupMocks              func(*backendsmocks.MockBackend, *configmapmocks.MockModelConfigMapProvider)
 		expectedStatus          apipb.ConditionStatus
 		expectedReason          string
 		expectedMessageContains string
@@ -125,173 +105,51 @@ func TestCleanupActor_Run(t *testing.T) {
 	}{
 		{
 			name: "successful cleanup, all resources deleted",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway, mockConfigMap *configmapmocks.MockModelConfigMapProvider, mockProxy *proxymocks.MockProxyProvider) {
+			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
 				// ConfigMap deletion succeeds
 				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(
-						gomock.Any(),
-						configmap.DeleteModelConfigMapRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(nil)
-
-				// HTTPRoute deletion succeeds
-				mockProxy.EXPECT().
-					DeleteInferenceServerRoute(
-						gomock.Any(),
-						gomock.Any(),
-						proxy.DeleteInferenceServerRouteRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
+					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 
 				// Infrastructure deletion succeeds
-				mockGateway.EXPECT().
-					DeleteInfrastructure(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.DeleteInfrastructureRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
+				mockBackend.EXPECT().
+					DeleteInfrastructure(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
 			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully",
+			expectedMessageContains: "Infrastructure, model ConfigMap cleanup initiated successfully",
 			expectedErr:             false,
 		},
 		{
 			name: "configmap deletion fails, cleanup continues",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway, mockConfigMap *configmapmocks.MockModelConfigMapProvider, mockProxy *proxymocks.MockProxyProvider) {
+			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
 				// ConfigMap deletion fails
 				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(
-						gomock.Any(),
-						configmap.DeleteModelConfigMapRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
+					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("configmap not found"))
 
-				// HTTPRoute deletion succeeds
-				mockProxy.EXPECT().
-					DeleteInferenceServerRoute(
-						gomock.Any(),
-						gomock.Any(),
-						proxy.DeleteInferenceServerRouteRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(nil)
-
 				// Infrastructure deletion succeeds
-				mockGateway.EXPECT().
-					DeleteInfrastructure(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.DeleteInfrastructureRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
+				mockBackend.EXPECT().
+					DeleteInfrastructure(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
 			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully",
-			expectedErr:             false,
-		},
-		{
-			name: "httproute deletion fails, cleanup continues",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway, mockConfigMap *configmapmocks.MockModelConfigMapProvider, mockProxy *proxymocks.MockProxyProvider) {
-				// ConfigMap deletion succeeds
-				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(
-						gomock.Any(),
-						configmap.DeleteModelConfigMapRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(nil)
-
-				// HTTPRoute deletion fails
-				mockProxy.EXPECT().
-					DeleteInferenceServerRoute(
-						gomock.Any(),
-						gomock.Any(),
-						proxy.DeleteInferenceServerRouteRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(errors.New("httproute not found"))
-
-				// Infrastructure deletion succeeds
-				mockGateway.EXPECT().
-					DeleteInfrastructure(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.DeleteInfrastructureRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
-					Return(nil)
-			},
-			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully",
+			expectedMessageContains: "Infrastructure, model ConfigMap cleanup initiated successfully",
 			expectedErr:             false,
 		},
 		{
 			name: "infrastructure deletion fails, returns error",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway, mockConfigMap *configmapmocks.MockModelConfigMapProvider, mockProxy *proxymocks.MockProxyProvider) {
+			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
 				// ConfigMap deletion succeeds
 				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(
-						gomock.Any(),
-						configmap.DeleteModelConfigMapRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(nil)
-
-				// HTTPRoute deletion succeeds
-				mockProxy.EXPECT().
-					DeleteInferenceServerRoute(
-						gomock.Any(),
-						gomock.Any(),
-						proxy.DeleteInferenceServerRouteRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
+					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 
 				// Infrastructure deletion fails
-				mockGateway.EXPECT().
-					DeleteInfrastructure(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.DeleteInfrastructureRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
+				mockBackend.EXPECT().
+					DeleteInfrastructure(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("failed to delete deployment"))
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
@@ -300,47 +158,21 @@ func TestCleanupActor_Run(t *testing.T) {
 			expectedErr:             true,
 		},
 		{
-			name: "both configmap and httproute deletion fail but infrastructure cleanup succeeds",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway, mockConfigMap *configmapmocks.MockModelConfigMapProvider, mockProxy *proxymocks.MockProxyProvider) {
+			name: "configmap deletion fails but infrastructure cleanup succeeds",
+			setupMocks: func(mockBackend *backendsmocks.MockBackend, mockConfigMap *configmapmocks.MockModelConfigMapProvider) {
 				// ConfigMap deletion fails
 				mockConfigMap.EXPECT().
-					DeleteModelConfigMap(
-						gomock.Any(),
-						configmap.DeleteModelConfigMapRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
+					DeleteModelConfigMap(gomock.Any(), "test-server", "test-namespace").
 					Return(errors.New("configmap error"))
 
-				// HTTPRoute deletion fails
-				mockProxy.EXPECT().
-					DeleteInferenceServerRoute(
-						gomock.Any(),
-						gomock.Any(),
-						proxy.DeleteInferenceServerRouteRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-						},
-					).
-					Return(errors.New("httproute error"))
-
 				// Infrastructure deletion succeeds
-				mockGateway.EXPECT().
-					DeleteInfrastructure(
-						gomock.Any(),
-						gomock.Any(),
-						gateways.DeleteInfrastructureRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
-					).
+				mockBackend.EXPECT().
+					DeleteInfrastructure(gomock.Any(), gomock.Any(), "test-server", "test-namespace").
 					Return(nil)
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
 			expectedReason:          "CleanupInitiated",
-			expectedMessageContains: "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully",
+			expectedMessageContains: "Infrastructure, model ConfigMap cleanup initiated successfully",
 			expectedErr:             false,
 		},
 	}
@@ -350,13 +182,12 @@ func TestCleanupActor_Run(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			mockConfigMapProvider := configmapmocks.NewMockModelConfigMapProvider(ctrl)
-			mockProxyProvider := proxymocks.NewMockProxyProvider(ctrl)
 
-			tt.setupMocks(mockGateway, mockConfigMapProvider, mockProxyProvider)
+			tt.setupMocks(mockBackend, mockConfigMapProvider)
 
-			actor := NewCleanupActor(mockGateway, mockConfigMapProvider, mockProxyProvider, zap.NewNop())
+			actor := NewCleanupActor(mockBackend, mockConfigMapProvider, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{

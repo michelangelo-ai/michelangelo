@@ -8,7 +8,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -16,9 +15,8 @@ import (
 
 // ModelSyncActor loads models to inference servers by updating ConfigMaps and verifying model readiness.
 type ModelSyncActor struct {
-	gateway                gateways.Gateway
-	modelConfigMapProvider configmap.ModelConfigMapProvider
-	logger                 *zap.Logger
+	gateway gateways.Gateway
+	logger  *zap.Logger
 }
 
 // GetType returns the condition type identifier for model sync.
@@ -41,16 +39,8 @@ func (a *ModelSyncActor) Retrieve(ctx context.Context, deployment *v2pb.Deployme
 
 		inferenceServerName := deployment.Spec.GetInferenceServer().Name
 
-		// Check if the desired model is ready in Triton
-		modelStatusRequest := gateways.CheckModelStatusRequest{
-			ModelName:       modelName,
-			InferenceServer: inferenceServerName,
-			DeploymentName:  deployment.Name, // Include deployment name for deployment-specific routing
-			Namespace:       deployment.Namespace,
-		}
-
 		// Implement retry logic with configurable timeout for health checks
-		modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelStatusRequest)
+		modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace)
 		if err != nil {
 			// Check if this is a timeout error vs other errors
 			if err.Error() == "health check timeout exceeded" {
@@ -113,28 +103,23 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 			zap.String("inference_server", inferenceServerName))
 
 		// Update deployment model in ConfigMap
-		if err := a.modelConfigMapProvider.AddModelToConfigMap(ctx, configmap.AddModelToConfigMapRequest{
-			InferenceServer: inferenceServerName,
-			Namespace:       deployment.Namespace,
-			ModelConfig: configmap.ModelConfigEntry{
-				Name: modelName,
-				// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-				StoragePath: fmt.Sprintf("s3://deploy-models/%s/", modelName),
-			},
-		}); err != nil {
-			a.logger.Error("Failed to update deployment via ConfigMapProvider", zap.Error(err))
+		// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
+		if err := a.gateway.LoadModel(ctx, a.logger, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName), inferenceServerName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+			a.logger.Error("Failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", deployment.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 			return &apipb.Condition{
 				Type:    a.GetType(),
 				Status:  apipb.CONDITION_STATUS_FALSE,
-				Reason:  "ConfigMapUpdateFailed",
+				Reason:  "ModelLoadingFailed",
 				Message: fmt.Sprintf("Failed to update deployment: %v", err),
 			}, nil
 		}
 
-		a.logger.Info("Updated ConfigMap with candidate model",
-			zap.String("deployment", deployment.Name),
-			zap.String("candidateModel", modelName),
-			zap.String("roleType", "candidate"))
+		a.logger.Info("Successfully initiated model loading",
+			zap.String("operation", "load_model"),
+			zap.String("model", modelName),
+			zap.String("inferenceServerName", inferenceServerName),
+			zap.String("namespace", deployment.Namespace),
+			zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 	}
 
 	// Return unknown so that the condition is only true when the model is truely ready and loaded in triton
@@ -142,14 +127,16 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 }
 
 // checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
-func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelStatusRequest gateways.CheckModelStatusRequest) (bool, error) {
+func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string) (bool, error) {
 	const (
 		modelHealthCheckTimeout  = 10 * time.Minute // Configurable timeout for model health checks
 		modelHealthCheckInterval = 30 * time.Second // Interval between health check retries
 	)
 
 	logger.Info("Starting model health check with timeout",
-		zap.String("model", modelStatusRequest.ModelName),
+		zap.String("model", modelName),
+		zap.String("inference_server", inferenceServerName),
+		zap.String("namespace", namespace),
 		zap.Int("timeout", int(modelHealthCheckTimeout)),
 		zap.Int("retryInterval", int(modelHealthCheckInterval)))
 
@@ -161,18 +148,18 @@ func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger
 	defer ticker.Stop()
 
 	// Try immediately first
-	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelStatusRequest)
+	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err == nil && modelReady {
-		logger.Info("Model health check succeeded immediately", zap.String("model", modelStatusRequest.ModelName))
+		logger.Info("Model health check succeeded immediately", zap.String("model", modelName))
 		return true, nil
 	}
 
 	if err != nil {
 		logger.Info("Initial model health check failed, will retry",
-			zap.String("model", modelStatusRequest.ModelName),
+			zap.String("model", modelName),
 			zap.Error(err))
 	} else {
-		logger.Info("Model not ready, will retry", zap.String("model", modelStatusRequest.ModelName))
+		logger.Info("Model not ready, will retry", zap.String("model", modelName))
 	}
 
 	// Start retry loop
@@ -180,25 +167,28 @@ func (a *ModelSyncActor) checkModelStatusWithTimeout(ctx context.Context, logger
 		select {
 		case <-timeoutCtx.Done():
 			logger.Info("Model health check timed out",
-				zap.String("model", modelStatusRequest.ModelName),
+				zap.String("model", modelName),
 				zap.Int("timeout", int(modelHealthCheckTimeout)))
 			return false, fmt.Errorf("health check timeout exceeded")
 
 		case <-ticker.C:
-			logger.Info("Retrying model health check", zap.String("model", modelStatusRequest.ModelName))
+			logger.Info("Retrying model health check", zap.String("model", modelName))
 
-			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelStatusRequest)
+			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
 			if err == nil && modelReady {
-				logger.Info("Model health check succeeded after retry", zap.String("model", modelStatusRequest.ModelName))
+				logger.Info("Model health check succeeded after retry", zap.String("model", modelName))
 				return true, nil
 			}
 
 			if err != nil {
 				logger.Info("Model health check retry failed, continuing to wait",
-					zap.String("model", modelStatusRequest.ModelName),
+					zap.String("model", modelName),
+					zap.String("inference_server", inferenceServerName),
+					zap.String("namespace", namespace),
+					zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()),
 					zap.Error(err))
 			} else {
-				logger.Info("Model still not ready, continuing to wait", zap.String("model", modelStatusRequest.ModelName))
+				logger.Info("Model still not ready, continuing to wait", zap.String("model", modelName), zap.String("inference_server", inferenceServerName), zap.String("namespace", namespace), zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()))
 			}
 		}
 	}

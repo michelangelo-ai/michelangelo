@@ -41,50 +41,50 @@ func NewDefaultModelConfigMapProvider(client client.Client, logger *zap.Logger) 
 }
 
 // CreateModelConfigMap creates a ModelConfigMap for model configuration
-func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, request CreateModelConfigMapRequest) error {
-	configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error {
+	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
-	p.logger.Info("Creating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
+	p.logger.Info("Creating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	// Check if ConfigMap already exists
 	existing := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, existing)
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, existing)
 	if err == nil {
 		p.logger.Info("ConfigMap already exists, skipping creation", zap.String("name", configMapName))
 		return nil
 	}
 
 	// Build model list JSON
-	modelListJSON, err := json.MarshalIndent(request.ModelConfigs, "", "  ")
+	modelListJSON, err := json.MarshalIndent(modelConfigs, "", "  ")
 	if err != nil {
 		p.logger.Error("failed to marshal model configs",
 			zap.Error(err),
 			zap.String("operation", "create_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to marshal model configs for ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
 	// Prepare labels
-	labels := map[string]string{
+	newLabels := map[string]string{
 		"app.kubernetes.io/component":      "model-config",
 		"app.kubernetes.io/part-of":        "michelangelo",
-		"michelangelo.ai/inference-server": request.InferenceServer,
+		"michelangelo.ai/inference-server": inferenceServer,
 	}
 
 	// Add custom labels
-	for k, v := range request.Labels {
-		labels[k] = v
+	for k, v := range labels {
+		newLabels[k] = v
 	}
 
 	// Create ConfigMap
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        configMapName,
-			Namespace:   request.Namespace,
-			Labels:      labels,
-			Annotations: request.Annotations,
+			Namespace:   namespace,
+			Labels:      newLabels,
+			Annotations: annotations,
 		},
 		Data: map[string]string{
 			modelListKey: string(modelListJSON),
@@ -95,32 +95,32 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 		p.logger.Error("failed to create ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "create_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to create ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
-	p.logger.Info("Model ConfigMap created successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(request.ModelConfigs)))
+	p.logger.Info("Model ConfigMap created successfully", zap.String("configMap", configMapName), zap.Int("modelCount", len(modelConfigs)))
 	return nil
 }
 
 // GetModelsFromConfigMap retrieves a ConfigMap and parses its model configurations
-func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, request GetModelConfigMapRequest) ([]ModelConfigEntry, error) {
-	configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string) ([]ModelConfigEntry, error) {
+	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
+	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, configMap)
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "get_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return nil, fmt.Errorf("failed to get ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
 	modelConfigs, err := p.parseModelConfigsFromConfigMap(ctx, configMap)
@@ -132,19 +132,19 @@ func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Conte
 }
 
 // AddModelToConfigMap adds a model to a ModelConfigMap
-func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, request AddModelToConfigMapRequest) error {
-	configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
+func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry) error {
+	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, configMap)
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "get_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
 	currentConfigs, err := p.parseModelConfigsFromConfigMap(ctx, configMap)
@@ -155,8 +155,8 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	// Add new model if not found
 	found := false
 	for i, config := range currentConfigs {
-		if config.Name == request.ModelConfig.Name {
-			currentConfigs[i].StoragePath = request.ModelConfig.StoragePath
+		if config.Name == modelConfig.Name {
+			currentConfigs[i].StoragePath = modelConfig.StoragePath
 			found = true
 			break
 		}
@@ -164,8 +164,8 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 
 	if !found {
 		currentConfigs = append(currentConfigs, ModelConfigEntry{
-			Name:        request.ModelConfig.Name,
-			StoragePath: request.ModelConfig.StoragePath,
+			Name:        modelConfig.Name,
+			StoragePath: modelConfig.StoragePath,
 		})
 	}
 
@@ -178,19 +178,19 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 }
 
 // RemoveModelFromConfigMap removes a model from a ModelConfigMap
-func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, request RemoveModelFromConfigMapRequest) error {
-	configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
-	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
+func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string) error {
+	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: request.Namespace}, configMap)
+	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "get_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to get ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
 	currentConfigs, err := p.parseModelConfigsFromConfigMap(ctx, configMap)
@@ -200,7 +200,7 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 
 	updatedConfigs := []ModelConfigEntry{}
 	for _, config := range currentConfigs {
-		if config.Name != request.ModelName {
+		if config.Name != modelName {
 			updatedConfigs = append(updatedConfigs, config)
 		}
 	}
@@ -214,15 +214,15 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 }
 
 // DeleteModelConfigMap deletes a ConfigMap for model configuration
-func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, request DeleteModelConfigMapRequest) error {
-	configMapName := addSuffixToString(request.InferenceServer, modelConfigSuffix)
+func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string) error {
+	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
-	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", request.Namespace))
+	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      configMapName,
-			Namespace: request.Namespace,
+			Namespace: namespace,
 		},
 	}
 
@@ -230,10 +230,10 @@ func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context
 		p.logger.Error("failed to delete ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "delete_configmap"),
-			zap.String("namespace", request.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("configMap", configMapName))
 		return fmt.Errorf("failed to delete ConfigMap %s/%s: %w",
-			request.Namespace, configMapName, err)
+			namespace, configMapName, err)
 	}
 
 	p.logger.Info("Model ConfigMap deleted successfully", zap.String("configMap", configMapName))

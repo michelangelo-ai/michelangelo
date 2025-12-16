@@ -165,8 +165,8 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "SteadyStateReached",
@@ -190,7 +190,7 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "HealthCheckFailed",
@@ -214,7 +214,7 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("connection error"))
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "HealthCheckFailed",
@@ -237,8 +237,8 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "ModelHealthCheckFailed",
@@ -262,8 +262,8 @@ func TestRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().IsHealthy(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "ModelHealthCheckFailed",

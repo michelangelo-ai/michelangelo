@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -17,14 +17,14 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ResourceCreat
 
 // ResourceCreationActor provisions Kubernetes resources for Triton inference servers.
 type ResourceCreationActor struct {
-	gateway gateways.Gateway
+	backend backends.Backend
 	logger  *zap.Logger
 }
 
 // NewResourceCreationActor creates a condition actor for Triton infrastructure provisioning.
-func NewResourceCreationActor(gateway gateways.Gateway, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewResourceCreationActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ResourceCreationActor{
-		gateway: gateway,
+		backend: backend,
 		logger:  logger,
 	}
 }
@@ -39,11 +39,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 	a.logger.Info("Retrieving Triton infrastructure condition")
 
 	// Check if infrastructure exists
-	statusResp, err := a.gateway.GetInfrastructureStatus(ctx, a.logger, gateways.GetInfrastructureStatusRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-		BackendType:     resource.Spec.BackendType,
-	})
+	status, err := a.backend.GetInfrastructureStatus(ctx, a.logger, resource.Name, resource.Namespace)
 	if err != nil {
 		a.logger.Error("Failed to check infrastructure status",
 			zap.Error(err),
@@ -58,14 +54,14 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 		}, nil
 	}
 
-	if statusResp.Status.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
+	if status.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_TRUE,
 			Reason:  "InfrastructureReady",
 			Message: "Infrastructure is ready",
 		}, nil
-	} else if statusResp.Status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
+	} else if status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
 		// Infrastructure doesn't exist or is incomplete, needs to be created
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -87,21 +83,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton infrastructure creation")
 
-	// Convert InferenceServer InitSpec to gateway ResourceSpec
-	initSpec := resource.Spec.InitSpec
-	resources := gateways.ResourceSpec{
-		CPU:      fmt.Sprintf("%d", initSpec.ResourceSpec.Cpu),
-		Memory:   initSpec.ResourceSpec.Memory,
-		GPU:      initSpec.ResourceSpec.Gpu,
-		Replicas: initSpec.NumInstances,
-	}
-
-	_, err := a.gateway.CreateInfrastructure(ctx, a.logger, gateways.CreateInfrastructureRequest{
-		InferenceServer: resource,
-		BackendType:     resource.Spec.BackendType,
-		Namespace:       resource.Namespace,
-		Resources:       resources,
-	})
+	_, err := a.backend.CreateInfrastructure(ctx, a.logger, resource)
 	if err != nil {
 		a.logger.Error("Failed to create infrastructure",
 			zap.Error(err),

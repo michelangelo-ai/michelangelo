@@ -11,8 +11,8 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	gatewaysmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -20,7 +20,7 @@ import (
 func TestResourceCreationActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name            string
-		setupMocks      func(*gatewaysmocks.MockGateway)
+		setupMocks      func(*backendsmocks.MockBackend)
 		expectedStatus  apipb.ConditionStatus
 		expectedReason  string
 		expectedMessage string
@@ -28,22 +28,17 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 	}{
 		{
 			name: "infrastructure is ready and serving",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					GetInfrastructureStatus(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
-					Return(&gateways.GetInfrastructureStatusResponse{
-						Status: gateways.InfrastructureStatus{
-							State: v2pb.INFERENCE_SERVER_STATE_SERVING,
-							Ready: true,
-						},
+					Return(&backends.InfrastructureStatus{
+						State: v2pb.INFERENCE_SERVER_STATE_SERVING,
+						Ready: true,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
@@ -53,22 +48,17 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "infrastructure is creating",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					GetInfrastructureStatus(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
-					Return(&gateways.GetInfrastructureStatusResponse{
-						Status: gateways.InfrastructureStatus{
-							State: v2pb.INFERENCE_SERVER_STATE_CREATING,
-							Ready: false,
-						},
+					Return(&backends.InfrastructureStatus{
+						State: v2pb.INFERENCE_SERVER_STATE_CREATING,
+						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -78,16 +68,13 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "error checking infrastructure status",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					GetInfrastructureStatus(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
 					Return(nil, errors.New("API error"))
 			},
@@ -98,22 +85,17 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "infrastructure in other state",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					GetInfrastructureStatus(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.GetInfrastructureStatusRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
-					Return(&gateways.GetInfrastructureStatusResponse{
-						Status: gateways.InfrastructureStatus{
-							State: v2pb.INFERENCE_SERVER_STATE_FAILED,
-							Ready: false,
-						},
+					Return(&backends.InfrastructureStatus{
+						State: v2pb.INFERENCE_SERVER_STATE_FAILED,
+						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
@@ -128,11 +110,11 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
 
-			tt.setupMocks(mockGateway)
+			tt.setupMocks(mockBackend)
 
-			actor := NewResourceCreationActor(mockGateway, zap.NewNop())
+			actor := NewResourceCreationActor(mockBackend, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -166,7 +148,7 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 func TestResourceCreationActor_Run(t *testing.T) {
 	tests := []struct {
 		name                    string
-		setupMocks              func(*gatewaysmocks.MockGateway)
+		setupMocks              func(*backendsmocks.MockBackend)
 		resource                *v2pb.InferenceServer
 		expectedStatus          apipb.ConditionStatus
 		expectedReason          string
@@ -175,22 +157,24 @@ func TestResourceCreationActor_Run(t *testing.T) {
 	}{
 		{
 			name: "infrastructure creation succeeds",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					CreateInfrastructure(
 						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
 					).
-					DoAndReturn(func(ctx context.Context, logger *zap.Logger, req gateways.CreateInfrastructureRequest) (*gateways.CreateInfrastructureResponse, error) {
-						assert.Equal(t, "test-server", req.InferenceServer.Name)
-						assert.Equal(t, "test-namespace", req.Namespace)
-						assert.Equal(t, v2pb.BACKEND_TYPE_TRITON, req.BackendType)
-						assert.Equal(t, "4", req.Resources.CPU)
-						assert.Equal(t, "8Gi", req.Resources.Memory)
-						assert.Equal(t, int32(2), req.Resources.GPU)
-						assert.Equal(t, int32(1), req.Resources.Replicas)
-						return &gateways.CreateInfrastructureResponse{
+					DoAndReturn(func(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*backends.InfrastructureStatus, error) {
+						assert.Equal(t, "test-server", inferenceServer.Name)
+						assert.Equal(t, "test-namespace", inferenceServer.Namespace)
+						assert.Equal(t, v2pb.BACKEND_TYPE_TRITON, inferenceServer.Spec.BackendType)
+						assert.NotNil(t, inferenceServer.Spec.InitSpec)
+						assert.NotNil(t, inferenceServer.Spec.InitSpec.ResourceSpec)
+						assert.Equal(t, int32(4), inferenceServer.Spec.InitSpec.ResourceSpec.Cpu)
+						assert.Equal(t, "8Gi", inferenceServer.Spec.InitSpec.ResourceSpec.Memory)
+						assert.Equal(t, int32(2), inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
+						assert.Equal(t, int32(1), inferenceServer.Spec.InitSpec.NumInstances)
+						return &backends.InfrastructureStatus{
 							State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 							Message: "Infrastructure creation initiated",
 						}, nil
@@ -220,8 +204,8 @@ func TestResourceCreationActor_Run(t *testing.T) {
 		},
 		{
 			name: "infrastructure creation fails",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					CreateInfrastructure(
 						gomock.Any(),
 						gomock.Any(),
@@ -257,11 +241,11 @@ func TestResourceCreationActor_Run(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
 
-			tt.setupMocks(mockGateway)
+			tt.setupMocks(mockBackend)
 
-			actor := NewResourceCreationActor(mockGateway, zap.NewNop())
+			actor := NewResourceCreationActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
 				Type: "TritonResourceCreation",
