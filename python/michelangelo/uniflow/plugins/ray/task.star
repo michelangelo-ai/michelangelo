@@ -1,5 +1,5 @@
 load("@plugin", "atexit", "json", "os", "ray", "time")
-load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
+load("../../commons.star", "DEFAULT_RETRY_ATTEMPTS", "CACHE_OPERATION_GET", "CACHE_OPERATION_PUT", "TASK_STATE_FAILED", "TASK_STATE_KILLED", "TASK_STATE_PENDING", "TASK_STATE_RUNNING", "TASK_STATE_SKIPPED", "TASK_STATE_SUCCEEDED", "TIME_FOMART", "create_cached_output", "get_cache_enabled", "get_cache_keys", "get_cached_output", "get_pythonpath", "get_result_url", "get_task_image", "get_task_name", "io_read_json", "process_terminated_job", "report_progress", "resource_dict", COMMONS_ENV = "ENV")
 
 DEFAULT_CREATE_CLUSTER_TIMEOUT_SECONDS = 60 * 30  # Timeout duration for cluster creation in seconds.
 RAY_ENV = {
@@ -200,21 +200,24 @@ def task(
                 breakpoint=breakpoint,
             )
 
-            retryable = process_terminated_ray_job(
-                job_state,
-                job,
-                task_name,
-                task_path,
-                args,
-                kwargs,
-                cache_version,
-                namespace,
-                result_url,
-                start_time_formated_str,
-                retry_attempt_id,
-                total_retry_attempt,
-                cluster_url,
-                ray_job_name,
+            # Generate log URL from Ray job name
+            generated_log_url = get_ray_log_url(ray_job_name)
+            log_url = generated_log_url if generated_log_url else cluster_url
+
+            retryable = process_terminated_job(
+                job_state = job_state,
+                task_name = task_name,
+                task_path = task_path,
+                args = args,
+                kwargs = kwargs,
+                cache_version = cache_version,
+                namespace = namespace,
+                result_url = result_url,
+                start_time_formatted_str = start_time_formated_str,
+                retry_attempt_id = retry_attempt_id,
+                total_retry_attempt = total_retry_attempt,
+                job_type = "Ray",
+                log_url = log_url,
             )
 
             if retryable == False:
@@ -251,57 +254,6 @@ def task(
     callable = callable_object(callable)
     callable.with_overrides = with_overrides
     return callable
-
-def process_terminated_ray_job(job_state, job, task_name, task_path, args, kwargs, cache_version, namespace, result_url, start_time_formated_str, retry_attempt_id, total_retry_attempt, cluster_url, ray_job_name):
-
-    retryable = False
-
-    if job_state == TASK_STATE_SUCCEEDED:
-
-        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
-        created_cached_output = create_cached_output(
-            namespace = namespace,
-            cache_keys = cache_keys,
-            zone = "",
-            ttl_in_days = 0,
-            task_name = task_name,
-            result_json_url = result_url,
-        )
-        cached_output_name = created_cached_output.get("metadata", {}).get("name", "")
-        end_time_seconds = time.time()
-        end_time_formated_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
-
-        # Generate log URL from Ray job name
-        generated_log_url = get_ray_log_url(ray_job_name)
-        log_url = generated_log_url if generated_log_url else cluster_url
-
-        report_progress(
-            task_name = task_name,
-            task_path = task_path,
-            task_state = TASK_STATE_SUCCEEDED,
-            task_log = log_url,
-            start_time = start_time_formated_str,
-            end_time = end_time_formated_str,
-            task_message = "Ray Task Completed Successfully",
-            output = cached_output_name,
-            retry_attempt_id = retry_attempt_id,
-        )
-        print("Ray job succeeded, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") succeeded")
-
-    elif job_state == TASK_STATE_KILLED:
-        print("Ray task killed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ").  no retry should be performed")
-        fail("Ray task killed, no retry should be performed")
-
-    elif job_state == TASK_STATE_FAILED:
-        print("Ray task failed, attempt (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") failed")
-        if retry_attempt_id < total_retry_attempt:
-            retryable = True
-        else:
-            print("Ray task failed after all (" + str(retry_attempt_id) + " / " + str(total_retry_attempt) + ") attempts were exhausted")
-            fail("Ray task failed after all retry attempts were exhausted ", "internal:", "message:bad job status:", job["status"]["state"], job)
-
-    return retryable
-
 
 def execute_ray_task(task_path, task_name, cluster, cluster_namespace, runtime_env, start_time_formated_str, result_url, args, kwargs, retry_attempt_id, total_retry_attempt, cache_version, namespace, breakpoint=False):
 
