@@ -1,5 +1,4 @@
 """Config pbtxt generation module."""
-
 from michelangelo.lib.model_manager._private.constants.triton_backend_type import (
     TritonBackendType,
 )
