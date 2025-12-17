@@ -45,8 +45,6 @@ def _schema() -> ModelSchema:
 
 
 def _sample_data() -> list[dict[str, np.ndarray]]:
-    # First sample omits optional inputs on purpose (tests optional=True behavior).
-    # Second sample includes them.
     return [
         {
             "x": np.zeros((1, 4), dtype=np.float32),
