@@ -2,7 +2,9 @@
 
 Run from the `python/` directory:
 
-  PYTHONPATH="." poetry run python ./examples/model_manager/simple_custom/package_model.py --out /tmp/mm-simple-custom
+  PYTHONPATH="." poetry run python
+    ./examples/model_manager/simple_custom/package_model.py
+    --out /tmp/mm-simple-custom
 """
 
 from __future__ import annotations
@@ -50,6 +52,7 @@ def _print_tree(root: str) -> None:
 
 
 def main() -> int:
+    """CLI entrypoint: build deployable and/or raw packages for DummyEchoModel."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out", required=True, help="Output directory to write packages"

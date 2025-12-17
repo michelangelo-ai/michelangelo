@@ -51,15 +51,18 @@ class TorchLinearModel(Model):
     """
 
     def __init__(self):
+        """Initialize the toy torch model with deterministic parameters."""
         self.net = torch.nn.Linear(4, 2)
         # Use lib/ init helper to exercise dependency extraction.
         init_linear(self.net, weight=0.1, bias=0.2)
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
+        """Persist model artifacts under `path` (here: torch state_dict)."""
         save_state_dict(path, self.net.state_dict())
 
     @classmethod
     def load(cls, path: str) -> TorchLinearModel:
+        """Load the model from artifacts under `path`."""
         obj = cls()
         state = load_state_dict(path)
         obj.net.load_state_dict(state)
@@ -67,6 +70,7 @@ class TorchLinearModel(Model):
         return obj
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """Run inference with numpy inputs and numpy outputs."""
         # Required input
         x = numpy_f32_to_tensor(inputs["x"])
         # Optional inputs (defaults)

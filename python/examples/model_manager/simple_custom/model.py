@@ -35,7 +35,8 @@ class DummyEchoModel(Model):
       - response2: int32 [1]
     """
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
+        """Persist model artifacts under `path`."""
         # Write a tiny artifact via example lib/ code (dependency extraction test).
         content = build_artifact_content(
             prefix=ARTIFACT_PREFIX, model_name="DummyEchoModel"
@@ -44,11 +45,14 @@ class DummyEchoModel(Model):
 
     @classmethod
     def load(cls, path: str) -> DummyEchoModel:
+        """Load the model from artifacts under `path` (stateless)."""
         # We don't need any state; just validate the artifact exists.
-        _ = open(os.path.join(path, "artifact.txt"), encoding="utf-8").read().strip()
+        with open(os.path.join(path, ARTIFACT_FILENAME), encoding="utf-8") as f:
+            f.read().strip()
         return cls()
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+        """Echo inputs (plus a couple derived outputs) in Model Manager format."""
         a = echo_int32(ensure_int32(inputs["a"]))
         b_raw = inputs.get("b")
         b = echo_int32(ensure_int32(b_raw)) if b_raw is not None else np.int32(0)

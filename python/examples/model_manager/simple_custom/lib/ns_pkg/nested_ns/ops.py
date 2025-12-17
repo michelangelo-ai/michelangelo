@@ -6,4 +6,5 @@ import numpy as np
 
 
 def add_zero(x: np.ndarray) -> np.ndarray:
+    """Add 0 to `x` (exercise nested namespace package imports)."""
     return x + np.int32(0)

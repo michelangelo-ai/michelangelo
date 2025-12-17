@@ -2,7 +2,8 @@
 
 Run from the `python/` directory:
 
-  PYTHONPATH="." poetry run python ./examples/model_manager/custom_triton_packager/package_model.py
+  PYTHONPATH="." poetry run python
+    ./examples/model_manager/custom_triton_packager/package_model.py
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ def _print_tree(root: str) -> None:
 
 
 def main() -> int:
+    """CLI entrypoint: build deployable and/or raw custom-Triton model packages."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out",
@@ -118,7 +120,8 @@ def main() -> int:
 
     if args.out_dir is None:
         print(
-            "\nNote: output was created in a temp directory and will be deleted at exit.\n"
+            "\nNote: output was created in a temp directory "
+            "and will be deleted at exit.\n"
             "Pass --out <dir> to keep the generated packages."
         )
 
