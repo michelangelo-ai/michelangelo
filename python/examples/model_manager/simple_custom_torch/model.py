@@ -27,6 +27,12 @@ except ModuleNotFoundError as e:  # pragma: no cover
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
+from examples.model_manager.simple_custom_torch.lib.init_utils import init_linear
+from examples.model_manager.simple_custom_torch.lib.torch_utils import (
+    numpy_f32_to_tensor,
+    tensor_to_numpy_f32,
+)
+
 
 class TorchLinearModel(Model):
     """Toy torch model: a single Linear layer.
@@ -37,10 +43,8 @@ class TorchLinearModel(Model):
 
     def __init__(self):
         self.net = torch.nn.Linear(4, 2)
-        torch.manual_seed(0)
-        with torch.no_grad():
-            self.net.weight.fill_(0.1)
-            self.net.bias.fill_(0.2)
+        # Use lib/ init helper to exercise dependency extraction.
+        init_linear(self.net, weight=0.1, bias=0.2)
 
     def save(self, path: str):
         os.makedirs(path, exist_ok=True)
@@ -55,10 +59,10 @@ class TorchLinearModel(Model):
         return obj
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x_np = inputs["input"].astype(np.float32)
-        x = torch.from_numpy(x_np)
+        # Use lib/ conversion helpers to exercise dependency extraction.
+        x = numpy_f32_to_tensor(inputs["input"])
         with torch.no_grad():
             y = self.net(x)
-        return {"response": y.cpu().numpy().astype(np.float32)}
+        return {"response": tensor_to_numpy_f32(y)}
 
 

@@ -15,6 +15,9 @@ except ModuleNotFoundError as e:  # pragma: no cover
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
+from examples.model_manager.simple_custom.lib.artifacts import write_text_artifact
+from examples.model_manager.simple_custom.lib.preprocess import ensure_int32
+
 
 class DummyEchoModel(Model):
     """Dummy model: returns the input unchanged (echo).
@@ -24,10 +27,8 @@ class DummyEchoModel(Model):
     """
 
     def save(self, path: str):
-        os.makedirs(path, exist_ok=True)
-        # Write a tiny artifact to prove packaging copies model artifacts.
-        with open(os.path.join(path, "artifact.txt"), "w", encoding="utf-8") as f:
-            f.write("dummy-echo")
+        # Write a tiny artifact via example lib/ code (dependency extraction test).
+        write_text_artifact(path, "artifact.txt", "dummy-echo")
 
     @classmethod
     def load(cls, path: str) -> "DummyEchoModel":
@@ -36,7 +37,8 @@ class DummyEchoModel(Model):
         return cls()
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        x = inputs["input"].astype(np.int32)
+        # Use lib/ helper to ensure it is included in the packaged deps.
+        x = ensure_int32(inputs["input"])
         return {"response": x}
 
 
