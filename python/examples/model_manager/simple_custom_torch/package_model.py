@@ -1,8 +1,10 @@
-"""Package a torch-backed custom model using CustomTritonPackager.
+r"""Package a torch-backed custom model using CustomTritonPackager.
 
 Run from the `python/` directory:
 
-  PYTHONPATH="." poetry run python ./examples/model_manager/simple_custom_torch/package_model.py --out /tmp/mm-simple-torch
+  PYTHONPATH="." poetry run python \
+    ./examples/model_manager/simple_custom_torch/package_model.py \
+    --out /tmp/mm-simple-torch
 """
 
 from __future__ import annotations
@@ -72,6 +74,7 @@ def _print_tree(root: str) -> None:
 
 
 def main() -> int:
+    """CLI entrypoint: build deployable and/or raw packages for TorchLinearModel."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--out", required=True, help="Output directory to write packages"

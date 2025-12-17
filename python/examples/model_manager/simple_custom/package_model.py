@@ -1,8 +1,10 @@
-"""Package a simple custom model using CustomTritonPackager.
+r"""Package a simple custom model using CustomTritonPackager.
 
 Run from the `python/` directory:
 
-  PYTHONPATH="." poetry run python ./examples/model_manager/simple_custom/package_model.py --out /tmp/mm-simple-custom
+  PYTHONPATH="." poetry run python \
+    ./examples/model_manager/simple_custom/package_model.py \
+    --out /tmp/mm-simple-custom
 """
 
 from __future__ import annotations
