@@ -1,14 +1,15 @@
-"""Model initialization helpers for the simple_custom_torch example."""
+"""Model initialization helpers for the simple_custom_torch example.
+
+Kept as a thin wrapper around the more complex nested package implementation.
+"""
 
 from __future__ import annotations
 
 import torch
 
+from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested.init import init_linear
 
-def init_linear(linear: torch.nn.Linear, weight: float = 0.1, bias: float = 0.2) -> None:
-    torch.manual_seed(0)
-    with torch.no_grad():
-        linear.weight.fill_(float(weight))
-        linear.bias.fill_(float(bias))
+
+__all__ = ["init_linear"]
 
 

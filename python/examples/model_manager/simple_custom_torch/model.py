@@ -27,11 +27,12 @@ except ModuleNotFoundError as e:  # pragma: no cover
 
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
-from examples.model_manager.simple_custom_torch.lib.init_utils import init_linear
-from examples.model_manager.simple_custom_torch.lib.torch_utils import (
+from examples.model_manager.simple_custom_torch.lib.ns_pkg.conversions import (
     numpy_f32_to_tensor,
     tensor_to_numpy_f32,
 )
+from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested.init import init_linear
+from examples.model_manager.simple_custom_torch.lib.utils import load_state_dict, save_state_dict
 
 
 class TorchLinearModel(Model):
@@ -47,13 +48,12 @@ class TorchLinearModel(Model):
         init_linear(self.net, weight=0.1, bias=0.2)
 
     def save(self, path: str):
-        os.makedirs(path, exist_ok=True)
-        torch.save(self.net.state_dict(), os.path.join(path, "state_dict.pt"))
+        save_state_dict(path, self.net.state_dict())
 
     @classmethod
     def load(cls, path: str) -> "TorchLinearModel":
         obj = cls()
-        state = torch.load(os.path.join(path, "state_dict.pt"), map_location="cpu")
+        state = load_state_dict(path)
         obj.net.load_state_dict(state)
         obj.net.eval()
         return obj
