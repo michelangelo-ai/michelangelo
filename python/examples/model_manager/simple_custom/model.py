@@ -25,8 +25,12 @@ from examples.model_manager.simple_custom.lib.utils import build_artifact_conten
 class DummyEchoModel(Model):
     """Dummy model: returns the input unchanged (echo).
 
-    - **Input**: {"input": np.ndarray[int32] shape [1]}
-    - **Output**: {"response": np.ndarray[int32] shape [1]}
+    - **Inputs**:
+      - a: required int32 [1]
+      - b: optional int32 [1]
+    - **Outputs**:
+      - response: int32 [1]
+      - response2: int32 [1]
     """
 
     def save(self, path: str):
@@ -41,10 +45,13 @@ class DummyEchoModel(Model):
         return cls()
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        # Use lib/ helper to ensure it is included in the packaged deps.
-        x = ensure_int32(inputs["input"])
-        # Use a namespace package helper too.
-        x = echo_int32(x)
-        return {"response": x}
+        a = echo_int32(ensure_int32(inputs["a"]))
+        b_raw = inputs.get("b")
+        b = echo_int32(ensure_int32(b_raw)) if b_raw is not None else np.int32(0)
+
+        out = (a + b).astype(np.int32)
+        out2 = (2 * a).astype(np.int32)
+
+        return {"response": out, "response2": out2}
 
 

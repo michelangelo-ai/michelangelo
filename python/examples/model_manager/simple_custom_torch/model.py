@@ -38,8 +38,14 @@ from examples.model_manager.simple_custom_torch.lib.utils import load_state_dict
 class TorchLinearModel(Model):
     """Toy torch model: a single Linear layer.
 
-    - **Input**: {"input": np.ndarray[float32] shape [1, 4]}
-    - **Output**: {"response": np.ndarray[float32] shape [1, 2]}
+    - **Inputs**:
+      - x: required float32 [1, 4]
+      - y: optional float32 [1, 4]
+      - scale: optional float32 [1]
+    - **Outputs**:
+      - response: float32 [1, 2]
+      - response_alt: float32 [1, 2]
+      - sum: float32 [1]
     """
 
     def __init__(self):
@@ -59,10 +65,27 @@ class TorchLinearModel(Model):
         return obj
 
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
-        # Use lib/ conversion helpers to exercise dependency extraction.
-        x = numpy_f32_to_tensor(inputs["input"])
+        # Required input
+        x = numpy_f32_to_tensor(inputs["x"])
+        # Optional inputs (defaults)
+        y_np = inputs.get("y")
+        y = numpy_f32_to_tensor(y_np) if y_np is not None else (0.0 * x)
+
+        scale_np = inputs.get("scale")
+        scale = float(scale_np[0]) if scale_np is not None else 1.0
+
+        x_eff = x + (scale * y)
         with torch.no_grad():
-            y = self.net(x)
-        return {"response": tensor_to_numpy_f32(y)}
+            out = self.net(x_eff)
+            out_alt = self.net(2.0 * x_eff)
+
+        out_np = tensor_to_numpy_f32(out)
+        out_alt_np = tensor_to_numpy_f32(out_alt)
+
+        return {
+            "response": out_np,
+            "response_alt": out_alt_np,
+            "sum": out_np.sum(axis=1).astype(np.float32),
+        }
 
 

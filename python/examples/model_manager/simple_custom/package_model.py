@@ -22,15 +22,24 @@ from examples.model_manager.simple_custom.model import DummyEchoModel
 
 def _schema() -> ModelSchema:
     return ModelSchema(
-        input_schema=[ModelSchemaItem(name="input", data_type=DataType.INT, shape=[1])],
+        input_schema=[
+            ModelSchemaItem(name="a", data_type=DataType.INT, shape=[1]),
+            ModelSchemaItem(name="b", data_type=DataType.INT, shape=[1], optional=True),
+        ],
         output_schema=[
-            ModelSchemaItem(name="response", data_type=DataType.INT, shape=[1])
+            ModelSchemaItem(name="response", data_type=DataType.INT, shape=[1]),
+            ModelSchemaItem(name="response2", data_type=DataType.INT, shape=[1]),
         ],
     )
 
 
 def _sample_data() -> list[dict[str, np.ndarray]]:
-    return [{"input": np.array([1], dtype=np.int32)}]
+    # First sample omits optional inputs on purpose (tests optional=True behavior).
+    # Second sample includes them.
+    return [
+        {"a": np.array([1], dtype=np.int32)},
+        {"a": np.array([2], dtype=np.int32), "b": np.array([3], dtype=np.int32)},
+    ]
 
 
 def _print_tree(root: str) -> None:

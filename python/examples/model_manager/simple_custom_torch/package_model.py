@@ -22,16 +22,43 @@ from examples.model_manager.simple_custom_torch.model import TorchLinearModel
 def _schema() -> ModelSchema:
     return ModelSchema(
         input_schema=[
-            ModelSchemaItem(name="input", data_type=DataType.FLOAT, shape=[1, 4]),
+            ModelSchemaItem(name="x", data_type=DataType.FLOAT, shape=[1, 4]),
+            ModelSchemaItem(
+                name="y",
+                data_type=DataType.FLOAT,
+                shape=[1, 4],
+                optional=True,
+            ),
+            ModelSchemaItem(
+                name="scale",
+                data_type=DataType.FLOAT,
+                shape=[1],
+                optional=True,
+            ),
         ],
         output_schema=[
             ModelSchemaItem(name="response", data_type=DataType.FLOAT, shape=[1, 2]),
+            ModelSchemaItem(name="response_alt", data_type=DataType.FLOAT, shape=[1, 2]),
+            ModelSchemaItem(name="sum", data_type=DataType.FLOAT, shape=[1]),
         ],
     )
 
 
 def _sample_data() -> list[dict[str, np.ndarray]]:
-    return [{"input": np.zeros((1, 4), dtype=np.float32)}]
+    # First sample omits optional inputs on purpose (tests optional=True behavior).
+    # Second sample includes them.
+    return [
+        {
+            "x": np.zeros((1, 4), dtype=np.float32),
+            "y": np.zeros((1, 4), dtype=np.float32),
+            "scale": np.zeros((1), dtype=np.float32),
+        },
+        {
+            "x": np.ones((1, 4), dtype=np.float32),
+            "y": (2.0 * np.ones((1, 4), dtype=np.float32)), 
+            "scale": np.array([0.5], dtype=np.float32),
+        },
+    ]
 
 
 def _print_tree(root: str) -> None:
