@@ -75,15 +75,27 @@ def find_dependency_files_internal(
     if max_depth is not None and depth > max_depth:
         return None
 
+
+    print("-------------module_name-----------------")
+    print(module_name)
+    print("--------------------------------")
+
     try:
         package = importlib.import_module(module_name)
     except (ImportError, TypeError):
         return None
 
+    print("-------------package-----------------")
+    print(package)
+    print("--------------------------------")
     # if the module is a package
     if hasattr(package, "__path__"):
         for importer, name, _ in pkgutil.walk_packages(package.__path__):
             full_name = f"{module_name}.{name}"
+
+            print("-------------full_name-----------------")
+            print(full_name)
+            print("--------------------------------")
 
             try:
                 sub_module = importlib.import_module(full_name)
@@ -91,7 +103,11 @@ def find_dependency_files_internal(
             except (ImportError, TypeError):
                 pass
 
+           
             init_file = os.path.join(importer.path, "__init__.py")
+            print("-------------init_file-----------------")
+            print(init_file)
+            print("--------------------------------")
             if os.path.exists(init_file):
                 files[f"{module_name}.__init__"] = init_file
 

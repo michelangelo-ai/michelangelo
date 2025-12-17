@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 
 import numpy as np
 
@@ -69,6 +70,7 @@ def main() -> int:
 
     if args.mode in ("deployable", "both"):
         deployable_path = os.path.join(out_dir, "deployable")
+        shutil.rmtree(deployable_path, ignore_errors=True)
         created = packager.create_model_package(
             model_path=artifacts_dir,
             model_class=model_class,
@@ -82,6 +84,7 @@ def main() -> int:
 
     if args.mode in ("raw", "both"):
         raw_path = os.path.join(out_dir, "raw")
+        shutil.rmtree(raw_path, ignore_errors=True)
         created = packager.create_raw_model_package(
             model_path=artifacts_dir,
             model_class=model_class,

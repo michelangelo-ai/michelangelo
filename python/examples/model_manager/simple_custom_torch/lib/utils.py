@@ -7,7 +7,7 @@ import os
 import torch
 
 from examples.model_manager.simple_custom_torch.lib.constants import STATE_DICT_FILENAME
-from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested.pathing import join_parts
+from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested import join_parts
 
 
 def state_dict_path(model_dir: str) -> str:
