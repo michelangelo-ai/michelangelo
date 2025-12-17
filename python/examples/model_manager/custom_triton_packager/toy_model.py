@@ -29,7 +29,7 @@ class ToyAddBiasModel(Model):
             f.write(str(self.bias))
 
     @classmethod
-    def load(cls, path: str) -> "ToyAddBiasModel":
+    def load(cls, path: str) -> ToyAddBiasModel:
         with open(os.path.join(path, "bias.txt"), encoding="utf-8") as f:
             bias = int(f.read().strip())
         return cls(bias=bias)

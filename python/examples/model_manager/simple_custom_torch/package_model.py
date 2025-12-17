@@ -10,13 +10,13 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+
 import numpy as np
 
+from examples.model_manager.simple_custom_torch.model import TorchLinearModel
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager.serde.model import load_raw_model
-
-from examples.model_manager.simple_custom_torch.model import TorchLinearModel
 
 
 def _schema() -> ModelSchema:

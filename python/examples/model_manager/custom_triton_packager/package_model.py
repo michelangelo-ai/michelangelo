@@ -20,11 +20,10 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "`poetry install -E example`."
     ) from e
 
+from examples.model_manager.custom_triton_packager.toy_model import ToyAddBiasModel
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager.serde.model import load_raw_model
-
-from examples.model_manager.custom_triton_packager.toy_model import ToyAddBiasModel
 
 
 def _schema() -> ModelSchema:

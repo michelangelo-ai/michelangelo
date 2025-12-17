@@ -13,11 +13,10 @@ import shutil
 
 import numpy as np
 
+from examples.model_manager.simple_custom.model import DummyEchoModel
 from michelangelo.lib.model_manager.packager.custom_triton import CustomTritonPackager
 from michelangelo.lib.model_manager.schema import DataType, ModelSchema, ModelSchemaItem
 from michelangelo.lib.model_manager.serde.model import load_raw_model
-
-from examples.model_manager.simple_custom.model import DummyEchoModel
 
 
 def _schema() -> ModelSchema:

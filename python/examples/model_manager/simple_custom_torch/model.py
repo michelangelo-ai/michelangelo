@@ -6,8 +6,6 @@ internally (convert to/from numpy).
 
 from __future__ import annotations
 
-import os
-
 try:
     import numpy as np
 except ModuleNotFoundError as e:  # pragma: no cover
@@ -25,8 +23,6 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "then run from the `python/` directory with `poetry run ...`."
     ) from e
 
-from michelangelo.lib.model_manager.interface.custom_model import Model
-
 from examples.model_manager.simple_custom_torch.lib.ns_pkg.conversions import (
     numpy_f32_to_tensor,
     tensor_to_numpy_f32,
@@ -38,6 +34,7 @@ from examples.model_manager.simple_custom_torch.lib.utils import (
     load_state_dict,
     save_state_dict,
 )
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 class TorchLinearModel(Model):
@@ -62,7 +59,7 @@ class TorchLinearModel(Model):
         save_state_dict(path, self.net.state_dict())
 
     @classmethod
-    def load(cls, path: str) -> "TorchLinearModel":
+    def load(cls, path: str) -> TorchLinearModel:
         obj = cls()
         state = load_state_dict(path)
         obj.net.load_state_dict(state)

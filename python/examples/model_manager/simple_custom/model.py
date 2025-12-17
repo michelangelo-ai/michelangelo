@@ -13,8 +13,6 @@ except ModuleNotFoundError as e:  # pragma: no cover
         "`poetry install -E example`."
     ) from e
 
-from michelangelo.lib.model_manager.interface.custom_model import Model
-
 from examples.model_manager.simple_custom.lib.artifacts import write_text_artifact
 from examples.model_manager.simple_custom.lib.constants import (
     ARTIFACT_FILENAME,
@@ -23,6 +21,7 @@ from examples.model_manager.simple_custom.lib.constants import (
 from examples.model_manager.simple_custom.lib.ns_pkg.echo import echo_int32
 from examples.model_manager.simple_custom.lib.preprocess import ensure_int32
 from examples.model_manager.simple_custom.lib.utils import build_artifact_content
+from michelangelo.lib.model_manager.interface.custom_model import Model
 
 
 class DummyEchoModel(Model):
@@ -44,7 +43,7 @@ class DummyEchoModel(Model):
         write_text_artifact(path, ARTIFACT_FILENAME, content)
 
     @classmethod
-    def load(cls, path: str) -> "DummyEchoModel":
+    def load(cls, path: str) -> DummyEchoModel:
         # We don't need any state; just validate the artifact exists.
         _ = open(os.path.join(path, "artifact.txt"), encoding="utf-8").read().strip()
         return cls()
