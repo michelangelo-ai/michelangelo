@@ -34,10 +34,14 @@ const (
 	// DefaultWorkSpaceRootURL is the default S3 location for workflow artifacts.
 	DefaultWorkSpaceRootURL = "s3://default" // TODO(#547): make this configurable
 
-	// Workflow input parameter keys.
+	// Workflow input parameter keys for uniflow pipeline
 	WorkflowEnvironKey = "environ"
 	WorkflowKWArgsKey  = "kwargs"
 	WorkflowArgsKey    = "args"
+
+	// Workflow input parameter keys for canvas flex pipeline
+	WorkflowTaskConfigsKey = "task_configs"
+	WorkflowConfigKey = "workflow_config"
 
 	// Cache-related environment variable names.
 	cacheEnabledVarName = "CACHE_ENABLED"
@@ -391,14 +395,17 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	}
 
 	if pipelineConfigMap != nil {
-		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
+		if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
+			args = getWorkflowArgs(pipelineConfigMap)
+			envs["CANVAS_FLEX_PIPELINE"] = "true"
+		} else if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
 			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
-		}
-		if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
-			kwArgs = val.([]interface{})
-		}
-		if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
-			envs = val.(map[string]interface{})
+			if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
+				kwArgs = val.([]interface{})
+			}
+			if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
+				envs = val.(map[string]interface{})
+			}
 		}
 	}
 
@@ -415,6 +422,17 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	envs["MA_PIPELINE_RUN_NAME"] = pipelineRun.Name
 	addTaskImageToEnv(pipelineRun, envs)
 	return args, kwArgs, envs, nil
+}
+
+func getWorkflowArgs(pipelineConfigMap map[string]interface{}) []interface{} {
+	workflowArgs := []interface{}{}
+	if len(pipelineConfigMap) > 1 {
+		if pipelineConfigMap[WorkflowConfigKey] != nil {
+			workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowConfigKey])
+		}
+		workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowTaskConfigsKey])
+	}
+	return workflowArgs
 }
 
 func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]interface{}, error) {
