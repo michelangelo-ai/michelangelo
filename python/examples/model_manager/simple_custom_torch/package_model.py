@@ -38,7 +38,9 @@ def _schema() -> ModelSchema:
         ],
         output_schema=[
             ModelSchemaItem(name="response", data_type=DataType.FLOAT, shape=[1, 2]),
-            ModelSchemaItem(name="response_alt", data_type=DataType.FLOAT, shape=[1, 2]),
+            ModelSchemaItem(
+                name="response_alt", data_type=DataType.FLOAT, shape=[1, 2]
+            ),
             ModelSchemaItem(name="sum", data_type=DataType.FLOAT, shape=[1]),
         ],
     )
@@ -53,7 +55,7 @@ def _sample_data() -> list[dict[str, np.ndarray]]:
         },
         {
             "x": np.ones((1, 4), dtype=np.float32),
-            "y": (2.0 * np.ones((1, 4), dtype=np.float32)), 
+            "y": (2.0 * np.ones((1, 4), dtype=np.float32)),
             "scale": np.array([0.5], dtype=np.float32),
         },
     ]
@@ -71,7 +73,9 @@ def _print_tree(root: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", required=True, help="Output directory to write packages")
+    parser.add_argument(
+        "--out", required=True, help="Output directory to write packages"
+    )
     parser.add_argument(
         "--mode",
         choices=["deployable", "raw", "both"],
@@ -130,5 +134,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

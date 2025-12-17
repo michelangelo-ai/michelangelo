@@ -1,4 +1,5 @@
 """Nested regular package under lib/regular_pkg."""
+
 from .init import init_linear
 from .pathing import join_parts
 

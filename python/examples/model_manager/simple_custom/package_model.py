@@ -52,7 +52,9 @@ def _print_tree(root: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--out", required=True, help="Output directory to write packages")
+    parser.add_argument(
+        "--out", required=True, help="Output directory to write packages"
+    )
     parser.add_argument(
         "--mode",
         choices=["deployable", "raw", "both"],
@@ -113,5 +115,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

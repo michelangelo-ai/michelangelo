@@ -23,5 +23,3 @@ def save_state_dict(model_dir: str, state_dict: dict) -> None:
 
 def load_state_dict(model_dir: str) -> dict:
     return torch.load(state_dict_path(model_dir), map_location="cpu")
-
-

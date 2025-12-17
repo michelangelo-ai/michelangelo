@@ -2,5 +2,3 @@
 
 ARTIFACT_FILENAME = "artifact.txt"
 ARTIFACT_PREFIX = "dummy-echo"
-
-

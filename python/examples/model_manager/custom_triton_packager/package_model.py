@@ -68,7 +68,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    model_class = "examples.model_manager.custom_triton_packager.toy_model.ToyAddBiasModel"
+    model_class = (
+        "examples.model_manager.custom_triton_packager.toy_model.ToyAddBiasModel"
+    )
     include_prefixes = ["examples.model_manager.custom_triton_packager"]
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -126,5 +128,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-

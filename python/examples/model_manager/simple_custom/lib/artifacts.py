@@ -11,5 +11,3 @@ def write_text_artifact(dir_path: str, filename: str, content: str) -> str:
     with open(out, "w", encoding="utf-8") as f:
         f.write(content)
     return out
-
-

@@ -16,7 +16,10 @@ except ModuleNotFoundError as e:  # pragma: no cover
 from michelangelo.lib.model_manager.interface.custom_model import Model
 
 from examples.model_manager.simple_custom.lib.artifacts import write_text_artifact
-from examples.model_manager.simple_custom.lib.constants import ARTIFACT_FILENAME, ARTIFACT_PREFIX
+from examples.model_manager.simple_custom.lib.constants import (
+    ARTIFACT_FILENAME,
+    ARTIFACT_PREFIX,
+)
 from examples.model_manager.simple_custom.lib.ns_pkg.echo import echo_int32
 from examples.model_manager.simple_custom.lib.preprocess import ensure_int32
 from examples.model_manager.simple_custom.lib.utils import build_artifact_content
@@ -35,7 +38,9 @@ class DummyEchoModel(Model):
 
     def save(self, path: str):
         # Write a tiny artifact via example lib/ code (dependency extraction test).
-        content = build_artifact_content(prefix=ARTIFACT_PREFIX, model_name="DummyEchoModel")
+        content = build_artifact_content(
+            prefix=ARTIFACT_PREFIX, model_name="DummyEchoModel"
+        )
         write_text_artifact(path, ARTIFACT_FILENAME, content)
 
     @classmethod
@@ -53,5 +58,3 @@ class DummyEchoModel(Model):
         out2 = (2 * a).astype(np.int32)
 
         return {"response": out, "response2": out2}
-
-

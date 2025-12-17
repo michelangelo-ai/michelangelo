@@ -31,8 +31,13 @@ from examples.model_manager.simple_custom_torch.lib.ns_pkg.conversions import (
     numpy_f32_to_tensor,
     tensor_to_numpy_f32,
 )
-from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested import init_linear
-from examples.model_manager.simple_custom_torch.lib.utils import load_state_dict, save_state_dict
+from examples.model_manager.simple_custom_torch.lib.regular_pkg.nested import (
+    init_linear,
+)
+from examples.model_manager.simple_custom_torch.lib.utils import (
+    load_state_dict,
+    save_state_dict,
+)
 
 
 class TorchLinearModel(Model):
@@ -87,5 +92,3 @@ class TorchLinearModel(Model):
             "response_alt": out_alt_np,
             "sum": out_np.sum(axis=1).astype(np.float32),
         }
-
-

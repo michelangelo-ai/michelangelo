@@ -7,5 +7,3 @@ import numpy as np
 
 def ensure_int32(x: np.ndarray) -> np.ndarray:
     return x.astype(np.int32)
-
-

@@ -7,5 +7,3 @@ import numpy as np
 
 def add_zero(x: np.ndarray) -> np.ndarray:
     return x + np.int32(0)
-
-

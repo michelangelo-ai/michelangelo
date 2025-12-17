@@ -37,5 +37,3 @@ class ToyAddBiasModel(Model):
     def predict(self, inputs: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
         x = inputs["input"].astype(np.int32)
         return {"response": (x + np.int32(self.bias)).astype(np.int32)}
-
-
