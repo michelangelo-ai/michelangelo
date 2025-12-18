@@ -1,4 +1,4 @@
-"""Create deployable + raw model packages using CustomTritonPackager.
+"""Create deployable + raw model packages using CustomTritonPackager. Hahaha
 
 Run from the `python/` directory:
 

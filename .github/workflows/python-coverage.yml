@@ -24,8 +24,6 @@ jobs:
     steps:
       - name: Runner info
         run: |
-          echo "Runner name: $RUNNER_NAME"
-          echo "OS: $RUNNER_OS"
           uname -a
           df -h
           mount
