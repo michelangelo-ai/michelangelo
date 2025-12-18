@@ -22,11 +22,6 @@ jobs:
         working-directory: ./python
 
     steps:
-      - name: Runner info
-        run: |
-          uname -a
-          df -h
-          mount
       - name: Inspect filesystem
         run: |
           pwd
