@@ -21,7 +21,7 @@ type ResourceCreationActor struct {
 	logger  *zap.Logger
 }
 
-// NewResourceCreationActor creates a condition actor for Triton infrastructure provisioning.
+// NewResourceCreationActor creates a condition actor for Triton server provisioning.
 func NewResourceCreationActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ResourceCreationActor{
 		backend: backend,
@@ -36,21 +36,21 @@ func (a *ResourceCreationActor) GetType() string {
 
 // Retrieve checks if Kubernetes infrastructure exists and is ready.
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Retrieving Triton infrastructure condition")
+	a.logger.Info("Retrieving Triton server condition")
 
-	// Check if infrastructure exists
-	status, err := a.backend.GetInfrastructureStatus(ctx, a.logger, resource.Name, resource.Namespace)
+	// Check if inference server exists
+	status, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace)
 	if err != nil {
-		a.logger.Error("Failed to check infrastructure status",
+		a.logger.Error("Failed to check server status",
 			zap.Error(err),
-			zap.String("operation", "get_infrastructure_status"),
+			zap.String("operation", "get_server_status"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InfrastructureCheckFailed",
-			Message: fmt.Sprintf("Failed to check infrastructure status: %v", err),
+			Reason:  "ServerCheckFailed",
+			Message: fmt.Sprintf("Failed to check server status: %v", err),
 		}, nil
 	}
 
@@ -58,50 +58,50 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "InfrastructureReady",
-			Message: "Infrastructure is ready",
+			Reason:  "ServerReady",
+			Message: "Server is ready",
 		}, nil
 	} else if status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
-		// Infrastructure doesn't exist or is incomplete, needs to be created
+		// Server doesn't exist or is incomplete, needs to be created
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InfrastructureNotFound",
-			Message: "Infrastructure needs to be created",
+			Reason:  "ServerNotFound",
+			Message: "Server needs to be created",
 		}, nil
 	}
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "InfrastructureCreating",
-		Message: "Infrastructure is being created",
+		Reason:  "ServerCreating",
+		Message: "Server is being created",
 	}, nil
 }
 
 // Run creates the Kubernetes deployment, service, and related resources for Triton.
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running Triton infrastructure creation")
+	a.logger.Info("Running Triton server creation")
 
-	_, err := a.backend.CreateInfrastructure(ctx, a.logger, resource)
+	_, err := a.backend.CreateServer(ctx, a.logger, resource)
 	if err != nil {
-		a.logger.Error("Failed to create infrastructure",
+		a.logger.Error("Failed to create server",
 			zap.Error(err),
-			zap.String("operation", "create_infrastructure"),
+			zap.String("operation", "create_server"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InfrastructureCreationFailed",
-			Message: fmt.Sprintf("Failed to create infrastructure: %v", err),
+			Reason:  "ServerCreationFailed",
+			Message: fmt.Sprintf("Failed to create server: %v", err),
 		}, err
 	}
 
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "InfrastructureCreationInitiated",
-		Message: "Infrastructure creation initiated successfully",
+		Reason:  "ServerCreationInitiated",
+		Message: "Server creation initiated successfully",
 	}, nil
 }

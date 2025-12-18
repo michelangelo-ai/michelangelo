@@ -52,48 +52,48 @@ func (mr *MockBackendMockRecorder) CheckModelStatus(ctx, logger, modelName, infe
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckModelStatus", reflect.TypeOf((*MockBackend)(nil).CheckModelStatus), ctx, logger, modelName, inferenceServerName, namespace)
 }
 
-// CreateInfrastructure mocks base method.
-func (m *MockBackend) CreateInfrastructure(ctx context.Context, logger *zap.Logger, inferenceServer *v2.InferenceServer) (*backends.InfrastructureStatus, error) {
+// CreateServer mocks base method.
+func (m *MockBackend) CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2.InferenceServer) (*backends.ServerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateInfrastructure", ctx, logger, inferenceServer)
-	ret0, _ := ret[0].(*backends.InfrastructureStatus)
+	ret := m.ctrl.Call(m, "CreateServer", ctx, logger, inferenceServer)
+	ret0, _ := ret[0].(*backends.ServerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// CreateInfrastructure indicates an expected call of CreateInfrastructure.
-func (mr *MockBackendMockRecorder) CreateInfrastructure(ctx, logger, inferenceServer interface{}) *gomock.Call {
+// CreateServer indicates an expected call of CreateServer.
+func (mr *MockBackendMockRecorder) CreateServer(ctx, logger, inferenceServer interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateInfrastructure", reflect.TypeOf((*MockBackend)(nil).CreateInfrastructure), ctx, logger, inferenceServer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateServer", reflect.TypeOf((*MockBackend)(nil).CreateServer), ctx, logger, inferenceServer)
 }
 
-// DeleteInfrastructure mocks base method.
-func (m *MockBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
+// DeleteServer mocks base method.
+func (m *MockBackend) DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteInfrastructure", ctx, logger, inferenceServerName, namespace)
+	ret := m.ctrl.Call(m, "DeleteServer", ctx, logger, inferenceServerName, namespace)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// DeleteInfrastructure indicates an expected call of DeleteInfrastructure.
-func (mr *MockBackendMockRecorder) DeleteInfrastructure(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+// DeleteServer indicates an expected call of DeleteServer.
+func (mr *MockBackendMockRecorder) DeleteServer(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteInfrastructure", reflect.TypeOf((*MockBackend)(nil).DeleteInfrastructure), ctx, logger, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteServer", reflect.TypeOf((*MockBackend)(nil).DeleteServer), ctx, logger, inferenceServerName, namespace)
 }
 
-// GetInfrastructureStatus mocks base method.
-func (m *MockBackend) GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (*backends.InfrastructureStatus, error) {
+// GetServerStatus mocks base method.
+func (m *MockBackend) GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (*backends.ServerStatus, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetInfrastructureStatus", ctx, logger, inferenceServerName, namespace)
-	ret0, _ := ret[0].(*backends.InfrastructureStatus)
+	ret := m.ctrl.Call(m, "GetServerStatus", ctx, logger, inferenceServerName, namespace)
+	ret0, _ := ret[0].(*backends.ServerStatus)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetInfrastructureStatus indicates an expected call of GetInfrastructureStatus.
-func (mr *MockBackendMockRecorder) GetInfrastructureStatus(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
+// GetServerStatus indicates an expected call of GetServerStatus.
+func (mr *MockBackendMockRecorder) GetServerStatus(ctx, logger, inferenceServerName, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetInfrastructureStatus", reflect.TypeOf((*MockBackend)(nil).GetInfrastructureStatus), ctx, logger, inferenceServerName, namespace)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetServerStatus", reflect.TypeOf((*MockBackend)(nil).GetServerStatus), ctx, logger, inferenceServerName, namespace)
 }
 
 // IsHealthy mocks base method.

@@ -106,12 +106,12 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	}
 
 	// Get current status from backend
-	status, err := p.backend.GetInfrastructureStatus(ctx, p.logger, resource.Name, resource.Namespace)
+	status, err := p.backend.GetServerStatus(ctx, p.logger, resource.Name, resource.Namespace)
 	if err != nil {
 		// Don't fail reconciliation for status check errors
-		p.logger.Error("Failed to get infrastructure status",
+		p.logger.Error("Failed to get server status",
 			zap.Error(err),
-			zap.String("operation", "get_infrastructure_status"),
+			zap.String("operation", "get_server_status"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return nil

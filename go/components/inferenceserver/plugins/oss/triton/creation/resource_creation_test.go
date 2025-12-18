@@ -27,50 +27,50 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 		expectedErr     bool
 	}{
 		{
-			name: "infrastructure is ready and serving",
+			name: "Inference server is ready and serving",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetInfrastructureStatus(
+					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
-					Return(&backends.InfrastructureStatus{
+					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_SERVING,
 						Ready: true,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_TRUE,
-			expectedReason:  "InfrastructureReady",
-			expectedMessage: "Infrastructure is ready",
+			expectedReason:  "ServerReady",
+			expectedMessage: "Server is ready",
 			expectedErr:     false,
 		},
 		{
-			name: "infrastructure is creating",
+			name: "server is creating",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetInfrastructureStatus(
+					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
-					Return(&backends.InfrastructureStatus{
+					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_CREATING,
 						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InfrastructureNotFound",
-			expectedMessage: "Infrastructure needs to be created",
+			expectedReason:  "ServerNotFound",
+			expectedMessage: "Server needs to be created",
 			expectedErr:     false,
 		},
 		{
-			name: "error checking infrastructure status",
+			name: "error checking server status",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetInfrastructureStatus(
+					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
 						"test-server",
@@ -79,28 +79,28 @@ func TestResourceCreationActor_Retrieve(t *testing.T) {
 					Return(nil, errors.New("API error"))
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InfrastructureCheckFailed",
-			expectedMessage: "Failed to check infrastructure status: API error",
+			expectedReason:  "ServerCheckFailed",
+			expectedMessage: "Failed to check server status: API error",
 			expectedErr:     false,
 		},
 		{
-			name: "infrastructure in other state",
+			name: "server in other state",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					GetInfrastructureStatus(
+					GetServerStatus(
 						gomock.Any(),
 						gomock.Any(),
 						"test-server",
 						"test-namespace",
 					).
-					Return(&backends.InfrastructureStatus{
+					Return(&backends.ServerStatus{
 						State: v2pb.INFERENCE_SERVER_STATE_FAILED,
 						Ready: false,
 					}, nil)
 			},
 			expectedStatus:  apipb.CONDITION_STATUS_FALSE,
-			expectedReason:  "InfrastructureCreating",
-			expectedMessage: "Infrastructure is being created",
+			expectedReason:  "ServerCreating",
+			expectedMessage: "Server is being created",
 			expectedErr:     false,
 		},
 	}
@@ -156,15 +156,15 @@ func TestResourceCreationActor_Run(t *testing.T) {
 		expectedErr             bool
 	}{
 		{
-			name: "infrastructure creation succeeds",
+			name: "server creation succeeds",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					CreateInfrastructure(
+					CreateServer(
 						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
 					).
-					DoAndReturn(func(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*backends.InfrastructureStatus, error) {
+					DoAndReturn(func(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*backends.ServerStatus, error) {
 						assert.Equal(t, "test-server", inferenceServer.Name)
 						assert.Equal(t, "test-namespace", inferenceServer.Namespace)
 						assert.Equal(t, v2pb.BACKEND_TYPE_TRITON, inferenceServer.Spec.BackendType)
@@ -174,9 +174,9 @@ func TestResourceCreationActor_Run(t *testing.T) {
 						assert.Equal(t, "8Gi", inferenceServer.Spec.InitSpec.ResourceSpec.Memory)
 						assert.Equal(t, int32(2), inferenceServer.Spec.InitSpec.ResourceSpec.Gpu)
 						assert.Equal(t, int32(1), inferenceServer.Spec.InitSpec.NumInstances)
-						return &backends.InfrastructureStatus{
+						return &backends.ServerStatus{
 							State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
-							Message: "Infrastructure creation initiated",
+							Message: "Server creation initiated",
 						}, nil
 					})
 			},
@@ -198,15 +198,15 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_TRUE,
-			expectedReason:          "InfrastructureCreationInitiated",
-			expectedMessageContains: "Infrastructure creation initiated successfully",
+			expectedReason:          "ServerCreationInitiated",
+			expectedMessageContains: "Server creation initiated successfully",
 			expectedErr:             false,
 		},
 		{
-			name: "infrastructure creation fails",
+			name: "server creation fails",
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					CreateInfrastructure(
+					CreateServer(
 						gomock.Any(),
 						gomock.Any(),
 						gomock.Any(),
@@ -230,8 +230,8 @@ func TestResourceCreationActor_Run(t *testing.T) {
 				},
 			},
 			expectedStatus:          apipb.CONDITION_STATUS_FALSE,
-			expectedReason:          "InfrastructureCreationFailed",
-			expectedMessageContains: "Failed to create infrastructure: insufficient resources",
+			expectedReason:          "ServerCreationFailed",
+			expectedMessageContains: "Failed to create server: insufficient resources",
 			expectedErr:             true,
 		},
 	}

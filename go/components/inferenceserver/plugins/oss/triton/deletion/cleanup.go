@@ -23,7 +23,7 @@ type CleanupActor struct {
 	logger                 *zap.Logger
 }
 
-// NewCleanupActor creates a condition actor for infrastructure cleanup during deletion.
+// NewCleanupActor creates a condition actor for inference server cleanup during deletion.
 func NewCleanupActor(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &CleanupActor{
 		backend:                backend,
@@ -37,18 +37,18 @@ func (a *CleanupActor) GetType() string {
 	return common.TritonCleanupConditionType
 }
 
-// Retrieve checks if all infrastructure has been successfully deleted.
+// Retrieve checks if all inference server has been successfully deleted.
 func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton cleanup condition")
 
-	// Check if infrastructure still exists
-	_, err := a.backend.GetInfrastructureStatus(ctx, a.logger, resource.Name, resource.Namespace)
+	// Check if inference server still exists
+	_, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace)
 	if err == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
 			Reason:  "CleanupInProgress",
-			Message: "Infrastructure cleanup in progress",
+			Message: "Inference server cleanup in progress",
 		}, nil
 	}
 
@@ -56,13 +56,13 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
 		Reason:  "CleanupCompleted",
-		Message: "Infrastructure cleanup completed",
+		Message: "Inference server cleanup completed",
 	}, nil
 }
 
 // Run deletes the deployment, service, ConfigMaps for the inference server.
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running Triton infrastructure cleanup with ConfigMap cleanup")
+	a.logger.Info("Running Triton inference server cleanup with ConfigMap cleanup")
 
 	// Delete ConfigMaps first
 	a.logger.Info("Cleaning up ConfigMaps for inference server", zap.String("inferenceServer", resource.Name))
@@ -81,28 +81,28 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, 
 		a.logger.Info("Successfully deleted model ConfigMap", zap.String("configMap", modelConfigMapName))
 	}
 
-	// Delete infrastructure (Kubernetes resources like Deployment, Service, etc.)
-	a.logger.Info("Cleaning up Kubernetes infrastructure", zap.String("inferenceServer", resource.Name))
-	err := a.backend.DeleteInfrastructure(ctx, a.logger, resource.Name, resource.Namespace)
+	// Delete inference server
+	a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
+	err := a.backend.DeleteServer(ctx, a.logger, resource.Name, resource.Namespace)
 	if err != nil {
-		a.logger.Error("Failed to delete infrastructure",
+		a.logger.Error("Failed to delete inference server",
 			zap.Error(err),
-			zap.String("operation", "delete_infrastructure"),
+			zap.String("operation", "delete_server"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InfrastructureCleanupFailed",
-			Message: fmt.Sprintf("Failed to cleanup infrastructure: %v", err),
-		}, fmt.Errorf("delete infrastructure for inference server %s/%s: %w", resource.Namespace, resource.Name, err)
+			Reason:  "ServerCleanupFailed",
+			Message: fmt.Sprintf("Failed to cleanup inference server: %v", err),
+		}, fmt.Errorf("delete inference server %s/%s: %w", resource.Namespace, resource.Name, err)
 	}
 
-	a.logger.Info("Triton infrastructure cleanup completed successfully", zap.String("inferenceServer", resource.Name))
+	a.logger.Info("Triton inference server cleanup completed successfully", zap.String("inferenceServer", resource.Name))
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
 		Reason:  "CleanupInitiated",
-		Message: "Infrastructure, model ConfigMap cleanup initiated successfully",
+		Message: "Inference server, model ConfigMap cleanup initiated successfully",
 	}, nil
 }

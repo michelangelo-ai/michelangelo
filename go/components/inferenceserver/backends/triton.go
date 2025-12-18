@@ -22,7 +22,7 @@ const (
 	defaultTritonImageTag = "23.04-py3"
 )
 
-// Triton Infrastructure Management
+// Triton Server Management
 type tritonBackend struct {
 	kubeClient             client.Client
 	modelConfigMapProvider configmap.ModelConfigMapProvider
@@ -37,14 +37,14 @@ func NewTritonBackend(kubeClient client.Client, modelConfigMapProvider configmap
 	}
 }
 
-func (b *tritonBackend) CreateInfrastructure(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*InfrastructureStatus, error) {
-	logger.Info("Creating Triton infrastructure", zap.String("server", inferenceServer.Name))
+func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
+	logger.Info("Creating Triton server", zap.String("server", inferenceServer.Name))
 
 	// Create Deployment
 	if err := b.createTritonDeployment(ctx, logger, inferenceServer); err != nil {
 		logger.Error("failed to create Deployment",
 			zap.Error(err),
-			zap.String("operation", "create_infrastructure"),
+			zap.String("operation", "create_server"),
 			zap.String("namespace", inferenceServer.Namespace),
 			zap.String("inferenceServer", inferenceServer.Name))
 		return nil, fmt.Errorf("failed to create Deployment for %s/%s: %w",
@@ -55,7 +55,7 @@ func (b *tritonBackend) CreateInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.createTritonService(ctx, logger, inferenceServer); err != nil {
 		logger.Error("failed to create Service",
 			zap.Error(err),
-			zap.String("operation", "create_infrastructure"),
+			zap.String("operation", "create_server"),
 			zap.String("namespace", inferenceServer.Namespace),
 			zap.String("inferenceServer", inferenceServer.Name))
 		return nil, fmt.Errorf("failed to create Service for %s/%s: %w",
@@ -66,30 +66,30 @@ func (b *tritonBackend) CreateInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServer.Name, inferenceServer.Namespace, nil, nil, nil); err != nil {
 		logger.Error("failed to create ConfigMap",
 			zap.Error(err),
-			zap.String("operation", "create_infrastructure"),
+			zap.String("operation", "create_server"),
 			zap.String("namespace", inferenceServer.Namespace),
 			zap.String("inferenceServer", inferenceServer.Name))
 		return nil, fmt.Errorf("failed to create ConfigMap for %s/%s: %w",
 			inferenceServer.Namespace, inferenceServer.Name, err)
 	}
 
-	return &InfrastructureStatus{
+	return &ServerStatus{
 		State:     v2pb.INFERENCE_SERVER_STATE_CREATING,
-		Message:   "Triton infrastructure creation initiated with empty ConfigMap",
+		Message:   "Triton Server creation initiated with empty ConfigMap",
 		Endpoints: []string{fmt.Sprintf("http://%s-inference-service.%s.svc.cluster.local:80", inferenceServer.Name, inferenceServer.Namespace)},
 	}, nil
 }
 
-func (b *tritonBackend) GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (*InfrastructureStatus, error) {
-	logger.Info("Getting Triton infrastructure status", zap.String("server", inferenceServerName))
+func (b *tritonBackend) GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (*ServerStatus, error) {
+	logger.Info("Getting Triton server status", zap.String("server", inferenceServerName))
 
 	// Check deployment status
 	deployment := &appsv1.Deployment{}
 	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServerName), Namespace: namespace}
 
 	if err := b.kubeClient.Get(ctx, deploymentKey, deployment); err != nil {
-		// When deployment doesn't exist, return CREATING state to trigger infrastructure creation
-		return &InfrastructureStatus{
+		// When deployment doesn't exist, return CREATING state to trigger server creation
+		return &ServerStatus{
 			State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
 			Message: fmt.Sprintf("Deployment not found, needs creation: %v", err),
 			Ready:   false,
@@ -102,11 +102,11 @@ func (b *tritonBackend) GetInfrastructureStatus(ctx context.Context, logger *zap
 	configMapKey := client.ObjectKey{Name: configMapName, Namespace: namespace}
 
 	if err := b.kubeClient.Get(ctx, configMapKey, configMap); err != nil {
-		// ConfigMap doesn't exist, infrastructure is incomplete
-		logger.Info("ConfigMap not found, infrastructure incomplete", zap.String("configMap", configMapName))
-		return &InfrastructureStatus{
+		// ConfigMap doesn't exist, server is incomplete
+		logger.Info("ConfigMap not found, server incomplete", zap.String("configMap", configMapName))
+		return &ServerStatus{
 			State:   v2pb.INFERENCE_SERVER_STATE_CREATING,
-			Message: fmt.Sprintf("ConfigMap %s not found, infrastructure incomplete", configMapName),
+			Message: fmt.Sprintf("ConfigMap %s not found, server incomplete", configMapName),
 			Ready:   false,
 		}, nil
 	}
@@ -119,7 +119,7 @@ func (b *tritonBackend) GetInfrastructureStatus(ctx context.Context, logger *zap
 		state = v2pb.INFERENCE_SERVER_STATE_SERVING
 	}
 
-	return &InfrastructureStatus{
+	return &ServerStatus{
 		State:   state,
 		Message: fmt.Sprintf("Deployment status: %d/%d replicas ready", deployment.Status.ReadyReplicas, deployment.Status.Replicas),
 		Ready:   ready,
@@ -129,8 +129,8 @@ func (b *tritonBackend) GetInfrastructureStatus(ctx context.Context, logger *zap
 	}, nil
 }
 
-func (b *tritonBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) error {
-	logger.Info("Deleting Triton infrastructure", zap.String("server", inferenceServerName))
+func (b *tritonBackend) DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) error {
+	logger.Info("Deleting Triton server", zap.String("server", inferenceServerName))
 
 	// Delete Deployment
 	deployment := &appsv1.Deployment{
@@ -142,7 +142,7 @@ func (b *tritonBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.kubeClient.Delete(ctx, deployment); err != nil {
 		logger.Error("failed to delete deployment",
 			zap.Error(err),
-			zap.String("operation", "delete_infrastructure"),
+			zap.String("operation", "delete_server"),
 			zap.String("namespace", namespace),
 			zap.String("inferenceServer", inferenceServerName))
 	}
@@ -157,7 +157,7 @@ func (b *tritonBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.kubeClient.Delete(ctx, service); err != nil {
 		logger.Error("failed to delete service",
 			zap.Error(err),
-			zap.String("operation", "delete_infrastructure"),
+			zap.String("operation", "delete_server"),
 			zap.String("namespace", namespace),
 			zap.String("inferenceServer", inferenceServerName))
 	}
@@ -166,7 +166,7 @@ func (b *tritonBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Lo
 	if err := b.modelConfigMapProvider.DeleteModelConfigMap(ctx, inferenceServerName, namespace); err != nil {
 		logger.Error("failed to delete ConfigMap",
 			zap.Error(err),
-			zap.String("operation", "delete_infrastructure"),
+			zap.String("operation", "delete_server"),
 			zap.String("namespace", namespace),
 			zap.String("inferenceServer", inferenceServerName))
 	} else {
@@ -179,7 +179,7 @@ func (b *tritonBackend) DeleteInfrastructure(ctx context.Context, logger *zap.Lo
 func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (bool, error) {
 	logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", inferenceServerName))
 
-	// Following Uber's approach: Check Kubernetes resource status instead of HTTP endpoints
+	// Check Kubernetes resource status instead of HTTP endpoints
 	// Get the Triton deployment status from Kubernetes
 	deploymentName := fmt.Sprintf("triton-%s", inferenceServerName)
 
