@@ -27,7 +27,7 @@ jobs:
         with:
           fetch-depth: 0  # Need full history for coverage comparison
 
-      - name: Free disk space for Bazel
+      - name: Free disk space
         run: |
           echo "Disk space before cleanup:"
           df -h
