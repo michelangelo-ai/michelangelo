@@ -22,6 +22,19 @@ jobs:
         working-directory: ./python
 
     steps:
+      - name: Runner info
+        run: |
+          echo "Runner name: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          uname -a
+          df -h
+          mount
+      - name: Inspect filesystem
+        run: |
+          pwd
+          ls -lah
+          du -h -d 1 / | sort -h
+          du -h -d 2 /tmp | sort -h | tail -n 40
       - name: Checkout code
         uses: actions/checkout@v4
         with:
