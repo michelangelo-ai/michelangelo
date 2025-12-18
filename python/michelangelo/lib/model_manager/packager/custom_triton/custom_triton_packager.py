@@ -1,4 +1,4 @@
-"""Packager for custom Triton models. testing github actions."""
+"""Packager for custom Triton models."""
 
 import tempfile
 from typing import Optional, Union
