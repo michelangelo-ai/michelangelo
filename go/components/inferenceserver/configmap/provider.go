@@ -13,6 +13,10 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const (
@@ -28,27 +32,45 @@ var addSuffixToString = func(str, suffix string) string {
 
 // defaultModelConfigMapProvider implements the ModelConfigMapProvider interface.
 type defaultModelConfigMapProvider struct {
-	kubeClient client.Client
-	logger     *zap.Logger
+	kubeClient    client.Client
+	clientFactory clientfactory.ClientFactory
+	logger        *zap.Logger
 }
 
 // NewDefaultModelConfigMapProvider creates a new defaultModelConfigMapProvider instance
-func NewDefaultModelConfigMapProvider(client client.Client, logger *zap.Logger) *defaultModelConfigMapProvider {
+func NewDefaultModelConfigMapProvider(kubeClient client.Client, logger *zap.Logger) *defaultModelConfigMapProvider {
+	sp := secrets.NewProvider(kubeClient)
+	cf := clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger)
 	return &defaultModelConfigMapProvider{
-		kubeClient: client,
-		logger:     logger,
+		kubeClient:    kubeClient,
+		clientFactory: cf,
+		logger:        logger,
 	}
 }
 
 // CreateModelConfigMap creates a ModelConfigMap for model configuration
-func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error {
+func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error {
 	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
-	p.logger.Info("Creating model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
+	p.logger.Info("Creating model ConfigMap",
+		zap.String("configMap", configMapName),
+		zap.String("namespace", namespace),
+		zap.Bool("hasConnectionSpec", connectionSpec != nil))
 
-	// Check if ConfigMap already exists
+	// Get the appropriate client for the target cluster
+	clusterClient, err := p.clientFactory.GetClient(ctx, connectionSpec)
+	if err != nil {
+		p.logger.Error("failed to get client for cluster",
+			zap.Error(err),
+			zap.String("operation", "create_configmap"),
+			zap.String("namespace", namespace),
+			zap.String("configMap", configMapName))
+		return fmt.Errorf("failed to get client for cluster: %w", err)
+	}
+
+	// Check if ConfigMap already exists in the target cluster
 	existing := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, existing)
+	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, existing)
 	if err == nil {
 		p.logger.Info("ConfigMap already exists, skipping creation", zap.String("name", configMapName))
 		return nil
@@ -91,7 +113,7 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 		},
 	}
 
-	if err := p.kubeClient.Create(ctx, configMap); err != nil {
+	if err := clusterClient.Create(ctx, configMap); err != nil {
 		p.logger.Error("failed to create ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "create_configmap"),
@@ -106,13 +128,23 @@ func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context
 }
 
 // GetModelsFromConfigMap retrieves a ConfigMap and parses its model configurations
-func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string) ([]ModelConfigEntry, error) {
+func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) ([]ModelConfigEntry, error) {
 	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
+	clusterClient, err := p.clientFactory.GetClient(ctx, connectionSpec)
+	if err != nil {
+		p.logger.Error("failed to get client for cluster",
+			zap.Error(err),
+			zap.String("operation", "get_configmap"),
+			zap.String("namespace", namespace),
+			zap.String("configMap", configMapName))
+		return nil, fmt.Errorf("failed to get client for cluster: %w", err)
+	}
+
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
+	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
@@ -132,11 +164,21 @@ func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Conte
 }
 
 // AddModelToConfigMap adds a model to a ModelConfigMap
-func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry) error {
+func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfig ModelConfigEntry) error {
 	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
+	clusterClient, err := p.clientFactory.GetClient(ctx, connectionSpec)
+	if err != nil {
+		p.logger.Error("failed to get client for cluster",
+			zap.Error(err),
+			zap.String("operation", "get_configmap"),
+			zap.String("namespace", namespace),
+			zap.String("configMap", configMapName))
+		return fmt.Errorf("failed to get client for cluster: %w", err)
+	}
+
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
+	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
@@ -170,7 +212,7 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	}
 
 	// Update ConfigMap
-	if err := p.updateConfigMapWithModels(ctx, configMap, currentConfigs); err != nil {
+	if err := p.updateConfigMapWithModels(ctx, clusterClient, configMap, currentConfigs); err != nil {
 		return err
 	}
 	p.logger.Info("Model successfully added to ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(currentConfigs)))
@@ -178,11 +220,22 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 }
 
 // RemoveModelFromConfigMap removes a model from a ModelConfigMap
-func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string) error {
+func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelName string) error {
 	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 	configMap := &corev1.ConfigMap{}
-	err := p.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
+
+	clusterClient, err := p.clientFactory.GetClient(ctx, connectionSpec)
+	if err != nil {
+		p.logger.Error("failed to get client for cluster",
+			zap.Error(err),
+			zap.String("operation", "get_configmap"),
+			zap.String("namespace", namespace),
+			zap.String("configMap", configMapName))
+		return fmt.Errorf("failed to get client for cluster: %w", err)
+	}
+
+	err = clusterClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, configMap)
 	if err != nil {
 		p.logger.Error("failed to get ConfigMap",
 			zap.Error(err),
@@ -206,7 +259,7 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 	}
 
 	// Update ConfigMap
-	if err := p.updateConfigMapWithModels(ctx, configMap, updatedConfigs); err != nil {
+	if err := p.updateConfigMapWithModels(ctx, clusterClient, configMap, updatedConfigs); err != nil {
 		return err
 	}
 	p.logger.Info("Model successfully removed from ConfigMap", zap.String("configMap", configMapName), zap.Int("modelCount", len(updatedConfigs)))
@@ -214,10 +267,20 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 }
 
 // DeleteModelConfigMap deletes a ConfigMap for model configuration
-func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string) error {
+func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) error {
 	configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
 
 	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
+
+	clusterClient, err := p.clientFactory.GetClient(ctx, connectionSpec)
+	if err != nil {
+		p.logger.Error("failed to get client for cluster",
+			zap.Error(err),
+			zap.String("operation", "delete_configmap"),
+			zap.String("namespace", namespace),
+			zap.String("configMap", configMapName))
+		return fmt.Errorf("failed to get client for cluster: %w", err)
+	}
 
 	configMap := &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -225,8 +288,7 @@ func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context
 			Namespace: namespace,
 		},
 	}
-
-	if err := p.kubeClient.Delete(ctx, configMap); err != nil {
+	if err := clusterClient.Delete(ctx, configMap); err != nil {
 		p.logger.Error("failed to delete ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "delete_configmap"),
@@ -240,7 +302,7 @@ func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context
 	return nil
 }
 
-func (p *defaultModelConfigMapProvider) updateConfigMapWithModels(ctx context.Context, configMap *corev1.ConfigMap, modelConfigs []ModelConfigEntry) error {
+func (p *defaultModelConfigMapProvider) updateConfigMapWithModels(ctx context.Context, clusterClient client.Client, configMap *corev1.ConfigMap, modelConfigs []ModelConfigEntry) error {
 	// Initialize data map if needed
 	if configMap.Data == nil {
 		configMap.Data = make(map[string]string)
@@ -265,7 +327,7 @@ func (p *defaultModelConfigMapProvider) updateConfigMapWithModels(ctx context.Co
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
 
-	if err := p.kubeClient.Update(ctx, configMap); err != nil {
+	if err := clusterClient.Update(ctx, configMap); err != nil {
 		p.logger.Error("failed to update ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "update_configmap"),

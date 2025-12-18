@@ -4,6 +4,8 @@ package configmap
 
 import (
 	"context"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // ModelConfigEntry represents a model configuration with name and storage location.
@@ -16,13 +18,13 @@ type ModelConfigEntry struct {
 // Used by inference servers to configure which models to load.
 type ModelConfigMapProvider interface {
 	// CreateModelConfigMap creates a new ConfigMap with model configurations.
-	CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error
+	CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error
 	// DeleteModelConfigMap removes the entire ConfigMap for an inference server.
-	DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string) error
+	DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) error
 	// GetModelsFromConfigMap retrieves all model configurations from a ConfigMap.
-	GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string) ([]ModelConfigEntry, error)
+	GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) ([]ModelConfigEntry, error)
 	// AddModelToConfigMap adds a single model configuration to an existing ConfigMap.
-	AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry) error
+	AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfig ModelConfigEntry) error
 	// RemoveModelFromConfigMap removes a model configuration from a ConfigMap.
-	RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string) error
+	RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelName string) error
 }

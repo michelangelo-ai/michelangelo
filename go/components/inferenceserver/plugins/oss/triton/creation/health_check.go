@@ -38,7 +38,9 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton health condition")
 
-	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource.Name, resource.Namespace)
+	// todo: ghosharitra: update this so that it checks all the cluster targets
+	connectionSpec := resource.Spec.ClusterTargets[0].GetKubernetes()
+	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource.Name, resource.Namespace, connectionSpec)
 
 	if err == nil && healthy {
 		return &apipb.Condition{

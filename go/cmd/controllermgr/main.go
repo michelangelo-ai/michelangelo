@@ -15,8 +15,6 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
@@ -82,7 +80,7 @@ func options() fx.Option {
 		baseconfig.Module,
 		gateways.Module,
 		configmap.Module,
-		proxy.Module,
+		// proxy.Module,
 		fx.Provide(scheme),
 		fx.Provide(baseconfig.GetK8sConfig),
 		fx.Provide(baseconfig.GetMetadataStorageConfig),
@@ -96,7 +94,7 @@ func options() fx.Option {
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
-		deployment.Module,
+		// deployment.Module,
 		inferenceserver.Module,
 		scheduler.Module,
 		cluster.Module,

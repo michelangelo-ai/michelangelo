@@ -13,7 +13,18 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
+
+// mockClientFactory is a test mock that always returns the provided client
+type mockClientFactory struct {
+	client client.Client
+}
+
+func (m *mockClientFactory) GetClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (client.Client, error) {
+	return m.client, nil
+}
 
 func TestCreateModelConfigMap(t *testing.T) {
 	tests := []struct {
@@ -134,10 +145,11 @@ func TestCreateModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+			mockFactory := &mockClientFactory{client: fakeClient}
+			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
-			// Execute
-			err := provider.CreateModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.labels, tt.annotations)
+			// Execute - passing nil for connectionSpec uses the default client
+			err := provider.CreateModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, nil, tt.modelConfigs, tt.labels, tt.annotations)
 
 			assert.NoError(t, err)
 			tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.annotations)
@@ -258,7 +270,8 @@ func TestGetModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+			mockFactory := &mockClientFactory{client: fakeClient}
+			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
 			actualResponse, err := provider.GetModelsFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace)
@@ -431,7 +444,8 @@ func TestAddModelToConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+			mockFactory := &mockClientFactory{client: fakeClient}
+			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
 			err := provider.AddModelToConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfig)
@@ -597,7 +611,8 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+			mockFactory := &mockClientFactory{client: fakeClient}
+			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
 			err := provider.RemoveModelFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelName)
@@ -669,7 +684,8 @@ func TestDeleteModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			provider := NewDefaultModelConfigMapProvider(fakeClient, zap.NewNop())
+			mockFactory := &mockClientFactory{client: fakeClient}
+			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
 			err := provider.DeleteModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace)

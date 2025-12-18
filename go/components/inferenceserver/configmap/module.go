@@ -12,6 +12,6 @@ var Module = fx.Options(
 )
 
 // newModelConfigMapProvider creates a new model config map provider
-func newModelConfigMapProvider(client client.Client, logger *zap.Logger) ModelConfigMapProvider {
-	return NewDefaultModelConfigMapProvider(client, logger)
+func newModelConfigMapProvider(kubeClient client.Client, logger *zap.Logger) ModelConfigMapProvider {
+	return NewDefaultModelConfigMapProvider(kubeClient, logger)
 }

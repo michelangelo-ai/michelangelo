@@ -48,10 +48,10 @@ func NewGatewayWithClients(p Params) Gateway {
 }
 
 // LoadModel initiates loading a model into an inference server
-func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName string, storagePath string, inferenceServerName string, namespace string, backendType v2pb.BackendType) error {
+func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName string, storagePath string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec, backendType v2pb.BackendType) error {
 	logger.Info("Loading model", zap.String("model", modelName), zap.String("storagePath", storagePath), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 	// Currrently, the only way to load a model is to append to an inference server's configmap
-	if err := g.modelConfigMapProvider.AddModelToConfigMap(ctx, inferenceServerName, namespace, configmap.ModelConfigEntry{
+	if err := g.modelConfigMapProvider.AddModelToConfigMap(ctx, inferenceServerName, namespace, connectionSpec, configmap.ModelConfigEntry{
 		Name:        modelName,
 		StoragePath: storagePath,
 	}); err != nil {
@@ -63,10 +63,10 @@ func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName s
 }
 
 // UnloadModel initiates unloading a model from an inference server
-func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) error {
+func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec, backendType v2pb.BackendType) error {
 	logger.Info("Unloading model", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 	// Currrently, the only way to unload a model is to remove it from an inference server's configmap
-	if err := g.modelConfigMapProvider.RemoveModelFromConfigMap(ctx, inferenceServerName, namespace, modelName); err != nil {
+	if err := g.modelConfigMapProvider.RemoveModelFromConfigMap(ctx, inferenceServerName, namespace, connectionSpec, modelName); err != nil {
 		logger.Error("failed to initiate model unloading", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 		return fmt.Errorf("failed to initiate model unloading: %w", err)
 	}
@@ -75,7 +75,7 @@ func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName
 }
 
 // CheckModelStatus dispatches model status checking based on backend type
-func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec, backendType v2pb.BackendType) (bool, error) {
 	logger.Info("Checking model status", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 	if backendType == v2pb.BACKEND_TYPE_INVALID {
 		return false, fmt.Errorf("invalid backend type: %v", backendType)
@@ -85,13 +85,13 @@ func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, mode
 		logger.Error("failed to get backend", zap.Error(err), zap.String("operation", "check_model_status"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 		return false, fmt.Errorf("failed to get backend for model %s on %s/%s: %w", modelName, namespace, inferenceServerName, err)
 	}
-	return backend.CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace)
+	return backend.CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace, connectionSpec)
 }
 
 // CheckModelExists checks if a model exists in an inference server.
-func (g *gateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+func (g *gateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec, backendType v2pb.BackendType) (bool, error) {
 	logger.Info("Checking model exists", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
-	currentConfigs, err := g.modelConfigMapProvider.GetModelsFromConfigMap(ctx, inferenceServerName, namespace)
+	currentConfigs, err := g.modelConfigMapProvider.GetModelsFromConfigMap(ctx, inferenceServerName, namespace, connectionSpec)
 	if err != nil {
 		logger.Error("failed to check if model exists in inference server", zap.Error(err), zap.String("operation", "check_model_exists"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 		return false, fmt.Errorf("failed to check existance of model %s in inference server %s in namespace %s: %w", modelName, inferenceServerName, namespace, err)
@@ -106,7 +106,7 @@ func (g *gateway) CheckModelExists(ctx context.Context, logger *zap.Logger, mode
 }
 
 // IsHealthy dispatches health checking based on backend type
-func (g *gateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+func (g *gateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec, backendType v2pb.BackendType) (bool, error) {
 	logger.Info("Checking server health", zap.String("server", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
 	if backendType == v2pb.BACKEND_TYPE_INVALID {
 		return false, fmt.Errorf("invalid backend type: %v", backendType)
@@ -115,5 +115,5 @@ func (g *gateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logg
 	if err != nil {
 		return false, fmt.Errorf("unable to get backend for inference server %s in namespace %s: %w", inferenceServerName, namespace, err)
 	}
-	return backend.IsHealthy(ctx, logger, inferenceServerName, namespace)
+	return backend.IsHealthy(ctx, logger, inferenceServerName, namespace, connectionSpec)
 }

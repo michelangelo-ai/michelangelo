@@ -37,9 +37,10 @@ func (a *ResourceCreationActor) GetType() string {
 // Retrieve checks if Kubernetes infrastructure exists and is ready.
 func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton server condition")
-
+	// todo: ghosharitra: update this so that it checks all the cluster targets
+	connectionSpec := resource.Spec.ClusterTargets[0].GetKubernetes()
 	// Check if inference server exists
-	status, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace)
+	status, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace, connectionSpec)
 	if err != nil {
 		a.logger.Error("Failed to check server status",
 			zap.Error(err),
@@ -82,20 +83,22 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 // Run creates the Kubernetes deployment, service, and related resources for Triton.
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton server creation")
-
-	_, err := a.backend.CreateServer(ctx, a.logger, resource)
-	if err != nil {
-		a.logger.Error("Failed to create server",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerCreationFailed",
-			Message: fmt.Sprintf("Failed to create server: %v", err),
-		}, err
+	for _, clusterTarget := range resource.Spec.ClusterTargets {
+		fmt.Println("creating pod in cluster", clusterTarget.GetClusterId())
+		_, err := a.backend.CreateServer(ctx, a.logger, resource, clusterTarget.GetKubernetes())
+		if err != nil {
+			a.logger.Error("Failed to create server",
+				zap.Error(err),
+				zap.String("operation", "create_server"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ServerCreationFailed",
+				Message: fmt.Sprintf("Failed to create server: %v", err),
+			}, err
+		}
 	}
 
 	return &apipb.Condition{

@@ -42,7 +42,9 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 	a.logger.Info("Retrieving Triton cleanup condition")
 
 	// Check if inference server still exists
-	_, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace)
+	// todo: ghosharitra: update this so that it checks all the cluster targets
+	connectionSpec := resource.Spec.ClusterTargets[0].GetKubernetes()
+	_, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace, connectionSpec)
 	if err == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -69,33 +71,36 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, 
 
 	// Clean up model-config ConfigMap
 	modelConfigMapName := fmt.Sprintf("%s-model-config", resource.Name)
-	if err := a.modelConfigMapProvider.DeleteModelConfigMap(ctx, resource.Name, resource.Namespace); err != nil {
-		a.logger.Error("Failed to delete model ConfigMap",
-			zap.Error(err),
-			zap.String("operation", "delete_configmap"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name),
-			zap.String("configMap", modelConfigMapName))
-		// Don't fail the whole cleanup for ConfigMap errors, but log them
-	} else {
-		a.logger.Info("Successfully deleted model ConfigMap", zap.String("configMap", modelConfigMapName))
-	}
+	// todo: ghosharitra: update this so that it checks all the cluster targets
+	for _, clusterTarget := range resource.Spec.ClusterTargets {
+		if err := a.modelConfigMapProvider.DeleteModelConfigMap(ctx, resource.Name, resource.Namespace, clusterTarget.GetKubernetes()); err != nil {
+			a.logger.Error("Failed to delete model ConfigMap",
+				zap.Error(err),
+				zap.String("operation", "delete_configmap"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name),
+				zap.String("configMap", modelConfigMapName))
+			// Don't fail the whole cleanup for ConfigMap errors, but log them
+		} else {
+			a.logger.Info("Successfully deleted model ConfigMap", zap.String("configMap", modelConfigMapName))
+		}
 
-	// Delete inference server
-	a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
-	err := a.backend.DeleteServer(ctx, a.logger, resource.Name, resource.Namespace)
-	if err != nil {
-		a.logger.Error("Failed to delete inference server",
-			zap.Error(err),
-			zap.String("operation", "delete_server"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerCleanupFailed",
-			Message: fmt.Sprintf("Failed to cleanup inference server: %v", err),
-		}, fmt.Errorf("delete inference server %s/%s: %w", resource.Namespace, resource.Name, err)
+		// Delete inference server
+		a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
+		err := a.backend.DeleteServer(ctx, a.logger, resource.Name, resource.Namespace, clusterTarget.GetKubernetes())
+		if err != nil {
+			a.logger.Error("Failed to delete inference server",
+				zap.Error(err),
+				zap.String("operation", "delete_server"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+			return &apipb.Condition{
+				Type:    a.GetType(),
+				Status:  apipb.CONDITION_STATUS_FALSE,
+				Reason:  "ServerCleanupFailed",
+				Message: fmt.Sprintf("Failed to cleanup inference server: %v", err),
+			}, fmt.Errorf("delete inference server %s/%s: %w", resource.Namespace, resource.Name, err)
+		}
 	}
 
 	a.logger.Info("Triton inference server cleanup completed successfully", zap.String("inferenceServer", resource.Name))

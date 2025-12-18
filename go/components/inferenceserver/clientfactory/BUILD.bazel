@@ -1,0 +1,21 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = [
+        "factory.go",
+        "interface.go",
+    ],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//proto/api/v2:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_client_go//rest:go_default_library",
+        "@io_k8s_client_go//tools/clientcmd:go_default_library",
+        "@io_k8s_client_go//tools/clientcmd/api:go_default_library",
+        "@io_k8s_client_go//util/flowcontrol:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
+    ],
+)

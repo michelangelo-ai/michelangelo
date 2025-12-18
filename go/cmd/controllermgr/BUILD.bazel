@@ -13,8 +13,6 @@ go_library(
         "//go/base/env:go_default_library",
         "//go/base/workflowclient/cadenceclient:go_default_library",
         "//go/base/zapfx:go_default_library",
-        "//go/components/deployment:go_default_library",
-        "//go/components/deployment/proxy:go_default_library",
         "//go/components/inferenceserver:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",
