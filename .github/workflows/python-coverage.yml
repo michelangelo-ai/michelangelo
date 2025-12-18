@@ -30,8 +30,20 @@ jobs:
         run: |
           pwd
           ls -lah
-          du -h -d 1 / | sort -h
-          du -h -d 2 /tmp | sort -h | tail -n 40
+          echo "=== Disk space (human) ==="
+          df -h
+          echo "=== Disk space (this job's filesystem) ==="
+          df -h .
+          echo "=== Available bytes (workspace filesystem) ==="
+          df -B1 . | awk 'NR==2{print "available_bytes=" $4}'
+          echo "=== Inodes (sometimes the real limit) ==="
+          df -i .
+          echo "=== Block devices ==="
+          lsblk || true
+          echo "=== Largest dirs in workspace ==="
+          du -h -d 2 "${GITHUB_WORKSPACE:-$PWD}" 2>/dev/null | sort -h | tail -n 40
+          echo "=== Largest dirs in /tmp ==="
+          du -h -d 2 /tmp 2>/dev/null | sort -h | tail -n 40
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
