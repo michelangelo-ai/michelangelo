@@ -5,6 +5,7 @@ go_library(
     srcs = [
         "httproute.go",
         "interface.go",
+        "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy",
     visibility = ["//visibility:public"],
@@ -14,6 +15,8 @@ go_library(
         "@io_k8s_apimachinery//pkg/apis/meta/v1/unstructured:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
         "@io_k8s_client_go//dynamic:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
         "@org_uber_go_zap//:go_default_library",
     ],
 )

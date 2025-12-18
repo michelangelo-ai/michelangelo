@@ -14,10 +14,16 @@ import (
 
 // Module provides the inference server controller with all dependencies
 var Module = fx.Options(
+	fx.Provide(newEventRecorder),
 	fx.Provide(newPluginRegistry),
 	fx.Provide(NewReconciler),
 	fx.Invoke(register),
 )
+
+// newEventRecorder creates a new event recorder
+func newEventRecorder(mgr ctrl.Manager) record.EventRecorder {
+	return mgr.GetEventRecorderFor(ControllerName)
+}
 
 // newPluginRegistry creates a new plugin registry with all OSS plugins registered
 func newPluginRegistry(kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.PluginRegistry {
