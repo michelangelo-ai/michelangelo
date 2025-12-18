@@ -22,17 +22,16 @@ jobs:
         working-directory: ./python
 
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history for coverage comparison
       - name: Inspect filesystem
         run: |
           pwd
           ls -lah
           du -h -d 1 / | sort -h
           du -h -d 2 /tmp | sort -h | tail -n 40
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Need full history for coverage comparison
-
       - name: Set up Python 3.9
         uses: actions/setup-python@v5
         with:
