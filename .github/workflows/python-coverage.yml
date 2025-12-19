@@ -45,32 +45,23 @@ jobs:
         with:
           python-version: '3.9'
 
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
       - name: Install Poetry
         uses: snok/install-poetry@v1
         with:
           version: 1.8.0
           virtualenvs-create: true
           virtualenvs-in-project: true
-
-      - name: Free up disk space
-        run: |
-          echo "=== Before cleanup ==="
-          df -h
-
-          # Remove large unused packages
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /usr/local/share/boost
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-
-          # Clean up docker images
-          docker rmi $(docker images -q) || true
-
-          # Clean apt cache
-          sudo apt-get clean
-
-          echo "=== After cleanup ==="
-          df -h
 
       - name: Load cached venv
         id: cached-poetry-dependencies
