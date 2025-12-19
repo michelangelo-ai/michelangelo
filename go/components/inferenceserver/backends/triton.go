@@ -67,7 +67,7 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 		}
 
 		// Create Deployment in the target cluster
-		if err := b.createTritonDeployment(ctx, logger, inferenceServer, clusterClient); err != nil {
+		if err = b.createTritonDeployment(ctx, logger, inferenceServer, clusterClient); err != nil {
 			logger.Error("failed to create Deployment",
 				zap.Error(err),
 				zap.String("operation", "create_server"),
@@ -77,8 +77,9 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 				inferenceServer.Namespace, inferenceServer.Name, err)
 		}
 
-		// Create Service in the target cluster
-		if err := b.createTritonService(ctx, logger, inferenceServer, clusterClient); err != nil {
+		// Create Service in the target cluster (returns the service with allocated NodePort)
+		tritonService, err := b.createTritonService(ctx, logger, inferenceServer, clusterClient)
+		if err != nil {
 			logger.Error("failed to create Service",
 				zap.Error(err),
 				zap.String("operation", "create_server"),
@@ -89,7 +90,7 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 		}
 
 		// Create empty ConfigMap for model configuration in the target cluster
-		if err := b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServer.Name, inferenceServer.Namespace, connectionSpec, nil, nil, nil); err != nil {
+		if err = b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServer.Name, inferenceServer.Namespace, connectionSpec, nil, nil, nil); err != nil {
 			logger.Error("failed to create ConfigMap",
 				zap.Error(err),
 				zap.String("operation", "create_server"),
@@ -99,17 +100,37 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 				inferenceServer.Namespace, inferenceServer.Name, err)
 		}
 
+		// Find the HTTP NodePort from the created service
+		var httpNodePort int32
+		for _, port := range tritonService.Spec.Ports {
+			if port.Name == "http" {
+				httpNodePort = port.NodePort
+				break
+			}
+		}
+		if httpNodePort == 0 {
+			return nil, fmt.Errorf("Triton service %s has no HTTP NodePort allocated", tritonService.Name)
+		}
+
+		// Get a node address from the target cluster for routing
+		nodeHost, err := b.getNodeAddress(ctx, clusterClient)
+		if err != nil {
+			logger.Error("failed to get node address from target cluster",
+				zap.Error(err),
+				zap.String("cluster", clusterTarget.ClusterId))
+			return nil, fmt.Errorf("failed to get node address for cluster %s: %w", clusterTarget.ClusterId, err)
+		}
+
 		// Register the cluster endpoint in the control plane (ServiceEntry + ExternalName Service)
-		serviceName := fmt.Sprintf("%s-inference-service", inferenceServer.Name)
-		serviceHost := fmt.Sprintf("%s.%s.svc.cluster.local", serviceName, inferenceServer.Namespace)
+		// Use the actual node address and NodePort for traffic routing
 		clusterEndpoint := endpointregistry.ClusterEndpoint{
 			ClusterID:           clusterTarget.ClusterId,
 			InferenceServerName: inferenceServer.Name,
 			Namespace:           inferenceServer.Namespace,
-			Host:                connectionSpec.Host,
-			Port:                connectionSpec.Port,
-			ServiceHost:         serviceHost,
-			ServicePort:         80,
+			Host:                nodeHost,
+			Port:                fmt.Sprintf("%d", httpNodePort),
+			ServiceHost:         nodeHost, // ExternalName will point to the actual node
+			ServicePort:         uint32(httpNodePort),
 			TokenSecretRef:      connectionSpec.TokenTag,
 			CASecretRef:         connectionSpec.CaDataTag,
 		}
@@ -576,16 +597,16 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 	return nil
 }
 
-func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer, clusterClient client.Client) error {
+func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer, clusterClient client.Client) (*corev1.Service, error) {
 	serviceName := fmt.Sprintf("%s-inference-service", inferenceServer.Name)
 
 	// Check if Service already exists in the target cluster
 	existing := &corev1.Service{}
 	err := clusterClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: inferenceServer.Namespace}, existing)
 	if err == nil {
-		// Service already exists, log and return success
+		// Service already exists, return it
 		logger.Info("Service already exists, skipping creation", zap.String("name", serviceName))
-		return nil
+		return existing, nil
 	}
 
 	service := &corev1.Service{
@@ -611,7 +632,7 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
-			Type: corev1.ServiceTypeClusterIP,
+			Type: corev1.ServiceTypeNodePort,
 		},
 	}
 
@@ -621,10 +642,55 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 			zap.String("operation", "create_triton_service"),
 			zap.String("namespace", inferenceServer.Namespace),
 			zap.String("service", serviceName))
-		return fmt.Errorf("failed to create Triton Service %s/%s: %w",
+		return nil, fmt.Errorf("failed to create Triton Service %s/%s: %w",
 			inferenceServer.Namespace, serviceName, err)
 	}
-	return nil
+	// Create mutates the object in place with the server response (including allocated NodePort)
+	return service, nil
+}
+
+// getNodeAddress gets an accessible address for a node in the target cluster.
+// For k3d clusters, this returns the node's hostname which is resolvable from
+// other k3d clusters on the same Docker network.
+func (b *tritonBackend) getNodeAddress(ctx context.Context, clusterClient client.Client) (string, error) {
+	nodeList := &corev1.NodeList{}
+	if err := clusterClient.List(ctx, nodeList); err != nil {
+		return "", fmt.Errorf("failed to list nodes: %w", err)
+	}
+
+	if len(nodeList.Items) == 0 {
+		return "", fmt.Errorf("no nodes found in cluster")
+	}
+
+	// Get the first node and find a usable address
+	node := nodeList.Items[0]
+
+	// Prefer InternalIP, then Hostname, then ExternalIP
+	var internalIP, hostname, externalIP string
+	for _, addr := range node.Status.Addresses {
+		switch addr.Type {
+		case corev1.NodeInternalIP:
+			internalIP = addr.Address
+		case corev1.NodeHostName:
+			hostname = addr.Address
+		case corev1.NodeExternalIP:
+			externalIP = addr.Address
+		}
+	}
+
+	// For k3d/Docker environments, hostname is often the most reliable
+	// as it's resolvable across containers on the same network
+	if hostname != "" {
+		return hostname, nil
+	}
+	if internalIP != "" {
+		return internalIP, nil
+	}
+	if externalIP != "" {
+		return externalIP, nil
+	}
+
+	return "", fmt.Errorf("no usable address found for node %s", node.Name)
 }
 
 func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequirements {

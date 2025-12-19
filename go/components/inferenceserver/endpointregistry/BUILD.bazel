@@ -22,4 +22,3 @@ go_library(
         "@org_uber_go_zap//:go_default_library",
     ],
 )
-

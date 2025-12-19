@@ -336,7 +336,8 @@ func (r *istioEndpointRegistry) buildServiceEntry(endpoint ClusterEndpoint) *uns
 			},
 			"spec": map[string]interface{}{
 				"hosts": []interface{}{
-					endpoint.ServiceHost,
+					// Use a virtual hostname that clients will use
+					fmt.Sprintf("%s-%s.inference.local", endpoint.InferenceServerName, endpoint.ClusterID),
 				},
 				"location": "MESH_EXTERNAL",
 				"ports": []interface{}{
@@ -352,6 +353,15 @@ func (r *istioEndpointRegistry) buildServiceEntry(endpoint ClusterEndpoint) *uns
 					},
 				},
 				"resolution": "DNS",
+				"endpoints": []interface{}{
+					map[string]interface{}{
+						"address": endpoint.Host, // The actual node hostname/IP
+						"ports": map[string]interface{}{
+							"http": int64(servicePort),
+							"grpc": int64(defaultGRPCPort),
+						},
+					},
+				},
 			},
 		},
 	}
