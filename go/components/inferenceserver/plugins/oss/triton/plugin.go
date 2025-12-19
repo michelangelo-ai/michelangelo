@@ -106,36 +106,35 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	}
 
 	// Get current status from backend
-	for _, clusterTarget := range resource.Spec.ClusterTargets {
-		status, err := p.backend.GetServerStatus(ctx, p.logger, resource.Name, resource.Namespace, clusterTarget.GetKubernetes())
-		if err != nil {
-			// Don't fail reconciliation for status check errors
-			p.logger.Error("Failed to get server status",
-				zap.Error(err),
-				zap.String("operation", "get_server_status"),
-				zap.String("namespace", resource.Namespace),
-				zap.String("inferenceServer", resource.Name))
-			return nil
-		}
+	status, err := p.backend.GetServerStatus(ctx, p.logger, resource)
+	if err != nil {
+		// Don't fail reconciliation for status check errors
+		p.logger.Error("Failed to get server status",
+			zap.Error(err),
+			zap.String("operation", "get_server_status"),
+			zap.String("namespace", resource.Namespace),
+			zap.String("inferenceServer", resource.Name))
+		return nil
+	}
 
-		// Update status based on external state
-		if status.State != resource.Status.State {
-			p.logger.Info("External state change detected",
-				zap.String("currentState", resource.Status.State.String()),
-				zap.String("externalState", status.State.String()))
+	// Update status based on external state
+	if status.State != resource.Status.State {
+		p.logger.Info("External state change detected",
+			zap.String("currentState", resource.Status.State.String()),
+			zap.String("externalState", status.State.String()))
 
-			resource.Status.State = status.State
-			resource.Status.ProviderMetadata = status.Message
+		resource.Status.State = status.State
+		resource.Status.ProviderMetadata = status.Message
 
-			// Record state transition events
-			switch status.State {
-			case v2pb.INFERENCE_SERVER_STATE_SERVING:
-				p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
-			case v2pb.INFERENCE_SERVER_STATE_FAILED:
-				p.Recorder.Event(resource, corev1.EventTypeWarning, "CreationFailed", "InferenceServer creation failed")
-			}
+		// Record state transition events
+		switch status.State {
+		case v2pb.INFERENCE_SERVER_STATE_SERVING:
+			p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
+		case v2pb.INFERENCE_SERVER_STATE_FAILED:
+			p.Recorder.Event(resource, corev1.EventTypeWarning, "CreationFailed", "InferenceServer creation failed")
 		}
 	}
+
 	return nil
 }
 

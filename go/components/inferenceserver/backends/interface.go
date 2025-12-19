@@ -22,13 +22,13 @@ type ServerStatus struct {
 // Each backend provides platform-specific logic for server and model management.
 type Backend interface {
 	// CreateServer provisions backend-specific Kubernetes resources for an inference server.
-	CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer, connectionSpec *v2pb.ConnectionSpec) (*ServerStatus, error)
+	CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error)
 	// GetServerStatus queries the backend-specific server state.
-	GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) (*ServerStatus, error)
+	GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error)
 	// DeleteServer removes backend-specific Kubernetes resources for an inference server.
-	DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) error
+	DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) error
 	// IsHealthy checks backend-specific health endpoints for an inference server.
-	IsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) (bool, error)
+	IsHealthy(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (bool, error)
 	// CheckModelStatus checks the status of a model on an inference server.
 	CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) (bool, error)
 }

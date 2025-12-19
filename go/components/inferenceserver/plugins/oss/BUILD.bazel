@@ -8,6 +8,7 @@ go_library(
     deps = [
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton:go_default_library",
         "//proto/api/v2:go_default_library",

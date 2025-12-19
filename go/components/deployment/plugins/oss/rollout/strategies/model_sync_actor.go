@@ -104,7 +104,7 @@ func (a *ModelSyncActor) Run(ctx context.Context, deployment *v2pb.Deployment, c
 
 		// Update deployment model in ConfigMap
 		// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-		if err := a.gateway.LoadModel(ctx, a.logger, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName), inferenceServerName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+		if err := a.gateway.LoadModel(ctx, a.logger, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName), inferenceServerName, deployment.Namespace); err != nil {
 			a.logger.Error("Failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", deployment.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 			return &apipb.Condition{
 				Type:    a.GetType(),

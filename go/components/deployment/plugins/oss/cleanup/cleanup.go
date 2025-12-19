@@ -101,7 +101,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, condi
 	a.logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 	// Initiate Unloading of Old Model From Inference Server
-	if err := a.gateway.UnloadModel(ctx, a.logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+	if err := a.gateway.UnloadModel(ctx, a.logger, currentModel, inferenceServerName, resource.Namespace); err != nil {
 		a.logger.Error("Failed to initiate unloading of old model", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", currentModel), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", resource.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
 		return &apipb.Condition{
 			Type:    a.GetType(),

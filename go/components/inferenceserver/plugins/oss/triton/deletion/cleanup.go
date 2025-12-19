@@ -43,8 +43,7 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 
 	// Check if inference server still exists
 	// todo: ghosharitra: update this so that it checks all the cluster targets
-	connectionSpec := resource.Spec.ClusterTargets[0].GetKubernetes()
-	_, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace, connectionSpec)
+	_, err := a.backend.GetServerStatus(ctx, a.logger, resource)
 	if err == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
@@ -87,7 +86,7 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, 
 
 		// Delete inference server
 		a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
-		err := a.backend.DeleteServer(ctx, a.logger, resource.Name, resource.Namespace, clusterTarget.GetKubernetes())
+		err := a.backend.DeleteServer(ctx, a.logger, resource)
 		if err != nil {
 			a.logger.Error("Failed to delete inference server",
 				zap.Error(err),

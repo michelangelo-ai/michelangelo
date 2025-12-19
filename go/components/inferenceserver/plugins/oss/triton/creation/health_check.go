@@ -39,8 +39,7 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 	a.logger.Info("Retrieving Triton health condition")
 
 	// todo: ghosharitra: update this so that it checks all the cluster targets
-	connectionSpec := resource.Spec.ClusterTargets[0].GetKubernetes()
-	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource.Name, resource.Namespace, connectionSpec)
+	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource)
 
 	if err == nil && healthy {
 		return &apipb.Condition{
@@ -71,14 +70,16 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 	}, nil
 }
 
-// Run returns a failed condition since health check failures cannot be automatically remediated.
+// todo: ghosharitra: revise this later
+// Run returns an unknown condition to trigger re-checking on next reconciliation.
+// Health check failures are expected during startup as pods are still coming up.
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	// This method is only ran when Retrieve() fails
-	// If Retrieve() failed, then there's nothing we can do here, simply return false condition.
+	// This method is called when Retrieve() returns non-TRUE status.
+	// Return UNKNOWN to keep reconciling and wait for pods to become healthy.
 	return &apipb.Condition{
 		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "HealthCheckFailed",
-		Message: "Server is not healthy",
+		Status:  apipb.CONDITION_STATUS_UNKNOWN,
+		Reason:  "HealthCheckPending",
+		Message: "Waiting for server to become healthy",
 	}, nil
 }

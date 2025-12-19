@@ -101,7 +101,7 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 	// Remove old model from ConfigMap
-	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace); err != nil {
 		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		// Don't fail entire deployment if remove from ConfigMap fails
 	}
