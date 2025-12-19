@@ -18,7 +18,7 @@ proto_library(
 )
 
 # Go proto library with validation compiler
-# Uses the EXISTING protoc-gen-validation to generate Validate() methods
+# Generates Validate() methods for ext types
 go_proto_library(
     name = "v2_ext_go_proto",
     compilers = [
@@ -33,12 +33,11 @@ go_proto_library(
     ],
 )
 
-# Go library that includes the auto-generated registration code
-# The register_generated.go is created by running:
-#   go run tools/gen-ext-register/main.go -proto_dir=proto/api/v2_ext -output=proto/api/v2_ext/register_generated.go
+# Go library embedding the proto library with manual registration
+# Registration code in register.go connects ext validation to base types
 go_library(
     name = "go_default_library",
-    srcs = ["register_generated.go"],
+    srcs = ["register.go"],  # Manual registration code
     embed = [":v2_ext_go_proto"],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext",
     visibility = ["//visibility:public"],
@@ -47,4 +46,3 @@ go_library(
         "//proto/api/v2:go_default_library",
     ],
 )
-
