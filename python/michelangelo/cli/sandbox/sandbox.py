@@ -1097,13 +1097,146 @@ def _create_compute_cluster_secrets(cluster_name: str):
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
+def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
+    """Create Kubernetes secrets for inference server to access a target cluster.
+
+    This creates:
+    1. A service account with cluster-admin permissions in the target cluster
+    2. Secrets in the control plane cluster with the CA data and token
+
+    Args:
+        cluster_name: The k3d cluster name (e.g., "cluster-1")
+        secret_prefix: Prefix for secret names (e.g., "k3d-cluster-1")
+    """
+    print(
+        f"🔐 Creating secrets for inference server access to cluster '{cluster_name}'"
+    )
+
+    # Get kubeconfig for the target cluster
+    kubeconfig = subprocess.check_output(
+        ["k3d", "kubeconfig", "get", cluster_name]
+    ).decode()
+
+    # Parse the kubeconfig YAML
+    kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract certificate-authority-data from clusters[0].cluster
+    ca_data = kubeconfig_data["clusters"][0]["cluster"].get(
+        "certificate-authority-data"
+    )
+    if not ca_data:
+        raise ValueError("certificate-authority-data not found in kubeconfig")
+    ca_data_decoded = base64.b64decode(ca_data).decode()
+
+    # Create service account with cluster-admin permissions in the target cluster
+    sa_manifest = {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+            "name": "michelangelo-inference-access",
+            "namespace": "default",
+        },
+    }
+
+    crb_manifest = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {"name": "michelangelo-inference-access-admin"},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "ClusterRole",
+            "name": "cluster-admin",
+        },
+        "subjects": [
+            {
+                "kind": "ServiceAccount",
+                "name": "michelangelo-inference-access",
+                "namespace": "default",
+            }
+        ],
+    }
+
+    # Apply SA and CRB to target cluster
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump_all([sa_manifest, crb_manifest], f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Create a token for the service account in the target cluster
+    token_decoded = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{cluster_name}",
+                "-n",
+                "default",
+                "create",
+                "token",
+                "michelangelo-inference-access",
+                "--duration=87600h",  # ~10 years
+            ]
+        )
+        .decode()
+        .strip()
+    )
+
+    # Create CA secret in the control plane cluster
+    ca_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": f"{secret_prefix}-ca", "namespace": "default"},
+        "stringData": {"cadata": ca_data_decoded},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(ca_secret, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Create token secret in the control plane cluster
+    token_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {"name": f"{secret_prefix}-token", "namespace": "default"},
+        "stringData": {"token": token_decoded},
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(token_secret, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Extract and log the server URL for the user to update their CR if needed
+    server_url = kubeconfig_data["clusters"][0]["cluster"].get("server", "")
+    print(f"✅ Created secrets '{secret_prefix}-ca' and '{secret_prefix}-token'")
+    print(f"   Target cluster API server: {server_url}")
+
+
 def _create_inference_demo_crs():
     """Create an inference server for the sandbox cluster for demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo...")
-
-    # Setup istio with Gateway API
-    # This allows usage of HTTPRoutes to route traffic to the inference server.
-    _setup_istio_with_gateway_api()
 
     inference_demo_dir = _dir / "demo" / "inference"
     # Create inference server CR
@@ -1113,12 +1246,55 @@ def _create_inference_demo_crs():
             f"❌ Inference server CR not found at {inference_server_path}, exiting..."
         )
 
+    # Parse the inference server YAML to extract target clusters
+    with open(inference_server_path) as f:
+        inference_server_yaml = yaml.safe_load(f)
+
+    # Extract target cluster info from clusterTargets
+    cluster_targets = inference_server_yaml.get("spec", {}).get("clusterTargets", [])
+    target_cluster_names = []
+
+    for target in cluster_targets:
+        cluster_id = target.get("clusterId", "")
+        k8s_config = target.get("kubernetes", {})
+        token_tag = k8s_config.get("tokenTag", "")
+        ca_tag = k8s_config.get("caDataTag", "")
+
+        if cluster_id and token_tag and ca_tag:
+            # Derive k3d cluster name from clusterId
+            # e.g., "k3d-cluster-1" -> "cluster-1"
+            if cluster_id.startswith("k3d-"):
+                k3d_cluster_name = cluster_id.replace("k3d-", "")
+            else:
+                k3d_cluster_name = cluster_id
+            # Derive secret prefix from tokenTag
+            # e.g., "k3d-cluster-1-token" -> "k3d-cluster-1"
+            secret_prefix = token_tag.replace("-token", "")
+
+            # Create secrets for this target cluster
+            _create_inference_cluster_secrets(k3d_cluster_name, secret_prefix)
+            # Use the k3d cluster name (without k3d- prefix) for Istio setup
+            target_cluster_names.append(k3d_cluster_name)
+
+    # Setup Istio with Gateway API on target clusters
+    # This allows usage of HTTPRoutes to route traffic to the inference server.
+    if not target_cluster_names:
+        _err_exit(
+            "❌ No valid clusterTargets found in inferenceserver.yaml.\n"
+            "Please specify at least one clusterTarget with clusterId, "
+            "tokenTag, and caDataTag."
+        )
+
+    print(
+        f"📋 Found {len(target_cluster_names)} target cluster(s): "
+        f"{target_cluster_names}"
+    )
+    _setup_istio_on_clusters(target_cluster_names)
+
     print("✅ Creating Triton Inference Server...")
     _kube_apply(inference_server_path)
 
     # Wait for inference server to reach SERVING state (image pull may take time)
-    with open(inference_server_path) as f:
-        inference_server_yaml = yaml.safe_load(f)
     inference_server_name = inference_server_yaml["metadata"]["name"]
     inference_server_namespace = inference_server_yaml["metadata"].get(
         "namespace", "default"
@@ -1150,7 +1326,7 @@ def _create_inference_demo_crs():
                 kubectl logs -l app=inference-server -n {inference_server_namespace}"
         )
 
-    # Deploy model-sync Deployment
+    # Deploy model-sync Deployment to each target cluster
     model_sync_deployment_path = _dir / "resources" / "model-sync.yaml"
     if not model_sync_deployment_path.exists():
         _err_exit(
@@ -1158,30 +1334,42 @@ def _create_inference_demo_crs():
                 exiting..."
         )
 
-    print("✅ Deploying model-sync Deployment...")
-    _kube_apply(model_sync_deployment_path)
+    # Deploy to each target cluster
+    for cluster_name in target_cluster_names:
+        ctx = f"k3d-{cluster_name}"
 
-    # Wait for Deployment to be ready
-    print("⏳ Waiting for model-sync Deployment to be ready...")
-    try:
-        _exec(
-            "kubectl",
-            "rollout",
-            "status",
-            "deployment/model-sync",
-            "-n",
-            "default",
-            "--timeout=60s",
-            raise_error=True,
-        )
-        print("✅ Model-sync Deployment is ready!")
-    except subprocess.CalledProcessError:
-        _err_exit(
-            "Model-sync Deployment failed to become ready after 60s.\n"
-            "Check status with:\n"
-            "kubectl get deployments model-sync -n default -o yaml\n"
-            "Check logs with: kubectl logs deployment/model-sync -n default"
-        )
+        # Create michelangelo-config ConfigMap (required for AWS/S3 access)
+        print(f"📦 Creating michelangelo-config ConfigMap in cluster '{ctx}'...")
+        _create_config_in_compute_cluster(cluster_name)
+
+        print(f"✅ Deploying model-sync Deployment to cluster '{ctx}'...")
+
+        kubectl_args = ["kubectl", "--context", ctx]
+        _exec(*kubectl_args, "apply", "-f", str(model_sync_deployment_path))
+
+        # Wait for Deployment to be ready
+        print(f"⏳ Waiting for model-sync Deployment to be ready on '{ctx}'...")
+        try:
+            _exec(
+                *kubectl_args,
+                "rollout",
+                "status",
+                "deployment/model-sync",
+                "-n",
+                "default",
+                "--timeout=60s",
+                raise_error=True,
+            )
+            print(f"✅ Model-sync Deployment is ready on '{ctx}'!")
+        except subprocess.CalledProcessError:
+            _err_exit(
+                f"Model-sync Deployment failed to become ready after 60s on '{ctx}'.\n"
+                f"Check status with:\n"
+                f"  kubectl --context {ctx} "
+                "get deployments model-sync -n default -o yaml\n"
+                f"Check logs with:\n"
+                f"  kubectl --context {ctx} logs deployment/model-sync -n default"
+            )
 
     print("✅ Inference demo resources created successfully")
 
@@ -1223,7 +1411,32 @@ def _create_inference_demo_crs():
     print("}'")
 
 
-def _setup_istio_with_gateway_api():
+def _setup_istio_on_clusters(target_clusters: list[str]):
+    """Install Istio and Gateway API on multiple target clusters.
+
+    This function sets up Istio service mesh with Kubernetes Gateway API support
+    on each of the specified target clusters. Use this for multi-cluster
+    deployments where inference workloads run on separate clusters.
+
+    Args:
+        target_clusters: List of k3d cluster names where Istio should be
+            installed. Each name is the k3d cluster name (without k3d- prefix).
+    """
+    if not target_clusters:
+        print("⚠️ No target clusters specified for Istio setup")
+        return
+
+    print(f"🚀 Setting up Istio on {len(target_clusters)} target cluster(s)...")
+
+    for cluster_name in target_clusters:
+        print(f"\n📦 Setting up Istio on cluster: {cluster_name}")
+        _setup_istio_with_gateway_api(kube_context=f"k3d-{cluster_name}")
+        print(f"✅ Istio setup complete on cluster: {cluster_name}")
+
+    print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
+
+
+def _setup_istio_with_gateway_api(kube_context: str | None = None):
     """Install Istio service mesh with Kubernetes Gateway API support.
 
     This function:
@@ -1231,8 +1444,16 @@ def _setup_istio_with_gateway_api():
     2. Installs Kubernetes Gateway API CRDs
     3. Installs Istio control plane (istiod)
     4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
+
+    Args:
+        kube_context: Optional kubectl context to use. If None, uses current context.
     """
-    print("Setting up Istio service mesh with Gateway API...")
+    # helm uses --kube-context, kubectl uses --context
+    helm_context_args = ["--kube-context", kube_context] if kube_context else []
+    kubectl_context_args = ["--context", kube_context] if kube_context else []
+    context_msg = f" (context: {kube_context})" if kube_context else ""
+
+    print(f"Setting up Istio service mesh with Gateway API{context_msg}...")
 
     # Fetch existing Helm repositories
     try:
@@ -1259,6 +1480,7 @@ def _setup_istio_with_gateway_api():
         "--install",
         "istio-base",
         "istio/base",
+        *helm_context_args,
         "--namespace",
         "istio-system",
         "--create-namespace",
@@ -1270,12 +1492,14 @@ def _setup_istio_with_gateway_api():
     print("Installing Gateway API CRDs...")
     _exec(
         "kubectl",
+        *kubectl_context_args,
         "apply",
         "-f",
         "https://github.com/kubernetes-sigs/gateway-api/releases/download/v1.1.0/standard-install.yaml",
     )
     _exec(
         "kubectl",
+        *kubectl_context_args,
         "wait",
         "--for=condition=Established",
         "crd/gateways.gateway.networking.k8s.io",
@@ -1292,6 +1516,7 @@ def _setup_istio_with_gateway_api():
         "--install",
         "istiod",
         "istio/istiod",
+        *helm_context_args,
         "--namespace",
         "istio-system",
         "--wait",
@@ -1300,6 +1525,7 @@ def _setup_istio_with_gateway_api():
     # Wait for Istio control plane to be ready
     _exec(
         "kubectl",
+        *kubectl_context_args,
         "wait",
         "--for=condition=available",
         "deployment",
@@ -1316,11 +1542,18 @@ def _setup_istio_with_gateway_api():
         _err_exit(f"❌ Gateway API setup not found at {gateway_setup_path}")
 
     print("Creating Gateway API Gateway CR...")
-    _kube_apply(gateway_setup_path)
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        str(gateway_setup_path),
+    )
 
     # Wait for Gateway to be programmed (Istio provisions the gateway)
     _exec(
         "kubectl",
+        *kubectl_context_args,
         "wait",
         "--for=condition=Programmed",
         "gateway/ma-gateway",
@@ -1332,6 +1565,7 @@ def _setup_istio_with_gateway_api():
     # Print status for visibility
     _exec(
         "kubectl",
+        *kubectl_context_args,
         "get",
         "gateway",
         "ma-gateway",
@@ -1341,19 +1575,20 @@ def _setup_istio_with_gateway_api():
         "wide",
     )
 
-    # automatically perform port-forwarding in the background
-    subprocess.Popen(
-        [
-            "kubectl",
-            "-n",
-            "default",
-            "port-forward",
-            "svc/ma-gateway-istio",
-            "8080:80",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # Only set up port-forwarding for the current context (not remote clusters)
+    if kube_context is None:
+        subprocess.Popen(
+            [
+                "kubectl",
+                "-n",
+                "default",
+                "port-forward",
+                "svc/ma-gateway-istio",
+                "8080:80",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     print("✅ Istio with Gateway API setup complete")
 

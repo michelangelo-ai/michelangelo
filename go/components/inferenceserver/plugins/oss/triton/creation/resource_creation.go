@@ -83,6 +83,7 @@ func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 // Run creates the Kubernetes deployment, service, and related resources for Triton.
 func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton server creation")
+	// todo: ghosharitra: parallelize this
 	for _, clusterTarget := range resource.Spec.ClusterTargets {
 		fmt.Println("creating pod in cluster", clusterTarget.GetClusterId())
 		_, err := a.backend.CreateServer(ctx, a.logger, resource, clusterTarget.GetKubernetes())
