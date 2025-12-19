@@ -1,0 +1,72 @@
+// Extension proto for v2.Model with stricter validation rules.
+// These validation rules are applied in addition to the base v2.Model validation.
+// To enable ext validation, import the v2_ext package in your application.
+
+syntax = "proto3";
+
+package michelangelo.api.v2_ext;
+
+option go_package = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext";
+
+import "michelangelo/api/options.proto";
+
+// ModelSpecExt defines stricter validation rules for ModelSpec fields.
+// These rules are enforced when the v2_ext package is imported.
+message ModelSpecExt {
+  // Owner email is required and must be a valid email format
+  string owner_email = 1 [(michelangelo.api.validation) = {
+    required: true
+    email: true
+    msg: "owner email is required and must be valid"
+  }];
+
+  // Description has a maximum length limit
+  string description = 2 [(michelangelo.api.validation) = {
+    max_length: "2000"
+    msg: "description must be at most 2000 characters"
+  }];
+
+  // Model kind must be a valid non-zero value
+  int32 kind = 3 [(michelangelo.api.validation) = {
+    min: "1"
+    msg: "kind must be a valid model type (non-zero)"
+  }];
+
+  // Algorithm name has length constraints
+  string algorithm = 4 [(michelangelo.api.validation) = {
+    max_length: "255"
+    msg: "algorithm name must be at most 255 characters"
+  }];
+
+  // Training framework has length constraints
+  string training_framework = 5 [(michelangelo.api.validation) = {
+    max_length: "255"
+    msg: "training framework must be at most 255 characters"
+  }];
+}
+
+// LLMSpecExt defines stricter validation rules for LLMSpec fields.
+message LLMSpecExt {
+  // Vendor is required for LLM models
+  string vendor = 1 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "100"
+    msg: "vendor is required and must be 1-100 characters"
+  }];
+
+  // Model name is required
+  string model_name = 2 [(michelangelo.api.validation) = {
+    required: true
+    min_length: "1"
+    max_length: "255"
+    msg: "model name is required and must be 1-255 characters"
+  }];
+
+  // Fine-tuned model ID has length constraints
+  string fine_tuned_model_id = 3 [(michelangelo.api.validation) = {
+    max_length: "255"
+    msg: "fine tuned model ID must be at most 255 characters"
+  }];
+}
+
