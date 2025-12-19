@@ -45,6 +45,30 @@ runs:
         plugins: poetry-dynamic-versioning[plugin]
 
     #----------------------------------------------
+    #       free up disk space
+    #----------------------------------------------
+    - name: Free up disk space
+      shell: bash
+      run: |
+        echo "=== Before cleanup ==="
+        df -h
+
+        # Remove large unused packages
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+
+        # Clean up docker images
+        docker rmi $(docker images -q) || true
+
+        # Clean apt cache
+        sudo apt-get clean
+
+        echo "=== After cleanup ==="
+        df -h
+
+    #----------------------------------------------
     #       load cached venv if cache exists
     #----------------------------------------------
     - name: Load cached venv
