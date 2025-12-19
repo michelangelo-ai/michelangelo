@@ -37,6 +37,20 @@ jobs:
         run: git branch -av
 
       #----------------------------------------------
+      #  Free up disk space before installing dependencies
+      #----------------------------------------------
+      - name: Free up disk space
+        uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      #----------------------------------------------
       #  Setup Python and Poetry using composite action
       #----------------------------------------------
       - name: Setup Python and Poetry
