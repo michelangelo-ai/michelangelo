@@ -33,10 +33,12 @@ go_proto_library(
     ],
 )
 
-# Go library that includes the registration code
+# Go library that includes the auto-generated registration code
+# The register_generated.go is created by running:
+#   go run tools/gen-ext-register/main.go -proto_dir=proto/api/v2_ext -output=proto/api/v2_ext/register_generated.go
 go_library(
     name = "go_default_library",
-    srcs = ["register.go"],
+    srcs = ["register_generated.go"],
     embed = [":v2_ext_go_proto"],
     importpath = "github.com/michelangelo-ai/michelangelo/proto/api/v2_ext",
     visibility = ["//visibility:public"],
