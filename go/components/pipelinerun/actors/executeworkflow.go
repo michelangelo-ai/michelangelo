@@ -394,6 +394,24 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		envs["UF_STORAGE_URL"] = DefaultWorkSpaceRootURL
 	}
 
+	// Apply dynamic parameters from pipelineRun.Spec.Input to override pipeline manifest
+	if pipelineRun.Spec.Input != nil {
+		if pipelineConfigMap == nil {
+			pipelineConfigMap = make(map[string]interface{})
+		}
+		
+		// Override task_configs and workflow_config if present
+		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowTaskConfigsKey, pipelineConfigMap)
+		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowConfigKey, pipelineConfigMap)
+
+		// Apply DevRun environment overrides if present
+		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
+			if err := applyDevRunEnvironmentOverrides(envs, environField.GetStructValue()); err != nil {
+				return nil, nil, nil, fmt.Errorf("failed to apply DevRun environment overrides: %w", err)
+			}
+		}
+	}
+
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
 			args = getWorkflowArgs(pipelineConfigMap)
@@ -405,15 +423,6 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 			}
 			if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
 				envs = val.(map[string]interface{})
-			}
-		}
-	}
-
-	// Apply DevRun environment overrides if present
-	if pipelineRun.Spec.Input != nil {
-		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
-			if err := applyDevRunEnvironmentOverrides(envs, environField.GetStructValue()); err != nil {
-				return nil, nil, nil, fmt.Errorf("failed to apply DevRun environment overrides: %w", err)
 			}
 		}
 	}
@@ -780,4 +789,19 @@ func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.
 		taskList = workflowConfig.TaskList
 	}
 	return taskList, nil
+}
+
+// applyInputFieldToConfigMap extracts a field from pipelineRun.Spec.Input and applies it to pipelineConfigMap
+func applyInputFieldToConfigMap(input *pbtypes.Struct, fieldKey string, pipelineConfigMap map[string]interface{}) {
+	if field := input.Fields[fieldKey]; field != nil {
+		if fieldStruct := field.GetStructValue(); fieldStruct != nil {
+			marshaler := &jsonpb.Marshaler{}
+			if fieldJSON, err := marshaler.MarshalToString(fieldStruct); err == nil {
+				var fieldMap map[string]interface{}
+				if err := json.Unmarshal([]byte(fieldJSON), &fieldMap); err == nil {
+					pipelineConfigMap[fieldKey] = fieldMap
+				}
+			}
+		}
+	}
 }
