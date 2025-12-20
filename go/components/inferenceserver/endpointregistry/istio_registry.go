@@ -368,8 +368,12 @@ func (r *istioEndpointRegistry) buildServiceEntry(endpoint ClusterEndpoint) *uns
 }
 
 // buildExternalNameService constructs a Kubernetes ExternalName Service.
+// The ExternalName points to the ServiceEntry's virtual hostname, enabling
+// HTTPRoutes to route through the ServiceEntry to the actual backend.
 func (r *istioEndpointRegistry) buildExternalNameService(endpoint ClusterEndpoint) *corev1.Service {
 	serviceName := r.buildExternalServiceName(endpoint.InferenceServerName, endpoint.ClusterID)
+	// Point to the ServiceEntry's virtual hostname (not the raw node hostname)
+	serviceEntryHost := fmt.Sprintf("%s-%s.inference.local", endpoint.InferenceServerName, endpoint.ClusterID)
 
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -391,7 +395,7 @@ func (r *istioEndpointRegistry) buildExternalNameService(endpoint ClusterEndpoin
 		},
 		Spec: corev1.ServiceSpec{
 			Type:         corev1.ServiceTypeExternalName,
-			ExternalName: endpoint.ServiceHost,
+			ExternalName: serviceEntryHost,
 		},
 	}
 }
