@@ -10,6 +10,8 @@ on:
 jobs:
   bazel-build:
     runs-on: ubuntu-latest
+    env:
+      GOTOOLCHAIN: auto
 
     steps:
       # Checkout the repository
@@ -21,6 +23,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.24'
+          cache-dependency-path: go/go.sum
 
       # Cache Bazel outputs
       - name: Cache Bazel Outputs
@@ -34,8 +37,6 @@ jobs:
 
       # Run Bazel tests
       - name: Run Bazel Test
-        env:
-          GOTOOLCHAIN: auto
         run: ./tools/bazel test ...
 
   python-build:
