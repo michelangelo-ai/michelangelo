@@ -17,7 +17,7 @@ bazel_dep(name = "protobuf", version = "29.0-rc3", repo_name = "com_google_proto
 ###########################################
 go_sdk = use_extension("@io_bazel_rules_go//go:extensions.bzl", "go_sdk")
 go_sdk.download(
-    version = "1.23.3",
+    version = "1.24.2",
 )
 go_sdk.nogo(
     includes = ["@//:__subpackages__"],
