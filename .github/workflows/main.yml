@@ -34,6 +34,8 @@ jobs:
 
       # Run Bazel tests
       - name: Run Bazel Test
+        env:
+          GOTOOLCHAIN: auto
         run: ./tools/bazel test ...
 
   python-build:
