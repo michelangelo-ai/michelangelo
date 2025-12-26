@@ -109,7 +109,8 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
 
 def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
-    """Reads a YAML file and returns its content as a dictionary."""
+    """Reads a YAML file and returns its content as a dictionary.
+    """
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
     yaml_dict = yaml_to_dict(yaml_path_string)
 
@@ -165,7 +166,8 @@ def read_yaml_to_crd_request(
     yaml_path_string: str,
     func_crd_metadata_converter: Callable,
 ) -> Message:
-    """Reads a YAML file and converts it to a CRD request instance."""
+    """Reads a YAML file and converts it to a CRD request instance.
+    """
     yaml_path = Path(yaml_path_string).resolve()
     yaml_dict = yaml_to_dict(yaml_path_string)
     crd_dict = {
@@ -231,7 +233,8 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
 
 
 def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for GET method."""
+    """Default common CRD member method implementation for GET method.
+    """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
@@ -329,7 +332,8 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for DELETE method."""
+    """Default common CRD member method implementation for DELETE method.
+    """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     call_res = crd_method_call_kwargs(
@@ -343,7 +347,8 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for APPLY method."""
+    """Default common CRD member method implementation for APPLY method.
+    """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
@@ -394,7 +399,8 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 class CRD:
-    """Representation of each CRD with its service methods"""
+    """Representation of each CRD with its service methods
+    """
 
     def __init__(self, name: str, full_name: str, metadata: list):
         self.name = name
