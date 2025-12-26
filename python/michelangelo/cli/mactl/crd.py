@@ -1,16 +1,16 @@
 """CRD class and its member method implementations."""
 
 from argparse import ArgumentParser
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Sequence
 from copy import deepcopy
-from datetime import datetime
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from inspect import Parameter, Signature
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Optional
 
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
