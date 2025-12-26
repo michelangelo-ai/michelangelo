@@ -1,16 +1,16 @@
-"""CRD class and its member method implementations
-"""
+"""CRD class and its member method implementations."""
 
 from argparse import ArgumentParser
 from collections.abc import MutableMapping
 from copy import deepcopy
+from datetime import datetime
 from dataclasses import dataclass
 from functools import partial
 from inspect import Parameter, Signature
 from logging import getLogger
 from pathlib import Path
 from types import MethodType
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Optional, Sequence
 
 from google.protobuf.json_format import MessageToDict, ParseDict
 from google.protobuf.message import Message
@@ -109,8 +109,7 @@ def yaml_to_dict(yaml_path_string: str) -> dict[str, Any]:
 
 
 def get_crd_namespace_and_name_from_yaml(yaml_path_string: str) -> tuple[str, str]:
-    """Reads a YAML file and returns its content as a dictionary.
-    """
+    """Reads a YAML file and returns its content as a dictionary."""
     _LOG.info("Start to Read YAML file: %r", yaml_path_string)
     yaml_dict = yaml_to_dict(yaml_path_string)
 
@@ -166,8 +165,7 @@ def read_yaml_to_crd_request(
     yaml_path_string: str,
     func_crd_metadata_converter: Callable,
 ) -> Message:
-    """Reads a YAML file and converts it to a CRD request instance.
-    """
+    """Reads a YAML file and converts it to a CRD request instance."""
     yaml_path = Path(yaml_path_string).resolve()
     yaml_dict = yaml_to_dict(yaml_path_string)
     crd_dict = {
@@ -189,8 +187,7 @@ def snake_to_camel(name: str) -> str:
 
 @dataclass
 class CrdMethodInfo:
-    """Method information to run CRD member method with grpc reflection
-    """
+    """Method information to run CRD member method with grpc reflection"""
 
     channel: Channel
     crd_full_name: str
@@ -213,8 +210,7 @@ def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
 
 
 def crd_method_call(crd_method_info, request_input: Message) -> Message:
-    """Call member method call of a CRD with grpc reflection
-    """
+    """Call member method call of a CRD with grpc reflection"""
     _LOG.debug("CRD method info: %r", crd_method_info)
     _LOG.debug("Request input (%r): %r", type(request_input), request_input)
 
@@ -235,8 +231,7 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
 
 
 def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for GET method.
-    """
+    """Default common CRD member method implementation for GET method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
@@ -255,9 +250,64 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     print(call_res)
 
 
+def prepare_column_info() -> list[dict]:
+    """Prepare column info for formatted printing of CRD items."""
+    res = [
+        {
+            "column_name": "NAMESPACE",
+            "retrieve_func": lambda item: item.metadata.namespace,
+            "max_length": len("NAMESPACE") + 1,
+        },
+        {
+            "column_name": "NAME",
+            "retrieve_func": lambda item: item.metadata.name,
+            "max_length": len("NAME") + 1,
+        },
+        {
+            "column_name": "LAST_UPDATED_SPEC",
+            "retrieve_func": lambda item: datetime.fromtimestamp(
+                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
+            ).strftime("%Y-%m-%d_%H:%M:%S"),
+            "max_length": len("LAST_UPDATED_SPEC") + 1,
+        },
+    ]
+    _LOG.debug("Prepared column info: %r", res)
+    return res
+
+
+def print_list_formatted(items: Sequence[Message]):
+    """Print list of CRD items in formatted way."""
+    _LOG.info("Print list of CRD items: %r (length %d)", type(items), len(items))
+
+    ansi_header = "\033[1;37;44m"  # bold + white + blue background
+    ansi_reset = "\033[0m"
+
+    column_info = prepare_column_info()
+    for item in items:
+        for col in column_info:
+            col["max_length"] = max(
+                col["max_length"], len(col["retrieve_func"](item)) + 1
+            )
+
+    print(
+        f"{ansi_header} "
+        + "".join([col["column_name"].ljust(col["max_length"]) for col in column_info])
+        + f"{ansi_reset}"
+    )
+    for item in items:
+        print(
+            " "
+            + "".join(
+                [
+                    col["retrieve_func"](item).ljust(col["max_length"])
+                    for col in column_info
+                ]
+            )
+        )
+
+
 def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for LIST method.
-    """
+    """Default common CRD member method implementation for LIST method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     call_res = crd_method_call_kwargs(
@@ -265,13 +315,6 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
         **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
     )
     _LOG.debug("Succeed to list CRDs: %r", type(call_res))
-    print()
-    print()
-    print(call_res)
-    print()
-    print()
-    print(call_res.__class__)
-    print()
     results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
     _LOG.debug(
         "Extracted keys (%s): %r / %r",
@@ -279,46 +322,14 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
         list(results),
         [type(v) for v in results.values()],
     )
-    print()
-    print()
     # we assume the there is only one list field in the response message
-    raw_elems = results[list(results)[0]]
-    print()
-    print()
-    print()
+    raw_elems = results[next(iter(results))]
 
-    for elem in raw_elems.items:
-        print(elem.metadata.namespace)
-        print(elem.metadata.name)
-        print()
-
-    """
-    print()
-    call_res_dict = MessageToDict(call_res)
-    _LOG.debug("Extracted keys: %r", list(call_res_dict))
-    print()
-    print()
-    print(crd_method_info.crd_full_name)
-    print()
-    print()
-    from pprint import pprint
-    pprint(call_res_dict)
-    print()
-    print()
-    print()
-    print()
-    result_list = [v for k, v in call_res_dict.items() if k.endswith("List")][0]['items']
-    _LOG.debug("Result list: %r", result_list)
-    print()
-    print()
-    print()
-    print(result_list)
-    """
+    print_list_formatted(raw_elems.items)
 
 
 def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for DELETE method.
-    """
+    """Default common CRD member method implementation for DELETE method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     call_res = crd_method_call_kwargs(
@@ -332,8 +343,7 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for APPLY method.
-    """
+    """Default common CRD member method implementation for APPLY method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
@@ -366,8 +376,7 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for CREATE method.
-    """
+    """Default common CRD member method implementation for CREATE method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start create_func for %r", _self.full_name)
@@ -385,8 +394,7 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 class CRD:
-    """Representation of each CRD with its service methods
-    """
+    """Representation of each CRD with its service methods"""
 
     def __init__(self, name: str, full_name: str, metadata: list):
         self.name = name
@@ -509,8 +517,7 @@ class CRD:
             parser.add_argument(*args, **kwargs)
 
     def _read_signatures(self, method_name: str) -> Signature:
-        """Read function signatures for method name.
-        """
+        """Read function signatures for method name."""
         _LOG.debug("Prepare func signature for `%r` function", method_name)
         res = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -526,8 +533,7 @@ class CRD:
     def _extract_method_info(
         self, channel: Channel, full_name: str, function_name: str
     ) -> tuple[str, type[Message], type[Message]]:
-        """Extract method information and their input/output types
-        """
+        """Extract method information and their input/output types"""
         assert isinstance(function_name, str), function_name
         assert function_name in ["Get", "Update", "Create", "List", "Delete"]
 
@@ -563,8 +569,7 @@ class CRD:
     def generate_delete(
         self, channel: Channel, parser: Optional[ArgumentParser] = None
     ):
-        """Generate delete function of this class.
-        """
+        """Generate delete function of this class."""
         _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
             channel,
@@ -604,8 +609,7 @@ class CRD:
         _LOG.debug("Generated GET injected well: %r", self.get)
 
     def generate_apply(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """Generate apply function of this class.
-        """
+        """Generate apply function of this class."""
         self.generate_get(channel)
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
@@ -624,8 +628,7 @@ class CRD:
         _LOG.debug("Generated APPLY injected well: %r", self.apply)
 
     def generate_create(self, channel: Channel):
-        """Generate create function of this class.
-        """
+        """Generate create function of this class."""
         _LOG.info("Generate CREATE method for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
@@ -644,8 +647,7 @@ class CRD:
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
     def generate_list(self, channel: Channel):
-        """Generate list function of this class.
-        """
+        """Generate list function of this class."""
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
@@ -669,8 +671,7 @@ class CRD:
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
     ) -> Message:
-        """Read a YAML file and update the original CRD request instance.
-        """
+        """Read a YAML file and update the original CRD request instance."""
         original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
         )
