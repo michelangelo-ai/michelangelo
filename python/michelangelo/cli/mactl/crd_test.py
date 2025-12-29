@@ -1,10 +1,11 @@
 """Unit tests for CRD module."""
 
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl.crd import (
     CrdMethodInfo,
+    delete_func_impl,
     list_func_impl,
     prepare_column_info,
 )
@@ -72,7 +73,7 @@ class ListFuncImplTest(TestCase):
         )
 
         # Prepare Mock
-        mock_item = Mock()
+        mock_item = MagicMock()
         mock_item.metadata.namespace = "test-ns"
         mock_item.metadata.name = "test-project"
         mock_item.metadata.labels = {"michelangelo/UpdateTimestamp": "1640000000000000"}
@@ -92,4 +93,31 @@ class ListFuncImplTest(TestCase):
         # Verify crd_method_call_kwargs was called with correct arguments
         mock_call_kwargs.assert_called_once_with(
             crd_method_info, namespace="test-namespace"
+        )
+
+
+class DeleteFuncImplTest(TestCase):
+    """Test cases for delete_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    def test_delete_func_impl(self, mock_call_kwargs):
+        """Test delete_func_impl calls crd_method_call_kwargs."""
+        # Create CrdMethodInfo instance
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="Delete",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        # Execute
+        delete_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "test-ns", "name": "test-project"}),
+        )
+
+        # Verify crd_method_call_kwargs was called with correct arguments
+        mock_call_kwargs.assert_called_once_with(
+            crd_method_info, namespace="test-ns", name="test-project"
         )

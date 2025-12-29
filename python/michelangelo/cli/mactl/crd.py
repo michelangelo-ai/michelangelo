@@ -212,7 +212,8 @@ def crd_method_call_kwargs(crd_method_info, **kwargs) -> Message:
 
 
 def crd_method_call(crd_method_info, request_input: Message) -> Message:
-    """Call member method call of a CRD with grpc reflection"""
+    """Call member method call of a CRD with grpc reflection
+    """
     _LOG.debug("CRD method info: %r", crd_method_info)
     _LOG.debug("Request input (%r): %r", type(request_input), request_input)
 
@@ -381,7 +382,8 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
 
 
 def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for CREATE method."""
+    """Default common CRD member method implementation for CREATE method.
+    """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start create_func for %r", _self.full_name)
