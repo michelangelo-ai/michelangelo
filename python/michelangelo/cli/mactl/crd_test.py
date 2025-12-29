@@ -1,9 +1,13 @@
 """Unit tests for CRD module."""
 
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from michelangelo.cli.mactl.crd import prepare_column_info
+from michelangelo.cli.mactl.crd import (
+    CrdMethodInfo,
+    list_func_impl,
+    prepare_column_info,
+)
 
 
 class PrepareColumnInfoTest(TestCase):
@@ -49,4 +53,43 @@ class PrepareColumnInfoTest(TestCase):
                 "test-name",
                 "2021-12-20_03:33:20",
             ],
+        )
+
+
+class ListFuncImplTest(TestCase):
+    """Test cases for list_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    def test_list_func_impl(self, mock_call_kwargs):
+        """Test list_func_impl extracts list fields and formats output."""
+        # Create CrdMethodInfo instance
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="michelangelo.api.v2.ProjectService",
+            method_name="List",
+            input_class=Mock,
+            output_class=Mock,
+        )
+
+        # Prepare Mock
+        mock_item = Mock()
+        mock_item.metadata.namespace = "test-ns"
+        mock_item.metadata.name = "test-project"
+        mock_item.metadata.labels = {"michelangelo/UpdateTimestamp": "1640000000000000"}
+
+        mock_response = Mock()
+        mock_response.ListFields.return_value = [
+            (
+                Mock(name="project_list"),
+                Mock(items=[mock_item]),
+            )
+        ]
+        mock_call_kwargs.return_value = mock_response
+
+        # Execute - should not raise any exceptions
+        list_func_impl(crd_method_info, Mock(arguments={"namespace": "test-namespace"}))
+
+        # Verify crd_method_call_kwargs was called with correct arguments
+        mock_call_kwargs.assert_called_once_with(
+            crd_method_info, namespace="test-namespace"
         )
