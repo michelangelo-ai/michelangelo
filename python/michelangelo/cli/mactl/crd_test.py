@@ -6,7 +6,10 @@ from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl.crd import (
     CrdMethodInfo,
+    apply_func_impl,
+    create_func_impl,
     delete_func_impl,
+    get_func_impl,
     list_func_impl,
     prepare_column_info,
 )
@@ -137,3 +140,86 @@ class DeleteFuncImplTest(TestCase):
         mock_call_kwargs.assert_called_once_with(
             crd_method_info, namespace="test-ns", name="test-project"
         )
+
+
+class GetFuncImplTest(TestCase):
+    """Test cases for get_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    def test_get_func_impl(self, mock_call_kwargs):
+        """Test get_func_impl with name calls crd_method_call_kwargs."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Get",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        get_func_impl(
+            crd_method_info,
+            Mock(arguments={"namespace": "ns", "name": "proj"}),
+        )
+        mock_call_kwargs.assert_called_once_with(
+            crd_method_info, namespace="ns", name="proj"
+        )
+
+
+class ApplyFuncImplTest(TestCase):
+    """Test cases for apply_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.get_crd_namespace_and_name_from_yaml")
+    def test_apply_func_impl_update(self, mock_get_ns: MagicMock, _):
+        """Test apply_func_impl updates existing CRD."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Apply",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd.get.return_value = Mock()
+        mock_crd.read_yaml_and_update_crd_request.return_value = Mock()
+        mock_get_ns.return_value = ("ns", "name")
+
+        apply_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        mock_crd.read_yaml_and_update_crd_request.assert_called_once()
+
+
+class CreateFuncImplTest(TestCase):
+    """Test cases for create_func_impl function."""
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call")
+    @patch("michelangelo.cli.mactl.crd.read_yaml_to_crd_request")
+    def test_create_func_impl(self, mock_read_yaml: MagicMock, mock_call: MagicMock):
+        """Test create_func_impl calls read_yaml_to_crd_request and crd_method_call."""
+        crd_method_info = CrdMethodInfo(
+            channel=Mock(),
+            crd_full_name="test.Service",
+            method_name="Create",
+            input_class=Mock,
+            output_class=Mock,
+        )
+        mock_crd = Mock()
+        mock_crd.full_name = "test.Service"
+        mock_crd.name = "test"
+        mock_crd.func_crd_metadata_converter = Mock()
+        mock_request = Mock()
+        mock_read_yaml.return_value = mock_request
+
+        create_func_impl(
+            crd_method_info, Mock(arguments={"self": mock_crd, "file": "f.yaml"})
+        )
+
+        mock_read_yaml.assert_called_once_with(
+            crd_method_info.input_class,
+            "test",
+            "f.yaml",
+            mock_crd.func_crd_metadata_converter,
+        )
+        mock_call.assert_called_once_with(crd_method_info, mock_request)

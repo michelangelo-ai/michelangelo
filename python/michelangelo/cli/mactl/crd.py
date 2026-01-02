@@ -189,7 +189,8 @@ def snake_to_camel(name: str) -> str:
 
 @dataclass
 class CrdMethodInfo:
-    """Method information to run CRD member method with grpc reflection"""
+    """Method information to run CRD member method with grpc reflection
+    """
 
     channel: Channel
     crd_full_name: str
@@ -525,7 +526,8 @@ class CRD:
             parser.add_argument(*args, **kwargs)
 
     def _read_signatures(self, method_name: str) -> Signature:
-        """Read function signatures for method name."""
+        """Read function signatures for method name.
+        """
         _LOG.debug("Prepare func signature for `%r` function", method_name)
         res = Signature(
             [Parameter("self", Parameter.POSITIONAL_OR_KEYWORD)]
@@ -541,7 +543,8 @@ class CRD:
     def _extract_method_info(
         self, channel: Channel, full_name: str, function_name: str
     ) -> tuple[str, type[Message], type[Message]]:
-        """Extract method information and their input/output types"""
+        """Extract method information and their input/output types
+        """
         assert isinstance(function_name, str), function_name
         assert function_name in ["Get", "Update", "Create", "List", "Delete"]
 
