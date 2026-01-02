@@ -1,5 +1,6 @@
 """Unit tests for CRD module."""
 
+from datetime import datetime, timezone
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
@@ -17,8 +18,23 @@ class PrepareColumnInfoTest(TestCase):
     def test_prepare_column_info(self):
         """Test prepare_column_info returns correct structure.
 
-        column structure and retrieve functions work.
+        Column structure and retrieve functions work.
+        Designed to test time conversion from UTC to local time.
         """
+        # Expected value
+        utc_time_str = "2021-12-20_11:33:20"  # UTC time expected string
+        dt_utc = datetime.strptime(utc_time_str, "%Y-%m-%d_%H:%M:%S").replace(
+            tzinfo=timezone.utc
+        )
+        # convert to local time string
+        expected_timestamp = dt_utc.astimezone().strftime("%Y-%m-%d_%H:%M:%S")
+        # Check format is correct
+        self.assertRegex(
+            expected_timestamp,
+            r"^\d{4}-\d{2}-\d{2}_\d{2}:\d{2}:\d{2}$",
+            f"Format of expected timestamp is incorrect: {expected_timestamp}",
+        )
+
         # Mock Entity
         mock_item = Mock()
         mock_item.metadata.namespace = "test-ns"
@@ -52,7 +68,7 @@ class PrepareColumnInfoTest(TestCase):
             [
                 "test-ns",
                 "test-name",
-                "2021-12-20_03:33:20",
+                expected_timestamp,
             ],
         )
 
