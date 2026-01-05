@@ -19,13 +19,6 @@ from michelangelo.cli.mactl.plugins.entity.pipeline.dev_run import (
 from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     add_function_signature as add_run_function_signature,
 )
-from michelangelo.cli.mactl.plugins.pipeline.kill import (
-    add_function_signature as add_kill_function_signature,
-)
-from michelangelo.cli.mactl.plugins.pipeline.kill import generate_kill
-from michelangelo.cli.mactl.plugins.pipeline.run import (
-    add_function_signature as add_run_function_signature,
-)
 from michelangelo.cli.mactl.plugins.entity.pipeline.run import (
     convert_crd_metadata_pipeline_run,
     generate_run,
@@ -48,10 +41,6 @@ def apply_plugins(crd: CRD, channel: Channel):
     add_dev_run_function_signature(crd)
     crd.generate_dev_run = MethodType(
         lambda self, ch, parser: generate_dev_run(self, ch, parser), crd
-    )
-    add_kill_function_signature(crd)
-    crd.generate_kill = MethodType(
-        lambda self, ch, parser: generate_kill(self, ch, parser), crd
     )
     _LOG.info("Plugin entities applied successfully to crd: %s", crd)
 

@@ -7,7 +7,7 @@ from unittest import TestCase
 from unittest.mock import Mock, MagicMock, patch
 
 from michelangelo.cli.mactl.crd import CRD
-from michelangelo.cli.mactl.plugins.pipeline.kill import (
+from michelangelo.cli.mactl.plugins.entity.pipeline.kill import (
     add_function_signature,
     generate_kill,
 )

@@ -19,6 +19,8 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
+# Import TypedStruct to register it in the descriptor pool
+from michelangelo.gen.api import typed_struct_pb2  # noqa: F401
 
 _LOG = getLogger(__name__)
 
