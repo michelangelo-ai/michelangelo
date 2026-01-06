@@ -1,5 +1,4 @@
-"""Utility functions for MaCTL subprocess management and environment detection.
-"""
+"""Utility functions for MaCTL subprocess management and environment detection."""
 
 import os
 import shutil

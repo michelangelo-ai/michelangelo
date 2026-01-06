@@ -1,3 +1,9 @@
+"""Pipeline kill command implementation.
+
+This module provides functionality to kill running pipeline runs by setting
+the kill flag on a PipelineRun resource.
+"""
+
 from argparse import ArgumentParser
 from inspect import Parameter, Signature
 from logging import getLogger
@@ -19,6 +25,7 @@ from michelangelo.cli.mactl.grpc_tools import (
     get_message_class_by_name,
     get_methods_from_service,
 )
+
 # Import TypedStruct to register it in the descriptor pool
 from michelangelo.gen.api import typed_struct_pb2  # noqa: F401
 
@@ -107,9 +114,7 @@ def generate_kill(crd: CRD, channel: Channel, parser: Optional[ArgumentParser] =
     _LOG.info("Update method: %r", update_method)
 
     # Get input and output classes
-    get_input_class = get_message_class_by_name(
-        method_pool, get_method.input_type[1:]
-    )
+    get_input_class = get_message_class_by_name(method_pool, get_method.input_type[1:])
     get_output_class = get_message_class_by_name(
         method_pool, get_method.output_type[1:]
     )
