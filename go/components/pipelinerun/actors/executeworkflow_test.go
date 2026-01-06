@@ -1002,6 +1002,29 @@ func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 			},
 			expectedUFStorageURL: "s3://pipeline-config-storage",
 		},
+		{
+			name: "UF_STORAGE_URL preserved when environ has other vars",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: createPipelineManifestWithEnviron(map[string]interface{}{
+										"CUSTOM_VAR": "custom-value",
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedUFStorageURL: DefaultWorkSpaceRootURL,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -1015,6 +1038,13 @@ func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 			ufStorageURL, exists := envs["UF_STORAGE_URL"]
 			require.True(t, exists, "UF_STORAGE_URL should exist in environment variables")
 			require.Equal(t, testCase.expectedUFStorageURL, ufStorageURL)
+
+			// For the test case with custom vars, verify they are also present
+			if testCase.name == "UF_STORAGE_URL preserved when environ has other vars" {
+				customVar, exists := envs["CUSTOM_VAR"]
+				require.True(t, exists, "CUSTOM_VAR should exist in environment variables")
+				require.Equal(t, "custom-value", customVar)
+			}
 		})
 	}
 }

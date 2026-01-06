@@ -398,7 +398,11 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 			kwArgs = val.([]interface{})
 		}
 		if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
-			envs = val.(map[string]interface{})
+			// Merge environment variables instead of replacing them
+			// This preserves default values like UF_STORAGE_URL set earlier
+			for k, v := range val.(map[string]interface{}) {
+				envs[k] = v
+			}
 		}
 	}
 
