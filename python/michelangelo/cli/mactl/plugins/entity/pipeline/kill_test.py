@@ -54,41 +54,22 @@ class PipelineKillTest(TestCase):
         # but we can check that the function runs without error
         self.assertTrue(True)
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
-    def test_generate_kill_basic(self, mock_get_message_class, mock_get_methods):
+    def test_generate_kill_basic(self):
         """Test basic kill command generation."""
-        # Setup mock methods
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", Mock(), Mock())
         )
-
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-
-        mock_get_methods.return_value = (mock_methods, Mock())
-
-        # Setup mock message classes
-        mock_get_message_class.return_value = Mock
 
         # Execute
         generate_kill(self.mock_crd, self.mock_channel)
 
         # Verify methods were called correctly
-        mock_get_methods.assert_called_once()
-        self.assertTrue(mock_get_message_class.called)
+        self.mock_crd.generate_get.assert_called_once_with(self.mock_channel)
+        self.mock_crd._extract_method_info.assert_called_once_with(
+            self.mock_channel, self.mock_crd.full_name, "Update"
+        )
 
     def test_kill_command_requires_namespace_and_name(self):
         """Test that kill command requires namespace and name parameters."""
@@ -97,85 +78,38 @@ class PipelineKillTest(TestCase):
         add_function_signature(self.mock_crd)
         self.assertTrue(True)
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    def test_generate_kill_missing_get_method(self, mock_get_methods):
-        """Test generate_kill error when GetPipelineRun method missing."""
-        mock_methods = {
-            "UpdatePipelineRun": Mock(),
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
-        with self.assertRaises(KeyError):
-            generate_kill(self.mock_crd, self.mock_channel)
-
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    def test_generate_kill_missing_update_method(self, mock_get_methods):
-        """Test generate_kill error when UpdatePipelineRun method missing."""
-        mock_methods = {
-            "GetPipelineRun": Mock(),
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
-        with self.assertRaises(KeyError):
-            generate_kill(self.mock_crd, self.mock_channel)
-
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
-    def test_kill_func_with_yes_flag(
-        self,
-        mock_parse_dict,
-        mock_message_to_dict,
-        mock_get_message_class,
-        mock_get_methods,
-    ):
-        """Test kill_func execution with --yes flag (auto-confirm)."""
-        # Setup mock methods
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
+    def test_generate_kill_missing_update_method(self):
+        """Test generate_kill error when Update method is missing."""
+        self.mock_crd.generate_get = Mock()
+        self.mock_crd._extract_method_info = Mock(
+            side_effect=ValueError("Method Update not found")
         )
 
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
+        with self.assertRaises(ValueError):
+            generate_kill(self.mock_crd, self.mock_channel)
 
-        # Setup mock message classes
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
+    @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
+    def test_kill_func_with_yes_flag(self, mock_parse_dict, mock_message_to_dict):
+        """Test kill_func execution with --yes flag (auto-confirm)."""
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
         mock_input_class = MagicMock()
         mock_output_class = MagicMock()
-        mock_get_message_class.side_effect = [
-            mock_input_class,
-            mock_output_class,
-            mock_input_class,
-            mock_output_class,
-        ]
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", mock_input_class, mock_output_class)
+        )
+
+        # Mock get method response
+        mock_get_response = Mock(spec=Message)
+        self.mock_crd.get = Mock(return_value=mock_get_response)
 
         # Setup mock channel responses
-        mock_get_stub = Mock()
-        mock_get_response = Mock(spec=Message)
-        mock_get_stub.return_value = mock_get_response
-
         mock_update_stub = Mock()
         mock_update_response = Mock(spec=Message)
         mock_update_stub.return_value = mock_update_response
 
-        self.mock_channel.unary_unary.side_effect = [mock_get_stub, mock_update_stub]
+        self.mock_channel.unary_unary.return_value = mock_update_stub
 
         # Setup MessageToDict to return proper structure
         mock_message_to_dict.side_effect = [
@@ -189,8 +123,7 @@ class PipelineKillTest(TestCase):
         # Get the kill function that was attached to the CRD
         kill_func = self.mock_crd.kill
 
-        # Execute the kill function by calling it directly
-        # The bind_signature decorator will handle binding
+        # Execute the kill function
         result = kill_func(
             self.mock_crd,
             namespace="test-namespace",
@@ -201,67 +134,37 @@ class PipelineKillTest(TestCase):
         # Verify the result is the update response
         self.assertEqual(result, mock_update_response)
 
-        # Verify gRPC stubs were called
-        self.assertEqual(self.mock_channel.unary_unary.call_count, 2)
-        mock_get_stub.assert_called_once()
-        mock_update_stub.assert_called_once()
+        # Verify get was called
+        self.mock_crd.get.assert_called_once_with("test-namespace", "test-pipeline-run")
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
     @patch("builtins.input")
     def test_kill_func_user_confirms(
-        self,
-        mock_input,
-        mock_parse_dict,
-        mock_message_to_dict,
-        mock_get_message_class,
-        mock_get_methods,
+        self, mock_input, mock_parse_dict, mock_message_to_dict
     ):
         """Test kill_func execution with user confirmation."""
         # User types 'yes'
         mock_input.return_value = "yes"
 
-        # Setup mocks
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
-        )
-
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
         mock_input_class = MagicMock()
         mock_output_class = MagicMock()
-        mock_get_message_class.side_effect = [
-            mock_input_class,
-            mock_output_class,
-            mock_input_class,
-            mock_output_class,
-        ]
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", mock_input_class, mock_output_class)
+        )
 
-        mock_get_stub = Mock()
+        # Mock get method response
         mock_get_response = Mock(spec=Message)
-        mock_get_stub.return_value = mock_get_response
+        self.mock_crd.get = Mock(return_value=mock_get_response)
 
+        # Setup mock channel responses
         mock_update_stub = Mock()
         mock_update_response = Mock(spec=Message)
         mock_update_stub.return_value = mock_update_response
 
-        self.mock_channel.unary_unary.side_effect = [mock_get_stub, mock_update_stub]
+        self.mock_channel.unary_unary.return_value = mock_update_stub
 
         mock_message_to_dict.side_effect = [
             {"pipeline_run": {"spec": {}}},
@@ -278,45 +181,20 @@ class PipelineKillTest(TestCase):
         self.assertEqual(result, mock_update_response)
         mock_input.assert_called_once()
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
     @patch("builtins.input")
     @patch("builtins.print")
-    def test_kill_func_user_cancels(
-        self, mock_print, mock_input, mock_get_message_class, mock_get_methods
-    ):
+    def test_kill_func_user_cancels(self, mock_print, mock_input):
         """Test kill_func when user cancels the operation."""
         # User types 'no'
         mock_input.return_value = "no"
 
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
-        )
-
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
         mock_input_class = MagicMock()
         mock_output_class = MagicMock()
-        mock_get_message_class.side_effect = [
-            mock_input_class,
-            mock_output_class,
-            mock_input_class,
-            mock_output_class,
-        ]
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", mock_input_class, mock_output_class)
+        )
 
         generate_kill(self.mock_crd, self.mock_channel)
         kill_func = self.mock_crd.kill
@@ -328,47 +206,20 @@ class PipelineKillTest(TestCase):
         self.assertIsNone(result)
         mock_print.assert_called_with("Kill operation cancelled.")
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
-    def test_kill_func_missing_spec_field(
-        self, mock_message_to_dict, mock_get_message_class, mock_get_methods
-    ):
+    def test_kill_func_missing_spec_field(self, mock_message_to_dict):
         """Test kill_func error when spec field is missing."""
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
-        )
-
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
         mock_input_class = MagicMock()
         mock_output_class = MagicMock()
-        mock_get_message_class.side_effect = [
-            mock_input_class,
-            mock_output_class,
-            mock_input_class,
-            mock_output_class,
-        ]
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", mock_input_class, mock_output_class)
+        )
 
-        mock_get_stub = Mock()
+        # Mock get method response
         mock_get_response = Mock(spec=Message)
-        mock_get_stub.return_value = mock_get_response
-
-        self.mock_channel.unary_unary.return_value = mock_get_stub
+        self.mock_crd.get = Mock(return_value=mock_get_response)
 
         # MessageToDict returns structure without spec field
         mock_message_to_dict.return_value = {"pipeline_run": {}}
@@ -381,56 +232,28 @@ class PipelineKillTest(TestCase):
 
         self.assertIn("Cannot set kill flag", str(context.exception))
 
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_methods_from_service"
-    )
-    @patch(
-        "michelangelo.cli.mactl.plugins.entity.pipeline.kill.get_message_class_by_name"
-    )
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.MessageToDict")
     @patch("michelangelo.cli.mactl.plugins.entity.pipeline.kill.ParseDict")
-    def test_kill_func_kill_flag_not_set(
-        self,
-        mock_parse_dict,
-        mock_message_to_dict,
-        mock_get_message_class,
-        mock_get_methods,
-    ):
+    def test_kill_func_kill_flag_not_set(self, mock_parse_dict, mock_message_to_dict):
         """Test kill_func error when kill flag is not set in response."""
-        mock_get_method = Mock()
-        mock_get_method.input_type = ".michelangelo.api.v2.GetPipelineRunRequest"
-        mock_get_method.output_type = ".michelangelo.api.v2.GetPipelineRunResponse"
-
-        mock_update_method = Mock()
-        mock_update_method.input_type = ".michelangelo.api.v2.UpdatePipelineRunRequest"
-        mock_update_method.output_type = (
-            ".michelangelo.api.v2.UpdatePipelineRunResponse"
-        )
-
-        mock_methods = {
-            "GetPipelineRun": mock_get_method,
-            "UpdatePipelineRun": mock_update_method,
-        }
-        mock_get_methods.return_value = (mock_methods, Mock())
-
+        # Mock generate_get and _extract_method_info
+        self.mock_crd.generate_get = Mock()
         mock_input_class = MagicMock()
         mock_output_class = MagicMock()
-        mock_get_message_class.side_effect = [
-            mock_input_class,
-            mock_output_class,
-            mock_input_class,
-            mock_output_class,
-        ]
+        self.mock_crd._extract_method_info = Mock(
+            return_value=("UpdatePipelineRun", mock_input_class, mock_output_class)
+        )
 
-        mock_get_stub = Mock()
+        # Mock get method response
         mock_get_response = Mock(spec=Message)
-        mock_get_stub.return_value = mock_get_response
+        self.mock_crd.get = Mock(return_value=mock_get_response)
 
+        # Setup mock channel responses
         mock_update_stub = Mock()
         mock_update_response = Mock(spec=Message)
         mock_update_stub.return_value = mock_update_response
 
-        self.mock_channel.unary_unary.side_effect = [mock_get_stub, mock_update_stub]
+        self.mock_channel.unary_unary.return_value = mock_update_stub
 
         # First call for get, second for update response
         mock_message_to_dict.side_effect = [
