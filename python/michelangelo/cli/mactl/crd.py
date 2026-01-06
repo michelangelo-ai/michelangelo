@@ -234,9 +234,8 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     return response
 
 
-def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for GET method.
-    """
+def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for GET method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     if "name" not in bound_args.arguments or not bound_args.arguments["name"]:
@@ -253,6 +252,7 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
         },
     )
     print(call_res)
+    return call_res
 
 
 def prepare_column_info() -> list[dict]:
@@ -311,7 +311,7 @@ def print_list_formatted(items: Sequence[Message]):
         )
 
 
-def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
+def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
     """Default common CRD member method implementation for LIST method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
@@ -331,11 +331,11 @@ def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     raw_elems = results[next(iter(results))]
 
     print_list_formatted(raw_elems.items)
+    return call_res
 
 
-def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for DELETE method.
-    """
+def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for DELETE method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
     call_res = crd_method_call_kwargs(
@@ -346,11 +346,11 @@ def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
         },
     )
     print(call_res)
+    return call_res
 
 
-def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for APPLY method.
-    """
+def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for APPLY method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start apply_func for %r", _self.full_name)
@@ -380,11 +380,11 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     )
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
+    return call_res
 
 
-def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
-    """Default common CRD member method implementation for CREATE method.
-    """
+def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+    """Default common CRD member method implementation for CREATE method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
     _self: CRD = bound_args.arguments["self"]
     _LOG.info("Start create_func for %r", _self.full_name)
@@ -399,6 +399,7 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     )
     call_res = crd_method_call(crd_method_info, request_input)
     print(call_res)
+    return call_res
 
 
 class CRD:
