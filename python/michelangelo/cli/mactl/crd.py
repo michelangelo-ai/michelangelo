@@ -1,10 +1,10 @@
-"""CRD class and its member method implementations
-"""
+"""CRD class and its member method implementations."""
 
 from argparse import ArgumentParser
-from collections.abc import MutableMapping
+from collections.abc import MutableMapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import datetime
 from functools import partial
 from inspect import Parameter, Signature
 from logging import getLogger
@@ -234,7 +234,7 @@ def crd_method_call(crd_method_info, request_input: Message) -> Message:
     return response
 
 
-def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     """Default common CRD member method implementation for GET method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -245,41 +245,110 @@ def get_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Mess
         _self.generate_list(crd_method_info.channel)
         return _self.list(namespace=get_single_arg(bound_args.arguments, "namespace"))
 
-    return crd_method_call_kwargs(
+    call_res = crd_method_call_kwargs(
         crd_method_info,
         **{
             "namespace": get_single_arg(bound_args.arguments, "namespace"),
             "name": get_single_arg(bound_args.arguments, "name"),
         },
     )
+    print(call_res)
 
 
-def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
-    """Default common CRD member method implementation for LIST method.
-    """
+def prepare_column_info() -> list[dict]:
+    """Prepare column info for formatted printing of CRD items."""
+    res = [
+        {
+            "column_name": "NAMESPACE",
+            "retrieve_func": lambda item: item.metadata.namespace,
+            "max_length": len("NAMESPACE") + 1,
+        },
+        {
+            "column_name": "NAME",
+            "retrieve_func": lambda item: item.metadata.name,
+            "max_length": len("NAME") + 1,
+        },
+        {
+            "column_name": "LAST_UPDATED_SPEC",
+            "retrieve_func": lambda item: datetime.fromtimestamp(
+                int(item.metadata.labels["michelangelo/UpdateTimestamp"]) / 1_000_000
+            ).strftime("%Y-%m-%d_%H:%M:%S"),
+            "max_length": len("LAST_UPDATED_SPEC") + 1,
+        },
+    ]
+    _LOG.debug("Prepared column info: %r", res)
+    return res
+
+
+def print_list_formatted(items: Sequence[Message]):
+    """Print list of CRD items in formatted way."""
+    _LOG.info("Print list of CRD items: %r (length %d)", type(items), len(items))
+
+    ansi_header = "\033[1;37;44m"  # bold + white + blue background
+    ansi_reset = "\033[0m"
+
+    column_info = prepare_column_info()
+    for item in items:
+        for col in column_info:
+            col["max_length"] = max(
+                col["max_length"], len(col["retrieve_func"](item)) + 1
+            )
+
+    print(
+        f"{ansi_header} "
+        + "".join([col["column_name"].ljust(col["max_length"]) for col in column_info])
+        + f"{ansi_reset}"
+    )
+    for item in items:
+        print(
+            " "
+            + "".join(
+                [
+                    col["retrieve_func"](item).ljust(col["max_length"])
+                    for col in column_info
+                ]
+            )
+        )
+
+
+def list_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
+    """Default common CRD member method implementation for LIST method."""
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    return crd_method_call_kwargs(
+    call_res = crd_method_call_kwargs(
         crd_method_info,
         **{"namespace": get_single_arg(bound_args.arguments, "namespace")},
     )
+    _LOG.debug("Succeed to list CRDs: %r", type(call_res))
+    results = {k.name: v for k, v in call_res.ListFields() if k.name.endswith("_list")}
+    _LOG.debug(
+        "Extracted keys (%s): %r / %r",
+        len(results),
+        list(results),
+        [type(v) for v in results.values()],
+    )
+    # we assume the there is only one list field in the response message
+    raw_elems = results[next(iter(results))]
+
+    print_list_formatted(raw_elems.items)
 
 
-def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+def delete_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     """Default common CRD member method implementation for DELETE method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
 
-    return crd_method_call_kwargs(
+    call_res = crd_method_call_kwargs(
         crd_method_info,
         **{
             "namespace": get_single_arg(bound_args.arguments, "namespace"),
             "name": get_single_arg(bound_args.arguments, "name"),
         },
     )
+    print(call_res)
 
 
-def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     """Default common CRD member method implementation for APPLY method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -309,10 +378,11 @@ def apply_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Me
     request_input = _self.read_yaml_and_update_crd_request(
         crd_method_info.input_class, _file, message_instance
     )
-    return crd_method_call(crd_method_info, request_input)
+    call_res = crd_method_call(crd_method_info, request_input)
+    print(call_res)
 
 
-def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> Message:
+def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature):
     """Default common CRD member method implementation for CREATE method.
     """
     _LOG.info("Bound arguments: %r", bound_args.arguments)
@@ -327,7 +397,8 @@ def create_func_impl(crd_method_info: CrdMethodInfo, bound_args: Signature) -> M
         _file,
         _self.func_crd_metadata_converter,
     )
-    return crd_method_call(crd_method_info, request_input)
+    call_res = crd_method_call(crd_method_info, request_input)
+    print(call_res)
 
 
 class CRD:
@@ -509,8 +580,7 @@ class CRD:
     def generate_delete(
         self, channel: Channel, parser: Optional[ArgumentParser] = None
     ):
-        """Generate delete function of this class.
-        """
+        """Generate delete function of this class."""
         _LOG.info("Generate DELETE method for %r / %r", self.name, self.full_name)
         method_info = CrdMethodInfo(
             channel,
@@ -550,8 +620,7 @@ class CRD:
         _LOG.debug("Generated GET injected well: %r", self.get)
 
     def generate_apply(self, channel: Channel, parser: Optional[ArgumentParser] = None):
-        """Generate apply function of this class.
-        """
+        """Generate apply function of this class."""
         self.generate_get(channel)
 
         _LOG.info("Generate APPLY method for %r / %r", self.name, self.full_name)
@@ -570,8 +639,7 @@ class CRD:
         _LOG.debug("Generated APPLY injected well: %r", self.apply)
 
     def generate_create(self, channel: Channel):
-        """Generate create function of this class.
-        """
+        """Generate create function of this class."""
         _LOG.info("Generate CREATE method for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
@@ -590,8 +658,7 @@ class CRD:
         _LOG.debug("Generated CREATE injected well: %r", self.create)
 
     def generate_list(self, channel: Channel):
-        """Generate list function of this class.
-        """
+        """Generate list function of this class."""
         _LOG.info("Generate LIST method for %r / %r", self.name, self.full_name)
 
         method_info = CrdMethodInfo(
@@ -615,8 +682,7 @@ class CRD:
     def read_yaml_and_update_crd_request(
         self, input_class: type[Message], yaml_path_string: str, original_crd: Message
     ) -> Message:
-        """Read a YAML file and update the original CRD request instance.
-        """
+        """Read a YAML file and update the original CRD request instance."""
         original_crd_dict: dict = MessageToDict(
             original_crd, preserving_proto_field_name=True
         )
@@ -654,3 +720,16 @@ def inject_func_signature(crd: CRD, function_name: str, signatures: dict) -> Non
         "Added function signature for action and argparser: %r",
         crd.func_signature[function_name],
     )
+
+
+def get_crd_simple_info(crd: CRD) -> dict[str, str]:
+    """
+    Get simple info of CRD for display
+    """
+    return {
+        "name": crd.name,
+        "namespace": crd.namespace,
+        "last_updated": crd.last_updated,
+        "ownder": crd.owner,
+        "type": crd.type,
+    }
