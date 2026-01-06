@@ -7,12 +7,11 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
-        "//go/components/inferenceserver/gateways:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton/creation:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton/deletion:go_default_library",
-        "//go/components/inferenceserver/proxy:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",

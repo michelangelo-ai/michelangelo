@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap/configmapmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -82,7 +81,7 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "CleanupPending",
@@ -103,7 +102,7 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupComplete",
@@ -124,7 +123,7 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "CleanupPending",
@@ -160,7 +159,7 @@ func TestModelCleanupRun(t *testing.T) {
 	tests := []struct {
 		name                     string
 		deployment               *v2pb.Deployment
-		setupMocks               func(*configmapmocks.MockModelConfigMapProvider, *gatewaysmocks.MockGateway)
+		setupMocks               func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
@@ -179,33 +178,9 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, gw *gatewaysmocks.MockGateway) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model model-v1",
-		},
-		{
-			name: "cleanup continues even if ConfigMap removal fails",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
-				},
-			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, gw *gatewaysmocks.MockGateway) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(errors.New("configmap error"))
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -225,10 +200,31 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, gw *gatewaysmocks.MockGateway) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("unload failed"))
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload error"))
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
+			},
+			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
+			expectedConditionReason:  "CleanupCompleted",
+			expectedConditionMessage: "Successfully cleaned up old model model-v1",
+		},
+		{
+			name: "cleanup completes even if model still shows loaded",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+				Status: v2pb.DeploymentStatus{
+					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
+				},
+			},
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -248,10 +244,9 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "old-bert"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, gw *gatewaysmocks.MockGateway) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-bert", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "old-bert", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -271,10 +266,9 @@ func TestModelCleanupRun(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v2"},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider, gw *gatewaysmocks.MockGateway) {
-				mcp.EXPECT().RemoveModelFromConfigMap(gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("verification failed"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v2", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v2", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("verification failed"))
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "CleanupCompleted",
@@ -287,14 +281,12 @@ func TestModelCleanupRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockConfigMap := configmapmocks.NewMockModelConfigMapProvider(ctrl)
 			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			tt.setupMocks(mockConfigMap, mockGateway)
+			tt.setupMocks(mockGateway)
 
 			actor := &ModelCleanupActor{
-				ModelConfigMapProvider: mockConfigMap,
-				Gateway:                mockGateway,
-				Logger:                 zap.NewNop(),
+				Gateway: mockGateway,
+				Logger:  zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, nil)

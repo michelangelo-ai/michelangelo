@@ -12,7 +12,6 @@
 //   - Handles scaling and replica management
 //
 // Network Routing:
-//   - Configures Gateway API HTTPRoutes
 //   - Sets up URL rewriting rules
 //   - Manages traffic routing for deployments
 //
@@ -23,7 +22,7 @@
 //
 // The controller follows a condition-based lifecycle model:
 //
-//	Creation:  Validation → Resource Creation → Proxy Configuration → Health Check
+//	Creation:  Validation → Resource Creation → Health Check
 //	Deletion:  Cleanup → Resource Removal
 package inferenceserver
 
@@ -47,9 +46,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	defaultengine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -57,7 +54,6 @@ import (
 //
 // The Reconciler handles:
 //   - Infrastructure provisioning (Kubernetes deployments, services, configmaps)
-//   - Network routing and proxy configuration (HTTPRoute/Gateway API)
 //   - Health checking and status reporting
 //   - Cleanup and finalization on deletion
 type Reconciler struct {
@@ -65,9 +61,7 @@ type Reconciler struct {
 
 	logger            *zap.Logger
 	Recorder          record.EventRecorder
-	Gateway           gateways.Gateway
 	engine            conditionInterfaces.Engine[*v2pb.InferenceServer]
-	ProxyProvider     proxy.ProxyProvider
 	Plugins           plugins.PluginRegistry
 	apiHandlerFactory apiHandler.Factory
 }
@@ -80,22 +74,18 @@ type Reconciler struct {
 // Parameters:
 //   - mgr: The controller-runtime manager providing Kubernetes client access
 //   - scheme: Kubernetes runtime scheme with registered CRD types
-//   - gateway: Gateway interface for backend-specific operations (Triton, vLLM, etc.)
-//   - proxyProvider: Provider for network routing management (HTTPRoute/Istio)
 //   - pluginRegistry: Registry of backend-specific plugins
 //   - apiHandlerFactory: Factory for creating API handlers
 //   - logger: Structured logger for observability
 //
 // Returns:
 //   - *Reconciler: Configured reconciler ready to be registered with the manager
-func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, pluginRegistry plugins.PluginRegistry, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
+func NewReconciler(mgr ctrl.Manager, scheme *runtime.Scheme, pluginRegistry plugins.PluginRegistry, apiHandlerFactory apiHandler.Factory, logger *zap.Logger) *Reconciler {
 	logger = logger.With(zap.String("component", "inferenceserver"))
 	return &Reconciler{
 		engine:            defaultengine.NewDefaultEngine[*v2pb.InferenceServer](logger),
 		Recorder:          mgr.GetEventRecorderFor(ControllerName),
-		Gateway:           gateway,
 		Plugins:           pluginRegistry,
-		ProxyProvider:     proxyProvider,
 		apiHandlerFactory: apiHandlerFactory,
 		logger:            logger,
 	}

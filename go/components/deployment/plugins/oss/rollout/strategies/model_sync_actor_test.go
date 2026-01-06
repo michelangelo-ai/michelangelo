@@ -10,7 +10,6 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap/configmapmocks"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -37,7 +36,7 @@ func TestModelSyncRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "ModelSyncCompleted",
@@ -73,7 +72,7 @@ func TestModelSyncRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "ModelSyncCompleted",
@@ -109,13 +108,13 @@ func TestModelSyncRun(t *testing.T) {
 	tests := []struct {
 		name                     string
 		deployment               *v2pb.Deployment
-		setupMocks               func(*configmapmocks.MockModelConfigMapProvider)
+		setupMocks               func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
 	}{
 		{
-			name: "successful model sync to configmap",
+			name: "successful model sync via gateway",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -125,15 +124,15 @@ func TestModelSyncRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider) {
-				mcp.EXPECT().AddModelToConfigMap(gomock.Any(), gomock.Any()).Return(nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "model-v1", "s3://deploy-models/model-v1/", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason:  "ModelSyncPending",
 			expectedConditionMessage: "Model sync is in progress",
 		},
 		{
-			name: "configmap update fails",
+			name: "model loading fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -143,11 +142,11 @@ func TestModelSyncRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider) {
-				mcp.EXPECT().AddModelToConfigMap(gomock.Any(), gomock.Any()).Return(errors.New("configmap update failed"))
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "model-v2", "s3://deploy-models/model-v2/", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("model loading failed"))
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "ConfigMapUpdateFailed",
+			expectedConditionReason:  "ModelLoadingFailed",
 			expectedConditionMessage: "Failed to update deployment",
 		},
 		{
@@ -161,7 +160,7 @@ func TestModelSyncRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider) {
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
 				// No mocks needed - early return
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_UNKNOWN,
@@ -179,8 +178,8 @@ func TestModelSyncRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider) {
-				mcp.EXPECT().AddModelToConfigMap(gomock.Any(), gomock.Any()).Return(nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "bert_cola", "s3://deploy-models/bert_cola/", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason:  "ModelSyncPending",
@@ -203,8 +202,8 @@ func TestModelSyncRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(mcp *configmapmocks.MockModelConfigMapProvider) {
-				mcp.EXPECT().AddModelToConfigMap(gomock.Any(), gomock.Any()).Return(nil)
+			setupMocks: func(gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().LoadModel(gomock.Any(), gomock.Any(), "llm-model", "s3://deploy-models/llm-model/", "triton-staging", "staging", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_UNKNOWN,
 			expectedConditionReason:  "ModelSyncPending",
@@ -217,12 +216,12 @@ func TestModelSyncRun(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockConfigMap := configmapmocks.NewMockModelConfigMapProvider(ctrl)
-			tt.setupMocks(mockConfigMap)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockGateway)
 
 			actor := &ModelSyncActor{
-				modelConfigMapProvider: mockConfigMap,
-				logger:                 zap.NewNop(),
+				gateway: mockGateway,
+				logger:  zap.NewNop(),
 			}
 
 			condition, err := actor.Run(context.Background(), tt.deployment, nil)

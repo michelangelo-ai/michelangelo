@@ -7,9 +7,8 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -18,17 +17,15 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ValidationAct
 
 // ValidationActor validates that inference server configuration meets Triton requirements.
 type ValidationActor struct {
-	gateway       gateways.Gateway
-	proxyProvider proxy.ProxyProvider
-	logger        *zap.Logger
+	backend backends.Backend
+	logger  *zap.Logger
 }
 
 // NewValidationActor creates a condition actor for Triton configuration validation.
-func NewValidationActor(gateway gateways.Gateway, logger *zap.Logger, proxyProvider proxy.ProxyProvider) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewValidationActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ValidationActor{
-		gateway:       gateway,
-		logger:        logger,
-		proxyProvider: proxyProvider,
+		backend: backend,
+		logger:  logger,
 	}
 }
 

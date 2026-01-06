@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -15,9 +14,8 @@ import (
 
 // ModelCleanupActor unloads previous model versions from inference servers after successful rollout.
 type ModelCleanupActor struct {
-	ModelConfigMapProvider configmap.ModelConfigMapProvider
-	Gateway                gateways.Gateway
-	Logger                 *zap.Logger
+	Gateway gateways.Gateway
+	Logger  *zap.Logger
 }
 
 // GetType returns the condition type identifier for model cleanup.
@@ -53,13 +51,7 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 
 	// Check if old model still exists in Triton (following Uber's verification pattern)
 	// Use gateway to check if old model is still loaded
-	statusRequest := gateways.CheckModelStatusRequest{
-		ModelName:       currentModel,
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-	}
-
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)
+	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
 		// If we can't check status, assume cleanup is needed
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
@@ -109,38 +101,15 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
 
 	// Remove old model from ConfigMap
-	if err := a.ModelConfigMapProvider.RemoveModelFromConfigMap(ctx, configmap.RemoveModelFromConfigMapRequest{
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-		ModelName:       currentModel,
-	}); err != nil {
+	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
 		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
 		// Don't fail entire deployment if remove from ConfigMap fails
 	}
 
-	// PHASE 2: Directly unload old model from Triton using API (following Uber's pattern)
-	a.Logger.Info("Phase 2: Unloading old model from Triton", zap.String("old_model", currentModel))
-
-	if err := a.Gateway.UnloadModel(ctx, a.Logger, gateways.UnloadModelRequest{
-		ModelName:       currentModel,
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-	}); err != nil {
-		a.Logger.Error("Failed to unload old model from Triton", zap.String("model", currentModel), zap.Error(err))
-		// Don't fail the deployment if direct unload fails - ConfigMap update should handle it
-		a.Logger.Info("ConfigMap update should eventually unload the model automatically")
-	}
-
-	// PHASE 3: Verify cleanup completed
+	// PHASE 2: Verify cleanup completed
 	a.Logger.Info("Phase 3: Verifying old model is unloaded", zap.String("old_model", currentModel))
 
-	statusRequest := gateways.CheckModelStatusRequest{
-		ModelName:       currentModel,
-		InferenceServer: inferenceServerName,
-		Namespace:       resource.Namespace,
-	}
-
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, statusRequest)
+	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err == nil && ready {
 		a.Logger.Info("Old model still loaded, but ConfigMap update should unload it eventually", zap.String("model", currentModel))
 	} else {
