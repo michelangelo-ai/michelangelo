@@ -1,7 +1,7 @@
-"""Training task for fine-tuning a BERT model on the CoLA dataset."""
-
 import logging
 
+import mlflow
+import mlflow.pytorch  # For logging PyTorch models
 import numpy as np
 import torch
 import transformers
@@ -14,22 +14,6 @@ from michelangelo.uniflow.plugins.ray import RayTask
 log = logging.getLogger(__name__)
 
 
-# Model creation function
-def create_model(
-    lr: float, eps: float
-) -> transformers.AutoModelForSequenceClassification:
-    """Create BERT model for sequence classification.
-
-    Args:
-        lr: Learning rate (unused in current implementation).
-        eps: Epsilon parameter (unused in current implementation).
-
-    Returns:
-        BERT model initialized for binary classification with 2 labels.
-    """
-    return transformers.AutoModelForSequenceClassification.from_pretrained(
-        "bert-base-cased", num_labels=2
-    )
 
 
 @uniflow.task(
@@ -39,28 +23,34 @@ def create_model(
         worker_cpu=1,
         worker_memory="4Gi",
         worker_instances=1,
-        # breakpoint=True,
+        breakpoint=False,
     ),
+    cache_enabled=False,
 )
 def train(
     train_data: Dataset,
     validation_data: Dataset,
     test_data: Dataset,
 ):
-    """Fine-tune BERT model on CoLA dataset.
-
-    Trains BERT for sequence classification on the linguistic acceptability task
-    using HuggingFace Trainer with automatic mixed precision if GPUs are available.
-
-    Args:
-        train_data: Ray Dataset containing training examples.
-        validation_data: Ray Dataset containing validation examples.
-        test_data: Ray Dataset containing test examples.
-
-    Returns:
-        Dictionary containing training metrics and model save path.
-    """
     log.info("Starting training...")
+
+    experiment_name = "bert-cola-experiment"
+    artifact_location = "s3://mlflow"
+
+    # Check if experiment already exists
+    experiment = mlflow.get_experiment_by_name(experiment_name)
+
+    if experiment is None:
+        # Create if it does not exist
+        mlflow.create_experiment(
+            name=experiment_name, artifact_location=artifact_location
+        )
+        print(f"Experiment '{experiment_name}' created.")
+    else:
+        print(f"Experiment '{experiment_name}' already exists.")
+
+    # Set the active experiment
+    mlflow.set_experiment(experiment_name)
 
     # Training configuration
     batch_size = 8
@@ -69,48 +59,66 @@ def train(
     eps = 1e-8
     output_dir = "./bert_cola"
 
-    # Load model
-    model = create_model(lr=lr, eps=eps)
+    # Start MLflow experiment
+    with mlflow.start_run():
+        # Log hyperparameters
+        mlflow.log_param("learning_rate", lr)
+        mlflow.log_param("eps", eps)
+        mlflow.log_param("batch_size", batch_size)
+        mlflow.log_param("max_epochs", max_epochs)
 
-    train_data = HFDataset.from_pandas(train_data.to_pandas())
-    validation_data = HFDataset.from_pandas(validation_data.to_pandas())
-    test_data = HFDataset.from_pandas(test_data.to_pandas())
+        # Load model
+        model = _create_model(lr=lr, eps=eps)
 
-    # Define training arguments
-    training_args = transformers.TrainingArguments(
-        output_dir=output_dir,
-        evaluation_strategy="epoch",
-        save_strategy="epoch",
-        save_total_limit=1,  # Keep only the best checkpoint
-        metric_for_best_model="eval_loss",  # Customize based on your needs
-        greater_is_better=False,
-        per_device_train_batch_size=batch_size,
-        per_device_eval_batch_size=batch_size,
-        num_train_epochs=max_epochs,
-        learning_rate=lr,
-        logging_dir=f"{output_dir}/logs",
-        load_best_model_at_end=True,
-    )
+        train_data = HFDataset.from_pandas(train_data.to_pandas())
+        validation_data = HFDataset.from_pandas(validation_data.to_pandas())
+        test_data = HFDataset.from_pandas(test_data.to_pandas())
 
-    trainer = transformers.Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_data,
-        eval_dataset=validation_data,
-        tokenizer=transformers.AutoTokenizer.from_pretrained("bert-base-cased"),
-        compute_metrics=_compute_metrics,
-    )
+        # Define training arguments
+        training_args = transformers.TrainingArguments(
+            output_dir=output_dir,
+            evaluation_strategy="epoch",
+            save_strategy="epoch",
+            save_total_limit=1,  # Keep only the best checkpoint
+            metric_for_best_model="eval_loss",  # Customize based on your needs
+            greater_is_better=False,
+            per_device_train_batch_size=batch_size,
+            per_device_eval_batch_size=batch_size,
+            num_train_epochs=max_epochs,
+            learning_rate=lr,
+            logging_dir=f"{output_dir}/logs",
+            load_best_model_at_end=True,
+        )
 
-    train_result = trainer.train()
-    trainer.save_model(output_dir)
+        trainer = transformers.Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_data,
+            eval_dataset=validation_data,
+            tokenizer=transformers.AutoTokenizer.from_pretrained("bert-base-cased"),
+            compute_metrics=_compute_metrics,
+        )
 
-    log.info("Training complete. Best model saved.")
+        train_result = trainer.train()
+        trainer.save_model(output_dir)
 
-    # Get the best checkpoint path
-    best_checkpoint = training_args.output_dir + "/checkpoint-best"
-    log.info(f"Best checkpoint path: {best_checkpoint}")
+        log.info("Training complete. Best model saved.")
 
-    return train_result, best_checkpoint
+        # Log metrics
+        mlflow.log_metric("train_loss", train_result.training_loss)
+        eval_result = trainer.evaluate(validation_data)
+        mlflow.log_metric("eval_loss", eval_result["eval_loss"])
+
+        # Get the best checkpoint path
+        best_checkpoint = training_args.output_dir + "/checkpoint-best"
+        log.info(f"Best checkpoint path: {best_checkpoint}")
+
+        # Register model in MLflow Model Registry
+        model_uri = f"runs:/{mlflow.active_run().info.run_id}/bert_model"
+        mlflow.pytorch.log_model(model, "bert_model")
+        mlflow.register_model(model_uri, "BertModelRegistry")
+
+        return model_uri, train_result, best_checkpoint
 
 
 def _compute_metrics(eval_pred):
@@ -138,3 +146,11 @@ def _compute_metrics(eval_pred):
     mcc = numerator / denominator if denominator != 0 else 0.0
 
     return {"matthews_correlation": mcc}
+
+# Model creation function
+def _create_model(
+    lr: float, eps: float
+) -> transformers.AutoModelForSequenceClassification:
+    return transformers.AutoModelForSequenceClassification.from_pretrained(
+        "bert-base-cased", num_labels=2
+    )

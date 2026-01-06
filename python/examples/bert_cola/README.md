@@ -1,31 +1,27 @@
-# BERT CoLA Fine-tuning Demo
+## Prerequisites
+1. Create Sandbox through `ma sandbox create`
 
-Fine-tuning BERT for linguistic acceptability classification using the Corpus of Linguistic Acceptability (CoLA) task from the GLUE benchmark. Demonstrates sequence classification with distributed training on Ray.
+2.a. This pipeline uses MLFLOW, hence the following steps are required:
+    1. run `kubectl exec -it mysql -- bash` on terminal to exec into the mysql pod
+    2. `mysql -u root -p`
+    3. enter "root" for password
+    4. run `create database mlflow_db;`
+    5. then exit the pod
 
-## Features
+2.b. Create a bucket called `mlflow` in minio
 
-- **Pre-trained Model**: BERT base model fine-tuning
-- **GLUE Benchmark**: CoLA task for grammatical acceptability
-- **Distributed Training**: Ray-based execution
-- **HuggingFace Integration**: Uses transformers and datasets libraries
-- **Evaluation Metrics**: Matthews correlation coefficient and accuracy
+3.a. create pipeline task image by running:
+```bash
+docker build -t examples:latest -f ./examples/Dockerfile .
+```
+3.b. import image into cluster by running 
+```bash
+k3d image import examples:latest -c michelangelo-sandbox
+```
 
-## How to Run
+
+## Run pipeline on Cadence
 
 ```bash
-cd michelangelo-ai/michelangelo/python
-source .venv/bin/activate
-poetry run python examples/bert_cola/bert_cola.py
-```
-
-## Expected Output
-
-```
-Loading dataset from GLUE/CoLA...
-Training BERT model...
-Epoch 1/3: loss=0.512, accuracy=0.85
-Epoch 2/3: loss=0.312, accuracy=0.89
-Epoch 3/3: loss=0.201, accuracy=0.92
-result: {'model_path': '/tmp/bert_cola_model', 'metrics': {...}}
-ok.
+PYTHONPATH="." poetry run python ./examples/bert_cola/bert_cola.py  remote-run --image docker.io/library/examples:latest --storage-url s3://default --yes
 ```
