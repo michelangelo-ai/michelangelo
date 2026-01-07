@@ -1,17 +1,22 @@
 """Unit tests for CRD module."""
 
 from datetime import datetime, timezone
+from inspect import Parameter, Signature
 from unittest import TestCase
 from unittest.mock import MagicMock, Mock, patch
 
 from michelangelo.cli.mactl.crd import (
+    CRD,
     CrdMethodInfo,
     apply_func_impl,
+    bind_signature,
     create_func_impl,
     delete_func_impl,
     get_func_impl,
+    inject_func_signature,
     list_func_impl,
     prepare_column_info,
+    snake_to_camel,
 )
 
 
@@ -223,3 +228,126 @@ class CreateFuncImplTest(TestCase):
             mock_crd.func_crd_metadata_converter,
         )
         mock_call.assert_called_once_with(crd_method_info, mock_request)
+
+
+class BindSignatureTest(TestCase):
+    """Test cases for bind_signature decorator."""
+
+    def test_bind_signature_applies_defaults(self):
+        """Test bind_signature binds arguments and applies default values."""
+        sig = Signature(
+            [
+                Parameter("x", Parameter.POSITIONAL_OR_KEYWORD),
+                Parameter("y", Parameter.POSITIONAL_OR_KEYWORD, default=100),
+            ]
+        )
+        mock_func = Mock(return_value="success")
+
+        # Create decorated function
+        decorated = bind_signature(sig)(mock_func)
+        result = decorated(5)
+
+        # Verify function was called and defaults were applied
+        self.assertEqual(result, "success")
+        bound_args = mock_func.call_args[0][0]
+        self.assertEqual(bound_args.arguments["x"], 5)
+        self.assertEqual(bound_args.arguments["y"], 100)
+
+
+class InjectFuncSignatureTest(TestCase):
+    """Test cases for inject_func_signature function."""
+
+    def test_inject_func_signature(self):
+        """Test inject_func_signature adds function signature to CRD."""
+        mock_crd = Mock(spec=CRD)
+        mock_crd.func_signature = {}
+
+        test_signatures = {
+            "help": "Test help message",
+            "args": [{"args": ["--test"], "kwargs": {"type": str}}],
+        }
+
+        inject_func_signature(mock_crd, "test_action", test_signatures)
+
+        self.assertIn("test_action", mock_crd.func_signature)
+        self.assertEqual(
+            mock_crd.func_signature["test_action"]["help"], "Test help message"
+        )
+        self.assertEqual(
+            mock_crd.func_signature["test_action"]["args"],
+            [{"args": ["--test"], "kwargs": {"type": str}}],
+        )
+
+
+class ExtractMethodInfoTest(TestCase):
+    """Test cases for CRD._extract_method_info method."""
+
+    @patch("michelangelo.cli.mactl.crd.get_message_class_by_name")
+    @patch("michelangelo.cli.mactl.crd.get_methods_from_service")
+    def test_extract_method_info(
+        self, mock_get_methods_from_service, mock_get_message_class_by_name
+    ):
+        """Test _extract_method_info returns correct method information."""
+        # Config mock
+        mock_method = Mock(
+            input_type="/test.GetRequest", output_type="/test.GetResponse"
+        )
+        mock_get_methods_from_service.return_value = (
+            {"GetTestCrd": mock_method},
+            Mock(),
+        )
+
+        mock_input_class = Mock()
+        mock_output_class = Mock()
+        mock_get_message_class_by_name.side_effect = [
+            mock_input_class,
+            mock_output_class,
+        ]
+
+        # Run test
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        method_name, input_class, output_class = crd._extract_method_info(
+            Mock(), "test.service.TestCrd", "Get"
+        )
+
+        # Check results
+        self.assertEqual(method_name, "GetTestCrd")
+        self.assertEqual(input_class, mock_input_class)
+        self.assertEqual(output_class, mock_output_class)
+
+
+class GenerateGetTest(TestCase):
+    """Test cases for CRD.generate_get method."""
+
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_get(self, mock_extract_method_info):
+        """Test generate_get creates the get method on CRD instance."""
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("GetTestCrd", Mock, Mock)
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_get(mock_channel)
+
+        self.assertTrue(hasattr(crd, "get"))
+        self.assertTrue(callable(crd.get))
+
+    @patch("michelangelo.cli.mactl.crd.crd_method_call_kwargs")
+    @patch.object(CRD, "_extract_method_info")
+    def test_generate_get_execution(
+        self, mock_extract_method_info, mock_crd_method_call_kwargs
+    ):
+        """Test the generated get method can be executed with correct arguments."""
+        mock_channel = Mock()
+        mock_extract_method_info.return_value = ("GetTestCrd", Mock, Mock)
+        mock_response = Mock()
+        mock_crd_method_call_kwargs.return_value = mock_response
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+        crd.generate_get(mock_channel)
+
+        result = crd.get(namespace="test-ns", name="test-name")
+
+        self.assertEqual(result, mock_response)
+        call_args = mock_crd_method_call_kwargs.call_args
+        self.assertEqual(call_args.kwargs["namespace"], "test-ns")
+        self.assertEqual(call_args.kwargs["name"], "test-name")
