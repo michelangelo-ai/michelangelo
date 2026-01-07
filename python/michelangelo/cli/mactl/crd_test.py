@@ -315,9 +315,7 @@ class ExtractMethodInfoTest(TestCase):
         self.assertEqual(output_class, mock_output_class)
 
     @patch("michelangelo.cli.mactl.crd.get_methods_from_service")
-    def test_extract_method_info_method_not_found(
-        self, mock_get_methods_from_service
-    ):
+    def test_extract_method_info_method_not_found(self, mock_get_methods_from_service):
         """Test _extract_method_info raises ValueError when method not found."""
         # Config mock with empty methods dict
         mock_get_methods_from_service.return_value = ({}, Mock())
