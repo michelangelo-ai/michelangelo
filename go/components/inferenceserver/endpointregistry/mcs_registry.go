@@ -2,6 +2,7 @@ package endpointregistry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -10,7 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
@@ -25,10 +25,8 @@ const (
 	mcsAPIGroup   = "multicluster.x-k8s.io"
 	mcsAPIVersion = "v1alpha1"
 
-	serviceImportResource = "serviceimports"
-
-	// Label for tracking which cluster the ServiceImport is associated with
-	labelSourceCluster = "michelangelo.ai/source-cluster"
+	// ConfigMap name prefix for storing endpoint metadata
+	endpointConfigMapPrefix = "mcs-endpoints-"
 )
 
 var (
@@ -37,38 +35,37 @@ var (
 		Version: mcsAPIVersion,
 		Kind:    "ServiceExport",
 	}
-	serviceImportGVR = schema.GroupVersionResource{
-		Group:    mcsAPIGroup,
-		Version:  mcsAPIVersion,
-		Resource: serviceImportResource,
-	}
 )
 
 var _ EndpointRegistry = &mcsEndpointRegistry{}
 
 // mcsEndpointRegistry implements EndpointRegistry using Kubernetes Multi-Cluster Services (MCS).
-// It creates ServiceExport in target clusters and ServiceImport in the control plane,
-// enabling cross-cluster service discovery and routing.
+//
+// Architecture:
+//   - ServiceExport is created in target clusters to export the inference service
+//   - Istio (with multi-cluster remote secrets) discovers ServiceExports and handles routing
+//   - A ConfigMap in the control plane stores endpoint metadata for querying
+//
+// This approach leverages Istio's native MCS support for traffic routing while
+// maintaining a simple metadata store for endpoint queries.
 type mcsEndpointRegistry struct {
-	dynamicClient dynamic.Interface
 	kubeClient    client.Client
 	clientFactory clientfactory.ClientFactory
 	logger        *zap.Logger
 }
 
 // NewMCSEndpointRegistry creates a new MCS-based endpoint registry.
-func NewMCSEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
+func NewMCSEndpointRegistry(kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
 	sp := secrets.NewProvider(kubeClient)
 	return &mcsEndpointRegistry{
-		dynamicClient: dynamicClient,
 		kubeClient:    kubeClient,
 		clientFactory: clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger),
 		logger:        logger,
 	}
 }
 
-// RegisterEndpoint creates a ServiceExport in the target cluster and a ServiceImport
-// in the control plane for the cluster endpoint.
+// RegisterEndpoint creates a ServiceExport in the target cluster and stores
+// endpoint metadata in a ConfigMap in the control plane.
 func (r *mcsEndpointRegistry) RegisterEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
 	logger.Info("Registering cluster endpoint via MCS",
 		zap.String("inferenceServer", endpoint.InferenceServerName),
@@ -81,9 +78,9 @@ func (r *mcsEndpointRegistry) RegisterEndpoint(ctx context.Context, logger *zap.
 		return fmt.Errorf("failed to create ServiceExport for cluster %s: %w", endpoint.ClusterID, err)
 	}
 
-	// Create ServiceImport in the control plane
-	if err := r.createServiceImport(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to create ServiceImport for cluster %s: %w", endpoint.ClusterID, err)
+	// Store endpoint metadata in ConfigMap
+	if err := r.storeEndpointMetadata(ctx, logger, endpoint); err != nil {
+		return fmt.Errorf("failed to store endpoint metadata for cluster %s: %w", endpoint.ClusterID, err)
 	}
 
 	logger.Info("Successfully registered cluster endpoint via MCS",
@@ -93,8 +90,8 @@ func (r *mcsEndpointRegistry) RegisterEndpoint(ctx context.Context, logger *zap.
 	return nil
 }
 
-// UnregisterEndpoint removes the ServiceExport from the target cluster and
-// ServiceImport from the control plane.
+// UnregisterEndpoint removes the endpoint metadata from the ConfigMap.
+// Note: ServiceExport cleanup in target cluster is handled by the backend.
 func (r *mcsEndpointRegistry) UnregisterEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error {
 	logger.Info("Unregistering cluster endpoint via MCS",
 		zap.String("inferenceServer", inferenceServerName),
@@ -102,22 +99,10 @@ func (r *mcsEndpointRegistry) UnregisterEndpoint(ctx context.Context, logger *za
 		zap.String("clusterID", clusterID),
 	)
 
-	// Delete ServiceImport from control plane first
-	serviceImportName := r.buildServiceImportName(inferenceServerName, clusterID)
-	if err := r.dynamicClient.Resource(serviceImportGVR).Namespace(namespace).Delete(ctx, serviceImportName, metav1.DeleteOptions{}); err != nil {
-		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete ServiceImport %s: %w", serviceImportName, err)
-		}
-		logger.Debug("ServiceImport not found, already deleted", zap.String("name", serviceImportName))
+	// Remove endpoint metadata from ConfigMap
+	if err := r.removeEndpointMetadata(ctx, logger, inferenceServerName, namespace, clusterID); err != nil {
+		return fmt.Errorf("failed to remove endpoint metadata for cluster %s: %w", clusterID, err)
 	}
-
-	// Note: We don't delete the ServiceExport from the target cluster here because:
-	// 1. We would need the connection spec to get the target cluster client
-	// 2. The backend already handles cleanup in the target cluster
-	// 3. The ServiceExport should be deleted when the service is deleted in the target cluster
-	//
-	// If explicit cleanup is needed, the backend should call a separate method
-	// or the ServiceExport should be owned by the service in the target cluster.
 
 	logger.Info("Successfully unregistered cluster endpoint via MCS",
 		zap.String("inferenceServer", inferenceServerName),
@@ -133,26 +118,23 @@ func (r *mcsEndpointRegistry) GetEndpoints(ctx context.Context, logger *zap.Logg
 		zap.String("namespace", namespace),
 	)
 
-	// List ServiceImports with label selector
-	labelSelector := fmt.Sprintf("%s=%s", labelInferenceServer, inferenceServerName)
-	list, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to list ServiceImports: %w", err)
+	configMapName := r.buildConfigMapName(inferenceServerName)
+	cm := &corev1.ConfigMap{}
+	if err := r.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, cm); err != nil {
+		if errors.IsNotFound(err) {
+			return []ClusterEndpoint{}, nil
+		}
+		return nil, fmt.Errorf("failed to get endpoint ConfigMap: %w", err)
 	}
 
-	endpoints := make([]ClusterEndpoint, 0, len(list.Items))
-	for _, item := range list.Items {
-		endpoint, err := r.parseServiceImport(&item)
-		if err != nil {
-			logger.Warn("Failed to parse ServiceImport, skipping",
-				zap.String("name", item.GetName()),
-				zap.Error(err),
-			)
+	endpoints := make([]ClusterEndpoint, 0, len(cm.Data))
+	for _, data := range cm.Data {
+		var endpoint ClusterEndpoint
+		if err := json.Unmarshal([]byte(data), &endpoint); err != nil {
+			logger.Warn("Failed to unmarshal endpoint data, skipping", zap.Error(err))
 			continue
 		}
-		endpoints = append(endpoints, *endpoint)
+		endpoints = append(endpoints, endpoint)
 	}
 
 	return endpoints, nil
@@ -160,17 +142,26 @@ func (r *mcsEndpointRegistry) GetEndpoints(ctx context.Context, logger *zap.Logg
 
 // GetEndpoint retrieves a specific cluster endpoint.
 func (r *mcsEndpointRegistry) GetEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) (*ClusterEndpoint, error) {
-	serviceImportName := r.buildServiceImportName(inferenceServerName, clusterID)
-
-	item, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(namespace).Get(ctx, serviceImportName, metav1.GetOptions{})
-	if err != nil {
+	configMapName := r.buildConfigMapName(inferenceServerName)
+	cm := &corev1.ConfigMap{}
+	if err := r.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, cm); err != nil {
 		if errors.IsNotFound(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get ServiceImport %s: %w", serviceImportName, err)
+		return nil, fmt.Errorf("failed to get endpoint ConfigMap: %w", err)
 	}
 
-	return r.parseServiceImport(item)
+	data, exists := cm.Data[clusterID]
+	if !exists {
+		return nil, nil
+	}
+
+	var endpoint ClusterEndpoint
+	if err := json.Unmarshal([]byte(data), &endpoint); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal endpoint data: %w", err)
+	}
+
+	return &endpoint, nil
 }
 
 // UpdateEndpoint updates an existing cluster endpoint registration.
@@ -180,9 +171,9 @@ func (r *mcsEndpointRegistry) UpdateEndpoint(ctx context.Context, logger *zap.Lo
 		zap.String("clusterID", endpoint.ClusterID),
 	)
 
-	// Update ServiceImport in the control plane
-	if err := r.updateServiceImport(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to update ServiceImport for cluster %s: %w", endpoint.ClusterID, err)
+	// Update endpoint metadata in ConfigMap
+	if err := r.storeEndpointMetadata(ctx, logger, endpoint); err != nil {
+		return fmt.Errorf("failed to update endpoint metadata for cluster %s: %w", endpoint.ClusterID, err)
 	}
 
 	return nil
@@ -244,62 +235,103 @@ func (r *mcsEndpointRegistry) createServiceExport(ctx context.Context, logger *z
 	return nil
 }
 
-// createServiceImport creates a ServiceImport in the control plane to import
-// the service from the target cluster.
-func (r *mcsEndpointRegistry) createServiceImport(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceImportName := r.buildServiceImportName(endpoint.InferenceServerName, endpoint.ClusterID)
+// storeEndpointMetadata stores endpoint metadata in a ConfigMap in the control plane.
+func (r *mcsEndpointRegistry) storeEndpointMetadata(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
+	configMapName := r.buildConfigMapName(endpoint.InferenceServerName)
 
-	// Check if ServiceImport already exists
-	existing, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(endpoint.Namespace).Get(ctx, serviceImportName, metav1.GetOptions{})
-	if err == nil {
-		logger.Info("ServiceImport already exists, skipping creation", zap.String("name", serviceImportName))
-		return r.updateServiceImportSpec(ctx, existing, endpoint)
-	}
-	if !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to check existing ServiceImport: %w", err)
+	// Serialize endpoint to JSON
+	endpointData, err := json.Marshal(endpoint)
+	if err != nil {
+		return fmt.Errorf("failed to marshal endpoint: %w", err)
 	}
 
-	serviceImport := r.buildServiceImport(endpoint)
-	if _, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(endpoint.Namespace).Create(ctx, serviceImport, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create ServiceImport: %w", err)
+	// Try to get existing ConfigMap
+	cm := &corev1.ConfigMap{}
+	err = r.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: endpoint.Namespace}, cm)
+	if err != nil {
+		if !errors.IsNotFound(err) {
+			return fmt.Errorf("failed to get ConfigMap: %w", err)
+		}
+
+		// ConfigMap doesn't exist, create it
+		cm = &corev1.ConfigMap{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      configMapName,
+				Namespace: endpoint.Namespace,
+				Labels: map[string]string{
+					labelInferenceServer: endpoint.InferenceServerName,
+					labelComponent:       "endpoint-registry",
+					labelManagedBy:       "michelangelo",
+				},
+			},
+			Data: map[string]string{
+				endpoint.ClusterID: string(endpointData),
+			},
+		}
+		if createErr := r.kubeClient.Create(ctx, cm); createErr != nil {
+			return fmt.Errorf("failed to create ConfigMap: %w", createErr)
+		}
+		logger.Info("Created endpoint metadata ConfigMap",
+			zap.String("name", configMapName),
+			zap.String("clusterID", endpoint.ClusterID),
+		)
+		return nil
 	}
 
-	logger.Info("Created ServiceImport",
-		zap.String("name", serviceImportName),
-		zap.String("cluster", endpoint.ClusterID),
+	// ConfigMap exists, update it
+	if cm.Data == nil {
+		cm.Data = make(map[string]string)
+	}
+	cm.Data[endpoint.ClusterID] = string(endpointData)
+
+	if err := r.kubeClient.Update(ctx, cm); err != nil {
+		return fmt.Errorf("failed to update ConfigMap: %w", err)
+	}
+
+	logger.Info("Updated endpoint metadata in ConfigMap",
+		zap.String("name", configMapName),
+		zap.String("clusterID", endpoint.ClusterID),
 	)
 	return nil
 }
 
-// updateServiceImport updates an existing ServiceImport.
-func (r *mcsEndpointRegistry) updateServiceImport(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceImportName := r.buildServiceImportName(endpoint.InferenceServerName, endpoint.ClusterID)
+// removeEndpointMetadata removes endpoint metadata from the ConfigMap.
+func (r *mcsEndpointRegistry) removeEndpointMetadata(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error {
+	configMapName := r.buildConfigMapName(inferenceServerName)
 
-	existing, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(endpoint.Namespace).Get(ctx, serviceImportName, metav1.GetOptions{})
+	cm := &corev1.ConfigMap{}
+	err := r.kubeClient.Get(ctx, client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			return r.createServiceImport(ctx, logger, endpoint)
+			// ConfigMap doesn't exist, nothing to remove
+			return nil
 		}
-		return fmt.Errorf("failed to get ServiceImport: %w", err)
+		return fmt.Errorf("failed to get ConfigMap: %w", err)
 	}
 
-	return r.updateServiceImportSpec(ctx, existing, endpoint)
-}
+	// Remove the cluster entry
+	delete(cm.Data, clusterID)
 
-// updateServiceImportSpec updates the spec of an existing ServiceImport.
-func (r *mcsEndpointRegistry) updateServiceImportSpec(ctx context.Context, existing *unstructured.Unstructured, endpoint ClusterEndpoint) error {
-	newImport := r.buildServiceImport(endpoint)
-
-	// Update annotations and spec
-	existing.SetAnnotations(newImport.GetAnnotations())
-	if err := unstructured.SetNestedField(existing.Object, newImport.Object["spec"], "spec"); err != nil {
-		return fmt.Errorf("failed to set spec: %w", err)
+	// If ConfigMap is empty, delete it
+	if len(cm.Data) == 0 {
+		if err := r.kubeClient.Delete(ctx, cm); err != nil {
+			return fmt.Errorf("failed to delete empty ConfigMap: %w", err)
+		}
+		logger.Info("Deleted empty endpoint metadata ConfigMap",
+			zap.String("name", configMapName),
+		)
+		return nil
 	}
 
-	if _, err := r.dynamicClient.Resource(serviceImportGVR).Namespace(endpoint.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ServiceImport: %w", err)
+	// Otherwise, update the ConfigMap
+	if err := r.kubeClient.Update(ctx, cm); err != nil {
+		return fmt.Errorf("failed to update ConfigMap: %w", err)
 	}
 
+	logger.Info("Removed endpoint metadata from ConfigMap",
+		zap.String("name", configMapName),
+		zap.String("clusterID", clusterID),
+	)
 	return nil
 }
 
@@ -325,104 +357,9 @@ func (r *mcsEndpointRegistry) buildServiceExport(endpoint ClusterEndpoint, servi
 	return u
 }
 
-// buildServiceImport constructs a ServiceImport for the control plane.
-// The ServiceImport references the exported service from the target cluster.
-func (r *mcsEndpointRegistry) buildServiceImport(endpoint ClusterEndpoint) *unstructured.Unstructured {
-	serviceImportName := r.buildServiceImportName(endpoint.InferenceServerName, endpoint.ClusterID)
-	// The source service name in the target cluster
-	sourceServiceName := fmt.Sprintf("%s-inference-service", endpoint.InferenceServerName)
-
-	servicePort := endpoint.ServicePort
-	if servicePort == 0 {
-		servicePort = defaultHTTPPort
-	}
-
-	return &unstructured.Unstructured{
-		Object: map[string]any{
-			"apiVersion": fmt.Sprintf("%s/%s", mcsAPIGroup, mcsAPIVersion),
-			"kind":       "ServiceImport",
-			"metadata": map[string]any{
-				"name":      serviceImportName,
-				"namespace": endpoint.Namespace,
-				"labels": map[string]any{
-					labelInferenceServer: endpoint.InferenceServerName,
-					labelClusterID:       endpoint.ClusterID,
-					labelSourceCluster:   endpoint.ClusterID,
-					labelComponent:       "endpoint-registry",
-					labelManagedBy:       "michelangelo",
-				},
-				"annotations": map[string]any{
-					annotationClusterID:              endpoint.ClusterID,
-					annotationAPIHost:                endpoint.Host,
-					annotationAPIPort:                endpoint.Port,
-					annotationTokenSecret:            endpoint.TokenSecretRef,
-					annotationCASecret:               endpoint.CASecretRef,
-					"michelangelo.ai/source-service": sourceServiceName,
-				},
-			},
-			"spec": map[string]any{
-				// Type can be "ClusterSetIP" (allocates VIP) or "Headless"
-				"type": "ClusterSetIP",
-				"ports": []any{
-					map[string]any{
-						"name":     "http",
-						"port":     int64(servicePort),
-						"protocol": "TCP",
-					},
-					map[string]any{
-						"name":     "grpc",
-						"port":     int64(defaultGRPCPort),
-						"protocol": "TCP",
-					},
-				},
-				// sessionAffinity can be "None" or "ClientIP"
-				"sessionAffinity": "None",
-			},
-		},
-	}
-}
-
-// parseServiceImport extracts a ClusterEndpoint from a ServiceImport.
-func (r *mcsEndpointRegistry) parseServiceImport(item *unstructured.Unstructured) (*ClusterEndpoint, error) {
-	annotations := item.GetAnnotations()
-	labels := item.GetLabels()
-
-	// Extract port from spec
-	ports, found, err := unstructured.NestedSlice(item.Object, "spec", "ports")
-	var servicePort uint32 = defaultHTTPPort
-	if err == nil && found && len(ports) > 0 {
-		if portMap, ok := ports[0].(map[string]any); ok {
-			if portNum, exists := portMap["port"]; exists {
-				switch v := portNum.(type) {
-				case int64:
-					servicePort = uint32(v)
-				case float64:
-					servicePort = uint32(v)
-				}
-			}
-		}
-	}
-
-	// The ServiceHost for MCS is derived from the ServiceImport name
-	// MCS creates a derived service with the format: <name>.<namespace>.svc.clusterset.local
-	serviceHost := fmt.Sprintf("%s.%s.svc.clusterset.local", item.GetName(), item.GetNamespace())
-
-	return &ClusterEndpoint{
-		ClusterID:           annotations[annotationClusterID],
-		InferenceServerName: labels[labelInferenceServer],
-		Namespace:           item.GetNamespace(),
-		Host:                annotations[annotationAPIHost],
-		Port:                annotations[annotationAPIPort],
-		ServiceHost:         serviceHost,
-		ServicePort:         servicePort,
-		TokenSecretRef:      annotations[annotationTokenSecret],
-		CASecretRef:         annotations[annotationCASecret],
-	}, nil
-}
-
-// buildServiceImportName generates the name for a ServiceImport.
-func (r *mcsEndpointRegistry) buildServiceImportName(inferenceServerName, clusterID string) string {
-	return fmt.Sprintf("%s-%s-mcs", inferenceServerName, clusterID)
+// buildConfigMapName generates the name for the endpoint metadata ConfigMap.
+func (r *mcsEndpointRegistry) buildConfigMapName(inferenceServerName string) string {
+	return fmt.Sprintf("%s%s", endpointConfigMapPrefix, inferenceServerName)
 }
 
 // DeleteServiceExportFromCluster deletes the ServiceExport from a target cluster.

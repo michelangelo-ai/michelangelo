@@ -32,7 +32,7 @@ var Module = fx.Options(
 // The registry type can be configured via the ENDPOINT_REGISTRY_TYPE environment variable.
 // Supported values: "istio" (default), "mcs"
 func newEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
-	return NewMCSEndpointRegistry(dynamicClient, kubeClient, logger)
+	return NewMCSEndpointRegistry(kubeClient, logger)
 	// return NewIstioEndpointRegistry(dynamicClient, kubeClient, logger)
 }
 

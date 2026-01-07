@@ -1234,6 +1234,242 @@ def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
     print(f"   Target cluster API server: {server_url}")
 
 
+def _create_istio_remote_secret(cluster_name: str):
+    """Create an Istio remote secret for multi-cluster service discovery.
+
+    This creates a secret in the control plane cluster's istio-system namespace
+    that allows istiod to connect to and discover services in the target cluster.
+    When istiod sees this secret (labeled with istio/multiCluster=true), it will:
+    1. Connect to the remote cluster's API server
+    2. Watch Services, Endpoints, and ServiceExports
+    3. Automatically configure Envoy to route traffic to remote services
+
+    Args:
+        cluster_name: The k3d cluster name (e.g., "cluster-1")
+    """
+    print(f"🔗 Creating Istio remote secret for cluster '{cluster_name}'...")
+
+    # Get kubeconfig for the target cluster
+    kubeconfig = subprocess.check_output(
+        ["k3d", "kubeconfig", "get", cluster_name]
+    ).decode()
+
+    # Parse the kubeconfig YAML
+    kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract cluster info
+    cluster_info = kubeconfig_data["clusters"][0]["cluster"]
+    server_url = cluster_info.get("server", "")
+    ca_data = cluster_info.get("certificate-authority-data", "")
+
+    if not ca_data:
+        raise ValueError("certificate-authority-data not found in kubeconfig")
+
+    # Create a service account for Istio in the target cluster (if not exists)
+    sa_manifest = {
+        "apiVersion": "v1",
+        "kind": "ServiceAccount",
+        "metadata": {
+            "name": "istio-reader",
+            "namespace": "istio-system",
+        },
+    }
+
+    # ClusterRole for reading services, endpoints, and MCS resources
+    cr_manifest = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRole",
+        "metadata": {"name": "istio-reader"},
+        "rules": [
+            {
+                "apiGroups": [""],
+                "resources": [
+                    "services",
+                    "endpoints",
+                    "pods",
+                    "nodes",
+                    "namespaces",
+                    "secrets",
+                ],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["networking.istio.io"],
+                "resources": ["*"],
+                "verbs": ["get", "list", "watch"],
+            },
+            {
+                "apiGroups": ["multicluster.x-k8s.io"],
+                "resources": ["serviceexports", "serviceimports"],
+                "verbs": ["get", "list", "watch", "create", "update", "delete"],
+            },
+            {
+                "apiGroups": ["discovery.k8s.io"],
+                "resources": ["endpointslices"],
+                "verbs": ["get", "list", "watch"],
+            },
+        ],
+    }
+
+    crb_manifest = {
+        "apiVersion": "rbac.authorization.k8s.io/v1",
+        "kind": "ClusterRoleBinding",
+        "metadata": {"name": "istio-reader"},
+        "roleRef": {
+            "apiGroup": "rbac.authorization.k8s.io",
+            "kind": "ClusterRole",
+            "name": "istio-reader",
+        },
+        "subjects": [
+            {
+                "kind": "ServiceAccount",
+                "name": "istio-reader",
+                "namespace": "istio-system",
+            }
+        ],
+    }
+
+    # Ensure istio-system namespace exists in target cluster
+    _exec(
+        "kubectl",
+        "--context",
+        f"k3d-{cluster_name}",
+        "create",
+        "namespace",
+        "istio-system",
+        "--dry-run=client",
+        "-o",
+        "yaml",
+        raise_error=False,
+    )
+    try:
+        subprocess.check_call(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{cluster_name}",
+                "get",
+                "namespace",
+                "istio-system",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError:
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "create",
+            "namespace",
+            "istio-system",
+        )
+
+    # Apply SA, ClusterRole, and ClusterRoleBinding to target cluster
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump_all([sa_manifest, cr_manifest, crb_manifest], f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    # Create a token for the istio-reader service account
+    token = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                f"k3d-{cluster_name}",
+                "-n",
+                "istio-system",
+                "create",
+                "token",
+                "istio-reader",
+                "--duration=87600h",  # ~10 years
+            ]
+        )
+        .decode()
+        .strip()
+    )
+
+    # Build a kubeconfig for Istio to use
+    remote_kubeconfig = {
+        "apiVersion": "v1",
+        "kind": "Config",
+        "clusters": [
+            {
+                "name": cluster_name,
+                "cluster": {
+                    "server": server_url,
+                    "certificate-authority-data": ca_data,
+                },
+            }
+        ],
+        "users": [
+            {
+                "name": cluster_name,
+                "user": {
+                    "token": token,
+                },
+            }
+        ],
+        "contexts": [
+            {
+                "name": cluster_name,
+                "context": {
+                    "cluster": cluster_name,
+                    "user": cluster_name,
+                },
+            }
+        ],
+        "current-context": cluster_name,
+    }
+
+    # Encode the kubeconfig as YAML then base64
+    kubeconfig_yaml = yaml.dump(remote_kubeconfig)
+    kubeconfig_b64 = base64.b64encode(kubeconfig_yaml.encode()).decode()
+
+    # Create the Istio remote secret in the control plane cluster
+    # The secret key is the cluster name, and the label tells istiod to use it
+    remote_secret = {
+        "apiVersion": "v1",
+        "kind": "Secret",
+        "metadata": {
+            "name": f"istio-remote-secret-{cluster_name}",
+            "namespace": "istio-system",
+            "labels": {
+                "istio/multiCluster": "true",
+            },
+            "annotations": {
+                "networking.istio.io/cluster": cluster_name,
+            },
+        },
+        "data": {
+            cluster_name: kubeconfig_b64,
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(remote_secret, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    print(f"✅ Created Istio remote secret for cluster '{cluster_name}'")
+    print("   istiod will now discover services in this cluster automatically")
+
+
 def _create_inference_demo_crs():
     """Create an inference server for the sandbox cluster for demo purposes."""
     print("🚀 Setting up Michelangelo AI Inference Demo...")
@@ -1293,7 +1529,13 @@ def _create_inference_demo_crs():
     # Setup Istio on control plane cluster and target clusters
     all_clusters = [_michelangelo_sandbox_kube_cluster_name]
     all_clusters.extend(target_cluster_names)
-    _setup_istio_on_clusters(all_clusters)
+    _setup_istio_and_mcs_with_gateway_api_on_clusters(all_clusters)
+
+    # Create Istio remote secrets for each target cluster
+    # This allows istiod in the control plane to discover services in target clusters
+    print("\n🔗 Setting up Istio multi-cluster service discovery...")
+    for cluster_name in target_cluster_names:
+        _create_istio_remote_secret(cluster_name)
 
     print("✅ Creating Triton Inference Server...")
     _kube_apply(inference_server_path)
@@ -1379,7 +1621,8 @@ def _create_inference_demo_crs():
 
     print("🎉 Inference demo deployment created successfully!")
     print("📋 What was set up:")
-    print("  • Gateway API with Istio integration")
+    print("  • Istio service mesh with Gateway API")
+    print("  • MCS API (ServiceExport/ServiceImport) for multi-cluster discovery")
     print("  • HTTPRoute for traffic routing")
     print("  • Triton Inference Server")
     print("  • Model-sync Deployment (handles S3 sync and model loading)")
@@ -1415,7 +1658,7 @@ def _create_inference_demo_crs():
     print("}'")
 
 
-def _setup_istio_on_clusters(target_clusters: list[str]):
+def _setup_istio_and_mcs_with_gateway_api_on_clusters(target_clusters: list[str]):
     """Install Istio and Gateway API on multiple target clusters.
 
     This function sets up Istio service mesh with Kubernetes Gateway API support
@@ -1434,13 +1677,13 @@ def _setup_istio_on_clusters(target_clusters: list[str]):
 
     for cluster_name in target_clusters:
         print(f"\n📦 Setting up Istio on cluster: {cluster_name}")
-        _setup_istio_with_gateway_api(kube_context=f"k3d-{cluster_name}")
+        _setup_istio_and_mcs_with_gateway_api(kube_context=f"k3d-{cluster_name}")
         print(f"✅ Istio setup complete on cluster: {cluster_name}")
 
     print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
 
 
-def _setup_istio_with_gateway_api(kube_context: str | None = None):
+def _setup_istio_and_mcs_with_gateway_api(kube_context: str | None = None):
     """Install Istio service mesh with Kubernetes Gateway API support.
 
     This function:
@@ -1509,6 +1752,33 @@ def _setup_istio_with_gateway_api(kube_context: str | None = None):
         "crd/gateways.gateway.networking.k8s.io",
         "crd/httproutes.gateway.networking.k8s.io",
         "crd/gatewayclasses.gateway.networking.k8s.io",
+        "--timeout=60s",
+    )
+
+    # Install MCS (Multi-Cluster Services) CRDs for cross-cluster service discovery
+    # Istio natively supports MCS API and can act as the MCS controller
+    print("Installing MCS API CRDs (ServiceExport, ServiceImport)...")
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        "https://raw.githubusercontent.com/kubernetes-sigs/mcs-api/v0.1.0/config/crd/multicluster.x-k8s.io_serviceexports.yaml",
+    )
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        "https://raw.githubusercontent.com/kubernetes-sigs/mcs-api/v0.1.0/config/crd/multicluster.x-k8s.io_serviceimports.yaml",
+    )
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "wait",
+        "--for=condition=Established",
+        "crd/serviceexports.multicluster.x-k8s.io",
+        "crd/serviceimports.multicluster.x-k8s.io",
         "--timeout=60s",
     )
 
@@ -1594,7 +1864,7 @@ def _setup_istio_with_gateway_api(kube_context: str | None = None):
             stderr=subprocess.DEVNULL,
         )
 
-    print("✅ Istio with Gateway API setup complete")
+    print("✅ Istio with Gateway API and MCS support setup complete")
 
 
 def _create_pipeline_demo_crs():
