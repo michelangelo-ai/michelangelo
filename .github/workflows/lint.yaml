@@ -122,12 +122,14 @@ jobs:
             let body = "### 🛠 Ruff Check & Format Results\n";
 
             if (hasFormatIssues) {
-              body += "\n#### ⚠️ Format Issues Detected\n```\n" + formatOutput + "\n```\n";
+              body += "\n#### ⚠️ Format Issues Detected\n";
+              body += "<details>\n<summary>Show details</summary>\n\n```\n" + formatOutput + "\n```\n</details>\n\n";
               body += "📌 Please run `poetry run ruff format .` locally to fix formatting issues.\n\n";
             }
 
             if (hasLintIssues) {
-              body += "\n#### 🚨 Lint Issues Detected\n```\n" + lintOutput + "\n```\n";
+              body += "\n#### 🚨 Lint Issues Detected\n";
+              body += "<details>\n<summary>Show details</summary>\n\n```\n" + lintOutput + "\n```\n</details>\n";
             }
 
             if (hasFormatIssues || hasLintIssues) {
