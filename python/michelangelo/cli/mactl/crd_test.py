@@ -16,6 +16,7 @@ from michelangelo.cli.mactl.crd import (
     inject_func_signature,
     list_func_impl,
     prepare_column_info,
+    snake_to_camel,
 )
 
 
