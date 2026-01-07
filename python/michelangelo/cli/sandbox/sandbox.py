@@ -1290,7 +1290,7 @@ def _create_inference_demo_crs():
         f"{target_cluster_names}"
     )
 
-    # Setup Istio on control plane cluster and target clusters (for ServiceEntry)
+    # Setup Istio on control plane cluster and target clusters
     all_clusters = [_michelangelo_sandbox_kube_cluster_name]
     all_clusters.extend(target_cluster_names)
     _setup_istio_on_clusters(all_clusters)

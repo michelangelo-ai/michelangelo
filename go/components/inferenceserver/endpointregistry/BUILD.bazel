@@ -5,11 +5,15 @@ go_library(
     srcs = [
         "interface.go",
         "istio_registry.go",
+        "mcs_registry.go",
         "module.go",
     ],
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry",
     visibility = ["//visibility:public"],
     deps = [
+        "//go/components/inferenceserver/clientfactory:go_default_library",
+        "//go/components/inferenceserver/secrets:go_default_library",
+        "//proto/api/v2:go_default_library",
         "@io_k8s_api//core/v1:go_default_library",
         "@io_k8s_apimachinery//pkg/api/errors:go_default_library",
         "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
