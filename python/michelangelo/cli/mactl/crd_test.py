@@ -16,7 +16,6 @@ from michelangelo.cli.mactl.crd import (
     inject_func_signature,
     list_func_impl,
     prepare_column_info,
-    snake_to_camel,
 )
 
 
@@ -314,6 +313,22 @@ class ExtractMethodInfoTest(TestCase):
         self.assertEqual(method_name, "GetTestCrd")
         self.assertEqual(input_class, mock_input_class)
         self.assertEqual(output_class, mock_output_class)
+
+    @patch("michelangelo.cli.mactl.crd.get_methods_from_service")
+    def test_extract_method_info_method_not_found(
+        self, mock_get_methods_from_service
+    ):
+        """Test _extract_method_info raises ValueError when method not found."""
+        # Config mock with empty methods dict
+        mock_get_methods_from_service.return_value = ({}, Mock())
+
+        crd = CRD(name="test_crd", full_name="test.service.TestCrd", metadata=[])
+
+        with self.assertRaises(ValueError) as context:
+            crd._extract_method_info(Mock(), "test.service.TestCrd", "Get")
+
+        self.assertIn("GetTestCrd", str(context.exception))
+        self.assertIn("test.service.TestCrd", str(context.exception))
 
 
 class GenerateGetTest(TestCase):
