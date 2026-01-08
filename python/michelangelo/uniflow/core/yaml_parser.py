@@ -540,6 +540,268 @@ class YAMLWorkflowParser:
 
         return inputs
 
+    def generate_python_code(self, output_path: Optional[Union[str, Path]] = None) -> str:
+        """Generate standalone Python code from the workflow configuration.
+
+        Args:
+            output_path: Optional output path for the generated file
+
+        Returns:
+            The generated Python code as a string
+        """
+        if not self.config:
+            raise ValueError("No configuration loaded")
+
+        # Generate the Python code
+        code_lines = []
+
+        # Header and imports
+        code_lines.extend([
+            "#!/usr/bin/env python3",
+            '"""Generated workflow from YAML configuration."""',
+            "",
+            "# Auto-generated imports",
+            "import os",
+            "import logging",
+            "from typing import Any, Dict",
+            "",
+            "# Uniflow imports",
+            "import michelangelo.uniflow as uniflow",
+            "from michelangelo.uniflow.core.dynamic import (",
+            "    DynamicExecutionContext, expand_task, conditional_task, collect_task,",
+            "    dynamic_context",
+            ")",
+            "from michelangelo.uniflow.plugins.ray import RayTask",
+            "from michelangelo.uniflow.plugins.spark import SparkTask",
+            "",
+            "# Configure logging",
+            "logging.basicConfig(level=logging.INFO)",
+            "log = logging.getLogger(__name__)",
+            "",
+            "# Workflow metadata",
+            f'WORKFLOW_NAME = "{self.config.metadata.name}"',
+            f'WORKFLOW_VERSION = "{self.config.metadata.version}"',
+        ])
+
+        if self.config.metadata.description:
+            code_lines.append(f'WORKFLOW_DESCRIPTION = "{self.config.metadata.description}"')
+
+        code_lines.append("")
+
+        # Generate task function imports and decorators
+        for task_name, task_spec in self.config.tasks.items():
+            code_lines.extend(self._generate_task_function_code(task_name, task_spec))
+            code_lines.append("")
+
+        # Generate main workflow function
+        code_lines.extend(self._generate_workflow_function_code())
+
+        # Add main execution block
+        code_lines.extend([
+            "",
+            'if __name__ == "__main__":',
+            "    # Set up environment for standalone execution",
+            '    os.environ["UF_LOCAL_RUN"] = "1"',
+            '    if not os.environ.get("UF_STORAGE_URL"):',
+            '        os.environ["UF_STORAGE_URL"] = os.path.expanduser("~/uf_storage")',
+            "",
+            "    # Run the workflow",
+            "    print(f'Starting workflow: {WORKFLOW_NAME} v{WORKFLOW_VERSION}')",
+            "    try:",
+            "        result = yaml_workflow()",
+            '        print("✅ Workflow completed successfully!")',
+            '        print("📋 Results:")',
+            "        for task_name, task_result in result.items():",
+            '            print(f"  {task_name}: {task_result}")',
+            "    except Exception as e:",
+            '        print(f"❌ Workflow failed: {e}")',
+            "        import traceback",
+            "        traceback.print_exc()",
+            "        exit(1)",
+        ])
+
+        # Join all lines
+        generated_code = "\n".join(code_lines)
+
+        # Write to file if output path specified
+        if output_path:
+            output_path = Path(output_path)
+        else:
+            # Default path in current directory
+            yaml_name = self.config.metadata.name.replace(" ", "_").lower()
+            output_path = Path(f"generated_{yaml_name}.py")
+
+        output_path.write_text(generated_code)
+
+        # Make file executable
+        output_path.chmod(0o755)
+
+        return generated_code
+
+    def _generate_task_function_code(self, task_name: str, task_spec: TaskSpec) -> List[str]:
+        """Generate Python code for a single task function."""
+        lines = []
+
+        # Import statement
+        lines.append(f"# Import function for task: {task_name}")
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            lines.append(f"from {module_path} import {func_name}")
+        except ValueError:
+            lines.append(f"# Note: {task_spec.function} should be importable")
+            lines.append(f"import {task_spec.function}")
+
+        # Task configuration
+        task_config_code = self._generate_task_config_code(task_spec)
+
+        # Apply decorators
+        decorator_lines = []
+
+        # Conditional decorator
+        if task_spec.condition:
+            condition_dict = task_spec.condition.dict(exclude_none=True)
+            decorator_lines.append(
+                f"@conditional_task("
+                f"condition={condition_dict}, "
+                f"on_true={repr(task_spec.condition.on_true)}, "
+                f"on_false={repr(task_spec.condition.on_false)})"
+            )
+
+        # Expand decorator
+        if task_spec.expand:
+            expand_config = task_spec.expand.dict(exclude_none=True)
+            expand_field, expand_value = next(iter(expand_config.items()))
+            if expand_field != "max_parallel":
+                decorator_lines.append(
+                    f"@expand_task("
+                    f"over={repr(expand_value)}, "
+                    f"expand_arg={repr(expand_field)}"
+                    f"{f', max_parallel={task_spec.expand.max_parallel}' if task_spec.expand.max_parallel else ''})"
+                )
+
+        # Collect decorator
+        if task_spec.collect:
+            decorator_lines.append(
+                f"@collect_task("
+                f"collect_from={repr(task_spec.collect.from_task)}, "
+                f"aggregation_strategy={repr(task_spec.collect.strategy)}"
+                f"{f', aggregation_field={repr(task_spec.collect.field)}' if task_spec.collect.field else ''})"
+            )
+
+        # Task decorator
+        decorator_lines.append(f"@uniflow.task(config={task_config_code})")
+
+        # Function definition
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            function_alias = f"{task_name}_task"
+            lines.extend(decorator_lines)
+            lines.append(f"def {function_alias}(*args, **kwargs):")
+            lines.append(f'    """Generated task function for {task_name}."""')
+            lines.append(f"    return {func_name}(*args, **kwargs)")
+        except ValueError:
+            function_alias = task_spec.function
+            lines.extend(decorator_lines)
+            lines.append(f"# Note: Using {task_spec.function} directly")
+
+        return lines
+
+    def _generate_task_config_code(self, task_spec: TaskSpec) -> str:
+        """Generate task configuration code."""
+        if not task_spec.config:
+            return "RayTask()"
+
+        config_type = task_spec.config.type
+        resources = task_spec.config.resources or ResourceConfig()
+
+        if config_type == "RayTask":
+            args = []
+            if resources.cpu:
+                args.append(f"head_cpu={resources.cpu}")
+            if resources.memory:
+                args.append(f'head_memory="{resources.memory}"')
+            if resources.gpu:
+                args.append(f"head_gpu={resources.gpu}")
+            return f"RayTask({', '.join(args)})"
+
+        elif config_type == "SparkTask":
+            args = []
+            if resources.cpu:
+                args.append(f"driver_cpu={resources.cpu}")
+            if resources.memory:
+                args.append(f'driver_memory="{resources.memory}"')
+            if resources.executor_cores:
+                args.append(f"executor_cpu={resources.executor_cores}")
+            if resources.executor_instances:
+                args.append(f"executor_instances={resources.executor_instances}")
+            return f"SparkTask({', '.join(args)})"
+
+        return "RayTask()"  # fallback
+
+    def _generate_workflow_function_code(self) -> List[str]:
+        """Generate the main workflow function code."""
+        lines = []
+
+        # Get execution order
+        execution_order = self._get_execution_order()
+
+        lines.extend([
+            "@uniflow.workflow()",
+            "def yaml_workflow(**kwargs):",
+            f'    """Generated workflow: {self.config.metadata.name}"""',
+            "    # Set up dynamic execution context",
+            "    dynamic_context.execution = DynamicExecutionContext()",
+            "",
+            "    try:",
+            "        # Execute tasks in topological order",
+            "        results = {}",
+        ])
+
+        # Generate task execution code
+        for i, task_name in enumerate(execution_order):
+            task_spec = self.config.tasks[task_name]
+
+            lines.append(f"        # Task {i+1}: {task_name}")
+            if task_spec.description:
+                lines.append(f'        # {task_spec.description}')
+            lines.append(f'        log.info("Executing task: {task_name}")')
+
+            # Generate task inputs
+            if task_spec.inputs:
+                lines.append("        task_inputs = {")
+                for input_name, input_spec in task_spec.inputs.items():
+                    if isinstance(input_spec, str) and input_spec.startswith("+"):
+                        ref_task = input_spec[1:]
+                        lines.append(f'            "{input_name}": results["{ref_task}"],')
+                    else:
+                        lines.append(f'            "{input_name}": {repr(input_spec)},')
+                lines.append("        }")
+            else:
+                lines.append("        task_inputs = {}")
+
+            # Call the task function
+            try:
+                module_path, func_name = task_spec.function.rsplit(".", 1)
+                function_alias = f"{task_name}_task"
+            except ValueError:
+                function_alias = task_spec.function
+
+            lines.extend([
+                f'        results["{task_name}"] = {function_alias}(**task_inputs)',
+                f'        log.info("Completed task: {task_name}")',
+                ""
+            ])
+
+        lines.extend([
+            "        return results",
+            "",
+            "    finally:",
+            "        # Clean up dynamic context",
+            "        dynamic_context.execution = None",
+        ])
+
+        return lines
+
 
 def load_yaml_workflow(yaml_path: Union[str, Path]) -> callable:
     """Load a workflow from a YAML configuration file.
@@ -571,3 +833,61 @@ def validate_yaml_workflow(yaml_path: Union[str, Path]) -> bool:
     parser = YAMLWorkflowParser()
     parser.parse_file(yaml_path)
     return True
+
+
+def generate_python_from_yaml(yaml_path: Union[str, Path], output_path: Optional[Union[str, Path]] = None) -> str:
+    """Generate standalone Python code from a YAML workflow.
+
+    Args:
+        yaml_path: Path to the YAML configuration file
+        output_path: Optional output path for generated Python file
+
+    Returns:
+        The generated Python code as a string
+    """
+    parser = YAMLWorkflowParser()
+    parser.parse_file(yaml_path)
+    return parser.generate_python_code(output_path)
+
+
+if __name__ == "__main__":
+    import argparse
+    import sys
+
+    parser_cli = argparse.ArgumentParser(
+        description="Generate standalone Python code from YAML workflows"
+    )
+    parser_cli.add_argument(
+        "yaml_file",
+        help="Path to the YAML workflow file"
+    )
+    parser_cli.add_argument(
+        "-o", "--output",
+        help="Output path for generated Python file (default: generated_{name}.py)"
+    )
+    parser_cli.add_argument(
+        "--validate-only",
+        action="store_true",
+        help="Only validate the YAML file without generating code"
+    )
+
+    args = parser_cli.parse_args()
+
+    try:
+        if args.validate_only:
+            validate_yaml_workflow(args.yaml_file)
+            print(f"✅ YAML workflow '{args.yaml_file}' is valid!")
+        else:
+            generated_code = generate_python_from_yaml(args.yaml_file, args.output)
+            print(f"✅ Generated Python code from '{args.yaml_file}'")
+            if args.output:
+                print(f"📁 Output written to: {args.output}")
+            else:
+                # Default output path
+                yaml_name = Path(args.yaml_file).stem
+                output_path = f"generated_{yaml_name}.py"
+                print(f"📁 Output written to: {output_path}")
+
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        sys.exit(1)
