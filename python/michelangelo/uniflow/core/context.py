@@ -78,14 +78,13 @@ class Context:
         Returns:
             True if running in local mode, False for remote execution.
         """
-        return self._target in ("local-run",)
-
+        return self._target == "local-run"
 
     def run(self, fn, *args, **kwargs):
         """Executes the workflow function in the specified context.
 
         Args:
-            fn: The workflow function to execute or path to YAML file for YAML workflows.
+            fn: The workflow function to execute.
             *args: Positional arguments to pass to the function.
             **kwargs: Keyword arguments to pass to the function.
         """
@@ -106,7 +105,6 @@ class Context:
             _local_run(fn, *args, **kwargs)
             return
 
-
         if self._target in ("remote-run", "cluster-run"):
             p = _remote_run_argument_parser(environ=True)
             ns = p.parse_args(self._args).__dict__
@@ -118,8 +116,6 @@ class Context:
                 **ns,
             )
             return
-
-
         raise ValueError(f"Unsupported target: {self._target}")
 
 
@@ -320,5 +316,3 @@ def _remote_run(
     rr.yes = yes
     rr.file_sync = file_sync
     rr.run()
-
-
