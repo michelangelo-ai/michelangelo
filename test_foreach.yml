@@ -1,0 +1,26 @@
+# Foreach/Expand Pattern Example
+metadata:
+  name: "foreach_example"
+  description: "Demonstrates foreach/expand pattern"
+  version: "1.0"
+
+tasks:
+  # Task that generates a list
+  generate_datasets:
+    function: "example_tasks.discover_datasets"
+    description: "Generate list of datasets to process"
+    config:
+      type: "RayTask"
+
+  # Task that expands over the list (foreach pattern)
+  process_each_dataset:
+    function: "example_tasks.preprocess"
+    description: "Process each dataset in parallel"
+    expand:
+      dataset_id: "+generate_datasets"  # Expand over previous task output
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 2
+        memory: "2GB"
+    dependencies: ["generate_datasets"]

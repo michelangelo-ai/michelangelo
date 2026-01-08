@@ -1,0 +1,148 @@
+# Example YAML workflow demonstrating dynamic patterns
+metadata:
+  name: "ml_training_pipeline"
+  description: "Dynamic ML pipeline with foreach and conditional logic"
+  version: "1.0"
+  author: "Data Science Team"
+
+defaults:
+  storage_url: "s3://ml-bucket/workflows"
+  image_spec: "ml-training:v1.0"
+  cache_enabled: true
+  cache_version: "v1"
+  retry_attempts: 2
+
+environment:
+  variables:
+    MODEL_TYPE: "bert"
+    BATCH_SIZE: 32
+  secrets:
+    - "ML_API_KEY"
+
+tasks:
+  # Static task that discovers available datasets
+  discover_datasets:
+    function: "src.data.discover_datasets"
+    description: "Find all available datasets for training"
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 2
+        memory: "4GB"
+    cache_enabled: true
+
+  # Dynamic task - processes each dataset in parallel
+  preprocess_dataset:
+    function: "src.data.preprocess"
+    description: "Preprocess individual dataset"
+    expand:
+      dataset_id: "+discover_datasets"  # Expand over previous task output
+    config:
+      type: "SparkTask"
+      resources:
+        cpu: 4
+        memory: "8GB"
+        executor_instances: 3
+    dependencies: ["discover_datasets"]
+    retry_attempts: 3
+
+  # Static task that merges preprocessed datasets
+  merge_datasets:
+    function: "src.data.merge_all"
+    description: "Merge all preprocessed datasets"
+    inputs:
+      dataset_list: "+preprocess_dataset"  # Collect all outputs from dynamic task
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 8
+        memory: "16GB"
+    dependencies: ["preprocess_dataset"]
+
+  # Conditional task - validates data quality
+  quality_check:
+    function: "src.validation.check_quality"
+    description: "Validate merged dataset quality"
+    inputs:
+      merged_data: "+merge_datasets"
+    condition:
+      field: "quality_score"
+      operator: ">"
+      value: 0.8
+      on_true: "train_model"
+      on_false: "data_cleanup"
+    config:
+      type: "RayTask"
+    dependencies: ["merge_datasets"]
+
+  # Conditional path A - train model if quality is good
+  train_model:
+    function: "src.training.train_model"
+    description: "Train ML model with high-quality data"
+    inputs:
+      training_data: "+merge_datasets"
+      model_type: "${MODEL_TYPE}"
+    config:
+      type: "RayTask"
+      resources:
+        gpu: 2
+        cpu: 8
+        memory: "32GB"
+    when: "quality_check.condition_result == true"
+
+  # Conditional path B - clean data if quality is poor
+  data_cleanup:
+    function: "src.data.advanced_cleanup"
+    description: "Advanced data cleaning for poor quality data"
+    inputs:
+      raw_data: "+merge_datasets"
+    config:
+      type: "SparkTask"
+      resources:
+        cpu: 16
+        memory: "64GB"
+        executor_instances: 10
+    when: "quality_check.condition_result == false"
+
+  # Dynamic hyperparameter search (grid search over parameters)
+  hyperparameter_search:
+    function: "src.training.train_with_params"
+    description: "Grid search over hyperparameters"
+    expand:
+      learning_rate: [0.001, 0.01, 0.1]
+      batch_size: [16, 32, 64]
+    config:
+      type: "RayTask"
+      resources:
+        gpu: 1
+        memory: "16GB"
+    dependencies: ["train_model"]
+    cache_enabled: true
+
+  # Collect and select best model
+  select_best_model:
+    function: "src.evaluation.select_best"
+    description: "Select best performing model from hyperparameter search"
+    collect:
+      from: "+hyperparameter_search"
+      strategy: "max"
+      field: "accuracy"
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 4
+        memory: "8GB"
+    dependencies: ["hyperparameter_search"]
+
+  # Final deployment task
+  deploy_model:
+    function: "src.deployment.deploy_to_production"
+    description: "Deploy the best model to production"
+    inputs:
+      best_model: "+select_best_model"
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 2
+        memory: "4GB"
+    dependencies: ["select_best_model"]
