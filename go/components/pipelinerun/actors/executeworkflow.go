@@ -41,7 +41,7 @@ const (
 
 	// Workflow input parameter keys for canvas flex pipeline
 	WorkflowTaskConfigsKey = "task_configs"
-	WorkflowConfigKey = "workflow_config"
+	WorkflowConfigKey      = "workflow_config"
 
 	// Cache-related environment variable names.
 	cacheEnabledVarName = "CACHE_ENABLED"
@@ -399,11 +399,11 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 		if pipelineConfigMap == nil {
 			pipelineConfigMap = make(map[string]interface{})
 		}
-		
+
 		// Override task_configs and workflow_config if present (Canvas Flex)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowTaskConfigsKey, pipelineConfigMap)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowConfigKey, pipelineConfigMap)
-		
+
 		// Override args and kw_args if present (Uniflow)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowArgsKey, pipelineConfigMap)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowKWArgsKey, pipelineConfigMap)

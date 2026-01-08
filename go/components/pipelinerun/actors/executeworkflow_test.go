@@ -1936,9 +1936,9 @@ func TestConvertKwArgsMapToList(t *testing.T) {
 		{
 			name: "Convert map to list of pairs",
 			input: map[string]interface{}{
-				"path":                  "glue",
-				"name":                  "cola",
-				"tokenizer_max_length":  128,
+				"path":                 "glue",
+				"name":                 "cola",
+				"tokenizer_max_length": 128,
 			},
 			expected: []interface{}{
 				[]interface{}{"path", "glue"},
