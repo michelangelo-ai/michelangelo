@@ -134,7 +134,7 @@ class TaskSpec(BaseModel):
     function: str
     description: Optional[str] = None
     config: Optional[TaskConfigSpec] = None
-    inputs: Optional[Dict[str, str]] = None
+    inputs: Optional[Dict[str, Any]] = None
     outputs: Optional[List[Dict[str, str]]] = None
     dependencies: Optional[List[str]] = None
 
