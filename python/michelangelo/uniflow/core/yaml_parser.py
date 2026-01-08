@@ -648,42 +648,8 @@ class YAMLWorkflowParser:
         # Task configuration
         task_config_code = self._generate_task_config_code(task_spec)
 
-        # Apply decorators
-        decorator_lines = []
-
-        # Conditional decorator
-        if task_spec.condition:
-            condition_dict = task_spec.condition.dict(exclude_none=True)
-            decorator_lines.append(
-                f"@conditional_task("
-                f"condition={condition_dict}, "
-                f"on_true={repr(task_spec.condition.on_true)}, "
-                f"on_false={repr(task_spec.condition.on_false)})"
-            )
-
-        # Expand decorator
-        if task_spec.expand:
-            expand_config = task_spec.expand.dict(exclude_none=True)
-            expand_field, expand_value = next(iter(expand_config.items()))
-            if expand_field != "max_parallel":
-                decorator_lines.append(
-                    f"@expand_task("
-                    f"over={repr(expand_value)}, "
-                    f"expand_arg={repr(expand_field)}"
-                    f"{f', max_parallel={task_spec.expand.max_parallel}' if task_spec.expand.max_parallel else ''})"
-                )
-
-        # Collect decorator
-        if task_spec.collect:
-            decorator_lines.append(
-                f"@collect_task("
-                f"collect_from={repr(task_spec.collect.from_task)}, "
-                f"aggregation_strategy={repr(task_spec.collect.strategy)}"
-                f"{f', aggregation_field={repr(task_spec.collect.field)}' if task_spec.collect.field else ''})"
-            )
-
-        # Task decorator
-        decorator_lines.append(f"@uniflow.task(config={task_config_code})")
+        # Only use basic @uniflow.task decorator (no dynamic decorators)
+        decorator_lines = [f"@uniflow.task(config={task_config_code})"]
 
         # Function definition
         try:
@@ -743,9 +709,6 @@ class YAMLWorkflowParser:
             "@uniflow.workflow()",
             "def yaml_workflow(**kwargs):",
             f'    """Generated workflow: {self.config.metadata.name}"""',
-            "    # Set up dynamic execution context",
-            "    dynamic_context.execution = DynamicExecutionContext()",
-            "",
             "    # Execute tasks in topological order",
             "    results = {}",
         ])
@@ -759,41 +722,260 @@ class YAMLWorkflowParser:
                 lines.append(f'    # {task_spec.description}')
             lines.append(f'    log.info("Executing task: {task_name}")')
 
-            # Generate task inputs
-            if task_spec.inputs:
-                lines.append("    task_inputs = {")
-                for input_name, input_spec in task_spec.inputs.items():
+            # Check if this task has expand (foreach) pattern
+            if task_spec.expand:
+                lines.extend(self._generate_foreach_task_code(task_name, task_spec))
+            # Check if this task has collect pattern
+            elif task_spec.collect:
+                lines.extend(self._generate_collect_task_code(task_name, task_spec))
+            # Check if this task has conditional pattern
+            elif task_spec.condition:
+                lines.extend(self._generate_conditional_task_code(task_name, task_spec))
+            else:
+                # Regular single task execution
+                lines.extend(self._generate_single_task_code(task_name, task_spec))
+
+            lines.append("")
+
+        lines.extend([
+            "    return results",
+        ])
+
+        return lines
+
+    def _generate_single_task_code(self, task_name: str, task_spec: TaskSpec) -> List[str]:
+        """Generate code for a regular single task execution."""
+        lines = []
+
+        # Generate task inputs
+        if task_spec.inputs:
+            lines.append("    task_inputs = {")
+            for input_name, input_spec in task_spec.inputs.items():
+                if isinstance(input_spec, str) and input_spec.startswith("+"):
+                    ref_task = input_spec[1:]
+                    lines.append(f'        "{input_name}": results["{ref_task}"],')
+                else:
+                    lines.append(f'        "{input_name}": {repr(input_spec)},')
+            lines.append("    }")
+        else:
+            lines.append("    task_inputs = {}")
+
+        # Call the task function
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            function_alias = f"{task_name}_task"
+        except ValueError:
+            function_alias = task_spec.function
+
+        lines.extend([
+            f'    results["{task_name}"] = {function_alias}(**task_inputs)',
+            f'    log.info("Completed task: {task_name}")',
+        ])
+
+        return lines
+
+    def _generate_foreach_task_code(self, task_name: str, task_spec: TaskSpec) -> List[str]:
+        """Generate code for a foreach/expand task execution."""
+        lines = []
+
+        # Get expand configuration
+        expand_config = task_spec.expand.dict(exclude_none=True)
+        expand_field, expand_value = next(iter(expand_config.items()))
+
+        if expand_field == "max_parallel":
+            raise ValueError("max_parallel is not a valid expand field name")
+
+        # Determine the source of iteration data
+        if isinstance(expand_value, str) and expand_value.startswith("+"):
+            # Reference to previous task result
+            ref_task = expand_value[1:]
+            iter_source = f'results["{ref_task}"]'
+        else:
+            # Static list
+            iter_source = repr(expand_value)
+
+        # Generate task inputs (excluding the expand field)
+        if task_spec.inputs:
+            lines.append("    base_task_inputs = {")
+            for input_name, input_spec in task_spec.inputs.items():
+                if input_name != expand_field:  # Skip the expand field
                     if isinstance(input_spec, str) and input_spec.startswith("+"):
                         ref_task = input_spec[1:]
                         lines.append(f'        "{input_name}": results["{ref_task}"],')
                     else:
                         lines.append(f'        "{input_name}": {repr(input_spec)},')
-                lines.append("    }")
+            lines.append("    }")
+        else:
+            lines.append("    base_task_inputs = {}")
+
+        # Call the task function
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            function_alias = f"{task_name}_task"
+        except ValueError:
+            function_alias = task_spec.function
+
+        # Generate foreach loop
+        lines.extend([
+            f"    # Foreach loop over {expand_field}",
+            f'    {task_name}_results = []',
+            f"    for {expand_field}_value in {iter_source}:",
+            "        # Create task inputs for this iteration",
+            "        iteration_inputs = base_task_inputs.copy()",
+            f'        iteration_inputs["{expand_field}"] = {expand_field}_value',
+            "",
+            f"        # Execute task for this iteration",
+            f"        iteration_result = {function_alias}(**iteration_inputs)",
+            f"        {task_name}_results.append(iteration_result)",
+            f'        log.info(f"Completed {task_name} iteration for {expand_field}={{iteration_inputs[\\"{expand_field}\\"]}}\")',
+            "",
+            f'    results["{task_name}"] = {task_name}_results',
+            f'    log.info("Completed all iterations for task: {task_name}")',
+        ])
+
+        return lines
+
+    def _generate_collect_task_code(self, task_name: str, task_spec: TaskSpec) -> List[str]:
+        """Generate code for a collect/aggregate task execution."""
+        lines = []
+
+        # Get collect configuration
+        collect_from = task_spec.collect.from_task
+        strategy = task_spec.collect.strategy
+        field = task_spec.collect.field
+
+        # Determine source task
+        if isinstance(collect_from, str):
+            if collect_from.startswith("+"):
+                source_task = collect_from[1:]
+                source_data = f'results["{source_task}"]'
             else:
-                lines.append("    task_inputs = {}")
+                source_data = repr(collect_from)
+        else:
+            # Multiple sources - not implemented yet
+            raise NotImplementedError("Multiple collect sources not implemented")
 
-            # Call the task function
-            try:
-                module_path, func_name = task_spec.function.rsplit(".", 1)
-                function_alias = f"{task_name}_task"
-            except ValueError:
-                function_alias = task_spec.function
+        # Generate aggregation logic
+        if strategy == "list":
+            aggregation_code = source_data
+        elif strategy == "sum":
+            if field:
+                aggregation_code = f"sum(item['{field}'] for item in {source_data})"
+            else:
+                aggregation_code = f"sum({source_data})"
+        elif strategy == "max":
+            if field:
+                aggregation_code = f"max({source_data}, key=lambda x: x['{field}'])"
+            else:
+                aggregation_code = f"max({source_data})"
+        elif strategy == "min":
+            if field:
+                aggregation_code = f"min({source_data}, key=lambda x: x['{field}'])"
+            else:
+                aggregation_code = f"min({source_data})"
+        else:
+            # Custom strategy - pass the raw data
+            aggregation_code = source_data
 
-            lines.extend([
-                f"    # Pass workflow results context to dynamic tasks",
-                f"    if hasattr({function_alias}, 'dynamic_type'):",
-                f"        {function_alias}._yaml_context_results = results",
-                "",
-                f'    results["{task_name}"] = {function_alias}(**task_inputs)',
-                f'    log.info("Completed task: {task_name}")',
-                ""
-            ])
+        # Generate task inputs
+        if task_spec.inputs:
+            lines.append("    task_inputs = {")
+            for input_name, input_spec in task_spec.inputs.items():
+                if isinstance(input_spec, str) and input_spec.startswith("+"):
+                    ref_task = input_spec[1:]
+                    lines.append(f'        "{input_name}": results["{ref_task}"],')
+                else:
+                    lines.append(f'        "{input_name}": {repr(input_spec)},')
+            lines.append("    }")
+        else:
+            lines.append("    task_inputs = {}")
+
+        # Add collected data as an input
+        lines.extend([
+            f"    # Collect and aggregate data from {source_task}",
+            f"    collected_data = {aggregation_code}",
+            f'    task_inputs["collected_results"] = collected_data',
+        ])
+
+        # Call the task function
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            function_alias = f"{task_name}_task"
+        except ValueError:
+            function_alias = task_spec.function
 
         lines.extend([
-            "    # Clean up dynamic context",
-            "    dynamic_context.execution = None",
-            "    return results",
+            f'    results["{task_name}"] = {function_alias}(**task_inputs)',
+            f'    log.info("Completed task: {task_name}")',
         ])
+
+        return lines
+
+    def _generate_conditional_task_code(self, task_name: str, task_spec: TaskSpec) -> List[str]:
+        """Generate code for a conditional task execution."""
+        lines = []
+
+        # Get condition configuration
+        condition = task_spec.condition
+
+        # Generate condition expression
+        if condition.expression:
+            condition_expr = condition.expression
+        elif condition.field and condition.operator and condition.value is not None:
+            # Simple field comparison
+            if condition.field.startswith("+"):
+                # Reference to previous task result
+                ref_task = condition.field[1:]
+                field_value = f'results["{ref_task}"]'
+            else:
+                field_value = f'"{condition.field}"'
+
+            condition_expr = f"{field_value} {condition.operator} {repr(condition.value)}"
+        else:
+            raise ValueError(f"Invalid condition configuration for task {task_name}")
+
+        # Generate task inputs
+        if task_spec.inputs:
+            lines.append("    task_inputs = {")
+            for input_name, input_spec in task_spec.inputs.items():
+                if isinstance(input_spec, str) and input_spec.startswith("+"):
+                    ref_task = input_spec[1:]
+                    lines.append(f'        "{input_name}": results["{ref_task}"],')
+                else:
+                    lines.append(f'        "{input_name}": {repr(input_spec)},')
+            lines.append("    }")
+        else:
+            lines.append("    task_inputs = {}")
+
+        # Call the task function
+        try:
+            module_path, func_name = task_spec.function.rsplit(".", 1)
+            function_alias = f"{task_name}_task"
+        except ValueError:
+            function_alias = task_spec.function
+
+        # Generate conditional execution
+        lines.extend([
+            f"    # Conditional execution based on: {condition_expr}",
+            f"    if {condition_expr}:",
+            f'        log.info("Condition met, executing task: {task_name}")',
+            f'        results["{task_name}"] = {function_alias}(**task_inputs)',
+        ])
+
+        if condition.on_false:
+            lines.extend([
+                "    else:",
+                f'        log.info("Condition not met, skipping task: {task_name}")',
+                f'        results["{task_name}"] = {repr(condition.on_false)}',
+            ])
+        else:
+            lines.extend([
+                "    else:",
+                f'        log.info("Condition not met, skipping task: {task_name}")',
+                f'        results["{task_name}"] = None',
+            ])
+
+        lines.append(f'    log.info("Completed conditional task: {task_name}")')
 
         return lines
 
