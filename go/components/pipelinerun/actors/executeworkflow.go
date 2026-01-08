@@ -417,13 +417,13 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 			pipelineConfigMap = make(map[string]interface{})
 		}
 
-		// Override task_configs and workflow_config if present (Canvas Flex)
-		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowTaskConfigsKey, pipelineConfigMap)
-		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowConfigKey, pipelineConfigMap)
-
-		// Override args and kw_args if present (Uniflow)
-		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowArgsKey, pipelineConfigMap)
-		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowKWArgsKey, pipelineConfigMap)
+		// Override input fields
+		applyInputOverrides(pipelineRun.Spec.Input, pipelineConfigMap,
+			WorkflowTaskConfigsKey, // Yaml based pipeline
+			WorkflowConfigKey,      // Yaml based pipeline
+			WorkflowArgsKey,        // Python SDK based pipeline
+			WorkflowKWArgsKey,      // Python SDK based pipeline
+		)
 
 		// Apply DevRun environment overrides if present
 		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
@@ -434,20 +434,7 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	}
 
 	if pipelineConfigMap != nil {
-		if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
-			// Canvas Flex pipeline
-			args = getWorkflowArgs(pipelineConfigMap)
-			envs["CANVAS_FLEX_PIPELINE"] = "true"
-		} else {
-			// Uniflow pipeline
-			if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
-				args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
-			} else if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
-				kwArgs = convertKwArgsMapToList(val)
-			} else if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
-				envs = val.(map[string]interface{})
-			}
-		}
+		args, kwArgs = extractWorkflowInputs(pipelineConfigMap, envs)
 	}
 
 	envs["MA_NAMESPACE"] = pipelineRun.Namespace
@@ -456,15 +443,40 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	return args, kwArgs, envs, nil
 }
 
-func getWorkflowArgs(pipelineConfigMap map[string]interface{}) []interface{} {
-	workflowArgs := []interface{}{}
-	if pipelineConfigMap[WorkflowConfigKey] != nil {
-		workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowConfigKey])
+// extractWorkflowInputs extracts workflow inputs (args and kw_args) from pipeline config.
+// It handles both Yaml-based pipelines and Python SDK pipelines.
+// For Yaml based pipeline: returns workflow_config and task_configs as args
+// For Python SDK based pipeline: processes args > kw_args > environ in order
+// Returns args and kwArgs (environ is merged into the provided envs map).
+func extractWorkflowInputs(pipelineConfigMap map[string]interface{}, envs map[string]interface{}) ([]interface{}, []interface{}) {
+	var args []interface{}
+	var kwArgs []interface{}
+
+	if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
+		// Yaml based pipeline
+		// Return workflow_config and task_configs as positional args
+		if pipelineConfigMap[WorkflowConfigKey] != nil {
+			args = append(args, pipelineConfigMap[WorkflowConfigKey])
+		}
+		if pipelineConfigMap[WorkflowTaskConfigsKey] != nil {
+			args = append(args, pipelineConfigMap[WorkflowTaskConfigsKey])
+		}
+		envs["YAML_BASED_PIPELINE"] = "true"
+	} else {
+		// Python SDK based pipeline
+		// Process args, kw_args, and env variables in order
+		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
+			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
+		} else if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
+			kwArgs = convertKwArgsMapToList(val)
+		} else if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
+			environMap := val.(map[string]interface{})
+			for k, v := range environMap {
+				envs[k] = v
+			}
+		}
 	}
-	if pipelineConfigMap[WorkflowTaskConfigsKey] != nil {
-		workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowTaskConfigsKey])
-	}
-	return workflowArgs
+	return args, kwArgs
 }
 
 // convertKwArgsMapToList converts kw_args from map format to list of [key, value] pairs.
@@ -834,7 +846,15 @@ func (a *ExecuteWorkflowActor) getTaskList(project *v2.Project, pipelineRun *v2.
 	return taskList, nil
 }
 
-// applyInputFieldToConfigMap extracts a field from pipelineRun.Spec.Input and applies it to pipelineConfigMap
+func applyInputOverrides(input *pbtypes.Struct, pipelineConfigMap map[string]interface{}, fieldKeys ...string) {
+	if input == nil {
+		return
+	}
+	for _, fieldKey := range fieldKeys {
+		applyInputFieldToConfigMap(input, fieldKey, pipelineConfigMap)
+	}
+}
+
 func applyInputFieldToConfigMap(input *pbtypes.Struct, fieldKey string, pipelineConfigMap map[string]interface{}) {
 	if field := input.Fields[fieldKey]; field != nil {
 		if fieldStruct := field.GetStructValue(); fieldStruct != nil {

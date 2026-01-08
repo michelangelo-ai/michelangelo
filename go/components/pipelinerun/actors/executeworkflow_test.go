@@ -2054,7 +2054,225 @@ func TestConvertKwArgsMapToList(t *testing.T) {
 	}
 }
 
-func TestGetWorkflowInputsWithKwArgs(t *testing.T) {
+func TestGetWorkflowInputsWithYamlBasedPipeline(t *testing.T) {
+	testCases := []struct {
+		name            string
+		pipelineRun     *v2.PipelineRun
+		expectedArgs    int // Number of args (workflow_config + task_configs)
+		expectedEnvKeys []string
+		expectError     bool
+	}{
+		{
+			name: "Yaml-based pipeline with both workflow_config and task_configs",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowConfigKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"workflow_name": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "test-workflow",
+												},
+											},
+											"version": {
+												Kind: &pbtypes.Value_NumberValue{
+													NumberValue: 1.0,
+												},
+											},
+										},
+									},
+								},
+							},
+							WorkflowTaskConfigsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"task1": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"task_name": {
+																Kind: &pbtypes.Value_StringValue{
+																	StringValue: "test-task-1",
+																},
+															},
+														},
+													},
+												},
+											},
+											"task2": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"task_name": {
+																Kind: &pbtypes.Value_StringValue{
+																	StringValue: "test-task-2",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    2, // workflow_config + task_configs
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME", "YAML_BASED_PIPELINE"},
+			expectError:     false,
+		},
+		{
+			name: "Yaml-based pipeline with only task_configs",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowTaskConfigsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"task1": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"enabled": {
+																Kind: &pbtypes.Value_BoolValue{
+																	BoolValue: true,
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    1, // Only task_configs
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME", "YAML_BASED_PIPELINE"},
+			expectError:     false,
+		},
+		{
+			name: "Yaml-based pipeline with only workflow_config",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowConfigKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"learning_rate": {
+												Kind: &pbtypes.Value_NumberValue{
+													NumberValue: 0.001,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Must have task_configs to be detected as Yaml-based
+							// This test case should NOT set YAML_BASED_PIPELINE
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    0, // workflow_config alone doesn't trigger Yaml-based detection
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME"},
+			expectError:     false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			args, kwArgs, envs, err := getWorkflowInputs(testCase.pipelineRun)
+
+			if testCase.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify args count
+			require.Len(t, args, testCase.expectedArgs)
+
+			// Verify kwArgs is empty for Yaml-based pipelines
+			require.Empty(t, kwArgs)
+
+			// Verify environment variables contain expected keys
+			for _, key := range testCase.expectedEnvKeys {
+				_, exists := envs[key]
+				require.True(t, exists, "Environment variable %s should exist", key)
+			}
+
+			// Verify YAML_BASED_PIPELINE flag is set correctly
+			if testCase.expectedArgs > 0 {
+				yamlFlag, exists := envs["YAML_BASED_PIPELINE"]
+				require.True(t, exists, "YAML_BASED_PIPELINE should be set for yaml-based pipelines")
+				require.Equal(t, "true", yamlFlag)
+			}
+		})
+	}
+}
+
+func TestGetWorkflowInputsWithPythonSDKBasedPipeline(t *testing.T) {
 	testCases := []struct {
 		name            string
 		pipelineRun     *v2.PipelineRun
