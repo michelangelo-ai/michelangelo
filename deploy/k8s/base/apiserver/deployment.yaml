@@ -1,0 +1,122 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-apiserver
+  namespace: default
+  labels:
+    app.kubernetes.io/name: michelangelo-apiserver
+    app.kubernetes.io/component: apiserver
+    app.kubernetes.io/part-of: michelangelo-platform
+spec:
+  replicas: 2  # Override in environment overlays
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: michelangelo-apiserver
+      app.kubernetes.io/component: apiserver
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: michelangelo-apiserver
+        app.kubernetes.io/component: apiserver
+        app.kubernetes.io/part-of: michelangelo-platform
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: michelangelo-apiserver
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        fsGroup: 65534
+      containers:
+      - name: apiserver
+        image: ghcr.io/michelangelo-ai/apiserver:latest  # Override with specific version in production
+        imagePullPolicy: IfNotPresent
+        ports:
+        - name: grpc
+          containerPort: 14566
+          protocol: TCP
+        - name: metrics
+          containerPort: 8080
+          protocol: TCP
+        - name: health
+          containerPort: 8081
+          protocol: TCP
+        env:
+        - name: CONFIG_FILE
+          value: /etc/config/config.yaml
+        - name: DB_HOST
+          valueFrom:
+            secretKeyRef:
+              name: michelangelo-database
+              key: host
+        - name: DB_PORT
+          valueFrom:
+            secretKeyRef:
+              name: michelangelo-database
+              key: port
+              optional: true
+        - name: DB_NAME
+          valueFrom:
+            secretKeyRef:
+              name: michelangelo-database
+              key: database
+        - name: DB_USER
+          valueFrom:
+            secretKeyRef:
+              name: michelangelo-database
+              key: username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: michelangelo-database
+              key: password
+        volumeMounts:
+        - name: config
+          mountPath: /etc/config
+          readOnly: true
+        - name: tmp
+          mountPath: /tmp
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: health
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: health
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+      volumes:
+      - name: config
+        configMap:
+          name: michelangelo-apiserver-config
+      - name: tmp
+        emptyDir: {}
+      nodeSelector:
+        kubernetes.io/os: linux
+      tolerations:
+      - key: "kubernetes.io/arch"
+        operator: "Equal"
+        value: "amd64"
+        effect: "NoSchedule"

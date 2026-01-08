@@ -217,29 +217,42 @@ necessary, and this assertion will be removed.
 
     _exec(*args)
 
-    resources = [
-        "boot.yaml",
-        "mysql.yaml",
-        "michelangelo-config.yaml",
-        "aws-credentials.yaml",
-    ]
+    # Deploy sandbox infrastructure using simple approach
+    print("🚀 Deploying Michelangelo sandbox...")
+
+    # Apply infrastructure resources (MySQL, MinIO, AWS credentials)
+    _kube_create(_dir / "resources" / "mysql.yaml")
+    _kube_create(_dir / "resources" / "minio.yaml")
+    _kube_create(_dir / "resources" / "aws-credentials.yaml")
+
+    # Apply core Michelangelo services
+    if "apiserver" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-apiserver.yaml")
+    if "controllermgr" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-controllermgr.yaml")
+    if "ui" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-ui.yaml")
+
+    # Create bucket setup with dynamic bucket list
+    bucket_names = ["logs", "default"]
+    if "mlflow" in ns.include_experimental:
+        bucket_names.append("mlflow")
+        print("🪣 Adding MLflow bucket to S3 setup")
+
+    _create_bucket_setup(bucket_names)
+
+    # Handle service exclusions by scaling down deployments
+    if "apiserver" in ns.exclude:
+        _exec("kubectl", "scale", "deployment", "sandbox-michelangelo-apiserver", "--replicas=0")
+    if "controllermgr" in ns.exclude:
+        _exec("kubectl", "scale", "deployment", "sandbox-michelangelo-controllermgr", "--replicas=0")
+    if "worker" in ns.exclude:
+        _exec("kubectl", "scale", "deployment", "sandbox-michelangelo-worker", "--replicas=0")
+
+    # Set up links for web interfaces
     links = []
 
-    # Cadence
-
-    if ns.workflow == "cadence":
-        resources.append("cadence.yaml")
-        links.append(
-            (
-                "Cadence Web UI",
-                "http://localhost:8088/domains/default/workflows",
-                "",
-            )
-        )
-
-    # MinIO
-
-    resources.append("minio.yaml")
+    # MinIO Console
     links.append(
         (
             "MinIO Console",
@@ -249,74 +262,30 @@ necessary, and this assertion will be removed.
     )
 
     # Prometheus & Grafana
+    links.append(("Prometheus", "http://localhost:9092", ""))
+    links.append(("Grafana Dashboard", "http://localhost:3000", "[Username: admin; Password: admin]"))
 
-    resources.append("prometheus.yaml")
-    resources.append("grafana.yaml")
-    links.append(
-        (
-            "Prometheus",
-            "http://localhost:9092",
-            "",
-        )
-    )
-    links.append(
-        (
-            "Grafana Dashboard",
-            "http://localhost:3000",
-            "[Username: admin; Password: admin]",
-        )
-    )
-
-    if "apiserver" not in ns.exclude:
-        resources.append("michelangelo-apiserver.yaml")
-    if "controllermgr" not in ns.exclude:
-        resources.append("michelangelo-controllermgr.yaml")
+    # Michelangelo UI (if not excluded)
     if "ui" not in ns.exclude:
-        resources.append("envoy.yaml")
-        resources.append("michelangelo-ui.yaml")
-        links.append(
-            (
-                "Michelangelo UI",
-                "http://localhost:8090",
-                "",
-            )
-        )
+        links.append(("Michelangelo UI", "http://localhost:8090", ""))
 
+    # Cadence workflow links (if using cadence)
+    if ns.workflow == "cadence":
+        links.append(("Cadence Web UI", "http://localhost:8088/domains/default/workflows", ""))
+
+    # MLflow (if experimental feature enabled)
+    if "mlflow" in ns.include_experimental:
+        # Apply MLflow resource from original resources directory
+        _kube_create(_dir / "resources" / "mlflow.yaml")
+        links.append(("MLflow Tracking Server", "http://localhost:5001", ""))
+
+    # Fluent-bit (if experimental feature enabled)
     if "fluent-bit" in ns.include_experimental:
-        # Provision a ServiceAccount for fluent-bit DaemonSet execution.
-        _exec(
-            "kubectl",
-            "create",
-            "serviceaccount",
-            "fluent-bit",
-        )
-        resources.extend(
-            [
-                "fluent-bit.yaml",
-                "fluent-bit-config.yaml",
-            ]
-        )
-
-    if "mlflow" in ns.include_experimental:
-        resources.append("mlflow.yaml")
-        links.append(
-            (
-                "MLflow Tracking Server",
-                "http://localhost:5001",
-                "",
-            )
-        )
-
-    # Determine buckets to create based on enabled services
-    bucket_names = ["logs", "default"]
-    if "mlflow" in ns.include_experimental:
-        bucket_names.append("mlflow")
-        print("🪣 Adding MLflow bucket to S3 setup")
-
-    # Create bucket setup with dynamic bucket list
-    _create_bucket_setup(bucket_names)
-    for r in resources:
-        _kube_create(_dir / "resources" / r)
+        # Provision a ServiceAccount for fluent-bit DaemonSet execution
+        _exec("kubectl", "create", "serviceaccount", "fluent-bit")
+        # Use fluent-bit resources from original resources directory
+        _kube_create(_dir / "resources" / "fluent-bit.yaml")
+        _kube_create(_dir / "resources" / "fluent-bit-config.yaml")
 
     _assert_command(
         "helm", "Helm not found, please install it: https://helm.sh/docs/intro/install/"
@@ -378,7 +347,7 @@ def _create_bucket_setup(bucket_names):
     """Create S3 bucket setup job with the provided bucket list."""
     bucket_names_str = ",".join(bucket_names)
 
-    # Read the original bucket setup YAML
+    # Read the bucket setup YAML from original resources directory
     original_bucket_setup_path = _dir / "resources" / "sandbox-bucket-setup.yaml"
 
     with open(original_bucket_setup_path) as f:
@@ -471,6 +440,7 @@ def _setup_temporal(links, helm_existing_repos):
         )
         _exec("helm", "repo", "update")
 
+    # Use temporal mysql config from original resources directory
     values_file = _dir / "resources" / "temporal.mysql.yaml"
 
     _exec(

@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namePrefix: dev-
+
+replicas:
+  - name: michelangelo-apiserver
+    count: 1
+  - name: michelangelo-controllermgr
+    count: 1
+  - name: michelangelo-worker
+    count: 1
+
+images:
+  - name: ghcr.io/michelangelo-ai/apiserver
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/controller-manager
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/worker
+    newTag: main
+  - name: ghcr.io/michelangelo-ai/ui
+    newTag: main
+
+commonLabels:
+  environment: development

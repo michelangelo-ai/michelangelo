@@ -1,0 +1,13 @@
+# Patch apiserver environment for sandbox (no database secrets)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-apiserver
+spec:
+  template:
+    spec:
+      containers:
+      - name: apiserver
+        env:
+        - name: CONFIG_FILE
+          value: "/etc/config/base.yaml"

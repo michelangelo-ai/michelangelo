@@ -1,0 +1,28 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-worker
+  labels:
+    app: michelangelo-worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: michelangelo-worker
+  template:
+    metadata:
+      labels:
+        app: michelangelo-worker
+    spec:
+      serviceAccountName: michelangelo-worker
+      containers:
+        - name: worker
+          image: ghcr.io/michelangelo-ai/worker:latest
+          imagePullPolicy: IfNotPresent
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"

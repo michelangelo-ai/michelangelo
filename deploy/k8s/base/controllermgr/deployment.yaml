@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: michelangelo-controllermgr
+  labels:
+    app: michelangelo-controllermgr
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: michelangelo-controllermgr
+  template:
+    metadata:
+      labels:
+        app: michelangelo-controllermgr
+    spec:
+      serviceAccountName: michelangelo-controllermgr
+      containers:
+        - name: controllermgr
+          image: ghcr.io/michelangelo-ai/controllermgr:latest
+          imagePullPolicy: IfNotPresent
+          volumeMounts:
+            - name: config-volume
+              mountPath: /config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+      volumes:
+        - name: config-volume
+          configMap:
+            name: michelangelo-controllermgr-config
