@@ -10,7 +10,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -60,16 +59,16 @@ type InClusterClientSet struct {
 }
 
 func NewInClusterClientSet() InClusterClientSet {
-	cfg, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err)
-	}
-	k8sClusterClient, err := kubernetes.NewForConfig(cfg)
-	if err != nil {
-		panic(err)
-	}
+	// cfg, _ := rest.InClusterConfig()
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// k8sClusterClient, err := kubernetes.NewForConfig(cfg)
+	// if err != nil {
+	// 	panic(err)
+	// }
 	return InClusterClientSet{
-		ClientSet: k8sClusterClient,
+		ClientSet: nil,
 	}
 }
 
