@@ -827,7 +827,7 @@ class YAMLWorkflowParser:
             f"        # Execute task for this iteration",
             f"        iteration_result = {function_alias}(**iteration_inputs)",
             f"        {task_name}_results.append(iteration_result)",
-            f'        log.info(f"Completed {task_name} iteration for {expand_field}={{iteration_inputs[\\"{expand_field}\\"]}}\")',
+            f'        log.info(f"Completed {task_name} iteration for {expand_field}={{iteration_inputs[\\'{expand_field}\\']}}\")',
             "",
             f'    results["{task_name}"] = {task_name}_results',
             f'    log.info("Completed all iterations for task: {task_name}")',
