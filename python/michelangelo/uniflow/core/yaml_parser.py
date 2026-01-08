@@ -754,23 +754,23 @@ class YAMLWorkflowParser:
         for i, task_name in enumerate(execution_order):
             task_spec = self.config.tasks[task_name]
 
-            lines.append(f"        # Task {i+1}: {task_name}")
+            lines.append(f"    # Task {i+1}: {task_name}")
             if task_spec.description:
-                lines.append(f'        # {task_spec.description}')
-            lines.append(f'        log.info("Executing task: {task_name}")')
+                lines.append(f'    # {task_spec.description}')
+            lines.append(f'    log.info("Executing task: {task_name}")')
 
             # Generate task inputs
             if task_spec.inputs:
-                lines.append("        task_inputs = {")
+                lines.append("    task_inputs = {")
                 for input_name, input_spec in task_spec.inputs.items():
                     if isinstance(input_spec, str) and input_spec.startswith("+"):
                         ref_task = input_spec[1:]
-                        lines.append(f'            "{input_name}": results["{ref_task}"],')
+                        lines.append(f'        "{input_name}": results["{ref_task}"],')
                     else:
-                        lines.append(f'            "{input_name}": {repr(input_spec)},')
-                lines.append("        }")
+                        lines.append(f'        "{input_name}": {repr(input_spec)},')
+                lines.append("    }")
             else:
-                lines.append("        task_inputs = {}")
+                lines.append("    task_inputs = {}")
 
             # Call the task function
             try:
@@ -780,19 +780,19 @@ class YAMLWorkflowParser:
                 function_alias = task_spec.function
 
             lines.extend([
-                f"        # Pass workflow results context to dynamic tasks",
-                f"        if hasattr({function_alias}, 'dynamic_type'):",
-                f"            {function_alias}._yaml_context_results = results",
+                f"    # Pass workflow results context to dynamic tasks",
+                f"    if hasattr({function_alias}, 'dynamic_type'):",
+                f"        {function_alias}._yaml_context_results = results",
                 "",
-                f'        results["{task_name}"] = {function_alias}(**task_inputs)',
-                f'        log.info("Completed task: {task_name}")',
+                f'    results["{task_name}"] = {function_alias}(**task_inputs)',
+                f'    log.info("Completed task: {task_name}")',
                 ""
             ])
 
         lines.extend([
-            "        # Clean up dynamic context",
-            "        dynamic_context.execution = None",
-            "        return results",
+            "    # Clean up dynamic context",
+            "    dynamic_context.execution = None",
+            "    return results",
         ])
 
         return lines
