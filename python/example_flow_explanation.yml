@@ -1,0 +1,40 @@
+# Complete Example: Dependencies vs Expand vs Input/Output Flow
+metadata:
+  name: "flow_explanation_example"
+  description: "Shows dependencies, expand, and data flow"
+  version: "1.0"
+
+tasks:
+  # Step 1: Generate list of datasets (returns: ["ds1", "ds2", "ds3"])
+  - task_id: "discover_datasets"
+    function: "example_tasks.discover_datasets"
+    inputs:
+      num_datasets: 3
+      dataset_prefix: "dataset"
+
+  # Step 2: Process each dataset in parallel
+  # EXPAND creates 3 tasks: process_datasets[ds1], process_datasets[ds2], process_datasets[ds3]
+  - task_id: "process_datasets"
+    function: "example_tasks.preprocess"
+    inputs:
+      output_format: "parquet"  # Same for all instances
+    expand:
+      dataset_id: "+discover_datasets"  # Different for each instance
+    dependencies: ["discover_datasets"]  # Wait for discover to finish
+
+  # Step 3: Merge all processed results
+  # INPUT/OUTPUT: Receives list of all process_datasets results
+  - task_id: "merge_results"
+    function: "example_tasks.merge_all"
+    inputs:
+      dataset_list: "+process_datasets"  # Gets: [result1, result2, result3]
+    dependencies: ["process_datasets"]  # Wait for ALL process tasks to finish
+
+  # Step 4: Quality check on merged data
+  # INPUT/OUTPUT: Receives the merged dataset info
+  - task_id: "quality_check"
+    function: "example_tasks.check_quality"
+    inputs:
+      merged_data: "+merge_results"  # Gets the merged dataset object
+      target_samples: 10000
+    dependencies: ["merge_results"]
