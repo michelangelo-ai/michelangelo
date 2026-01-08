@@ -12,7 +12,7 @@ spec:
   type: PIPELINE_TYPE_TRAIN
   manifest:
     type: PIPELINE_MANIFEST_TYPE_UNIFLOW
-    uniflowTar: s3://default/bert_local_2.tar
+    uniflowTar: s3://default/bert_local.tar
   commit:
     gitRef: "main"
     branch: "main"
