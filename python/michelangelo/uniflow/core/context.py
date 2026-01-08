@@ -51,7 +51,6 @@ from michelangelo.uniflow.core.remote_run import (
     RemoteRunTemporal,
 )
 from michelangelo.uniflow.core.utils import LOGGING_FORMAT, ArgparseEnvironAction
-from michelangelo.uniflow.core.yaml_parser import YAMLWorkflowParser
 
 log = logging.getLogger(__name__)
 cadence = "cadence"
@@ -79,15 +78,8 @@ class Context:
         Returns:
             True if running in local mode, False for remote execution.
         """
-        return self._target in ("local-run", "yaml-local-run")
+        return self._target in ("local-run",)
 
-    def is_yaml_workflow(self):
-        """Check if the context is configured for YAML workflows.
-
-        Returns:
-            True if using YAML workflows, False for Python workflows.
-        """
-        return self._target in ("yaml-local-run", "yaml-remote-run")
 
     def run(self, fn, *args, **kwargs):
         """Executes the workflow function in the specified context.
@@ -114,20 +106,6 @@ class Context:
             _local_run(fn, *args, **kwargs)
             return
 
-        if self._target == "yaml-local-run":
-            p = argparse.ArgumentParser()
-            p.add_argument(
-                "--environ",
-                "--env",
-                action=ArgparseEnvironAction,
-                nargs="*",
-                default={},
-            )
-            ns = p.parse_args(self._args)
-
-            os.environ.update(ns.environ)
-            _yaml_local_run(fn, *args, **kwargs)
-            return
 
         if self._target in ("remote-run", "cluster-run"):
             p = _remote_run_argument_parser(environ=True)
@@ -141,17 +119,6 @@ class Context:
             )
             return
 
-        if self._target == "yaml-remote-run":
-            p = _remote_run_argument_parser(environ=True)
-            ns = p.parse_args(self._args).__dict__
-            _yaml_remote_run(
-                environ={**self.environ, **ns.pop("environ")},
-                yaml_path=fn,
-                args=args,
-                kwargs=kwargs,
-                **ns,
-            )
-            return
 
         raise ValueError(f"Unsupported target: {self._target}")
 
@@ -191,7 +158,7 @@ def create_context() -> Context:
 
     target, args = args[0], args[1:]
 
-    assert target in ["local-run", "remote-run", "yaml-local-run", "yaml-remote-run"], (
+    assert target in ["local-run", "remote-run"], (
         f"Unsupported target: {target}; args: {sys.argv[1:]}"
     )
 
@@ -355,94 +322,3 @@ def _remote_run(
     rr.run()
 
 
-def _yaml_local_run(yaml_path: str, *args, **kw):
-    """Execute a YAML workflow in Local Mode.
-
-    Parses the YAML workflow configuration and converts it to a Python workflow
-    function, then executes it locally using the existing local run infrastructure.
-
-    Args:
-        yaml_path: Path to the YAML workflow configuration file.
-        *args: Positional arguments to pass to the workflow function.
-        **kw: Keyword arguments to pass to the workflow function.
-
-    Raises:
-        FileNotFoundError: If the YAML file doesn't exist.
-        ValueError: If the YAML configuration is invalid.
-        RuntimeError: If the generated workflow function fails validation.
-    """
-    log.info("Loading YAML workflow from: %s", yaml_path)
-
-    # Parse YAML configuration and create workflow function
-    parser = YAMLWorkflowParser()
-    parser.parse_file(yaml_path)
-    workflow_func = parser.create_workflow_function()
-
-    log.info("Generated workflow function from YAML: %s", workflow_func.__name__)
-
-    # Execute using existing local run infrastructure
-    _local_run(workflow_func, *args, **kw)
-
-
-def _yaml_remote_run(
-    *,
-    yaml_path: str,
-    environ: Optional[dict] = None,
-    args: Optional[tuple] = None,
-    kwargs: Optional[dict] = None,
-    execution_timeout_seconds: int = DEFAULT_EXECUTION_TIMEOUT_SECONDS,
-    cron: Optional[str] = None,
-    storage_url: str = "",
-    image: str = "",
-    yes: bool = False,
-    workflow: str = cadence,
-    file_sync: bool = False,
-):
-    """Execute a YAML workflow in Remote Mode.
-
-    Parses the YAML workflow configuration and converts it to a Python workflow
-    function, then submits it for remote execution on Cadence or Temporal.
-
-    Args:
-        yaml_path: Path to the YAML workflow configuration file.
-        environ: Environment variables to be injected for the workflow remote run.
-        args: Arguments for the workflow function.
-        kwargs: Keyword arguments for the workflow function.
-        execution_timeout_seconds: Execution timeout in seconds.
-        cron: Cron expression for scheduling periodic workflow runs.
-        storage_url: Persistent storage URL for saving and loading workflow
-            checkpoints.
-        image: Container image to use for running workflow tasks.
-        yes: Automatically answer yes to confirmation prompts.
-        workflow: Workflow engine to use ("cadence" or "temporal"). Defaults to
-            "cadence".
-        file_sync: Sync local code changes to the remote run.
-
-    Raises:
-        FileNotFoundError: If the YAML file doesn't exist.
-        ValueError: If the YAML configuration is invalid.
-        AssertionError: If required parameters are missing.
-    """
-    log.info("Loading YAML workflow from: %s", yaml_path)
-
-    # Parse YAML configuration and create workflow function
-    parser = YAMLWorkflowParser()
-    parser.parse_file(yaml_path)
-    workflow_func = parser.create_workflow_function()
-
-    log.info("Generated workflow function from YAML: %s", workflow_func.__name__)
-
-    # Execute using existing remote run infrastructure
-    _remote_run(
-        fn=workflow_func,
-        environ=environ,
-        args=args,
-        kwargs=kwargs,
-        execution_timeout_seconds=execution_timeout_seconds,
-        cron=cron,
-        storage_url=storage_url,
-        image=image,
-        yes=yes,
-        workflow=workflow,
-        file_sync=file_sync,
-    )

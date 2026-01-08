@@ -46,20 +46,9 @@ Examples:
               resources:
                 cpu: 2
 
-        # Python code
-        workflow_func = uniflow.load_yaml_workflow("workflow.yml")
-        result = workflow_func()
-
-    Dynamic workflows with conditions::
-
-        @uniflow.conditional_task(
-            condition=lambda result: result["quality"] > 0.8,
-            on_true="train_model",
-            on_false="clean_data"
-        )
-        @uniflow.task(config=RayTask())
-        def quality_check(data: dict) -> dict:
-            return {"quality": calculate_quality(data)}
+        # Generate standalone Python from YAML
+        python_code = uniflow.generate_python_from_yaml("workflow.yml", "generated_workflow.py")
+        # Then run: poetry run python generated_workflow.py
 """
 
 # Core decorators and context
@@ -73,18 +62,11 @@ from michelangelo.uniflow.core import (
     IO,
 )
 
-# Dynamic workflow functionality
-from michelangelo.uniflow.core.dynamic import (
-    expand_task,
-    conditional_task,
-    collect_task,
-    DynamicExecutionContext,
-)
 
 # YAML workflow functionality
 from michelangelo.uniflow.core.yaml_parser import (
-    load_yaml_workflow,
     validate_yaml_workflow,
+    generate_python_from_yaml,
     YAMLWorkflowParser,
 )
 
@@ -106,20 +88,12 @@ __all__ = [
     "RayTask",
     "SparkTask",
 
-    # Dynamic workflows
-    "expand_task",
-    "conditional_task",
-    "collect_task",
-    "DynamicExecutionContext",
 
     # YAML workflows
-    "load_yaml_workflow",
     "validate_yaml_workflow",
+    "generate_python_from_yaml",
     "YAMLWorkflowParser",
 ]
 
-# Convenience aliases for common patterns
-foreach_task = expand_task  # Alternative name for expand_task
-if_else_task = conditional_task  # Alternative name for conditional_task
 
 __version__ = "1.0.0"
