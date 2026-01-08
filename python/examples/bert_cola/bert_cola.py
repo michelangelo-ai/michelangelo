@@ -57,9 +57,4 @@ if __name__ == "__main__":
     # ctx.run(train_workflow)
 
     # Example 2: Run with custom configuration (SST-2 dataset)
-    ctx.run(
-        train_workflow,
-        path="glue",
-        name="sst2",
-        tokenizer_max_length=256
-    )
+    ctx.run(train_workflow, path="glue", name="sst2", tokenizer_max_length=256)
