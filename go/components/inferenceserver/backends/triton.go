@@ -121,15 +121,16 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 			return nil, fmt.Errorf("failed to get node address for cluster %s: %w", clusterTarget.ClusterId, err)
 		}
 
-		// Register the cluster endpoint in the control plane (ServiceEntry + ExternalName Service)
-		// Use the actual node address and NodePort for traffic routing
+		// Register the cluster endpoint in the control plane (ServiceExport + ConfigMap metadata)
+		// Host/Port are the Kubernetes API server address for connecting to the target cluster
+		// ServiceHost/ServicePort are the actual node address and NodePort for traffic routing
 		clusterEndpoint := endpointregistry.ClusterEndpoint{
 			ClusterID:           clusterTarget.ClusterId,
 			InferenceServerName: inferenceServer.Name,
 			Namespace:           inferenceServer.Namespace,
-			Host:                nodeHost,
-			Port:                fmt.Sprintf("%d", httpNodePort),
-			ServiceHost:         nodeHost, // ExternalName will point to the actual node
+			Host:                connectionSpec.Host,
+			Port:                connectionSpec.Port,
+			ServiceHost:         nodeHost,
 			ServicePort:         uint32(httpNodePort),
 			TokenSecretRef:      connectionSpec.TokenTag,
 			CASecretRef:         connectionSpec.CaDataTag,
