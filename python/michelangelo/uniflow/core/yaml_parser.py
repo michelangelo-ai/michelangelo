@@ -131,6 +131,7 @@ class CollectConfig(BaseModel):
 
 class TaskSpec(BaseModel):
     """Specification for a single task."""
+    task_id: Optional[str] = None  # DAG Factory style task_id
     function: str
     description: Optional[str] = None
     config: Optional[TaskConfigSpec] = None
@@ -179,7 +180,7 @@ class WorkflowConfig(BaseModel):
     defaults: Optional[DefaultsConfig] = None
     environment: Optional[EnvironmentConfig] = None
     workflow: Optional[Dict[str, Any]] = None
-    tasks: Dict[str, TaskSpec]
+    tasks: Union[Dict[str, TaskSpec], List[TaskSpec]]  # Support both dict and list formats
 
 
 class YAMLWorkflowParser:
@@ -227,8 +228,19 @@ class YAMLWorkflowParser:
             Parsed and validated workflow configuration
         """
         self.config = WorkflowConfig(**config_dict)
+        self._normalize_tasks_format()
         self._validate_workflow()
         return self.config
+
+    def _normalize_tasks_format(self):
+        """Convert list-style tasks to dict-style for internal processing."""
+        if isinstance(self.config.tasks, list):
+            # Convert DAG Factory list format to dict format
+            tasks_dict = {}
+            for task_spec in self.config.tasks:
+                task_name = task_spec.task_id or f"task_{len(tasks_dict)}"
+                tasks_dict[task_name] = task_spec
+            self.config.tasks = tasks_dict
 
     def _validate_workflow(self):
         """Validate the workflow configuration."""
