@@ -2,6 +2,7 @@
 
 Example workflow demonstrating BERT fine-tuning on the Corpus of Linguistic
 Acceptability (CoLA) task from the GLUE benchmark.
+Support workflow parameters via dict or Starlark-compatible parameters.
 """
 
 import michelangelo.uniflow.core as uniflow
@@ -11,18 +12,17 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
-def train_workflow():
-    """Training workflow for BERT model on CoLA dataset.
+def train_workflow(path="glue", name="cola", tokenizer_max_length=128):
+    """Training workflow for BERT model on GLUE datasets."""
+    print("[train_workflow] Starting with config:")
+    print("  - Dataset: " + path + "/" + name)
+    print("  - Tokenizer max length: " + str(tokenizer_max_length))
 
-    Loads CoLA dataset from GLUE benchmark, fine-tunes BERT for sequence
-    classification, and evaluates model performance.
-    """
-    data_path = "glue"
-    data_name = "cola"
+    # Load data using configuration
     train_data, validation_data, test_data = load_data(
-        data_path,
-        data_name,
-        tokenizer_max_length=128,
+        path=path,
+        name=name,
+        tokenizer_max_length=tokenizer_max_length,
     )
     result = train(
         train_data,
@@ -51,4 +51,15 @@ if __name__ == "__main__":
     # this is example docker image, we don't need to pull it from docker registry
     ctx.environ["IMAGE_PULL_POLICY"] = "Never"
     ctx.environ["S3_ALLOW_BUCKET_CREATION"] = "True"
-    ctx.run(train_workflow)
+
+    # Example 1: Run with default configuration (CoLA dataset)
+    # please rebuild tar file if changed bert_cola.py for sandbox testing
+    # ctx.run(train_workflow)
+
+    # Example 2: Run with custom configuration (SST-2 dataset)
+    ctx.run(
+        train_workflow,
+        path="glue",
+        name="sst2",
+        tokenizer_max_length=256
+    )

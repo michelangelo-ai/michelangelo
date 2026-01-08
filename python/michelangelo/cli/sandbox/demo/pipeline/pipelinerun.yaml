@@ -1,9 +1,15 @@
 apiVersion: michelangelo.api/v2
 kind: PipelineRun
 metadata:
- name: run-training-pipeline
+ name: run-training-pipeline-15
  namespace: ma-dev-test
 spec:
  pipeline:
    name: training-pipeline
    namespace: ma-dev-test
+ input:
+   # kw_args is a Struct that maps to workflow function parameters
+   kw_args:
+     path: glue                         # train_workflow(path='glue')
+     name: sst2                         # train_workflow(name='sst2')
+     tokenizer_max_length: 256          # train_workflow(tokenizer_max_length=256)

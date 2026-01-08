@@ -36,7 +36,7 @@ const (
 
 	// Workflow input parameter keys for uniflow pipeline
 	WorkflowEnvironKey = "environ"
-	WorkflowKWArgsKey  = "kwargs"
+	WorkflowKWArgsKey  = "kw_args"
 	WorkflowArgsKey    = "args"
 
 	// Workflow input parameter keys for canvas flex pipeline
@@ -400,9 +400,13 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 			pipelineConfigMap = make(map[string]interface{})
 		}
 		
-		// Override task_configs and workflow_config if present
+		// Override task_configs and workflow_config if present (Canvas Flex)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowTaskConfigsKey, pipelineConfigMap)
 		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowConfigKey, pipelineConfigMap)
+		
+		// Override args and kw_args if present (Uniflow)
+		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowArgsKey, pipelineConfigMap)
+		applyInputFieldToConfigMap(pipelineRun.Spec.Input, WorkflowKWArgsKey, pipelineConfigMap)
 
 		// Apply DevRun environment overrides if present
 		if environField := pipelineRun.Spec.Input.Fields["environ"]; environField != nil {
@@ -414,14 +418,16 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 	if pipelineConfigMap != nil {
 		if _, ok := pipelineConfigMap[WorkflowTaskConfigsKey]; ok {
+			// Canvas Flex pipeline
 			args = getWorkflowArgs(pipelineConfigMap)
 			envs["CANVAS_FLEX_PIPELINE"] = "true"
-		} else if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
-			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
-			if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
-				kwArgs = val.([]interface{})
-			}
-			if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
+		} else {
+			// Uniflow pipeline
+			if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
+				args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
+			} else if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
+				kwArgs = convertKwArgsMapToList(val)
+			} else if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
 				envs = val.(map[string]interface{})
 			}
 		}
@@ -435,13 +441,33 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 
 func getWorkflowArgs(pipelineConfigMap map[string]interface{}) []interface{} {
 	workflowArgs := []interface{}{}
-	if len(pipelineConfigMap) > 1 {
-		if pipelineConfigMap[WorkflowConfigKey] != nil {
-			workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowConfigKey])
-		}
+	if pipelineConfigMap[WorkflowConfigKey] != nil {
+		workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowConfigKey])
+	}
+	if pipelineConfigMap[WorkflowTaskConfigsKey] != nil {
 		workflowArgs = append(workflowArgs, pipelineConfigMap[WorkflowTaskConfigsKey])
 	}
 	return workflowArgs
+}
+
+// convertKwArgsMapToList converts kw_args from map format to list of [key, value] pairs.
+// Starlark workflow input expects kw_args as a list of [key, value] pairs, key as parameter name and value as parameter value.
+func convertKwArgsMapToList(val interface{}) []interface{} {
+	switch v := val.(type) {
+	case map[string]interface{}:
+		// Convert map to list of [key, value] pairs
+		kwArgsList := make([]interface{}, 0, len(v))
+		for key, value := range v {
+			kwArgsList = append(kwArgsList, []interface{}{key, value})
+		}
+		return kwArgsList
+	case []interface{}:
+		// Already in list format
+		return v
+	default:
+		// Unknown format, return empty list
+		return []interface{}{}
+	}
 }
 
 func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]interface{}, error) {
