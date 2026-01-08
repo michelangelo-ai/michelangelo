@@ -7,10 +7,10 @@ resources:
   - ../../base
 
   # Add sandbox-specific infrastructure components only
-  - resources/temporal.mysql.yaml
+  # Note: temporal.mysql.yaml is a Helm values file, not a K8s resource - handled by sandbox.py
   - resources/mysql.yaml
   - resources/minio.yaml
-  - resources/envoy.yaml
+  # Note: envoy.yaml conflicts with base - using patch instead
   - resources/aws-credentials.yaml
   - resources/sandbox-bucket-setup.yaml
 
@@ -24,11 +24,12 @@ resources:
 
 namePrefix: sandbox-
 
-commonLabels:
-  environment: sandbox
-  deployment-type: development
+labels:
+- pairs:
+    environment: sandbox
+    deployment-type: development
 
-namespace: michelangelo
+namespace: default
 
 # Override image tags to use main for development
 images:
@@ -52,24 +53,20 @@ replicas:
 
 # Patch base configs to work with sandbox infrastructure
 patches:
-  # Replace apiserver config to use sandbox infrastructure
+  # Replace apiserver config to use sandbox configuration
   - path: patches/apiserver-config.yaml
     target:
       kind: ConfigMap
       name: michelangelo-apiserver-config
 
-  # Add sandbox environment variables to deployments
+  # Update apiserver deployment for sandbox environment
   - path: patches/apiserver-env.yaml
     target:
       kind: Deployment
       name: michelangelo-apiserver
 
-  - path: patches/controllermgr-env.yaml
+  # Convert Envoy service to NodePort for local access
+  - path: patches/envoy-service.yaml
     target:
-      kind: Deployment
-      name: michelangelo-controllermgr
-
-  - path: patches/worker-env.yaml
-    target:
-      kind: Deployment
-      name: michelangelo-worker
+      kind: Service
+      name: envoy

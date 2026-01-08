@@ -6,4 +6,4 @@ resources:
   - service.yaml
   - rbac.yaml
 
-namespace: michelangelo
+namespace: default

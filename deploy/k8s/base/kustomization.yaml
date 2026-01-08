@@ -7,5 +7,6 @@ resources:
   - worker/
   - michelangelo-ui/
 
-commonLabels:
-  app.kubernetes.io/part-of: michelangelo
+labels:
+- pairs:
+    app.kubernetes.io/part-of: michelangelo

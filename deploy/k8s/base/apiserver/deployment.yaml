@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: michelangelo-apiserver
-  namespace: michelangelo
+  namespace: default
   labels:
     app.kubernetes.io/name: michelangelo-apiserver
     app.kubernetes.io/component: apiserver

@@ -217,15 +217,21 @@ necessary, and this assertion will be removed.
 
     _exec(*args)
 
-    # Deploy sandbox using Kustomize overlay
-    print("🚀 Deploying Michelangelo sandbox using Kustomize...")
+    # Deploy sandbox infrastructure using simple approach
+    print("🚀 Deploying Michelangelo sandbox...")
 
-    # Find the michelangelo project root (3 levels up from sandbox.py)
-    project_root = _dir.parent.parent.parent
-    kustomize_path = project_root / "deploy" / "k8s" / "overlays" / "sandbox"
+    # Apply infrastructure resources (MySQL, MinIO, AWS credentials)
+    _kube_create(_dir / "resources" / "mysql.yaml")
+    _kube_create(_dir / "resources" / "minio.yaml")
+    _kube_create(_dir / "resources" / "aws-credentials.yaml")
 
-    # Apply the sandbox overlay
-    _exec("kubectl", "apply", "-k", str(kustomize_path))
+    # Apply core Michelangelo services
+    if "apiserver" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-apiserver.yaml")
+    if "controllermgr" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-controllermgr.yaml")
+    if "ui" not in ns.exclude:
+        _kube_create(_dir / "resources" / "michelangelo-ui.yaml")
 
     # Create bucket setup with dynamic bucket list
     bucket_names = ["logs", "default"]
@@ -269,7 +275,7 @@ necessary, and this assertion will be removed.
 
     # MLflow (if experimental feature enabled)
     if "mlflow" in ns.include_experimental:
-        # Apply MLflow resource separately since it's optional
+        # Apply MLflow resource from original resources directory
         _kube_create(_dir / "resources" / "mlflow.yaml")
         links.append(("MLflow Tracking Server", "http://localhost:5001", ""))
 
@@ -277,6 +283,7 @@ necessary, and this assertion will be removed.
     if "fluent-bit" in ns.include_experimental:
         # Provision a ServiceAccount for fluent-bit DaemonSet execution
         _exec("kubectl", "create", "serviceaccount", "fluent-bit")
+        # Use fluent-bit resources from original resources directory
         _kube_create(_dir / "resources" / "fluent-bit.yaml")
         _kube_create(_dir / "resources" / "fluent-bit-config.yaml")
 
@@ -340,7 +347,7 @@ def _create_bucket_setup(bucket_names):
     """Create S3 bucket setup job with the provided bucket list."""
     bucket_names_str = ",".join(bucket_names)
 
-    # Read the original bucket setup YAML
+    # Read the bucket setup YAML from original resources directory
     original_bucket_setup_path = _dir / "resources" / "sandbox-bucket-setup.yaml"
 
     with open(original_bucket_setup_path) as f:
@@ -433,6 +440,7 @@ def _setup_temporal(links, helm_existing_repos):
         )
         _exec("helm", "repo", "update")
 
+    # Use temporal mysql config from original resources directory
     values_file = _dir / "resources" / "temporal.mysql.yaml"
 
     _exec(

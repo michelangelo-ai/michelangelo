@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: michelangelo-apiserver-config
-  namespace: michelangelo
+  namespace: default
   labels:
     app.kubernetes.io/name: michelangelo-apiserver
     app.kubernetes.io/component: apiserver

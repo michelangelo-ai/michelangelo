@@ -7,7 +7,7 @@ spec:
   template:
     spec:
       containers:
-      - name: michelangelo-worker
+      - name: worker
         env:
         # Database connection for sandbox MySQL
         - name: DB_HOST
