@@ -7,19 +7,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // Params contains dependencies for strategy actors
 type Params struct {
-	Client                 client.Client
-	ProxyProvider          proxy.ProxyProvider
-	Gateway                gateways.Gateway
-	Logger                 *zap.Logger
-	ModelConfigMapProvider configmap.ModelConfigMapProvider
+	Client        client.Client
+	ProxyProvider proxy.ProxyProvider
+	Gateway       gateways.Gateway
+	Logger        *zap.Logger
 }
 
 // GetActorsForStrategy returns actors for the appropriate strategy

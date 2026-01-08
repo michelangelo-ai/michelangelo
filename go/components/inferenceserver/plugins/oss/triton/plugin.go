@@ -9,12 +9,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/creation"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/deletion"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -26,24 +25,20 @@ type TritonPlugin struct {
 	creationPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 	deletionPlugin conditionInterfaces.Plugin[*v2pb.InferenceServer]
 
-	gateway                gateways.Gateway
-	modelConfigMapProvider configmap.ModelConfigMapProvider
-	proxyProvider          proxy.ProxyProvider
-	Recorder               record.EventRecorder
-	logger                 *zap.Logger
+	backend  backends.Backend
+	Recorder record.EventRecorder
+	logger   *zap.Logger
 }
 
 // NewPlugin creates a Triton plugin with creation and deletion workflows.
-func NewPlugin(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
+func NewPlugin(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
-		creationPlugin: creation.NewTritonCreationPlugin(gateway, proxyProvider, logger),
-		deletionPlugin: deletion.NewTritonDeletionPlugin(gateway, proxyProvider, modelConfigMapProvider, logger),
+		creationPlugin: creation.NewTritonCreationPlugin(backend, logger),
+		deletionPlugin: deletion.NewTritonDeletionPlugin(backend, modelConfigMapProvider, logger),
 
-		gateway:                gateway,
-		modelConfigMapProvider: modelConfigMapProvider,
-		proxyProvider:          proxyProvider,
-		Recorder:               recorder,
-		logger:                 logger,
+		backend:  backend,
+		Recorder: recorder,
+		logger:   logger,
 	}
 }
 
@@ -98,7 +93,7 @@ func (p *TritonPlugin) ParseState(inferenceServer *v2pb.InferenceServer) v2pb.In
 	return v2pb.INFERENCE_SERVER_STATE_CREATING
 }
 
-// UpdateDetails updates status, annotations, and labels with backend-specific information from the gateway.
+// UpdateDetails updates status, annotations, and labels with backend-specific information from the backend.
 func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.InferenceServer) error {
 	// Skip if resource is being deleted
 	if !resource.GetDeletionTimestamp().IsZero() {
@@ -110,33 +105,29 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 		return nil
 	}
 
-	// Get current status from gateway
-	statusResp, err := p.gateway.GetInfrastructureStatus(ctx, p.logger, gateways.GetInfrastructureStatusRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-		BackendType:     resource.Spec.BackendType,
-	})
+	// Get current status from backend
+	status, err := p.backend.GetServerStatus(ctx, p.logger, resource.Name, resource.Namespace)
 	if err != nil {
 		// Don't fail reconciliation for status check errors
-		p.logger.Error("Failed to get infrastructure status",
+		p.logger.Error("Failed to get server status",
 			zap.Error(err),
-			zap.String("operation", "get_infrastructure_status"),
+			zap.String("operation", "get_server_status"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return nil
 	}
 
 	// Update status based on external state
-	if statusResp.Status.State != resource.Status.State {
+	if status.State != resource.Status.State {
 		p.logger.Info("External state change detected",
 			zap.String("currentState", resource.Status.State.String()),
-			zap.String("externalState", statusResp.Status.State.String()))
+			zap.String("externalState", status.State.String()))
 
-		resource.Status.State = statusResp.Status.State
-		resource.Status.ProviderMetadata = statusResp.Status.Message
+		resource.Status.State = status.State
+		resource.Status.ProviderMetadata = status.Message
 
 		// Record state transition events
-		switch statusResp.Status.State {
+		switch status.State {
 		case v2pb.INFERENCE_SERVER_STATE_SERVING:
 			p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
 		case v2pb.INFERENCE_SERVER_STATE_FAILED:

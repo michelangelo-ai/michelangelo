@@ -36,72 +36,72 @@ func (m *MockModelConfigMapProvider) EXPECT() *MockModelConfigMapProviderMockRec
 }
 
 // AddModelToConfigMap mocks base method.
-func (m *MockModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, request configmap.AddModelToConfigMapRequest) error {
+func (m *MockModelConfigMapProvider) AddModelToConfigMap(ctx context.Context, inferenceServer, namespace string, modelConfig configmap.ModelConfigEntry) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddModelToConfigMap", ctx, request)
+	ret := m.ctrl.Call(m, "AddModelToConfigMap", ctx, inferenceServer, namespace, modelConfig)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // AddModelToConfigMap indicates an expected call of AddModelToConfigMap.
-func (mr *MockModelConfigMapProviderMockRecorder) AddModelToConfigMap(ctx, request interface{}) *gomock.Call {
+func (mr *MockModelConfigMapProviderMockRecorder) AddModelToConfigMap(ctx, inferenceServer, namespace, modelConfig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModelToConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).AddModelToConfigMap), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddModelToConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).AddModelToConfigMap), ctx, inferenceServer, namespace, modelConfig)
 }
 
 // CreateModelConfigMap mocks base method.
-func (m *MockModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, request configmap.CreateModelConfigMapRequest) error {
+func (m *MockModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, inferenceServer, namespace string, modelConfigs []configmap.ModelConfigEntry, labels, annotations map[string]string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CreateModelConfigMap", ctx, request)
+	ret := m.ctrl.Call(m, "CreateModelConfigMap", ctx, inferenceServer, namespace, modelConfigs, labels, annotations)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // CreateModelConfigMap indicates an expected call of CreateModelConfigMap.
-func (mr *MockModelConfigMapProviderMockRecorder) CreateModelConfigMap(ctx, request interface{}) *gomock.Call {
+func (mr *MockModelConfigMapProviderMockRecorder) CreateModelConfigMap(ctx, inferenceServer, namespace, modelConfigs, labels, annotations interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateModelConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).CreateModelConfigMap), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateModelConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).CreateModelConfigMap), ctx, inferenceServer, namespace, modelConfigs, labels, annotations)
 }
 
 // DeleteModelConfigMap mocks base method.
-func (m *MockModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, request configmap.DeleteModelConfigMapRequest) error {
+func (m *MockModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context, inferenceServer, namespace string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteModelConfigMap", ctx, request)
+	ret := m.ctrl.Call(m, "DeleteModelConfigMap", ctx, inferenceServer, namespace)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // DeleteModelConfigMap indicates an expected call of DeleteModelConfigMap.
-func (mr *MockModelConfigMapProviderMockRecorder) DeleteModelConfigMap(ctx, request interface{}) *gomock.Call {
+func (mr *MockModelConfigMapProviderMockRecorder) DeleteModelConfigMap(ctx, inferenceServer, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteModelConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).DeleteModelConfigMap), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteModelConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).DeleteModelConfigMap), ctx, inferenceServer, namespace)
 }
 
 // GetModelsFromConfigMap mocks base method.
-func (m *MockModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, request configmap.GetModelConfigMapRequest) ([]configmap.ModelConfigEntry, error) {
+func (m *MockModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Context, inferenceServer, namespace string) ([]configmap.ModelConfigEntry, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetModelsFromConfigMap", ctx, request)
+	ret := m.ctrl.Call(m, "GetModelsFromConfigMap", ctx, inferenceServer, namespace)
 	ret0, _ := ret[0].([]configmap.ModelConfigEntry)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetModelsFromConfigMap indicates an expected call of GetModelsFromConfigMap.
-func (mr *MockModelConfigMapProviderMockRecorder) GetModelsFromConfigMap(ctx, request interface{}) *gomock.Call {
+func (mr *MockModelConfigMapProviderMockRecorder) GetModelsFromConfigMap(ctx, inferenceServer, namespace interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModelsFromConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).GetModelsFromConfigMap), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetModelsFromConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).GetModelsFromConfigMap), ctx, inferenceServer, namespace)
 }
 
 // RemoveModelFromConfigMap mocks base method.
-func (m *MockModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, request configmap.RemoveModelFromConfigMapRequest) error {
+func (m *MockModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Context, inferenceServer, namespace, modelName string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RemoveModelFromConfigMap", ctx, request)
+	ret := m.ctrl.Call(m, "RemoveModelFromConfigMap", ctx, inferenceServer, namespace, modelName)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // RemoveModelFromConfigMap indicates an expected call of RemoveModelFromConfigMap.
-func (mr *MockModelConfigMapProviderMockRecorder) RemoveModelFromConfigMap(ctx, request interface{}) *gomock.Call {
+func (mr *MockModelConfigMapProviderMockRecorder) RemoveModelFromConfigMap(ctx, inferenceServer, namespace, modelName interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveModelFromConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).RemoveModelFromConfigMap), ctx, request)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveModelFromConfigMap", reflect.TypeOf((*MockModelConfigMapProvider)(nil).RemoveModelFromConfigMap), ctx, inferenceServer, namespace, modelName)
 }

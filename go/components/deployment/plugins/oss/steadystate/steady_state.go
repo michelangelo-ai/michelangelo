@@ -62,12 +62,8 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 		// For OSS, actively monitor and maintain steady state
 		if resource.Status.State != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			a.logger.Info("Deployment not healthy, investigating", zap.String("state", resource.Status.State.String()))
-
 			// Check if the inference server is healthy
-			healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
-				InferenceServer: resource.Spec.GetInferenceServer().Name,
-				Namespace:       resource.Namespace,
-			})
+			healthy, err := a.gateway.InferenceServerIsHealthy(ctx, a.logger, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 			if err != nil {
 				a.logger.Error("failed to check health of inference server",
 					zap.Error(err),
@@ -87,14 +83,7 @@ func (a *SteadyStateActor) Run(ctx context.Context, resource *v2pb.Deployment, c
 			}
 
 			// Check if the desired model is ready in Triton
-			modelStatusRequest := gateways.CheckModelStatusRequest{
-				ModelName:       resource.Spec.DesiredRevision.Name,
-				InferenceServer: resource.Spec.GetInferenceServer().Name,
-				DeploymentName:  resource.Name,
-				Namespace:       resource.Namespace,
-			}
-
-			modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelStatusRequest)
+			modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, resource.Spec.DesiredRevision.Name, resource.Spec.GetInferenceServer().Name, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 			if err != nil {
 				a.logger.Error("failed to check model status",
 					zap.Error(err),

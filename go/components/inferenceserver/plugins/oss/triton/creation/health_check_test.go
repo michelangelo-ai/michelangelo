@@ -11,8 +11,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	gatewaysmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
+	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -20,7 +19,7 @@ import (
 func TestHealthCheckActor_Retrieve(t *testing.T) {
 	tests := []struct {
 		name            string
-		setupMocks      func(*gatewaysmocks.MockGateway)
+		setupMocks      func(*backendsmocks.MockBackend)
 		expectedStatus  apipb.ConditionStatus
 		expectedReason  string
 		expectedMessage string
@@ -28,16 +27,13 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 	}{
 		{
 			name: "server is healthy",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.HealthCheckRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
 					Return(true, nil)
 			},
@@ -48,16 +44,13 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "server is not healthy",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.HealthCheckRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
 					Return(false, nil)
 			},
@@ -68,16 +61,13 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 		},
 		{
 			name: "health check returns error",
-			setupMocks: func(mockGateway *gatewaysmocks.MockGateway) {
-				mockGateway.EXPECT().
+			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
+				mockBackend.EXPECT().
 					IsHealthy(
 						gomock.Any(),
 						gomock.Any(),
-						gateways.HealthCheckRequest{
-							InferenceServer: "test-server",
-							Namespace:       "test-namespace",
-							BackendType:     v2pb.BACKEND_TYPE_TRITON,
-						},
+						"test-server",
+						"test-namespace",
 					).
 					Return(false, errors.New("connection timeout"))
 			},
@@ -93,11 +83,11 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
 
-			tt.setupMocks(mockGateway)
+			tt.setupMocks(mockBackend)
 
-			actor := NewHealthCheckActor(mockGateway, zap.NewNop())
+			actor := NewHealthCheckActor(mockBackend, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -130,14 +120,14 @@ func TestHealthCheckActor_Retrieve(t *testing.T) {
 
 func TestHealthCheckActor_Run(t *testing.T) {
 	// Run() always returns a simple false condition since there's nothing
-	// it can do differently from Retrieve(). It doesn't call the gateway.
+	// it can do differently from Retrieve(). It doesn't call the backend.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-	// No expectations set,gateway should not be called
+	mockBackend := backendsmocks.NewMockBackend(ctrl)
+	// No expectations set, backend should not be called
 
-	actor := NewHealthCheckActor(mockGateway, zap.NewNop())
+	actor := NewHealthCheckActor(mockBackend, zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{

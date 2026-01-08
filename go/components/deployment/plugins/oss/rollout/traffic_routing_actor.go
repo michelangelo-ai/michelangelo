@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -32,12 +32,8 @@ func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
-	ok, err := a.ProxyProvider.CheckDeploymentRouteStatus(ctx, a.Logger, proxy.CheckDeploymentRouteStatusRequest{
-		DeploymentName:  deployment.Name,
-		Namespace:       deployment.Namespace,
-		InferenceServer: deployment.Spec.GetInferenceServer().Name,
-		ModelName:       deployment.Spec.DesiredRevision.Name,
-	})
+	ok, err := a.ProxyProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
+		deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		a.Logger.Error("failed to check deployment route status",
 			zap.Error(err),
@@ -77,12 +73,7 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		}, nil
 	}
 
-	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, proxy.EnsureDeploymentRouteRequest{
-		DeploymentName:  deployment.Name,
-		Namespace:       deployment.Namespace,
-		ModelName:       deployment.Spec.DesiredRevision.Name,
-		InferenceServer: deployment.Spec.GetInferenceServer().Name,
-	})
+	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
 	if err != nil {
 		a.Logger.Error("failed to add deployment route",
 			zap.Error(err),

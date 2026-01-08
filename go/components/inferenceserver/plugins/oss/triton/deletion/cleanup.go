@@ -7,10 +7,9 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -19,18 +18,16 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &CleanupActor{
 
 // CleanupActor removes all Kubernetes resources associated with a Triton inference server.
 type CleanupActor struct {
-	gateway                gateways.Gateway
+	backend                backends.Backend
 	modelConfigMapProvider configmap.ModelConfigMapProvider
-	proxyProvider          proxy.ProxyProvider
 	logger                 *zap.Logger
 }
 
-// NewCleanupActor creates a condition actor for infrastructure cleanup during deletion.
-func NewCleanupActor(gateway gateways.Gateway, modelConfigMapProvider configmap.ModelConfigMapProvider, proxyProvider proxy.ProxyProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+// NewCleanupActor creates a condition actor for inference server cleanup during deletion.
+func NewCleanupActor(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &CleanupActor{
-		gateway:                gateway,
+		backend:                backend,
 		modelConfigMapProvider: modelConfigMapProvider,
-		proxyProvider:          proxyProvider,
 		logger:                 logger,
 	}
 }
@@ -40,23 +37,18 @@ func (a *CleanupActor) GetType() string {
 	return common.TritonCleanupConditionType
 }
 
-// Retrieve checks if all infrastructure has been successfully deleted.
+// Retrieve checks if all inference server has been successfully deleted.
 func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton cleanup condition")
 
-	// Check if infrastructure still exists
-	_, err := a.gateway.GetInfrastructureStatus(ctx, a.logger, gateways.GetInfrastructureStatusRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-		BackendType:     resource.Spec.BackendType,
-	})
-
+	// Check if inference server still exists
+	_, err := a.backend.GetServerStatus(ctx, a.logger, resource.Name, resource.Namespace)
 	if err == nil {
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
 			Reason:  "CleanupInProgress",
-			Message: "Infrastructure cleanup in progress",
+			Message: "Inference server cleanup in progress",
 		}, nil
 	}
 
@@ -64,23 +56,20 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
 		Reason:  "CleanupCompleted",
-		Message: "Infrastructure cleanup completed",
+		Message: "Inference server cleanup completed",
 	}, nil
 }
 
-// Run deletes the deployment, service, ConfigMaps, and HTTPRoute for the inference server.
+// Run deletes the deployment, service, ConfigMaps for the inference server.
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running Triton infrastructure cleanup with ConfigMap and HTTPRoute cleanup")
+	a.logger.Info("Running Triton inference server cleanup with ConfigMap cleanup")
 
 	// Delete ConfigMaps first
 	a.logger.Info("Cleaning up ConfigMaps for inference server", zap.String("inferenceServer", resource.Name))
 
 	// Clean up model-config ConfigMap
 	modelConfigMapName := fmt.Sprintf("%s-model-config", resource.Name)
-	if err := a.modelConfigMapProvider.DeleteModelConfigMap(ctx, configmap.DeleteModelConfigMapRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-	}); err != nil {
+	if err := a.modelConfigMapProvider.DeleteModelConfigMap(ctx, resource.Name, resource.Namespace); err != nil {
 		a.logger.Error("Failed to delete model ConfigMap",
 			zap.Error(err),
 			zap.String("operation", "delete_configmap"),
@@ -92,50 +81,28 @@ func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, 
 		a.logger.Info("Successfully deleted model ConfigMap", zap.String("configMap", modelConfigMapName))
 	}
 
-	// Delete HTTPRoute for the inference server
-	a.logger.Info("Cleaning up HTTPRoute for inference server", zap.String("inferenceServer", resource.Name))
-	httpRouteName := fmt.Sprintf("%s-httproute", resource.Name)
-	if err := a.proxyProvider.DeleteInferenceServerRoute(ctx, a.logger, proxy.DeleteInferenceServerRouteRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-	}); err != nil {
-		a.logger.Error("Failed to delete HTTPRoute",
-			zap.Error(err),
-			zap.String("operation", "delete_httproute"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name),
-			zap.String("httpRoute", httpRouteName))
-		// Don't fail the whole cleanup for HTTPRoute errors, but log them
-	} else {
-		a.logger.Info("Successfully deleted HTTPRoute", zap.String("httpRoute", httpRouteName))
-	}
-
-	// Delete infrastructure (Kubernetes resources like Deployment, Service, etc.)
-	a.logger.Info("Cleaning up Kubernetes infrastructure", zap.String("inferenceServer", resource.Name))
-	err := a.gateway.DeleteInfrastructure(ctx, a.logger, gateways.DeleteInfrastructureRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-		BackendType:     resource.Spec.BackendType,
-	})
+	// Delete inference server
+	a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
+	err := a.backend.DeleteServer(ctx, a.logger, resource.Name, resource.Namespace)
 	if err != nil {
-		a.logger.Error("Failed to delete infrastructure",
+		a.logger.Error("Failed to delete inference server",
 			zap.Error(err),
-			zap.String("operation", "delete_infrastructure"),
+			zap.String("operation", "delete_server"),
 			zap.String("namespace", resource.Namespace),
 			zap.String("inferenceServer", resource.Name))
 		return &apipb.Condition{
 			Type:    a.GetType(),
 			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "InfrastructureCleanupFailed",
-			Message: fmt.Sprintf("Failed to cleanup infrastructure: %v", err),
-		}, fmt.Errorf("delete infrastructure for inference server %s/%s: %w", resource.Namespace, resource.Name, err)
+			Reason:  "ServerCleanupFailed",
+			Message: fmt.Sprintf("Failed to cleanup inference server: %v", err),
+		}, fmt.Errorf("delete inference server %s/%s: %w", resource.Namespace, resource.Name, err)
 	}
 
-	a.logger.Info("Triton infrastructure cleanup completed successfully", zap.String("inferenceServer", resource.Name))
+	a.logger.Info("Triton inference server cleanup completed successfully", zap.String("inferenceServer", resource.Name))
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,
 		Reason:  "CleanupInitiated",
-		Message: "Infrastructure, model ConfigMap, and HTTPRoute cleanup initiated successfully",
+		Message: "Inference server, model ConfigMap cleanup initiated successfully",
 	}, nil
 }

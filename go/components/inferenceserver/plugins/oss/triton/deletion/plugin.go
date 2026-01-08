@@ -4,26 +4,23 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // TritonDeletionPlugin orchestrates the condition actors for inference server deletion.
 type TritonDeletionPlugin struct {
-	gateway                gateways.Gateway
-	proxyProvider          proxy.ProxyProvider
+	backend                backends.Backend
 	modelConfigMapProvider configmap.ModelConfigMapProvider
 	logger                 *zap.Logger
 }
 
 // NewTritonDeletionPlugin creates a plugin that manages cleanup of all inference server resources.
-func NewTritonDeletionPlugin(gateway gateways.Gateway, proxyProvider proxy.ProxyProvider, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
+func NewTritonDeletionPlugin(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.Plugin[*v2pb.InferenceServer] {
 	return &TritonDeletionPlugin{
-		gateway:                gateway,
-		proxyProvider:          proxyProvider,
+		backend:                backend,
 		modelConfigMapProvider: modelConfigMapProvider,
 		logger:                 logger,
 	}
@@ -32,7 +29,7 @@ func NewTritonDeletionPlugin(gateway gateways.Gateway, proxyProvider proxy.Proxy
 // GetActors returns the condition actors for deletion workflow.
 func (p *TritonDeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewCleanupActor(p.gateway, p.modelConfigMapProvider, p.proxyProvider, p.logger),
+		NewCleanupActor(p.backend, p.modelConfigMapProvider, p.logger),
 	}
 }
 

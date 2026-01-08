@@ -7,7 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -17,14 +17,14 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &HealthCheckAc
 
 // HealthCheckActor verifies inference server health by polling backend health endpoints.
 type HealthCheckActor struct {
-	gateway gateways.Gateway
+	backend backends.Backend
 	logger  *zap.Logger
 }
 
 // NewHealthCheckActor creates a condition actor for Triton health verification.
-func NewHealthCheckActor(gateway gateways.Gateway, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewHealthCheckActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &HealthCheckActor{
-		gateway: gateway,
+		backend: backend,
 		logger:  logger,
 	}
 }
@@ -38,11 +38,7 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton health condition")
 
-	healthy, err := a.gateway.IsHealthy(ctx, a.logger, gateways.HealthCheckRequest{
-		InferenceServer: resource.Name,
-		Namespace:       resource.Namespace,
-		BackendType:     resource.Spec.BackendType,
-	})
+	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource.Name, resource.Namespace)
 
 	if err == nil && healthy {
 		return &apipb.Condition{

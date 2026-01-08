@@ -7,7 +7,6 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -15,9 +14,8 @@ import (
 
 // RolloutCompletionActor finalizes deployment by updating CurrentRevision and cleaning up rollout metadata.
 type RolloutCompletionActor struct {
-	gateway                gateways.Gateway
-	modelConfigMapProvider configmap.ModelConfigMapProvider
-	logger                 *zap.Logger
+	gateway gateways.Gateway
+	logger  *zap.Logger
 }
 
 // GetType returns the condition type identifier for rollout completion.

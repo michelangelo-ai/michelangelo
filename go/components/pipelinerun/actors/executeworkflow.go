@@ -395,6 +395,23 @@ func getWorkflowInputs(pipelineRun *v2.PipelineRun) ([]interface{}, []interface{
 	}
 
 	// Apply dynamic parameters from pipelineRun.Spec.Input to override pipeline manifest
+	if pipelineConfigMap != nil {
+		if _, ok := pipelineConfigMap[WorkflowArgsKey]; ok {
+			args = pipelineConfigMap[WorkflowArgsKey].([]interface{})
+		}
+		if val, ok := pipelineConfigMap[WorkflowKWArgsKey]; ok {
+			kwArgs = val.([]interface{})
+		}
+		if val, ok := pipelineConfigMap[WorkflowEnvironKey]; ok {
+			// Merge environment variables instead of replacing them
+			// This preserves default values like UF_STORAGE_URL set earlier
+			for k, v := range val.(map[string]interface{}) {
+				envs[k] = v
+			}
+		}
+	}
+
+	// Apply DevRun environment overrides if present
 	if pipelineRun.Spec.Input != nil {
 		if pipelineConfigMap == nil {
 			pipelineConfigMap = make(map[string]interface{})

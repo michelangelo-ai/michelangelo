@@ -7,18 +7,17 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 // gateway implements the Gateway interface
 type gateway struct {
-	httpClient    *http.Client
-	kubeClient    client.Client
-	dynamicClient dynamic.Interface
+	httpClient *http.Client
+	kubeClient client.Client
 
 	registry *registry
 
@@ -26,162 +25,95 @@ type gateway struct {
 }
 
 type Params struct {
+	Logger                 *zap.Logger
 	KubeClient             client.Client
-	DynamicClient          dynamic.Interface
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 }
 
 // NewGatewayWithClients creates a new inference server gateway with Kubernetes clients
 func NewGatewayWithClients(p Params) Gateway {
-	return &gateway{
+	gateway := &gateway{
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
-		kubeClient:    p.KubeClient,
-		dynamicClient: p.DynamicClient,
-
-		registry: newRegistry(),
+		kubeClient: p.KubeClient,
+		registry:   newRegistry(),
 
 		modelConfigMapProvider: p.ModelConfigMapProvider,
 	}
+
+	// Register Triton backend with its endpoint configuration
+	gateway.registry.registerBackend(v2pb.BACKEND_TYPE_TRITON, backends.NewTritonBackend(p.KubeClient, p.ModelConfigMapProvider, p.Logger))
+	return gateway
 }
 
-// Inference Server Backend Management Methods
-
-// RegisterBackend registers a backend for a specific backend type
-func (g *gateway) RegisterBackend(backendType v2pb.BackendType, backend Backend) {
-	g.registry.registerBackend(backendType, backend)
+// LoadModel initiates loading a model into an inference server
+func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, modelName string, storagePath string, inferenceServerName string, namespace string, backendType v2pb.BackendType) error {
+	logger.Info("Loading model", zap.String("model", modelName), zap.String("storagePath", storagePath), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	// Currrently, the only way to load a model is to append to an inference server's configmap
+	if err := g.modelConfigMapProvider.AddModelToConfigMap(ctx, inferenceServerName, namespace, configmap.ModelConfigEntry{
+		Name:        modelName,
+		StoragePath: storagePath,
+	}); err != nil {
+		logger.Error("failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+		return fmt.Errorf("failed to initiate model loading: %w", err)
+	}
+	logger.Info("successfully initiated model loading", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	return nil
 }
 
-// CreateInfrastructure dispatches infrastructure creation based on backend type
-func (g *gateway) CreateInfrastructure(ctx context.Context, logger *zap.Logger, request CreateInfrastructureRequest) (*CreateInfrastructureResponse, error) {
-	logger.Info("Creating infrastructure", zap.String("server", request.InferenceServer.Name), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer.Name, request.InferenceServer.Namespace)
-	if err != nil {
-		return nil, err
+// UnloadModel initiates unloading a model from an inference server
+func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) error {
+	logger.Info("Unloading model", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	// Currrently, the only way to unload a model is to remove it from an inference server's configmap
+	if err := g.modelConfigMapProvider.RemoveModelFromConfigMap(ctx, inferenceServerName, namespace, modelName); err != nil {
+		logger.Error("failed to initiate model unloading", zap.Error(err), zap.String("operation", "unload_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+		return fmt.Errorf("failed to initiate model unloading: %w", err)
 	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return nil, err
-	}
-	return backend.CreateInfrastructure(ctx, logger, request)
-}
-
-// GetInfrastructureStatus dispatches infrastructure status checking based on backend type
-func (g *gateway) GetInfrastructureStatus(ctx context.Context, logger *zap.Logger, request GetInfrastructureStatusRequest) (*GetInfrastructureStatusResponse, error) {
-	logger.Info("Getting infrastructure status", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return nil, err
-	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return nil, err
-	}
-	return backend.GetInfrastructureStatus(ctx, logger, request)
-}
-
-// DeleteInfrastructure dispatches infrastructure deletion based on backend type
-func (g *gateway) DeleteInfrastructure(ctx context.Context, logger *zap.Logger, request DeleteInfrastructureRequest) error {
-	logger.Info("Deleting infrastructure", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return err
-	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return err
-	}
-	return backend.DeleteInfrastructure(ctx, logger, request)
-}
-
-// IsHealthy dispatches health checking based on backend type
-func (g *gateway) IsHealthy(ctx context.Context, logger *zap.Logger, request HealthCheckRequest) (bool, error) {
-	logger.Info("Checking server health", zap.String("server", request.InferenceServer), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return false, err
-	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return false, fmt.Errorf("unable to get backend for inference server %s in namespace %s: %w", request.InferenceServer, request.Namespace, err)
-	}
-	return backend.IsHealthy(ctx, logger, request)
-}
-
-// Model Management Methods
-
-// LoadModel dispatches model loading based on backend type
-func (g *gateway) LoadModel(ctx context.Context, logger *zap.Logger, request LoadModelRequest) error {
-	logger.Info("Loading model", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return err
-	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return err
-	}
-	return backend.LoadModel(ctx, logger, request)
-}
-
-// UnloadModel dispatches model unloading based on backend type
-func (g *gateway) UnloadModel(ctx context.Context, logger *zap.Logger, request UnloadModelRequest) error {
-	logger.Info("Unloading model", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return err
-	}
-	backend, err := g.registry.getBackend(backendType)
-	if err != nil {
-		return err
-	}
-	return backend.UnloadModel(ctx, logger, request)
+	logger.Info("successfully initiated model unloading", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	return nil
 }
 
 // CheckModelStatus dispatches model status checking based on backend type
-func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, request CheckModelStatusRequest) (bool, error) {
-	logger.Info("Checking model status", zap.String("model", request.ModelName), zap.String("backend", request.BackendType.String()))
-	backendType, err := g.ensureInferenceServerBackendType(ctx, logger, request.BackendType, request.InferenceServer, request.Namespace)
-	if err != nil {
-		return false, err
+func (g *gateway) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+	logger.Info("Checking model status", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	if backendType == v2pb.BACKEND_TYPE_INVALID {
+		return false, fmt.Errorf("invalid backend type: %v", backendType)
 	}
 	backend, err := g.registry.getBackend(backendType)
 	if err != nil {
-		return false, err
+		logger.Error("failed to get backend", zap.Error(err), zap.String("operation", "check_model_status"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+		return false, fmt.Errorf("failed to get backend for model %s on %s/%s: %w", modelName, namespace, inferenceServerName, err)
 	}
-	return backend.CheckModelStatus(ctx, logger, request)
+	return backend.CheckModelStatus(ctx, logger, modelName, inferenceServerName, namespace)
 }
 
-func (g *gateway) ensureInferenceServerBackendType(ctx context.Context, logger *zap.Logger, backendType v2pb.BackendType, inferenceServerName, namespace string) (v2pb.BackendType, error) {
-	if backendType != v2pb.BACKEND_TYPE_INVALID {
-		return backendType, nil
-	}
-	inferredBackendType := g.getInferenceServerBackendType(ctx, logger, inferenceServerName, namespace)
-	if inferredBackendType == v2pb.BACKEND_TYPE_INVALID {
-		logger.Error("failed to get backend type for inference server",
-			zap.String("operation", "ensure_backend_type"),
-			zap.String("namespace", namespace),
-			zap.String("inference_server", inferenceServerName))
-		return v2pb.BACKEND_TYPE_INVALID, fmt.Errorf("get backend type for inference server %s/%s: backend type is invalid or resource not found",
-			namespace, inferenceServerName)
-	}
-	return inferredBackendType, nil
-}
-
-func (g *gateway) getInferenceServerBackendType(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) v2pb.BackendType {
-	inferenceServer := &v2pb.InferenceServer{}
-	err := g.kubeClient.Get(ctx, client.ObjectKey{
-		Name:      inferenceServerName,
-		Namespace: namespace,
-	}, inferenceServer)
+// CheckModelExists checks if a model exists in an inference server.
+func (g *gateway) CheckModelExists(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+	logger.Info("Checking model exists", zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	currentConfigs, err := g.modelConfigMapProvider.GetModelsFromConfigMap(ctx, inferenceServerName, namespace)
 	if err != nil {
-		logger.Error("failed to get inference server resource",
-			zap.Error(err),
-			zap.String("operation", "get_backend_type"),
-			zap.String("namespace", namespace),
-			zap.String("inference_server", inferenceServerName))
-		return v2pb.BACKEND_TYPE_INVALID
+		logger.Error("failed to check if model exists in inference server", zap.Error(err), zap.String("operation", "check_model_exists"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+		return false, fmt.Errorf("failed to check existance of model %s in inference server %s in namespace %s: %w", modelName, inferenceServerName, namespace, err)
 	}
-	return inferenceServer.Spec.GetBackendType()
+
+	for _, config := range currentConfigs {
+		if config.Name == modelName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// IsHealthy dispatches health checking based on backend type
+func (g *gateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, backendType v2pb.BackendType) (bool, error) {
+	logger.Info("Checking server health", zap.String("server", inferenceServerName), zap.String("namespace", namespace), zap.String("backendType", backendType.String()))
+	if backendType == v2pb.BACKEND_TYPE_INVALID {
+		return false, fmt.Errorf("invalid backend type: %v", backendType)
+	}
+	backend, err := g.registry.getBackend(backendType)
+	if err != nil {
+		return false, fmt.Errorf("unable to get backend for inference server %s in namespace %s: %w", inferenceServerName, namespace, err)
+	}
+	return backend.IsHealthy(ctx, logger, inferenceServerName, namespace)
 }

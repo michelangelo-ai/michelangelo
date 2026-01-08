@@ -1202,7 +1202,7 @@ def _create_inference_demo_crs():
             to test inference of a model deployed to the above inference server:\n"
     )
     print(
-        "  curl -X POST http://localhost:8080/inference-server-example/models/<model-name>/infer \\"  # noqa: E501
+        "  curl -X POST http://localhost:8080/inference-server-example/<deployment-name>/infer \\"  # noqa: E501
     )
     print('  -H "Content-Type: application/json" \\')
     print("  -d '{")

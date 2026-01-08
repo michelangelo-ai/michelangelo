@@ -10,8 +10,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	gatewaysmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
-	proxymocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy/proxymocks"
+	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -56,11 +55,10 @@ func TestValidationActor_Retrieve(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
-			// No expectations set, gateway and proxy should not be called
+			mockBackend := backendsmocks.NewMockBackend(ctrl)
+			// No expectations set, backend should not be called
 
-			actor := NewValidationActor(mockGateway, zap.NewNop(), mockProxy)
+			actor := NewValidationActor(mockBackend, zap.NewNop())
 
 			resource := &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
@@ -93,15 +91,14 @@ func TestValidationActor_Retrieve(t *testing.T) {
 
 func TestValidationActor_Run(t *testing.T) {
 	// Run() always returns a simple false condition since there's nothing
-	// it can do differently from Retrieve(). It doesn't check backend type or call gateway/proxy.
+	// it can do differently from Retrieve(). It doesn't check backend type or call backend.
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockGateway := gatewaysmocks.NewMockGateway(ctrl)
-	mockProxy := proxymocks.NewMockProxyProvider(ctrl)
-	// No expectations set, gateway and proxy should not be called
+	mockBackend := backendsmocks.NewMockBackend(ctrl)
+	// No expectations set, backend should not be called
 
-	actor := NewValidationActor(mockGateway, zap.NewNop(), mockProxy)
+	actor := NewValidationActor(mockBackend, zap.NewNop())
 
 	resource := &v2pb.InferenceServer{
 		ObjectMeta: metav1.ObjectMeta{

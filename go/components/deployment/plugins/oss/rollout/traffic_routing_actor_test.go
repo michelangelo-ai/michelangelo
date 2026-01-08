@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -36,7 +36,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(true, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "TrafficRoutingConfigured",
@@ -54,7 +54,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
 			expectedConditionReason:  "DeploymentRouteNotConfigured",
@@ -72,7 +72,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
+				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "CheckDeploymentRouteStatusFailed",
@@ -126,7 +126,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "TrafficRoutingConfigured",
@@ -160,7 +160,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(errors.New("route creation failed"))
+				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(errors.New("route creation failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "AddDeploymentRouteFailed",
@@ -183,7 +183,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				},
 			},
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "complex-deployment", "production", "triton-server", "bert_cola").Return(nil)
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
 			expectedConditionReason:  "TrafficRoutingConfigured",
