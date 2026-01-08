@@ -1,13 +1,12 @@
-# Foreach/Expand Pattern Example
+# Foreach/Expand Pattern Example (DAG Factory Style)
 metadata:
   name: "foreach_example"
   description: "Demonstrates foreach/expand pattern"
   version: "1.0"
 
-
 tasks:
   # Task that generates a list with custom parameters
-  generate_datasets:
+  - task_id: "generate_datasets"
     function: "example_tasks.discover_datasets"
     description: "Generate list of datasets to process"
     inputs:
@@ -16,9 +15,8 @@ tasks:
     config:
       type: "RayTask"
 
-
   # Task that expands over the list (foreach pattern) with custom parameters
-  process_each_dataset:
+  - task_id: "process_each_dataset"
     function: "example_tasks.preprocess"
     description: "Process each dataset in parallel"
     inputs:
