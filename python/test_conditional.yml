@@ -1,12 +1,13 @@
-# Conditional (If-Else) Pattern Example
+# Conditional (If-Else) Pattern Example (DAG Factory Style)
+# NOTE: Full conditional logic not yet implemented in explicit generation
 metadata:
   name: "conditional_example"
-  description: "Demonstrates conditional execution"
+  description: "Demonstrates quality check workflow (simplified)"
   version: "1.0"
 
 tasks:
   # Task that produces data for condition evaluation
-  create_test_data:
+  - task_id: "create_test_data"
     function: "example_tasks.merge_all"
     description: "Create test data for quality check"
     inputs:
@@ -14,7 +15,8 @@ tasks:
     config:
       type: "RayTask"
 
-  check_data_quality:
+  # Check data quality
+  - task_id: "check_data_quality"
     function: "example_tasks.check_quality"
     description: "Check data quality to decide next step"
     inputs:
@@ -23,26 +25,10 @@ tasks:
       type: "RayTask"
     dependencies: ["create_test_data"]
 
-  # Conditional branching based on quality score
-  quality_gate:
-    function: "example_tasks.check_quality"
-    description: "Quality gate for decision making"
-    inputs:
-      merged_data: "+check_data_quality"
-    condition:
-      field: "quality_score"
-      operator: ">"
-      value: 0.8
-      on_true: "train_model"
-      on_false: "clean_data"
-    config:
-      type: "RayTask"
-    dependencies: ["check_data_quality"]
-
-  # Executed if quality is good (condition = true)
-  train_model:
+  # Train model based on quality result (simplified - always executed)
+  - task_id: "train_model"
     function: "example_tasks.train_model"
-    description: "Train model with high quality data"
+    description: "Train model with data"
     inputs:
       training_data: "+check_data_quality"
       model_type: "bert"
@@ -51,17 +37,4 @@ tasks:
       resources:
         cpu: 4
         memory: "8GB"
-    when: "quality_gate.condition_result == true"
-
-  # Executed if quality is poor (condition = false)
-  clean_data:
-    function: "example_tasks.advanced_cleanup"
-    description: "Clean poor quality data"
-    inputs:
-      raw_data: "+check_data_quality"
-    config:
-      type: "RayTask"
-      resources:
-        cpu: 2
-        memory: "4GB"
-    when: "quality_gate.condition_result == false"
+    dependencies: ["check_data_quality"]

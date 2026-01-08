@@ -1,4 +1,4 @@
-# Comprehensive Input Parameters Example
+# Comprehensive Input Parameters Example (DAG Factory Style)
 metadata:
   name: "input_parameters_example"
   description: "Demonstrates various input parameter patterns"
@@ -6,7 +6,7 @@ metadata:
 
 tasks:
   # Task 1: Discovery with custom parameters
-  discover_data:
+  - task_id: "discover_data"
     function: "example_tasks.discover_datasets"
     description: "Discover datasets with custom configuration"
     inputs:
@@ -16,7 +16,7 @@ tasks:
       type: "RayTask"
 
   # Task 2: Preprocessing with different parameters for each dataset
-  preprocess_datasets:
+  - task_id: "preprocess_datasets"
     function: "example_tasks.preprocess"
     description: "Preprocess each dataset with custom settings"
     inputs:
@@ -33,7 +33,7 @@ tasks:
     dependencies: ["discover_data"]
 
   # Task 3: Merge all results
-  merge_preprocessed:
+  - task_id: "merge_preprocessed"
     function: "example_tasks.merge_all"
     description: "Merge all preprocessed datasets"
     inputs:
@@ -43,7 +43,7 @@ tasks:
     dependencies: ["preprocess_datasets"]
 
   # Task 4: Quality check with custom thresholds
-  quality_assessment:
+  - task_id: "quality_assessment"
     function: "example_tasks.check_quality"
     description: "Check data quality with custom thresholds"
     inputs:
@@ -56,7 +56,7 @@ tasks:
     dependencies: ["merge_preprocessed"]
 
   # Task 5: Training with comprehensive parameters
-  train_model:
+  - task_id: "train_model"
     function: "example_tasks.train_model"
     description: "Train model with specific hyperparameters"
     inputs:

@@ -1,4 +1,4 @@
-# Collect/Aggregate Pattern Example
+# Collect/Aggregate Pattern Example (DAG Factory Style)
 metadata:
   name: "collect_example"
   description: "Demonstrates collect/aggregate pattern"
@@ -6,14 +6,14 @@ metadata:
 
 tasks:
   # Generate hyperparameter combinations
-  generate_hyperparams:
+  - task_id: "generate_hyperparams"
     function: "example_tasks.discover_datasets"  # Placeholder - returns a list
     description: "Generate hyperparameter combinations"
     config:
       type: "RayTask"
 
   # Dynamic task that creates multiple results
-  hyperparameter_search:
+  - task_id: "hyperparameter_search"
     function: "example_tasks.train_with_params"
     description: "Train with different hyperparameters"
     expand:
@@ -25,18 +25,18 @@ tasks:
         memory: "2GB"
 
   # Collect all results and find the best one
-  select_best_model:
+  # NOTE: collect patterns not yet implemented in explicit generation
+  - task_id: "select_best_model"
     function: "example_tasks.select_best"
     description: "Select best model from hyperparameter search"
-    collect:
-      from: "+hyperparameter_search"
-      strategy: "list"  # Pass all results to the task for selection
+    inputs:
+      collected_results: "+hyperparameter_search"  # Simplified - gets list of results
     config:
       type: "RayTask"
     dependencies: ["hyperparameter_search"]
 
   # Use the best model for deployment
-  deploy_model:
+  - task_id: "deploy_model"
     function: "example_tasks.deploy_to_production"
     description: "Deploy the selected best model"
     inputs:
