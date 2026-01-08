@@ -431,10 +431,13 @@ def process_data(input_path: str, config: Dict[str, Any]) -> Dict[str, Any]:
 
 ## Examples
 
-See the included example files:
-- `example_workflow.yml` - Complete ML pipeline with dynamic patterns
-- `example_tasks.py` - Python task functions for the YAML workflow
-- `yaml_workflow_demo.py` - CLI demo script showing usage
+See the included example files in the `python/` directory:
+- `python/example_workflow.yml` - Complete ML pipeline with dynamic patterns
+- `python/example_tasks.py` - Python task functions for the YAML workflow
+- `python/yaml_workflow_demo.py` - CLI demo script showing usage
+- `python/run_yaml_examples.py` - Test runner for all workflow examples
+- `python/inspect_generated_code.py` - Utility to inspect generated Python code
+- `python/test_*.yml` - Various test workflows (basic, foreach, conditional, collect)
 
 ## Advanced Features
 
