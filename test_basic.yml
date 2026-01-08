@@ -1,0 +1,15 @@
+# Basic test workflow - single static task
+metadata:
+  name: "basic_test"
+  description: "Simple single task workflow"
+  version: "1.0"
+
+tasks:
+  simple_task:
+    function: "example_tasks.discover_datasets"
+    description: "Discover available datasets"
+    config:
+      type: "RayTask"
+      resources:
+        cpu: 1
+        memory: "1GB"
