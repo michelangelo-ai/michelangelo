@@ -607,17 +607,11 @@ class YAMLWorkflowParser:
             "",
             "    # Run the workflow",
             "    print(f'Starting workflow: {WORKFLOW_NAME} v{WORKFLOW_VERSION}')",
-            "    try:",
-            "        result = yaml_workflow()",
-            '        print("✅ Workflow completed successfully!")',
-            '        print("📋 Results:")',
-            "        for task_name, task_result in result.items():",
-            '            print(f"  {task_name}: {task_result}")',
-            "    except Exception as e:",
-            '        print(f"❌ Workflow failed: {e}")',
-            "        import traceback",
-            "        traceback.print_exc()",
-            "        exit(1)",
+            "    result = yaml_workflow()",
+            '    print("✅ Workflow completed successfully!")',
+            '    print("📋 Results:")',
+            "    for task_name, task_result in result.items():",
+            '        print(f"  {task_name}: {task_result}")',
         ])
 
         # Join all lines
@@ -752,9 +746,8 @@ class YAMLWorkflowParser:
             "    # Set up dynamic execution context",
             "    dynamic_context.execution = DynamicExecutionContext()",
             "",
-            "    try:",
-            "        # Execute tasks in topological order",
-            "        results = {}",
+            "    # Execute tasks in topological order",
+            "    results = {}",
         ])
 
         # Generate task execution code
@@ -787,17 +780,19 @@ class YAMLWorkflowParser:
                 function_alias = task_spec.function
 
             lines.extend([
+                f"        # Pass workflow results context to dynamic tasks",
+                f"        if hasattr({function_alias}, 'dynamic_type'):",
+                f"            {function_alias}._yaml_context_results = results",
+                "",
                 f'        results["{task_name}"] = {function_alias}(**task_inputs)',
                 f'        log.info("Completed task: {task_name}")',
                 ""
             ])
 
         lines.extend([
-            "        return results",
-            "",
-            "    finally:",
             "        # Clean up dynamic context",
             "        dynamic_context.execution = None",
+            "        return results",
         ])
 
         return lines
