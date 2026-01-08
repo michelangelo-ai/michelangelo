@@ -29,13 +29,11 @@ const (
 	endpointConfigMapPrefix = "mcs-endpoints-"
 )
 
-var (
-	serviceExportGVK = schema.GroupVersionKind{
-		Group:   mcsAPIGroup,
-		Version: mcsAPIVersion,
-		Kind:    "ServiceExport",
-	}
-)
+var serviceExportGVK = schema.GroupVersionKind{
+	Group:   mcsAPIGroup,
+	Version: mcsAPIVersion,
+	Kind:    "ServiceExport",
+}
 
 var _ EndpointRegistry = &mcsEndpointRegistry{}
 
@@ -65,7 +63,8 @@ func NewMCSEndpointRegistry(kubeClient client.Client, logger *zap.Logger) Endpoi
 }
 
 // RegisterEndpoint creates a ServiceExport in the target cluster and stores
-// endpoint metadata in a ConfigMap in the control plane.
+// endpoint metadata in a ConfigMap in the control plane. The MCS controller
+// (Submariner/GKE fleet/ EKS cloudmap) automatically creates the ServiceImport based on the ServiceExport.
 func (r *mcsEndpointRegistry) RegisterEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
 	logger.Info("Registering cluster endpoint via MCS",
 		zap.String("inferenceServer", endpoint.InferenceServerName),

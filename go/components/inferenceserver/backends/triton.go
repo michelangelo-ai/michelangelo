@@ -77,7 +77,7 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 				inferenceServer.Namespace, inferenceServer.Name, err)
 		}
 
-		// Create Service in the target cluster (returns the service with allocated NodePort)
+		// Create Service in the target cluster
 		tritonService, err := b.createTritonService(ctx, logger, inferenceServer, clusterClient)
 		if err != nil {
 			logger.Error("failed to create Service",
@@ -100,38 +100,24 @@ func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, in
 				inferenceServer.Namespace, inferenceServer.Name, err)
 		}
 
-		// Find the HTTP NodePort from the created service
-		var httpNodePort int32
-		for _, port := range tritonService.Spec.Ports {
-			if port.Name == "http" {
-				httpNodePort = port.NodePort
-				break
-			}
-		}
-		if httpNodePort == 0 {
-			return nil, fmt.Errorf("Triton service %s has no HTTP NodePort allocated", tritonService.Name)
-		}
-
-		// Get a node address from the target cluster for routing
-		nodeHost, err := b.getNodeAddress(ctx, clusterClient)
-		if err != nil {
-			logger.Error("failed to get node address from target cluster",
-				zap.Error(err),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return nil, fmt.Errorf("failed to get node address for cluster %s: %w", clusterTarget.ClusterId, err)
-		}
+		// For MCS (Multi-Cluster Services), use the service name directly.
+		// The MCS controller (Istio/Submariner) will handle cross-cluster routing.
+		// Services exported via ServiceExport are accessible at:
+		// <service-name>.<namespace>.svc.clusterset.local
+		serviceName := tritonService.Name
+		servicePort := uint32(80) // HTTP port from the ClusterIP service
 
 		// Register the cluster endpoint in the control plane (ServiceExport + ConfigMap metadata)
 		// Host/Port are the Kubernetes API server address for connecting to the target cluster
-		// ServiceHost/ServicePort are the actual node address and NodePort for traffic routing
+		// ServiceHost/ServicePort point to the ClusterIP service (MCS will handle routing)
 		clusterEndpoint := endpointregistry.ClusterEndpoint{
 			ClusterID:           clusterTarget.ClusterId,
 			InferenceServerName: inferenceServer.Name,
 			Namespace:           inferenceServer.Namespace,
 			Host:                connectionSpec.Host,
 			Port:                connectionSpec.Port,
-			ServiceHost:         nodeHost,
-			ServicePort:         uint32(httpNodePort),
+			ServiceHost:         serviceName,
+			ServicePort:         servicePort,
 			TokenSecretRef:      connectionSpec.TokenTag,
 			CASecretRef:         connectionSpec.CaDataTag,
 		}
@@ -633,7 +619,7 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
-			Type: corev1.ServiceTypeNodePort,
+			Type: corev1.ServiceTypeClusterIP,
 		},
 	}
 
@@ -646,7 +632,6 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 		return nil, fmt.Errorf("failed to create Triton Service %s/%s: %w",
 			inferenceServer.Namespace, serviceName, err)
 	}
-	// Create mutates the object in place with the server response (including allocated NodePort)
 	return service, nil
 }
 
