@@ -1,0 +1,53 @@
+---
+# ClusterIP Service for HTTPRoute integration
+# Uses manual EndpointSlice to bridge with ServiceImport IPs
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-server-example-inference-service
+  namespace: default
+spec:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 80
+    protocol: TCP
+    targetPort: 80
+  - name: grpc
+    port: 8001
+    protocol: TCP
+    targetPort: 8001
+---
+# Manual EndpointSlice that references ServiceImport IPs
+# Submariner creates EndpointSlices with multicluster.kubernetes.io/service-name,
+# but Kubernetes requires kubernetes.io/service-name for Service association
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: inference-server-example-inference-service
+  namespace: default
+  labels:
+    kubernetes.io/service-name: inference-server-example-inference-service
+addressType: IPv4
+endpoints:
+  # cluster-1 (target-cluster-0) IP from ServiceImport
+  - addresses:
+      - "10.45.234.41"
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+  # cluster-2 (target-cluster-1) IP from ServiceImport
+  - addresses:
+      - "10.47.83.54"
+    conditions:
+      ready: true
+      serving: true
+      terminating: false
+ports:
+  - name: http
+    port: 80
+    protocol: TCP
+  - name: grpc
+    port: 8001
+    protocol: TCP

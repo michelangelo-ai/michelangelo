@@ -1537,6 +1537,14 @@ def _create_inference_demo_crs():
     for cluster_name in target_cluster_names:
         _create_istio_remote_secret(cluster_name)
 
+    # Setup Submariner for cross-cluster service discovery
+    # (Lighthouse creates ServiceImports)
+    target_contexts = [f"k3d-{name}" for name in target_cluster_names]
+    _setup_submariner_for_clusters(
+        control_plane_context=f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        target_cluster_contexts=target_contexts,
+    )
+
     print("✅ Creating Triton Inference Server...")
     _kube_apply(inference_server_path)
 
@@ -1782,8 +1790,8 @@ def _setup_istio_and_mcs_with_gateway_api(kube_context: str | None = None):
         "--timeout=60s",
     )
 
-    # Install or upgrade Istio control plane (istiod)
-    print("Installing/upgrading Istio control plane...")
+    # Install or upgrade Istio control plane (istiod) with MCS support enabled
+    print("Installing/upgrading Istio control plane with MCS support...")
     _exec(
         "helm",
         "upgrade",
@@ -1793,6 +1801,13 @@ def _setup_istio_and_mcs_with_gateway_api(kube_context: str | None = None):
         *helm_context_args,
         "--namespace",
         "istio-system",
+        # Enable MCS (Multi-Cluster Services) support
+        "--set",
+        "pilot.env.ENABLE_MCS_SERVICE_DISCOVERY=true",
+        "--set",
+        "pilot.env.ENABLE_MCS_HOST=true",
+        "--set",
+        "pilot.env.ENABLE_MCS_CLUSTER_LOCAL=false",
         "--wait",
     )
 
@@ -1865,6 +1880,170 @@ def _setup_istio_and_mcs_with_gateway_api(kube_context: str | None = None):
         )
 
     print("✅ Istio with Gateway API and MCS support setup complete")
+
+
+def _setup_submariner_broker(broker_context: str):
+    """Deploy Submariner broker on the control plane cluster using subctl.
+
+    The broker is the central component that facilitates cluster registration
+    and cross-cluster service discovery via Lighthouse.
+
+    Args:
+        broker_context: kubectl context for the broker cluster
+            (e.g., "k3d-michelangelo-sandbox")
+    """
+    print(f"🔗 Setting up Submariner broker on {broker_context}...")
+
+    # Check if subctl is installed
+    if shutil.which("subctl") is None:
+        print("⚠️  subctl not found. Installing via curl...")
+        _exec(
+            "bash",
+            "-c",
+            "curl -Ls https://get.submariner.io | bash",
+        )
+        # Add to PATH for this session
+        home_bin = os.path.expanduser("~/.local/bin")
+        os.environ["PATH"] = home_bin + ":" + os.environ["PATH"]
+
+    # Deploy broker using subctl
+    # Service discovery is enabled by default via --components
+    _exec(
+        "subctl",
+        "deploy-broker",
+        "--context",
+        broker_context,
+    )
+
+    print(f"✅ Submariner broker deployed on {broker_context}")
+
+
+def _join_cluster_to_submariner(
+    cluster_context: str,
+    cluster_id: str,
+    cluster_cidr: str = "10.42.0.0/16",
+    service_cidr: str = "10.43.0.0/16",
+):
+    """Join a cluster to the Submariner broker for cross-cluster networking.
+
+    This installs the Submariner gateway and Lighthouse components on the cluster,
+    enabling cross-cluster service discovery.
+
+    Args:
+        cluster_context: kubectl context for the cluster to join
+        cluster_id: Unique identifier for this cluster
+        cluster_cidr: Pod CIDR for the cluster (default: k3d default)
+        service_cidr: Service CIDR for the cluster (default: k3d default)
+    """
+    print(f"🔗 Joining cluster {cluster_id} to Submariner...")
+
+    # Label a node as gateway (required for Submariner)
+    nodes = (
+        subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                cluster_context,
+                "get",
+                "nodes",
+                "-o",
+                "jsonpath={.items[0].metadata.name}",
+            ]
+        )
+        .decode()
+        .strip()
+    )
+    _exec(
+        "kubectl",
+        "--context",
+        cluster_context,
+        "label",
+        "node",
+        nodes,
+        "submariner.io/gateway=true",
+        "--overwrite",
+    )
+
+    # Join cluster using subctl
+    # The broker-info.subm file is created by deploy-broker
+    _exec(
+        "subctl",
+        "join",
+        "broker-info.subm",
+        "--context",
+        cluster_context,
+        "--clusterid",
+        cluster_id,
+        "--clustercidr",
+        cluster_cidr,
+        "--servicecidr",
+        service_cidr,
+        "--natt=false",  # Disable NAT traversal for local k3d clusters
+    )
+
+    print(f"✅ Cluster {cluster_id} joined to Submariner")
+
+
+def _setup_submariner_for_clusters(
+    control_plane_context: str, target_cluster_contexts: list[str]
+):
+    """Set up Submariner across control plane and target clusters.
+
+    This deploys the Submariner broker on the control plane and joins
+    all clusters (including control plane) to enable cross-cluster
+    service discovery via Lighthouse.
+
+    Args:
+        control_plane_context: kubectl context for the control plane cluster
+        target_cluster_contexts: List of kubectl contexts for target clusters
+    """
+    print("\n🌐 Setting up Submariner for multi-cluster service discovery...")
+
+    # Deploy broker on control plane
+    _setup_submariner_broker(control_plane_context)
+
+    # Join control plane to Submariner
+    _join_cluster_to_submariner(
+        cluster_context=control_plane_context,
+        cluster_id="control-plane",
+    )
+
+    # Join each target cluster with non-overlapping CIDRs
+    # Discover actual CIDRs from each cluster instead of hardcoding
+    for i, ctx in enumerate(target_cluster_contexts):
+        # Get pod CIDR from the cluster
+        try:
+            # Try to find pod CIDR from nodes
+            nodes_output = subprocess.check_output(
+                [
+                    "kubectl",
+                    "--context",
+                    ctx,
+                    "get",
+                    "nodes",
+                    "-o",
+                    "jsonpath={.items[0].spec.podCIDR}",
+                ]
+            ).decode().strip()
+            pod_cidr = nodes_output if nodes_output else f"10.{44 + i*2}.0.0/24"
+
+            # Get service CIDR - k3d default with our custom prefix
+            service_cidr = f"10.{45 + i*2}.0.0/16"
+
+            print(f"Discovered CIDRs for {ctx}: Pod={pod_cidr}, Service={service_cidr}")
+        except Exception as e:
+            print(f"Warning: Could not discover CIDRs for {ctx}, using defaults: {e}")
+            pod_cidr = f"10.{44 + i*2}.0.0/24"
+            service_cidr = f"10.{45 + i*2}.0.0/16"
+
+        _join_cluster_to_submariner(
+            cluster_context=ctx,
+            cluster_id=f"target-cluster-{i}",
+            cluster_cidr=pod_cidr,
+            service_cidr=service_cidr,
+        )
+
+    print("✅ Submariner setup complete - Lighthouse is now managing ServiceImports")
 
 
 def _create_pipeline_demo_crs():
