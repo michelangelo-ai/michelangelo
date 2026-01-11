@@ -1,4 +1,6 @@
-**Purpose**: Register an existing compute Kubernetes cluster with the Michelangelo control plane to enable running Ray jobs.
+# Register a Compute Cluster
+
+Register an existing compute Kubernetes cluster with the Michelangelo control plane to enable running Ray jobs.
 
 ### Prerequisites
 - Existing Kubernetes compute cluster accessible via kubectl

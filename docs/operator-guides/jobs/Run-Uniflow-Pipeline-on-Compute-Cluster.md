@@ -1,4 +1,6 @@
-**Purpose**: Run a Uniflow pipeline that schedules Ray jobs on the compute Kubernetes cluster `michelangelo-compute-0`.
+# Run Uniflow Pipeline on Compute Cluster
+
+Run a Uniflow pipeline that schedules Ray jobs on the compute Kubernetes cluster `michelangelo-compute-0`.
 
 ### Prerequisites
 - **Repository**: Local checkout with `$REPOROOT` pointing to the repo root

@@ -1,3 +1,5 @@
+# Model Registry Guide
+
 Save, version, and manage trained models using Michelangelo's comprehensive model packaging system.
 
 ## What Michelangelo Model Packaging Provides

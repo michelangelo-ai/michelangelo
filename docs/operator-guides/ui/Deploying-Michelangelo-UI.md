@@ -1,6 +1,5 @@
-# 1. overview / Introduction
+# Deploying Michelangelo UI
 
-### Purpose
 This guide covers how the Michelangelo UI fits into Michelangelo's Kubernetes deployments and how operators can adapt the configuration for their environments.
 
 ### Context
@@ -11,7 +10,7 @@ The Michelangelo UI is a React-based web application that provides a graphical i
 - Kubernetes administrators adapting the sandbox for production use
 - Teams wanting to customize UI configuration for their environment
 
-## 2. Key Concepts / Terms
+## Key Concepts
 
 - **Sandbox Manifests**: Reference Kubernetes YAML files providing working deployment templates
 - **ConfigMap Injection**: Runtime configuration mounted into containers without rebuilding images
@@ -19,7 +18,7 @@ The Michelangelo UI is a React-based web application that provides a graphical i
 - **Envoy Proxy**: Service mesh proxy handling gRPC-Web translation
 - **Template Customization**: Adapting reference manifests for specific infrastructure requirements
 
-## 3. Installation / Setup
+## Setup
 
 ### Prerequisites
 - Kubernetes cluster with Michelangelo API server deployed
@@ -110,7 +109,7 @@ Once deployed, verify the connection chain:
 2. **Config loads**: Check browser dev tools for `/config.json`
 3. **API connectivity**: Verify API calls succeed (no CORS errors in browser console)
 
-## 4. Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 

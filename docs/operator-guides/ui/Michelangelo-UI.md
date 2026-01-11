@@ -1,4 +1,6 @@
-Michelangelo’s User Interface (UI) provides a standard, code free ML development experience. It guides users through five phases in the ML development lifecycle, from developing your first model to productionization.
+# Michelangelo UI
+
+Michelangelo's User Interface (UI) provides a standard, code free ML development experience. It guides users through five phases in the ML development lifecycle, from developing your first model to productionization.
 
 ## Getting Started
 

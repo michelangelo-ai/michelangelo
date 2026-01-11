@@ -1,21 +1,15 @@
-# 1. overview / Introduction
+# Michelangelo React Library
 
-### Purpose
 This guide covers integrating Michelangelo UI components into existing React applications as npm dependencies.
 
-### Context
 The Michelangelo React Library allows organizations to embed Michelangelo Studio capabilities within their existing web applications, maintaining their current deployment infrastructure while adding ML platform functionality.
 
-### Audience
-- Frontend developers working on existing React applications
-- Platform operators looking to understand UI integration into their platform
-
-## 2. Key Concepts / Terms
+## Key Concepts
 
 - **Dependency Injection**: Pattern for providing external dependencies (themes, services) to components
 - **gRPC Client**: Generated TypeScript client for API communication
 
-## 3. Architecture / Design
+## Architecture
 
 ### Components
 - **@michelangelo-ai/core**: Main UI components and application logic
@@ -30,7 +24,7 @@ The Michelangelo React Library allows organizations to embed Michelangelo Studio
 ### Design Decisions
 - **Dependency injection**: Allows customization of logging, theming, and services
 
-## 4. Installation / Setup
+## Setup
 
 ### Prerequisites
 - React 18 application
@@ -124,7 +118,7 @@ npm start  # or yarn dev, yarn start, etc.
 3. **Access the integrated UI:**
 Navigate to your app and then to `/michelangelo` (or whatever route you configured)
 
-## 5. Configuration
+## Configuration
 
 ### Basic Configuration
 
@@ -239,7 +233,7 @@ function App() {
 }
 ```
 
-## 6. Troubleshooting
+## Troubleshooting
 
 **API connectivity issues:**
 - Verify CORS configuration on your API server

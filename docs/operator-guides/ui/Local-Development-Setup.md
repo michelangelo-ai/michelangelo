@@ -1,12 +1,8 @@
-# 1. overview / Introduction
+# Local Development Setup
 
-### Purpose
 This guide covers setting up a local development environment for contributing to the Michelangelo UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo sandbox environment for UI development and testing.
 
-### Audience
-- Contributors to the Michelangelo UI
-
-## 2. Key Concepts / Terms
+## Key Concepts
 
 **Hot Reload**: Automatic browser refresh when code changes are detected
 **Vite**: Modern build tool providing fast development server and optimized builds
@@ -15,7 +11,7 @@ This guide covers setting up a local development environment for contributing to
 **Protobuf Generation**: Creating TypeScript clients from .proto files
 **Yarn Workspaces**: Monorepo management tool for handling multiple packages
 
-## 3. Architecture / Design
+## Architecture
 
 ### Components
 - **Vite Development Server**: Fast development server with hot reload
@@ -30,7 +26,7 @@ This guide covers setting up a local development environment for contributing to
 - **Protobuf**: buf CLI for code generation
 - **Container**: Docker for sandbox environment
 
-## 4. Installation / Setup
+## Setup
 
 ### Prerequisites
 
