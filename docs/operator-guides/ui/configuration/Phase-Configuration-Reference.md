@@ -55,7 +55,7 @@ The `state` property controls overall phase behavior and appearance:
 - Optional link to external documentation
 
 ### `entities`
-- Array of entity configurations (see [Entity Configuration Reference](Entity-Configuration-Reference))
+- Array of entity configurations (see [Entity Configuration Reference](./Entity-Configuration-Reference))
 - Order in array affects display order in navigation
 
 ## Source Files
@@ -66,5 +66,5 @@ The `state` property controls overall phase behavior and appearance:
 
 ## Related Documentation
 
-- [Entity Configuration Reference](Entity-Configuration-Reference) - Configure entities within phases
-- [Configuration API](Configuration-API) - Overview of configuration system
+- [Entity Configuration Reference](./Entity-Configuration-Reference) - Configure entities within phases
+- [Configuration API](./Configuration-API) - Overview of configuration system

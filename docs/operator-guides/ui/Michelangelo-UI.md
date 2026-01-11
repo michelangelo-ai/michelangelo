@@ -16,7 +16,7 @@ Add Michelangelo components to your existing React application as npm dependenci
 - **For: Frontend developers, application teams**
 - **Use case: Separate frontend/backend infrastructure, or embedding ML capabilities in existing developer tools**
 
-→ **[React Library Integration](React-Library-Integration)**
+→ **[React Library Integration](./Michelangelo-React-Library)**
 
 ### 🛠️ Local Development
 Set up a development environment for contributing to the UI codebase.
@@ -34,11 +34,11 @@ Define UI behavior through structured configuration objects - our abstraction fo
 - **For: Anyone customizing Michelangelo UI**
 - **Use case: Adding entities, customizing tables, defining workflow phases**
 
-→ [Configuration API](Configuration-API) 
-  → [Cell Types Reference](Cell-Type-Reference)  
-  → [Table Configuration Reference](Table-Configuration-Reference)  
-  → [Phase Configuration Reference](Phase-Configuration-Reference)  
-  → [Entity Configuration Reference](Entity-Configuration-Reference)  
+→ [Configuration API](./configuration/Configuration-API)
+  → [Cell Types Reference](./configuration/Cell-Type-Reference)
+  → [Table Configuration Reference](./configuration/Table-Configuration-Reference)
+  → [Phase Configuration Reference](./configuration/Phase-Configuration-Reference)
+  → [Entity Configuration Reference](./configuration/Entity-Configuration-Reference)  
 
 ## Architecture Overview
 

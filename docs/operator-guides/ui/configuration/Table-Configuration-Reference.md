@@ -9,7 +9,7 @@ Table configuration controls table-level behavior (pagination, sorting, search, 
 
 | Property            | Type               | Description                                                                    | Default                                                |
 | ------------------- | ------------------ | ------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `columns`           | `ColumnConfig[]`   | Array of column definitions (see [Cell Types References](Cell-Types-References)) | ✅ Required                                            |
+| `columns`           | `ColumnConfig[]`   | Array of column definitions (see [Cell Types Reference](./Cell-Type-Reference)) | ✅ Required                                            |
 | `emptyState`        | `EmptyState`       | Content to display when table has no data                                      | `{ title: 'No data', content: 'No data is present.' }` |
 | `disablePagination` | `boolean`          | Show all data in single page without pagination controls                       | `false`                                                |
 | `disableSorting`    | `boolean`          | Disable sorting functionality for all columns                                  | `false`                                                |
@@ -23,7 +23,7 @@ Table configuration controls table-level behavior (pagination, sorting, search, 
 ### `columns`
 
 - Array of column configurations using cell types
-- See [Cell Types Reference](Cell-Types-Reference) for complete column/cell configuration
+- See [Cell Types Reference](./Cell-Type-Reference) for complete column/cell configuration
 - Order in array determines initial display order
 
 ### `emptyState`
@@ -94,6 +94,6 @@ Controls what displays when the table has no data.
 
 ## Related Documentation
 
-- [Cell Types Reference](Cell-Types-Reference) - Column configuration (the `columns` property)
+- [Cell Types Reference](./Cell-Type-Reference) - Column configuration (the `columns` property)
 - [Entity Configuration Reference](Entity-Configuration-Reference) - How entities use list and detail views
-- [Configuration API](Configuration-API) - Overview of configuration system
+- [Configuration API](./Configuration-API) - Overview of configuration system

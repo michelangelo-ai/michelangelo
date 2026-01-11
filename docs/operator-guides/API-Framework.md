@@ -24,8 +24,7 @@ HTTP/JSON. Michelangelo will support three SDK bindings by default
 including Python, Golang and Java. Any other language bindings
 supported by gRPC should work as well.
 
-For detailed Michelangelo API definition, see the
-[API Reference](docs/api-reference.md).
+For detailed Michelangelo API definition, see the API Reference (coming soon).
 
 Figure below shows the high-level architecture of Michelangelo API
 framework that consists of the following components:

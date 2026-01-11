@@ -68,7 +68,7 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
 
 ## View Configuration
 
-Views define how entities are presented. See [Cell Types Reference](Cell-Types-Reference) for column/field configuration.
+Views define how entities are presented. See [Cell Types Reference](./Cell-Type-Reference) for column/field configuration.
 
 - **List views**: `config/entities/*/list.ts` - Table columns with cells
 - **Detail views**: `config/entities/*/detail.ts` - Metadata header + content pages
@@ -129,5 +129,5 @@ The configuration system uses this mapping to:
 ## Related Documentation
 
 - [Phase Configuration Reference](Phase-Configuration-Reference) - Configure phases that contain entities
-- [Cell Types Reference](Cell-Types-Reference) - Configure columns and fields in views
-- [Configuration API](Configuration-API) - Overview of configuration system
+- [Cell Types Reference](./Cell-Type-Reference) - Configure columns and fields in views
+- [Configuration API](./Configuration-API) - Overview of configuration system
