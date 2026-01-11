@@ -327,16 +327,16 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 							},
 						},
 					},
-					"kwargs": {
-						Kind: &types.Value_ListValue{
-							ListValue: &types.ListValue{Values: []*types.Value{}},
+					"kw_args": {
+						Kind: &types.Value_StructValue{
+							StructValue: &types.Struct{Fields: map[string]*types.Value{}},
 						},
 					},
 				},
 			},
 		},
 		{
-			name: "Uniflow - Environ, KwArgs (sorted)",
+			name: "Uniflow - Environ, KwArgs",
 			params: &v2pb.PipelineExecutionParameters{
 				Environ: map[string]string{
 					"ENV_VAR_1": "value1",
@@ -367,41 +367,13 @@ func TestGenerateUniflowPRInput(t *testing.T) {
 							ListValue: &types.ListValue{Values: []*types.Value{}},
 						},
 					},
-					"kwargs": {
-						Kind: &types.Value_ListValue{
-							ListValue: &types.ListValue{
-								Values: []*types.Value{
-									// Sorted: param_a, param_m, param_z
-									{
-										Kind: &types.Value_ListValue{
-											ListValue: &types.ListValue{
-												Values: []*types.Value{
-													{Kind: &types.Value_StringValue{StringValue: "param_a"}},
-													{Kind: &types.Value_StringValue{StringValue: "value_a"}},
-												},
-											},
-										},
-									},
-									{
-										Kind: &types.Value_ListValue{
-											ListValue: &types.ListValue{
-												Values: []*types.Value{
-													{Kind: &types.Value_StringValue{StringValue: "param_m"}},
-													{Kind: &types.Value_NumberValue{NumberValue: 42.0}},
-												},
-											},
-										},
-									},
-									{
-										Kind: &types.Value_ListValue{
-											ListValue: &types.ListValue{
-												Values: []*types.Value{
-													{Kind: &types.Value_StringValue{StringValue: "param_z"}},
-													{Kind: &types.Value_StringValue{StringValue: "value_z"}},
-												},
-											},
-										},
-									},
+					"kw_args": {
+						Kind: &types.Value_StructValue{
+							StructValue: &types.Struct{
+								Fields: map[string]*types.Value{
+									"param_z": {Kind: &types.Value_StringValue{StringValue: "value_z"}},
+									"param_a": {Kind: &types.Value_StringValue{StringValue: "value_a"}},
+									"param_m": {Kind: &types.Value_NumberValue{NumberValue: 42.0}},
 								},
 							},
 						},
