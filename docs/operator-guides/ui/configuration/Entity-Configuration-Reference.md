@@ -1,4 +1,4 @@
-## Overview
+## overview
 
 Entities define data models and their properties within a phase. Each entity represents a type of object in your ML platform (pipelines, runs, models, datasets, etc.) and specifies how that object is displayed and interacted with in the UI.
 
@@ -68,7 +68,7 @@ export const RUN_ENTITY_CONFIG: PhaseEntityConfig = {
 
 ## View Configuration
 
-Views define how entities are presented. See [Cell Types Reference](./Cell-Type-Reference) for column/field configuration.
+Views define how entities are presented. See [Cell Types Reference](./cell-type-reference) for column/field configuration.
 
 - **List views**: `config/entities/*/list.ts` - Table columns with cells
 - **Detail views**: `config/entities/*/detail.ts` - Metadata header + content pages
@@ -128,6 +128,6 @@ The configuration system uses this mapping to:
 
 ## Related Documentation
 
-- [Phase Configuration Reference](Phase-Configuration-Reference) - Configure phases that contain entities
-- [Cell Types Reference](./Cell-Type-Reference) - Configure columns and fields in views
-- [Configuration API](./Configuration-API) - Overview of configuration system
+- [Phase Configuration Reference](phase-configuration-reference) - Configure phases that contain entities
+- [Cell Types Reference](./cell-type-reference) - Configure columns and fields in views
+- [Configuration API](./configuration-api) - overview of configuration system

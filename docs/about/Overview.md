@@ -27,7 +27,7 @@ Canvas provides a highly customized, code driven ML development experience by ap
 
 ## Architecture
 
-### Ecosystem Overview
+### Ecosystem overview
 
 At Uber, Machine Learning (ML) is critical because of the complexity and scale of all the decisions that we have to make. ML can reduce uncertainty in our processes, making our products more targeted and our user experience better. There are also so many factors and signals influencing our systems that we often need ML to make sense of what’s happening.
 

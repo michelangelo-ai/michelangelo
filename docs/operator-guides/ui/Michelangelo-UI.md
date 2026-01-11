@@ -8,7 +8,7 @@ Production deployment using sandbox manifests as templates for your infrastructu
 - **For: Platform operators**
 - **Use case: Full ML platform deployment with UI**
 
-→ **[Deploying Michelangelo UI](Deploying-Michelangelo-UI)**
+→ **[Deploying Michelangelo UI](./deploying-michelangelo-ui)**
 
 ### 📦 Integrate with Existing React App
 Add Michelangelo components to your existing React application as npm dependencies that connect to your infrastructure.
@@ -16,7 +16,7 @@ Add Michelangelo components to your existing React application as npm dependenci
 - **For: Frontend developers, application teams**
 - **Use case: Separate frontend/backend infrastructure, or embedding ML capabilities in existing developer tools**
 
-→ **[React Library Integration](./Michelangelo-React-Library)**
+→ **[React Library Integration](./michelangelo-react-library)**
 
 ### 🛠️ Local Development
 Set up a development environment for contributing to the UI codebase.
@@ -24,7 +24,7 @@ Set up a development environment for contributing to the UI codebase.
 - **For: Contributors, UI developers**
 - **Use case: UI development and contributions**
 
-→ **[Local Development Setup](Local-Development-Setup)**
+→ **[Local Development Setup](local-development-setup)**
 
 ## Customizing the UI
 
@@ -34,13 +34,13 @@ Define UI behavior through structured configuration objects - our abstraction fo
 - **For: Anyone customizing Michelangelo UI**
 - **Use case: Adding entities, customizing tables, defining workflow phases**
 
-→ [Configuration API](./configuration/Configuration-API)
-  → [Cell Types Reference](./configuration/Cell-Type-Reference)
-  → [Table Configuration Reference](./configuration/Table-Configuration-Reference)
-  → [Phase Configuration Reference](./configuration/Phase-Configuration-Reference)
-  → [Entity Configuration Reference](./configuration/Entity-Configuration-Reference)  
+→ [Configuration API](./configuration/configuration-api)
+  → [Cell Types Reference](./configuration/cell-type-reference)
+  → [Table Configuration Reference](./configuration/table-configuration-reference)
+  → [Phase Configuration Reference](./configuration/phase-configuration-reference)
+  → [Entity Configuration Reference](./configuration/entity-configuration-reference)  
 
-## Architecture Overview
+## Architecture overview
 
 The Michelangelo UI is built with React and communicates with the Michelangelo API server through gRPC-Web. The UI supports two main consumption methods:
 

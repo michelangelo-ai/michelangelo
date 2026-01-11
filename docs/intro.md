@@ -10,15 +10,15 @@ Michelangelo is an ML platform for building, deploying, and managing machine lea
 
 ## Getting Started
 
-- **[Overview](./about/Overview)** - Learn about the platform
-- **[Core Concepts](./about/Core-Concepts-and-Key-Terms)** - Key terms and concepts
-- **[Setup Guide](./setup-guide/Sandbox-Setup)** - Get started with your sandbox
+- **[Overview](./about/overview)** - Learn about the platform
+- **[Core Concepts](./about/core-concepts-and-key-terms)** - Key terms and concepts
+- **[Setup Guide](./setup-guide/sandbox-setup)** - Get started with your sandbox
 
 ## Documentation
 
-- **[User Guides](./user-guides/Project-Management-for-ML-Pipelines)** - End-to-end workflows
-- **[Operator Guides](./operator-guides/API-Framework)** - Infrastructure and deployment
-- **[Contributing](./contributing/Developer-Guide)** - Development guides
+- **[User Guides](./user-guides/project-management-for-ml-pipelines)** - End-to-end workflows
+- **[Operator Guides](./operator-guides/api-framework)** - Infrastructure and deployment
+- **[Contributing](./contributing/developer-guide)** - Development guides
 
 ## Quick Links
 

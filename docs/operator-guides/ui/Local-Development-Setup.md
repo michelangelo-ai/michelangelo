@@ -1,4 +1,4 @@
-## 1. Overview / Introduction
+## 1. overview / Introduction
 
 ### Purpose
 This guide covers setting up a local development environment for contributing to the Michelangelo UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo sandbox environment for UI development and testing.
@@ -50,7 +50,7 @@ npm install --global yarn
 yarn --version  # Verify installation
 ```
 
-**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../setup-guide/Sandbox-Setup).
+**For full-stack development (optional):** following [Michelangelo Sandbox Getting Started](../../setup-guide/sandbox-setup).
 
 **Note:** The sandbox is optional for UI development. You can develop UI components and pages without a running API server by mocking responses or working with static data.
 
@@ -115,4 +115,4 @@ A: Yes, you can work with mock data or specifically on data-independent function
 - [Vite Documentation](https://vitejs.dev/)
 - [Yarn Workspaces Guide](https://classic.yarnpkg.com/en/docs/workspaces/)
 - [Node Version Manager (nvm)](https://github.com/nvm-sh/nvm)
-- [Michelangelo Sandbox Documentation](../../setup-guide/Sandbox-Setup)
+- [Michelangelo Sandbox Documentation](../../setup-guide/sandbox-setup)

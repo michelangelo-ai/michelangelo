@@ -1,4 +1,4 @@
-## Overview
+## overview
 
 Michelangelo UI is configuration-driven, meaning common UI patterns are abstracted into configuration objects. Think of these as component APIs or contracts that cover the standard cases for ML platform interfaces.
 
@@ -218,10 +218,10 @@ The best way to learn is to explore working examples:
 
 Detailed API references for each configuration type:
 
-- [Cell Types Reference](Cell-Type-Reference)
-- [Table Configuration Reference](Table-Configuration-Reference)
-- [Phase Configuration Reference](Phase-Configuration-Reference)
-- [Entity Configuration Reference](Entity-Configuration-Reference)
+- [Cell Types Reference](cell-type-reference)
+- [Table Configuration Reference](table-configuration-reference)
+- [Phase Configuration Reference](phase-configuration-reference)
+- [Entity Configuration Reference](entity-configuration-reference)
 
 ### FAQ
 

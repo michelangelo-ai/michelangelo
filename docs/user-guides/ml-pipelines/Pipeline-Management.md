@@ -38,7 +38,7 @@ The custom workflows are fully customized Uniflow workflows.
 
 # Pipeline Creation
 
-An MA Studio project is required before creating pipelines. Please refer to [Project Management](https://github.com/michelangelo-ai/michelangelo/wiki/Project-Management-for-ML-Pipelines) for project creation.
+An MA Studio project is required before creating pipelines. Please refer to [Project Management](https://github.com/michelangelo-ai/michelangelo/wiki/project-management-for-ml-pipelines) for project creation.
 
 ## Pipeline Creation for Standard Workflows 
 

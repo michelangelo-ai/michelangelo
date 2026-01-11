@@ -2,7 +2,7 @@
 
 This guide describes how to configure **Michelangelo server components** in Kubernetes cluster. It focuses on the **configuration surfaces** (ConfigMaps, fields, and key parameters).
 
-# Overview
+# overview
 
 Michelangelo consists of four core server components:
 

@@ -1,4 +1,4 @@
-## 1. Overview / Introduction
+## 1. overview / Introduction
 
 ### Purpose
 This guide covers how the Michelangelo UI fits into Michelangelo's Kubernetes deployments and how operators can adapt the configuration for their environments.
@@ -102,7 +102,7 @@ The UI container serves the React application on port 80 (standard HTTP). Users 
 The UI serves static files (HTML, JS, CSS) from nginx, so it's a standard web server that needs HTTP access from users' browsers.
 
 ### Reference Implementation
-For a complete working example, see the [Sandbox Guide](../../setup-guide/Sandbox-Setup) which includes all components configured and connected.
+For a complete working example, see the [Sandbox Guide](../../setup-guide/sandbox-setup) which includes all components configured and connected.
 
 ### Verification
 Once deployed, verify the connection chain:

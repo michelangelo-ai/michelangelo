@@ -1,6 +1,6 @@
 This page describes the Michelangelo Job Scheduler architecture and how to extend it with custom backends or plugins.
 
-## Architecture Overview
+## Architecture overview
 
 The scheduler system is designed with clean separation of concerns, allowing job controllers to remain agnostic to the underlying scheduling implementation.
 

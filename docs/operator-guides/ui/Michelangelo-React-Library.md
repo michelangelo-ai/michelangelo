@@ -1,4 +1,4 @@
-## 1. Overview / Introduction
+## 1. overview / Introduction
 
 ### Purpose
 This guide covers integrating Michelangelo UI components into existing React applications as npm dependencies.
@@ -212,7 +212,7 @@ clusters:
               port_value: 8081                # Your API server port
 ```
 
-**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo UI](Deploying-Michelangelo-UI) guide.
+**Reference Configuration:** See complete Envoy setup in the [Deploying Michelangelo UI](./deploying-michelangelo-ui) guide.
 
 ### Icon Configuration
 

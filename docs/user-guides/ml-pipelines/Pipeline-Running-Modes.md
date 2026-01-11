@@ -11,7 +11,7 @@ Machine learning workflows have unique challenges:
 * **Staging Stage**: Need production-like execution with safety controls  
 * **Production Stage**: Need enterprise-grade reliability, scheduling, and monitoring
 
-## Running Modes Overview
+## Running Modes overview
 
 | Mode | Development Stage | Problem Solved | Value Proposition |
 | ----- | ----- | ----- | ----- |

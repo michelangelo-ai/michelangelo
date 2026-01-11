@@ -262,7 +262,7 @@ Uniflow tasks run on Spark or Ray clusters. Two main retry strategies were consi
 
 • **Recreate Cluster for Retry (Chosen)**: This approach is less efficient due to restart overhead but provides better isolation and a clean execution environment. It is more robust and can solve a broader range of failures, including infrastructure-level issues and environmental misconfigurations. Uniflow prioritizes reliability, accepting a small downgrade in performance.
 
-# 8\. Architecture Overview
+# 8\. Architecture overview
 
 Uniflow's architecture involves several key components:
 
