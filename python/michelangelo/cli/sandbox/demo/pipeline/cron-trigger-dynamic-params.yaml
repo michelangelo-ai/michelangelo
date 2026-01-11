@@ -15,17 +15,17 @@ spec:
     maxConcurrency: 1
     parametersMap:
       sst2-test:
-        kw_args:
+        kwArgs:
           path: 'glue'
           name: 'sst2'
           tokenizer_max_length: 256
       mrpc-test:
-        kw_args:
+        kwArgs:
           path: 'glue'
           name: 'mrpc'
           tokenizer_max_length: 128
       cola-test:
-        kw_args:
+        kwArgs:
           path: 'glue'
           name: 'cola'
           tokenizer_max_length: 128
