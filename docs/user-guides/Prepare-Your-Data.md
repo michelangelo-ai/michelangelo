@@ -2,15 +2,15 @@
 
 Learn how to prepare data in Uniflow for the ML pipeline on Michelangelo using Ray's distributed processing capabilities.
 
-## **What You'll Learn**
+## What You'll Learn
 
 * Apply preprocessing at scale with Ray  
 * Create train/validation/test splits  
 * Handle large datasets efficiently
 
-## **Preprocessing Patterns**
+## Preprocessing Patterns
 
-### **Distributed Preprocessing with Ray**
+### Distributed Preprocessing with Ray
 
 ```py
 import ray.data as rd
@@ -26,7 +26,7 @@ train_dv = DatasetVariable(value=train_ds)
 val_dv = DatasetVariable(value=val_ds)
 ```
 
-### **Common Preprocessing Functions**
+### Common Preprocessing Functions
 
 | Task | Implementation Pattern | Notes |
 | ----- | ----- | ----- |
@@ -36,27 +36,27 @@ val_dv = DatasetVariable(value=val_ds)
 | Text Tokenization | HuggingFace tokenizers | For NLP workflows |
 | Image Preprocessing | `torchvision.transforms` | For computer vision |
 
-## **Data Splitting Strategies**
+## Data Splitting Strategies
 
-### **Random Split**
+### Random Split
 
 ```py
 train_ds, temp_ds = dataset.train_test_split(test_size=0.3)
 val_ds, test_ds = temp_ds.train_test_split(test_size=0.5)
 ```
 
-### **Temporal Split (Time Series)**
+### Temporal Split (Time Series)
 
 ```py
 train_ds = dataset.filter(lambda x: x["date"] <= "2023-01-01")
 val_ds = dataset.filter(lambda x: "2023-01-01" < x["date"] <= "2023-06-01")
 ```
 
-## **DatasetVariable: Michelangelo's Dataset Abstraction**
+## DatasetVariable: Michelangelo's Dataset Abstraction
 
 Michelangelo provides `DatasetVariable` to handle datasets across different frameworks with automatic storage and serialization.
 
-### **Flexible Dataset Usage**
+### Flexible Dataset Usage
 
 | Framework | Usage | Load Method |
 | ----- | ----- | ----- |
@@ -64,7 +64,7 @@ Michelangelo provides `DatasetVariable` to handle datasets across different fram
 | Pandas DataFrames | `DatasetVariable(value=pandas_df)` | `load_pandas_dataframe()` |
 | Spark DataFrames | `DatasetVariable(value=spark_df)` | `load_spark_dataframe()` |
 
-### **Direct Dataset Usage**
+### Direct Dataset Usage
 
 | Framework | Direct Usage | When to Use |
 | ----- | ----- | ----- |
@@ -81,7 +81,7 @@ def process_data_directly(data_path: str):
     return dataset
 ```
 
-### **Creating DatasetVariables**
+### Creating DatasetVariables
 
 ```py
 import ray.data as rd
@@ -98,7 +98,7 @@ spark_df = spark.read.parquet("s3://bucket/data.parquet")
 dataset_var = DatasetVariable(value=spark_df)
 ```
 
-## **Automatic Storage in Uniflow Tasks**
+## Automatic Storage in Uniflow Tasks
 
 ```py
 @uniflow.task()
@@ -124,7 +124,7 @@ def use_prepared_data(datasets: dict):
     val_data = datasets["validation"].value
 ```
 
-## **Integration with Trainer SDK**
+## Integration with Trainer SDK
 
 ```py
 trainer_param = LightningTrainerParam(
@@ -140,19 +140,19 @@ trainer = LightningTrainer(trainer_param)
 result = trainer.train(run_config, scaling_config)
 ```
 
-## **Best Practices**
+## Best Practices
 
 * Use Parquet for large datasets  
 * Process in batches  
 * Validate data after preprocessing  
 * Leverage uniflow tasks for caching and reproducibility
 
-## **Next Steps**
+## Next Steps
 
 * Continue to [Model Training guide](https://github.com/michelangelo-ai/michelangelo/wiki/Train-and-Register-a-Model)  
 * Check troubleshooting section
 
-## **Common Issues**
+## Common Issues
 
 * Out of memory → Reduce batch size or use Spark  
 * Slow preprocessing → Increase `num_cpus`  

@@ -1,6 +1,6 @@
 # Set Up Triggers
 
-## **What You'll Learn**
+## What You'll Learn
 
 * How to configure cron-based recurring run triggers within a single pipeline revision  
 * How to configure ad-hoc backfill triggers within a single pipeline revision
@@ -31,7 +31,7 @@ A **TriggerRun** example demonstrates binding a cron schedule and execution para
 
 ### 
 
-### **What are Parameter IDs?**
+### What are Parameter IDs?
 
 Parameter IDs represent configurations utilized for scaling up trigger runs. For instance, suppose you need to execute an orchestration pipeline across 700+ cities, each with its unique configuration. In such cases, you aim to consolidate all 700 cities' configurations into a single pipeline while managing them separately. This is achieved by specifying the configurations for all 700+ cities within a dynamic parameter defined in the trigger file. 
 
@@ -72,6 +72,6 @@ The process for setting up a backfill trigger follows the same steps (1\~4) used
 | `spec.startTimestamp`  | `"2024-03-23T09:00:00Z"` | This field defines the **beginning** of the historical time interval over which the backfill should run. It is an **inclusive** boundary. If multiple runs are desired, users must choose a correct interval to ensure the cron cycle is included. |
 | `spec.endTimestamp` | `"2024-03-23T09:15:00Z"` | This field defines the **end** of the historical time interval. The backfill trigger automatically catches all cron running cycles between the start and end time frames. This boundary is also **inclusive**; setting the end timestamp to the exact scheduled time will still kick off that run. |
 
-### **What is the start timestamp and end timestamp in the backfill trigger?**
+### What is the start timestamp and end timestamp in the backfill trigger?
 
 Start timestamp and end timestamp are time intervals where the user configures in running a backfill trigger. Backfill trigger automatically catches all cron running cycles between these 2 time frames. For example, in the backfill trigger where cron schedule is **"00 9 \* \* 6"** that triggers at 9am on Saturday, the start timestamp is **"2024-03-23T09:00:00Z"** and the end timestamp is **"2024-03-23T09:15:00Z"**. So it backfills one run happening at  **"2024-03-23T09:00:00Z"** (Saturday at 9am). If the user wants to backfill multiple runs in the previous time interval, then they need to choose the correct time interval for start timestamp and end timestamp, make sure cron cycle is included.

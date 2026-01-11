@@ -42,7 +42,7 @@ An MA Studio project is required before creating pipelines. Please refer to [Pro
 
 ## Pipeline Creation for Standard Workflows 
 
-### **Folder Structure**
+### Folder Structure
 
 To create a pipeline, we must create a directory under the project folder with the following structure.
 
@@ -52,7 +52,7 @@ To create a pipeline, we must create a directory under the project folder with t
     pipeline.yaml
 ```
 
-### **pipeline.yaml** 
+### pipeline.yaml
 
 The **pipeline.yaml** file defines the metadata for the pipeline. This file is required to register the pipeline with MA Studio. The format of the **pipeline.yaml** file conforms to this protobuf. 
 
@@ -69,11 +69,11 @@ spec:
     path: pipeline_conf.yaml         # For standard workflows, the manifest path is always pipeline_conf.yaml
 ```
 
-### **pipeline_conf.yaml** 
+### pipeline_conf.yaml
 
 The **pipeline_conf.yaml** file contains the configuration for the pipeline.
 
-#### **Example** 
+#### Example
 
 **pipeline_conf.yaml**
 
@@ -120,7 +120,7 @@ task_configs:
 
 ## Pipeline Creation for Custom Workflows
 
-### **Typical Code Structure** 
+### Typical Code Structure
 
 ```
 <project root>
@@ -147,7 +147,7 @@ task_configs:
         └── ...
 ```
 
-### **Define Custom Workflows** 
+### Define Custom Workflows
 
 The workflow function defines the execution flow. It typically invokes the tasks in a certain order. In the remote run, the workflow function is triggered in Cadence. 
 
@@ -162,7 +162,7 @@ def workflow_name(...):
     task2(...)
 ```
 
-### **Define the Tasks**
+### Define the Tasks
 
 The task function is to be executed in either Ray or Spark.  
 
@@ -176,9 +176,9 @@ def task_name(...):
     ...
 ```
 
-### **Define the Pipeline** 
+### Define the Pipeline
 
-#### **Folder Structure** 
+#### Folder Structure
 
 ```
 \<pipeline folder>  
@@ -186,7 +186,7 @@ def task_name(...):
 	pipeline.yaml
 ```
 
-#### **pipeline.yaml** 
+#### pipeline.yaml
 
 The **pipeline.yaml** file defines the metadata for the pipeline. This file is required to register the pipeline with MA Studio. The format of the **pipeline.yaml** file conforms to this protobuf.
 
@@ -206,11 +206,11 @@ spec:
     path: //uber/foo/bar:pipeline    # The manifest path is the bazel target corresponds to the pipeline.py file
 ```
 
-#### **pipeline.py** 
+#### pipeline.py
 
 The **pipeline.py** file triggers the workflow function with a set of parameters.
 
-##### **Example** 
+##### Example
 
 ```
 from uber.ai.uniflow import create_context
@@ -239,7 +239,7 @@ ma pipeline apply \-f \<pipeline.yaml path>
 
 ## Remote Run 
 
-### **Run the Pipeline from UI**
+### Run the Pipeline from UI
 
 After the pipeline is registered in MA Studio, it is displayed in the pipeline list page in MA Studio.
 
@@ -251,7 +251,7 @@ Click into the pipeline and click the Run button.
 <img width="1407" height="187" alt="Screenshot 2026-01-08 at 3 15 10 PM" src="https://github.com/user-attachments/assets/1451f194-3244-455a-9d03-75975a5bdfcb" />
 
 
-### **Run the Pipeline using MACTL** 
+### Run the Pipeline using MACTL
 
 If the pipeline is registered from the main branch. A new pipeline revision is created under the main branch, and the default revision for the pipeline is updated to the new revision. Therefore, you can run the pipeline directly.
 
@@ -259,13 +259,13 @@ If the pipeline is registered from the main branch. A new pipeline revision is c
 ma pipeline run \--namespace=\<namespace> \--name=\<pipeline_name>
 ```
 
-#### **Example** 
+#### Example
 
 ```
 ma pipeline run \--namespace=ma-dev-test-uber-one \--name=simple-custom-train
 ```
 
-### **Run the Pipeline Revision using MACTL** 
+### Run the Pipeline Revision using MACTL
 
 If the pipeline is registered from a remote private branch. A new pipeline revision is created under the private branch, and the default revision for the pipeline is not updated. Therefore, you should run the pipeline with the revision.
 

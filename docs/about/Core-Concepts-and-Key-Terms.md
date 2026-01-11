@@ -43,33 +43,33 @@ def train():
     print("training")
 ```
 
-### **Project**
+### Project
 
 A business use case with a set of continuously trackable metrics.
 
 -   Uber-specific examples include predicting cancellation rate on rides dispatch and the ranking of restaurants on the UberEats home feed.
 
-### **Compute Resource**
+### Compute Resource
 
 These are hardware resources (CPU, GPU, memory, storage, etc) for running Machine Learning workloads.
 
-### **Dataset**
+### Dataset
 
 A piece of data registered in Michelangelo. Users can set up data pipelines and let Michelangelo manage the dataset, or directly register the dataset in Michelangelo and manage it externally. They can can use the dataset for training and evaluation.
 
-### **Feature**
+### Feature
 
 An individual measurable property or characteristic of a phenomenon, represented as an attribute in a dataset.
 
-### **Job**
+### Job
 
 A batch job running a ML workload. Currently Michelangelo runs [Spark](https://spark.apache.org/docs/latest/index.html) for data processing and [Ray](https://www.ray.io/) for ML training.
 
-### **Pipeline**
+### Pipeline
 
 A pipeline is a recipe that runs multiple jobs and creates desired output artifacts.
 
-### **Model**
+### Model
 
 As a widely used term, a machine learning model refers to output from a training job over a set of data, providing it an algorithm that it can use to reason over, learn from, and make predictions about that data.
 
@@ -77,34 +77,34 @@ As a widely used term, a machine learning model refers to output from a training
 
      **revision id:** Revision of the model, for normal model, it will always be revision 0. But for incremental training, the revision id will keep increasing for each iteration of the model training job.
 
-### **Model Excellence Scores**
+### Model Excellence Scores
 
 Model Excellent Scores (MES) provide visibility into the ML model quality throughout various stages of a model’s life cycle, such as feature quality, prediction performance, and model freshness.
 
-### **Model Family**
+### Model Family
 
 Model Family is a sub problem using different ML model especially training features and objectives within a project (use case). This is used when there are multiple models supporting one use case.
 
 -   Model excellence scores track the quality on each model family.
 -   For example, UberEats home feed ranking is determined by different models optimizing conversion rate, net inflow, service quality and fairness.
 
-### **Inference Server**
+### Inference Server
 
 Inference Server is synonymous with the Online Prediction Service, and is essentially the host for use-cases that require online prediction.
 
-### **Deployment**
+### Deployment
 
 Runs a set of processes to load a model into a target. Provides a human readable name for accessing a model.
 
-### **Endpoint**
+### Endpoint
 
 The routing mechanism for making requests to a group of deployments.
 
-### **Target**
+### Target
 
 Target is the physical destination of a model.
 
-### **Evaluation Report**
+### Evaluation Report
 
 Collection of model metrics. Some examples are model performance report, feature importance report, data quality report, etc.
 

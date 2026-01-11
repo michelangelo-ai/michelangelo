@@ -1,6 +1,6 @@
 Save, version, and manage trained models using Michelangelo's comprehensive model packaging system.
 
-## **What Michelangelo Model Packaging Provides**
+## What Michelangelo Model Packaging Provides
 
 Michelangelo's model packager handles the complete model lifecycle:
 
@@ -12,9 +12,9 @@ Michelangelo's model packager handles the complete model lifecycle:
 * **Model validation** – Built-in schema and inference tests  
 * **Easy downloading** – Retrieve any version for serving or fine-tuning
 
-# **Model Registration**
+# Model Registration
 
-## **Register a Model**
+## Register a Model
 
 ```py
 from michelangelo.lib.model_manager import CustomTritonPackager
@@ -76,7 +76,7 @@ raw_model_package_path = packager.create_raw_model_package(
 
 ```
 
-### **What happens during registration**
+### What happens during registration
 
 1. A **Model Custom Resource (CR)** is created in the Michelangelo control plane  
 2. Model **schema & metadata** are stored in ETCD  
@@ -86,7 +86,7 @@ raw_model_package_path = packager.create_raw_model_package(
 4. Packager **uploads both artifacts** to cloud storage  
 5. Model **validation tests** run (load → schema → sample inference)
 
-# **Model Formats and Storage**
+# Model Formats and Storage
 
 Michelangelo produces **two complementary formats**.
 
@@ -98,7 +98,7 @@ Used for:
 * Offline analysis  
 * Reproducibility
 
-### **Directory structure**
+### Directory structure
 
 ```
 model_name/└── 0/    └── metadata/        ├── type.yaml        ├── schema.yaml        ├── sample_data.yaml
@@ -112,7 +112,7 @@ model_name/└── 0/    └── metadata/        ├── type.yaml   
 
 The deployable artifact is packaged into a **Triton-compatible model repository**.
 
-### **Directory structure**
+### Directory structure
 
 ```
 model_name/
@@ -127,7 +127,7 @@ model_name/
 ├── config.pbtxt
 ```
 
-### **Purpose of key files**
+### Purpose of key files
 
 | File | Purpose |
 | ----- | ----- |
@@ -138,7 +138,7 @@ model_name/
 | **config.pbtxt** | Triton configuration (I/O schema, batching, instances) |
 | **uber/**\* | Auto-packaged modules required at inference time |
 
-### **Features of Deployable Models**
+### Features of Deployable Models
 
 ✔ Fully Triton-compatible  
  ✔ Batch \+ real-time inference  
@@ -152,9 +152,9 @@ Stored in cloud at:
 s3://<bucket>/models/<model_name>/serve/<version>/
 ```
 
-# **Inference Support**
+# Inference Support
 
-## **Online & Offline Inference**
+## Online & Offline Inference
 
 ```py
 from uber.ai.michelangelo.sdk.model_manager.downloader import download_raw_model
@@ -178,16 +178,16 @@ response = result.get("response")[0]
 
 ```
 
-# **Loading & Downloading Models**
+# Loading & Downloading Models
 
-## **Load model for serving or analysis**
+## Load model for serving or analysis
 
 ```py
 model = packager.load_model("housing-predictor")
 model_v2 = packager.load_model("housing-predictor", version="2")
 ```
 
-## **Download for fine-tuning or custom deployment**
+## Download for fine-tuning or custom deployment
 
 ```py
 from uber.ai.michelangelo.sdk.model_manager.downloader import download_raw_model

@@ -20,122 +20,122 @@ Machine learning workflows have unique challenges:
 | **Pipeline Dev Run** | Build Integration | "Does my Dockerfile actually work?" | **20+ mins** \- Full image building |
 | **Pipeline Run** | Production Deployment | "How do I deploy my committed code?" | **Varies** \- Only accepts committed code |
 
-## **Local Run Mode**
+## Local Run Mode
 
-### **Why This Mode Exists**
+### Why This Mode Exists
 
 Data scientists and ML engineers need to iterate quickly on workflow logic without the overhead of containers, clusters, or configuration files. The \#1 pain point in ML development is slow feedback loops.
 
-### **Benefits**
+### Benefits
 
 * **Zero Setup Time**: Run immediately without any infrastructure  
 * **Instant Feedback**: See results in seconds, not minutes  
 * **Full Debugging**: Use your IDE, debugger, and local tools  
 * **Cost Savings**: No cloud compute costs during development
 
-### **When to Use**
+### When to Use
 
 * **Stage**: Initial development and experimentation  
 * **Scenario**: "Can I test this change right now?" — Need immediate feedback  
 * **Team**: Individual data scientists prototyping  
 * **Duration**: Hours to days during active development
 
-### **Execution Timing**
+### Execution Timing
 
 * **Provisioning**: **Instant** (0 seconds)  
 * **Execution**: **Immediate** — Runs your code instantly  
 * **Best for**: Quick iterations, debugging, small datasets
 
-### **Speed vs Accuracy Trade-off**
+### Speed vs Accuracy Trade-off
 
 * **Speed**: Fastest possible execution  
 * **Accuracy**: Lower (local environment may differ from production)
 
-### **Usage**
+### Usage
 
 ```shell
 poetry run python workflow.py
 ```
 
-## **Remote Run Mode**
+## Remote Run Mode
 
-### **Why This Mode Exists**
+### Why This Mode Exists
 
 Teams need to test workflows with **larger datasets and compute** without waiting for slow image builds. This solves: "My workflow works locally, but I need real compute power right now."
 
-### **Benefits**
+### Benefits
 
 * **Better Resources**: Use cloud compute without local hardware limits  
 * **Skip Build Times**: Reuse existing images  
 * **Scale Testing**: Validate workflows at realistic data scale  
 * **Fast Feedback Loop**: No CI/CD delays
 
-### **When to Use**
+### When to Use
 
 * **Stage**: Functional \+ scaling tests  
 * **Scenario**: "My laptop can’t handle this dataset"  
 * **Team**: Devs validating compute-heavy logic
 
-### **Execution Timing**
+### Execution Timing
 
 * **Provisioning**: **2–5 mins**  
 * **Execution**: Starts fast using prebuilt images  
 * **Best for**: GPU workloads, large datasets, memory-intensive tasks
 
-### **Speed vs Process Trade-off**
+### Speed vs Process Trade-off
 
 * **Speed**: Fast (no build pipeline)  
 * **Process**: Lightweight governance
 
-### **Usage**
+### Usage
 
 ```shell
 poetry run python workflow.py remote-run --storage-url s3://my-bucket/workflows --image my-workflow:latest
 ```
 
-### **Required**
+### Required
 
 * `--storage-url`  
 * `--image`
 
-### **Optional**
+### Optional
 
 * `--workflow` (`cadence` | `temporal`)  
 * `--cron`  
 * `--file-sync`  
 * `--yes`
 
-## **Pipeline Dev Run Mode**
+## Pipeline Dev Run Mode
 
-### **Why This Mode Exists**
+### Why This Mode Exists
 
 Engineers must validate the **entire pipeline**, including container image builds, dependency resolution, and resume functionality — without pushing to production.
 
-### **Benefits**
+### Benefits
 
 * **Full Pipeline Testing**  
 * **Resumeable Execution**  
 * **Build Validation** (Dockerfile \+ dependencies)  
 * **Integration Simulation**
 
-### **When to Use**
+### When to Use
 
 * **Stage**: Pipeline integration  
 * **Scenario**: "Does my Dockerfile actually work?"  
 * **Team**: ML engineers validating pipeline end-to-end
 
-### **Execution Timing**
+### Execution Timing
 
 * **Provisioning \+ Building**: **20+ mins**  
 * **Execution**: Depends on pipeline  
 * **Best for**: Pre-production verification
 
-### **Completeness vs Speed Trade-off**
+### Completeness vs Speed Trade-off
 
 * **Completeness**: High  
 * **Speed**: Slowest (build \+ run)
 
-### **Usage**
+### Usage
 
 ```shell
 mactl pipeline dev_run -f pipeline.yaml
@@ -143,53 +143,53 @@ mactl pipeline dev_run -f pipeline.yaml --env DATASET_SIZE=1000
 mactl pipeline dev_run -f pipeline.yaml --resume_from my-run-123:train
 ```
 
-## **Pipeline Run Mode**
+## Pipeline Run Mode
 
-### **Why This Mode Exists**
+### Why This Mode Exists
 
 Enterprises need **production-grade pipeline execution** with full CI/CD, governance, monitoring, and rollback support.
 
-### **Benefits**
+### Benefits
 
 * **Full CI/CD Pipeline**  
 * **Version Control \+ Rollback**  
 * **Enterprise Monitoring \+ SLAs**  
 * **Automated Governance**
 
-### **When to Use**
+### When to Use
 
 * **Stage**: Production  
 * **Scenario**: "How do I deploy my committed code?"  
 * **Team**: Production ML \+ platform teams
 
-### **Execution Timing**
+### Execution Timing
 
 * **Provisioning**: Depends on CI/CD  
 * **Execution**: Production-grade reliability  
 * **Requirements**: Code must be committed
 
-### **Reliability vs Agility Trade-off**
+### Reliability vs Agility Trade-off
 
 * **Reliability**: Maximum  
 * **Agility**: Lower
 
-### **Usage**
+### Usage
 
 ```shell
 ma pipeline run -n my-namespace --name my-pipeline
 ma pipeline run -n my-namespace --name my-pipeline --resume_from previous-run:step
 ```
 
-## **Decision Tree: Which Mode Should I Use?**
+## Decision Tree: Which Mode Should I Use?
 
-### **Stage-Based**
+### Stage-Based
 
 * **Early Development** → Local Run  
 * **Scaling Tests** → Remote Run  
 * **Integration Testing** → Pipeline Dev Run  
 * **Production Deployment** → Pipeline Run
 
-### **Concern-Based**
+### Concern-Based
 
 | Concern | Mode |
 | ----- | ----- |

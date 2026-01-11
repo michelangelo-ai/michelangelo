@@ -1,10 +1,10 @@
 # File Sync User Guide
 
-## **What is File Sync?**
+## What is File Sync?
 
 File Sync lets you test your local code changes on remote infrastructure **without rebuilding Docker images**. Instead of waiting 20+ minutes for image builds per task, you can sync your changes in 2-5 minutes.
 
-## **When to Use File Sync**
+## When to Use File Sync
 
 **Use file sync when:**
 
@@ -18,7 +18,7 @@ File Sync lets you test your local code changes on remote infrastructure **witho
 * You're ready to deploy to production  
 * You're working with sensitive data that shouldn't leave your machine (not applicable to cloud storage)
 
-## **How to Use File Sync**
+## How to Use File Sync
 
 remote run support: add `--file-sync` flag to your remote run command
 
@@ -37,12 +37,12 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 
 ### 
 
-### **Requirements**
+### Requirements
 
 * Your code must be in a Git repository  
 * You have Authorization Access to cloud storage (S3/MinIO)
 
-## **Important Things to Know**
+## Important Things to Know
 
 **File sync assumes your local Git changes relate to the Docker image**
 
@@ -62,7 +62,7 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 * **With Git metadata:** Only sends files that actually changed since the image was built  
 * **Without Git metadata:** Sends all your uncommitted changes (may include extra files)
 
-## **What Gets Synced**
+## What Gets Synced
 
 **Files included:**
 
@@ -77,7 +77,7 @@ ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
 * Large binary files (should be in `.gitignore`)  
 * Unchanged files (when Git metadata is available)
 
-## **Typical Development Flow**
+## Typical Development Flow
 
 1. **Make code changes** (don't commit yet)  
 2. **Run with file sync** \- your changes are tested remotely in 2-5 minutes  

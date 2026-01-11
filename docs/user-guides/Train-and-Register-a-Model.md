@@ -4,14 +4,14 @@ This guide explains **how to retrieve datasets for training** inside Michelangel
 
 The focus is simplicity: **you control your training logic**, Michelangelo provides the dataset plumbing and optional distributed compute.
 
-## **What You'll Learn**
+## What You'll Learn
 
 * How datasets are passed to training tasks  
 * How to load Ray, Pandas, or Spark datasets  
 * How to scale training with Ray workers  
 * How to use the Lightning Trainer SDK for deep learning
 
-# **1\. Understanding Training Inputs**
+# 1\. Understanding Training Inputs
 
 Michelangelo workflows pass datasets using **DatasetVariable**.
 
@@ -29,7 +29,7 @@ Access the dataset inside a training task using:
 dataset = train_dv.value
 ```
 
-### **Dataset Formats**
+### Dataset Formats
 
 | Format | When It Appears | How to Use It |
 | ----- | ----- | ----- |
@@ -37,7 +37,7 @@ dataset = train_dv.value
 | **Pandas DataFrame** | Local CSV or small data | Convert to tensors directly |
 | **Spark DataFrame** | Spark preprocessing step | Convert to Pandas or Ray before training |
 
-# **2\. Simple Training Example**
+# 2\. Simple Training Example
 
 For basic (scikit-learn, lightweight PyTorch) training, load your dataset directly:
 
@@ -66,11 +66,11 @@ def train_model(train_dv: DatasetVariable, val_dv: DatasetVariable):
     return model
 ```
 
-# **3\. Distributed Training with Lightning Trainer SDK**
+# 3\. Distributed Training with Lightning Trainer SDK
 
 To scale training across CPUs/GPUs, wrap your training task using **RayTask**.
 
-## **Example: Distributed Deep Learning with Ray Workers**
+## Example: Distributed Deep Learning with Ray Workers
 
 ```py
 from michelangelo.sdk.trainer.torch.pytorch_lightning.lightning_trainer import (
@@ -147,7 +147,7 @@ def train_distributed_model(
     return trainer.train(run_config, scaling_config)
 ```
 
-### **What Ray Handles for You**
+### What Ray Handles for You
 
 * Worker creation  
 * Dataset sharding  
@@ -156,7 +156,7 @@ def train_distributed_model(
 * Automatic checkpointing  
 * Fault recovery
 
-### **Benefits of the Lightning Trainer SDK**
+### Benefits of the Lightning Trainer SDK
 
 | Benefit | Description |
 | ----- | ----- |
@@ -172,29 +172,29 @@ You **do not** need to implement:
 
 The SDK automates all distributed concerns.
 
-## **Best Practices**
+## Best Practices
 
-### **Recommended**
+### Recommended
 
 * Use trainer SDK for distributed deep learning  
 * Start small, then scale  
 * Track experiments consistently  
 * Tune compute resources for your model
 
-### **Avoid**
+### Avoid
 
 * Manual distributed loops unless necessary  
 * Training without validation datasets  
 * Ignoring memory/CPU/GPU limits
 
-## **Next Steps**
+## Next Steps
 
 Your models are now ready to move forward:
 
 * Continue to [**Model Registry**](https://github.com/michelangelo-ai/michelangelo/wiki/Model-Registry-Guide) to save and version  
 * Continue to **Model Deployment** _(Coming Soon)_ for inference
 
-## **Troubleshooting**
+## Troubleshooting
 
 * **Out of memory?** Lower batch size or increase memory  
 * **Slow training?** Increase workers or enable GPU  

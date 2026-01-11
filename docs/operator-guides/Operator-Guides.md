@@ -31,7 +31,7 @@ The following diagram shows the relationship between each of the services in Mic
 
 ## API Server Configuration
 
-### **Key Fields**
+### Key Fields
 
 ```
 apiserver:
@@ -48,7 +48,7 @@ apiserver:
     enableIncompatibleUpdate: false
 ```
 
-### **Field Explanations**
+### Field Explanations
 
 | Field | Description |
 | ----- | ----- |
@@ -60,7 +60,7 @@ apiserver:
 
 ## Controller Manager Configuration
 
-### **Key Fields**
+### Key Fields
 
 ```
 controllermgr:
@@ -87,7 +87,7 @@ workflowClient:
   domain: uniflow
 ```
 
-### **Field Explanations**
+### Field Explanations
 
 | Field | Description |
 | ----- | ----- |
@@ -100,7 +100,7 @@ workflowClient:
 
 ## Worker Configuration
 
-### **Key Fields**
+### Key Fields
 
 ```
 worker:
@@ -124,7 +124,7 @@ workflow-engine:
     domain: uniflow
 ```
 
-### **Field Explanations**
+### Field Explanations
 
 | Field | Description |
 | ----- | ----- |
@@ -135,7 +135,7 @@ workflow-engine:
 
 ## UI & Envoy Configuration
 
-### **Envoy Proxy**
+### Envoy Proxy
 
 **ConfigMap:**
 
@@ -157,7 +157,7 @@ static_resources:
                       port_value: 14566
 ```
 
-### **Public UI Config**
+### Public UI Config
 
 **ConfigMap:**
 
@@ -195,13 +195,13 @@ minio:
   useIam: true                # Use IAM roles for authentication
 ```
 
-### **Fields**
+### Fields
 
 * `awsRegion` – The AWS region of your S3 bucket.  
 * `awsEndpointUrl` – S3 endpoint (`s3.amazonaws.com` or regional endpoint).  
 * `useIam` – Set to `true` in production (do not hardcode keys in config).
 
-## **Storage Setup Checklist (from original guide)**
+## Storage Setup Checklist (from original guide)
 
 * Configure **AWS credentials/IAM roles** for pods that need S3 access.  
 * Verify **region and endpoint** in the ConfigMap match your S3 setup.  
@@ -223,7 +223,7 @@ workflowClient:
   domain: uniflow               # Temporal domain
 ```
 
-### **Fields**
+### Fields
 
 * `service` – Workflow engine frontend service name (`temporal-frontend` / `cadence-frontend`).  
 * `host` – Full endpoint (host:port).  

@@ -1,6 +1,6 @@
-# **Prerequisites** 
+# Prerequisites
 
-## **Required Software** 
+## Required Software
 
 This guide assumes you have the following software installed and configured on your system. Please follow the instructions below for each prerequisite.
 
@@ -8,7 +8,7 @@ This guide assumes you have the following software installed and configured on y
 * [kubectl](https://kubernetes.io/docs/tasks/tools/#kubectl)  
 * [k3d](https://k3d.io/)
 
-### **Docker** 
+### Docker
 
 Please follow the official Docker installation guide for your operating system: [Official Docker Documentation](https://docs.docker.com/get-started/get-docker)
 
@@ -33,7 +33,7 @@ Why is this important?
 
 Ensuring this entry exists allows containers managed by Docker (including the Kubernetes nodes created by k3d) to easily connect back to services running on your local development machine using the consistent host.docker.internal address.
 
-### **kubectl** 
+### kubectl
 
 kubectl is the command-line tool for interacting with Kubernetes clusters. You will use it to manage and inspect your k3d cluster.
 
@@ -45,7 +45,7 @@ Follow the official Kubernetes documentation for installing kubectl: [Install ku
 brew install kubectl
 ```
 
-### **k3d** 
+### k3d
 
 k3d is a lightweight tool to run local Kubernetes clusters in Docker. It simplifies the process of setting up a Kubernetes environment for development and testing.
 
@@ -55,7 +55,7 @@ Installation:
 brew install k3d
 ```
 
-## **GitHub Personal Access Token** 
+## GitHub Personal Access Token
 
 Michelangelo is not publicly available yet, so we keep Michelangelo's Docker containers in the private GitHub Container Registry, which requires a [GitHub personal access token (classic)](https://github.com/settings/tokens) for authentication.
 
@@ -74,7 +74,7 @@ For a more detailed guide, please refer to [https://docs.github.com/en/packages/
 
 Be aware that CR\_PAT environment variable is required while Michelangelo is NOT publicly accessible. Once we become public, the token will no longer be necessary, and this section will be removed.
 
-## **Python Environment** 
+## Python Environment
 
 This project requires Python version 3.9 or higher to run certain scripts and tools.
 
@@ -92,7 +92,7 @@ python \--version
 
 The output should display a version number that starts with 3.9 or a higher minor or patch version (e.g., Python 3.9.x, Python 3.10.y).
 
-### **Poetry \- Python Dependency Management** 
+### Poetry \- Python Dependency Management
 
 Poetry is used to manage the project's Python dependencies, ensuring that you have the correct versions of all necessary libraries for development and running Python-based tools.
 
@@ -118,7 +118,7 @@ poetry install
 
 This command should install all the dependencies from pyproject.toml.
 
-# **Commands** 
+# Commands
 
 | Action | Description |
 | ----- | ----- |
@@ -130,13 +130,13 @@ This command should install all the dependencies from pyproject.toml.
 
 ## Create Command Arguments 
 
-### **Command Format** 
+### Command Format
 
 ```shell
 ma sandbox create [OPTIONS]
 ```
 
-### **Core Options** 
+### Core Options
 
 | Argument | Type | Default | Description |
 | ----- | ----- | ----- | ----- |
@@ -146,7 +146,7 @@ ma sandbox create [OPTIONS]
 | `--compute-cluster-name` | String | `michelangelo-compute-0` | Name of the jobs cluster |
 | `--include-experimental` | List | `[]` | Include experimental services |
 
-### **Excludable Services (`--exclude`)** 
+### Excludable Services (`--exclude`)
 
 * `apiserver`  
 * `controllermgr`  
@@ -155,7 +155,7 @@ ma sandbox create [OPTIONS]
 * `ray`  
 * `spark`
 
-### **Experimental Services (`--include-experimental`)** 
+### Experimental Services (`--include-experimental`)
 
 * `fluent-bit`  
 * `mlflow`
@@ -184,25 +184,25 @@ ma sandbox create --include-experimental mlflow
 
 ## Example Configurations
 
-### **Minimal Sandbox** 
+### Minimal Sandbox
 
 ```shell
 ma sandbox create
 ```
 
-### **Use Temporal** 
+### Use Temporal
 
 ```shell
 ma sandbox create --workflow temporal
 ```
 
-### **No UI** 
+### No UI
 
 ```shell
 ma sandbox create --exclude ui
 ```
 
-### **Full Experimental Mode** 
+### Full Experimental Mode
 
 ```shell
 ma sandbox create \
@@ -211,7 +211,7 @@ ma sandbox create \
   --workflow temporal
 ```
 
-### **API-Only Mode** 
+### API-Only Mode
 
 ```shell
 ma sandbox create \
@@ -219,7 +219,7 @@ ma sandbox create \
   --include-experimental mlflow
 ```
 
-### **Create a compute Cluster** 
+### Create a compute Cluster
 
 ```shell
 ma sandbox create \
@@ -229,30 +229,30 @@ ma sandbox create \
 
 ## Sandbox Management 
 
-### **Delete**
+### Delete
 
 ```shell
 ma sandbox delete
 ```
 
-### **Start / Stop** 
+### Start / Stop
 
 ```shell
 ma sandbox start
 ma sandbox stop
 ```
 
-### **Create Demo Pipelines** 
+### Create Demo Pipelines
 
 ```shell
 ma sandbox demo
 ```
 
-# **Running Michelangelo Studio UI** 
+# Running Michelangelo Studio UI
 
 This section guides you on how to run the Michelangelo Studio user interface locally. Before proceeding, ensure you have completed all the steps in the Prerequisites section.
 
-## **UI Specific Prerequisites** 
+## UI Specific Prerequisites
 
 Before running the UI, you need to have the following installed:
 
@@ -269,7 +269,7 @@ npm install \--global yarn
 
 Verify with yarn \--version.
 
-### **Sandbox** 
+### Sandbox
 
 While you can technically run the Michelangelo Studio UI outside Michelangelo's sandbox, your experience will be limited. The UI fetches data from the Michelangelo API, so ensuring the API sandbox environment is running and accessible (as detailed in the "[Running Michelangelo's API sandbox environment](https://www.google.com/search?q=%23running-michelangelos-api-sandbox-environment)" section) is crucial for the UI to function optimally.
 
@@ -283,7 +283,7 @@ The previous command will indicate a successful run by outputting the following:
 Demo CRs created in namespace ma-dev-test.
 ```
 
-## **Running the Application** 
+## Running the Application
 
 1. Navigate to the UI directory:  
    cd $REPO\_ROOT/javascript  

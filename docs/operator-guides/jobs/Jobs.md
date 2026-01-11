@@ -2,7 +2,7 @@
 
 Michelangelo provides a unified way to run large-scale data processing and ML training jobs on Kubernetes, using **Ray** and **Spark** as execution engines. This guide explains *the core concepts*, how jobs run, compute is allocated, and how users interact with the system.
 
-## **What Is a Michelangelo Job?**
+## What Is a Michelangelo Job?
 
 A Michelangelo job is any workload—training, batch inference, ETL, feature generation—that runs on a managed compute cluster.  
 Users define *what to run*, and Michelangelo handles:
@@ -15,13 +15,13 @@ Users define *what to run*, and Michelangelo handles:
 
 You focus on the job logic; Michelangelo manages the infrastructure.
 
-## **Architecture**
+## Architecture
 
 The image below displays the Michelangelo (MA) architecture for running Spark and Ray batch jobs end‑to‑end: submission, scheduling, execution, and reporting.
 
 <img width="687" height="673" alt="Screenshot 2026-01-08 at 12 31 13 PM" src="https://github.com/user-attachments/assets/4dc5cf1d-aefc-430a-9d67-31b2b8f55e5e" />
 
-## **How Jobs Run**
+## How Jobs Run
 
 The execution flow is very similar across Ray and Spark:
 
@@ -42,7 +42,7 @@ The execution flow is very similar across Ray and Spark:
 
 This mirrors the same control-plane to compute-plane flow seen in platforms like **Databricks** and **Kubeflow**.
 
-## **Choosing Ray or Spark**
+## Choosing Ray or Spark
 
 | Engine | Best For | Why |
 | ----- | ----- | ----- |
@@ -54,25 +54,25 @@ A simple rule:
 * **If your workload is Python/ML/GPU → use Ray**  
 * **If your workload is SQL/ETL/joins → use Spark**
 
-## **What You Need to Specify**
+## What You Need to Specify
 
 Michelangelo abstracts away most of the details. Users only provide the essentials:
 
-### **For Ray jobs**
+### For Ray jobs
 
 * The **container image** with your training code  
 * The **entrypoint** (e.g., `python train.py`)  
 * Desired **head/worker compute sizing**  
 * Optional: min/max workers for autoscaling
 
-### **For Spark jobs**
+### For Spark jobs
 
 * Your **application file** (Python or JAR)  
 * Application **arguments**  
 * Driver/executor resource sizes  
 * Optional: dynamic allocation configuration
 
-## **Observability & Operations**
+## Observability & Operations
 
 Michelangelo automatically provides:
 

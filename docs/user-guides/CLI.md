@@ -1,8 +1,8 @@
-# **User Guide**
+# User Guide
 
 The Michelangelo CLI interface provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
 
-## **Prerequisites**
+## Prerequisites
 
 Before using CLI, ensure:
 
@@ -32,11 +32,11 @@ Configure API server address (optional):
 3.  $ export MACTL_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
 ```
 
-## **Usage**
+## Usage
 
 All Michelangelo API entities support the following standard operations -- GET, APPLY, and DELETE
 
-### **How to run the command in michelangelo repository**
+### How to run the command in michelangelo repository
 
 Usage:
 
@@ -46,7 +46,7 @@ $ ma <COMMAND> <RESOURCE_TYPE> [ARGS]
 
 We will abstract this part like $ ma <COMMAND> <RESOURCE_TYPE> in below.
 
-### **GET - Retrieve resource**
+### GET - Retrieve resource
 
 Retrieve information about an existing resource by namespace and name. If you don't specify the \--name field, it would list all resources under the specified namespace.
 
@@ -98,7 +98,7 @@ GET command supports extra arguments for some entity types (e.g. revision entity
 
 \--revision-pipeline filter pipeline revision entities only
 
-### **APPLY - Create or update a resource from YAML**
+### APPLY - Create or update a resource from YAML
 
 Apply (create or update) a resource from a YAML configuration file. MA command automatically detects the resource type from the apiVersion and kind fields in the YAML.
 
@@ -116,7 +116,7 @@ $ ma pipeline apply --file="./examples/bert_cola/pipeline.yaml"
 
 $ ma project apply --file="./project.yaml"
 
-### **DELETE - Remove a resource**
+### DELETE - Remove a resource
 
 Delete a specific resource by namespace and name.
 
@@ -138,13 +138,13 @@ $ ma project delete --namespace="ma-dev-test" --name="my-project"
 
 $ ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
 
-## **Type specific commands**
+## Type specific commands
 
 MA Command supports the default type-specific commands for users for specific Michelangelo API entities.
 
-### **Pipeline**
+### Pipeline
 
-#### **RUN - Execute a pipeline**
+#### RUN - Execute a pipeline
 
 The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using ma apply <pipeline_conf.yaml PATH command first.
 
@@ -176,7 +176,7 @@ Example:
 
 $ ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
 
-#### **DEV RUN - Execute a pipeline in DEV mode**
+#### DEV RUN - Execute a pipeline in DEV mode
 
 The DEV RUN command is used to run a pipeline without registering it. This command is to allow users to quickly iterate on their pipelines. The dev-run command supports an \--env flag for passing environment variables, which are injected into the pipeline's execution environment.
 
@@ -274,9 +274,9 @@ The KILL command is used to cleanly terminate a running trigger_run resource. Th
 
   $ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger --yes
 
-## **YAML Resource Examples**
+## YAML Resource Examples
 
-### **Pipeline YAML**
+### Pipeline YAML
 
 apiVersion: michelangelo.uber.com/v2beta1
 
@@ -296,7 +296,7 @@ spec:
 
     filePath: examples.bert_cola.bert_cola
 
-### **Project YAML**
+### Project YAML
 
 apiVersion: michelangelo.api/v2
 
@@ -326,7 +326,7 @@ spec:
 
   rootDir: python/michelangelo/cli/sandbox/crds
 
-### **PipelineRun YAML**
+### PipelineRun YAML
 
 apiVersion: michelangelo.api/v2
 
@@ -346,7 +346,7 @@ spec:
 
     namespace: ma-dev-test
 
-### **PromptTemplate YAML**
+### PromptTemplate YAML
 
 apiVersion: michelangelo.uber.com/v2beta1
 
@@ -388,7 +388,7 @@ spec:
 
   type: PROMPT_TEMPLATE_TYPE_LLM_CHAT_COMPLETION
 
-## **Configuration**
+## Configuration
 
 ### Configuration RC file
 
@@ -475,22 +475,22 @@ Michelangelo command will travel the CRD yaml directories and try to find config
 
 The namespace has the priority by this order: command line argument, rc file, and directory search. If no method finds the namespace, the ma command would error out.
 
-## **Troubleshooting**
+## Troubleshooting
 
-### **Common Issues**
+### Common Issues
 
 1.  Connection refused: Ensure the API server is running and accessible
 2.  Resource not found: Verify namespace and resource name are correct
 3.  YAML parsing errors: Check YAML syntax and required fields
 4.  Permission denied: Ensure proper authentication/authorization setup
 
-## **Tips and Best Practices**
+## Tips and Best Practices
 
 1.  YAML files must include apiVersion, kind, and metadata sections
 2.  Resource names are case-sensitive and use snake_case in commands (e.g., pipeline_run not PipelineRun)
 3.  Check API server connectivity if commands fail with gRPC connection errors
 
-### **Debug Mode**
+### Debug Mode
 
 Enable debug logging by setting the environment variable:
 
