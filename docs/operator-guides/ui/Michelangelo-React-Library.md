@@ -1,4 +1,4 @@
-## 1. overview / Introduction
+# 1. overview / Introduction
 
 ### Purpose
 This guide covers integrating Michelangelo UI components into existing React applications as npm dependencies.

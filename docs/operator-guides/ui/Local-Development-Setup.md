@@ -1,4 +1,4 @@
-## 1. overview / Introduction
+# 1. overview / Introduction
 
 ### Purpose
 This guide covers setting up a local development environment for contributing to the Michelangelo UI codebase. The local development setup provides hot-reload capabilities, debugging tools, and integration with the Michelangelo sandbox environment for UI development and testing.

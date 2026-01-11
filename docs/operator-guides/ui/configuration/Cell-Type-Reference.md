@@ -1,4 +1,4 @@
-## overview
+# overview
 
 Cells are the fundamental building blocks for displaying data in Michelangelo UI. They define how individual fields are rendered across all view types: list views (table columns), detail views (metadata headers), and forms.
 

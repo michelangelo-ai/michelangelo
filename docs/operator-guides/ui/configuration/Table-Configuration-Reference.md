@@ -1,4 +1,4 @@
-## overview
+# overview
 
 Table configuration controls table-level behavior (pagination, sorting, search, filters) and is shared across:
 

@@ -1,4 +1,4 @@
-## 1. overview / Introduction
+# 1. overview / Introduction
 
 ### Purpose
 This guide covers how the Michelangelo UI fits into Michelangelo's Kubernetes deployments and how operators can adapt the configuration for their environments.

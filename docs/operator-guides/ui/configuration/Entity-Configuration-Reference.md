@@ -1,4 +1,4 @@
-## overview
+# overview
 
 Entities define data models and their properties within a phase. Each entity represents a type of object in your ML platform (pipelines, runs, models, datasets, etc.) and specifies how that object is displayed and interacted with in the UI.
 

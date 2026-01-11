@@ -1,4 +1,4 @@
-## Mock interfaces
+# Mock interfaces
 
 1. Add following line into the .go file that the interface(s) are defined:
 

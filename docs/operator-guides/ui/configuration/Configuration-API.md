@@ -1,4 +1,4 @@
-## overview
+# overview
 
 Michelangelo UI is configuration-driven, meaning common UI patterns are abstracted into configuration objects. Think of these as component APIs or contracts that cover the standard cases for ML platform interfaces.
 

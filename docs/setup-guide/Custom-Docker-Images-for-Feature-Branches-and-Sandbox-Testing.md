@@ -1,4 +1,4 @@
-## Custom Docker Images for Feature Branches and Sandbox Testing
+# Custom Docker Images for Feature Branches and Sandbox Testing
 
 This guide explains how to build and publish custom Docker images for a feature branch using the dev release workflow, update sandbox manifests to reference those images, and run the sandbox to test your changes.
 
