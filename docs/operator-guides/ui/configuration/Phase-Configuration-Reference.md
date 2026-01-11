@@ -1,4 +1,4 @@
-# overview
+# Phase Configuration Reference
 
 Phases group entities by ML lifecycle stage, providing structure to the Michelangelo UI workflow. Each phase represents a step in the machine learning operations lifecycle (e.g., data preparation, training, deployment, monitoring).
 

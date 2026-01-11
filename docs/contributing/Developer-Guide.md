@@ -1,9 +1,8 @@
 
 
-# Python Envrionment
+# Developer Guide
 
-
-## Environment Setup
+## Python Environment Setup
 
 Set up packages and linter tools on your development environment
 

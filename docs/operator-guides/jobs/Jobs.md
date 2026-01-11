@@ -1,4 +1,4 @@
-# Introduction
+# Michelangelo Jobs
 
 Michelangelo provides a unified way to run large-scale data processing and ML training jobs on Kubernetes, using **Ray** and **Spark** as execution engines. This guide explains *the core concepts*, how jobs run, compute is allocated, and how users interact with the system.
 

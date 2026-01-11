@@ -1,6 +1,8 @@
-# Prerequisites
+# Sandbox Setup
 
-## Required Software
+## Prerequisites
+
+### Required Software
 
 This guide assumes you have the following software installed and configured on your system. Please follow the instructions below for each prerequisite.
 

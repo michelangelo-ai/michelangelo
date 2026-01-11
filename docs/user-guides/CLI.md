@@ -1,4 +1,4 @@
-# User Guide
+# CLI Reference
 
 The Michelangelo CLI interface provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
 

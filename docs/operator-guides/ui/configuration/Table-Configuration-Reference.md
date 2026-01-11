@@ -1,4 +1,4 @@
-# overview
+# Table Configuration Reference
 
 Table configuration controls table-level behavior (pagination, sorting, search, filters) and is shared across:
 
