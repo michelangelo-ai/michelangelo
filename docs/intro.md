@@ -1,6 +1,7 @@
 ---
 slug: /
 sidebar_position: 1
+title: Welcome
 ---
 
 # Welcome to Michelangelo
@@ -9,9 +10,15 @@ Michelangelo is an ML platform for building, deploying, and managing machine lea
 
 ## Getting Started
 
-Explore our documentation to learn more about the platform:
+- **[Overview](./about/Overview)** - Learn about the platform
+- **[Core Concepts](./about/Core-Concepts-and-Key-Terms)** - Key terms and concepts
+- **[Setup Guide](./setup-guide/Sandbox-Setup)** - Get started with your sandbox
 
-- **[Go Error Handling Guide](/dev/go/error_handling)** - Best practices for error handling in Go
+## Documentation
+
+- **[User Guides](./user-guides/Project-Management-for-ML-Pipelines)** - End-to-end workflows
+- **[Operator Guides](./operator-guides/API-Framework)** - Infrastructure and deployment
+- **[Contributing](./contributing/Developer-Guide)** - Development guides
 
 ## Quick Links
 

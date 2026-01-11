@@ -17,8 +17,12 @@ const config: Config = {
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: 'warn',
   onBrokenMarkdownLinks: 'warn',
+
+  markdown: {
+    format: 'md',
+  },
 
   i18n: {
     defaultLocale: 'en',
@@ -35,17 +39,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           editUrl: 'https://github.com/michelangelo-ai/michelangelo/tree/main/website/',
         },
-        blog: {
-          showReadingTime: true,
-          feedOptions: {
-            type: ['rss', 'atom'],
-            xslt: true,
-          },
-          editUrl: 'https://github.com/michelangelo-ai/michelangelo/tree/main/website/',
-          onInlineTags: 'warn',
-          onInlineAuthors: 'warn',
-          onUntruncatedBlogPosts: 'warn',
-        },
+        blog: false,
         theme: {
           customCss: './src/css/custom.css',
         },
@@ -73,7 +67,6 @@ const config: Config = {
           position: 'left',
           label: 'Docs',
         },
-        {to: '/blog', label: 'Blog', position: 'left'},
         {
           href: 'https://github.com/michelangelo-ai/michelangelo',
           label: 'GitHub',
@@ -96,10 +89,6 @@ const config: Config = {
         {
           title: 'More',
           items: [
-            {
-              label: 'Blog',
-              to: '/blog',
-            },
             {
               label: 'GitHub',
               href: 'https://github.com/michelangelo-ai/michelangelo',

@@ -1,0 +1,499 @@
+# **User Guide**
+
+The Michelangelo CLI interface provides a unified way to manage resources using standard Kubernetes-style commands. This guide covers all supported commands for managing Michelangelo API entities.
+
+## **Prerequisites**
+
+Before using CLI, ensure:
+
+API Server is running:
+
+```
+# Start the Michelangelo API server (from repository root)
+
+1.  $ bazel run //go/cmd/apiserver:apiserver
+```
+
+Dependencies are installed:
+```
+# Set repo root and install dependencies
+
+$ export REPO_ROOT="/Users/{username}/michelangelo"
+
+$ cd $REPO_ROOT/python/
+
+2.  $ poetry install -E mactl
+```
+
+Configure API server address (optional):
+```
+# Override default API server address
+
+3.  $ export MACTL_ADDRESS="127.0.0.1:14566"  # e.g., for Michelangelo Api Server
+```
+
+## **Usage**
+
+All Michelangelo API entities support the following standard operations -- GET, APPLY, and DELETE
+
+### **How to run the command in michelangelo repository**
+
+Usage:
+
+$ cd $REPO_ROOT/python/
+
+$ ma <COMMAND> <RESOURCE_TYPE> [ARGS]
+
+We will abstract this part like $ ma <COMMAND> <RESOURCE_TYPE> in below.
+
+### **GET - Retrieve resource**
+
+Retrieve information about an existing resource by namespace and name. If you don't specify the \--name field, it would list all resources under the specified namespace.
+
+Syntax:
+
+$ ma <RESOURCE_TYPE> get --namespace="<namespace>" [--name="<name>"]
+
+Examples:
+
+# List all projects
+
+$ ma project get --namespace="ma-dev-test"
+
+# List all pipelines in a namespace
+
+$ ma pipeline get --namespace="ma-dev-test"
+
+# Get a specific pipeline
+
+$ ma pipeline get --namespace="ma-dev-test" --name="bert-cola-test"
+
+# Get a specific project
+
+$ ma project get --namespace="ma-dev-test" --name="my-project"
+
+# Get a pipeline run
+
+$ ma pipeline_run get --namespace="ma-dev-test" --name="run-001"
+
+#### Arguments (Not implemented yet)
+
+Some arguments are available only for list functions (get command without --name argument)
+
+\-o              output in {list,json,yaml} format
+
+\--limit [n]     (list command only) limit of the list output (default 20)
+
+\--page [n]      (list command only) pagination of list
+
+##### Special arguments for specific entity type (Not implemented yet)
+
+GET command supports extra arguments for some entity types (e.g. revision entity). It helps users to filter out a list of entities by its attribute.
+
+\--revision-deployment     filter deployment revision entities only
+
+\--revision-model filter model revision entities only
+
+\--revision-owner filter owner revision entities only
+
+\--revision-pipeline filter pipeline revision entities only
+
+### **APPLY - Create or update a resource from YAML**
+
+Apply (create or update) a resource from a YAML configuration file. MA command automatically detects the resource type from the apiVersion and kind fields in the YAML.
+
+Syntax:
+
+$ ma <RESOURCE_TYPE> apply --file="<YAML_FILE_PATH>"
+
+Examples:
+
+# Apply a pipeline configuration
+
+$ ma pipeline apply --file="./examples/bert_cola/pipeline.yaml"
+
+# Apply a project configuration
+
+$ ma project apply --file="./project.yaml"
+
+### **DELETE - Remove a resource**
+
+Delete a specific resource by namespace and name.
+
+Syntax:
+
+$ ma <RESOURCE_TYPE> delete --namespace="<namespace>" --name="<name>"
+
+Examples:
+
+# Delete a pipeline
+
+$ ma pipeline delete --namespace="ma-dev-test" --name="bert-cola-test"
+
+# Delete a project
+
+$ ma project delete --namespace="ma-dev-test" --name="my-project"
+
+# Delete a pipeline run
+
+$ ma pipeline_run delete --namespace="ma-dev-test" --name="run-001"
+
+## **Type specific commands**
+
+MA Command supports the default type-specific commands for users for specific Michelangelo API entities.
+
+### **Pipeline**
+
+#### **RUN - Execute a pipeline**
+
+The RUN command is specifically available for pipelines to create and execute pipeline runs. To run a pipeline, you need to register your pipeline by using ma apply <pipeline_conf.yaml PATH command first.
+
+Syntax:
+
+$ ma pipeline run --namespace="<namespace>" --name="<pipeline_name>"
+
+Example:
+
+# Run a registered pipeline
+
+$ ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test"
+
+##### Arguments
+
+Some arguments are available only for list functions (get command without --name argument)
+
+\--resume_from          create resumed pipeline run from specified pipeline run (specifying resume_from step is optional)
+
+##### Resume_From Argument
+
+The RUN command also can have a --resume_from argument that allows a new pipeline run to be resumed from a previous pipeline line run. If a pipeline run step is not specified in the resume_from argument, the resumed pipeline will automatically resume from the last failed step of the previous pipeline.
+
+Syntax:
+
+$ ma pipeline run --namespace="<namespace>" --name="<pipeline_name>" --resume_from=<pipeline_run_name>:<pipeline_run_step_name>
+
+Example:
+
+$ ma pipeline run --namespace="ma-dev-test" --name="bert-cola-test" --resume_from=run-1759873504-b93b7f612:train
+
+#### **DEV RUN - Execute a pipeline in DEV mode**
+
+The DEV RUN command is used to run a pipeline without registering it. This command is to allow users to quickly iterate on their pipelines. The dev-run command supports an \--env flag for passing environment variables, which are injected into the pipeline's execution environment.
+
+Syntax:
+
+$ ma pipeline dev-run --file=<YAML_FILE_PATH> --env=<ENV_VAR>=<ENV_VAL>
+
+Example:
+
+# Run a pipeline in dev mode
+
+$ ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar
+
+# To pass in multiple environment variables:
+
+$ ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar --env=lorem=ipsum --env=key=val
+
+##### Dev-run command with local file sync (Not implemented yet)
+
+Example:
+
+# Run a pipeline in dev mode with file sync
+
+$ ma pipeline dev-run  --file="./examples/bert_cola/pipeline.yaml" --env=foo=bar –-file-sync
+
+##### Differences between dev-run and remote-run in vanilla uniflow
+
+1\. dev_run: Test Pipeline from Local File
+
+  \`pipeline dev_run\` command runs a pipeline directly from your committed git snapshot. Pipeline run will be controlled by Michelangelo API server and controller.  This command creates a PipelineRun Entity but no Pipeline Entity. It means, users cannot see the pipeline entity information in MA studio, which was executed by dev-run command.
+
+  Technical details: This command reads your pipeline configuration from a local YAML file, creates a PipelineRun Michelangelo entity, which does not have the registered parent Pipeline entity. The key difference from \`pipeline run\` command is that it embeds the entire pipeline specification inline rather than referencing an existing registered Pipeline resource, allowing you to test changes before actually registering it. However, it only uses code that's committed to git. Any uncommitted changes in your working directory are ignored. This command goes through the full Michelangelo API and controller manager path: ma command → API Server → PipelineRun entity → Controller Manager → Cadence/Temporal.
+
+2\. dev_run --file-sync: Test Pipeline + Uncommitted Changes
+
+  Adding \`--file-sync\` to the \`pipeline dev_run\` command enables testing of uncommitted code changes without needing to commit or rebuild Docker images.
+
+Technical details: It works by creating two tarballs: the workflow tarball (from committed code) and a file-sync tarball (containing only files changed via git diff). When the container starts, Python's sitecustomize.py automatically downloads the file-sync tarball and overlays those changed files on top of the base code, effectively "patching" the container with your local edits. This still goes through Michelangelo API server and controller managers (creates a PipelineRun) but injects an additional environment variable UF_FILE_SYNC_TARBALL_URL that implies the remote container where to find your local changes.
+
+3\. remote-run: (non ma command) Direct Workflow Execution
+
+remote-run command (invoked via python my_workflow.py remote-run) bypasses Michelangelo API server and skips PipelineRun Entity entirely and directly submits your workflow to Cadence or Temporal using their CLI tools. Users cannot see the Pipeline and PipelineRun status in MA Studio UI.
+
+Technical details: It creates a workflow tarball from your committed code and sends it straight to the workflow engine without creating any Michelangelo entities like Pipeline or PipelineRun.
+
+4\. remote-run --file-sync:  (non ma command) Direct Workflow Execution with uncommitted changes
+
+Similar to the \`--file-sync\` option in \`dev-run\` command, it reflects the current uncommitted code changes in remote-run.
+
+Technical details: remote-run --file-sync creates two tarballs: a workflow tarball (from committed code) that is base64-encoded and embedded directly in the Cadence CLI command input, and a file-sync tarball (git diff changes) that is uploaded to S3. The S3 URL for the file-sync tarball is passed as an environment variable to the container, which downloads and overlays those changes at runtime.The trade-off is that no Michelangelo entities like PipelineRun is created, no MA UI visualization and resource management capabilities, monitoring is only through the Cadence/Temporal UI.
+
+### Pipeline_run
+
+#### Kill (not implemented yet)
+
+ The KILL command is used to cleanly terminate a running pipeline in MA Studio. It would change the PipelineRun status as “killed”, so actual pipeline execution in Cadence would be aborted. The command will prompt for confirmation unless the --yes flag is provided.
+
+Syntax:
+
+  $ ma pipeline_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes]
+
+Parameters:
+
+  - --namespace: Kubernetes namespace where the pipeline run exists
+  - --name: Name of the pipeline run to kill
+  - --yes: (Optional) Skip confirmation prompt and kill immediately
+
+Example:
+
+  # Kill a pipeline run with confirmation prompt
+
+  $ ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538
+
+  # Kill a pipeline run without confirmation prompt
+
+  $ ma pipeline_run kill --namespace=ma-dev-test --name=pipeline-run-20251118-194500-8cdb1538 --yes
+
+### Trigger_run
+
+#### Kill - Terminate a running trigger
+
+The KILL command is used to cleanly terminate a running trigger_run resource. This command sets the trigger's kill flag, which triggers proper Cadence  workflow termination. The command will prompt for confirmation unless the --yes flag is provided.
+
+  Syntax:
+
+  $ ma trigger_run kill --namespace=<NAMESPACE> --name=<NAME> [--yes]
+
+  Example:
+
+  # Kill a trigger run with confirmation prompt
+
+  $ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger
+
+  # Kill a trigger run without confirmation prompt
+
+  $ ma trigger_run kill --namespace=ma-dev-test --name=training-pipeline-cron-trigger --yes
+
+## **YAML Resource Examples**
+
+### **Pipeline YAML**
+
+apiVersion: michelangelo.uber.com/v2beta1
+
+kind: Pipeline
+
+metadata:
+
+  namespace: "ma-dev-test"
+
+  name: "my-pipeline"
+
+spec:
+
+  type: "PIPELINE_TYPE_TRAIN"
+
+  manifest:
+
+    filePath: examples.bert_cola.bert_cola
+
+### **Project YAML**
+
+apiVersion: michelangelo.api/v2
+
+kind: Project
+
+metadata:
+
+  name: ma-dev-test
+
+  namespace: ma-dev-test
+
+spec:
+
+  description: My ML Project
+
+  owner:
+
+    owningTeam: "michelangelo"
+
+    owners:
+
+      - craig.marker
+
+  tier: 4
+
+  gitRepo: https://github.com/uber/michelangelo
+
+  rootDir: python/michelangelo/cli/sandbox/crds
+
+### **PipelineRun YAML**
+
+apiVersion: michelangelo.api/v2
+
+kind: PipelineRun
+
+metadata:
+
+  name: run-training-pipeline
+
+  namespace: ma-dev-test
+
+spec:
+
+  pipeline:
+
+    name: training-pipeline
+
+    namespace: ma-dev-test
+
+### **PromptTemplate YAML**
+
+apiVersion: michelangelo.uber.com/v2beta1
+
+kind: PromptTemplate
+
+metadata:
+
+  name: mactl-pt-test-001
+
+  namespace: ma-integration-test
+
+spec:
+
+  features:
+
+    - name: user_name
+
+      value: albert greenberg
+
+  instruction: |-
+
+    Classify the following user's name: '{{user_name}}'
+
+  messages:
+
+    - content: Please classify user's name..
+
+      role: user
+
+  model: azure-openai-gpt4
+
+  model_params:
+
+    max_tokens: 1024
+
+    temperature: 0.01
+
+  traffic_type: PROMPT_TEMPLATE_TRAFFIC_TYPE_PRODUCTION
+
+  type: PROMPT_TEMPLATE_TYPE_LLM_CHAT_COMPLETION
+
+## **Configuration**
+
+### Configuration RC file
+
+MA command supports configuration through a configrc file located at ~/.ma/configrc (Not implemented yet)
+
+#### Example configuration (configrc file)
+
+[minio]
+
+ access_key_id= minioadmin
+
+ secret_access_key= minioadmin
+
+ endpoint_url= http://localhost:9091
+
+[metadata]
+
+rpc-caller = grpcurl
+
+rpc-service = ma-apiserver
+
+rpc-encoding = proto
+
+[mactl]
+
+address = 127.0.0.1:14566
+
+use_tls = false
+
+namespace = “ma-dev-test”
+
+#### Configurable fields
+
+##### MinIO credentials(Not implemented yet)
+
+MinIO credentials for object storage are placed under the [minio] section.
+
+Available configuration fields:
+
+-   \`access_key_id\`
+    -   MinIO user name (example: minioadmin)
+-   \`secret_access_key\`
+    -   MinIO password (example: minioadmin)
+-   \`endpoint_url\`
+    -   MinIO endpoint URL(example: http://localhost:9091)
+
+##### API server endpoints
+
+(Currently supported  at  ~/.mactlrc / Will be configuable in the configrc file later.)
+
+API server related configuration would be placed under \`[mactl]\` group
+
+Available configuration fields:
+
+-   \`address\`
+    -   Address of API server (example: 127.0.0.1:14566)
+-   \`use_tls\`
+    -   Configuration whether the client uses the TLS credentials
+
+##### Custom Metadata
+
+(Currently supported  at  ~/.mactlrc / Will be configuable in the configrc file later.)
+
+ Custom gRPC metadata headers are placed under the [metadata] section.
+
+Available configuration fields:
+
+-   \`rpc-caller\`
+    -   Identifies the calling client (example: grpcurl)
+-   \`rpc-service\`
+    -   Target service name (example: ma-apiserver)
+-   \`rpc-encoding\`
+    -   Protocol encoding format (example: proto)
+
+##### Default namespaces(Not implemented yet)
+
+User can specify the default namespace by using \`namespace\` field in the  ~/.ma/configrc  file. This allows users to avoid repeatedly passing the --namespace flag for every command.
+
+Once configured, the default namespace will be applied to all ma commands unless explicitly overridden.  For example, if user configured namespace = “ma-dev-test” in  ~/.ma/configrc With this configuration, commands like ma pipeline run --name=my-pipeline will automatically use ma-dev-test  as the namespace without requiring the --namespace argument.
+
+#### Namespace auto-recognition(Not implemented yet)
+
+Michelangelo command will travel the CRD yaml directories and try to find config/project.yaml file. If the \`ma\` command finds this directory structure and project.yaml is a valid michelangelo project CRD representation, it would implicitly use this project as default namespace. Users can overwrite this default namespace by using --namespace argument or configuration rc file.
+
+The namespace has the priority by this order: command line argument, rc file, and directory search. If no method finds the namespace, the ma command would error out.
+
+## **Troubleshooting**
+
+### **Common Issues**
+
+1.  Connection refused: Ensure the API server is running and accessible
+2.  Resource not found: Verify namespace and resource name are correct
+3.  YAML parsing errors: Check YAML syntax and required fields
+4.  Permission denied: Ensure proper authentication/authorization setup
+
+## **Tips and Best Practices**
+
+1.  YAML files must include apiVersion, kind, and metadata sections
+2.  Resource names are case-sensitive and use snake_case in commands (e.g., pipeline_run not PipelineRun)
+3.  Check API server connectivity if commands fail with gRPC connection errors
+
+### **Debug Mode**
+
+Enable debug logging by setting the environment variable:
+
+$ export LOG_LEVEL=DEBUG
+
+This will provide detailed information about gRPC calls and internal operations.

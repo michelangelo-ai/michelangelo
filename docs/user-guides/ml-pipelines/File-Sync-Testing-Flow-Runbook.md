@@ -1,0 +1,85 @@
+# File Sync User Guide
+
+## **What is File Sync?**
+
+File Sync lets you test your local code changes on remote infrastructure **without rebuilding Docker images**. Instead of waiting 20+ minutes for image builds per task, you can sync your changes in 2-5 minutes.
+
+## **When to Use File Sync**
+
+**Use file sync when:**
+
+* My laptop can't handle this dataset locally, I want to do remote cluster runs with ray/spark task code changes  
+* I want to do development runs to increase velocity when developing models, setting up pipelines, or implementing evaluations  
+* I want to test changes quickly without committing code
+
+**Don't use file sync when:**
+
+* Your changes affect Dockerfile, Dependencies or Python environment  
+* You're ready to deploy to production  
+* You're working with sensitive data that shouldn't leave your machine (not applicable to cloud storage)
+
+## **How to Use File Sync**
+
+remote run support: add `--file-sync` flag to your remote run command
+
+```shell
+python workflow.py remote-run \
+    --storage-url s3://my-bucket/workflows \
+    --image my-workflow:latest \
+    --file-sync
+```
+
+ma pipeline dev\_run support: add `--file-sync` flag to your ma pipeline dev-run command
+
+```shell
+ma pipeline dev_run --file-sync --file <path_to_pipeline.yaml>
+```
+
+### 
+
+### **Requirements**
+
+* Your code must be in a Git repository  
+* You have Authorization Access to cloud storage (S3/MinIO)
+
+## **Important Things to Know**
+
+**File sync assumes your local Git changes relate to the Docker image**
+
+**This works best when:**
+
+* You built the Docker image yourself from your current branch  
+* The image contains Git metadata showing which commit it was built from
+
+**This can cause issues when:**
+
+* Someone else built the image you're using  
+* You're using an image built from a different branch/commit  
+* Your local changes are outside the project root folder OR the volume and complexity of non-dependency changes is excessive to the fundamental system limitations
+
+**What happens:**
+
+* **With Git metadata:** Only sends files that actually changed since the image was built  
+* **Without Git metadata:** Sends all your uncommitted changes (may include extra files)
+
+## **What Gets Synced**
+
+**Files included:**
+
+* Modified files since the image was built (if image has Git metadata)  
+* All your uncommitted changes (if no Git metadata)  
+* New files you've created locally  
+* Staged changes in Git
+
+**Files excluded:**
+
+* Files listed in `.gitignore`  
+* Large binary files (should be in `.gitignore`)  
+* Unchanged files (when Git metadata is available)
+
+## **Typical Development Flow**
+
+1. **Make code changes** (don't commit yet)  
+2. **Run with file sync** \- your changes are tested remotely in 2-5 minutes  
+3. **Iterate quickly** \- repeat steps 1-2 until satisfied  
+4. **Commit and rebuild image** only when ready for production
