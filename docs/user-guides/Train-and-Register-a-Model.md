@@ -11,7 +11,7 @@ The focus is simplicity: **you control your training logic**, Michelangelo provi
 * How to scale training with Ray workers  
 * How to use the Lightning Trainer SDK for deep learning
 
-# 1\. Understanding Training Inputs
+## Understanding Training Inputs
 
 Michelangelo workflows pass datasets using **DatasetVariable**.
 
@@ -37,7 +37,7 @@ dataset = train_dv.value
 | **Pandas DataFrame** | Local CSV or small data | Convert to tensors directly |
 | **Spark DataFrame** | Spark preprocessing step | Convert to Pandas or Ray before training |
 
-# 2\. Simple Training Example
+## Simple Training Example
 
 For basic (scikit-learn, lightweight PyTorch) training, load your dataset directly:
 
@@ -66,7 +66,7 @@ def train_model(train_dv: DatasetVariable, val_dv: DatasetVariable):
     return model
 ```
 
-# 3\. Distributed Training with Lightning Trainer SDK
+## Distributed Training with Lightning Trainer SDK
 
 To scale training across CPUs/GPUs, wrap your training task using **RayTask**.
 
