@@ -336,15 +336,6 @@ def build(
         >>> package = build(my_workflow)
         >>> tarball = package.to_tarball_bytes()
     """
-    # Skip build validation for YAML-generated workflows
-    if hasattr(fn, '_uf_yaml_generated') and fn._uf_yaml_generated:
-        # Return a minimal package for YAML workflows since they don't need transpilation
-        return Package(
-            files={"workflow.star": b"# YAML-generated workflow", "meta.json": b'{"main_file":"workflow.star","main_function":"yaml_workflow"}'},
-            main_file="workflow.star",
-            main_function="yaml_workflow"
-        )
-
     files = {}
     fn_path = _transpile_function(fn, files, transpiler_callback)
 
