@@ -20,15 +20,14 @@ import (
 
 func TestRetrieve(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
-			name: "model still exists in ConfigMap, cleanup required",
+			name: "model still exists in inference server, cleanup required",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -43,12 +42,11 @@ func TestRetrieve(t *testing.T) {
 			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "ModelStillExistsInConfigMap",
-			expectedConditionMessage: "Model old-model still exists in ConfigMap",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Model old-model still exists in Inference Server",
 		},
 		{
-			name: "unable to check model in ConfigMap",
+			name: "unable to check model in inference server",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -64,7 +62,7 @@ func TestRetrieve(t *testing.T) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "UnableToCheckModelInConfigMap",
+			expectedConditionReason: "Unable to check if model old-model exists in Inference Server: connection error",
 		},
 		{
 			name: "HTTPRoute still exists, cleanup required",
@@ -83,9 +81,8 @@ func TestRetrieve(t *testing.T) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(true, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "HTTPRouteStillExists",
-			expectedConditionMessage: "Cleanup required: HTTPRoute test-deployment-httproute still exists",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Cleanup required: HTTPRoute test-deployment-httproute still exists",
 		},
 		{
 			name: "unable to check HTTPRoute exists",
@@ -105,7 +102,7 @@ func TestRetrieve(t *testing.T) {
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "UnableToCheckHTTPRouteExists",
+			expectedConditionReason: "Unable to check if HTTPRoute test-deployment-httproute exists: api error",
 		},
 		{
 			name: "cleanup completed, all resources cleaned up",
@@ -124,9 +121,8 @@ func TestRetrieve(t *testing.T) {
 				gw.EXPECT().CheckModelExists(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 				pp.EXPECT().DeploymentRouteExists(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Cleanup not required",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 	}
 
@@ -146,28 +142,23 @@ func TestRetrieve(t *testing.T) {
 				logger:        zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
+			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			if tt.expectedConditionMessage != "" {
-				assert.Contains(t, condition.Message, tt.expectedConditionMessage)
-			}
 		})
 	}
 }
 
 func TestRun(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
-		expectedStage            v2pb.DeploymentStage
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*gatewaysmocks.MockGateway, *proxymocks.MockProxyProvider)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "successful cleanup, all operations complete",
@@ -187,10 +178,8 @@ func TestRun(t *testing.T) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Cleanup completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "model unloading fails",
@@ -209,10 +198,8 @@ func TestRun(t *testing.T) {
 			setupMocks: func(gw *gatewaysmocks.MockGateway, pp *proxymocks.MockProxyProvider) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload failed"))
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "ModelUnloadingFailed",
-			expectedConditionMessage: "Failed to unload old model old-model from inference server",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS,
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Failed to unload old model old-model from inference server: unload failed",
 		},
 		{
 			name: "HTTPRoute deletion fails with error",
@@ -232,10 +219,8 @@ func TestRun(t *testing.T) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-model", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(errors.New("deletion failed"))
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "HTTPRouteCleanupFailed",
-			expectedConditionMessage: "Failed to delete HTTPRoute test-deployment-httproute",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS,
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Failed to delete HTTPRoute test-deployment-httproute: deletion failed",
 		},
 		{
 			name: "HTTPRoute not found during deletion, continues successfully",
@@ -256,10 +241,8 @@ func TestRun(t *testing.T) {
 				notFoundErr := kerrors.NewNotFound(schema.GroupResource{Group: "gateway.networking.k8s.io", Resource: "httproutes"}, "test-deployment-httproute")
 				pp.EXPECT().DeleteDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default").Return(notFoundErr)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Cleanup completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE,
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 	}
 
@@ -279,16 +262,12 @@ func TestRun(t *testing.T) {
 				logger:        zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, nil)
+			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			if tt.expectedConditionMessage != "" {
-				assert.Contains(t, condition.Message, tt.expectedConditionMessage)
-			}
-			assert.Equal(t, tt.expectedStage, tt.deployment.Status.Stage)
 		})
 	}
 }

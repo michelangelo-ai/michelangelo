@@ -6,11 +6,15 @@ import (
 
 	"go.uber.org/zap"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
+
+var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &ModelCleanupActor{}
 
 // ModelCleanupActor unloads previous model versions from inference servers after successful rollout.
 type ModelCleanupActor struct {
@@ -32,15 +36,9 @@ func (a *ModelCleanupActor) GetLogger() *zap.Logger {
 func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	currentModel := resource.Status.GetCurrentRevision().GetName()
 	desiredModel := resource.Spec.GetDesiredRevision().GetName()
-
 	// If models are the same, no cleanup needed
 	if currentModel == "" || (currentModel == desiredModel) {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "NoCleanupNeeded",
-			Message: "No cleanup required",
-		}, nil
+		return conditionUtils.GenerateTrueCondition(condition), nil
 	}
 
 	inferenceServerName := resource.Spec.GetInferenceServer().GetName()
@@ -49,37 +47,19 @@ func (a *ModelCleanupActor) Retrieve(ctx context.Context, resource *v2pb.Deploym
 		zap.String("desired_model", desiredModel),
 		zap.String("inference_server", inferenceServerName))
 
-	// Check if old model still exists in Triton (following Uber's verification pattern)
-	// Use gateway to check if old model is still loaded
+	// Check if old model still exists in Triton
 	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
-		// If we can't check status, assume cleanup is needed
 		a.Logger.Info("Cannot verify old model status, cleanup may be needed", zap.Error(err))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "CleanupPending",
-			Message: fmt.Sprintf("Need to cleanup old model %s", currentModel),
-		}, nil
+		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Need to cleanup old model %s", currentModel)), nil
 	}
 
 	if ready {
 		// Old model is still loaded, cleanup needed
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "CleanupPending",
-			Message: fmt.Sprintf("Old model %s still loaded, cleanup needed", currentModel),
-		}, nil
+		return conditionUtils.GenerateFalseCondition(condition, "CleanupPending", fmt.Sprintf("Old model %s still loaded, cleanup needed", currentModel)), nil
 	}
-
 	// Old model not found or already cleaned up
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "CleanupComplete",
-		Message: fmt.Sprintf("Old model %s already cleaned up", currentModel),
-	}, nil
+	return conditionUtils.GenerateTrueCondition(condition), nil
 }
 
 // Run removes old model from ConfigMap and directly unloads it from Triton via API.
@@ -90,40 +70,21 @@ func (a *ModelCleanupActor) Run(ctx context.Context, resource *v2pb.Deployment, 
 	desiredModel := resource.Spec.GetDesiredRevision().GetName()
 	inferenceServerName := resource.Spec.GetInferenceServer().GetName()
 
-	a.Logger.Info("Starting model cleanup",
+	a.Logger.Info("Starting old model cleanup",
 		zap.String("old_model", currentModel),
 		zap.String("new_model", desiredModel),
 		zap.String("inference_server", inferenceServerName))
 
-	// PHASE 1: Update ConfigMap to remove old model
-
-	// Get current ConfigMap and remove old model from it
-	a.Logger.Info("Phase 1: Removing old model from ConfigMap", zap.String("old_model", currentModel))
-
-	// Remove old model from ConfigMap
+	// Unload old model from inference server
+	a.Logger.Info("Unloading old model from inference server", zap.String("old_model", currentModel))
 	if err := a.Gateway.UnloadModel(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
-		a.Logger.Error("Failed to remove old model from ConfigMap", zap.String("model", currentModel), zap.Error(err))
-		// Don't fail entire deployment if remove from ConfigMap fails
+		a.Logger.Error("Failed to unload old model from inference server", zap.String("model", currentModel), zap.Error(err))
+		return conditionUtils.GenerateFalseCondition(condition, "ModelUnloadingFailed", fmt.Sprintf("Failed to unload old model %s from inference server: %v", currentModel, err)), nil
 	}
 
-	// PHASE 2: Verify cleanup completed
-	a.Logger.Info("Phase 3: Verifying old model is unloaded", zap.String("old_model", currentModel))
-
-	ready, err := a.Gateway.CheckModelStatus(ctx, a.Logger, currentModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON)
-	if err == nil && ready {
-		a.Logger.Info("Old model still loaded, but ConfigMap update should unload it eventually", zap.String("model", currentModel))
-	} else {
-		a.Logger.Info("Old model successfully unloaded", zap.String("model", currentModel))
-	}
-
-	a.Logger.Info("Model cleanup completed successfully",
+	a.Logger.Info("Successfully unloaded old model from inference server",
 		zap.String("old_model", currentModel),
 		zap.String("new_model", desiredModel))
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "CleanupCompleted",
-		Message: fmt.Sprintf("Successfully cleaned up old model %s, active model is now %s", currentModel, desiredModel),
-	}, nil
+	return conditionUtils.GenerateTrueCondition(condition), nil
 }

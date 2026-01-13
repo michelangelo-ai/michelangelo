@@ -23,8 +23,11 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// Subtype the subtype that the plugin represents.
-const Subtype = "oss"
+const (
+	prodEnvironment = "production"
+	environmentKey  = "environment"
+	Subtype         = "oss"
+)
 
 var _ plugins.Plugin = &Plugin{}
 
@@ -114,85 +117,124 @@ func (p *Plugin) GetSteadyStatePlugin() conditionInterfaces.Plugin[*v2pb.Deploym
 	return p.steadyStatePlugin
 }
 
-// ParseStage derives the current deployment stage from conditions and status.
+// ParseStage goes through all the conditions and determines the current deployment stage.
 func (p *Plugin) ParseStage(deployment *v2pb.Deployment) v2pb.DeploymentStage {
-	// New rollout needed if desired revision differs from candidate revision
-	desired := deployment.Spec.DesiredRevision
-	candidate := deployment.Status.CandidateRevision
-	if desired != nil && candidate != nil && desired.Name != candidate.Name {
-		return v2pb.DEPLOYMENT_STAGE_VALIDATION
-	}
-
-	// No conditions means stay in current stage
-	if len(deployment.Status.Conditions) == 0 {
-		return deployment.Status.Stage
-	}
+	stage := deployment.Status.Stage
 
 	for _, cond := range deployment.Status.Conditions {
-		switch cond.Type {
-		case common.ActorTypeRollback:
-			if cond.Status == apipb.CONDITION_STATUS_TRUE {
+		if p.isFromSteadyState(cond) {
+			return stage
+		}
+
+		// if a terminal actor has true status, then we return immediately
+		if cond.Status == apipb.CONDITION_STATUS_TRUE {
+			switch cond.Type {
+			case common.ActorTypeRolloutComplete:
+				return v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
+			case common.ActorTypeCleanup:
+				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
+			case common.ActorTypeRollback:
 				return v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
 			}
-			return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+			continue
+		}
 
-		case common.ActorTypeCleanup:
-			if cond.Status == apipb.CONDITION_STATUS_TRUE {
-				return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE
-			}
-			return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
-
-		case common.ActorTypeSteadyState:
-			return deployment.Status.Stage
-
+		// otherwise return the stage based on the first actor with false status
+		switch cond.Type {
 		case common.ActorTypeValidation:
-			if cond.Status == apipb.CONDITION_STATUS_FALSE {
-				return v2pb.DEPLOYMENT_STAGE_VALIDATION
-			}
-
-		case common.ActorTypeModelSync:
-			if cond.Status == apipb.CONDITION_STATUS_FALSE {
-				return v2pb.DEPLOYMENT_STAGE_PLACEMENT
-			}
+			fallthrough
+		case common.ActorTypeAssetPreparation:
+			return v2pb.DEPLOYMENT_STAGE_VALIDATION
+		case common.ActorTypeResourceAcquisition:
+			return v2pb.DEPLOYMENT_STAGE_RESOURCE_ACQUISITION
+		case common.ActorTypeCleanup:
+			return v2pb.DEPLOYMENT_STAGE_CLEAN_UP_IN_PROGRESS
+		case common.ActorTypeRollback:
+			return v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
+		default:
+			return v2pb.DEPLOYMENT_STAGE_PLACEMENT
 		}
 	}
+	return stage
+}
 
-	// Determine stage based on rollout progress indicators
-	hasRolloutComplete := false
-	hasValidated := false
-	for _, cond := range deployment.Status.Conditions {
-		if cond.Type == common.ActorTypeRolloutCompletion && cond.Status == apipb.CONDITION_STATUS_TRUE {
-			hasRolloutComplete = true
+// isFromSteadyState checks if the condition comes from a steady state plugin actor
+func (p *Plugin) isFromSteadyState(condition *apipb.Condition) bool {
+	if p.GetSteadyStatePlugin() == nil {
+		return false
+	}
+	for _, actor := range p.GetSteadyStatePlugin().GetActors() {
+		if actor.GetType() == condition.GetType() {
+			return true
 		}
-		if cond.Type == common.ActorTypeValidation && cond.Status == apipb.CONDITION_STATUS_TRUE {
-			hasValidated = true
-		}
 	}
-
-	if hasRolloutComplete {
-		return v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE
-	}
-	if hasValidated {
-		return v2pb.DEPLOYMENT_STAGE_PLACEMENT
-	}
-	return v2pb.DEPLOYMENT_STAGE_VALIDATION
+	return false
 }
 
 // GetState computes the current deployment state from the resource status.
 func (p *Plugin) GetState(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (v2pb.DeploymentStatus, error) {
-	// For OSS, we'll return the current status
+	// If currentRevision is nil, this means either:
+	//   - The model has never been successfully rolled out, or
+	//   - The deployment has reached the DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE stage.
+	// If the stage is DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE, set the state to DEPLOYMENT_STATE_EMPTY.
+	// Otherwise, set the state to DEPLOYMENT_STATE_INITIALIZING.
+	currentRevision := deployment.Status.GetCurrentRevision()
+	if currentRevision == nil {
+		deployment.Status.State = v2pb.DEPLOYMENT_STATE_INITIALIZING
+		if deployment.Status.GetStage() == v2pb.DEPLOYMENT_STAGE_CLEAN_UP_COMPLETE {
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_EMPTY
+		}
+		return deployment.Status, nil
+	}
+
+	inferenceServer := deployment.Spec.GetInferenceServer()
+	// Every deployment must have an inference server.
+	if inferenceServer == nil || inferenceServer.GetName() == "" {
+		deployment.Status.State = v2pb.DEPLOYMENT_STATE_INVALID
+		return deployment.Status, nil
+	}
+	serverName := inferenceServer.GetName()
+	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	if err != nil {
+		p.logger.Error("failed to check model status",
+			zap.Error(err),
+			zap.String("operation", "check_model_status"),
+			zap.String("namespace", deployment.Namespace),
+			zap.String("deployment", deployment.Name),
+			zap.String("model", deployment.Spec.DesiredRevision.Name))
+		return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
+			deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+	}
+	if healthy {
+		if deployment.Status.GetState() != v2pb.DEPLOYMENT_STATE_HEALTHY {
+			p.logger.Info("deployment status changed to healthy",
+				zap.String("deployment", deployment.Name),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("previous_state", deployment.Status.GetState().String()),
+				zap.String("new_state", v2pb.DEPLOYMENT_STATE_HEALTHY.String()))
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
+		}
+	} else {
+		if deployment.Status.GetState() != v2pb.DEPLOYMENT_STATE_UNHEALTHY {
+			p.logger.Info("deployment status changed to unhealthy",
+				zap.String("deployment", deployment.Name),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("previous_state", deployment.Status.GetState().String()),
+				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()))
+			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
+		}
+	}
 	return deployment.Status, nil
 }
 
 // HealthCheckGate verifies the inference server is healthy before allowing rollout to proceed.
 func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.ObservabilityContext, deployment *v2pb.Deployment) (bool, error) {
-	// For OSS, we'll do a basic health check
-
 	// Check if the inference server is specified
 	if deployment.Spec.GetInferenceServer() == nil {
 		return false, nil
 	}
-
 	// Check if the inference server is healthy
 	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
 	if err != nil {
