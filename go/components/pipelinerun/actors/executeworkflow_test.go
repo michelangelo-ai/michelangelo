@@ -2873,19 +2873,19 @@ func TestFindTaskResetEventIDByActivityID(t *testing.T) {
 
 func TestGetWorkflowUrl(t *testing.T) {
 	testCases := []struct {
-		name               string
-		configSetup        map[string]interface{}
-		inputName          string
-		expectedUrl        string
-		expectError        bool
+		name        string
+		configSetup map[string]interface{}
+		inputName   string
+		expectedUrl string
+		expectError bool
 	}{
 		{
 			name: "Valid config with workflow URL template",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":    "default",
-					"workflowUrl": "http://cadence-web:8080/domain/%s/workflows/%s",
-					"domain":      "michelangelo",
+					"taskList":          "default",
+					"workflowUrlFormat": "http://cadence-web:8080/domain/%s/workflows/%s",
+					"domain":            "michelangelo",
 				},
 			},
 			inputName:   "test-pipeline-run",
@@ -2896,9 +2896,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Config with different domain",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":    "custom-queue",
-					"workflowUrl": "https://temporal-ui.prod:7243/namespaces/%s/workflows/%s",
-					"domain":      "production",
+					"taskList":          "custom-queue",
+					"workflowUrlFormat": "https://temporal-ui.prod:7243/namespaces/%s/workflows/%s",
+					"domain":            "production",
 				},
 			},
 			inputName:   "prod-pipeline-execution",
@@ -2921,9 +2921,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Empty pipeline name",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":    "default",
-					"workflowUrl": "http://localhost:8080/domain/%s/workflows/%s",
-					"domain":      "default",
+					"taskList":          "default",
+					"workflowUrlFormat": "http://localhost:8080/domain/%s/workflows/%s",
+					"domain":            "default",
 				},
 			},
 			inputName:   "",
@@ -2934,9 +2934,9 @@ func TestGetWorkflowUrl(t *testing.T) {
 			name: "Complex pipeline name with special characters",
 			configSetup: map[string]interface{}{
 				"workflowClient": map[string]interface{}{
-					"taskList":    "default",
-					"workflowUrl": "http://cadence-web:8080/domain/%s/workflows/%s",
-					"domain":      "test-domain",
+					"taskList":          "default",
+					"workflowUrlFormat": "http://cadence-web:8080/domain/%s/workflows/%s",
+					"domain":            "test-domain",
 				},
 			},
 			inputName:   "my-pipeline-run-123_test",

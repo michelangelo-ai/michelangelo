@@ -234,11 +234,11 @@ func (a *ExecuteWorkflowActor) GetWorkflowUrl(name string) string {
 	}
 
 	// Check if the required configuration fields are present
-	if workflowConfig.WorkflowUrl == "" || workflowConfig.Domain == "" {
+	if workflowConfig.WorkflowUrlFormat == "" || workflowConfig.Domain == "" {
 		return ""
 	}
 
-	return fmt.Sprintf(workflowConfig.WorkflowUrl, workflowConfig.Domain, name)
+	return fmt.Sprintf(workflowConfig.WorkflowUrlFormat, workflowConfig.Domain, name)
 }
 
 // Run executes and monitors the workflow for a pipeline run.
