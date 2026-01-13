@@ -64,3 +64,5 @@ data:
       host: cadence:7833
       transport: grpc
       domain: default
+      taskList: default
+      workflowUrlFormat: http://localhost:8088/namespaces/%s/workflows/%s

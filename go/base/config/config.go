@@ -36,6 +36,7 @@ type WorkflowClientConfig struct {
 	Domain    string `yaml:"domain"`
 	TaskList  string `yaml:"taskList"`
 	Provider  string `yaml:"provider"`
+	WorkflowUrl string `yaml:"workflowUrl"`
 	UseTLS    bool   `yaml:"useTLS"`
 }
 

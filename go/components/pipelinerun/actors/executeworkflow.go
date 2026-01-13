@@ -215,6 +215,32 @@ func (a *ExecuteWorkflowActor) Retrieve(ctx context.Context, resource *v2.Pipeli
 	}, nil
 }
 
+// GetWorkflowUrl constructs the monitoring URL for workflow execution logs and status.
+//
+// This method builds a formatted URL that points to the workflow engine's web UI,
+// allowing users to monitor workflow execution progress, view logs, and inspect
+// task-level details. The URL format is configured via the workflow client settings
+// and typically points to the Cadence or Temporal web interface.
+//
+// Parameters:
+//   - name: The workflow execution name (usually the pipeline run name)
+//
+// Returns a formatted URL string for the workflow monitoring interface, or an
+// empty string if the workflow client configuration cannot be retrieved.
+func (a *ExecuteWorkflowActor) GetWorkflowUrl(name string) string {
+	workflowConfig, getWorkflowClientConfigErr := config.GetWorkflowClientConfig(a.configProvider)
+	if getWorkflowClientConfigErr != nil {
+		return ""
+	}
+
+	// Check if the required configuration fields are present
+	if workflowConfig.WorkflowUrl == "" || workflowConfig.Domain == "" {
+		return ""
+	}
+
+	return fmt.Sprintf(workflowConfig.WorkflowUrl, workflowConfig.Domain, name)
+}
+
 // Run executes and monitors the workflow for a pipeline run.
 //
 // This method handles the complete lifecycle of workflow execution:
@@ -247,6 +273,7 @@ func (a *ExecuteWorkflowActor) Run(ctx context.Context, pipelineRun *v2.Pipeline
 			DisplayName: pipelinerunutils.ExecuteWorkflowStepName,
 			State:       v2.PIPELINE_RUN_STEP_STATE_PENDING,
 			StartTime:   pbtypes.TimestampNow(),
+			LogUrl:      a.GetWorkflowUrl(pipelineRun.Name),
 		}
 		pipelineRun.Status.Steps = append(pipelineRun.Status.Steps, executeWorkflowStep)
 	}
