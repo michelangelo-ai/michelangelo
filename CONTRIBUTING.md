@@ -1,0 +1,134 @@
+# Contributing to Project
+
+Thanks for taking the first step in contributing to our project.
+
+**Uber welcomes contributions of all kinds and sizes. This includes everything from simple bug reports to large features.** 
+
+See the [Table of Contents](#values) for different ways to contribute and details about how we treat each contribution. Please read the relevant section before making your contribution as it will not only make it a lot easier for us but also ensure you have the very best developer experience too.
+
+>:star: If you like the project, but don't have time to contribute just now, that's no problem at all!. 
+
+There are other easy ways to help support the project and show your appreciation including
+* Star the project
+* Join the our community
+* Shout about us online or at local meetups with your peers & colleagues
+
+## Table of Contents
+- [Code of Conduct](##Code-of-Conduct)
+- [I Have a Question](##I-have-a-Question)
+- [I Want To Contribute](##I-want-to-contribute)
+  - [Legal Notice](###legal-notice)
+- [Enhancements & Features](##enhancements-&-features)
+  - [Before Submitting an Enhancement or Feature](###Before-Submitting-an-Enhancement-or-Feature)
+  - [How do I submit a Good Enhancement or Feature](###How-do-I-submit-a-Good-Enhancement-or-Feature)
+- [Reporting Bugs](##Reporting-bugs)
+  - [Before Submitting a Bug Report](###Before-Submitting-a-Bug-Report)
+  - [How Do I Submit a Good Bug Report?](###How-Do-I-Submit-a-Good-Bug-Report?)
+- [Creating a Pull Request](##Creating-a-pull-request)
+  - [Before Creating a Pull Request](###before-creating-a-pull-request?)
+  - [How Do I Submit a Good Pull Request?](###How-Do-I-Submit-a-Good-pull-Request?)
+
+## Code of Conduct
+This project and everyone participating in it is governed by our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating, you are expected to uphold these standards. 
+
+## I Have a Question
+
+> Please don't file an issue to ask a question. You'll get faster results by using the resources below.
+
+If you want to ask a question about the project, there are a few options available to you.
+
+* Check and read our [Documentation](https://github.com/michelangelo-ai/michelangelo/wiki),
+* Search our existing [Issues](https://github.com/michelangelo-ai/michelangelo/issues) as this may also help you.
+* Join our Community (coming soon) to engage with other users and contributors,
+
+If you’re still facing issues and need further help, then we recommend the following process:
+* Open an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose).
+* Provide as **much context as you can** about what you're running into.
+* Provide any relevant platform versions (nodejs, npm, etc), depending on what seems related and **feel free to include screenshots or code-snippets**.
+
+The project maintainers will then take care of the issue as soon as possible and help to resolve your question.
+
+## I Want To Contribute
+
+#### Legal Notice
+
+When contributing to any Uber Open Source project, you agree that you have authored 100% of the content and that you have the necessary rights to that content and that the content you contribute may be provided under the project license. 
+
+You’re required to sign our [Contributor License Agreement](https://cla-assistant.io/michelangelo-ai) to confirm this and you’ll be prompted to do this when submitting your first contribution.
+
+## Enhancements & Features
+
+This section guides you through submitting an enhancement or new functionality into the project; as well as minor improvements to existing functionality. Following these guidelines will help the community to understand your submission.
+
+### Before Submitting an Enhancement or Feature
+
+* Make sure that you are using the latest version of the project.
+* **Read the [documentation](https://github.com/michelangelo-ai/michelangelo/wiki) carefully** and find out if the functionality you’re proposing is already covered, this may well be through configuration.
+* Perform a [search](https://github.com/michelangelo-ai/michelangelo/issues) to see if the enhancement has already been suggested. If it has, add a comment to the existing issue instead of opening a new one.
+* Consider whether your **idea fits with the scope and aims of the project** and keep in mind that we want features that will be useful to the majority of our users and not just a handful.
+
+### How do I submit a Good Enhancement or Feature
+
+Enhancements and new features suggestions are tracked as [issues](https://github.com/michelangelo-ai/michelangelo/issues).
+
+* Open an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose).
+* Use a **clear and descriptive title** for the issue to identify the suggestion.
+* Provide a **description of the enhancement** with as many details as possible touching on what specifically is missing, out of date, wrong, or needs improvement.
+* **Describe the current behaviour** of the project and **explain which behaviour you expected to see** instead and why. 
+* You’re welcome to **include screenshots** which help you demonstrate the steps or point out which part your submission is related to.
+* **Explain why this enhancement would be useful** to the majority of our project users. You may also want to point out the other projects that solved it better and which could serve as inspiration for making our tool even stronger.
+
+## Reporting Bugs
+
+This section guides you through submitting a Bug Report into the project where a behaviour or functionality isn’t working as you’d expected. Following these guidelines will help the community to understand your submission and ensure you’ve identified a bug correctly.
+
+### Before Submitting a Bug Report
+
+Bug reports shouldn't need the project maintainers to clarify or search for more information. Therefore, we ask you to investigate carefully, collect information and describe the issue in detail in your report. If you complete the following steps in advance, then this will help us fix the issue as fast as possible.
+
+* Make sure that you are using the latest version of the project.
+* **Determine if your bug is really a bug** and not an error on your side e.g. using incompatible environment components/versions.
+* To see if other users have experienced (and potentially already solved) the same issue you are having, **check if there is not already a bug report** existing for your bug or error in the [bug list](https://github.com/michelangelo-ai/michelangelo/issues?q=is%3Aissue%20state%3Aopen%20label%3Abug). If it has and the issue is still open, add a comment to the existing issue instead of opening a new one
+* Collect information about the bug:
+  *  OS, Platform and Version (Windows, Linux, macOS, x86, ARM)
+  * Version of the interpreter, compiler, SDK, runtime environment, package manager, depending on what seems relevant – for local instances only.
+  * If possible, your input and the output
+  * Can you reliably reproduce the issue? 
+
+### How Do I Submit a Good Bug Report?
+
+> :warning: You must never report security related issues, vulnerabilities or bugs to the issue tracker, or elsewhere in public. Instead sensitive bugs should be submitted through the Uber [HackerOne](https://hackerone.com/uber) process.
+
+We use GitHub issues to track bugs. If you run into an issue with the project:
+
+* Open an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose) selecting the bug report template.
+* Explain the behaviour you would expect and the actual behaviour.
+* Please **provide as much context as possible** and describe the reproduction steps that someone else can follow to recreate the issue on their own.
+* If you’re making changes to the project then your context should also include your code. For good bug reports **you should isolate the problem and create a reduced test case**.
+
+### Once it's filed:
+
+* The project team will label the issue accordingly.
+* A project maintainer will try to reproduce the issue with your provided steps. If there are no reproduction steps, or no obvious way to reproduce the issue, we’ll request these details but the bug won’t be addressed until they are provided.
+* If the team is able to reproduce the issue, it will be tagged and the issue will be queued to be implemented.
+
+## Creating a Pull Request
+
+If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.
+
+### Before Creating a Pull Request
+
+* Check if there is an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose) that highlights the same problem that you want to solve or that requests the same feature that you want to implement. If this is the case, then **remember to link the issue in your Pull Request**.
+* You might also want to check if a similar [pull request](https://github.com/michelangelo-ai/michelangelo/pulls) has already been created.
+* It’s always good practice to consider creating an issue before creating a Pull Request but for smaller changes we don’t mind if you omit this stage.
+
+### How Do I Submit a Good Pull Request?
+
+* Use a **clear and descriptive title** for the Pull Request.
+* Follow this Pull Request template (coming soon).
+* **Link the issue** related to this Pull Request, if present.
+* Provide a **short description of the solution you proposed** in as many details as possible.
+* **Use comments in the code** that you provide to give us more context to any code based submissions.
+
+Thanks for contributing into our project.
+
