@@ -7,7 +7,10 @@ plugin-specific converters.
 from unittest import TestCase
 from unittest.mock import Mock
 
-from michelangelo.cli.mactl.plugins.entity.pipeline.main import apply_plugin_command
+from michelangelo.cli.mactl.plugins.entity.pipeline.main import (
+    apply_plugin_command,
+    apply_plugins,
+)
 
 
 class PipelineMainTest(TestCase):
@@ -50,3 +53,11 @@ class PipelineMainTest(TestCase):
         self.assertTrue(hasattr(self.mock_crd, "generate_dev_run"))
         self.assertIsNotNone(self.mock_crd.func_crd_metadata_converter)
         self.assertIsNotNone(self.mock_crd.generate_dev_run)
+
+    def test_apply_plugins_registers_kill_command(self):
+        """Test that apply_plugins registers the kill command."""
+        apply_plugins(self.mock_crd, self.mock_channel)
+
+        # Verify that generate_kill was set
+        self.assertTrue(hasattr(self.mock_crd, "generate_kill"))
+        self.assertIsNotNone(self.mock_crd.generate_kill)

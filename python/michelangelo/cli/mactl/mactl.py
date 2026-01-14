@@ -398,7 +398,7 @@ def main(channel: Channel):
     # Phase 5: Execute
     func_action = getattr(crds[user_command_crd], user_command_action)
     _LOG.debug("target action function is ready: %r", func_action)
-    result = func_action(**vars(args))
+    func_action(**vars(args))
 
     # Convert to JSON and pretty print
     # temporary disable json converting due to issue:
@@ -411,7 +411,6 @@ def main(channel: Channel):
     )
     print(json_output)
     """
-    print(result)
 
 
 def run():

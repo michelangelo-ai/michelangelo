@@ -7,3 +7,9 @@ spec:
  pipeline:
    name: training-pipeline
    namespace: ma-dev-test
+ input:
+   # kw_args is a Struct that overrides original workflow arguments
+   kw_args:
+     path: glue
+     name: sst2
+     tokenizer_max_length: 256

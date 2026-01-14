@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,72 +14,46 @@ import (
 )
 
 func TestRolloutCompletionRetrieve(t *testing.T) {
+	// Helper to create a condition with cleanupComplete metadata set
+	cleanupCompletedCondition := func() *api.Condition {
+		cleanupComplete := &types.BoolValue{Value: true}
+		metadata, _ := types.MarshalAny(cleanupComplete)
+		return &api.Condition{Metadata: metadata}
+	}
+
 	tests := []struct {
 		name                     string
 		deployment               *v2pb.Deployment
+		inputCondition           *api.Condition
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
 	}{
 		{
-			name: "completion tasks finished when rollout complete and healthy",
+			name: "completion tasks finished when metadata indicates complete",
 			deployment: &v2pb.Deployment{
 				Status: v2pb.DeploymentStatus{
 					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
 					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
 				},
 			},
+			inputCondition:           cleanupCompletedCondition(),
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CompletionTasksFinished",
-			expectedConditionMessage: "All rollout completion tasks have been successfully executed",
+			expectedConditionReason:  "",
+			expectedConditionMessage: "",
 		},
 		{
-			name: "completion tasks pending when stage not rollout complete",
+			name: "completion tasks pending when metadata not set",
 			deployment: &v2pb.Deployment{
 				Status: v2pb.DeploymentStatus{
 					Stage: v2pb.DEPLOYMENT_STAGE_PLACEMENT,
 					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
 				},
 			},
+			inputCondition:           &api.Condition{},
 			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CompletionTasksPending",
-			expectedConditionMessage: "Rollout completion tasks are pending",
-		},
-		{
-			name: "completion tasks pending when rollout complete but unhealthy",
-			deployment: &v2pb.Deployment{
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CompletionTasksPending",
-			expectedConditionMessage: "Rollout completion tasks are pending",
-		},
-		{
-			name: "completion tasks pending when state healthy but stage not complete",
-			deployment: &v2pb.Deployment{
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_VALIDATION,
-					State: v2pb.DEPLOYMENT_STATE_HEALTHY,
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CompletionTasksPending",
-			expectedConditionMessage: "Rollout completion tasks are pending",
-		},
-		{
-			name: "completion tasks pending when rollout failed",
-			deployment: &v2pb.Deployment{
-				Status: v2pb.DeploymentStatus{
-					Stage: v2pb.DEPLOYMENT_STAGE_ROLLOUT_FAILED,
-					State: v2pb.DEPLOYMENT_STATE_UNHEALTHY,
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CompletionTasksPending",
-			expectedConditionMessage: "Rollout completion tasks are pending",
+			expectedConditionReason:  "Rollout completion tasks are pending",
+			expectedConditionMessage: "CompletionTasksPending",
 		},
 	}
 
@@ -88,7 +63,7 @@ func TestRolloutCompletionRetrieve(t *testing.T) {
 				logger: zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
+			condition, err := actor.Retrieve(context.Background(), tt.deployment, tt.inputCondition)
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
@@ -106,14 +81,11 @@ func TestRolloutCompletionRun(t *testing.T) {
 		expectedConditionStatus  api.ConditionStatus
 		expectedConditionReason  string
 		expectedConditionMessage string
-		expectedStage            v2pb.DeploymentStage
-		expectedState            v2pb.DeploymentState
-		expectedCurrentRevision  string
 		checkAnnotations         bool
 		expectedAnnotations      map[string]string
 	}{
 		{
-			name: "rollout completion updates current revision and status",
+			name: "rollout completion returns true condition",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
 				Spec: v2pb.DeploymentSpec{
@@ -126,11 +98,8 @@ func TestRolloutCompletionRun(t *testing.T) {
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "Success",
-			expectedConditionMessage: "Operation completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-			expectedState:            v2pb.DEPLOYMENT_STATE_HEALTHY,
-			expectedCurrentRevision:  "model-v2",
+			expectedConditionReason:  "",
+			expectedConditionMessage: "",
 		},
 		{
 			name: "rollout completion cleans up annotations",
@@ -154,36 +123,13 @@ func TestRolloutCompletionRun(t *testing.T) {
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "Success",
-			expectedConditionMessage: "Operation completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-			expectedState:            v2pb.DEPLOYMENT_STATE_HEALTHY,
-			expectedCurrentRevision:  "bert_cola",
+			expectedConditionReason:  "",
+			expectedConditionMessage: "",
 			checkAnnotations:         true,
 			expectedAnnotations: map[string]string{
 				"rollout.michelangelo.ai/strategy": "rolling",
 				"other.annotation.com/keep-this":   "value",
 			},
-		},
-		{
-			name: "rollout completion with nil current revision",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "initial-model"},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: nil,
-					Stage:           v2pb.DEPLOYMENT_STAGE_VALIDATION,
-					State:           v2pb.DEPLOYMENT_STATE_INITIALIZING,
-				},
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "Success",
-			expectedConditionMessage: "Operation completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-			expectedState:            v2pb.DEPLOYMENT_STATE_HEALTHY,
-			expectedCurrentRevision:  "initial-model",
 		},
 		{
 			name: "rollout completion with no annotations",
@@ -201,11 +147,8 @@ func TestRolloutCompletionRun(t *testing.T) {
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "Success",
-			expectedConditionMessage: "Operation completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-			expectedState:            v2pb.DEPLOYMENT_STATE_HEALTHY,
-			expectedCurrentRevision:  "model-v1",
+			expectedConditionReason:  "",
+			expectedConditionMessage: "",
 		},
 		{
 			name: "rollout completion with empty annotations map",
@@ -223,11 +166,8 @@ func TestRolloutCompletionRun(t *testing.T) {
 				},
 			},
 			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "Success",
-			expectedConditionMessage: "Operation completed successfully",
-			expectedStage:            v2pb.DEPLOYMENT_STAGE_ROLLOUT_COMPLETE,
-			expectedState:            v2pb.DEPLOYMENT_STATE_HEALTHY,
-			expectedCurrentRevision:  "model-v3",
+			expectedConditionReason:  "",
+			expectedConditionMessage: "",
 		},
 	}
 
@@ -237,19 +177,13 @@ func TestRolloutCompletionRun(t *testing.T) {
 				logger: zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, nil)
+			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
 			assert.Equal(t, tt.expectedConditionMessage, condition.Message)
-			assert.Equal(t, tt.expectedStage, tt.deployment.Status.Stage)
-			assert.Equal(t, tt.expectedState, tt.deployment.Status.State)
-			assert.NotNil(t, tt.deployment.Status.CurrentRevision)
-			assert.Equal(t, tt.expectedCurrentRevision, tt.deployment.Status.CurrentRevision.Name)
-			assert.Contains(t, tt.deployment.Status.Message, "Rollout completed successfully")
-			assert.Contains(t, tt.deployment.Status.Message, tt.expectedCurrentRevision)
 
 			if tt.checkAnnotations {
 				assert.NotNil(t, tt.deployment.Annotations)

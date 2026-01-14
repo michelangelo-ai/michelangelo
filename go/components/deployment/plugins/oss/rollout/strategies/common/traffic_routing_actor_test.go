@@ -1,4 +1,4 @@
-package rollout
+package common
 
 import (
 	"context"
@@ -17,12 +17,11 @@ import (
 
 func TestTrafficRoutingRetrieve(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*proxymocks.MockProxyProvider)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*proxymocks.MockProxyProvider)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "traffic routing configured successfully",
@@ -38,9 +37,8 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
 				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(true, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "TrafficRoutingConfigured",
-			expectedConditionMessage: "HTTPRoute test-deployment successfully configured for deployment",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "deployment route not configured",
@@ -56,9 +54,8 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
 				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "DeploymentRouteNotConfigured",
-			expectedConditionMessage: "Deployment route is not configured",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Deployment route is not configured",
 		},
 		{
 			name: "check deployment route status fails",
@@ -75,7 +72,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "CheckDeploymentRouteStatusFailed",
+			expectedConditionReason: "Failed to check deployment route status: api error",
 		},
 	}
 
@@ -92,27 +89,23 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 				Logger:        zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
+			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			if tt.expectedConditionMessage != "" {
-				assert.Contains(t, condition.Message, tt.expectedConditionMessage)
-			}
 		})
 	}
 }
 
 func TestTrafficRoutingRun(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*proxymocks.MockProxyProvider)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*proxymocks.MockProxyProvider)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "traffic routing configured successfully",
@@ -128,9 +121,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
 				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "TrafficRoutingConfigured",
-			expectedConditionMessage: "HTTPRoute for deployment test-deployment successfully configured",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "missing inference server",
@@ -144,9 +136,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
 				// No mock setup needed - early return
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "MissingInferenceServer",
-			expectedConditionMessage: "inference server not specified for deployment test-deployment",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "inference server not specified for deployment test-deployment",
 		},
 		{
 			name: "add deployment route fails",
@@ -163,7 +154,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(errors.New("route creation failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "AddDeploymentRouteFailed",
+			expectedConditionReason: "Failed to add deployment route: route creation failed",
 		},
 		{
 			name: "traffic routing configured with complex deployment",
@@ -185,9 +176,8 @@ func TestTrafficRoutingRun(t *testing.T) {
 			setupMocks: func(pp *proxymocks.MockProxyProvider) {
 				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "complex-deployment", "production", "triton-server", "bert_cola").Return(nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "TrafficRoutingConfigured",
-			expectedConditionMessage: "HTTPRoute for deployment complex-deployment successfully configured",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 	}
 
@@ -204,15 +194,12 @@ func TestTrafficRoutingRun(t *testing.T) {
 				Logger:        zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, nil)
+			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			if tt.expectedConditionMessage != "" {
-				assert.Contains(t, condition.Message, tt.expectedConditionMessage)
-			}
 		})
 	}
 }

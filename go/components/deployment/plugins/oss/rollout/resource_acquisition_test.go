@@ -17,12 +17,11 @@ import (
 
 func TestResourceAcquisitionRetrieve(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*gatewaysmocks.MockGateway)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "resources available when inference server is healthy",
@@ -35,11 +34,10 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "ResourcesAvailable",
-			expectedConditionMessage: "Resources are available and can be acquired",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "no inference server specified",
@@ -52,9 +50,8 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
 				// No mock setup needed - early return
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "NoInferenceServer",
-			expectedConditionMessage: "No inference server specified for deployment",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "No inference server specified for deployment",
 		},
 		{
 			name: "inference server is not healthy",
@@ -67,11 +64,10 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "HealthCheckFailed",
-			expectedConditionMessage: "Inference server is not healthy",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Inference server is not healthy",
 		},
 		{
 			name: "health check fails with error",
@@ -84,10 +80,10 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("connection error"))
+				gw.EXPECT().InferenceServerIsHealthy(gomock.Any(), gomock.Any(), "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("connection error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
-			expectedConditionReason: "HealthCheckFailed",
+			expectedConditionReason: "Failed to check health of inference server: connection error",
 		},
 	}
 
@@ -104,29 +100,26 @@ func TestResourceAcquisitionRetrieve(t *testing.T) {
 				logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
+			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			if tt.expectedConditionMessage != "" {
-				assert.Contains(t, condition.Message, tt.expectedConditionMessage)
-			}
 		})
 	}
 }
 
 func TestResourceAcquisitionRun(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		inputCondition          *api.Condition
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
-			name: "resources not available returns terminal state",
+			name: "run returns the input condition unchanged",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -135,9 +128,10 @@ func TestResourceAcquisitionRun(t *testing.T) {
 					},
 				},
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "ResourcesNotAvailable",
-			expectedConditionMessage: "Resources are not available and cannot be acquired",
+			inputCondition: &api.Condition{
+				Status: api.CONDITION_STATUS_FALSE,
+				Reason: "ResourcesNotAvailable",
+			},
 		},
 	}
 
@@ -147,13 +141,10 @@ func TestResourceAcquisitionRun(t *testing.T) {
 				logger: zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, nil)
+			condition, err := actor.Run(context.Background(), tt.deployment, tt.inputCondition)
 
 			assert.NoError(t, err)
-			assert.NotNil(t, condition)
-			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
-			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			assert.Equal(t, tt.expectedConditionMessage, condition.Message)
+			assert.Equal(t, tt.inputCondition, condition)
 		})
 	}
 }

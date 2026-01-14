@@ -1,4 +1,4 @@
-name: "test_model_name-0"
+name: "test_model_name"
 backend: "python"
 max_batch_size: 256
 dynamic_batching: {

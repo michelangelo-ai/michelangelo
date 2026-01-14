@@ -10,14 +10,14 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/pluginmanager"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins"
-	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
 )
 
 // Module FX
 var Module = fx.Options(
+	proxy.Module,
 	fx.Provide(newPluginRegistry),
 	fx.Invoke(register),
-	oss.Module,
 )
 
 // newPluginRegistry creates a new plugin registry

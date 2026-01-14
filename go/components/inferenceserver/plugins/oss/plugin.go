@@ -1,6 +1,7 @@
 package oss
 
 import (
+	"go.uber.org/fx"
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/record"
 

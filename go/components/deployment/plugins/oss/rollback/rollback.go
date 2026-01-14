@@ -2,17 +2,24 @@ package rollback
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/zap"
 
+	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
+var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &RollbackActor{}
+
 // RollbackActor restores deployment to the previous stable revision when rollout fails.
 type RollbackActor struct {
-	logger *zap.Logger
+	logger  *zap.Logger
+	gateway gateways.Gateway
 }
 
 // GetType returns the condition type identifier for rollback.
@@ -20,56 +27,34 @@ func (a *RollbackActor) GetType() string {
 	return common.ActorTypeRollback
 }
 
-// Retrieve checks if rollback has completed by verifying CurrentRevision exists.
+// Retrieve checks if rollback is required by verifying whether CandidateRevision still exists.
 func (a *RollbackActor) Retrieve(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	// Check if rollback is complete when we restore to the previous revision
-	if resource.Status.CurrentRevision != nil {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "RollbackCompleted",
-			Message: "Rollback completed successfully",
-		}, nil
+	candidateModel := resource.Status.CandidateRevision.GetName()
+	if candidateModel == "" {
+		return conditionsutil.GenerateTrueCondition(condition), nil
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "RollbackInProgress",
-		Message: "Rollback in progress",
-	}, nil
+	a.logger.Info("Rollback in progress", zap.String("candidate_model", candidateModel))
+	if exists, err := a.gateway.CheckModelExists(ctx, a.logger, candidateModel, resource.Spec.GetInferenceServer().GetName(), resource.GetNamespace(), v2pb.BACKEND_TYPE_TRITON); err != nil {
+		return conditionsutil.GenerateFalseCondition(condition, "UnableToCheckModelExists", fmt.Sprintf("Unable to check if model %s exists in Inference Server: %v", candidateModel, err)), nil
+	} else if exists {
+		return conditionsutil.GenerateFalseCondition(condition, "ModelStillExistsInInferenceServer", fmt.Sprintf("Candidate Model %s still exists in Inference Server", candidateModel)), nil
+	}
+	return conditionsutil.GenerateTrueCondition(condition), nil
 }
 
-// Run reverts DesiredRevision to CurrentRevision to restore the previous stable state.
+// Run unloads the candidate model from the inference server.
 func (a *RollbackActor) Run(ctx context.Context, resource *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running rollback for deployment", zap.String("deployment", resource.Name))
+	inferenceServerName := resource.Spec.GetInferenceServer().GetName()
+	candidateModel := resource.Status.CandidateRevision.GetName()
+	a.logger.Info("Starting deployment rollback",
+		zap.String("candidate_model", candidateModel),
+		zap.String("inference_server", inferenceServerName))
 
-	// Update deployment status to indicate rollback is in progress
-	resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_IN_PROGRESS
-	resource.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY
-
-	if resource.Status.CurrentRevision != nil {
-		// Store the failed revision for reference
-		failedRevision := resource.Spec.DesiredRevision
-
-		// For OSS, rollback means restoring the previous revision
-		resource.Spec.DesiredRevision = resource.Status.CurrentRevision
-
-		// Update status to reflect rollback completion
-		resource.Status.Stage = v2pb.DEPLOYMENT_STAGE_ROLLBACK_COMPLETE
-		resource.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
-
-		a.logger.Info("Rolled back to previous revision",
-			zap.String("from", failedRevision.Name),
-			zap.String("to", resource.Status.CurrentRevision.Name))
-	} else {
-		a.logger.Info("No previous revision available for rollback")
+	if err := a.gateway.UnloadModel(ctx, a.logger, candidateModel, inferenceServerName, resource.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
+		a.logger.Error("Failed to rollback deployment", zap.String("model", candidateModel), zap.Error(err))
+		return conditionsutil.GenerateFalseCondition(condition, "RollbackFailed", fmt.Sprintf("Failed to rollback deployment: %v", err)), nil
 	}
 
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_TRUE,
-		Reason:  "RollbackCompleted",
-		Message: "Rollback completed successfully",
-	}, nil
+	return conditionsutil.GenerateTrueCondition(condition), nil
 }

@@ -1002,6 +1002,29 @@ func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 			},
 			expectedUFStorageURL: "s3://pipeline-config-storage",
 		},
+		{
+			name: "UF_STORAGE_URL preserved when environ has other vars",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: createPipelineManifestWithEnviron(map[string]interface{}{
+										"CUSTOM_VAR": "custom-value",
+									}),
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedUFStorageURL: DefaultWorkSpaceRootURL,
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -1015,6 +1038,13 @@ func TestGetWorkflowInputsUFStorageURL(t *testing.T) {
 			ufStorageURL, exists := envs["UF_STORAGE_URL"]
 			require.True(t, exists, "UF_STORAGE_URL should exist in environment variables")
 			require.Equal(t, testCase.expectedUFStorageURL, ufStorageURL)
+
+			// For the test case with custom vars, verify they are also present
+			if testCase.name == "UF_STORAGE_URL preserved when environ has other vars" {
+				customVar, exists := envs["CUSTOM_VAR"]
+				require.True(t, exists, "CUSTOM_VAR should exist in environment variables")
+				require.Equal(t, "custom-value", customVar)
+			}
 		})
 	}
 }
@@ -1923,6 +1953,500 @@ func TestExecuteWorkflowActor_Retrieve(t *testing.T) {
 
 			require.NoError(t, err)
 			require.Equal(t, testCase.expectedCondition, condition)
+		})
+	}
+}
+
+func TestConvertKwArgsMapToList(t *testing.T) {
+	testCases := []struct {
+		name     string
+		input    interface{}
+		expected []interface{}
+	}{
+		{
+			name: "Convert map to list of pairs",
+			input: map[string]interface{}{
+				"path":                 "glue",
+				"name":                 "cola",
+				"tokenizer_max_length": 128,
+			},
+			expected: []interface{}{
+				[]interface{}{"path", "glue"},
+				[]interface{}{"name", "cola"},
+				[]interface{}{"tokenizer_max_length", 128},
+			},
+		},
+		{
+			name:     "Empty map",
+			input:    map[string]interface{}{},
+			expected: []interface{}{},
+		},
+		{
+			name: "Already in list format",
+			input: []interface{}{
+				[]interface{}{"key1", "value1"},
+				[]interface{}{"key2", "value2"},
+			},
+			expected: []interface{}{
+				[]interface{}{"key1", "value1"},
+				[]interface{}{"key2", "value2"},
+			},
+		},
+		{
+			name:     "Invalid format returns empty list",
+			input:    "invalid",
+			expected: []interface{}{},
+		},
+		{
+			name:     "Nil returns empty list",
+			input:    nil,
+			expected: []interface{}{},
+		},
+		{
+			name: "Map with various types",
+			input: map[string]interface{}{
+				"string_val": "test",
+				"int_val":    42,
+				"float_val":  3.14,
+				"bool_val":   true,
+			},
+			expected: []interface{}{
+				[]interface{}{"string_val", "test"},
+				[]interface{}{"int_val", 42},
+				[]interface{}{"float_val", 3.14},
+				[]interface{}{"bool_val", true},
+			},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			result := convertKwArgsMapToList(testCase.input)
+			// Since Go map iteration order is randomized, we need to compare sets
+			if len(result) != len(testCase.expected) {
+				t.Errorf("Expected length %d, got %d", len(testCase.expected), len(result))
+				return
+			}
+			// Convert to map for easier comparison when input is map
+			if _, isMap := testCase.input.(map[string]interface{}); isMap && len(result) > 0 {
+				resultMap := make(map[string]interface{})
+				for _, pair := range result {
+					if pairSlice, ok := pair.([]interface{}); ok && len(pairSlice) == 2 {
+						if key, ok := pairSlice[0].(string); ok {
+							resultMap[key] = pairSlice[1]
+						}
+					}
+				}
+				expectedMap := make(map[string]interface{})
+				for _, pair := range testCase.expected {
+					if pairSlice, ok := pair.([]interface{}); ok && len(pairSlice) == 2 {
+						if key, ok := pairSlice[0].(string); ok {
+							expectedMap[key] = pairSlice[1]
+						}
+					}
+				}
+				require.Equal(t, expectedMap, resultMap)
+			} else {
+				// For non-map inputs, compare directly
+				require.Equal(t, testCase.expected, result)
+			}
+		})
+	}
+}
+
+func TestGetWorkflowInputsWithYamlBasedPipeline(t *testing.T) {
+	testCases := []struct {
+		name            string
+		pipelineRun     *v2.PipelineRun
+		expectedArgs    int // Number of args (workflow_config + task_configs)
+		expectedEnvKeys []string
+		expectError     bool
+	}{
+		{
+			name: "Yaml-based pipeline with both workflow_config and task_configs",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowConfigKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"workflow_name": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "test-workflow",
+												},
+											},
+											"version": {
+												Kind: &pbtypes.Value_NumberValue{
+													NumberValue: 1.0,
+												},
+											},
+										},
+									},
+								},
+							},
+							WorkflowTaskConfigsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"task1": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"task_name": {
+																Kind: &pbtypes.Value_StringValue{
+																	StringValue: "test-task-1",
+																},
+															},
+														},
+													},
+												},
+											},
+											"task2": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"task_name": {
+																Kind: &pbtypes.Value_StringValue{
+																	StringValue: "test-task-2",
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    2, // workflow_config + task_configs
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME", "YAML_BASED_PIPELINE"},
+			expectError:     false,
+		},
+		{
+			name: "Yaml-based pipeline with only task_configs",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowTaskConfigsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"task1": {
+												Kind: &pbtypes.Value_StructValue{
+													StructValue: &pbtypes.Struct{
+														Fields: map[string]*pbtypes.Value{
+															"enabled": {
+																Kind: &pbtypes.Value_BoolValue{
+																	BoolValue: true,
+																},
+															},
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    1, // Only task_configs
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME", "YAML_BASED_PIPELINE"},
+			expectError:     false,
+		},
+		{
+			name: "Yaml-based pipeline with only workflow_config",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowConfigKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"learning_rate": {
+												Kind: &pbtypes.Value_NumberValue{
+													NumberValue: 0.001,
+												},
+											},
+										},
+									},
+								},
+							},
+							// Must have task_configs to be detected as Yaml-based
+							// This test case should NOT set YAML_BASED_PIPELINE
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedArgs:    0, // workflow_config alone doesn't trigger Yaml-based detection
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME"},
+			expectError:     false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			args, kwArgs, envs, err := getWorkflowInputs(testCase.pipelineRun)
+
+			if testCase.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify args count
+			require.Len(t, args, testCase.expectedArgs)
+
+			// Verify kwArgs is empty for Yaml-based pipelines
+			require.Empty(t, kwArgs)
+
+			// Verify environment variables contain expected keys
+			for _, key := range testCase.expectedEnvKeys {
+				_, exists := envs[key]
+				require.True(t, exists, "Environment variable %s should exist", key)
+			}
+
+			// Verify YAML_BASED_PIPELINE flag is set correctly
+			if testCase.expectedArgs > 0 {
+				yamlFlag, exists := envs["YAML_BASED_PIPELINE"]
+				require.True(t, exists, "YAML_BASED_PIPELINE should be set for yaml-based pipelines")
+				require.Equal(t, "true", yamlFlag)
+			}
+		})
+	}
+}
+
+func TestGetWorkflowInputsWithPythonSDKBasedPipeline(t *testing.T) {
+	testCases := []struct {
+		name            string
+		pipelineRun     *v2.PipelineRun
+		expectedKwArgs  int
+		expectedEnvKeys []string
+		expectError     bool
+	}{
+		{
+			name: "Uniflow pipeline with kw_args from Spec.Input",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowKWArgsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"path": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "glue",
+												},
+											},
+											"name": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "cola",
+												},
+											},
+											"tokenizer_max_length": {
+												Kind: &pbtypes.Value_NumberValue{
+													NumberValue: 128,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil, // No manifest content
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedKwArgs:  3, // path, name, tokenizer_max_length
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME"},
+			expectError:     false,
+		},
+		{
+			name: "Uniflow pipeline with only kw_args (no args)",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							WorkflowKWArgsKey: {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"dataset": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "mnist",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedKwArgs:  1, // dataset
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME"},
+			expectError:     false,
+		},
+		{
+			name: "Uniflow pipeline with environ",
+			pipelineRun: &v2.PipelineRun{
+				ObjectMeta: v1.ObjectMeta{
+					Name:      "test-pipeline",
+					Namespace: "default",
+				},
+				Spec: v2.PipelineRunSpec{
+					Input: &pbtypes.Struct{
+						Fields: map[string]*pbtypes.Value{
+							"environ": {
+								Kind: &pbtypes.Value_StructValue{
+									StructValue: &pbtypes.Struct{
+										Fields: map[string]*pbtypes.Value{
+											"CUSTOM_VAR": {
+												Kind: &pbtypes.Value_StringValue{
+													StringValue: "custom_value",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: v2.PipelineRunStatus{
+					SourcePipeline: &v2.SourcePipeline{
+						Pipeline: &v2.Pipeline{
+							Spec: v2.PipelineSpec{
+								Manifest: &v2.PipelineManifest{
+									Content: nil,
+								},
+							},
+						},
+					},
+				},
+			},
+			expectedKwArgs:  0,
+			expectedEnvKeys: []string{"UF_STORAGE_URL", "MA_NAMESPACE", "MA_PIPELINE_RUN_NAME", "CUSTOM_VAR"},
+			expectError:     false,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			args, kwArgs, envs, err := getWorkflowInputs(testCase.pipelineRun)
+
+			if testCase.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+
+			// Verify args is empty (args support will be added in a separate diff)
+			require.Empty(t, args)
+
+			// Verify kw_args count (since order is not guaranteed)
+			require.Len(t, kwArgs, testCase.expectedKwArgs)
+
+			// Verify that each kw_arg is a [key, value] pair
+			for _, kwArg := range kwArgs {
+				pair, ok := kwArg.([]interface{})
+				require.True(t, ok, "Each kw_arg should be a list")
+				require.Len(t, pair, 2, "Each kw_arg pair should have exactly 2 elements")
+			}
+
+			// Verify environment variables contain expected keys
+			for _, key := range testCase.expectedEnvKeys {
+				_, exists := envs[key]
+				require.True(t, exists, "Environment variable %s should exist", key)
+			}
 		})
 	}
 }

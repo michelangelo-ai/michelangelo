@@ -1,4 +1,4 @@
-load("@plugin", "cachedoutput", "hashlib", "json", "os", "progress", "storage", "uuid", "workflow")
+load("@plugin", "cachedoutput", "hashlib", "json", "os", "progress", "storage", "time", "uuid", "workflow")
 
 ENV = {
     "UF_REMOTE_RUN": "1",
@@ -274,11 +274,11 @@ def get_storage_type(result_json_url):
 def get_pythonpath():
     """
     Get PYTHONPATH environment variable with file sync support.
-    
-    When file sync is enabled (UF_FILE_SYNC_TARBALL_URL is set), appends the 
-    sitecustomize.py directory to PYTHONPATH. This ensures sitecustomize.py runs 
+
+    When file sync is enabled (UF_FILE_SYNC_TARBALL_URL is set), appends the
+    sitecustomize.py directory to PYTHONPATH. This ensures sitecustomize.py runs
     automatically on container startup to apply local code changes before task execution.
-    
+
     Returns:
         PYTHONPATH value, defaulting to "/app" if not set by user.
         If file sync is enabled, appends ":/app/michelangelo/uniflow/core" to the path.
@@ -289,3 +289,84 @@ def get_pythonpath():
         # Append sitecustomize.py location to enable automatic file sync on container startup
         pythonpath = pythonpath + ":/app/michelangelo/uniflow/core"
     return pythonpath
+
+def process_terminated_job(
+        job_state,
+        task_name,
+        task_path,
+        args,
+        kwargs,
+        cache_version,
+        namespace,
+        result_url,
+        start_time_formatted_str,
+        retry_attempt_id,
+        total_retry_attempt,
+        job_type,
+        log_url):
+    """
+    Process the result of a terminated job (Spark or Ray).
+
+    This function handles the common logic for processing job termination states
+    across different job execution engines (Spark, Ray, etc.).
+
+    Args:
+        job_state: The final state of the job (SUCCEEDED, FAILED, or KILLED)
+        task_name: The name of the task
+        task_path: The path of the task
+        args: Input arguments to the task
+        kwargs: Input keyword arguments to the task
+        cache_version: The version of the cache
+        namespace: The namespace of the task
+        result_url: The URL where the result is stored
+        start_time_formatted_str: The formatted start time string
+        retry_attempt_id: The current retry attempt number
+        total_retry_attempt: The total number of retry attempts
+        job_type: The type of job ("Spark" or "Ray") for message customization
+        log_url: The URL to the job logs
+
+    Returns:
+        retryable: Boolean indicating whether the job should be retried
+    """
+    retryable = False
+
+    if job_state == TASK_STATE_SUCCEEDED:
+        cache_keys = get_cache_keys(task_path, task_name, args, kwargs, cache_version, CACHE_OPERATION_PUT)
+        print("{} | caching with key".format(job_type.lower()), "key:", cache_keys)
+        created_cached_output = create_cached_output(
+            namespace = namespace,
+            cache_keys = cache_keys,
+            zone = "",
+            ttl_in_days = 0,
+            task_name = task_name,
+            result_json_url = result_url,
+        )
+        end_time_seconds = time.time()
+        end_time_formatted_str = time.utc_format_seconds(TIME_FOMART, end_time_seconds)
+
+        report_progress(
+            task_path = task_path,
+            task_name = task_name,
+            task_log = log_url,
+            task_message = "{} job succeeded".format(job_type) if job_type == "Spark" else "{} Task Completed Successfully".format(job_type),
+            task_state = TASK_STATE_SUCCEEDED,
+            start_time = start_time_formatted_str,
+            end_time = end_time_formatted_str,
+            output = created_cached_output.get("metadata", {}).get("name", ""),
+            retry_attempt_id = retry_attempt_id,
+        )
+        print("{} job succeeded, attempt ({} / {}) succeeded".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
+
+    elif job_state == TASK_STATE_KILLED:
+        print("{} job killed, attempt ({} / {}). no retry should be performed".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
+        fail("{} job killed, no retry should be performed".format(job_type))
+
+    elif job_state == TASK_STATE_FAILED:
+        print("{} job failed, attempt ({} / {}) failed".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
+        if retry_attempt_id < total_retry_attempt:
+            retryable = True
+        else:
+            print("{} job failed after all ({} / {}) attempts were exhausted".format(job_type, str(retry_attempt_id), str(total_retry_attempt)))
+            fail("{} job failed after all attempts were exhausted".format(job_type))
+
+    return retryable

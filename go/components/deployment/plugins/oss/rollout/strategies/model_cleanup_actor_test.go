@@ -17,12 +17,11 @@ import (
 
 func TestModelCleanupRetrieve(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*gatewaysmocks.MockGateway)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "no cleanup needed when current model is empty",
@@ -38,12 +37,9 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: ""},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				// No mocks needed - early return
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "NoCleanupNeeded",
-			expectedConditionMessage: "No cleanup required",
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "no cleanup needed when models are the same",
@@ -59,12 +55,9 @@ func TestModelCleanupRetrieve(t *testing.T) {
 					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
 				},
 			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				// No mocks needed - early return
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "NoCleanupNeeded",
-			expectedConditionMessage: "No cleanup required",
+			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "cleanup pending when old model still loaded",
@@ -81,11 +74,10 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CleanupPending",
-			expectedConditionMessage: "Old model model-v1 still loaded, cleanup needed",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Old model model-v1 still loaded, cleanup needed",
 		},
 		{
 			name: "cleanup complete when old model not found",
@@ -102,11 +94,10 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, nil)
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupComplete",
-			expectedConditionMessage: "Old model model-v1 already cleaned up",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
 			name: "cleanup pending when cannot verify model status",
@@ -123,11 +114,10 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(false, errors.New("api error"))
+				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("api error"))
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_FALSE,
-			expectedConditionReason:  "CleanupPending",
-			expectedConditionMessage: "Need to cleanup old model model-v1",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Need to cleanup old model model-v1",
 		},
 	}
 
@@ -144,25 +134,23 @@ func TestModelCleanupRetrieve(t *testing.T) {
 				Logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Retrieve(context.Background(), tt.deployment, nil)
+			condition, err := actor.Retrieve(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			assert.Contains(t, condition.Message, tt.expectedConditionMessage)
 		})
 	}
 }
 
 func TestModelCleanupRun(t *testing.T) {
 	tests := []struct {
-		name                     string
-		deployment               *v2pb.Deployment
-		setupMocks               func(*gatewaysmocks.MockGateway)
-		expectedConditionStatus  api.ConditionStatus
-		expectedConditionReason  string
-		expectedConditionMessage string
+		name                    string
+		deployment              *v2pb.Deployment
+		setupMocks              func(*gatewaysmocks.MockGateway)
+		expectedConditionStatus api.ConditionStatus
+		expectedConditionReason string
 	}{
 		{
 			name: "successful cleanup of old model",
@@ -180,14 +168,12 @@ func TestModelCleanupRun(t *testing.T) {
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model model-v1",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 		{
-			name: "cleanup continues even if unload fails",
+			name: "cleanup fails when unload fails",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
 				Spec: v2pb.DeploymentSpec{
@@ -202,36 +188,12 @@ func TestModelCleanupRun(t *testing.T) {
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(errors.New("unload error"))
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model model-v1",
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "Failed to unload old model model-v1 from inference server: unload error",
 		},
 		{
-			name: "cleanup completes even if model still shows loaded",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v2"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v1"},
-				},
-			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v1", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(true, nil)
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model model-v1",
-		},
-		{
-			name: "cleanup completes with verification showing model unloaded",
+			name: "cleanup successful with different model names",
 			deployment: &v2pb.Deployment{
 				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "production"},
 				Spec: v2pb.DeploymentSpec{
@@ -246,33 +208,9 @@ func TestModelCleanupRun(t *testing.T) {
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
 				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "old-bert", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "old-bert", "triton-prod", "production", v2pb.BACKEND_TYPE_TRITON).Return(false, nil)
 			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model old-bert",
-		},
-		{
-			name: "cleanup completes even when verification check fails",
-			deployment: &v2pb.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
-				Spec: v2pb.DeploymentSpec{
-					DesiredRevision: &api.ResourceIdentifier{Name: "model-v3"},
-					Target: &v2pb.DeploymentSpec_InferenceServer{
-						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
-					},
-				},
-				Status: v2pb.DeploymentStatus{
-					CurrentRevision: &api.ResourceIdentifier{Name: "model-v2"},
-				},
-			},
-			setupMocks: func(gw *gatewaysmocks.MockGateway) {
-				gw.EXPECT().UnloadModel(gomock.Any(), gomock.Any(), "model-v2", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(nil)
-				gw.EXPECT().CheckModelStatus(gomock.Any(), gomock.Any(), "model-v2", "test-server", "default", v2pb.BACKEND_TYPE_TRITON).Return(false, errors.New("verification failed"))
-			},
-			expectedConditionStatus:  api.CONDITION_STATUS_TRUE,
-			expectedConditionReason:  "CleanupCompleted",
-			expectedConditionMessage: "Successfully cleaned up old model model-v2",
+			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
+			expectedConditionReason: "",
 		},
 	}
 
@@ -289,13 +227,12 @@ func TestModelCleanupRun(t *testing.T) {
 				Logger:  zap.NewNop(),
 			}
 
-			condition, err := actor.Run(context.Background(), tt.deployment, nil)
+			condition, err := actor.Run(context.Background(), tt.deployment, &api.Condition{})
 
 			assert.NoError(t, err)
 			assert.NotNil(t, condition)
 			assert.Equal(t, tt.expectedConditionStatus, condition.Status)
 			assert.Equal(t, tt.expectedConditionReason, condition.Reason)
-			assert.Contains(t, condition.Message, tt.expectedConditionMessage)
 		})
 	}
 }

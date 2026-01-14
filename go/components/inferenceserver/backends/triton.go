@@ -400,9 +400,7 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 							zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
 							zap.Int32("totalReplicas", deployment.Status.Replicas),
 							zap.String("cluster", clusterTarget.ClusterId))
-						return false, fmt.Errorf("pods not ready for deployment %s/%s in cluster %s: %d/%d",
-							inferenceServer.Namespace, deploymentName, clusterTarget.ClusterId,
-							deployment.Status.ReadyReplicas, deployment.Status.Replicas)
+						return false, nil
 					}
 				} else {
 					logger.Error("Triton deployment not available",
@@ -412,8 +410,7 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 						zap.String("reason", condition.Reason),
 						zap.String("message", condition.Message),
 						zap.String("cluster", clusterTarget.ClusterId))
-					return false, fmt.Errorf("deployment %s/%s not available in cluster %s: %s",
-						inferenceServer.Namespace, deploymentName, clusterTarget.ClusterId, condition.Message)
+					return false, nil
 				}
 			}
 		}

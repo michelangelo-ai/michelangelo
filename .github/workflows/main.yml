@@ -46,6 +46,22 @@ jobs:
           fetch-depth: 0  # Fetch full history for git operations
 
       #----------------------------------------------
+      #  Free disk space to prevent "No space left on device" errors
+      #----------------------------------------------
+      - name: Free disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h
+          # Remove large packages not needed for Python builds
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/share/powershell
+          sudo rm -rf /usr/share/swift
+          echo "Disk space after cleanup:"
+          df -h
+
+      #----------------------------------------------
       #  Setup Python and Poetry using composite action
       #----------------------------------------------
       - name: Setup Python and Poetry
