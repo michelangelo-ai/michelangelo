@@ -4,7 +4,7 @@ Thanks for taking the first step in contributing to our project.
 
 **Uber welcomes contributions of all kinds and sizes. This includes everything from simple bug reports to large features.** 
 
-See the [Table of Contents](#values) for different ways to contribute and details about how we treat each contribution. Please read the relevant section before making your contribution as it will not only make it a lot easier for us but also ensure you have the very best developer experience too.
+See the [Table of Contents](#table-of-contents) for different ways to contribute and details about how we treat each contribution. Please read the relevant section before making your contribution as it will not only make it a lot easier for us but also ensure you have the very best developer experience too.
 
 >:star: If you like the project, but don't have time to contribute just now, that's no problem at all!. 
 
@@ -13,21 +13,23 @@ There are other easy ways to help support the project and show your appreciation
 * Join the our community
 * Shout about us online or at local meetups with your peers & colleagues
 
+<a id="table-of-contents"></a>
 ## Table of Contents
-- [Code of Conduct](##Code-of-Conduct)
-- [I Have a Question](##I-have-a-Question)
-- [I Want To Contribute](##I-want-to-contribute)
-  - [Legal Notice](###legal-notice)
-- [Enhancements & Features](##enhancements-&-features)
-  - [Before Submitting an Enhancement or Feature](###Before-Submitting-an-Enhancement-or-Feature)
-  - [How do I submit a Good Enhancement or Feature](###How-do-I-submit-a-Good-Enhancement-or-Feature)
-- [Reporting Bugs](##Reporting-bugs)
-  - [Before Submitting a Bug Report](###Before-Submitting-a-Bug-Report)
-  - [How Do I Submit a Good Bug Report?](###How-Do-I-Submit-a-Good-Bug-Report?)
-- [Creating a Pull Request](##Creating-a-pull-request)
-  - [Before Creating a Pull Request](###before-creating-a-pull-request?)
-  - [How Do I Submit a Good Pull Request?](###How-Do-I-Submit-a-Good-pull-Request?)
+- [Code of Conduct](#code-of-conduct)
+- [I Have a Question](#i-have-a-question)
+- [I Want To Contribute](#i-want-to-contribute)
+  - [Legal Notice](#legal-notice)
+- [Enhancements and Features](#enhancements-and-features)
+  - [Before Submitting an Enhancement or Feature](#before-submitting-an-enhancement-or-feature)
+  - [How do I submit a Good Enhancement or Feature](#how-do-i-submit-a-good-enhancement-or-feature)
+- [Reporting Bugs](#reporting-bugs)
+  - [Before Submitting a Bug Report](#before-submitting-a-bug-report)
+  - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report?)
+- [Creating a Pull Request](#creating-a-pull-request)
+  - [Before Creating a Pull Request](#before-creating-a-pull-request?)
+  - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request?)
 
+<a id="code-of-conduct"></a>
 ## Code of Conduct
 This project and everyone participating in it is governed by our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating, you are expected to uphold these standards. 
 
@@ -56,7 +58,7 @@ When contributing to any Uber Open Source project, you agree that you have autho
 
 You’re required to sign our [Contributor License Agreement](https://cla-assistant.io/michelangelo-ai) to confirm this and you’ll be prompted to do this when submitting your first contribution.
 
-## Enhancements & Features
+## Enhancements and Features
 
 This section guides you through submitting an enhancement or new functionality into the project; as well as minor improvements to existing functionality. Following these guidelines will help the community to understand your submission.
 
@@ -125,7 +127,7 @@ If you want to fix a bug or propose a new feature you’ll do this through creat
 ### How Do I Submit a Good Pull Request?
 
 * Use a **clear and descriptive title** for the Pull Request.
-* Follow this Pull Request template (coming soon).
+* Follow this [Pull Request template](https://github.com/michelangelo-ai/michelangelo/blob/main/.github/pull_request_template.md).
 * **Link the issue** related to this Pull Request, if present.
 * Provide a **short description of the solution you proposed** in as many details as possible.
 * **Use comments in the code** that you provide to give us more context to any code based submissions.
