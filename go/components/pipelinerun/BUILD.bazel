@@ -13,7 +13,6 @@ go_library(
         "//go/api/handler:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/env:go_default_library",
-        "//go/base/notification/provider:go_default_library",
         "//go/components/pipelinerun/notification:go_default_library",
         "//go/components/pipelinerun/plugin:go_default_library",
         "//proto/api/v2:go_default_library",

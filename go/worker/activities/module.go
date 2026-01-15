@@ -3,6 +3,7 @@ package activities
 import (
 	"go.uber.org/fx"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/utils"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
@@ -18,4 +19,5 @@ var Module = fx.Options(
 	model.Module,
 	cachedoutput.Module,
 	trigger.Module,
+	utils.Module,
 )

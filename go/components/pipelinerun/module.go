@@ -6,7 +6,6 @@ import (
 
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/notification/provider"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	"go.uber.org/zap"
@@ -27,7 +26,6 @@ var (
 	//   )
 	Module = fx.Options(
 		plugin.Module,
-		provider.Module,     // Notification provider dependency
 		notification.Module, // PipelineRun notification dependency
 		fx.Invoke(register),
 	)

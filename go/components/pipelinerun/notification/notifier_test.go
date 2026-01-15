@@ -4,23 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
+	"github.com/golang/mock/gomock"
+	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	interface_mock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
-
-// MockNotificationProvider is a mock implementation of NotificationProvider for testing
-type MockNotificationProvider struct {
-	mock.Mock
-}
-
-func (m *MockNotificationProvider) SendPipelineRunNotification(ctx context.Context, event *types.NotificationEvent) error {
-	args := m.Called(ctx, event)
-	return args.Error(0)
-}
 
 func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 	tests := []struct {
@@ -29,7 +20,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 		newPipelineRun *v2pb.PipelineRun
 		shouldNotify   bool
 		expectedError  bool
-		providerError  error
+		workflowError  error
 	}{
 		{
 			name: "No state change - should not notify",
@@ -130,7 +121,7 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 			expectedError: false,
 		},
 		{
-			name: "Provider error - should not fail reconciliation",
+			name: "Workflow error - should not fail reconciliation",
 			oldPipelineRun: &v2pb.PipelineRun{
 				Status: v2pb.PipelineRunStatus{
 					State: v2pb.PIPELINE_RUN_STATE_RUNNING,
@@ -155,24 +146,30 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 				},
 			},
 			shouldNotify:  true,
-			expectedError: false, // Should not propagate provider errors
-			providerError: assert.AnError,
+			expectedError: false, // Should not propagate workflow errors
+			workflowError: assert.AnError,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create mock provider
-			mockProvider := &MockNotificationProvider{}
+			// Create mock workflow client
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockClient := interface_mock.NewMockWorkflowClient(ctrl)
 
 			// Set up expectations based on shouldNotify
 			if tt.shouldNotify {
-				mockProvider.On("SendPipelineRunNotification", mock.Anything, mock.Anything).Return(tt.providerError)
+				mockExecution := &clientInterfaces.WorkflowExecution{RunID: "test-run-id"}
+				mockClient.EXPECT().
+					StartWorkflow(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(mockExecution, tt.workflowError).
+					Times(1)
 			}
 
-			// Create notifier with mock provider
+			// Create notifier with mock workflow client
 			logger := zap.NewNop() // Use no-op logger for tests
-			notifier := NewPipelineRunNotifier(mockProvider, logger)
+			notifier := NewPipelineRunNotifier(mockClient, logger)
 
 			// Execute the method under test
 			err := notifier.NotifyOnStateChange(context.Background(), tt.oldPipelineRun, tt.newPipelineRun)
@@ -183,9 +180,6 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 			}
-
-			// Verify mock expectations
-			mockProvider.AssertExpectations(t)
 		})
 	}
 }
@@ -251,7 +245,7 @@ func TestPipelineRunNotifier_ShouldNotify(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create notifier (provider not used in ShouldNotify)
+			// Create notifier (workflow client not used in ShouldNotify)
 			logger := zap.NewNop()
 			notifier := NewPipelineRunNotifier(nil, logger)
 

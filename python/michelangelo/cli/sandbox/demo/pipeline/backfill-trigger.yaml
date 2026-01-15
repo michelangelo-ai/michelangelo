@@ -1,7 +1,7 @@
 apiVersion: michelangelo.api/v2
 kind: TriggerRun
 metadata:
-  name: training-pipeline-backfill-trigger
+  name: training-pipeline-backfill-trigger6
   namespace: ma-dev-test
   annotations:
     description: "Test training pipeline execution via backfill trigger"
@@ -11,7 +11,23 @@ spec:
     namespace: ma-dev-test
   trigger:
     cronSchedule:
-      cron: "0 8 * * *"  # Run every day at 8am
-    maxConcurrency: 3
+      cron: "* * * * *"  # Run every day at 8am
+    maxConcurrency: 2
   startTimestamp: 2025-10-01T00:00:00Z
-  endTimestamp: 2025-10-08T00:00:00Z
+  endTimestamp: 2025-10-01T00:01:00Z
+  notifications:
+    - notificationType: NOTIFICATION_TYPE_EMAIL
+      eventTypes:
+        - EVENT_TYPE_PIPELINE_RUN_STATE_SUCCEEDED
+        - EVENT_TYPE_PIPELINE_RUN_STATE_FAILED
+      resourceType: RESOURCE_TYPE_PIPELINE_RUN
+      emails:
+        - "test@uber.com"
+
+    - notificationType: NOTIFICATION_TYPE_SLACK
+      eventTypes:
+        - EVENT_TYPE_PIPELINE_RUN_STATE_FAILED
+        - EVENT_TYPE_PIPELINE_RUN_STATE_KILLED
+      resourceType: RESOURCE_TYPE_PIPELINE_RUN
+      slackDestinations:
+        - "#alerts"
