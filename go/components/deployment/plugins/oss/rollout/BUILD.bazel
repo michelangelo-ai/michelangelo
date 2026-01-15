@@ -36,7 +36,6 @@ go_test(
     ],
     embed = [":go_default_library"],
     deps = [
-        "//go/components/deployment/proxy/proxymocks:go_default_library",
         "//go/components/inferenceserver/gateways/gatewaysmocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

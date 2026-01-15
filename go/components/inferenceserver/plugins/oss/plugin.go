@@ -15,7 +15,11 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// RegisterPlugins registers all OSS plugins with the plugin registry
-func RegisterPlugins(registry plugins.PluginRegistry, kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, endpointRegistry endpointregistry.EndpointRegistry, recorder record.EventRecorder, logger *zap.Logger) {
+var Module = fx.Options(
+	fx.Invoke(registerPlugins),
+)
+
+// registerPlugins registers all OSS plugins with the plugin registry
+func registerPlugins(registry plugins.PluginRegistry, kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, endpointRegistry endpointregistry.EndpointRegistry, recorder record.EventRecorder, logger *zap.Logger) {
 	registry.RegisterPlugin(v2pb.BACKEND_TYPE_TRITON, triton.NewPlugin(backends.NewTritonBackend(kubeClient, modelConfigMapProvider, endpointRegistry, logger), modelConfigMapProvider, recorder, logger))
 }
