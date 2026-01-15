@@ -75,6 +75,10 @@ func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActi
 	// TODO: Implement slack sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
 	logger := activity.GetLogger(ctx)
+	if logger == nil {
+		// For testing contexts where activity logger is not available
+		logger = zap.NewNop()
+	}
 	logger.Info("Sending slack notification",
 		zap.String("channel", req.Channel),
 		zap.String("text", req.Text))
@@ -110,6 +114,10 @@ func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActi
 	// TODO: Implement email sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
 	logger := activity.GetLogger(ctx)
+	if logger == nil {
+		// For testing contexts where activity logger is not available
+		logger = zap.NewNop()
+	}
 	logger.Info("Sending email notification",
 		zap.Strings("to", req.To),
 		zap.String("subject", req.Subject))
