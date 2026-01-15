@@ -23,6 +23,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
+	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -39,6 +40,7 @@ type Reconciler struct {
 	plugin            *plugin.Plugin
 	engine            *defaultEngine.DefaultEngine[*v2pb.PipelineRun]
 	apiHandlerFactory apiHandler.Factory
+	notifier          *notification.PipelineRunNotifier
 }
 
 // NewReconciler creates a new PipelineRun controller reconciler.
@@ -51,15 +53,22 @@ type Reconciler struct {
 //   - plugin: Contains the ConditionActors for pipeline execution stages
 //   - logger: Structured logger for the controller
 //   - apiHandlerFactory: Factory for creating API handlers to interact with Kubernetes
+//   - notifier: Handles pipeline run notifications for state changes
 //
 // Returns a configured Reconciler ready to be registered with a controller manager.
-func NewReconciler(plugin *plugin.Plugin, logger *zap.Logger, apiHandlerFactory apiHandler.Factory) *Reconciler {
+func NewReconciler(
+	plugin *plugin.Plugin,
+	logger *zap.Logger,
+	apiHandlerFactory apiHandler.Factory,
+	notifier *notification.PipelineRunNotifier,
+) *Reconciler {
 	logger = logger.With(zap.String("component", "pipelinerun"))
 	return &Reconciler{
 		plugin:            plugin,
 		logger:            logger,
 		engine:            defaultEngine.NewDefaultEngine[*v2pb.PipelineRun](logger),
 		apiHandlerFactory: apiHandlerFactory,
+		notifier:          notifier,
 	}
 }
 
@@ -106,6 +115,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_FAILED
 		}
 	}
+
+	// Send notifications for state changes (non-blocking)
+	if notificationErr := r.notifier.NotifyOnStateChange(ctx, originalPipelineRun, pipelineRun); notificationErr != nil {
+		logger.Warn("Failed to send notifications",
+			zap.Error(notificationErr),
+			zap.String("pipeline_run", req.NamespacedName.String()))
+		// Don't fail reconciliation due to notification errors
+	}
+
 	if err = r.updatePipelineRunStatus(ctx, pipelineRun, originalPipelineRun); err != nil {
 		if returnErr != nil {
 			logger.Error("Failed to update pipeline run status", zap.Error(err))

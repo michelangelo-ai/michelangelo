@@ -343,6 +343,10 @@ func generatePipelineRunRequest(
 			Name:      triggerRun.Spec.Revision.Name,
 		}
 	}
+	// Copy notifications from trigger run to pipeline run
+	if len(triggerRun.Spec.Notifications) > 0 {
+		pr.Spec.Notifications = triggerRun.Spec.Notifications
+	}
 	pr.Labels[PipelineManifestTypeLabel] = triggerRun.Labels[PipelineManifestTypeLabel]
 	return v2pb.CreatePipelineRunRequest{
 		PipelineRun: pr,
