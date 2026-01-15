@@ -1,7 +1,7 @@
 apiVersion: michelangelo.api/v2
 kind: TriggerRun
 metadata:
-  name: training-pipeline-backfill-trigger6
+  name: training-pipeline-backfill-trigger
   namespace: ma-dev-test
   annotations:
     description: "Test training pipeline execution via backfill trigger"
@@ -11,10 +11,10 @@ spec:
     namespace: ma-dev-test
   trigger:
     cronSchedule:
-      cron: "* * * * *"  # Run every day at 8am
-    maxConcurrency: 2
+      cron: "0 8 * * *"  # Run every day at 8am
+    maxConcurrency: 3
   startTimestamp: 2025-10-01T00:00:00Z
-  endTimestamp: 2025-10-01T00:01:00Z
+  endTimestamp: 2025-10-08T00:00:00Z
   notifications:
     - notificationType: NOTIFICATION_TYPE_EMAIL
       eventTypes:
