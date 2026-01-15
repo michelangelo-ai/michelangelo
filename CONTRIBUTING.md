@@ -24,15 +24,16 @@ There are other easy ways to help support the project and show your appreciation
   - [How do I submit a Good Enhancement or Feature](#how-do-i-submit-a-good-enhancement-or-feature)
 - [Reporting Bugs](#reporting-bugs)
   - [Before Submitting a Bug Report](#before-submitting-a-bug-report)
-  - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report?)
+  - [How Do I Submit a Good Bug Report?](#how-do-i-submit-a-good-bug-report)
 - [Creating a Pull Request](#creating-a-pull-request)
-  - [Before Creating a Pull Request](#before-creating-a-pull-request?)
-  - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request?)
+  - [Before Creating a Pull Request](#before-creating-a-pull-request)
+  - [How Do I Submit a Good Pull Request?](#how-do-i-submit-a-good-pull-request)
 
 <a id="code-of-conduct"></a>
 ## Code of Conduct
 This project and everyone participating in it is governed by our [Code of Conduct](./CODE_OF_CONDUCT.md). By participating, you are expected to uphold these standards. 
 
+<a id="i-have-a-question"></a>
 ## I Have a Question
 
 > Please don't file an issue to ask a question. You'll get faster results by using the resources below.
@@ -50,18 +51,22 @@ If you’re still facing issues and need further help, then we recommend the fol
 
 The project maintainers will then take care of the issue as soon as possible and help to resolve your question.
 
+<a id="i-want-to-contribute"></a>
 ## I Want To Contribute
 
+<a id="legal-notice"></a>
 #### Legal Notice
 
 When contributing to any Uber Open Source project, you agree that you have authored 100% of the content and that you have the necessary rights to that content and that the content you contribute may be provided under the project license. 
 
 You’re required to sign our [Contributor License Agreement](https://cla-assistant.io/michelangelo-ai) to confirm this and you’ll be prompted to do this when submitting your first contribution.
 
+<a id="enhancements-and-features"></a>
 ## Enhancements and Features
 
 This section guides you through submitting an enhancement or new functionality into the project; as well as minor improvements to existing functionality. Following these guidelines will help the community to understand your submission.
 
+<a id="before-submitting-an-enhancement-or-feature"></a>
 ### Before Submitting an Enhancement or Feature
 
 * Make sure that you are using the latest version of the project.
@@ -69,6 +74,7 @@ This section guides you through submitting an enhancement or new functionality i
 * Perform a [search](https://github.com/michelangelo-ai/michelangelo/issues) to see if the enhancement has already been suggested. If it has, add a comment to the existing issue instead of opening a new one.
 * Consider whether your **idea fits with the scope and aims of the project** and keep in mind that we want features that will be useful to the majority of our users and not just a handful.
 
+<a id="how-do-i-submit-a-good-enhancement-or-feature"></a>
 ### How do I submit a Good Enhancement or Feature
 
 Enhancements and new features suggestions are tracked as [issues](https://github.com/michelangelo-ai/michelangelo/issues).
@@ -80,10 +86,12 @@ Enhancements and new features suggestions are tracked as [issues](https://github
 * You’re welcome to **include screenshots** which help you demonstrate the steps or point out which part your submission is related to.
 * **Explain why this enhancement would be useful** to the majority of our project users. You may also want to point out the other projects that solved it better and which could serve as inspiration for making our tool even stronger.
 
+<a id="reporting-bugs"></a>
 ## Reporting Bugs
 
 This section guides you through submitting a Bug Report into the project where a behaviour or functionality isn’t working as you’d expected. Following these guidelines will help the community to understand your submission and ensure you’ve identified a bug correctly.
 
+<a id="before-submitting-a-bug-report"></a>
 ### Before Submitting a Bug Report
 
 Bug reports shouldn't need the project maintainers to clarify or search for more information. Therefore, we ask you to investigate carefully, collect information and describe the issue in detail in your report. If you complete the following steps in advance, then this will help us fix the issue as fast as possible.
@@ -97,6 +105,7 @@ Bug reports shouldn't need the project maintainers to clarify or search for more
   * If possible, your input and the output
   * Can you reliably reproduce the issue? 
 
+<a id="how-do-i-submit-a-good-bug-report"></a>
 ### How Do I Submit a Good Bug Report?
 
 > :warning: You must never report security related issues, vulnerabilities or bugs to the issue tracker, or elsewhere in public. Instead sensitive bugs should be submitted through the Uber [HackerOne](https://hackerone.com/uber) process.
@@ -114,16 +123,19 @@ We use GitHub issues to track bugs. If you run into an issue with the project:
 * A project maintainer will try to reproduce the issue with your provided steps. If there are no reproduction steps, or no obvious way to reproduce the issue, we’ll request these details but the bug won’t be addressed until they are provided.
 * If the team is able to reproduce the issue, it will be tagged and the issue will be queued to be implemented.
 
+<a id="creating-a-pull-request"></a>
 ## Creating a Pull Request
 
 If you want to fix a bug or propose a new feature you’ll do this through creating a Pull Request.
 
+<a id="before-creating-pull-request"></a>
 ### Before Creating a Pull Request
 
 * Check if there is an [issue](https://github.com/michelangelo-ai/michelangelo/issues/new/choose) that highlights the same problem that you want to solve or that requests the same feature that you want to implement. If this is the case, then **remember to link the issue in your Pull Request**.
 * You might also want to check if a similar [pull request](https://github.com/michelangelo-ai/michelangelo/pulls) has already been created.
 * It’s always good practice to consider creating an issue before creating a Pull Request but for smaller changes we don’t mind if you omit this stage.
 
+<a id="how-do-i-submit-a-good-pull-request"></a>
 ### How Do I Submit a Good Pull Request?
 
 * Use a **clear and descriptive title** for the Pull Request.
