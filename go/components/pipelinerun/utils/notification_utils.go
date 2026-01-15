@@ -61,7 +61,16 @@ type (
 	}
 )
 
-// SendMessageToSlackActivity sends a message to slack
+// SendMessageToSlackActivity sends a message to a Slack channel.
+//
+// This method is executed as part of a Starlark worker activity for pipeline run notifications.
+//
+// Params:
+// - ctx: The context for the operation.
+// - req: The request containing the Slack channel and message text.
+//
+// Returns:
+// - error: Error information if the operation fails.
 func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
 	// TODO: Implement slack sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
@@ -87,8 +96,17 @@ func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActi
 	return nil
 }
 
-// SendMessageToEmailActivity sends a message to email
-func SendMessageToEmailActivity(ctx context.Context, req SendMessageToEmailActivityRequest) error {
+// SendMessageToEmailActivity sends an email message.
+//
+// This method is executed as part of a Starlark worker activity for pipeline run notifications.
+//
+// Params:
+// - ctx: The context for the operation.
+// - req: The request containing email recipients, subject, and message content.
+//
+// Returns:
+// - error: Error information if the operation fails.
+func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActivityRequest) error {
 	// TODO: Implement email sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
 	logger := activity.GetLogger(ctx)
@@ -119,7 +137,17 @@ func SendMessageToEmailActivity(ctx context.Context, req SendMessageToEmailActiv
 	return nil
 }
 
-// SendSlackNotification sends a slack notification
+// sendSlackNotification sends a slack notification through workflow activity execution.
+//
+// This method executes the SendMessageToSlackActivity as part of a notification workflow.
+//
+// Params:
+// - ctx: The workflow context for the operation.
+// - channel: The Slack channel to send the message to.
+// - text: The message content to send.
+//
+// Returns:
+// - error: Error information if the activity execution fails.
 func sendSlackNotification(ctx workflow.Context, channel, text string) error {
 	logger := workflow.GetLogger(ctx)
 	ao := workflowActivityOpts
@@ -137,7 +165,18 @@ func sendSlackNotification(ctx workflow.Context, channel, text string) error {
 	return nil
 }
 
-// SendEmailNotification sends an email notification
+// sendEmailNotification sends an email notification through workflow activity execution.
+//
+// This method executes the SendMessageToEmailActivity as part of a notification workflow.
+//
+// Params:
+// - ctx: The workflow context for the operation.
+// - to: List of email addresses to send the notification to.
+// - subject: The email subject line.
+// - text: The email message content.
+//
+// Returns:
+// - error: Error information if the activity execution fails.
 func sendEmailNotification(ctx workflow.Context, to []string, subject, text string) error {
 	logger := workflow.GetLogger(ctx)
 	ao := workflowActivityOpts
@@ -157,9 +196,19 @@ func sendEmailNotification(ctx workflow.Context, to []string, subject, text stri
 	return nil
 }
 
-// SendPRNotification sends a notification for a pipeline run
-func (r *workflows) SendPRNotification(ctx workflow.Context, pipelineRun *v2pb.PipelineRun) error {
-	ctx = workflow.WithBackend(ctx, r.workflow)
+// SendPRNotification sends notifications for a pipeline run based on configured notification settings.
+//
+// This method is executed as a workflow to process pipeline run state changes and send
+// appropriate notifications via email and Slack channels based on the notification configuration.
+//
+// Params:
+// - ctx: The workflow context for the operation.
+// - pipelineRun: The pipeline run object containing notification configurations and current state.
+//
+// Returns:
+// - error: Error information if any notification delivery fails.
+func SendPRNotification(ctx workflow.Context, pipelineRun *v2pb.PipelineRun) error {
+	ctx = workflow.WithActivityOptions(ctx, workflowActivityOpts)
 	logger := workflow.GetLogger(ctx)
 	notifications := pipelineRun.Spec.Notifications
 	var err error
@@ -190,11 +239,21 @@ var Module = fx.Options(
 )
 
 // registerNotificationWorkflowsAndActivities registers notification workflows and activities with the workers.
-func registerNotificationWorkflowsAndActivities(workers []worker.Worker, workflow workflow.Workflow) {
-	ws := workflows{workflow: workflow}
+//
+// This function registers all notification-related workflows and activities with the Cadence worker
+// instances, making them available for execution when workflow clients start them.
+//
+// Params:
+// - workers: Array of worker instances to register workflows and activities with.
+//
+// Registered Components:
+// - SendPRNotification workflow: Processes pipeline run notifications
+// - SendMessageToEmailActivity: Sends email notifications
+// - SendMessageToSlackActivity: Sends Slack notifications
+func registerNotificationWorkflowsAndActivities(workers []worker.Worker) {
 	for _, w := range workers {
 		// Register workflow
-		w.RegisterWorkflow(ws.SendPRNotification, PRNotificationWorkflowName)
+		w.RegisterWorkflow(SendPRNotification, PRNotificationWorkflowName)
 
 		// Register activities
 		w.RegisterActivity(SendMessageToEmailActivity)
