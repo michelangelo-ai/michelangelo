@@ -112,6 +112,9 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	// todo: ghosharitra: revise this
 	if len(resource.Status.TargetClusterStatuses) == 0 {
 		resource.Status.TargetClusterStatuses = make([]*v2pb.TargetClusterStatus, len(resource.Spec.ClusterTargets))
+		for i := range resource.Status.TargetClusterStatuses {
+			resource.Status.TargetClusterStatuses[i] = &v2pb.TargetClusterStatus{}
+		}
 	}
 
 	for i, clusterTarget := range resource.Spec.ClusterTargets {
@@ -123,6 +126,7 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 				zap.String("operation", "get_server_status"),
 				zap.String("namespace", resource.Namespace),
 				zap.String("inferenceServer", resource.Name))
+			continue
 		}
 
 		// Update status based on external state
