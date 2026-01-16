@@ -344,9 +344,23 @@ func (a *ExecuteWorkflowActor) StartWorkflow(ctx context.Context, pipelineRun *v
 		return nil, fmt.Errorf("failed to add task cache env: %w", err)
 	}
 	pipeline := pipelineRun.Status.SourcePipeline.Pipeline
-	tarContent, err := a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
-	if err != nil {
-		return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+
+	var tarContent []byte
+
+	// Check manifest type and handle accordingly
+	if pipeline.Spec.Manifest.Type == v2.PIPELINE_MANIFEST_TYPE_YAML {
+		// Convert DAG Factory YAML to Uniflow tar
+		converter := NewYAMLToUniflowConverter(a.logger)
+		tarContent, err = converter.ConvertYAMLToUniflowTar(ctx, pipeline)
+		if err != nil {
+			return nil, fmt.Errorf("convert YAML pipeline %s/%s to Uniflow tar: %w", pipeline.Namespace, pipeline.Name, err)
+		}
+	} else {
+		// Default behavior: load Uniflow tar from blob storage
+		tarContent, err = a.blobStore.Get(ctx, pipeline.Spec.Manifest.UniflowTar)
+		if err != nil {
+			return nil, fmt.Errorf("get tar content for pipeline %s/%s: %w", pipeline.Namespace, pipeline.Name, err)
+		}
 	}
 
 	workflowExecution, err := a.workflowClient.StartWorkflow(
@@ -425,6 +439,15 @@ func decodePipelineManifestContent(pipelineSpec v2.PipelineSpec) (map[string]int
 	if pipelineSpec.Manifest.Content == nil {
 		return map[string]interface{}{}, nil
 	}
+
+	// Handle YAML pipelines - they don't have workflow inputs in the manifest
+	if pipelineSpec.Manifest.Type == v2.PIPELINE_MANIFEST_TYPE_YAML {
+		// For YAML pipelines, return empty config since workflow inputs
+		// will be generated during YAML to Uniflow conversion
+		return map[string]interface{}{}, nil
+	}
+
+	// Handle regular Uniflow pipelines with TypedStruct content
 	pbStruct := &apipb.TypedStruct{}
 	err := pbtypes.UnmarshalAny(pipelineSpec.Manifest.Content, pbStruct)
 	if err != nil || pbStruct.Value == nil {
