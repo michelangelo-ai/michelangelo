@@ -108,6 +108,12 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	// Get current status from backend
 	numReadyClusters := 0
 	numFailedClusters := 0
+
+	// todo: ghosharitra: revise this
+	if len(resource.Status.TargetClusterStatuses) == 0 {
+		resource.Status.TargetClusterStatuses = make([]*v2pb.TargetClusterStatus, len(resource.Spec.ClusterTargets))
+	}
+
 	for i, clusterTarget := range resource.Spec.ClusterTargets {
 		status, err := p.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, clusterTarget)
 		if err != nil {
