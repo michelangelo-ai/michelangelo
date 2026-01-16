@@ -72,7 +72,7 @@ type (
 // Returns:
 // - error: Error information if the operation fails.
 func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActivityRequest) error {
-	// TODO: Implement slack sending logic
+	// TODO(#700): Implement slack sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
 	logger := activity.GetLogger(ctx)
 	if logger == nil {
@@ -111,7 +111,7 @@ func SendMessageToSlackActivity(ctx context.Context, req *SendMessageToSlackActi
 // Returns:
 // - error: Error information if the operation fails.
 func SendMessageToEmailActivity(ctx context.Context, req *SendMessageToEmailActivityRequest) error {
-	// TODO: Implement email sending logic
+	// TODO(#701): Implement email sending logic
 	// This would typically integrate with internal CAG (Communication API Gateway) service
 	logger := activity.GetLogger(ctx)
 	if logger == nil {
