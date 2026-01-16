@@ -21,5 +21,5 @@ var Module = fx.Options(
 
 // registerPlugins registers all OSS plugins with the plugin registry
 func registerPlugins(registry plugins.PluginRegistry, kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, endpointRegistry endpointregistry.EndpointRegistry, recorder record.EventRecorder, logger *zap.Logger) {
-	registry.RegisterPlugin(v2pb.BACKEND_TYPE_TRITON, triton.NewPlugin(backends.NewTritonBackend(kubeClient, modelConfigMapProvider, logger), modelConfigMapProvider, recorder, logger))
+	registry.RegisterPlugin(v2pb.BACKEND_TYPE_TRITON, triton.NewPlugin(backends.NewTritonBackend(kubeClient, modelConfigMapProvider, logger), endpointRegistry, modelConfigMapProvider, recorder, logger))
 }

@@ -14,29 +14,29 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &EnsureClusterWorkloadsActor{}
+var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ClusterWorkloadsActor{}
 
-// EnsureClusterWorkloadsActor provisions Kubernetes resources for Triton inference servers.
-type EnsureClusterWorkloadsActor struct {
+// ClusterWorkloadsActor provisions Kubernetes resources for Triton inference servers.
+type ClusterWorkloadsActor struct {
 	backend backends.Backend
 	logger  *zap.Logger
 }
 
-// NewEnsureClusterWorkloadsActor creates a condition actor for Triton server provisioning.
-func NewEnsureClusterWorkloadsActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
-	return &EnsureClusterWorkloadsActor{
+// NewClusterWorkloadsActor creates a condition actor for Triton server provisioning.
+func NewClusterWorkloadsActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+	return &ClusterWorkloadsActor{
 		backend: backend,
 		logger:  logger,
 	}
 }
 
 // GetType returns the condition type identifier for resource creation.
-func (a *EnsureClusterWorkloadsActor) GetType() string {
-	return common.TritonResourceCreationConditionType
+func (a *ClusterWorkloadsActor) GetType() string {
+	return common.TritonClusterWorkloadsConditionType
 }
 
 // Retrieve checks if Kubernetes infrastructure for all target clusters exists and is ready.
-func (a *EnsureClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton server condition")
 
 	// todo: ghosharitra: parallelize this
@@ -58,7 +58,7 @@ func (a *EnsureClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2
 }
 
 // Run ensures that the infrastructure for all target clusters exists and is ready.
-func (a *EnsureClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+func (a *ClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton server infrastructure creation for all target clusters")
 
 	// todo: explicitly handle creation of configmaps here

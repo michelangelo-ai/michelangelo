@@ -11,6 +11,7 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/creation"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/triton/deletion"
@@ -31,9 +32,9 @@ type TritonPlugin struct {
 }
 
 // NewPlugin creates a Triton plugin with creation and deletion workflows.
-func NewPlugin(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
+func NewPlugin(backend backends.Backend, endpointRegistry endpointregistry.EndpointRegistry, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
-		creationPlugin: creation.NewTritonCreationPlugin(backend, logger),
+		creationPlugin: creation.NewTritonCreationPlugin(backend, endpointRegistry, logger),
 		deletionPlugin: deletion.NewTritonDeletionPlugin(backend, modelConfigMapProvider, logger),
 
 		backend:  backend,

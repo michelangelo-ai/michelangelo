@@ -12,6 +12,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const (
@@ -20,22 +24,25 @@ const (
 	istioNetworkingVersion = "v1"
 	serviceEntryResource   = "serviceentries"
 
-	// Annotation keys for ServiceEntry
-	annotationClusterID   = "michelangelo.ai/cluster-id"
-	annotationAPIHost     = "michelangelo.ai/api-host"
-	annotationAPIPort     = "michelangelo.ai/api-port"
-	annotationTokenSecret = "michelangelo.ai/token-secret"
-	annotationCASecret    = "michelangelo.ai/ca-secret"
-
-	// Label keys
+	// Label keys (control-plane + target-cluster discovery)
 	labelInferenceServer = "michelangelo.ai/inference-server"
 	labelClusterID       = "michelangelo.ai/cluster-id"
 	labelComponent       = "app.kubernetes.io/component"
 	labelManagedBy       = "app.kubernetes.io/managed-by"
 
-	// Default ports
+	// Label on the *target cluster* Service that represents the east-west gateway.
+	// Sandbox setup should own this Service and apply these labels.
+	labelEastWestGateway = "michelangelo.ai/east-west-gateway"
+
+	// Control-plane object names
+	globalServiceEntryName = "ma-inference-endpoints"
+
+	// Default logical ports exposed by the upstream
 	defaultHTTPPort = 80
 	defaultGRPCPort = 8001
+
+	// Default actual gateway port if we can't infer one from the Service.
+	defaultEastWestGatewayPort = 15443
 )
 
 var serviceEntryGVR = schema.GroupVersionResource{
@@ -46,406 +53,457 @@ var serviceEntryGVR = schema.GroupVersionResource{
 
 var _ EndpointRegistry = &istioEndpointRegistry{}
 
-// istioEndpointRegistry implements EndpointRegistry using Istio ServiceEntry
-// and Kubernetes ExternalName Services.
+// istioEndpointRegistry implements EndpointRegistry using:
+// - a single control-plane ServiceEntry (hosts = all inference-server hosts; endpoints = per-cluster east-west gateways)
+// - one control-plane ExternalName Service per inference server (bridge for HTTPRoute backendRefs)
 type istioEndpointRegistry struct {
 	dynamicClient dynamic.Interface
 	kubeClient    client.Client
+	clientFactory clientfactory.ClientFactory
 	logger        *zap.Logger
 }
 
-// NewIstioEndpointRegistry creates a new Istio-based endpoint registry.
 func NewIstioEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
+	sp := secrets.NewProvider(kubeClient)
+	cf := clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger)
 	return &istioEndpointRegistry{
 		dynamicClient: dynamicClient,
 		kubeClient:    kubeClient,
+		clientFactory: cf,
 		logger:        logger,
 	}
 }
 
-// RegisterEndpoint creates a ServiceEntry and ExternalName Service for the cluster endpoint.
-func (r *istioEndpointRegistry) RegisterEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	logger.Info("Registering cluster endpoint",
-		zap.String("inferenceServer", endpoint.InferenceServerName),
-		zap.String("namespace", endpoint.Namespace),
-		zap.String("clusterID", endpoint.ClusterID),
-	)
-
-	// Create ServiceEntry in the control plane
-	if err := r.createServiceEntry(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to create ServiceEntry for cluster %s: %w", endpoint.ClusterID, err)
-	}
-
-	// Create ExternalName Service for HTTPRoute compatibility
-	if err := r.createExternalNameService(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to create ExternalName Service for cluster %s: %w", endpoint.ClusterID, err)
-	}
-
-	logger.Info("Successfully registered cluster endpoint",
-		zap.String("inferenceServer", endpoint.InferenceServerName),
-		zap.String("clusterID", endpoint.ClusterID),
-	)
-	return nil
-}
-
-// UnregisterEndpoint removes the ServiceEntry and ExternalName Service for a cluster.
-func (r *istioEndpointRegistry) UnregisterEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error {
-	logger.Info("Unregistering cluster endpoint",
-		zap.String("inferenceServer", inferenceServerName),
-		zap.String("namespace", namespace),
-		zap.String("clusterID", clusterID),
-	)
-
-	// Delete ServiceEntry
-	serviceEntryName := r.buildServiceEntryName(inferenceServerName, clusterID)
-	if err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).Delete(ctx, serviceEntryName, metav1.DeleteOptions{}); err != nil {
-		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete ServiceEntry %s: %w", serviceEntryName, err)
-		}
-		logger.Debug("ServiceEntry not found, already deleted", zap.String("name", serviceEntryName))
-	}
-
-	// Delete ExternalName Service
-	externalServiceName := r.buildExternalServiceName(inferenceServerName, clusterID)
-	externalService := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      externalServiceName,
-			Namespace: namespace,
-		},
-	}
-	if err := r.kubeClient.Delete(ctx, externalService); err != nil {
-		if !errors.IsNotFound(err) {
-			return fmt.Errorf("failed to delete ExternalName Service %s: %w", externalServiceName, err)
-		}
-		logger.Debug("ExternalName Service not found, already deleted", zap.String("name", externalServiceName))
-	}
-
-	logger.Info("Successfully unregistered cluster endpoint",
-		zap.String("inferenceServer", inferenceServerName),
-		zap.String("clusterID", clusterID),
-	)
-	return nil
-}
-
-// GetEndpoints retrieves all registered cluster endpoints for an inference server.
-func (r *istioEndpointRegistry) GetEndpoints(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]ClusterEndpoint, error) {
-	logger.Debug("Getting endpoints for inference server",
-		zap.String("inferenceServer", inferenceServerName),
-		zap.String("namespace", namespace),
-	)
-
-	// List ServiceEntries with label selector
-	labelSelector := fmt.Sprintf("%s=%s", labelInferenceServer, inferenceServerName)
-	list, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).List(ctx, metav1.ListOptions{
-		LabelSelector: labelSelector,
-	})
+// todo: ghosharitra: add comments here
+func (r *istioEndpointRegistry) EnsureRegisteredEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
+	resolved, err := r.resolveEndpointFromTargetCluster(ctx, endpoint)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list ServiceEntries: %w", err)
+		return err
 	}
 
-	endpoints := make([]ClusterEndpoint, 0, len(list.Items))
-	for _, item := range list.Items {
-		endpoint, err := r.parseServiceEntry(&item)
-		if err != nil {
-			logger.Warn("Failed to parse ServiceEntry, skipping",
-				zap.String("name", item.GetName()),
-				zap.Error(err),
-			)
+	// ServiceEntry must exist before ExternalName bridge so Istio knows how to route the hostname.
+	if err := r.ensureGlobalServiceEntry(ctx, logger, resolved); err != nil {
+		return err
+	}
+
+	return r.ensureBridgeService(ctx, logger, resolved.InferenceServerName, resolved.Namespace)
+}
+
+// todo: ghosharitra: add comments here
+func (r *istioEndpointRegistry) DeleteRegisteredEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error {
+	se, err := r.getGlobalServiceEntry(ctx, namespace)
+	if err != nil {
+		return err
+	}
+	if se == nil {
+		return nil
+	}
+
+	endpoints, _, _ := unstructured.NestedSlice(se.Object, "spec", "endpoints")
+	newEndpoints := make([]interface{}, 0, len(endpoints))
+	for _, e := range endpoints {
+		m, ok := e.(map[string]interface{})
+		if !ok {
 			continue
 		}
-		endpoints = append(endpoints, *endpoint)
+		labels, _, _ := unstructured.NestedStringMap(m, "labels")
+		if labels[labelClusterID] == clusterID {
+			continue
+		}
+		newEndpoints = append(newEndpoints, m)
+	}
+	if err := unstructured.SetNestedSlice(se.Object, newEndpoints, "spec", "endpoints"); err != nil {
+		return fmt.Errorf("failed to set ServiceEntry endpoints: %w", err)
 	}
 
-	return endpoints, nil
+	logger.Info("Updating global ServiceEntry to remove cluster endpoint",
+		zap.String("serviceEntry", globalServiceEntryName),
+		zap.String("namespace", namespace),
+		zap.String("clusterID", clusterID),
+	)
+	if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).Update(ctx, se, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update global ServiceEntry: %w", err)
+	}
+	return nil
 }
 
-// GetEndpoint retrieves a specific cluster endpoint.
-func (r *istioEndpointRegistry) GetEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) (*ClusterEndpoint, error) {
-	serviceEntryName := r.buildServiceEntryName(inferenceServerName, clusterID)
+func (r *istioEndpointRegistry) ListRegisteredEndpoints(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]ClusterEndpoint, error) {
+	se, err := r.getGlobalServiceEntry(ctx, namespace)
+	if err != nil {
+		return nil, err
+	}
+	if se == nil {
+		return []ClusterEndpoint{}, nil
+	}
 
-	item, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).Get(ctx, serviceEntryName, metav1.GetOptions{})
+	wantHost := inferenceServerHost(inferenceServerName, namespace)
+	hosts, _, _ := unstructured.NestedStringSlice(se.Object, "spec", "hosts")
+	hostExists := false
+	for _, h := range hosts {
+		if h == wantHost {
+			hostExists = true
+			break
+		}
+	}
+	if !hostExists {
+		return []ClusterEndpoint{}, nil
+	}
+
+	endpoints, _, _ := unstructured.NestedSlice(se.Object, "spec", "endpoints")
+	out := make([]ClusterEndpoint, 0, len(endpoints))
+	for _, e := range endpoints {
+		m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		addr, _, _ := unstructured.NestedString(m, "address")
+		lbls, _, _ := unstructured.NestedStringMap(m, "labels")
+		portsAny, _, _ := unstructured.NestedMap(m, "ports")
+
+		ports := map[string]uint32{}
+		for k, v := range portsAny {
+			switch vv := v.(type) {
+			case int64:
+				ports[k] = uint32(vv)
+			case float64:
+				ports[k] = uint32(vv)
+			}
+		}
+
+		out = append(out, ClusterEndpoint{
+			ClusterID:           lbls[labelClusterID],
+			InferenceServerName: inferenceServerName,
+			Namespace:           namespace,
+			Address:             addr,
+			Ports:               ports,
+		})
+	}
+	return out, nil
+}
+
+// todo: ghosharitra: add comments here
+// HTTPRoute references this bridge service; it forwards to the ServiceEntry host.
+func (r *istioEndpointRegistry) ensureBridgeService(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
+	serviceName := fmt.Sprintf("%s-inference-bridge", inferenceServerName)
+	// ExternalName = the real service FQDN (matches ServiceEntry host and target-cluster Service).
+	externalName := inferenceServerHost(inferenceServerName, namespace)
+
+	existing := &corev1.Service{}
+	err := r.kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: namespace}, existing)
+	if err == nil {
+		needsUpdate := existing.Spec.Type != corev1.ServiceTypeExternalName || existing.Spec.ExternalName != externalName
+		if !needsUpdate {
+			return nil
+		}
+		existing.Spec.Type = corev1.ServiceTypeExternalName
+		existing.Spec.ExternalName = externalName
+		return r.kubeClient.Update(ctx, existing)
+	}
+	if !errors.IsNotFound(err) {
+		return fmt.Errorf("failed to get bridge Service %s/%s: %w", namespace, serviceName, err)
+	}
+
+	svc := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      serviceName,
+			Namespace: namespace,
+			Labels: map[string]string{
+				labelInferenceServer: inferenceServerName,
+				labelComponent:       "endpoint-registry",
+				labelManagedBy:       "michelangelo",
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:         corev1.ServiceTypeExternalName,
+			ExternalName: externalName,
+		},
+	}
+	logger.Info("Creating bridge ExternalName Service",
+		zap.String("service", serviceName),
+		zap.String("namespace", namespace),
+		zap.String("externalName", externalName),
+	)
+	if err := r.kubeClient.Create(ctx, svc); err != nil {
+		return fmt.Errorf("failed to create bridge Service %s/%s: %w", namespace, serviceName, err)
+	}
+	return nil
+}
+
+// todo: ghosharitra: add comments here
+func (r *istioEndpointRegistry) ensureGlobalServiceEntry(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
+	se, err := r.getGlobalServiceEntry(ctx, endpoint.Namespace)
+	if err != nil {
+		return err
+	}
+
+	if se == nil {
+		se = r.newGlobalServiceEntry(endpoint.Namespace)
+	}
+
+	// Hosts = union of all inference-server hosts.
+	hosts, _, _ := unstructured.NestedStringSlice(se.Object, "spec", "hosts")
+	wantHost := inferenceServerHost(endpoint.InferenceServerName, endpoint.Namespace)
+	if !containsString(hosts, wantHost) {
+		hosts = append(hosts, wantHost)
+	}
+	if err := unstructured.SetNestedStringSlice(se.Object, hosts, "spec", "hosts"); err != nil {
+		return fmt.Errorf("failed to set ServiceEntry hosts: %w", err)
+	}
+
+	// Endpoints = one per cluster (east-west gateways), shared across all hosts.
+	endpoints, _, _ := unstructured.NestedSlice(se.Object, "spec", "endpoints")
+	newEndpoints := make([]interface{}, 0, len(endpoints)+1)
+	replaced := false
+	for _, e := range endpoints {
+		m, ok := e.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		lbls, _, _ := unstructured.NestedStringMap(m, "labels")
+		if lbls[labelClusterID] == endpoint.ClusterID {
+			newEndpoints = append(newEndpoints, r.serviceEntryEndpoint(endpoint))
+			replaced = true
+		} else {
+			newEndpoints = append(newEndpoints, m)
+		}
+	}
+	if !replaced {
+		newEndpoints = append(newEndpoints, r.serviceEntryEndpoint(endpoint))
+	}
+	if err := unstructured.SetNestedSlice(se.Object, newEndpoints, "spec", "endpoints"); err != nil {
+		return fmt.Errorf("failed to set ServiceEntry endpoints: %w", err)
+	}
+
+	// Upsert.
+	creationTimestamp := se.GetCreationTimestamp()
+	if creationTimestamp.IsZero() {
+		logger.Info("Creating global ServiceEntry",
+			zap.String("serviceEntry", globalServiceEntryName),
+			zap.String("namespace", endpoint.Namespace),
+		)
+		if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Create(ctx, se, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("failed to create global ServiceEntry: %w", err)
+		}
+		return nil
+	}
+
+	if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Update(ctx, se, metav1.UpdateOptions{}); err != nil {
+		return fmt.Errorf("failed to update global ServiceEntry: %w", err)
+	}
+	return nil
+}
+
+func (r *istioEndpointRegistry) getGlobalServiceEntry(ctx context.Context, namespace string) (*unstructured.Unstructured, error) {
+	se, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(namespace).Get(ctx, globalServiceEntryName, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("failed to get ServiceEntry %s: %w", serviceEntryName, err)
+		return nil, fmt.Errorf("failed to get global ServiceEntry %s/%s: %w", namespace, globalServiceEntryName, err)
 	}
-
-	return r.parseServiceEntry(item)
+	return se, nil
 }
 
-// UpdateEndpoint updates an existing cluster endpoint registration.
-func (r *istioEndpointRegistry) UpdateEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	logger.Info("Updating cluster endpoint",
-		zap.String("inferenceServer", endpoint.InferenceServerName),
-		zap.String("clusterID", endpoint.ClusterID),
-	)
-
-	// Update ServiceEntry
-	if err := r.updateServiceEntry(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to update ServiceEntry for cluster %s: %w", endpoint.ClusterID, err)
-	}
-
-	// Update ExternalName Service
-	if err := r.updateExternalNameService(ctx, logger, endpoint); err != nil {
-		return fmt.Errorf("failed to update ExternalName Service for cluster %s: %w", endpoint.ClusterID, err)
-	}
-
-	return nil
-}
-
-// createServiceEntry creates an Istio ServiceEntry for the cluster endpoint.
-func (r *istioEndpointRegistry) createServiceEntry(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceEntryName := r.buildServiceEntryName(endpoint.InferenceServerName, endpoint.ClusterID)
-
-	// Check if ServiceEntry already exists
-	existing, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Get(ctx, serviceEntryName, metav1.GetOptions{})
-	if err == nil {
-		logger.Info("ServiceEntry already exists, skipping creation", zap.String("name", serviceEntryName))
-		// Update if needed
-		return r.updateServiceEntrySpec(ctx, existing, endpoint)
-	}
-	if !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to check existing ServiceEntry: %w", err)
-	}
-
-	serviceEntry := r.buildServiceEntry(endpoint)
-	if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Create(ctx, serviceEntry, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("failed to create ServiceEntry: %w", err)
-	}
-
-	logger.Info("Created ServiceEntry",
-		zap.String("name", serviceEntryName),
-		zap.String("host", endpoint.ServiceHost),
-	)
-	return nil
-}
-
-// createExternalNameService creates a Kubernetes ExternalName Service that points
-// to the ServiceEntry host. This enables HTTPRoute to reference the endpoint.
-func (r *istioEndpointRegistry) createExternalNameService(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceName := r.buildExternalServiceName(endpoint.InferenceServerName, endpoint.ClusterID)
-
-	// Check if Service already exists
-	existing := &corev1.Service{}
-	err := r.kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: endpoint.Namespace}, existing)
-	if err == nil {
-		logger.Info("ExternalName Service already exists, skipping creation", zap.String("name", serviceName))
-		return nil
-	}
-	if !errors.IsNotFound(err) {
-		return fmt.Errorf("failed to check existing ExternalName Service: %w", err)
-	}
-
-	service := r.buildExternalNameService(endpoint)
-	if err := r.kubeClient.Create(ctx, service); err != nil {
-		return fmt.Errorf("failed to create ExternalName Service: %w", err)
-	}
-
-	logger.Info("Created ExternalName Service",
-		zap.String("name", serviceName),
-		zap.String("externalName", endpoint.ServiceHost),
-	)
-	return nil
-}
-
-// updateServiceEntry updates an existing ServiceEntry.
-func (r *istioEndpointRegistry) updateServiceEntry(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceEntryName := r.buildServiceEntryName(endpoint.InferenceServerName, endpoint.ClusterID)
-
-	existing, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Get(ctx, serviceEntryName, metav1.GetOptions{})
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Create if not exists
-			return r.createServiceEntry(ctx, logger, endpoint)
-		}
-		return fmt.Errorf("failed to get ServiceEntry: %w", err)
-	}
-
-	return r.updateServiceEntrySpec(ctx, existing, endpoint)
-}
-
-// updateServiceEntrySpec updates the spec of an existing ServiceEntry.
-func (r *istioEndpointRegistry) updateServiceEntrySpec(ctx context.Context, existing *unstructured.Unstructured, endpoint ClusterEndpoint) error {
-	newEntry := r.buildServiceEntry(endpoint)
-
-	// Update annotations and spec
-	existing.SetAnnotations(newEntry.GetAnnotations())
-	if err := unstructured.SetNestedField(existing.Object, newEntry.Object["spec"], "spec"); err != nil {
-		return fmt.Errorf("failed to set spec: %w", err)
-	}
-
-	if _, err := r.dynamicClient.Resource(serviceEntryGVR).Namespace(endpoint.Namespace).Update(ctx, existing, metav1.UpdateOptions{}); err != nil {
-		return fmt.Errorf("failed to update ServiceEntry: %w", err)
-	}
-
-	return nil
-}
-
-// updateExternalNameService updates an existing ExternalName Service.
-func (r *istioEndpointRegistry) updateExternalNameService(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	serviceName := r.buildExternalServiceName(endpoint.InferenceServerName, endpoint.ClusterID)
-
-	existing := &corev1.Service{}
-	err := r.kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: endpoint.Namespace}, existing)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return r.createExternalNameService(ctx, logger, endpoint)
-		}
-		return fmt.Errorf("failed to get ExternalName Service: %w", err)
-	}
-
-	// Update external name
-	existing.Spec.ExternalName = endpoint.ServiceHost
-	if err := r.kubeClient.Update(ctx, existing); err != nil {
-		return fmt.Errorf("failed to update ExternalName Service: %w", err)
-	}
-
-	return nil
-}
-
-// buildServiceEntry constructs an Istio ServiceEntry for the endpoint.
-func (r *istioEndpointRegistry) buildServiceEntry(endpoint ClusterEndpoint) *unstructured.Unstructured {
-	serviceEntryName := r.buildServiceEntryName(endpoint.InferenceServerName, endpoint.ClusterID)
-
-	servicePort := endpoint.ServicePort
-	if servicePort == 0 {
-		servicePort = defaultHTTPPort
-	}
-
+func (r *istioEndpointRegistry) newGlobalServiceEntry(namespace string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": fmt.Sprintf("%s/%s", istioNetworkingGroup, istioNetworkingVersion),
 			"kind":       "ServiceEntry",
 			"metadata": map[string]interface{}{
-				"name":      serviceEntryName,
-				"namespace": endpoint.Namespace,
+				"name":      globalServiceEntryName,
+				"namespace": namespace,
 				"labels": map[string]interface{}{
-					labelInferenceServer: endpoint.InferenceServerName,
-					labelClusterID:       endpoint.ClusterID,
-					labelComponent:       "endpoint-registry",
-					labelManagedBy:       "michelangelo",
-				},
-				"annotations": map[string]interface{}{
-					annotationClusterID:   endpoint.ClusterID,
-					annotationAPIHost:     endpoint.Host,
-					annotationAPIPort:     endpoint.Port,
-					annotationTokenSecret: endpoint.TokenSecretRef,
-					annotationCASecret:    endpoint.CASecretRef,
+					labelComponent: "endpoint-registry",
+					labelManagedBy: "michelangelo",
 				},
 			},
 			"spec": map[string]interface{}{
-				"hosts": []interface{}{
-					// Use a virtual hostname that clients will use
-					fmt.Sprintf("%s-%s.inference.local", endpoint.InferenceServerName, endpoint.ClusterID),
-				},
-				"location": "MESH_EXTERNAL",
+				"hosts":      []interface{}{},
+				"location":   "MESH_EXTERNAL",
+				"resolution": "STATIC",
 				"ports": []interface{}{
-					map[string]interface{}{
-						"number":   int64(servicePort),
-						"name":     "http",
-						"protocol": "HTTP",
-					},
-					map[string]interface{}{
-						"number":   int64(defaultGRPCPort),
-						"name":     "grpc",
-						"protocol": "GRPC",
-					},
+					map[string]interface{}{"number": int64(defaultHTTPPort), "name": "http", "protocol": "HTTP"},
+					map[string]interface{}{"number": int64(defaultGRPCPort), "name": "grpc", "protocol": "GRPC"},
 				},
-				"resolution": "DNS",
-				"endpoints": []interface{}{
-					map[string]interface{}{
-						"address": endpoint.Host, // The actual node hostname/IP
-						"ports": map[string]interface{}{
-							"http": int64(servicePort),
-							"grpc": int64(defaultGRPCPort),
-						},
-					},
-				},
+				"endpoints": []interface{}{},
 			},
 		},
 	}
 }
 
-// buildExternalNameService constructs a Kubernetes ExternalName Service.
-// The ExternalName points to the ServiceEntry's virtual hostname, enabling
-// HTTPRoutes to route through the ServiceEntry to the actual backend.
-func (r *istioEndpointRegistry) buildExternalNameService(endpoint ClusterEndpoint) *corev1.Service {
-	serviceName := r.buildExternalServiceName(endpoint.InferenceServerName, endpoint.ClusterID)
-	// Point to the ServiceEntry's virtual hostname (not the raw node hostname)
-	serviceEntryHost := fmt.Sprintf("%s-%s.inference.local", endpoint.InferenceServerName, endpoint.ClusterID)
-
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      serviceName,
-			Namespace: endpoint.Namespace,
-			Labels: map[string]string{
-				labelInferenceServer: endpoint.InferenceServerName,
-				labelClusterID:       endpoint.ClusterID,
-				labelComponent:       "endpoint-registry",
-				labelManagedBy:       "michelangelo",
-			},
-			Annotations: map[string]string{
-				annotationClusterID:   endpoint.ClusterID,
-				annotationAPIHost:     endpoint.Host,
-				annotationAPIPort:     endpoint.Port,
-				annotationTokenSecret: endpoint.TokenSecretRef,
-				annotationCASecret:    endpoint.CASecretRef,
-			},
+func (r *istioEndpointRegistry) serviceEntryEndpoint(endpoint ClusterEndpoint) map[string]interface{} {
+	httpPort := endpoint.Ports["http"]
+	if httpPort == 0 {
+		httpPort = defaultEastWestGatewayPort
+	}
+	grpcPort := endpoint.Ports["grpc"]
+	if grpcPort == 0 {
+		grpcPort = defaultEastWestGatewayPort
+	}
+	return map[string]interface{}{
+		"address": endpoint.Address,
+		"labels": map[string]interface{}{
+			labelClusterID: endpoint.ClusterID,
 		},
-		Spec: corev1.ServiceSpec{
-			Type:         corev1.ServiceTypeExternalName,
-			ExternalName: serviceEntryHost,
+		"ports": map[string]interface{}{
+			"http": int64(httpPort),
+			"grpc": int64(grpcPort),
 		},
 	}
 }
 
-// parseServiceEntry extracts a ClusterEndpoint from a ServiceEntry.
-func (r *istioEndpointRegistry) parseServiceEntry(item *unstructured.Unstructured) (*ClusterEndpoint, error) {
-	annotations := item.GetAnnotations()
-	labels := item.GetLabels()
-
-	// Extract hosts from spec
-	hosts, found, err := unstructured.NestedStringSlice(item.Object, "spec", "hosts")
-	if err != nil || !found || len(hosts) == 0 {
-		return nil, fmt.Errorf("ServiceEntry has no hosts configured")
+func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Context, endpoint ClusterEndpoint) (ClusterEndpoint, error) {
+	if endpoint.TargetCluster == nil {
+		return ClusterEndpoint{}, fmt.Errorf("targetCluster is required for cluster %s", endpoint.ClusterID)
+	}
+	switch endpoint.TargetCluster.GetConfig().(type) {
+	case *v2pb.ClusterTarget_Kubernetes:
+		// ok
+	default:
+		return ClusterEndpoint{}, fmt.Errorf("unsupported cluster type: %T", endpoint.TargetCluster.GetConfig())
 	}
 
-	// Extract port from spec
-	ports, found, err := unstructured.NestedSlice(item.Object, "spec", "ports")
-	var servicePort uint32 = defaultHTTPPort
-	if err == nil && found && len(ports) > 0 {
-		if portMap, ok := ports[0].(map[string]interface{}); ok {
-			if portNum, exists := portMap["number"]; exists {
-				switch v := portNum.(type) {
-				case int64:
-					servicePort = uint32(v)
-				case float64:
-					servicePort = uint32(v)
-				}
+	clusterClient, err := r.clientFactory.GetClient(ctx, endpoint.TargetCluster.GetKubernetes())
+	if err != nil {
+		return ClusterEndpoint{}, fmt.Errorf("failed to get client for cluster %s: %w", endpoint.ClusterID, err)
+	}
+
+	// Discover the east-west gateway Service by label.
+	svcs := &corev1.ServiceList{}
+	if err := clusterClient.List(ctx, svcs, client.MatchingLabels{
+		labelEastWestGateway: "true",
+		labelClusterID:       endpoint.ClusterID,
+	}); err != nil {
+		return ClusterEndpoint{}, fmt.Errorf("failed to list east-west gateway services in cluster %s: %w", endpoint.ClusterID, err)
+	}
+	if len(svcs.Items) == 0 {
+		return ClusterEndpoint{}, fmt.Errorf("no east-west gateway Service found in cluster %s (expected labels: %s=true, %s=%s)",
+			endpoint.ClusterID, labelEastWestGateway, labelClusterID, endpoint.ClusterID)
+	}
+
+	svc := svcs.Items[0]
+
+	var addr string
+	var port uint32
+
+	// For NodePort services (common in k3d), we need the node address + NodePort.
+	// For LoadBalancer/ClusterIP, we use the service address + service port.
+	if svc.Spec.Type == corev1.ServiceTypeNodePort {
+		// Get a node address from the target cluster
+		nodes := &corev1.NodeList{}
+		if err := clusterClient.List(ctx, nodes); err != nil {
+			return ClusterEndpoint{}, fmt.Errorf("failed to list nodes in cluster %s: %w", endpoint.ClusterID, err)
+		}
+		if len(nodes.Items) == 0 {
+			return ClusterEndpoint{}, fmt.Errorf("no nodes found in cluster %s", endpoint.ClusterID)
+		}
+		addr = nodeAddress(&nodes.Items[0])
+		port = serviceNodePort(&svc)
+	} else {
+		addr = serviceAddress(&svc)
+		port = servicePort(&svc)
+	}
+
+	if addr == "" {
+		return ClusterEndpoint{}, fmt.Errorf("east-west gateway Service %s/%s has no reachable address", svc.Namespace, svc.Name)
+	}
+	if port == 0 {
+		port = defaultEastWestGatewayPort
+	}
+
+	endpoint.Address = addr
+	if endpoint.Ports == nil {
+		endpoint.Ports = map[string]uint32{}
+	}
+	// Both logical ports route via the gateway; the gateway routes to the right upstream.
+	endpoint.Ports["http"] = port
+	endpoint.Ports["grpc"] = port
+	return endpoint, nil
+}
+
+func serviceAddress(svc *corev1.Service) string {
+	if len(svc.Status.LoadBalancer.Ingress) > 0 {
+		if svc.Status.LoadBalancer.Ingress[0].IP != "" {
+			return svc.Status.LoadBalancer.Ingress[0].IP
+		}
+		if svc.Status.LoadBalancer.Ingress[0].Hostname != "" {
+			return svc.Status.LoadBalancer.Ingress[0].Hostname
+		}
+	}
+	if svc.Spec.ExternalName != "" {
+		return svc.Spec.ExternalName
+	}
+	if svc.Spec.ClusterIP != "" && svc.Spec.ClusterIP != "None" {
+		return svc.Spec.ClusterIP
+	}
+	return ""
+}
+
+func servicePort(svc *corev1.Service) uint32 {
+	for _, p := range svc.Spec.Ports {
+		switch p.Name {
+		case "tls", "https", "istio":
+			if p.Port > 0 {
+				return uint32(p.Port)
 			}
 		}
 	}
-
-	return &ClusterEndpoint{
-		ClusterID:           annotations[annotationClusterID],
-		InferenceServerName: labels[labelInferenceServer],
-		Namespace:           item.GetNamespace(),
-		Host:                annotations[annotationAPIHost],
-		Port:                annotations[annotationAPIPort],
-		ServiceHost:         hosts[0],
-		ServicePort:         servicePort,
-		TokenSecretRef:      annotations[annotationTokenSecret],
-		CASecretRef:         annotations[annotationCASecret],
-	}, nil
+	if len(svc.Spec.Ports) > 0 && svc.Spec.Ports[0].Port > 0 {
+		return uint32(svc.Spec.Ports[0].Port)
+	}
+	return 0
 }
 
-// buildServiceEntryName generates the name for a ServiceEntry.
-func (r *istioEndpointRegistry) buildServiceEntryName(inferenceServerName, clusterID string) string {
-	return fmt.Sprintf("%s-%s-se", inferenceServerName, clusterID)
+// serviceNodePort returns the NodePort for the east-west gateway service.
+func serviceNodePort(svc *corev1.Service) uint32 {
+	for _, p := range svc.Spec.Ports {
+		switch p.Name {
+		case "tls", "https", "istio":
+			if p.NodePort > 0 {
+				return uint32(p.NodePort)
+			}
+		}
+	}
+	if len(svc.Spec.Ports) > 0 && svc.Spec.Ports[0].NodePort > 0 {
+		return uint32(svc.Spec.Ports[0].NodePort)
+	}
+	return 0
 }
 
-// buildExternalServiceName generates the name for an ExternalName Service.
-func (r *istioEndpointRegistry) buildExternalServiceName(inferenceServerName, clusterID string) string {
-	return fmt.Sprintf("%s-%s-external", inferenceServerName, clusterID)
+// nodeAddress returns a routable address for the node.
+// Prefers InternalIP, then ExternalIP, then Hostname.
+func nodeAddress(node *corev1.Node) string {
+	var internalIP, externalIP, hostname string
+	for _, addr := range node.Status.Addresses {
+		switch addr.Type {
+		case corev1.NodeInternalIP:
+			internalIP = addr.Address
+		case corev1.NodeExternalIP:
+			externalIP = addr.Address
+		case corev1.NodeHostName:
+			hostname = addr.Address
+		}
+	}
+	// For k3d, InternalIP is the Docker container IP, which is routable within the Docker network.
+	if internalIP != "" {
+		return internalIP
+	}
+	if externalIP != "" {
+		return externalIP
+	}
+	return hostname
+}
+
+func inferenceServerHost(inferenceServerName, namespace string) string {
+	return fmt.Sprintf("%s-inference-service.%s.svc.cluster.local", inferenceServerName, namespace)
+}
+
+func containsString(xs []string, x string) bool {
+	for _, v := range xs {
+		if v == x {
+			return true
+		}
+	}
+	return false
 }

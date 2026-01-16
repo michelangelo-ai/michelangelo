@@ -9,6 +9,7 @@ go_library(
         "//go/base/conditions/interfaces:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/plugins:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton/creation:go_default_library",
         "//go/components/inferenceserver/plugins/oss/triton/deletion:go_default_library",

@@ -3,6 +3,7 @@ load("@io_bazel_rules_go//go:def.bzl", "go_library", "go_test")
 go_library(
     name = "go_default_library",
     srcs = [
+        "control_plane_discovery.go",
         "health_check.go",
         "plugin.go",
         "resource_creation.go",
@@ -14,6 +15,7 @@ go_library(
         "//go/base/conditions/interfaces:go_default_library",
         "//go/base/conditions/utils:go_default_library",
         "//go/components/inferenceserver/backends:go_default_library",
+        "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/plugins/oss/common:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

@@ -75,7 +75,7 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 			namespace, inferenceServerName, err)
 	}
 
-	// Create Service in the target cluster (returns the service with allocated NodePort)
+	// Create Service in the target cluster (ClusterIP; east-west gateway handles cross-cluster routing)
 	_, err = b.createTritonService(ctx, inferenceServerName, namespace, clusterClient)
 	if err != nil {
 		b.logger.Error("failed to create Service",
@@ -508,7 +508,7 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 					Protocol:   corev1.ProtocolTCP,
 				},
 			},
-			Type: corev1.ServiceTypeNodePort,
+			Type: corev1.ServiceTypeClusterIP,
 		},
 	}
 
@@ -521,7 +521,6 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 		return nil, fmt.Errorf("failed to create Triton Service %s/%s: %w",
 			namespace, serviceName, err)
 	}
-	// Create mutates the object in place with the server response (including allocated NodePort)
 	return service, nil
 }
 
