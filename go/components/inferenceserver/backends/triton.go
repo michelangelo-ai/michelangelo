@@ -16,7 +16,6 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -29,389 +28,267 @@ const (
 
 // Triton Server Management
 type tritonBackend struct {
-	kubeClient             client.Client
 	clientFactory          clientfactory.ClientFactory
 	modelConfigMapProvider configmap.ModelConfigMapProvider
-	endpointRegistry       endpointregistry.EndpointRegistry
 	logger                 *zap.Logger
 }
 
-func NewTritonBackend(kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, endpointRegistry endpointregistry.EndpointRegistry, logger *zap.Logger) *tritonBackend {
+func NewTritonBackend(kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) *tritonBackend {
 	sp := secrets.NewProvider(kubeClient)
 	return &tritonBackend{
-		kubeClient:             kubeClient,
 		clientFactory:          clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger),
 		modelConfigMapProvider: modelConfigMapProvider,
-		endpointRegistry:       endpointRegistry,
 		logger:                 logger,
 	}
 }
 
-func (b *tritonBackend) CreateServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
-	logger.Info("Creating Triton server",
-		zap.String("server", inferenceServer.Name),
-		zap.String("namespace", inferenceServer.Namespace),
+func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, namespace string, resourceConstraints ResourceConstraints, targetCluster *v2pb.ClusterTarget) (*ServerStatus, error) {
+	b.logger.Info("Creating Triton server",
+		zap.String("server", inferenceServerName),
+		zap.String("namespace", namespace),
 	)
-	endpoints := []string{}
-	for _, clusterTarget := range inferenceServer.Spec.ClusterTargets {
-		connectionSpec := clusterTarget.GetKubernetes()
-		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
-		if err != nil {
-			logger.Error("failed to get client for cluster",
-				zap.Error(err),
-				zap.String("operation", "create_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return nil, fmt.Errorf("failed to get client for cluster %s: %w", clusterTarget.ClusterId, err)
-		}
 
-		// Create Deployment in the target cluster
-		if err = b.createTritonDeployment(ctx, logger, inferenceServer, clusterClient); err != nil {
-			logger.Error("failed to create Deployment",
-				zap.Error(err),
-				zap.String("operation", "create_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name))
-			return nil, fmt.Errorf("failed to create Deployment for %s/%s: %w",
-				inferenceServer.Namespace, inferenceServer.Name, err)
-		}
+	var clusterClient client.Client
+	var err error
+	var host string
+	var port string
 
-		// Create Service in the target cluster (returns the service with allocated NodePort)
-		tritonService, err := b.createTritonService(ctx, logger, inferenceServer, clusterClient)
-		if err != nil {
-			logger.Error("failed to create Service",
-				zap.Error(err),
-				zap.String("operation", "create_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name))
-			return nil, fmt.Errorf("failed to create Service for %s/%s: %w",
-				inferenceServer.Namespace, inferenceServer.Name, err)
-		}
-
-		// Create empty ConfigMap for model configuration in the target cluster
-		if err = b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServer.Name, inferenceServer.Namespace, connectionSpec, nil, nil, nil); err != nil {
-			logger.Error("failed to create ConfigMap",
-				zap.Error(err),
-				zap.String("operation", "create_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name))
-			return nil, fmt.Errorf("failed to create ConfigMap for %s/%s: %w",
-				inferenceServer.Namespace, inferenceServer.Name, err)
-		}
-
-		// Find the HTTP NodePort from the created service
-		var httpNodePort int32
-		for _, port := range tritonService.Spec.Ports {
-			if port.Name == "http" {
-				httpNodePort = port.NodePort
-				break
-			}
-		}
-		if httpNodePort == 0 {
-			return nil, fmt.Errorf("Triton service %s has no HTTP NodePort allocated", tritonService.Name)
-		}
-
-		// Get a node address from the target cluster for routing
-		nodeHost, err := b.getNodeAddress(ctx, clusterClient)
-		if err != nil {
-			logger.Error("failed to get node address from target cluster",
-				zap.Error(err),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return nil, fmt.Errorf("failed to get node address for cluster %s: %w", clusterTarget.ClusterId, err)
-		}
-
-		// Register the cluster endpoint in the control plane (ServiceEntry + ExternalName Service)
-		// Use the actual node address and NodePort for traffic routing
-		clusterEndpoint := endpointregistry.ClusterEndpoint{
-			ClusterID:           clusterTarget.ClusterId,
-			InferenceServerName: inferenceServer.Name,
-			Namespace:           inferenceServer.Namespace,
-			Host:                nodeHost,
-			Port:                fmt.Sprintf("%d", httpNodePort),
-			ServiceHost:         nodeHost, // ExternalName will point to the actual node
-			ServicePort:         uint32(httpNodePort),
-			TokenSecretRef:      connectionSpec.TokenTag,
-			CASecretRef:         connectionSpec.CaDataTag,
-		}
-		if err := b.endpointRegistry.RegisterEndpoint(ctx, logger, clusterEndpoint); err != nil {
-			logger.Error("failed to register cluster endpoint",
-				zap.Error(err),
-				zap.String("operation", "create_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return nil, fmt.Errorf("failed to register endpoint for cluster %s: %w",
-				clusterTarget.ClusterId, err)
-		}
-
-		// Build endpoint URL based on cluster context
-		endpoint := b.buildServiceEndpoint(inferenceServer.Name, inferenceServer.Namespace, connectionSpec)
-		endpoints = append(endpoints, endpoint)
+	clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	if err != nil {
+		b.logger.Error("failed to get cluster client",
+			zap.Error(err),
+			zap.String("operation", "create_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
 	}
 
+	// Create Deployment in the target cluster
+	if err = b.createTritonDeployment(ctx, inferenceServerName, namespace, resourceConstraints, clusterClient); err != nil {
+		b.logger.Error("failed to create Deployment",
+			zap.Error(err),
+			zap.String("operation", "create_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName))
+		return nil, fmt.Errorf("failed to create Deployment for %s/%s: %w",
+			namespace, inferenceServerName, err)
+	}
+
+	// Create Service in the target cluster (returns the service with allocated NodePort)
+	_, err = b.createTritonService(ctx, inferenceServerName, namespace, clusterClient)
+	if err != nil {
+		b.logger.Error("failed to create Service",
+			zap.Error(err),
+			zap.String("operation", "create_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName))
+		return nil, fmt.Errorf("failed to create Service for %s/%s: %w",
+			namespace, inferenceServerName, err)
+	}
+
+	// Create empty ConfigMap for model configuration in the target cluster
+	if err = b.modelConfigMapProvider.CreateModelConfigMap(ctx, inferenceServerName, namespace, nil, nil, nil, targetCluster); err != nil {
+		b.logger.Error("failed to create ConfigMap",
+			zap.Error(err),
+			zap.String("operation", "create_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName))
+		return nil, fmt.Errorf("failed to create ConfigMap for %s/%s: %w",
+			namespace, inferenceServerName, err)
+	}
+
+	// Build endpoint URL based on cluster context
+	endpoint := b.buildServiceEndpoint(inferenceServerName, namespace, host, port)
+
 	return &ServerStatus{
-		State:     v2pb.INFERENCE_SERVER_STATE_CREATING,
-		Message:   "Triton Server creation initiated with empty ConfigMap",
-		Endpoints: endpoints,
+		ClusterState: v2pb.CLUSTER_STATE_CREATING,
+		Endpoints:    []string{endpoint},
 	}, nil
 }
 
-func (b *tritonBackend) GetServerStatus(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (*ServerStatus, error) {
-	logger.Info("Getting Triton server status", zap.String("server", inferenceServer.Name))
+func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (*ServerStatus, error) {
+	b.logger.Info("Getting Triton server status", zap.String("server", inferenceServerName))
 
-	// Check deployment status for each cluster target
 	endpoints := []string{}
-	allReady := true
-	clustersChecked := 0
-	totalClusters := len(inferenceServer.Spec.ClusterTargets)
+	var clusterClient client.Client
+	var err error
+	var host string
+	var port string
 
-	for _, clusterTarget := range inferenceServer.Spec.ClusterTargets {
-		connectionSpec := clusterTarget.GetKubernetes()
-		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
+	switch targetCluster.GetConfig().(type) {
+	case *v2pb.ClusterTarget_Kubernetes:
+		clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
 		if err != nil {
-			logger.Error("failed to get client for cluster",
+			b.logger.Error("failed to get cluster client",
 				zap.Error(err),
 				zap.String("operation", "get_server_status"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			// Mark as not ready but continue checking other clusters
-			allReady = false
-			continue
+				zap.String("namespace", namespace),
+				zap.String("inferenceServer", inferenceServerName),
+				zap.String("cluster", targetCluster.ClusterId))
+			return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
 		}
+		connectionSpec := targetCluster.GetKubernetes()
+		host = connectionSpec.Host
+		port = connectionSpec.Port
+	default:
+		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
+	}
+	endpoint := b.buildServiceEndpoint(inferenceServerName, namespace, host, port)
+	endpoints = append(endpoints, endpoint)
 
-		deployment := &appsv1.Deployment{}
-		deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServer.Name), Namespace: inferenceServer.Namespace}
+	deployment := &appsv1.Deployment{}
+	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServerName), Namespace: namespace}
 
-		if err := clusterClient.Get(ctx, deploymentKey, deployment); err != nil {
-			logger.Info("Deployment not found in cluster",
-				zap.String("cluster", clusterTarget.ClusterId),
-				zap.Error(err))
-			allReady = false
-			continue
-		}
-
-		// Check if ConfigMap exists
-		configMapName := fmt.Sprintf("%s-model-config", inferenceServer.Name)
-		configMap := &corev1.ConfigMap{}
-		configMapKey := client.ObjectKey{Name: configMapName, Namespace: inferenceServer.Namespace}
-
-		if err := clusterClient.Get(ctx, configMapKey, configMap); err != nil {
-			logger.Info("ConfigMap not found in cluster",
-				zap.String("configMap", configMapName),
-				zap.String("cluster", clusterTarget.ClusterId))
-			allReady = false
-			continue
-		}
-
-		// Check if deployment is ready by comparing against desired replicas (Spec.Replicas)
-		desiredReplicas := int32(1)
-		if deployment.Spec.Replicas != nil {
-			desiredReplicas = *deployment.Spec.Replicas
-		}
-
-		clusterReady := deployment.Status.ReadyReplicas == desiredReplicas && desiredReplicas > 0
-		if !clusterReady {
-			logger.Info("Deployment not ready in cluster",
-				zap.String("cluster", clusterTarget.ClusterId),
-				zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-				zap.Int32("desiredReplicas", desiredReplicas),
-				zap.Int32("statusReplicas", deployment.Status.Replicas))
-			allReady = false
-		} else {
-			logger.Info("Deployment ready in cluster",
-				zap.String("cluster", clusterTarget.ClusterId),
-				zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-				zap.Int32("desiredReplicas", desiredReplicas))
-		}
-
-		clustersChecked++
-
-		// Build endpoint URL based on cluster context
-		endpoint := b.buildServiceEndpoint(inferenceServer.Name, inferenceServer.Namespace, connectionSpec)
-		endpoints = append(endpoints, endpoint)
+	if err := clusterClient.Get(ctx, deploymentKey, deployment); err != nil {
+		b.logger.Info("Deployment not found in cluster",
+			zap.String("cluster", targetCluster.ClusterId),
+			zap.Error(err))
+		return &ServerStatus{
+			ClusterState: v2pb.CLUSTER_STATE_INVALID,
+			Endpoints:    endpoints,
+		}, nil
 	}
 
-	// Determine overall state: only SERVING if ALL clusters are checked and ALL are ready
-	state := v2pb.INFERENCE_SERVER_STATE_CREATING
-	message := fmt.Sprintf("Inference server %s creation is pending", inferenceServer.Name)
-
-	if clustersChecked == totalClusters && totalClusters > 0 && allReady {
-		state = v2pb.INFERENCE_SERVER_STATE_SERVING
-		message = fmt.Sprintf("Inference server %s is ready on all %d cluster(s)", inferenceServer.Name, clustersChecked)
-	} else if clustersChecked > 0 {
-		message = fmt.Sprintf("Inference server %s is creating (%d/%d cluster(s) checked, allReady=%v)",
-			inferenceServer.Name, clustersChecked, totalClusters, allReady)
+	clusterState := v2pb.CLUSTER_STATE_READY
+	// Check if deployment is ready by comparing against desired replicas
+	desiredReplicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		desiredReplicas = *deployment.Spec.Replicas
+	}
+	if clusterReady := desiredReplicas > 0 && deployment.Status.ReadyReplicas == desiredReplicas; !clusterReady {
+		clusterState = v2pb.CLUSTER_STATE_CREATING
 	}
 
-	logger.Info("Server status determined",
-		zap.String("state", state.String()),
-		zap.Int("clustersChecked", clustersChecked),
-		zap.Int("totalClusters", totalClusters),
-		zap.Bool("allReady", allReady))
+	b.logger.Info("Server status determined",
+		zap.String("clusterState", clusterState.String()),
+		zap.String("endpoint", endpoint))
 
 	return &ServerStatus{
-		State:     state,
-		Message:   message,
-		Ready:     allReady && clustersChecked == totalClusters && totalClusters > 0,
-		Endpoints: endpoints,
+		ClusterState: clusterState,
+		Endpoints:    endpoints,
 	}, nil
 }
 
-func (b *tritonBackend) DeleteServer(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) error {
-	logger.Info("Deleting Triton server", zap.String("server", inferenceServer.Name))
-
-	var errs []error
-
-	for _, clusterTarget := range inferenceServer.Spec.ClusterTargets {
-		connectionSpec := clusterTarget.GetKubernetes()
-		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
-		if err != nil {
-			logger.Error("failed to get client for cluster",
-				zap.Error(err),
-				zap.String("operation", "delete_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			errs = append(errs, fmt.Errorf("failed to get client for cluster %s: %w", clusterTarget.ClusterId, err))
-			continue
-		}
-
-		// Delete Deployment
-		deployment := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("triton-%s", inferenceServer.Name),
-				Namespace: inferenceServer.Namespace,
-			},
-		}
-
-		if err := clusterClient.Delete(ctx, deployment); client.IgnoreNotFound(err) != nil {
-			logger.Error("failed to delete deployment",
-				zap.Error(err),
-				zap.String("operation", "delete_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			errs = append(errs, err)
-		}
-
-		// Delete Service
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("%s-inference-service", inferenceServer.Name),
-				Namespace: inferenceServer.Namespace,
-			},
-		}
-		if err := clusterClient.Delete(ctx, service); client.IgnoreNotFound(err) != nil {
-			logger.Error("failed to delete service",
-				zap.Error(err),
-				zap.String("operation", "delete_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			errs = append(errs, err)
-		}
-
-		// Delete ConfigMap using the modelConfigMapProvider
-		if err := b.modelConfigMapProvider.DeleteModelConfigMap(ctx, inferenceServer.Name, inferenceServer.Namespace, connectionSpec); err != nil {
-			logger.Error("failed to delete ConfigMap",
-				zap.Error(err),
-				zap.String("operation", "delete_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			errs = append(errs, err)
-		} else {
-			logger.Info("ConfigMap deleted successfully",
-				zap.String("name", fmt.Sprintf("%s-model-config", inferenceServer.Name)),
-				zap.String("cluster", clusterTarget.ClusterId))
-		}
-
-		// Unregister the cluster endpoint from the control plane
-		if err := b.endpointRegistry.UnregisterEndpoint(ctx, logger, inferenceServer.Name, inferenceServer.Namespace, clusterTarget.ClusterId); err != nil {
-			logger.Error("failed to unregister cluster endpoint",
-				zap.Error(err),
-				zap.String("operation", "delete_server"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			errs = append(errs, err)
-		} else {
-			logger.Info("Cluster endpoint unregistered successfully",
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-		}
+func (b *tritonBackend) DeleteServer(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) error {
+	b.logger.Info("Deleting Triton server", zap.String("server", inferenceServerName))
+	clusterClient, err := b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	if err != nil {
+		b.logger.Error("failed to get cluster client",
+			zap.Error(err),
+			zap.String("operation", "delete_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
 	}
 
-	if len(errs) > 0 {
-		return fmt.Errorf("encountered %d error(s) during deletion", len(errs))
+	// Delete kubernetes deployment
+	deployment := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("triton-%s", inferenceServerName),
+			Namespace: namespace,
+		},
 	}
 
+	if err := clusterClient.Delete(ctx, deployment); client.IgnoreNotFound(err) != nil {
+		b.logger.Error("failed to delete deployment",
+			zap.Error(err),
+			zap.String("operation", "delete_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return fmt.Errorf("failed to delete deployment for %s/%s: %w", namespace, inferenceServerName, err)
+	}
+
+	// Delete kubernetes service
+	service := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-inference-service", inferenceServerName),
+			Namespace: namespace,
+		},
+	}
+	if err := clusterClient.Delete(ctx, service); client.IgnoreNotFound(err) != nil {
+		b.logger.Error("failed to delete service",
+			zap.Error(err),
+			zap.String("operation", "delete_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return fmt.Errorf("failed to delete service for %s/%s: %w", namespace, inferenceServerName, err)
+	}
+
+	// Delete model configmap
+	if err := b.modelConfigMapProvider.DeleteModelConfigMap(ctx, inferenceServerName, namespace, targetCluster); err != nil {
+		b.logger.Error("failed to delete ConfigMap",
+			zap.Error(err),
+			zap.String("operation", "delete_server"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return fmt.Errorf("failed to delete ConfigMap for %s/%s: %w", namespace, inferenceServerName, err)
+	}
 	return nil
 }
 
-func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer) (bool, error) {
-	logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", inferenceServer.Name))
+func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
+	b.logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", inferenceServerName))
 
-	for _, clusterTarget := range inferenceServer.Spec.ClusterTargets {
-		connectionSpec := clusterTarget.GetKubernetes()
-		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
-		if err != nil {
-			logger.Error("failed to get client for cluster",
-				zap.Error(err),
-				zap.String("operation", "health_check"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("inferenceServer", inferenceServer.Name),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return false, fmt.Errorf("failed to get client for cluster %s: %w", clusterTarget.ClusterId, err)
-		}
+	clusterClient, err := b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	if err != nil {
+		b.logger.Error("failed to get cluster client",
+			zap.Error(err),
+			zap.String("operation", "health_check"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return false, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+	}
 
-		deploymentName := fmt.Sprintf("triton-%s", inferenceServer.Name)
-		deployment := &appsv1.Deployment{}
+	deploymentName := fmt.Sprintf("triton-%s", inferenceServerName)
+	deployment := &appsv1.Deployment{}
 
-		err = clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: inferenceServer.Namespace}, deployment)
-		if err != nil {
-			logger.Error("failed to get Triton deployment",
-				zap.Error(err),
-				zap.String("operation", "health_check"),
-				zap.String("namespace", inferenceServer.Namespace),
-				zap.String("deployment", deploymentName),
-				zap.String("cluster", clusterTarget.ClusterId))
-			return false, fmt.Errorf("failed to get deployment %s/%s in cluster %s: %w",
-				inferenceServer.Namespace, deploymentName, clusterTarget.ClusterId, err)
-		}
+	err = clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, deployment)
+	if err != nil {
+		b.logger.Error("failed to get Triton deployment",
+			zap.Error(err),
+			zap.String("operation", "health_check"),
+			zap.String("namespace", namespace),
+			zap.String("deployment", deploymentName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return false, fmt.Errorf("failed to get deployment %s/%s in cluster %s: %w",
+			namespace, deploymentName, targetCluster.ClusterId, err)
+	}
 
-		// Check deployment conditions
-		for _, condition := range deployment.Status.Conditions {
-			if condition.Type == appsv1.DeploymentAvailable {
-				if condition.Status == corev1.ConditionTrue {
-					// Also check if pods are ready
-					if deployment.Status.ReadyReplicas > 0 && deployment.Status.ReadyReplicas == deployment.Status.Replicas {
-						logger.Info("Triton pods are ready in cluster",
-							zap.String("server", inferenceServer.Name),
-							zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-							zap.String("cluster", clusterTarget.ClusterId))
-					} else {
-						logger.Error("Triton deployment available but pods not ready",
-							zap.String("operation", "health_check"),
-							zap.String("namespace", inferenceServer.Namespace),
-							zap.String("server", inferenceServer.Name),
-							zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
-							zap.Int32("totalReplicas", deployment.Status.Replicas),
-							zap.String("cluster", clusterTarget.ClusterId))
-						return false, nil
-					}
+	// Check deployment conditions
+	for _, condition := range deployment.Status.Conditions {
+		if condition.Type == appsv1.DeploymentAvailable {
+			if condition.Status == corev1.ConditionTrue {
+				// Also check if pods are ready
+				if deployment.Status.ReadyReplicas > 0 && deployment.Status.ReadyReplicas == deployment.Status.Replicas {
+					b.logger.Info("Triton pods are ready in cluster",
+						zap.String("server", inferenceServerName),
+						zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
+						zap.String("cluster", targetCluster.ClusterId))
 				} else {
-					logger.Error("Triton deployment not available",
+					b.logger.Error("Triton deployment available but pods not ready",
 						zap.String("operation", "health_check"),
-						zap.String("namespace", inferenceServer.Namespace),
-						zap.String("server", inferenceServer.Name),
-						zap.String("reason", condition.Reason),
-						zap.String("message", condition.Message),
-						zap.String("cluster", clusterTarget.ClusterId))
+						zap.String("namespace", namespace),
+						zap.String("server", inferenceServerName),
+						zap.Int32("readyReplicas", deployment.Status.ReadyReplicas),
+						zap.Int32("totalReplicas", deployment.Status.Replicas),
+						zap.String("cluster", targetCluster.ClusterId))
 					return false, nil
 				}
+			} else {
+				b.logger.Error("Triton deployment not available",
+					zap.String("operation", "health_check"),
+					zap.String("namespace", namespace),
+					zap.String("server", inferenceServerName),
+					zap.String("reason", condition.Reason),
+					zap.String("message", condition.Message),
+					zap.String("cluster", targetCluster.ClusterId))
+				return false, nil
 			}
 		}
 	}
@@ -420,90 +297,92 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 
 // Triton Model Management
 
-func (b *tritonBackend) CheckModelStatus(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) (bool, error) {
-	logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
+func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, inferenceServerName string, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
+	b.logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
+
+	var err error
+	var host string
+	var port string
+	switch targetCluster.GetConfig().(type) {
+	case *v2pb.ClusterTarget_Kubernetes:
+		connectionSpec := targetCluster.GetKubernetes()
+		host = connectionSpec.Host
+		port = connectionSpec.Port
+	default:
+		return false, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
+	}
 
 	modelReadyPath := fmt.Sprintf("/v2/models/%s/ready", modelName)
-
-	// Use Kubernetes API proxy to access the service
-	serviceURL := b.buildServiceEndpoint(inferenceServerName, namespace, connectionSpec) + modelReadyPath
-
-	logger.Info("Checking Triton model ready endpoint",
-		zap.String("url", serviceURL),
-		zap.String("model", modelName),
-		zap.String("namespace", namespace),
-		zap.String("server", inferenceServerName))
+	serviceEndpoint := b.buildServiceEndpoint(inferenceServerName, namespace, host, port)
+	serviceURL := fmt.Sprintf("%s%s", serviceEndpoint, modelReadyPath)
+	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
+	if err != nil {
+		b.logger.Error("failed to create ready request",
+			zap.Error(err),
+			zap.String("operation", "check_model_status"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("model", modelName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return false, fmt.Errorf("failed to create ready request for model %s on %s/%s: %w",
+			modelName, namespace, inferenceServerName, err)
+	}
 
 	httpClient := &http.Client{
 		Timeout: 10 * time.Second,
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
-	if err != nil {
-		logger.Error("failed to create ready request",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", namespace),
-			zap.String("inferenceServer", inferenceServerName),
-			zap.String("model", modelName))
-		return false, fmt.Errorf("failed to create ready request for model %s on %s/%s: %w",
-			modelName, namespace, inferenceServerName, err)
-	}
-
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		logger.Error("failed to call Triton ready endpoint",
+		b.logger.Error("failed to call Triton ready endpoint",
 			zap.Error(err),
 			zap.String("operation", "check_model_status"),
 			zap.String("namespace", namespace),
 			zap.String("inferenceServer", inferenceServerName),
 			zap.String("model", modelName),
-			zap.String("url", serviceURL))
+			zap.String("url", serviceURL),
+			zap.String("cluster", targetCluster.ClusterId))
 		return false, fmt.Errorf("failed to call Triton ready endpoint for model %s on %s/%s: %w",
 			modelName, namespace, inferenceServerName, err)
 	}
 	defer resp.Body.Close()
 
-	// Model is ready if status is 200
-	ready := resp.StatusCode == http.StatusOK
-
-	if ready {
-		logger.Info("Triton model is ready",
-			zap.String("model", modelName),
-			zap.String("url", serviceURL),
-			zap.Int("statusCode", resp.StatusCode))
-	} else {
-		logger.Warn("Triton model not ready",
+	if ready := resp.StatusCode == http.StatusOK; !ready {
+		b.logger.Warn("Triton model not ready",
+			zap.String("operation", "check_model_status"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
 			zap.String("model", modelName),
 			zap.String("url", serviceURL),
 			zap.Int("statusCode", resp.StatusCode),
-			zap.String("status", resp.Status))
+			zap.String("cluster", targetCluster.ClusterId))
+		return false, nil
 	}
 
-	return ready, nil
+	return true, nil
 }
 
-func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer, clusterClient client.Client) error {
-	deploymentName := fmt.Sprintf("triton-%s", inferenceServer.Name)
+func (b *tritonBackend) createTritonDeployment(ctx context.Context, inferenceServerName, namespace string, constraints ResourceConstraints, clusterClient client.Client) error {
+	deploymentName := fmt.Sprintf("triton-%s", inferenceServerName)
 
 	// Check if Deployment already exists in the target cluster
 	existing := &appsv1.Deployment{}
-	err := clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: inferenceServer.Namespace}, existing)
+	err := clusterClient.Get(ctx, client.ObjectKey{Name: deploymentName, Namespace: namespace}, existing)
 	if err == nil {
 		// Deployment already exists, log and return success
-		logger.Info("Deployment already exists, skipping creation", zap.String("name", deploymentName))
+		b.logger.Info("Deployment already exists, skipping creation", zap.String("name", deploymentName))
 		return nil
 	}
 
-	replicas := inferenceServer.Spec.InitSpec.NumInstances
+	replicas := constraints.Replicas
 	if replicas == 0 {
-		replicas = 1
+		replicas = int32(1)
 	}
 
 	deployment := &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deploymentName,
-			Namespace: inferenceServer.Namespace,
+			Namespace: namespace,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -528,7 +407,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 								{ContainerPort: 8001, Name: "grpc"},
 								{ContainerPort: 8002, Name: "metrics"},
 							},
-							Resources: buildResourceRequirements(inferenceServer.Spec.InitSpec),
+							Resources: buildResourceRequirements(constraints),
 							Args: []string{
 								"tritonserver",
 								"--model-store=/mnt/models",
@@ -558,7 +437,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 							Name: "workdir",
 							VolumeSource: corev1.VolumeSource{
 								HostPath: &corev1.HostPathVolumeSource{
-									Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServer.Name),
+									Path: fmt.Sprintf("/var/lib/michelangelo/models/%s", inferenceServerName),
 									Type: func() *corev1.HostPathType {
 										t := corev1.HostPathDirectoryOrCreate
 										return &t
@@ -571,7 +450,7 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{
-										Name: fmt.Sprintf("%s-model-config", inferenceServer.Name),
+										Name: fmt.Sprintf("%s-model-config", inferenceServerName),
 									},
 								},
 							},
@@ -583,37 +462,37 @@ func (b *tritonBackend) createTritonDeployment(ctx context.Context, logger *zap.
 	}
 
 	if err := clusterClient.Create(ctx, deployment); err != nil {
-		logger.Error("failed to create Triton Deployment",
+		b.logger.Error("failed to create Triton Deployment",
 			zap.Error(err),
 			zap.String("operation", "create_triton_deployment"),
-			zap.String("namespace", inferenceServer.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("deployment", deploymentName))
 		return fmt.Errorf("failed to create Triton Deployment %s/%s: %w",
-			inferenceServer.Namespace, deploymentName, err)
+			namespace, deploymentName, err)
 	}
 	return nil
 }
 
-func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Logger, inferenceServer *v2pb.InferenceServer, clusterClient client.Client) (*corev1.Service, error) {
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServer.Name)
+func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServerName, namespace string, clusterClient client.Client) (*corev1.Service, error) {
+	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
 
 	// Check if Service already exists in the target cluster
 	existing := &corev1.Service{}
-	err := clusterClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: inferenceServer.Namespace}, existing)
+	err := clusterClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: namespace}, existing)
 	if err == nil {
 		// Service already exists, return it
-		logger.Info("Service already exists, skipping creation", zap.String("name", serviceName))
+		b.logger.Info("Service already exists, skipping creation", zap.String("name", serviceName))
 		return existing, nil
 	}
 
 	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      serviceName,
-			Namespace: inferenceServer.Namespace,
+			Namespace: namespace,
 		},
 		Spec: corev1.ServiceSpec{
 			Selector: map[string]string{
-				"app": fmt.Sprintf("triton-%s", inferenceServer.Name),
+				"app": fmt.Sprintf("triton-%s", inferenceServerName),
 			},
 			Ports: []corev1.ServicePort{
 				{
@@ -634,79 +513,57 @@ func (b *tritonBackend) createTritonService(ctx context.Context, logger *zap.Log
 	}
 
 	if err := clusterClient.Create(ctx, service); err != nil {
-		logger.Error("failed to create Triton Service",
+		b.logger.Error("failed to create Triton Service",
 			zap.Error(err),
 			zap.String("operation", "create_triton_service"),
-			zap.String("namespace", inferenceServer.Namespace),
+			zap.String("namespace", namespace),
 			zap.String("service", serviceName))
 		return nil, fmt.Errorf("failed to create Triton Service %s/%s: %w",
-			inferenceServer.Namespace, serviceName, err)
+			namespace, serviceName, err)
 	}
 	// Create mutates the object in place with the server response (including allocated NodePort)
 	return service, nil
 }
 
-// getNodeAddress gets an accessible address for a node in the target cluster.
-// For k3d clusters, this returns the node's hostname which is resolvable from
-// other k3d clusters on the same Docker network.
-func (b *tritonBackend) getNodeAddress(ctx context.Context, clusterClient client.Client) (string, error) {
-	nodeList := &corev1.NodeList{}
-	if err := clusterClient.List(ctx, nodeList); err != nil {
-		return "", fmt.Errorf("failed to list nodes: %w", err)
-	}
-
-	if len(nodeList.Items) == 0 {
-		return "", fmt.Errorf("no nodes found in cluster")
-	}
-
-	// Get the first node and find a usable address
-	node := nodeList.Items[0]
-
-	// Prefer InternalIP, then Hostname, then ExternalIP
-	var internalIP, hostname, externalIP string
-	for _, addr := range node.Status.Addresses {
-		switch addr.Type {
-		case corev1.NodeInternalIP:
-			internalIP = addr.Address
-		case corev1.NodeHostName:
-			hostname = addr.Address
-		case corev1.NodeExternalIP:
-			externalIP = addr.Address
-		}
-	}
-
-	// For k3d/Docker environments, hostname is often the most reliable
-	// as it's resolvable across containers on the same network
-	if hostname != "" {
-		return hostname, nil
-	}
-	if internalIP != "" {
-		return internalIP, nil
-	}
-	if externalIP != "" {
-		return externalIP, nil
-	}
-
-	return "", fmt.Errorf("no usable address found for node %s", node.Name)
+// buildServiceEndpoint constructs the Kubernetes API proxy URL for the service.
+// Format: https://{host}:{port}/api/v1/namespaces/{namespace}/services/{service}:http/proxy
+func (b *tritonBackend) buildServiceEndpoint(inferenceServerName, namespace, host, port string) string {
+	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
+	return fmt.Sprintf("https://%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
+		host, port, namespace, serviceName)
 }
 
-func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequirements {
+func (b *tritonBackend) getClusterClientFromTargetCluster(ctx context.Context, targetCluster *v2pb.ClusterTarget) (client.Client, error) {
+	switch targetCluster.GetConfig().(type) {
+	case *v2pb.ClusterTarget_Kubernetes:
+		connectionSpec := targetCluster.GetKubernetes()
+		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client for cluster %s: %w", targetCluster.ClusterId, err)
+		}
+		return clusterClient, nil
+	default:
+		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
+	}
+}
+
+func buildResourceRequirements(constraints ResourceConstraints) corev1.ResourceRequirements {
 	requests := corev1.ResourceList{}
 	limits := corev1.ResourceList{}
 
-	if initSpec.ResourceSpec.Cpu > 0 {
-		requests[corev1.ResourceCPU] = parseQuantity(fmt.Sprintf("%d", initSpec.ResourceSpec.Cpu))
-		limits[corev1.ResourceCPU] = parseQuantity(fmt.Sprintf("%d", initSpec.ResourceSpec.Cpu))
+	if constraints.Cpu > 0 {
+		requests[corev1.ResourceCPU] = parseQuantity(fmt.Sprintf("%d", constraints.Cpu))
+		limits[corev1.ResourceCPU] = parseQuantity(fmt.Sprintf("%d", constraints.Cpu))
 	}
 
-	if initSpec.ResourceSpec.Memory != "" {
-		requests[corev1.ResourceMemory] = parseQuantity(initSpec.ResourceSpec.Memory)
-		limits[corev1.ResourceMemory] = parseQuantity(initSpec.ResourceSpec.Memory)
+	if constraints.Memory != "" {
+		requests[corev1.ResourceMemory] = parseQuantity(constraints.Memory)
+		limits[corev1.ResourceMemory] = parseQuantity(constraints.Memory)
 	}
 
-	if initSpec.ResourceSpec.Gpu > 0 {
-		requests["nvidia.com/gpu"] = parseQuantity(fmt.Sprintf("%d", initSpec.ResourceSpec.Gpu))
-		limits["nvidia.com/gpu"] = parseQuantity(fmt.Sprintf("%d", initSpec.ResourceSpec.Gpu))
+	if constraints.Gpu > 0 {
+		requests["nvidia.com/gpu"] = parseQuantity(fmt.Sprintf("%d", constraints.Gpu))
+		limits["nvidia.com/gpu"] = parseQuantity(fmt.Sprintf("%d", constraints.Gpu))
 	}
 
 	return corev1.ResourceRequirements{
@@ -718,12 +575,4 @@ func buildResourceRequirements(initSpec *v2pb.InitSpec) corev1.ResourceRequireme
 func parseQuantity(value string) resource.Quantity {
 	qty, _ := resource.ParseQuantity(value)
 	return qty
-}
-
-// buildServiceEndpoint constructs the Kubernetes API proxy URL for the service.
-// Format: https://{host}:{port}/api/v1/namespaces/{namespace}/services/{service}:http/proxy
-func (b *tritonBackend) buildServiceEndpoint(inferenceServerName string, namespace string, connectionSpec *v2pb.ConnectionSpec) string {
-	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
-	return fmt.Sprintf("https://%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
-		connectionSpec.Host, connectionSpec.Port, namespace, serviceName)
 }

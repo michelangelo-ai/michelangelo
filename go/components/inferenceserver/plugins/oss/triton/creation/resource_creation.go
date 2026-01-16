@@ -7,104 +7,80 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionsUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ResourceCreationActor{}
+var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &EnsureClusterWorkloadsActor{}
 
-// ResourceCreationActor provisions Kubernetes resources for Triton inference servers.
-type ResourceCreationActor struct {
+// EnsureClusterWorkloadsActor provisions Kubernetes resources for Triton inference servers.
+type EnsureClusterWorkloadsActor struct {
 	backend backends.Backend
 	logger  *zap.Logger
 }
 
-// NewResourceCreationActor creates a condition actor for Triton server provisioning.
-func NewResourceCreationActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
-	return &ResourceCreationActor{
+// NewEnsureClusterWorkloadsActor creates a condition actor for Triton server provisioning.
+func NewEnsureClusterWorkloadsActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+	return &EnsureClusterWorkloadsActor{
 		backend: backend,
 		logger:  logger,
 	}
 }
 
 // GetType returns the condition type identifier for resource creation.
-func (a *ResourceCreationActor) GetType() string {
+func (a *EnsureClusterWorkloadsActor) GetType() string {
 	return common.TritonResourceCreationConditionType
 }
 
-// Retrieve checks if Kubernetes infrastructure exists and is ready.
-func (a *ResourceCreationActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+// Retrieve checks if Kubernetes infrastructure for all target clusters exists and is ready.
+func (a *EnsureClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton server condition")
-	// Check if inference server exists
-	// todo: ghosharitra: update this so that it checks all the cluster targets
-	status, err := a.backend.GetServerStatus(ctx, a.logger, resource)
-	if err != nil {
-		a.logger.Error("Failed to check server status",
-			zap.Error(err),
-			zap.String("operation", "get_server_status"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerCheckFailed",
-			Message: fmt.Sprintf("Failed to check server status: %v", err),
-		}, nil
-	}
 
-	if status.State == v2pb.INFERENCE_SERVER_STATE_SERVING {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "ServerReady",
-			Message: "Server is ready",
-		}, nil
-	} else if status.State == v2pb.INFERENCE_SERVER_STATE_CREATING {
-		// Server doesn't exist or is incomplete, needs to be created
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerNotFound",
-			Message: "Server needs to be created",
-		}, nil
+	// todo: ghosharitra: parallelize this
+	for _, targetCluster := range resource.Spec.ClusterTargets {
+		status, err := a.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, targetCluster)
+		if err != nil {
+			a.logger.Error("Failed to check server status",
+				zap.Error(err),
+				zap.String("operation", "get_server_status"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCheckFailed", "Failed to check cluster status"), nil
+		}
+		if status.ClusterState != v2pb.CLUSTER_STATE_READY {
+			return conditionsUtils.GenerateUnknownCondition(condition, "ClusterNotReady", fmt.Sprintf("Cluster %s is in state %s", targetCluster.ClusterId, status.ClusterState)), nil
+		}
 	}
-
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "ServerCreating",
-		Message: "Server is being created",
-	}, nil
+	return conditionsUtils.GenerateTrueCondition(condition), nil
 }
 
-// Run creates the Kubernetes deployment, service, and related resources for Triton.
-func (a *ResourceCreationActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	a.logger.Info("Running Triton server creation")
+// Run ensures that the infrastructure for all target clusters exists and is ready.
+func (a *EnsureClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
+	a.logger.Info("Running Triton server infrastructure creation for all target clusters")
+
+	// todo: explicitly handle creation of configmaps here
+
 	// todo: ghosharitra: parallelize this
-	_, err := a.backend.CreateServer(ctx, a.logger, resource)
-	if err != nil {
-		a.logger.Error("Failed to create server",
-			zap.Error(err),
-			zap.String("operation", "create_server"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "ServerCreationFailed",
-			Message: fmt.Sprintf("Failed to create server: %v", err),
-		}, err
+	for _, targetCluster := range resource.Spec.ClusterTargets {
+		_, err := a.backend.CreateServer(ctx, resource.Name, resource.Namespace, backends.ResourceConstraints{
+			Cpu:      resource.Spec.InitSpec.ResourceSpec.Cpu,
+			Memory:   resource.Spec.InitSpec.ResourceSpec.Memory,
+			Gpu:      resource.Spec.InitSpec.ResourceSpec.Gpu,
+			Replicas: resource.Spec.InitSpec.NumInstances,
+		}, targetCluster)
+		if err != nil {
+			a.logger.Error("Failed to create server",
+				zap.Error(err),
+				zap.String("operation", "create_server"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCreationFailed", fmt.Sprintf("Failed to create server in cluster %s: %v", targetCluster.ClusterId, err)), nil
+		}
 	}
 
 	// todo: ghosharitra: revise this later
-	// Return UNKNOWN status to indicate creation is in progress.
-	// The next Retrieve() call will check if resources are actually ready.
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_UNKNOWN,
-		Reason:  "ServerCreationInitiated",
-		Message: "Server creation initiated, waiting for resources to be ready",
-	}, nil
+	return conditionsUtils.GenerateUnknownCondition(condition, "ClusterCreationInitiated", "server creation initiated in all target clusters, waiting for resources to be ready"), nil
 }

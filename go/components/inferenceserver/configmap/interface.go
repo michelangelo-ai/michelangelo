@@ -18,13 +18,13 @@ type ModelConfigEntry struct {
 // Used by inference servers to configure which models to load.
 type ModelConfigMapProvider interface {
 	// CreateModelConfigMap creates a new ConfigMap with model configurations.
-	CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string) error
+	CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string, targetCluster *v2pb.ClusterTarget) error
 	// DeleteModelConfigMap removes the entire ConfigMap for an inference server.
-	DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) error
+	DeleteModelConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) error
 	// GetModelsFromConfigMap retrieves all model configurations from a ConfigMap.
-	GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec) ([]ModelConfigEntry, error)
+	GetModelsFromConfigMap(ctx context.Context, inferenceServer string, namespace string, targetCluster *v2pb.ClusterTarget) ([]ModelConfigEntry, error)
 	// AddModelToConfigMap adds a single model configuration to an existing ConfigMap.
-	AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelConfig ModelConfigEntry) error
+	AddModelToConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfig ModelConfigEntry, targetCluster *v2pb.ClusterTarget) error
 	// RemoveModelFromConfigMap removes a model configuration from a ConfigMap.
-	RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, connectionSpec *v2pb.ConnectionSpec, modelName string) error
+	RemoveModelFromConfigMap(ctx context.Context, inferenceServer string, namespace string, modelName string, targetCluster *v2pb.ClusterTarget) error
 }

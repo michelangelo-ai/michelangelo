@@ -156,10 +156,9 @@ message InferenceServerStatus {
 
 // ClusterState represents the lifecycle state of infrastructure in a cluster.
 enum ClusterState {
-  CLUSTER_STATE_UNKNOWN = 0;
+  CLUSTER_STATE_INVALID = 0;
   CLUSTER_STATE_CREATING = 1;
   CLUSTER_STATE_READY = 2;
-  CLUSTER_STATE_UPDATING = 3;
   CLUSTER_STATE_DELETING = 4;
   CLUSTER_STATE_FAILED = 5;
 }

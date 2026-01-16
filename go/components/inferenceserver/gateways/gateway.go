@@ -45,7 +45,7 @@ func NewGatewayWithClients(p Params) Gateway {
 	}
 
 	// Register Triton backend with its endpoint configuration
-	gateway.registry.registerBackend(v2pb.BACKEND_TYPE_TRITON, backends.NewTritonBackend(p.KubeClient, p.ModelConfigMapProvider, p.EndpointRegistry, p.Logger))
+	gateway.registry.registerBackend(v2pb.BACKEND_TYPE_TRITON, backends.NewTritonBackend(p.KubeClient, p.ModelConfigMapProvider, p.Logger))
 	return gateway
 }
 

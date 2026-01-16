@@ -48,6 +48,8 @@ func (a *ValidationActor) Retrieve(ctx context.Context, resource *v2pb.Inference
 		}, nil
 	}
 
+	// todo: ghosharitra: add validation for the cluster targets
+
 	return &apipb.Condition{
 		Type:    a.GetType(),
 		Status:  apipb.CONDITION_STATUS_TRUE,

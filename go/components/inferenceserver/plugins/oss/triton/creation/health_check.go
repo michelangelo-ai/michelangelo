@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
+	conditionsUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -38,48 +39,25 @@ func (a *HealthCheckActor) GetType() string {
 func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton health condition")
 
-	// todo: ghosharitra: update this so that it checks all the cluster targets
-	healthy, err := a.backend.IsHealthy(ctx, a.logger, resource)
-
-	if err == nil && healthy {
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_TRUE,
-			Reason:  "HealthCheckSucceeded",
-			Message: "Server is healthy",
-		}, nil
-	} else if err != nil {
-		a.logger.Error("Health check failed",
-			zap.Error(err),
-			zap.String("operation", "health_check"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return &apipb.Condition{
-			Type:    a.GetType(),
-			Status:  apipb.CONDITION_STATUS_FALSE,
-			Reason:  "HealthCheckFailed",
-			Message: fmt.Sprintf("Health check error: %v", err),
-		}, nil
+	// todo: ghosharitra: parallelize this
+	for _, targetCluster := range resource.Spec.ClusterTargets {
+		healthy, err := a.backend.IsHealthy(ctx, resource.Name, resource.Namespace, targetCluster)
+		if err != nil {
+			a.logger.Error("Failed to check health",
+				zap.Error(err),
+				zap.String("operation", "health_check"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+			return conditionsUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Health check error: %v", err)), nil
+		}
+		if !healthy {
+			return conditionsUtils.GenerateFalseCondition(condition, "HealthCheckFailed", fmt.Sprintf("Server is not healthy in cluster %s", targetCluster.ClusterId)), nil
+		}
 	}
-
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_FALSE,
-		Reason:  "HealthCheckFailed",
-		Message: "Server is not healthy",
-	}, nil
+	return conditionsUtils.GenerateTrueCondition(condition), nil
 }
 
 // todo: ghosharitra: revise this later
-// Run returns an unknown condition to trigger re-checking on next reconciliation.
-// Health check failures are expected during startup as pods are still coming up.
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
-	// This method is called when Retrieve() returns non-TRUE status.
-	// Return UNKNOWN to keep reconciling and wait for pods to become healthy.
-	return &apipb.Condition{
-		Type:    a.GetType(),
-		Status:  apipb.CONDITION_STATUS_UNKNOWN,
-		Reason:  "HealthCheckPending",
-		Message: "Waiting for server to become healthy",
-	}, nil
+	return condition, nil
 }

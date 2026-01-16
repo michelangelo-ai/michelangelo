@@ -27,8 +27,10 @@ func NewTritonCreationPlugin(backend backends.Backend, logger *zap.Logger) condi
 func (p *TritonCreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
 		NewValidationActor(p.backend, p.logger),
-		NewResourceCreationActor(p.backend, p.logger),
+		NewEnsureClusterWorkloadsActor(p.backend, p.logger),
 		NewHealthCheckActor(p.backend, p.logger),
+		// EnsureClusterWorkloads
+		// EnsureControlPlaneDiscovery
 	}
 }
 

@@ -106,33 +106,51 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	}
 
 	// Get current status from backend
-	status, err := p.backend.GetServerStatus(ctx, p.logger, resource)
-	if err != nil {
-		// Don't fail reconciliation for status check errors
-		p.logger.Error("Failed to get server status",
-			zap.Error(err),
-			zap.String("operation", "get_server_status"),
-			zap.String("namespace", resource.Namespace),
-			zap.String("inferenceServer", resource.Name))
-		return nil
+	numReadyClusters := 0
+	numFailedClusters := 0
+	for i, clusterTarget := range resource.Spec.ClusterTargets {
+		status, err := p.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, clusterTarget)
+		if err != nil {
+			// Don't fail reconciliation for status check errors
+			p.logger.Error("Failed to get server status",
+				zap.Error(err),
+				zap.String("operation", "get_server_status"),
+				zap.String("namespace", resource.Namespace),
+				zap.String("inferenceServer", resource.Name))
+		}
+
+		// Update status based on external state
+		if status.ClusterState != resource.Status.TargetClusterStatuses[i].State {
+			p.logger.Info("External state change detected",
+				zap.String("currentState", resource.Status.TargetClusterStatuses[i].State.String()),
+				zap.String("externalState", status.ClusterState.String()))
+
+			resource.Status.TargetClusterStatuses[i].State = status.ClusterState
+
+			// Record state transition events
+			switch status.ClusterState {
+			case v2pb.CLUSTER_STATE_READY:
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterReady", "Cluster is ready")
+				numReadyClusters++
+			case v2pb.CLUSTER_STATE_CREATING:
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterCreating", "Cluster is creating")
+			case v2pb.CLUSTER_STATE_DELETING:
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterDeleting", "Cluster is deleting")
+			case v2pb.CLUSTER_STATE_FAILED:
+				numFailedClusters++
+				p.Recorder.Event(resource, corev1.EventTypeWarning, "ClusterFailed", "Cluster failed")
+			}
+		}
 	}
 
-	// Update status based on external state
-	if status.State != resource.Status.State {
-		p.logger.Info("External state change detected",
-			zap.String("currentState", resource.Status.State.String()),
-			zap.String("externalState", status.State.String()))
-
-		resource.Status.State = status.State
-		resource.Status.ProviderMetadata = status.Message
-
-		// Record state transition events
-		switch status.State {
-		case v2pb.INFERENCE_SERVER_STATE_SERVING:
-			p.Recorder.Event(resource, corev1.EventTypeNormal, "CreationCompleted", "InferenceServer creation completed successfully")
-		case v2pb.INFERENCE_SERVER_STATE_FAILED:
-			p.Recorder.Event(resource, corev1.EventTypeWarning, "CreationFailed", "InferenceServer creation failed")
-		}
+	// todo: ghosharitra: revise this
+	// infer server state based on the number of ready and failed target cluster deployments
+	if numReadyClusters == len(resource.Spec.ClusterTargets) {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_SERVING
+	} else if numFailedClusters > 0 {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_FAILED
+	} else if numReadyClusters > 0 {
+		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_CREATING
 	}
 
 	return nil
