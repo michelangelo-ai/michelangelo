@@ -1,5 +1,3 @@
-load("@rules_python//python:defs.bzl", "py_library")
-
 # gazelle:exclude .git/
 # gazelle:exclude pkg/
 # gazelle:exclude python/
@@ -40,13 +38,4 @@ nogo(
     name = "default_nogo",
     visibility = ["//visibility:public"],
     deps = TOOLS_NOGO,
-)
-
-py_library(
-    name = "michelangelo",
-    srcs = [
-        "bc7/workflow.py",
-        "javascript/node_modules/flatted/python/flatted.py",
-    ],
-    visibility = ["//:__subpackages__"],
 )
