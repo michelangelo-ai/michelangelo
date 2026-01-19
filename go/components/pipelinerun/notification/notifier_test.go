@@ -88,8 +88,8 @@ func TestPipelineRunNotifier_NotifyOnStateChange(t *testing.T) {
 				Spec: v2pb.PipelineRunSpec{
 					Notifications: []*v2pb.Notification{
 						{
-							NotificationType: v2pb.NOTIFICATION_TYPE_SLACK,
-							EventTypes:       []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_FAILED},
+							NotificationType:  v2pb.NOTIFICATION_TYPE_SLACK,
+							EventTypes:        []v2pb.Notification_EventType{v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_FAILED},
 							SlackDestinations: []string{"#alerts"},
 						},
 					},

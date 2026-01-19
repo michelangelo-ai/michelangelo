@@ -35,7 +35,7 @@ func TestContainsEventType(t *testing.T) {
 			expected:   false,
 		},
 		{
-			name:       "Multiple event types, contains match",
+			name: "Multiple event types, contains match",
 			eventTypes: []v2pb.Notification_EventType{
 				v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_FAILED,
 				v2pb.EVENT_TYPE_PIPELINE_RUN_STATE_KILLED,
@@ -105,7 +105,7 @@ func TestGenerateText(t *testing.T) {
 			Name:      "test-run",
 			Namespace: "test-project",
 			Labels: map[string]string{
-				"michelangelo/SourcePipelineType":         "PIPELINE_TYPE_TRAIN",
+				"michelangelo/SourcePipelineType":            "PIPELINE_TYPE_TRAIN",
 				"pipeline.michelangelo/PipelineManifestType": "PIPELINE_MANIFEST_TYPE_ASL",
 			},
 		},

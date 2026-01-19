@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	_defaultMaURL   = "https://michelangelo-studio.uberinternal.com/ma/"
-	_defaultMaEmail = "michelangelo@uber.com"
+	_defaultMaURL                        = "https://michelangelo-studio.uberinternal.com/ma/"
+	_defaultMaEmail                      = "michelangelo@uber.com"
 	_sourcePipelineTypeLabelName         = "michelangelo/SourcePipelineType"
 	_sourcePipelineManifestTypeLabelName = "pipeline.michelangelo/PipelineManifestType"
 )
