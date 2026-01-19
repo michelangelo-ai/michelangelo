@@ -37,6 +37,7 @@ go_test(
         "//go/base/workflowclient/interface/interface_mock:go_default_library",
         "//go/components/pipelinerun/actors:go_default_library",
         "//go/components/pipelinerun/actors/utils:go_default_library",
+        "//go/components/pipelinerun/notification:go_default_library",
         "//go/components/pipelinerun/plugin:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",
