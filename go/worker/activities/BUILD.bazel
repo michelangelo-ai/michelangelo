@@ -6,9 +6,9 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/worker/activities",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/components/pipelinerun/utils:go_default_library",
         "//go/worker/activities/cachedoutput:go_default_library",
         "//go/worker/activities/model:go_default_library",
+        "//go/worker/activities/notification:go_default_library",
         "//go/worker/activities/ray:go_default_library",
         "//go/worker/activities/spark:go_default_library",
         "//go/worker/activities/storage:go_default_library",

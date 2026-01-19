@@ -8,7 +8,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
-	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/utils"
+	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 	"go.uber.org/zap"
 )
@@ -66,7 +66,7 @@ func (n *PipelineRunNotifier) NotifyOnStateChange(
 	execution, err := n.workflowClient.StartWorkflow(
 		ctx,
 		options,
-		utils.PRNotificationWorkflowName,
+		notification.PRNotificationWorkflowName,
 		croppedPipelineRun,
 	)
 
