@@ -2,6 +2,7 @@
 
 import argparse
 import base64
+import contextlib
 import json
 import os
 import shutil
@@ -1415,12 +1416,257 @@ def _create_inference_demo_crs():
     print("}'")
 
 
+def _generate_shared_ca_certs(cluster_names: list[str]) -> Path:
+    """Generate a shared root CA and per-cluster intermediate CAs.
+
+    For multi-cluster Istio mTLS to work, all clusters must trust each other's
+    certificates. This is achieved by having a shared root CA that signs
+    intermediate CAs for each cluster.
+
+    Directory structure:
+        certs/
+        ├── root-cert.pem       # Root CA certificate (shared)
+        ├── root-key.pem        # Root CA private key (keep secure)
+        ├── <cluster>/
+        │   ├── ca-cert.pem     # Intermediate CA certificate
+        │   ├── ca-key.pem      # Intermediate CA private key
+        │   └── cert-chain.pem  # Certificate chain (intermediate + root)
+
+    Args:
+        cluster_names: List of cluster names to generate intermediate CAs for
+
+    Returns:
+        Path to the certs directory
+    """
+    # Create a persistent certs directory in the sandbox resources
+    ca_dir = _dir / "certs"
+    ca_dir.mkdir(exist_ok=True)
+
+    root_cert = ca_dir / "root-cert.pem"
+    root_key = ca_dir / "root-key.pem"
+
+    # Generate root CA if it doesn't exist
+    if not root_cert.exists() or not root_key.exists():
+        print("   Generating root CA...")
+        subprocess.check_call(
+            [
+                "openssl",
+                "req",
+                "-x509",
+                "-sha256",
+                "-nodes",
+                "-days",
+                "3650",  # 10 years
+                "-newkey",
+                "rsa:4096",
+                "-subj",
+                "/O=Michelangelo/CN=Root CA",
+                "-keyout",
+                str(root_key),
+                "-out",
+                str(root_cert),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Generate intermediate CA for each cluster
+    for cluster_name in cluster_names:
+        cluster_dir = ca_dir / cluster_name
+        cluster_dir.mkdir(exist_ok=True)
+
+        ca_cert = cluster_dir / "ca-cert.pem"
+        ca_key = cluster_dir / "ca-key.pem"
+        ca_csr = cluster_dir / "ca-csr.pem"
+        cert_chain = cluster_dir / "cert-chain.pem"
+
+        if ca_cert.exists() and ca_key.exists():
+            print(f"   Intermediate CA for {cluster_name} already exists, skipping...")
+            continue
+
+        print(f"   Generating intermediate CA for {cluster_name}...")
+
+        # Generate intermediate CA private key and CSR
+        subprocess.check_call(
+            [
+                "openssl",
+                "req",
+                "-newkey",
+                "rsa:4096",
+                "-nodes",
+                "-subj",
+                f"/O=Michelangelo/CN={cluster_name} Intermediate CA",
+                "-keyout",
+                str(ca_key),
+                "-out",
+                str(ca_csr),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Create extensions config file for CA signing
+        ext_file = cluster_dir / "ca-ext.cnf"
+        ext_file.write_text(
+            "[v3_ca]\n"
+            "basicConstraints=critical,CA:TRUE\n"
+            "keyUsage=critical,keyCertSign,cRLSign\n"
+        )
+
+        # Sign the intermediate CA with the root CA
+        subprocess.check_call(
+            [
+                "openssl",
+                "x509",
+                "-req",
+                "-sha256",
+                "-days",
+                "3650",
+                "-CA",
+                str(root_cert),
+                "-CAkey",
+                str(root_key),
+                "-CAcreateserial",
+                "-in",
+                str(ca_csr),
+                "-out",
+                str(ca_cert),
+                "-extfile",
+                str(ext_file),
+                "-extensions",
+                "v3_ca",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        # Clean up extension file
+        ext_file.unlink(missing_ok=True)
+
+        # Create certificate chain (intermediate + root)
+        with open(cert_chain, "w") as f:
+            f.write(ca_cert.read_text())
+            f.write(root_cert.read_text())
+
+        # Clean up CSR
+        ca_csr.unlink(missing_ok=True)
+
+    return ca_dir
+
+
+def _create_istio_ca_secret(kube_context: str, ca_dir: Path, cluster_name: str):
+    """Create the 'cacerts' secret in istio-system namespace.
+
+    Istio uses this secret to issue workload certificates. By providing
+    a shared root CA hierarchy, all clusters will trust each other's
+    workload certificates.
+
+    Args:
+        kube_context: kubectl context (e.g., "k3d-cluster-1")
+        ca_dir: Path to the CA certificates directory
+        cluster_name: Name of the cluster (used to find intermediate CA)
+    """
+    kubectl_context_args = ["--context", kube_context]
+
+    root_cert = ca_dir / "root-cert.pem"
+    cluster_ca_dir = ca_dir / cluster_name
+    ca_cert = cluster_ca_dir / "ca-cert.pem"
+    ca_key = cluster_ca_dir / "ca-key.pem"
+    cert_chain = cluster_ca_dir / "cert-chain.pem"
+
+    # Verify all required files exist
+    for f in [root_cert, ca_cert, ca_key, cert_chain]:
+        if not f.exists():
+            raise FileNotFoundError(f"Required CA file not found: {f}")
+
+    # Ensure istio-system namespace exists
+    with contextlib.suppress(subprocess.CalledProcessError):
+        subprocess.check_call(
+            ["kubectl", *kubectl_context_args, "create", "namespace", "istio-system"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Delete existing secret if present (to update certs)
+    with contextlib.suppress(subprocess.CalledProcessError):
+        subprocess.check_call(
+            [
+                "kubectl",
+                *kubectl_context_args,
+                "delete",
+                "secret",
+                "cacerts",
+                "-n",
+                "istio-system",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    # Create the cacerts secret
+    print(f"   Creating cacerts secret in {kube_context}...")
+    subprocess.check_call(
+        [
+            "kubectl",
+            *kubectl_context_args,
+            "create",
+            "secret",
+            "generic",
+            "cacerts",
+            "-n",
+            "istio-system",
+            f"--from-file=root-cert.pem={root_cert}",
+            f"--from-file=ca-cert.pem={ca_cert}",
+            f"--from-file=ca-key.pem={ca_key}",
+            f"--from-file=cert-chain.pem={cert_chain}",
+        ]
+    )
+
+
+def _create_inference_mtls_destination_rule():
+    """Create a wildcard DestinationRule for multi-cluster mTLS on the control plane.
+
+    This DestinationRule tells the control plane's Istio sidecars to use mTLS
+    when connecting to ServiceEntry endpoints (east-west gateways in target clusters).
+
+    The rule uses a wildcard host pattern to match all inference service hostnames
+    created by the EndpointRegistry (e.g., *-inference-service.*.svc.cluster.local).
+    """
+    kube_context = f"k3d-{_michelangelo_sandbox_kube_cluster_name}"
+    kubectl_context_args = ["--context", kube_context]
+
+    print("🔒 Creating mTLS DestinationRule for multi-cluster inference routing...")
+
+    destination_rule_path = _dir / "demo" / "inference" / "destination-rule-mtls.yaml"
+    if not destination_rule_path.exists():
+        _err_exit(f"❌ DestinationRule not found at {destination_rule_path}")
+
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "apply",
+        "-f",
+        str(destination_rule_path),
+    )
+
+    print("✅ mTLS DestinationRule created for inference endpoints")
+
+
 def _setup_istio_on_clusters(target_clusters: list[str]):
     """Install Istio and Gateway API on multiple target clusters.
 
     This function sets up Istio service mesh with Kubernetes Gateway API support
     on each of the specified target clusters. Use this for multi-cluster
     deployments where inference workloads run on separate clusters.
+
+    For multi-cluster mTLS to work (AUTO_PASSTHROUGH on east-west gateways),
+    all clusters must share the same root CA. This function:
+    1. Generates a shared root CA
+    2. Creates per-cluster intermediate CAs signed by the root
+    3. Installs Istio with the shared CA hierarchy
+
+    For target clusters (non-control-plane), an east-west gateway is also
+    installed to enable cross-cluster routing via AUTO_PASSTHROUGH.
 
     Args:
         target_clusters: List of k3d cluster names where Istio should be
@@ -1432,25 +1678,105 @@ def _setup_istio_on_clusters(target_clusters: list[str]):
 
     print(f"🚀 Setting up Istio on {len(target_clusters)} target cluster(s)...")
 
-    for cluster_name in target_clusters:
+    # Generate shared root CA for multi-cluster mTLS trust
+    print("🔐 Generating shared root CA for multi-cluster mTLS...")
+    ca_dir = _generate_shared_ca_certs(target_clusters)
+    print(f"   CA certificates stored in: {ca_dir}")
+
+    for idx, cluster_name in enumerate(target_clusters):
         print(f"\n📦 Setting up Istio on cluster: {cluster_name}")
-        _setup_istio_with_gateway_api(kube_context=f"k3d-{cluster_name}")
+        kube_context = f"k3d-{cluster_name}"
+        # Network names:
+        # network0 for control plane,
+        # network1, network2, etc. for target clusters
+        network_name = f"network{idx}"
+
+        # Install shared CA secret before Istio installation
+        _create_istio_ca_secret(kube_context, ca_dir, cluster_name)
+
+        # Label istio-system namespace with network topology
+        # (required for multi-cluster)
+        # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+        _exec(
+            "kubectl",
+            "--context",
+            kube_context,
+            "label",
+            "namespace",
+            "istio-system",
+            f"topology.istio.io/network={network_name}",
+            "--overwrite",
+        )
+
+        # Label default namespace for sidecar injection and network topology
+        # Sidecar injection is required for pods
+        # to receive mTLS traffic from east-west gateway
+        _exec(
+            "kubectl",
+            "--context",
+            kube_context,
+            "label",
+            "namespace",
+            "default",
+            "istio-injection=enabled",
+            f"topology.istio.io/network={network_name}",
+            "--overwrite",
+        )
+
+        _setup_istio_with_gateway_api(
+            kube_context=kube_context,
+            cluster_name=cluster_name,
+            network_name=network_name,
+        )
+
+        # Install east-west gateway on target clusters (not control plane)
+        is_control_plane = cluster_name == _michelangelo_sandbox_kube_cluster_name
+        if not is_control_plane:
+            cluster_id = f"k3d-{cluster_name}"  # e.g., "k3d-cluster-1"
+            _install_east_west_gateway(
+                kube_context=kube_context,
+                cluster_id=cluster_id,
+                network_name=network_name,
+            )
+
         print(f"✅ Istio setup complete on cluster: {cluster_name}")
+
+    # Create remote secrets so control plane istiod
+    # can discover endpoints in target clusters.
+    # This enables cross-cluster service discovery
+    _create_remote_secrets_for_control_plane(target_clusters)
+
+    # Configure meshNetworks on control plane so it knows how to route to each network
+    # This tells istiod to route traffic through east-west gateways
+    # for cross-network traffic
+    _configure_control_plane_mesh_networks(target_clusters)
+
+    # Create a wildcard DestinationRule on the control plane to enable mTLS
+    # for all traffic to ServiceEntry endpoints (east-west gateways)
+    _create_inference_mtls_destination_rule()
 
     print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
 
 
-def _setup_istio_with_gateway_api(kube_context: str | None = None):
+def _setup_istio_with_gateway_api(
+    kube_context: str | None = None,
+    cluster_name: str | None = None,
+    network_name: str | None = None,
+):
     """Install Istio service mesh with Kubernetes Gateway API support.
 
     This function:
     1. Installs Istio base CRDs and cluster roles
     2. Installs Kubernetes Gateway API CRDs
-    3. Installs Istio control plane (istiod)
+    3. Installs Istio control plane (istiod) with multi-cluster settings
     4. Creates the Gateway CR which triggers Istio to auto-provision the gateway
 
     Args:
         kube_context: Optional kubectl context to use. If None, uses current context.
+        cluster_name: Optional cluster name for multi-cluster mesh.
+            Used for istiod multiCluster.clusterName.
+        network_name: Optional network name for multi-cluster mesh.
+            Used for istiod global.network.
     """
     # helm uses --kube-context, kubectl uses --context
     helm_context_args = ["--kube-context", kube_context] if kube_context else []
@@ -1514,7 +1840,7 @@ def _setup_istio_with_gateway_api(kube_context: str | None = None):
 
     # Install or upgrade Istio control plane (istiod)
     print("Installing/upgrading Istio control plane...")
-    _exec(
+    istiod_args = [
         "helm",
         "upgrade",
         "--install",
@@ -1524,7 +1850,16 @@ def _setup_istio_with_gateway_api(kube_context: str | None = None):
         "--namespace",
         "istio-system",
         "--wait",
-    )
+    ]
+    # Add multi-cluster settings if cluster/network names are provided
+    # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+    if cluster_name or network_name:
+        istiod_args.extend(["--set", "global.meshID=mesh1"])
+    if cluster_name:
+        istiod_args.extend(["--set", f"global.multiCluster.clusterName={cluster_name}"])
+    if network_name:
+        istiod_args.extend(["--set", f"global.network={network_name}"])
+    _exec(*istiod_args)
 
     # Wait for Istio control plane to be ready
     _exec(
@@ -1595,6 +1930,383 @@ def _setup_istio_with_gateway_api(kube_context: str | None = None):
         )
 
     print("✅ Istio with Gateway API setup complete")
+
+
+def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name: str):
+    """Install an Istio east-west gateway for cross-cluster routing.
+
+    This function:
+    1. Installs the istio/gateway Helm chart as an east-west gateway
+    2. Labels the gateway Service with discovery labels for EndpointRegistry
+    3. Creates a Gateway CR with AUTO_PASSTHROUGH for SNI-based routing
+
+    The EndpointRegistry in the control plane discovers this gateway by looking
+    for Services with labels:
+      - michelangelo.ai/east-west-gateway: "true"
+      - michelangelo.ai/cluster-id: <cluster_id>
+
+    Args:
+        kube_context: kubectl context (e.g., "k3d-cluster-1")
+        cluster_id: The cluster ID used in InferenceServer.spec.clusterTargets
+                    (e.g., "k3d-cluster-1")
+        network_name: Network name for multi-cluster topology (e.g., "network1")
+                      See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+    """
+    helm_context_args = ["--kube-context", kube_context]
+    kubectl_context_args = ["--context", kube_context]
+
+    print(
+        f"📡 Installing east-west gateway on {kube_context} (cluster_id={cluster_id})"
+    )
+
+    # Install the east-west gateway using istio/gateway Helm chart
+    # We use a separate release name to avoid conflict with the ingress gateway
+    # The networkGateway setting adds the
+    # topology.istio.io/network label for multi-cluster
+    _exec(
+        "helm",
+        "upgrade",
+        "--install",
+        "istio-eastwestgateway",
+        "istio/gateway",
+        *helm_context_args,
+        "--namespace",
+        "istio-system",
+        "--set",
+        "name=istio-eastwestgateway",
+        # networkGateway adds topology.istio.io/network label
+        # (required for multi-cluster)
+        # See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+        "--set",
+        f"networkGateway={network_name}",
+        # Use NodePort for k3d compatibility
+        "--set",
+        "service.type=NodePort",
+        # Expose port 15443 for mTLS passthrough
+        "--set",
+        "service.ports[0].name=tls",
+        "--set",
+        "service.ports[0].port=15443",
+        "--set",
+        "service.ports[0].targetPort=15443",
+        "--set",
+        "service.ports[0].nodePort=31443",
+        "--wait",
+    )
+
+    # Label the gateway Service with discovery labels
+    # These labels allow EndpointRegistry to discover this gateway
+    _exec(
+        "kubectl",
+        *kubectl_context_args,
+        "label",
+        "service",
+        "istio-eastwestgateway",
+        "-n",
+        "istio-system",
+        "michelangelo.ai/east-west-gateway=true",
+        f"michelangelo.ai/cluster-id={cluster_id}",
+        "--overwrite",
+    )
+
+    # Create a Gateway CR with AUTO_PASSTHROUGH mode
+    # This allows the gateway to route based on SNI without explicit VirtualServices
+    gateway_manifest = {
+        "apiVersion": "networking.istio.io/v1",
+        "kind": "Gateway",
+        "metadata": {
+            "name": "cross-cluster-gateway",
+            "namespace": "istio-system",
+        },
+        "spec": {
+            "selector": {"istio": "eastwestgateway"},
+            "servers": [
+                {
+                    "port": {"number": 15443, "name": "tls", "protocol": "TLS"},
+                    "tls": {"mode": "AUTO_PASSTHROUGH"},
+                    "hosts": ["*.svc.cluster.local"],
+                }
+            ],
+        },
+    }
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(gateway_manifest, f)
+        f.flush()
+        _exec(
+            "kubectl",
+            *kubectl_context_args,
+            "apply",
+            "-f",
+            f.name,
+        )
+
+    print("✅ East-west gateway installed with labels:")
+    print("   michelangelo.ai/east-west-gateway=true")
+    print(f"   michelangelo.ai/cluster-id={cluster_id}")
+
+
+def _create_remote_secrets_for_control_plane(target_clusters: list[str]):
+    """Create remote secrets so istiod can access target cluster API servers.
+
+    This enables cross-cluster service discovery - the control plane istiod can
+    discover endpoints in target clusters.
+
+    See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+
+    Args:
+        target_clusters: List of target cluster names (not including control plane).
+    """
+    control_plane = _michelangelo_sandbox_kube_cluster_name
+    control_plane_context = f"k3d-{control_plane}"
+
+    print("🔑 Creating remote secrets for cross-cluster endpoint discovery...")
+
+    for cluster_name in target_clusters:
+        if cluster_name == control_plane:
+            continue  # Skip control plane
+
+        target_context = f"k3d-{cluster_name}"
+        print(f"   Creating remote secret for {cluster_name}...")
+
+        # Create service account for remote access in target cluster
+        _exec(
+            "kubectl",
+            "--context",
+            target_context,
+            "create",
+            "serviceaccount",
+            "istiod-remote",
+            "-n",
+            "istio-system",
+            "--dry-run=client",
+            "-o",
+            "yaml",
+        )
+        # Apply it (ignore errors if exists)
+        with contextlib.suppress(subprocess.CalledProcessError):
+            subprocess.run(
+                [
+                    "kubectl",
+                    "--context",
+                    target_context,
+                    "create",
+                    "serviceaccount",
+                    "istiod-remote",
+                    "-n",
+                    "istio-system",
+                ],
+                check=False,
+            )
+
+        # Create cluster role binding
+        with contextlib.suppress(subprocess.CalledProcessError):
+            subprocess.run(
+                [
+                    "kubectl",
+                    "--context",
+                    target_context,
+                    "create",
+                    "clusterrolebinding",
+                    "istiod-remote",
+                    "--clusterrole=cluster-admin",
+                    "--serviceaccount=istio-system:istiod-remote",
+                ],
+                check=False,
+            )
+
+        # Create token secret for service account
+        token_secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": "istiod-remote-token",
+                "namespace": "istio-system",
+                "annotations": {
+                    "kubernetes.io/service-account.name": "istiod-remote"
+                },
+            },
+            "type": "kubernetes.io/service-account-token",
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+            yaml.dump(token_secret, f)
+            f.flush()
+            with contextlib.suppress(subprocess.CalledProcessError):
+                subprocess.run(
+                    ["kubectl", "--context", target_context, "apply", "-f", f.name],
+                    check=False,
+                )
+
+        # Wait for token to be populated
+        time.sleep(2)
+
+        # Get cluster details from target
+        target_server = subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                target_context,
+                "config",
+                "view",
+                "--minify",
+                "-o",
+                "jsonpath={.clusters[0].cluster.server}",
+            ]
+        ).decode().strip()
+
+        target_ca = subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                target_context,
+                "config",
+                "view",
+                "--raw",
+                "--minify",
+                "-o",
+                "jsonpath={.clusters[0].cluster.certificate-authority-data}",
+            ]
+        ).decode().strip()
+
+        target_token_b64 = subprocess.check_output(
+            [
+                "kubectl",
+                "--context",
+                target_context,
+                "get",
+                "secret",
+                "istiod-remote-token",
+                "-n",
+                "istio-system",
+                "-o",
+                "jsonpath={.data.token}",
+            ]
+        ).decode().strip()
+
+        target_token = base64.b64decode(target_token_b64).decode()
+
+        # Build kubeconfig for remote access
+        kubeconfig = f"""apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority-data: {target_ca}
+    server: {target_server}
+  name: {cluster_name}
+contexts:
+- context:
+    cluster: {cluster_name}
+    user: {cluster_name}
+  name: {cluster_name}
+current-context: {cluster_name}
+users:
+- name: {cluster_name}
+  user:
+    token: {target_token}
+"""
+        kubeconfig_b64 = base64.b64encode(kubeconfig.encode()).decode()
+
+        # Create remote secret in control plane
+        remote_secret = {
+            "apiVersion": "v1",
+            "kind": "Secret",
+            "metadata": {
+                "name": f"istio-remote-secret-{cluster_name}",
+                "namespace": "istio-system",
+                "labels": {"istio/multiCluster": "true"},
+                "annotations": {"networking.istio.io/cluster": cluster_name},
+            },
+            "type": "Opaque",
+            "data": {cluster_name: kubeconfig_b64},
+        }
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+            yaml.dump(remote_secret, f)
+            f.flush()
+            _exec(
+                "kubectl",
+                "--context",
+                control_plane_context,
+                "apply",
+                "-f",
+                f.name,
+            )
+
+    print("✅ Remote secrets created for cross-cluster endpoint discovery")
+
+
+def _configure_control_plane_mesh_networks(cluster_names: list[str]):
+    """Configure meshNetworks on control plane for cross-network routing.
+
+    This tells the control plane istiod how to reach pods on each network by
+    routing traffic through the east-west gateways.
+
+    See: https://istio.io/latest/docs/setup/install/multicluster/multi-primary_multi-network/
+
+    Args:
+        cluster_names: List of all cluster names (including control plane).
+    """
+    control_plane = _michelangelo_sandbox_kube_cluster_name
+    control_plane_context = f"k3d-{control_plane}"
+
+    # Build meshNetworks config for each target cluster
+    # network0 = control plane (no gateway needed, local)
+    # network1 = cluster-1, network2 = cluster-2, etc.
+    mesh_networks_args = []
+
+    for idx, cluster_name in enumerate(cluster_names):
+        if cluster_name == control_plane:
+            continue  # Skip control plane - it's local
+
+        network_name = f"network{idx}"
+        # Get the node IP for this cluster's east-west gateway
+        node_name = f"k3d-{cluster_name}-server-0"
+        node_ip = subprocess.check_output(
+            [
+                "docker",
+                "inspect",
+                node_name,
+                "--format",
+                "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}",
+            ]
+        ).decode().strip()
+
+        # Add meshNetworks config
+        mesh_networks_args.extend([
+            "--set",
+            f"global.meshNetworks.{network_name}.endpoints[0].fromRegistry={cluster_name}",
+            "--set",
+            f"global.meshNetworks.{network_name}.gateways[0].address={node_ip}",
+            "--set",
+            f"global.meshNetworks.{network_name}.gateways[0].port=31443",
+        ])
+
+    if not mesh_networks_args:
+        print("   No target clusters to configure meshNetworks for")
+        return
+
+    print("🌐 Configuring meshNetworks on control plane for cross-network routing...")
+
+    # Upgrade istiod on control plane with meshNetworks config
+    _exec(
+        "helm",
+        "upgrade",
+        "istiod",
+        "istio/istiod",
+        "--kube-context",
+        control_plane_context,
+        "--namespace",
+        "istio-system",
+        "--set",
+        "global.meshID=mesh1",
+        "--set",
+        f"global.multiCluster.clusterName={control_plane}",
+        "--set",
+        "global.network=network0",
+        *mesh_networks_args,
+        "--wait",
+    )
+
+    print("✅ meshNetworks configured on control plane")
 
 
 def _create_pipeline_demo_crs():
