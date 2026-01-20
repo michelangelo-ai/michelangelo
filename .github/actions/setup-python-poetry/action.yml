@@ -17,7 +17,7 @@ inputs:
   poetry-version:
     description: 'Poetry version to install'
     required: false
-    default: '2.2.1'
+    default: 'latest'
 
 runs:
   using: composite
