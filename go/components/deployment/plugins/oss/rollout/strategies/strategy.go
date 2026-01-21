@@ -32,7 +32,7 @@ func GetActorsForStrategy(ctx context.Context, params Params, deployment *v2pb.D
 	case "rolling":
 		fallthrough
 	default:
-		return GetRollingActors(params, deployment), nil
+		return getRollingActors(params, deployment), nil
 	}
 }
 

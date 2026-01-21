@@ -26,7 +26,8 @@ type Params struct {
 func NewRollbackPlugin(p Params) conditionInterfaces.Plugin[*v2pb.Deployment] {
 	return &conditionPlugin{actors: []conditionInterfaces.ConditionActor[*v2pb.Deployment]{
 		&RollbackActor{
-			logger: p.Logger,
+			logger:  p.Logger,
+			gateway: p.Gateway,
 		},
 	}}
 }

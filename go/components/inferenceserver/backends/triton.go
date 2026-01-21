@@ -205,32 +205,31 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 					logger.Info("Triton pods are ready", zap.String("server", inferenceServerName), zap.Int("readyReplicas", int(deployment.Status.ReadyReplicas)))
 					return true, nil
 				} else {
-					logger.Error("Triton deployment available but pods not ready",
+					logger.Warn("Triton deployment available but pods not ready",
 						zap.String("operation", "health_check"),
 						zap.String("namespace", namespace),
 						zap.String("server", inferenceServerName),
 						zap.Int("readyReplicas", int(deployment.Status.ReadyReplicas)),
 						zap.Int("totalReplicas", int(deployment.Status.Replicas)))
-					return false, fmt.Errorf("pods not ready for deployment %s/%s: %d/%d",
-						namespace, deploymentName, deployment.Status.ReadyReplicas, deployment.Status.Replicas)
+					return false, nil
 				}
 			} else {
-				logger.Error("Triton deployment not available",
+				logger.Warn("Triton deployment not available",
 					zap.String("operation", "health_check"),
 					zap.String("namespace", namespace),
 					zap.String("server", inferenceServerName),
 					zap.String("reason", condition.Reason),
 					zap.String("message", condition.Message))
-				return false, fmt.Errorf("deployment %s/%s not available: %s", namespace, deploymentName, condition.Message)
+				return false, nil
 			}
 		}
 	}
 
-	logger.Error("Triton deployment status unclear",
+	logger.Warn("Triton deployment status unclear",
 		zap.String("operation", "health_check"),
 		zap.String("namespace", namespace),
 		zap.String("server", inferenceServerName))
-	return false, fmt.Errorf("deployment status unclear for %s/%s", namespace, deploymentName)
+	return false, nil
 }
 
 // Triton Model Management
