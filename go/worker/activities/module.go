@@ -5,6 +5,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/model"
+	"github.com/michelangelo-ai/michelangelo/go/worker/activities/notification"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/ray"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/storage"
@@ -18,4 +19,5 @@ var Module = fx.Options(
 	model.Module,
 	cachedoutput.Module,
 	trigger.Module,
+	notification.Module,
 )
