@@ -205,7 +205,7 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 					logger.Info("Triton pods are ready", zap.String("server", inferenceServerName), zap.Int("readyReplicas", int(deployment.Status.ReadyReplicas)))
 					return true, nil
 				} else {
-					logger.Info("Triton deployment available but pods not ready",
+					logger.Warn("Triton deployment available but pods not ready",
 						zap.String("operation", "health_check"),
 						zap.String("namespace", namespace),
 						zap.String("server", inferenceServerName),
@@ -214,7 +214,7 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 					return false, nil
 				}
 			} else {
-				logger.Info("Triton deployment not available",
+				logger.Warn("Triton deployment not available",
 					zap.String("operation", "health_check"),
 					zap.String("namespace", namespace),
 					zap.String("server", inferenceServerName),
@@ -225,7 +225,7 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, logger *zap.Logger, infer
 		}
 	}
 
-	logger.Info("Triton deployment status unclear",
+	logger.Warn("Triton deployment status unclear",
 		zap.String("operation", "health_check"),
 		zap.String("namespace", namespace),
 		zap.String("server", inferenceServerName))
