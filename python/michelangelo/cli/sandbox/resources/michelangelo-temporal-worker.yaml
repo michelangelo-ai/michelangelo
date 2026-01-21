@@ -43,6 +43,10 @@ data:
         workers:
           - domain: default
             taskList: default
+          - domain: default
+            taskList: trigger_run
+          - domain: default
+            taskList: pipeline_run
         client:
           domain: default
 

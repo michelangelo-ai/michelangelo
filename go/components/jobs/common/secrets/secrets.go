@@ -11,6 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -60,9 +61,14 @@ type InClusterClientSet struct {
 }
 
 func NewInClusterClientSet() InClusterClientSet {
+	// Try in-cluster config first, then fall back to kubeconfig for local development
 	cfg, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err)
+		// Fall back to kubeconfig (controller-runtime's GetConfig handles this)
+		cfg, err = ctrl.GetConfig()
+		if err != nil {
+			panic(err)
+		}
 	}
 	k8sClusterClient, err := kubernetes.NewForConfig(cfg)
 	if err != nil {
