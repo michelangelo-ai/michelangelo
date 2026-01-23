@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 	appsv1 "k8s.io/api/apps/v1"
@@ -303,24 +302,33 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, name
 }
 
 // Triton Model Management
-
+// todo: ghosharitra: review this properly, I added a function to get a HTTP client with proper TLS configuration for the target cluster.
 func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, inferenceServerName string, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
 	b.logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
 
-	var err error
-	var host string
-	var port string
+	var connectionSpec *v2pb.ConnectionSpec
 	switch targetCluster.GetConfig().(type) {
 	case *v2pb.ClusterTarget_Kubernetes:
-		connectionSpec := targetCluster.GetKubernetes()
-		host = connectionSpec.Host
-		port = connectionSpec.Port
+		connectionSpec = targetCluster.GetKubernetes()
 	default:
 		return false, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
 
+	// Get HTTP client with proper TLS configuration for the target cluster
+	httpClient, err := b.clientFactory.GetHTTPClient(ctx, connectionSpec)
+	if err != nil {
+		b.logger.Error("failed to get HTTP client for target cluster",
+			zap.Error(err),
+			zap.String("operation", "check_model_status"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("model", modelName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return false, fmt.Errorf("failed to get HTTP client for cluster %s: %w", targetCluster.ClusterId, err)
+	}
+
 	modelReadyPath := fmt.Sprintf("/v2/models/%s/ready", modelName)
-	serviceEndpoint := b.buildServiceEndpoint(inferenceServerName, namespace, host, port)
+	serviceEndpoint := b.buildServiceEndpoint(inferenceServerName, namespace, connectionSpec.Host, connectionSpec.Port)
 	serviceURL := fmt.Sprintf("%s%s", serviceEndpoint, modelReadyPath)
 	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
 	if err != nil {
@@ -333,10 +341,6 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, 
 			zap.String("cluster", targetCluster.ClusterId))
 		return false, fmt.Errorf("failed to create ready request for model %s on %s/%s: %w",
 			modelName, namespace, inferenceServerName, err)
-	}
-
-	httpClient := &http.Client{
-		Timeout: 10 * time.Second,
 	}
 
 	resp, err := httpClient.Do(req)

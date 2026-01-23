@@ -2,8 +2,12 @@ package clientfactory
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"net/http"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -104,6 +108,59 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, connectionSpec *v2
 		zap.String("port", connectionSpec.Port))
 
 	return newClient, nil
+}
+
+// todo: ghosharitra: review this properly
+// GetHTTPClient returns an HTTP client configured with TLS for the given connection spec.
+func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (*http.Client, error) {
+	if connectionSpec == nil {
+		return nil, fmt.Errorf("connectionSpec is required for GetHTTPClient")
+	}
+
+	// Get authentication credentials from secret provider
+	auth, err := f.secretProvider.GetClientAuth(ctx, connectionSpec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client auth for %s:%s: %w",
+			connectionSpec.Host, connectionSpec.Port, err)
+	}
+
+	// Create a certificate pool with the CA certificate
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM([]byte(auth.CertificateAuthorityData)) {
+		return nil, fmt.Errorf("failed to parse CA certificate for %s:%s",
+			connectionSpec.Host, connectionSpec.Port)
+	}
+
+	// Create TLS config with the CA certificate
+	tlsConfig := &tls.Config{
+		RootCAs:    caCertPool,
+		MinVersion: tls.VersionTLS12,
+	}
+
+	// Create transport with TLS config and bearer token
+	transport := &bearerTokenRoundTripper{
+		token: auth.ClientTokenData,
+		rt: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
+
+	return &http.Client{
+		Transport: transport,
+		Timeout:   30 * time.Second,
+	}, nil
+}
+
+// bearerTokenRoundTripper adds a bearer token to each request.
+type bearerTokenRoundTripper struct {
+	token string
+	rt    http.RoundTripper
+}
+
+func (rt *bearerTokenRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.Header.Set("Authorization", "Bearer "+rt.token)
+	return rt.rt.RoundTrip(req)
 }
 
 // getClientKey generates a unique key for caching clients based on connection spec.
