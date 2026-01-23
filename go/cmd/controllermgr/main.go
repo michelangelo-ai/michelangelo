@@ -15,6 +15,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
 	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
+	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	inferenceserverOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/client"
@@ -90,8 +92,8 @@ func options() fx.Option {
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
-		// deployment.Module,
-		// deploymentOSSPlugin.Module,
+		deployment.Module,
+		deploymentOSSPlugin.Module,
 		inferenceserver.Module,
 		inferenceserverOSSPlugin.Module,
 		scheduler.Module,

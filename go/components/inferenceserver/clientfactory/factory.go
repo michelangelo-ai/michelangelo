@@ -13,31 +13,18 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 const serviceName = "michelangelo-inferenceserver"
-
-// ClientAuth contains the credentials needed to authenticate to a Kubernetes cluster.
-type ClientAuth struct {
-	// CertificateAuthorityData contains PEM-encoded certificate authority certificates.
-	CertificateAuthorityData string
-	// ClientTokenData contains the bearer token for the client.
-	ClientTokenData string
-}
-
-// SecretProvider retrieves cluster authentication credentials from a secret store.
-type SecretProvider interface {
-	// GetClientAuth retrieves the authentication credentials for a given connection spec.
-	GetClientAuth(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (ClientAuth, error)
-}
 
 var _ ClientFactory = &defaultClientFactory{} // ensure implementation satisfies interface
 
 // defaultClientFactory implements the ClientFactory interface.
 type defaultClientFactory struct {
 	defaultClient  client.Client
-	secretProvider SecretProvider
+	secretProvider secrets.SecretProvider
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
 
@@ -52,7 +39,7 @@ type defaultClientFactory struct {
 // scheme is the runtime scheme to use for the clients.
 func NewClientFactory(
 	defaultClient client.Client,
-	secretProvider SecretProvider,
+	secretProvider secrets.SecretProvider,
 	scheme *runtime.Scheme,
 	logger *zap.Logger,
 ) ClientFactory {
@@ -125,7 +112,7 @@ func (f *defaultClientFactory) getClientKey(connectionSpec *v2pb.ConnectionSpec)
 }
 
 // getKubeClientConfig builds a REST config from connection details and auth.
-func (f *defaultClientFactory) getKubeClientConfig(server string, auth *ClientAuth) (*rest.Config, error) {
+func (f *defaultClientFactory) getKubeClientConfig(server string, auth *secrets.ClientAuth) (*rest.Config, error) {
 	clientCmdConfig := f.getKubeConfigStruct(server, auth)
 
 	config, err := clientcmd.NewDefaultClientConfig(
@@ -146,7 +133,7 @@ func (f *defaultClientFactory) getKubeClientConfig(server string, auth *ClientAu
 }
 
 // getKubeConfigStruct builds a kubeconfig struct from connection details.
-func (f *defaultClientFactory) getKubeConfigStruct(server string, auth *ClientAuth) *api.Config {
+func (f *defaultClientFactory) getKubeConfigStruct(server string, auth *secrets.ClientAuth) *api.Config {
 	clusterName := "remote-cluster"
 	contextName := fmt.Sprintf("%s@%s", serviceName, clusterName)
 

@@ -3,15 +3,13 @@ package strategies
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"go.uber.org/zap"
-
-	"github.com/gogo/protobuf/types"
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
+	actorCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	strategiesCommon "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/rollout/strategies/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -27,6 +25,7 @@ func getRollingActors(params Params, deployment *v2pb.Deployment) []conditionInt
 		},
 		&strategiesCommon.TrafficRoutingActor{
 			ProxyProvider: params.ProxyProvider,
+			Gateway:       params.Gateway,
 			Logger:        params.Logger,
 		},
 		&ModelCleanupActor{
@@ -50,147 +49,211 @@ func (a *RollingRolloutActor) GetType() string {
 	return common.ActorTypeRollingRollout
 }
 
-// GetLogger returns the logger instance for this actor.
-func (a *RollingRolloutActor) GetLogger() *zap.Logger {
-	return a.logger
-}
-
-// Retrieve checks if the desired model is loaded and ready in Triton with retry timeout logic.
+// Retrieve checks the deployment status of the current cluster and updates state accordingly.
 func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
-	rolloutstarted := &types.BoolValue{}
-	_ = types.UnmarshalAny(condition.Metadata, rolloutstarted)
-	if !rolloutstarted.Value {
+	metadata := actorCommon.GetClusterMetadata(condition)
+
+	// No metadata means Run hasn't been called yet
+	if metadata == nil {
+		a.logger.Info("No rollout metadata found, triggering Run to initialize")
 		return conditionUtils.GenerateFalseCondition(condition, "RollingRolloutNotStarted", "Rolling rollout has not started"), nil
 	}
 
-	// Check if the desired model is actually loaded and ready in Triton
-	if deployment.Spec.DesiredRevision != nil {
-		modelName := deployment.Spec.DesiredRevision.Name
+	// Find current cluster (first non-DEPLOYED)
+	currentIdx := -1
+	for i, cluster := range metadata.Clusters {
+		if cluster.State != actorCommon.ClusterStateDeployed {
+			currentIdx = i
+			break
+		}
+	}
 
-		// Check if model is loaded in inference server
-		inferenceServerName := deployment.Spec.GetInferenceServer().Name
-		modelReady, err := a.checkModelStatusWithTimeout(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace)
+	if currentIdx == -1 {
+		a.logger.Info("All clusters have been deployed successfully",
+			zap.Int("total_clusters", len(metadata.Clusters)))
+		return conditionUtils.GenerateTrueCondition(condition), nil
+	}
+
+	// Update CurrentIndex so Run knows which cluster to deploy
+	if metadata.CurrentIndex != currentIdx {
+		metadata.CurrentIndex = currentIdx
+		if err := actorCommon.SetClusterMetadata(condition, metadata); err != nil {
+			return nil, fmt.Errorf("failed to update current index: %w", err)
+		}
+	}
+
+	currentCluster := &metadata.Clusters[currentIdx]
+	modelName := deployment.Spec.DesiredRevision.Name
+	inferenceServerName := deployment.Spec.GetInferenceServer().Name
+
+	a.logger.Info("Checking deployment status for cluster",
+		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("state", currentCluster.State),
+		zap.Int("cluster_index", currentIdx),
+		zap.Int("total_clusters", len(metadata.Clusters)))
+
+	// If in PENDING state, update CurrentIndex and trigger Run to deploy
+	if currentCluster.State == actorCommon.ClusterStatePending {
+		return conditionUtils.GenerateFalseCondition(condition, "ClusterPendingDeployment",
+			fmt.Sprintf("Cluster %s is pending deployment", currentCluster.ClusterID)), nil
+	}
+
+	// If IN_PROGRESS state, then check model status
+	if currentCluster.State == actorCommon.ClusterStateDeploymentInProgress {
+		clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
+
+		modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace, clusterTarget, backendType)
+		// todo: ghosharitra: need to differentiate between error and model not ready cases
 		if err != nil {
-			if err.Error() == "health check timeout exceeded" {
-				a.logger.Info("Model health check timed out after 10 minutes", zap.String("model", modelName))
-				return conditionUtils.GenerateFalseCondition(condition, "ModelHealthCheckTimeout", fmt.Sprintf("Model %s health check timed out after 10 minutes", modelName)), nil
-			}
-			a.logger.Error("Failed to check model status in Triton", zap.String("model", modelName), zap.Error(err))
-			return conditionUtils.GenerateFalseCondition(condition, "ModelHealthCheckError", fmt.Sprintf("Error checking model %s readiness: %v", modelName, err)), nil
+			a.logger.Warn("Failed to check model status, will retry",
+				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("model", modelName),
+				zap.Error(err))
+			return conditionUtils.GenerateUnknownCondition(condition, "ModelStatusCheckFailed",
+				fmt.Sprintf("Failed to check model status on cluster %s: %v", currentCluster.ClusterID, err)), nil
 		}
 
 		if modelReady {
-			a.logger.Info("New model is loaded and ready in Triton", zap.String("model", modelName))
+			// Mark as DEPLOYED
+			a.logger.Info("Model deployed successfully on cluster",
+				zap.String("cluster_id", currentCluster.ClusterID),
+				zap.String("model", modelName))
+
+			metadata.Clusters[currentIdx].State = actorCommon.ClusterStateDeployed
+			metadata.CurrentIndex = currentIdx + 1
+
+			if err := actorCommon.SetClusterMetadata(condition, metadata); err != nil {
+				return nil, fmt.Errorf("failed to update metadata: %w", err)
+			}
+
+			// Check if more clusters remain
+			if currentIdx+1 < len(metadata.Clusters) {
+				return conditionUtils.GenerateFalseCondition(condition, "NextClusterPending",
+					fmt.Sprintf("Cluster %s deployed, moving to next cluster", currentCluster.ClusterID)), nil
+			}
+
+			// All done
 			return conditionUtils.GenerateTrueCondition(condition), nil
-		} else {
-			a.logger.Info("New model is not yet ready in Triton, continuing to wait", zap.String("model", modelName))
-			return conditionUtils.GenerateFalseCondition(condition, "ModelNotReady", fmt.Sprintf("Model %s is loading but not yet ready in Triton", modelName)), nil
 		}
+
+		// Model not ready yet
+		a.logger.Info("Model not yet ready on cluster, continuing to wait",
+			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("model", modelName))
+		return conditionUtils.GenerateUnknownCondition(condition, "ModelLoading",
+			fmt.Sprintf("Model %s is loading on cluster %s", modelName, currentCluster.ClusterID)), nil
 	}
 
-	return conditionUtils.GenerateFalseCondition(condition, "RollingRolloutPending", "Rolling rollout is in progress"), nil
+	return conditionUtils.GenerateUnknownCondition(condition, "UnexpectedState",
+		fmt.Sprintf("Cluster %s in unexpected state: %s", currentCluster.ClusterID, currentCluster.State)), nil
 }
 
-// Run adds the model to the ConfigMap, triggering inference server to load it.
+// Run initiates model deployment on the current cluster.
 func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running rolling rollout for deployment", zap.String("deployment", deployment.Name))
 
-	if deployment.Spec.DesiredRevision != nil {
-		modelName := deployment.Spec.DesiredRevision.Name
-		inferenceServerName := deployment.Spec.GetInferenceServer().Name
+	if deployment.Spec.DesiredRevision == nil {
+		return conditionUtils.GenerateFalseCondition(condition, "NoDesiredRevision", "No desired revision specified"), nil
+	}
 
-		a.logger.Info("Syncing model to inference server",
-			zap.String("model", modelName),
+	modelName := deployment.Spec.DesiredRevision.Name
+	inferenceServerName := deployment.Spec.GetInferenceServer().Name
+
+	metadata := actorCommon.GetClusterMetadata(condition)
+
+	// if metadata is nil, then initialize it from the inference server
+	if metadata == nil {
+		a.logger.Info("Initializing rollout metadata from inference server",
 			zap.String("inference_server", inferenceServerName))
 
-		var err error
-		// TODO(#696): ghosharitra: make the storage path configurable w.r.t storage client and storage location
-		if err = a.gateway.LoadModel(ctx, a.logger, modelName, fmt.Sprintf("s3://deploy-models/%s/", modelName), inferenceServerName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON); err != nil {
-			a.logger.Error("Failed to initiate model loading", zap.Error(err), zap.String("operation", "load_model"), zap.String("model", modelName), zap.String("inferenceServerName", inferenceServerName), zap.String("namespace", deployment.Namespace), zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
-			return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed", fmt.Sprintf("Failed to update deployment: %v", err)), nil
-		}
-		rolloutstarted := &types.BoolValue{Value: true}
-		condition.Metadata, err = types.MarshalAny(rolloutstarted)
+		targetInfo, err := a.gateway.GetDeploymentTargetInfo(ctx, a.logger, inferenceServerName, deployment.Namespace)
 		if err != nil {
-			return condition, fmt.Errorf("failed to marshal rolloutstarted condition: %w", err)
+			return conditionUtils.GenerateFalseCondition(condition, "GetTargetInfoFailed",
+				fmt.Sprintf("Failed to get deployment target info: %v", err)), nil
 		}
 
-		a.logger.Info("Successfully initiated model loading",
-			zap.String("operation", "load_model"),
-			zap.String("model", modelName),
-			zap.String("inferenceServerName", inferenceServerName),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("backendType", v2pb.BACKEND_TYPE_TRITON.String()))
+		if len(targetInfo.ClusterTargets) == 0 {
+			return conditionUtils.GenerateFalseCondition(condition, "NoClustersFound",
+				"No target clusters found for inference server"), nil
+		}
+
+		// Build metadata with all clusters in PENDING state
+		metadata = &actorCommon.ClusterMetadata{
+			BackendType:  targetInfo.BackendType.String(),
+			Clusters:     make([]actorCommon.ClusterEntry, len(targetInfo.ClusterTargets)),
+			CurrentIndex: 0,
+		}
+
+		for i, ct := range targetInfo.ClusterTargets {
+			k8s := ct.GetKubernetes()
+			metadata.Clusters[i] = actorCommon.ClusterEntry{
+				ClusterID: ct.ClusterId,
+				Host:      k8s.GetHost(),
+				Port:      k8s.GetPort(),
+				TokenTag:  k8s.GetTokenTag(),
+				CaDataTag: k8s.GetCaDataTag(),
+				State:     actorCommon.ClusterStatePending,
+			}
+		}
+
+		if err := actorCommon.SetClusterMetadata(condition, metadata); err != nil {
+			return nil, fmt.Errorf("failed to set initial metadata: %w", err)
+		}
+
+		a.logger.Info("Initialized rollout metadata, returning to let Retrieve start deployment",
+			zap.Int("cluster_count", len(metadata.Clusters)),
+			zap.String("backend_type", metadata.BackendType))
+
+		return conditionUtils.GenerateUnknownCondition(condition, "MetadataInitialized",
+			"Rollout metadata initialized, ready for deployment"), nil
 	}
 
-	// Return unknown so that the condition is only true when the model is truely ready and loaded in triton
-	return conditionUtils.GenerateUnknownCondition(condition, "RollingRolloutPending", "Rolling rollout is in progress"), nil
-}
+	if metadata.CurrentIndex >= len(metadata.Clusters) || metadata.CurrentIndex < 0 {
+		a.logger.Info("All clusters already deployed")
+		return conditionUtils.GenerateTrueCondition(condition), nil
+	}
 
-// checkModelStatusWithTimeout implements retry logic with configurable timeout for model health checks
-func (a *RollingRolloutActor) checkModelStatusWithTimeout(ctx context.Context, logger *zap.Logger, modelName string, inferenceServerName string, namespace string) (bool, error) {
-	const (
-		modelHealthCheckTimeout  = 10 * time.Minute // Configurable timeout for model health checks
-		modelHealthCheckInterval = 30 * time.Second // Interval between health check retries
-	)
+	currentCluster := &metadata.Clusters[metadata.CurrentIndex]
 
-	logger.Info("Starting model health check with timeout",
+	// If IN_PROGRESS, just return UNKNOWN (Retrieve will check status)
+	if currentCluster.State == actorCommon.ClusterStateDeploymentInProgress {
+		a.logger.Info("Cluster deployment in progress, waiting for Retrieve to check status",
+			zap.String("cluster_id", currentCluster.ClusterID))
+		return conditionUtils.GenerateUnknownCondition(condition, "DeploymentInProgress",
+			fmt.Sprintf("Model deployment in progress on cluster %s", currentCluster.ClusterID)), nil
+	}
+
+	// Deploy to this cluster
+	a.logger.Info("Starting model deployment on cluster",
+		zap.String("cluster_id", currentCluster.ClusterID),
 		zap.String("model", modelName),
-		zap.String("inference_server", inferenceServerName),
-		zap.String("namespace", namespace),
-		zap.Int("timeout", int(modelHealthCheckTimeout)),
-		zap.Int("retryInterval", int(modelHealthCheckInterval)))
+		zap.Int("cluster_index", metadata.CurrentIndex),
+		zap.Int("total_clusters", len(metadata.Clusters)))
 
-	// Create a context with timeout for the entire health check process
-	timeoutCtx, cancel := context.WithTimeout(ctx, modelHealthCheckTimeout)
-	defer cancel()
+	clusterTarget := actorCommon.GetClusterTarget(currentCluster)
+	// TODO(#696): make the storage path configurable w.r.t storage client and storage location
+	storagePath := fmt.Sprintf("s3://deploy-models/%s/", modelName)
 
-	ticker := time.NewTicker(modelHealthCheckInterval)
-	defer ticker.Stop()
-
-	// Try immediately first
-	modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
-	if err == nil && modelReady {
-		logger.Info("Model health check succeeded immediately", zap.String("model", modelName))
-		return true, nil
+	if err := a.gateway.LoadModel(ctx, a.logger, modelName, storagePath, inferenceServerName, deployment.Namespace, clusterTarget); err != nil {
+		a.logger.Error("Failed to initiate model loading",
+			zap.Error(err),
+			zap.String("cluster_id", currentCluster.ClusterID),
+			zap.String("model", modelName))
+		return conditionUtils.GenerateFalseCondition(condition, "ModelLoadingFailed",
+			fmt.Sprintf("Failed to load model on cluster %s: %v", currentCluster.ClusterID, err)), nil
 	}
 
-	if err != nil {
-		logger.Info("Initial model health check failed, will retry",
-			zap.String("model", modelName),
-			zap.Error(err))
-	} else {
-		logger.Info("Model not ready, will retry", zap.String("model", modelName))
+	// Mark as IN_PROGRESS
+	metadata.Clusters[metadata.CurrentIndex].State = actorCommon.ClusterStateDeploymentInProgress
+	if err := actorCommon.SetClusterMetadata(condition, metadata); err != nil {
+		return nil, fmt.Errorf("failed to update metadata: %w", err)
 	}
 
-	// Start retry loop
-	for {
-		select {
-		case <-timeoutCtx.Done():
-			logger.Info("Model health check timed out",
-				zap.String("model", modelName),
-				zap.Int("timeout", int(modelHealthCheckTimeout)))
-			return false, fmt.Errorf("health check timeout exceeded")
+	a.logger.Info("Successfully initiated model loading on cluster",
+		zap.String("cluster_id", currentCluster.ClusterID),
+		zap.String("model", modelName))
 
-		case <-ticker.C:
-			logger.Info("Retrying model health check", zap.String("model", modelName))
-
-			modelReady, err := a.gateway.CheckModelStatus(timeoutCtx, logger, modelName, inferenceServerName, namespace, v2pb.BACKEND_TYPE_TRITON)
-			if err == nil && modelReady {
-				logger.Info("Model health check succeeded after retry", zap.String("model", modelName))
-				return true, nil
-			}
-
-			if err != nil {
-				logger.Info("Model health check retry failed, continuing to wait",
-					zap.String("model", modelName),
-					zap.String("inference_server", inferenceServerName),
-					zap.String("namespace", namespace),
-					zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()),
-					zap.Error(err))
-			} else {
-				logger.Info("Model still not ready, continuing to wait", zap.String("model", modelName), zap.String("inference_server", inferenceServerName), zap.String("namespace", namespace), zap.String("backend_type", v2pb.BACKEND_TYPE_TRITON.String()))
-			}
-		}
-	}
+	return conditionUtils.GenerateUnknownCondition(condition, "DeploymentStarted",
+		fmt.Sprintf("Model deployment started on cluster %s", currentCluster.ClusterID)), nil
 }

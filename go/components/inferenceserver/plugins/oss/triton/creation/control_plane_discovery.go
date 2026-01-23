@@ -96,8 +96,7 @@ func (a *ControlPlaneDiscoveryActor) Run(ctx context.Context, resource *v2pb.Inf
 			ClusterID:           clusterID,
 			InferenceServerName: resource.Name,
 			Namespace:           resource.Namespace,
-			TargetCluster:       clusterTarget,
-		}); err != nil {
+		}, clusterTarget); err != nil {
 			a.logger.Error("Failed to register endpoint",
 				zap.Error(err),
 				zap.String("clusterID", clusterID),

@@ -18,6 +18,7 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
+// todo: ghosharitra: name the externalname service and serviceentries w.r.t. inference server name
 const (
 	// Istio ServiceEntry constants
 	istioNetworkingGroup   = "networking.istio.io"
@@ -75,8 +76,8 @@ func NewIstioEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client
 }
 
 // todo: ghosharitra: add comments here
-func (r *istioEndpointRegistry) EnsureRegisteredEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
-	resolved, err := r.resolveEndpointFromTargetCluster(ctx, endpoint)
+func (r *istioEndpointRegistry) EnsureRegisteredEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint, targetCluster *v2pb.ClusterTarget) error {
+	resolved, err := r.resolveEndpointFromTargetCluster(ctx, endpoint, targetCluster)
 	if err != nil {
 		return err
 	}
@@ -136,7 +137,7 @@ func (r *istioEndpointRegistry) ListRegisteredEndpoints(ctx context.Context, log
 		return []ClusterEndpoint{}, nil
 	}
 
-	wantHost := inferenceServerHost(inferenceServerName, namespace)
+	wantHost := generateInferenceServerHost(inferenceServerName, namespace)
 	hosts, _, _ := unstructured.NestedStringSlice(se.Object, "spec", "hosts")
 	hostExists := false
 	for _, h := range hosts {
@@ -182,12 +183,16 @@ func (r *istioEndpointRegistry) ListRegisteredEndpoints(ctx context.Context, log
 	return out, nil
 }
 
+func (r *istioEndpointRegistry) GetControlPlaneServiceName(inferenceServerName string) string {
+	return generateControlPlaneServiceName(inferenceServerName)
+}
+
 // todo: ghosharitra: add comments here
 // HTTPRoute references this bridge service; it forwards to the ServiceEntry host.
 func (r *istioEndpointRegistry) ensureBridgeService(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
-	serviceName := fmt.Sprintf("%s-inference-bridge", inferenceServerName)
+	serviceName := generateControlPlaneServiceName(inferenceServerName)
 	// ExternalName = the real service FQDN (matches ServiceEntry host and target-cluster Service).
-	externalName := inferenceServerHost(inferenceServerName, namespace)
+	externalName := generateInferenceServerHost(inferenceServerName, namespace)
 
 	existing := &corev1.Service{}
 	err := r.kubeClient.Get(ctx, client.ObjectKey{Name: serviceName, Namespace: namespace}, existing)
@@ -243,7 +248,7 @@ func (r *istioEndpointRegistry) ensureGlobalServiceEntry(ctx context.Context, lo
 
 	// Hosts = union of all inference-server hosts.
 	hosts, _, _ := unstructured.NestedStringSlice(se.Object, "spec", "hosts")
-	wantHost := inferenceServerHost(endpoint.InferenceServerName, endpoint.Namespace)
+	wantHost := generateInferenceServerHost(endpoint.InferenceServerName, endpoint.Namespace)
 	if !containsString(hosts, wantHost) {
 		hosts = append(hosts, wantHost)
 	}
@@ -353,18 +358,18 @@ func (r *istioEndpointRegistry) serviceEntryEndpoint(endpoint ClusterEndpoint) m
 	}
 }
 
-func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Context, endpoint ClusterEndpoint) (ClusterEndpoint, error) {
-	if endpoint.TargetCluster == nil {
+func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Context, endpoint ClusterEndpoint, targetCluster *v2pb.ClusterTarget) (ClusterEndpoint, error) {
+	if targetCluster == nil {
 		return ClusterEndpoint{}, fmt.Errorf("targetCluster is required for cluster %s", endpoint.ClusterID)
 	}
-	switch endpoint.TargetCluster.GetConfig().(type) {
+	switch targetCluster.GetConfig().(type) {
 	case *v2pb.ClusterTarget_Kubernetes:
 		// ok
 	default:
-		return ClusterEndpoint{}, fmt.Errorf("unsupported cluster type: %T", endpoint.TargetCluster.GetConfig())
+		return ClusterEndpoint{}, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
 
-	clusterClient, err := r.clientFactory.GetClient(ctx, endpoint.TargetCluster.GetKubernetes())
+	clusterClient, err := r.clientFactory.GetClient(ctx, targetCluster.GetKubernetes())
 	if err != nil {
 		return ClusterEndpoint{}, fmt.Errorf("failed to get client for cluster %s: %w", endpoint.ClusterID, err)
 	}
@@ -495,7 +500,7 @@ func nodeAddress(node *corev1.Node) string {
 	return hostname
 }
 
-func inferenceServerHost(inferenceServerName, namespace string) string {
+func generateInferenceServerHost(inferenceServerName, namespace string) string {
 	return fmt.Sprintf("%s-inference-service.%s.svc.cluster.local", inferenceServerName, namespace)
 }
 
@@ -506,4 +511,8 @@ func containsString(xs []string, x string) bool {
 		}
 	}
 	return false
+}
+
+func generateControlPlaneServiceName(inferenceServerName string) string {
+	return fmt.Sprintf("%s-inference-bridge", inferenceServerName)
 }

@@ -194,18 +194,35 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 		return deployment.Status, nil
 	}
 	serverName := inferenceServer.GetName()
-	healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+	deploymentTargetInfo, err := p.gateway.GetDeploymentTargetInfo(ctx, p.logger, serverName, deployment.Namespace)
 	if err != nil {
-		p.logger.Error("failed to check model status",
-			zap.Error(err),
-			zap.String("operation", "check_model_status"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("model", deployment.Spec.DesiredRevision.Name))
-		return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
-			deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+		return deployment.Status, fmt.Errorf("get deployment target info for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	if healthy {
+	allHealthy := true
+	for _, clusterTarget := range deploymentTargetInfo.ClusterTargets {
+		healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
+		if err != nil {
+			p.logger.Error("failed to check model status",
+				zap.Error(err),
+				zap.String("operation", "check_model_status"),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("deployment", deployment.Name),
+				zap.String("model", deployment.Spec.DesiredRevision.Name))
+			return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
+				deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+		}
+		if !healthy {
+			allHealthy = false
+			p.logger.Warn("model is not healthy in cluster",
+				zap.String("cluster_id", clusterTarget.ClusterId),
+				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("inference_server", serverName),
+				zap.String("namespace", deployment.Namespace))
+		}
+	}
+
+	// only log during state change
+	if allHealthy {
 		if deployment.Status.GetState() != v2pb.DEPLOYMENT_STATE_HEALTHY {
 			p.logger.Info("deployment status changed to healthy",
 				zap.String("deployment", deployment.Name),
@@ -235,19 +252,38 @@ func (p *Plugin) HealthCheckGate(ctx context.Context, observability plugins.Obse
 	if deployment.Spec.GetInferenceServer() == nil {
 		return false, nil
 	}
-	// Check if the inference server is healthy
-	healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, v2pb.BACKEND_TYPE_TRITON)
+
+	// Check if the inference server is healthy for all target clusters
+	deploymentTargetInfo, err := p.gateway.GetDeploymentTargetInfo(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
 	if err != nil {
-		p.logger.Error("failed to check health of inference server",
-			zap.Error(err),
-			zap.String("operation", "health_check_gate"),
-			zap.String("namespace", deployment.Namespace),
-			zap.String("deployment", deployment.Name),
-			zap.String("inference_server", deployment.Spec.GetInferenceServer().Name))
-		return false, fmt.Errorf("check health of inference server %s for deployment %s/%s: %w",
-			deployment.Spec.GetInferenceServer().Name, deployment.Namespace, deployment.Name, err)
+		return false, fmt.Errorf("get deployment target info for deployment %s/%s: %w", deployment.Namespace, deployment.Name, err)
 	}
-	return healthy, nil
+	allHealthy := true
+	for _, clusterTarget := range deploymentTargetInfo.ClusterTargets {
+		healthy, err := p.gateway.InferenceServerIsHealthy(ctx, p.logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
+		if err != nil {
+			p.logger.Error("failed to check health of inference server",
+				zap.Error(err),
+				zap.String("operation", "health_check_gate"),
+				zap.String("namespace", deployment.Namespace),
+				zap.String("deployment", deployment.Name),
+				zap.String("inference_server", deployment.Spec.GetInferenceServer().Name),
+				zap.String("cluster_id", clusterTarget.ClusterId))
+			return false, fmt.Errorf("check health of inference server %s for deployment %s/%s: %w",
+				deployment.Spec.GetInferenceServer().Name, deployment.Namespace, deployment.Name, err)
+		}
+		if !healthy {
+			allHealthy = false
+			p.logger.Warn("inference server is not healthy in cluster",
+				zap.String("cluster_id", clusterTarget.ClusterId),
+				zap.String("inference_server", deployment.Spec.GetInferenceServer().Name),
+				zap.String("namespace", deployment.Namespace))
+		}
+	}
+	if !allHealthy {
+		return false, nil
+	}
+	return true, nil
 }
 
 // PopulateDeploymentLogs adds error logs to deployment status (no-op for OSS).

@@ -53,6 +53,14 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 	var host string
 	var port string
 
+	switch targetCluster.GetConfig().(type) {
+	case *v2pb.ClusterTarget_Kubernetes:
+		connectionSpec := targetCluster.GetKubernetes()
+		host = connectionSpec.Host
+		port = connectionSpec.Port
+	default:
+		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
+	}
 	clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get cluster client",
@@ -103,14 +111,13 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 
 	return &ServerStatus{
 		ClusterState: v2pb.CLUSTER_STATE_CREATING,
-		Endpoints:    []string{endpoint},
+		Endpoint:     endpoint,
 	}, nil
 }
 
 func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (*ServerStatus, error) {
 	b.logger.Info("Getting Triton server status", zap.String("server", inferenceServerName))
 
-	endpoints := []string{}
 	var clusterClient client.Client
 	var err error
 	var host string
@@ -118,24 +125,24 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 
 	switch targetCluster.GetConfig().(type) {
 	case *v2pb.ClusterTarget_Kubernetes:
-		clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
-		if err != nil {
-			b.logger.Error("failed to get cluster client",
-				zap.Error(err),
-				zap.String("operation", "get_server_status"),
-				zap.String("namespace", namespace),
-				zap.String("inferenceServer", inferenceServerName),
-				zap.String("cluster", targetCluster.ClusterId))
-			return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
-		}
 		connectionSpec := targetCluster.GetKubernetes()
 		host = connectionSpec.Host
 		port = connectionSpec.Port
 	default:
 		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
+
+	clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	if err != nil {
+		b.logger.Error("failed to get cluster client",
+			zap.Error(err),
+			zap.String("operation", "get_server_status"),
+			zap.String("namespace", namespace),
+			zap.String("inferenceServer", inferenceServerName),
+			zap.String("cluster", targetCluster.ClusterId))
+		return nil, fmt.Errorf("failed to get cluster client for cluster %s: %w", targetCluster.ClusterId, err)
+	}
 	endpoint := b.buildServiceEndpoint(inferenceServerName, namespace, host, port)
-	endpoints = append(endpoints, endpoint)
 
 	deployment := &appsv1.Deployment{}
 	deploymentKey := client.ObjectKey{Name: fmt.Sprintf("triton-%s", inferenceServerName), Namespace: namespace}
@@ -146,7 +153,7 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 			zap.Error(err))
 		return &ServerStatus{
 			ClusterState: v2pb.CLUSTER_STATE_INVALID,
-			Endpoints:    endpoints,
+			Endpoint:     endpoint,
 		}, nil
 	}
 
@@ -166,7 +173,7 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 
 	return &ServerStatus{
 		ClusterState: clusterState,
-		Endpoints:    endpoints,
+		Endpoint:     endpoint,
 	}, nil
 }
 

@@ -2,6 +2,8 @@ package triton
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"go.uber.org/zap"
 	"k8s.io/client-go/tools/record"
@@ -131,26 +133,36 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 		}
 
 		// Update status based on external state
+		var message string
 		if status.ClusterState != resource.Status.TargetClusterStatuses[i].State {
 			p.logger.Info("External state change detected",
 				zap.String("currentState", resource.Status.TargetClusterStatuses[i].State.String()),
 				zap.String("externalState", status.ClusterState.String()))
 
-			resource.Status.TargetClusterStatuses[i].State = status.ClusterState
-
 			// Record state transition events
 			switch status.ClusterState {
 			case v2pb.CLUSTER_STATE_READY:
-				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterReady", "Cluster is ready")
+				message = fmt.Sprintf("Cluster %s is ready", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterReady", message)
 				numReadyClusters++
 			case v2pb.CLUSTER_STATE_CREATING:
-				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterCreating", "Cluster is creating")
+				message = fmt.Sprintf("Cluster %s is creating", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterCreating", message)
 			case v2pb.CLUSTER_STATE_DELETING:
-				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterDeleting", "Cluster is deleting")
+				message = fmt.Sprintf("Cluster %s is deleting", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeNormal, "ClusterDeleting", message)
 			case v2pb.CLUSTER_STATE_FAILED:
 				numFailedClusters++
-				p.Recorder.Event(resource, corev1.EventTypeWarning, "ClusterFailed", "Cluster failed")
+				message = fmt.Sprintf("Cluster %s failed", clusterTarget.ClusterId)
+				p.Recorder.Event(resource, corev1.EventTypeWarning, "ClusterFailed", message)
 			}
+
+			// update target cluster status
+			resource.Status.TargetClusterStatuses[i].State = status.ClusterState
+			resource.Status.TargetClusterStatuses[i].ClusterId = clusterTarget.ClusterId
+			resource.Status.TargetClusterStatuses[i].Message = message
+			resource.Status.TargetClusterStatuses[i].Endpoint = status.Endpoints[0]
+			resource.Status.TargetClusterStatuses[i].LastUpdated = time.Now().Format(time.RFC3339)
 		}
 	}
 

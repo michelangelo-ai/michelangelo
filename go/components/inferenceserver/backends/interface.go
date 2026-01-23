@@ -11,7 +11,7 @@ import (
 // ServerStatus represents the current state and health of inference server.
 type ServerStatus struct {
 	ClusterState v2pb.ClusterState
-	Endpoints    []string
+	Endpoint     string
 }
 
 type ResourceConstraints struct {

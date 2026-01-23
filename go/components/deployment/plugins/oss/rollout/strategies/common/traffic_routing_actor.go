@@ -10,6 +10,7 @@ import (
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -19,6 +20,7 @@ var _ conditionInterfaces.ConditionActor[*v2pb.Deployment] = &TrafficRoutingActo
 // TrafficRoutingActor manages HTTPRoute configuration to route deployment traffic to models.
 type TrafficRoutingActor struct {
 	ProxyProvider proxy.ProxyProvider
+	Gateway       gateways.Gateway
 	Logger        *zap.Logger
 }
 
@@ -27,17 +29,12 @@ func (a *TrafficRoutingActor) GetType() string {
 	return common.ActorTypeTrafficRouting
 }
 
-// GetLogger returns the logger instance for this actor.
-func (a *TrafficRoutingActor) GetLogger() *zap.Logger {
-	return a.Logger
-}
-
 // Retrieve checks if the Gateway API HTTPRoute is correctly configured for the deployment.
 func (a *TrafficRoutingActor) Retrieve(ctx context.Context, deployment *v2pb.Deployment, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.Logger.Info("Retrieving traffic routing configuration for deployment", zap.String("deployment", deployment.Name))
 
 	ok, err := a.ProxyProvider.CheckDeploymentRouteStatus(ctx, a.Logger,
-		deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
+		deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, deployment.Spec.GetInferenceServer().GetName())
 	if err != nil {
 		a.Logger.Error("failed to check deployment route status",
 			zap.Error(err),
@@ -60,7 +57,12 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		return conditionsutil.GenerateFalseCondition(condition, "MissingInferenceServer", fmt.Sprintf("inference server not specified for deployment %s", deployment.Name)), nil
 	}
 
-	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name)
+	controlPlaneServiceName, err := a.Gateway.GetControlPlaneServiceName(ctx, a.Logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
+	if controlPlaneServiceName == "" {
+		return conditionsutil.GenerateFalseCondition(condition, "MissingControlPlaneService", fmt.Sprintf("control plane service not found for inference server %s", deployment.Spec.GetInferenceServer().Name)), nil
+	}
+
+	err = a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
 	if err != nil {
 		a.Logger.Error("failed to add deployment route",
 			zap.Error(err),
