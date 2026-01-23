@@ -20,7 +20,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "google/protobuf/timestamp.proto";
-import "google/protobuf/any.proto";
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/v2/git.proto";
@@ -116,9 +115,6 @@ message ProjectSpec {
 
   // Type info of the project.
   ProjectTypeInfo type_info = 10 [(michelangelo.api.validation) = {optional: true}];
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999 [(michelangelo.api.validation) = {optional: true}];
 }
 
 // Describes the state of a project resource.
@@ -179,9 +175,6 @@ message ProjectStatus {
 
   // timestamp of last status update
   google.protobuf.Timestamp last_update_time = 4;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Defines a ML Project for a specific ML use case.

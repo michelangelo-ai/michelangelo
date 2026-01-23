@@ -21,7 +21,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
-import "google/protobuf/any.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/job.proto";
@@ -32,9 +31,6 @@ import "michelangelo/api/v2/user.proto";
 message DriverSpec {
   // Pod spec for the Spark driver
   PodSpec pod = 1;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Specification for the executors in a Spark job
@@ -44,9 +40,6 @@ message ExecutorSpec {
 
   // Number of executor instances
   int32 instances = 2;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Specification for a Spark job (application)
@@ -90,9 +83,6 @@ message SparkJobSpec {
 
   // Spark version specify the version of spark to use
   string spark_version = 13;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Dependencies specifies all possible types of dependencies of a Spark application.
@@ -127,9 +117,6 @@ message SparkJobStatus {
 
   // Spark application id
   string application_id = 8;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // SparkJob refers to a Spark job.

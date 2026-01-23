@@ -19,7 +19,6 @@ package michelangelo.api.v2;
 option go_package = "v2";
 
 import "michelangelo/api/options.proto";
-import "google/protobuf/any.proto";
 
 // ResourceSpec defines compute resource requirements for a Pod.
 // It specifies hardware limits and constraints for:
@@ -73,9 +72,6 @@ message ResourceSpec {
   // - Critical for workloads that open many files/sockets
   // For example: 1024 means the Pod can have up to 1024 open files/sockets
   int32 file_descriptors = 5 [(michelangelo.api.validation) = {min: "0"}];
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 
   // GPU SKU identifier that specifies:
   // - The type/model of GPU required (e.g. "nvidia-tesla-v100")
@@ -209,9 +205,6 @@ message PodSpec {
   // - Model serving commands: ["tritonserver", "--model-repository=/models"]
   // - Data processing jobs: ["spark-submit", "process.py", "--input=/data"]
   repeated string command = 7;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 // EnvFromSource represents the source of a set of ConfigMaps or Secrets
 message EnvFromSource {
