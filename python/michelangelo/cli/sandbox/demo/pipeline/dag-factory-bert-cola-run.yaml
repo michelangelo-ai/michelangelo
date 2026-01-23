@@ -1,17 +1,16 @@
 apiVersion: michelangelo.api/v2
 kind: PipelineRun
 metadata:
-  name: dag-factory-bert-cola-run
+  name: dag-factory-bert-cola-run122
   namespace: ma-dev-test
   annotations:
     michelangelo/description: "Test execution of DAG Factory YAML pipeline"
 spec:
   pipeline:
     namespace: ma-dev-test
-    name: dag-factory-bert-cola
+    name: dag-factory-bert-cola-foreach-pipeline
   description: "Test run of converted DAG Factory pipeline"
   input:
     environment: "test"
     ref_date: "2026-01-16"
     batch_size: 1000
-  workspaceRootDir: "/test-workspace/dag-factory-test"

@@ -32,16 +32,15 @@ func NewYAMLToUniflowConverter(logger *zap.Logger) *YAMLToUniflowConverter {
 	}
 }
 
-// Pipeline Specification Models (DAG Factory format)
+// Pipeline Specification Models (New format)
 
-type ScheduleConfig struct {
-	StartDate      string `yaml:"start_date,omitempty"`
-	EndDate        string `yaml:"end_date,omitempty"`
-	Catchup        string `yaml:"catchup,omitempty"`
-	Crontab        string `yaml:"crontab,omitempty"`
-	MaxConcurrency int    `yaml:"max_concurrency,omitempty"`
-	SLA            string `yaml:"sla,omitempty"`
-	Timeout        string `yaml:"timeout,omitempty"`
+type TriggerSettings struct {
+	Mode           string `yaml:"mode"`                      // MANUAL, SCHEDULED, EVENT_BASED
+	Crontab        string `yaml:"crontab,omitempty"`         // cron expression
+	StartDate      string `yaml:"start_date,omitempty"`      // start date
+	EndDate        string `yaml:"end_date,omitempty"`        // end date
+	Catchup        string `yaml:"catchup,omitempty"`         // catchup setting
+	MaxConcurrency int    `yaml:"max_concurrency,omitempty"` // max concurrent runs
 }
 
 type SlackConfig struct {
@@ -49,37 +48,63 @@ type SlackConfig struct {
 	UserOncall string `yaml:"user_oncall,omitempty"`
 }
 
-type AlertCondition struct {
-	OnRetry   string `yaml:"on_retry,omitempty"`
-	OnSLAMiss string `yaml:"on_sla_miss,omitempty"`
-	OnFailure string `yaml:"on_failure,omitempty"`
+type SplunkConfig struct {
+	Oncall string `yaml:"oncall,omitempty"`
 }
 
 type NotificationConfig struct {
-	SlackConfig    *SlackConfig    `yaml:"slack_config,omitempty"`
-	Email          string          `yaml:"email,omitempty"`
-	AlertCondition *AlertCondition `yaml:"alert_condition,omitempty"`
+	SlackConfig  *SlackConfig  `yaml:"slack_config,omitempty"`
+	SplunkConfig *SplunkConfig `yaml:"splunk_config,omitempty"`
+}
+
+type PipelineArtifacts struct {
+	Location string `yaml:"location,omitempty"`
 }
 
 type PipelineConfig struct {
-	Type          string              `yaml:"type"`
-	Name          string              `yaml:"name"`
-	Owner         string              `yaml:"owner"`
-	Workspace     string              `yaml:"workspace"`
-	Schedule      *ScheduleConfig     `yaml:"schedule,omitempty"`
-	Notifications *NotificationConfig `yaml:"notifications,omitempty"`
-	Description   string              `yaml:"description,omitempty"`
-	MetadataTags  []string            `yaml:"metadata_tags,omitempty"`
+	ID                string              `yaml:"id"`
+	Name              string              `yaml:"name"`
+	CreatedBy         string              `yaml:"created_by"`
+	CreatedTime       int64               `yaml:"created_time"`
+	Workspace         string              `yaml:"workspace"`
+	TriggerSettings   *TriggerSettings    `yaml:"trigger_settings,omitempty"`
+	SLA               string              `yaml:"sla,omitempty"`
+	Timeout           string              `yaml:"timeout,omitempty"`
+	Notifications     *NotificationConfig `yaml:"notifications,omitempty"`
+	Description       string              `yaml:"description,omitempty"`
+	Tags              []string            `yaml:"tags,omitempty"`
+	Tasks             []*TaskSpec         `yaml:"tasks,omitempty"`
+	PipelineArtifacts *PipelineArtifacts  `yaml:"pipeline_artifacts,omitempty"`
 }
 
 type NotebookTaskConfig struct {
 	NotebookPath   string                 `yaml:"notebook_path"`
+	TaskParameters map[string]interface{} `yaml:"task_parameters,omitempty"`
 	UserParameters map[string]interface{} `yaml:"user_parameters,omitempty"`
 }
 
 type ForEachTaskConfig struct {
-	Inputs      string `yaml:"inputs"`
-	Concurrency int    `yaml:"concurrency,omitempty"`
+	Inputs       string              `yaml:"inputs"` // String template reference
+	Concurrency  int                 `yaml:"concurrency,omitempty"`
+	NotebookTask *NotebookTaskConfig `yaml:"notebook_task,omitempty"`
+}
+
+type ConditionConfig struct {
+	Op    string `yaml:"op"`    // EQUAL_TO, NOT_EQUAL_TO, etc.
+	Left  string `yaml:"left"`  // Left side of comparison
+	Right string `yaml:"right"` // Right side of comparison
+}
+
+type IfElseTaskConfig struct {
+	Inputs    string           `yaml:"inputs"`
+	Condition *ConditionConfig `yaml:"condition,omitempty"`
+}
+
+type SparkOneTaskConfig struct {
+	Retries        int                    `yaml:"retries,omitempty"`
+	RetryDelay     string                 `yaml:"retry_delay,omitempty"`
+	TaskParameters map[string]interface{} `yaml:"task_parameters,omitempty"`
+	UserParameters map[string]interface{} `yaml:"user_parameters,omitempty"`
 }
 
 type DependsOnConfig struct {
@@ -115,8 +140,10 @@ type TaskSpec struct {
 	// Task type configs (mutually exclusive)
 	NotebookTask *NotebookTaskConfig `yaml:"notebook_task,omitempty"`
 	ForEachTask  *ForEachTaskConfig  `yaml:"for_each_task,omitempty"`
+	IfElseTask   *IfElseTaskConfig   `yaml:"if_else_task,omitempty"`
 	RayTask      *RayTaskConfig      `yaml:"ray_task,omitempty"`
 	SparkTask    *SparkTaskConfig    `yaml:"spark_task,omitempty"`
+	SparkOneTask *SparkOneTaskConfig `yaml:"sparkone_task,omitempty"`
 
 	// Dependencies
 	DependsOn []*DependsOnConfig `yaml:"depends_on,omitempty"`
@@ -125,7 +152,6 @@ type TaskSpec struct {
 type DAGFactorySpec struct {
 	SpecVersion string          `yaml:"spec_version"`
 	Pipeline    *PipelineConfig `yaml:"pipeline"`
-	Tasks       []*TaskSpec     `yaml:"tasks,omitempty"`
 }
 
 // ConvertYAMLToUniflowTar converts DAG Factory YAML content to Uniflow tar bytes
@@ -147,7 +173,7 @@ func (c *YAMLToUniflowConverter) ConvertYAMLToUniflowTar(ctx context.Context, pi
 		return nil, fmt.Errorf("failed to parse DAG Factory YAML: %w", unmarshalErr)
 	}
 
-	log.Info("Parsed DAG Factory spec", zap.String("pipeline_name", dagSpec.Pipeline.Name), zap.Int("tasks", len(dagSpec.Tasks)))
+	log.Info("Parsed DAG Factory spec", zap.String("pipeline_name", dagSpec.Pipeline.Name), zap.Int("tasks", len(dagSpec.Pipeline.Tasks)))
 
 	// Convert to Uniflow format
 	uniflowYAML, err := c.convertToUniflowYAML(&dagSpec)
@@ -302,7 +328,7 @@ func (c *YAMLToUniflowConverter) convertToUniflowYAML(dagSpec *DAGFactorySpec) (
 			"name":        dagSpec.Pipeline.Name,
 			"version":     dagSpec.SpecVersion,
 			"description": dagSpec.Pipeline.Description,
-			"author":      dagSpec.Pipeline.Owner,
+			"author":      dagSpec.Pipeline.CreatedBy,
 		},
 		"defaults": map[string]interface{}{
 			"image_spec":     "michelangelo-base:latest",
@@ -310,7 +336,7 @@ func (c *YAMLToUniflowConverter) convertToUniflowYAML(dagSpec *DAGFactorySpec) (
 			"retry_attempts": 0,
 		},
 		"environment": c.convertEnvironment(dagSpec.Pipeline),
-		"tasks":       c.convertTasks(dagSpec.Tasks),
+		"tasks":       c.convertTasks(dagSpec.Pipeline.Tasks),
 	}
 
 	// Add storage URL from workspace
@@ -332,25 +358,32 @@ func (c *YAMLToUniflowConverter) convertToUniflowYAML(dagSpec *DAGFactorySpec) (
 func (c *YAMLToUniflowConverter) convertEnvironment(pipeline *PipelineConfig) map[string]interface{} {
 	env := map[string]interface{}{
 		"variables": map[string]interface{}{
-			"PIPELINE_TYPE": pipeline.Type,
+			"PIPELINE_ID":        pipeline.ID,
+			"PIPELINE_NAME":      pipeline.Name,
+			"PIPELINE_WORKSPACE": pipeline.Workspace,
 		},
 	}
 
-	// Add schedule information
-	if pipeline.Schedule != nil {
-		schedule := pipeline.Schedule
-		if schedule.Crontab != "" {
-			env["variables"].(map[string]interface{})["CRONTAB"] = schedule.Crontab
+	// Add trigger settings information
+	if pipeline.TriggerSettings != nil {
+		triggers := pipeline.TriggerSettings
+		if triggers.Mode != "" {
+			env["variables"].(map[string]interface{})["TRIGGER_MODE"] = triggers.Mode
 		}
-		if schedule.SLA != "" {
-			env["variables"].(map[string]interface{})["SLA"] = schedule.SLA
+		if triggers.Crontab != "" {
+			env["variables"].(map[string]interface{})["CRONTAB"] = triggers.Crontab
 		}
-		if schedule.Timeout != "" {
-			env["variables"].(map[string]interface{})["TIMEOUT"] = schedule.Timeout
+		if triggers.MaxConcurrency > 0 {
+			env["variables"].(map[string]interface{})["MAX_CONCURRENCY"] = fmt.Sprintf("%d", triggers.MaxConcurrency)
 		}
-		if schedule.MaxConcurrency > 0 {
-			env["variables"].(map[string]interface{})["MAX_CONCURRENCY"] = fmt.Sprintf("%d", schedule.MaxConcurrency)
-		}
+	}
+
+	// Add pipeline-level SLA and timeout
+	if pipeline.SLA != "" {
+		env["variables"].(map[string]interface{})["SLA"] = pipeline.SLA
+	}
+	if pipeline.Timeout != "" {
+		env["variables"].(map[string]interface{})["TIMEOUT"] = pipeline.Timeout
 	}
 
 	// Add notification config
@@ -359,8 +392,8 @@ func (c *YAMLToUniflowConverter) convertEnvironment(pipeline *PipelineConfig) ma
 		if notifications.SlackConfig != nil && notifications.SlackConfig.Channel != "" {
 			env["variables"].(map[string]interface{})["SLACK_CHANNEL"] = notifications.SlackConfig.Channel
 		}
-		if notifications.Email != "" {
-			env["variables"].(map[string]interface{})["EMAIL_NOTIFICATIONS"] = notifications.Email
+		if notifications.SplunkConfig != nil && notifications.SplunkConfig.Oncall != "" {
+			env["variables"].(map[string]interface{})["SPLUNK_ONCALL"] = notifications.SplunkConfig.Oncall
 		}
 	}
 
@@ -398,7 +431,7 @@ func (c *YAMLToUniflowConverter) convertSingleTask(task *TaskSpec) map[string]in
 		uniflowTask["function"] = "michelangelo.uniflow.plugins.notebook.run_notebook"
 		uniflowTask["config"] = map[string]interface{}{"type": "NotebookTask"}
 		uniflowTask["expand"] = map[string]interface{}{
-			"item": c.convertTemplate(task.ForEachTask.Inputs),
+			"item": task.ForEachTask.Inputs,
 		}
 		if task.ForEachTask.Concurrency > 0 {
 			uniflowTask["expand"].(map[string]interface{})["max_parallel"] = task.ForEachTask.Concurrency
@@ -479,12 +512,27 @@ func (c *YAMLToUniflowConverter) convertTemplate(templateStr string) string {
 	return templateStr
 }
 
+// convertForEachInputsForStarlark converts ForEach inputs string to Starlark format
+func (c *YAMLToUniflowConverter) convertForEachInputsForStarlark(inputs string) string {
+	if inputs == "" {
+		return "[]"
+	}
+
+	// Check if it's a template reference
+	if strings.Contains(inputs, "{{tasks.") {
+		return c.convertStarlarkTemplateReference(inputs)
+	}
+
+	// Return as quoted string if not a template
+	return fmt.Sprintf("\"%s\"", inputs)
+}
+
 // generateStarlarkCode generates the Starlark workflow code directly
 func (c *YAMLToUniflowConverter) generateStarlarkCode(dagSpec *DAGFactorySpec) (string, error) {
 	var starlarkCode strings.Builder
 
 	// Generate load statements for required plugins
-	loadStatements, err := c.generateStarlarkLoadStatements(dagSpec.Tasks)
+	loadStatements, err := c.generateStarlarkLoadStatements(dagSpec.Pipeline.Tasks)
 	if err != nil {
 		return "", fmt.Errorf("failed to generate load statements: %w", err)
 	}
@@ -514,9 +562,9 @@ func (c *YAMLToUniflowConverter) generateStarlarkLoadStatements(tasks []*TaskSpe
 		loadPath string
 		function string
 	}{
-		"NotebookTask": {"__notebook_task__", "notebook_task.star", "task"},
-		"RayTask":      {"__ray_task__", "ray_task.star", "task"},
-		"SparkTask":    {"__spark_task__", "spark_task.star", "spark_task"},
+		//"NotebookTask": {"__notebook_task__", "notebook_task.star", "task"},
+		"RayTask":   {"__ray_task__", "ray_task.star", "task"},
+		"SparkTask": {"__spark_task__", "spark_task.star", "spark_task"},
 	}
 
 	// Determine which plugins are needed
@@ -529,7 +577,14 @@ func (c *YAMLToUniflowConverter) generateStarlarkLoadStatements(tasks []*TaskSpe
 		} else if task.SparkTask != nil {
 			taskType = "SparkTask"
 		} else if task.ForEachTask != nil {
-			taskType = "NotebookTask" // ForEachTask also uses notebook execution
+			// ForEach tasks use the inner task type for load statements
+			if task.SparkTask != nil {
+				taskType = "SparkTask"
+			} else if task.RayTask != nil {
+				taskType = "RayTask"
+			} else {
+				taskType = "RayTask" // Default for ForEach
+			}
 		} else {
 			taskType = "RayTask" // Default to RayTask
 		}
@@ -557,7 +612,7 @@ func (c *YAMLToUniflowConverter) generateStarlarkWorkflowFunction(dagSpec *DAGFa
 	}
 
 	// Get execution order (topological sort of dependencies)
-	executionOrder, err := c.getTaskExecutionOrder(dagSpec.Tasks)
+	executionOrder, err := c.getTaskExecutionOrder(dagSpec.Pipeline.Tasks)
 	if err != nil {
 		return "", fmt.Errorf("failed to determine execution order: %w", err)
 	}
@@ -654,6 +709,30 @@ func (c *YAMLToUniflowConverter) getTaskExecutionOrder(tasks []*TaskSpec) ([]*Ta
 	return result, nil
 }
 
+// TaskExecutionContext represents different execution contexts
+type TaskExecutionContext string
+
+const (
+	ContextRegular     TaskExecutionContext = "regular"
+	ContextConditional TaskExecutionContext = "conditional"
+	ContextForEach     TaskExecutionContext = "foreach"
+)
+
+// generateTaskExecutionCode generates appropriate task execution code based on task type
+func (c *YAMLToUniflowConverter) generateTaskExecutionCode(task *TaskSpec, context TaskExecutionContext) (string, error) {
+	// Determine task type and generate appropriate execution code
+	if task.NotebookTask != nil {
+		return c.generateStarlarkNotebookTaskExecution(task), nil
+	} else if task.RayTask != nil {
+		return c.generateStarlarkRayTaskExecution(task), nil
+	} else if task.SparkTask != nil {
+		return c.generateStarlarkSparkTaskExecution(task), nil
+	} else {
+		// Default to RayTask
+		return c.generateStarlarkRayTaskExecution(task), nil
+	}
+}
+
 // generateStarlarkTaskExecution generates Starlark code for a single task
 func (c *YAMLToUniflowConverter) generateStarlarkTaskExecution(task *TaskSpec) (string, error) {
 	var taskCode strings.Builder
@@ -674,16 +753,11 @@ func (c *YAMLToUniflowConverter) generateStarlarkTaskExecution(task *TaskSpec) (
 	}
 
 	// Regular single task execution
-	if task.NotebookTask != nil {
-		taskCode.WriteString(c.generateStarlarkNotebookTaskExecution(task))
-	} else if task.RayTask != nil {
-		taskCode.WriteString(c.generateStarlarkRayTaskExecution(task))
-	} else if task.SparkTask != nil {
-		taskCode.WriteString(c.generateStarlarkSparkTaskExecution(task))
-	} else {
-		// Default to RayTask
-		taskCode.WriteString(c.generateStarlarkRayTaskExecution(task))
+	executionCode, err := c.generateTaskExecutionCode(task, ContextRegular)
+	if err != nil {
+		return "", err
 	}
+	taskCode.WriteString(executionCode)
 
 	return taskCode.String(), nil
 }
@@ -734,14 +808,12 @@ func (c *YAMLToUniflowConverter) generateStarlarkConditionalExecution(task *Task
 				return "", err
 			}
 			innerTaskCode = innerCode
-		} else if task.NotebookTask != nil {
-			innerTaskCode = c.generateStarlarkNotebookTaskExecution(task)
-		} else if task.RayTask != nil {
-			innerTaskCode = c.generateStarlarkRayTaskExecution(task)
-		} else if task.SparkTask != nil {
-			innerTaskCode = c.generateStarlarkSparkTaskExecution(task)
 		} else {
-			innerTaskCode = c.generateStarlarkRayTaskExecution(task)
+			var err error
+			innerTaskCode, err = c.generateTaskExecutionCode(task, ContextConditional)
+			if err != nil {
+				return "", err
+			}
 		}
 
 		// Indent task lines
@@ -978,16 +1050,44 @@ func (c *YAMLToUniflowConverter) generateStarlarkForEachExecution(task *TaskSpec
 	var taskCode strings.Builder
 	taskCode.WriteString(fmt.Sprintf("# Task: %s (foreach)\n", task.TaskID))
 
-	iterSource := c.convertStarlarkTemplateReference(task.ForEachTask.Inputs)
+	iterSource := c.convertForEachInputsForStarlark(task.ForEachTask.Inputs)
 
 	taskCode.WriteString(fmt.Sprintf("%s_results = []\n", safeName))
 	taskCode.WriteString(fmt.Sprintf("for item_value in %s:\n", iterSource))
-	taskCode.WriteString(fmt.Sprintf("    iteration_result = __notebook_task__(\n"))
-	taskCode.WriteString(fmt.Sprintf("        \"michelangelo.uniflow.plugins.notebook.run_notebook\",\n"))
-	taskCode.WriteString("        item=item_value,\n")
-	taskCode.WriteString("        cache_enabled=True,\n")
-	taskCode.WriteString("        retry_attempts=0,\n")
-	taskCode.WriteString("    )()\n")
+
+	// Generate the appropriate task execution code based on task type
+	executionCode, err := c.generateTaskExecutionCode(task, ContextForEach)
+	if err != nil {
+		return "", err
+	}
+
+	// Modify the generated code to use 'iteration_result' instead of the task name result
+	// Replace the task result assignment with iteration_result assignment
+	modifiedCode := strings.ReplaceAll(executionCode, fmt.Sprintf("%s_result = ", safeName), "iteration_result = ")
+
+	// Remove any comments from the execution code since we already have a comment for the ForEach task
+	lines := strings.Split(modifiedCode, "\n")
+	var cleanedLines []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" && !strings.HasPrefix(trimmed, "#") {
+			cleanedLines = append(cleanedLines, line)
+		}
+	}
+	modifiedCode = strings.Join(cleanedLines, "\n")
+
+	// Replace {{item}} with item_value for ForEach context
+	modifiedCode = strings.ReplaceAll(modifiedCode, `"{{item}}"`, "item_value")
+	modifiedCode = strings.ReplaceAll(modifiedCode, "{{item}}", "item_value")
+
+	// Indent the execution code for the for loop
+	lines = strings.Split(strings.TrimSpace(modifiedCode), "\n")
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			taskCode.WriteString(fmt.Sprintf("    %s\n", line))
+		}
+	}
+
 	taskCode.WriteString(fmt.Sprintf("    %s_results.append(iteration_result)\n", safeName))
 	taskCode.WriteString(fmt.Sprintf("%s_result = %s_results\n\n", safeName, safeName))
 
