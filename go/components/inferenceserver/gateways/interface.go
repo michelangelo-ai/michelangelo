@@ -33,5 +33,5 @@ type Gateway interface {
 	// InferenceServerIsHealthy checks if the inference server is healthy.
 	InferenceServerIsHealthy(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string, targetCluster *v2pb.ClusterTarget, backendType v2pb.BackendType) (bool, error)
 	// GetControlPlaneServiceName returns the name of the control plane service for an inference server.
-	GetControlPlaneServiceName(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (string, error)
+	GetControlPlaneServiceName(inferenceServerName string) string
 }

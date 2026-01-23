@@ -164,6 +164,10 @@ func (g *gateway) GetDeploymentTargetInfo(ctx context.Context, logger *zap.Logge
 	}, nil
 }
 
+func (g *gateway) GetControlPlaneServiceName(inferenceServerName string) string {
+	return g.endpointRegistry.GetControlPlaneServiceName(inferenceServerName)
+}
+
 func (g *gateway) getInferenceServer(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) (*v2pb.InferenceServer, error) {
 	inferenceServer := &v2pb.InferenceServer{}
 	err := g.kubeClient.Get(ctx, client.ObjectKey{

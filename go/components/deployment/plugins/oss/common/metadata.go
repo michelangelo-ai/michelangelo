@@ -89,7 +89,7 @@ func SetClusterMetadata(condition *apipb.Condition, metadata *ClusterMetadata) e
 	}
 
 	var mapData map[string]interface{}
-	if err := json.Unmarshal(jsonBytes, &mapData); err != nil {
+	if err = json.Unmarshal(jsonBytes, &mapData); err != nil {
 		return fmt.Errorf("failed to unmarshal to map: %w", err)
 	}
 

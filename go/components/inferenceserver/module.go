@@ -9,6 +9,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins"
 )
 
@@ -16,7 +17,7 @@ import (
 var Module = fx.Options(
 	endpointregistry.Module,
 	configmap.Module,
-	// gateways.Module,
+	gateways.Module,
 	fx.Provide(newEventRecorder),
 	fx.Provide(newPluginRegistry),
 	fx.Provide(NewReconciler),

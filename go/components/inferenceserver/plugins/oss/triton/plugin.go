@@ -161,7 +161,7 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 			resource.Status.TargetClusterStatuses[i].State = status.ClusterState
 			resource.Status.TargetClusterStatuses[i].ClusterId = clusterTarget.ClusterId
 			resource.Status.TargetClusterStatuses[i].Message = message
-			resource.Status.TargetClusterStatuses[i].Endpoint = status.Endpoints[0]
+			resource.Status.TargetClusterStatuses[i].Endpoint = status.Endpoint
 			resource.Status.TargetClusterStatuses[i].LastUpdated = time.Now().Format(time.RFC3339)
 		}
 	}

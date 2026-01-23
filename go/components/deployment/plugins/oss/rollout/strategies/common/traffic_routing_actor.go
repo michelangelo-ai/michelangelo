@@ -57,12 +57,11 @@ func (a *TrafficRoutingActor) Run(ctx context.Context, deployment *v2pb.Deployme
 		return conditionsutil.GenerateFalseCondition(condition, "MissingInferenceServer", fmt.Sprintf("inference server not specified for deployment %s", deployment.Name)), nil
 	}
 
-	controlPlaneServiceName, err := a.Gateway.GetControlPlaneServiceName(ctx, a.Logger, deployment.Spec.GetInferenceServer().Name, deployment.Namespace)
+	controlPlaneServiceName := a.Gateway.GetControlPlaneServiceName(deployment.Spec.GetInferenceServer().Name)
 	if controlPlaneServiceName == "" {
 		return conditionsutil.GenerateFalseCondition(condition, "MissingControlPlaneService", fmt.Sprintf("control plane service not found for inference server %s", deployment.Spec.GetInferenceServer().Name)), nil
 	}
-
-	err = a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
+	err := a.ProxyProvider.EnsureDeploymentRoute(ctx, a.Logger, deployment.Name, deployment.Namespace, deployment.Spec.GetInferenceServer().Name, deployment.Spec.DesiredRevision.Name, controlPlaneServiceName)
 	if err != nil {
 		a.Logger.Error("failed to add deployment route",
 			zap.Error(err),
