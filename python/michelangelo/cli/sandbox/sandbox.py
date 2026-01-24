@@ -1745,6 +1745,23 @@ def _setup_istio_on_clusters(target_clusters: list[str]):
     # for all traffic to ServiceEntry endpoints (east-west gateways)
     _create_inference_mtls_destination_rule()
 
+    # setup port-forwarding for the control plane
+    # kubectl --context k3d-michelangelo-sandbox port-forward svc/ma-gateway-istio 8080:80 -n default
+    subprocess.Popen(
+        [
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "port-forward",
+            "svc/ma-gateway-istio",
+            "8080:80",
+            "-n",
+            "default",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
     print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
 
 
@@ -1904,21 +1921,6 @@ def _setup_istio_with_gateway_api(
         "wide",
     )
 
-    # Only set up port-forwarding for the current context (not remote clusters)
-    if kube_context is None:
-        subprocess.Popen(
-            [
-                "kubectl",
-                "-n",
-                "default",
-                "port-forward",
-                "svc/ma-gateway-istio",
-                "8080:80",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
     print("✅ Istio with Gateway API setup complete")
 
 
@@ -1999,6 +2001,7 @@ def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name:
         "--overwrite",
     )
 
+    # todo: ghosharitra: make this into a yaml
     # Create a Gateway CR with AUTO_PASSTHROUGH mode
     # This allows the gateway to route based on SNI without explicit VirtualServices
     gateway_manifest = {
