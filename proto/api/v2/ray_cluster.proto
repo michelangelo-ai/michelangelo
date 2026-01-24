@@ -21,7 +21,6 @@ option go_package = "v2";
 
 import "k8s.io/apimachinery/pkg/apis/meta/v1/generated.proto";
 import "k8s.io/api/core/v1/generated.proto";
-import "google/protobuf/any.proto";
 import "michelangelo/api/options.proto";
 import "michelangelo/api/conditions.proto";
 import "michelangelo/api/v2/job.proto";
@@ -37,9 +36,6 @@ message RayHeadSpec {
 
   // Ray start parameters for the head node
   map<string, string> ray_start_params = 3;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Specification for the workers in a Ray cluster
@@ -58,9 +54,6 @@ message RayWorkerSpec {
 
   // Ray start parameters for the worker nodes
   map<string, string> ray_start_params = 5;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Specification for a Ray cluster
@@ -86,9 +79,6 @@ message RayClusterSpec {
 
   // Scheduling spec
   SchedulingSpec scheduling = 7;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 // Describes the state of a ray cluster.
@@ -237,9 +227,6 @@ message RayClusterStatus {
   // Each error entry provides detailed context, such as error type, associated pod name, and timestamps of occurrences.
   // This information aids in root cause analysis and accelerates resolution of cluster failures.
   repeated PodErrors pod_errors = 9;
-
-  // Extension field for additional custom data
-  google.protobuf.Any ext = 999;
 }
 
 
