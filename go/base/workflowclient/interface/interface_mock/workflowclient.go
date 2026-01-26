@@ -154,4 +154,3 @@ func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, run
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
 }
-
