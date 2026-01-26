@@ -3,10 +3,12 @@ package triggerrun
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"testing"
 
 	"github.com/go-logr/zapr"
+	"github.com/golang/mock/gomock"
+	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
+	interfaceMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	apiutils "github.com/michelangelo-ai/michelangelo/go/api/utils"
 	api "github.com/michelangelo-ai/michelangelo/proto/api"
@@ -335,9 +337,43 @@ func TestReconcile(t *testing.T) {
 			initialObj := test.initialObject.DeepCopy()
 			initialObj.Status = test.initialStatus
 			initialObjects := []runtime.Object{initialObj}
+			mockClient := interfaceMock.NewMockWorkflowClient(gomock.NewController(t))
+
+			// Set up common mock expectations
+			mockClient.EXPECT().GetProvider().Return("test-provider").AnyTimes()
+			mockClient.EXPECT().SupportsSchedules().Return(true).AnyTimes()
+
+			// Set up mock expectations based on the test scenario
+			if test.initialStatus.State == v2pb.TRIGGER_RUN_STATE_INVALID {
+				// Test is expecting to start a workflow
+				if test.name == "first time enable failed" {
+					mockClient.EXPECT().StartScheduledWorkflow(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("failed to start workflow"))
+				} else {
+					mockClient.EXPECT().StartScheduledWorkflow(gomock.Any(), gomock.Any()).Return(&clientInterface.WorkflowExecution{ID: "test-execution-id", RunID: "test-run-id"}, nil)
+				}
+			} else if test.initialStatus.State == v2pb.TRIGGER_RUN_STATE_RUNNING {
+				// Test expects either kill operation or status check
+				if test.name != "" && test.name == "kill an running trigger - succeeded" {
+					mockClient.EXPECT().StopScheduledWorkflow(gomock.Any(), gomock.Any()).Return(nil)
+				} else if test.name != "" && (test.name == "kill an running trigger - failed with invalid state" || test.name == "kill an running trigger - failed with running state" || test.name == "kill an running trigger - failed with failed state") {
+					mockClient.EXPECT().StopScheduledWorkflow(gomock.Any(), gomock.Any()).Return(fmt.Errorf("failed to stop workflow"))
+				} else {
+					// Status check scenarios
+					if test.name == "running triggerrun GetStatus - failed" {
+						mockClient.EXPECT().GetScheduleStatus(gomock.Any(), gomock.Any()).Return(nil, fmt.Errorf("failed to GetStatus"))
+					} else if test.name == "running triggerrun GetStatus - succeeded with running status" {
+						mockClient.EXPECT().GetScheduleStatus(gomock.Any(), gomock.Any()).Return(&clientInterface.ScheduleStatus{State: "RUNNING", IsRunning: true}, nil)
+					} else if test.name == "running triggerrun GetStatus - succeeded with succeeded status" {
+						mockClient.EXPECT().GetScheduleStatus(gomock.Any(), gomock.Any()).Return(&clientInterface.ScheduleStatus{State: "COMPLETED", IsRunning: false}, nil)
+					} else if test.name == "running triggerrun GetStatus - failed with failed status" {
+						mockClient.EXPECT().GetScheduleStatus(gomock.Any(), gomock.Any()).Return(&clientInterface.ScheduleStatus{State: "FAILED", IsRunning: false}, nil)
+					}
+				}
+			}
+
 			params := Params{
-				Logger:      zapr.NewLogger(zaptest.NewLogger(t)),
-				CronTrigger: test.cronRunnerProvider(),
+				Logger:         zapr.NewLogger(zaptest.NewLogger(t)),
+				WorkflowClient: mockClient,
 			}
 			reconciler := setUpReconciler(t, initialObjects, params)
 			tr := &v2pb.TriggerRun{}
@@ -369,41 +405,8 @@ func TestReconcile(t *testing.T) {
 
 }
 
-func TestGetRunner(t *testing.T) {
-	tests := []struct {
-		name       string
-		runnerType string
-		triggerRun v2pb.TriggerRun
-	}{
-		{
-			name:       "cron trigger",
-			runnerType: "*triggerrun.cronTrigger",
-			triggerRun: v2pb.TriggerRun{
-				Spec: v2pb.TriggerRunSpec{
-					Trigger: &v2pb.Trigger{
-						TriggerType: &v2pb.Trigger_CronSchedule{CronSchedule: &v2pb.CronSchedule{Cron: "5 * * * *"}},
-					},
-				},
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			initialObj := test.triggerRun.DeepCopy()
-			initialObjects := []runtime.Object{initialObj}
-			params := Params{
-				Logger:      zapr.NewLogger(zaptest.NewLogger(t)),
-				CronTrigger: &cronTrigger{},
-			}
-			reconciler := setUpReconciler(t, initialObjects, params)
-			runner := reconciler.getRunner(&test.triggerRun)
-			runnerType := reflect.TypeOf(runner).String()
-			assert.NotNil(t, runner, test.name)
-			assert.Equal(t, test.runnerType, runnerType, test.name)
-
-		})
-	}
-}
+// TestGetRunner removed - functionality no longer exists after architecture simplification
+// The controller now uses WorkflowClient directly instead of the runner pattern
 
 func setUpReconciler(t *testing.T, initialObjects []runtime.Object, params Params) Reconciler {
 	scheme := runtime.NewScheme()

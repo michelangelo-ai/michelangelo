@@ -56,25 +56,21 @@ const (
 // Params contains the dependencies required to instantiate the TriggerRun Reconciler.
 //
 // This struct uses Uber FX dependency injection to wire controller dependencies.
-// The Runner implementations are tagged by name to inject the correct trigger type.
+// The controller now uses RunnerFactory for provider-aware runner selection instead
+// of hardcoded Runner implementations.
 type Params struct {
 	fx.In
 
 	Logger            logr.Logger
 	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
-
-	CronTrigger       Runner `name:"cron-trigger"`        // Handles cron-based recurring workflows
-	IntervalTrigger   Runner `name:"interval-trigger"`    // Handles interval-based workflows
-	BackfillTrigger   Runner `name:"backfill-trigger"`    // Handles backfill workflows
-	BatchRerunTrigger Runner `name:"batch-rerun-trigger"` // Handles batch rerun workflows
 }
 
 // Reconciler reconciles TriggerRun resources through a state machine.
 //
 // The reconciler manages the complete lifecycle of trigger runs, from initial workflow
-// start through terminal states (SUCCEEDED, FAILED, or KILLED). It delegates execution
-// to the appropriate Runner based on the trigger type.
+// start through terminal states (SUCCEEDED, FAILED, or KILLED). It uses RunnerFactory
+// for provider-aware runner selection.
 //
 // State transitions are handled through a labeled switch statement that allows
 // breaking out of the state machine once a terminal state is reached. The reconciler
@@ -89,24 +85,19 @@ type Reconciler struct {
 	Scheme *runtime.Scheme
 
 	apiHandlerFactory apiHandler.Factory
+	WorkflowClient    clientInterface.WorkflowClient
 
-	CronTrigger       Runner // Executes cron-scheduled workflows
-	IntervalTrigger   Runner // Executes interval-based workflows
-	BackfillTrigger   Runner // Executes backfill workflows
-	BatchRerunTrigger Runner // Executes batch rerun workflows
+	// Removed RunnerFactory - using WorkflowClient unified scheduling directly
 }
 
 // NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
 //
-// The reconciler is initialized with Runner implementations for each supported trigger type.
-// The API handler is configured during registration through the Register method.
+// The reconciler uses WorkflowClient's unified scheduling methods for provider-aware
+// trigger management. The API handler is configured during registration through the Register method.
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
-		CronTrigger:       p.CronTrigger,
-		IntervalTrigger:   p.IntervalTrigger,
-		BackfillTrigger:   p.BackfillTrigger,
-		BatchRerunTrigger: p.BatchRerunTrigger,
+		WorkflowClient:    p.WorkflowClient,
 	}
 }
 
@@ -137,18 +128,18 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 // State Machine Logic:
 //
 //   - Terminal states (SUCCEEDED/FAILED/KILLED): Mark resource immutable and stop reconciliation
-//   - INVALID: Start workflow execution using appropriate Runner, transition to RUNNING or FAILED
-//   - RUNNING: Check workflow status, handle kill requests if Spec.Kill is true
+//   - INVALID: Start scheduled workflow using WorkflowClient unified scheduling
+//   - RUNNING: Check schedule status, handle kill requests if Spec.Kill is true
 //
 // The method performs the following operations:
 //  1. Check if resource is in terminal state and mark immutable if needed
 //  2. Create deep copy of resource to detect changes
-//  3. Execute state transitions through labeled StateMachine switch
+//  3. Execute state transitions using WorkflowClient's unified scheduling methods
 //  4. Persist status updates if resource changed
 //  5. Requeue after 60 seconds for continued monitoring
 //
 // Kill requests are processed by setting Spec.Kill=true, which causes the reconciler
-// to invoke the Runner's Kill method during the next reconciliation.
+// to invoke WorkflowClient.StopScheduledWorkflow during the next reconciliation.
 func (r *Reconciler) reconcile(
 	ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun,
 ) (ctrl.Result, error) {
@@ -168,7 +159,8 @@ func (r *Reconciler) reconcile(
 	}
 	originalTriggerRun := triggerRun.DeepCopy()
 
-	runner := r.getRunner(triggerRun)
+	// Generate schedule ID for this trigger
+	scheduleID := r.generateScheduleID(triggerRun)
 StateMachine:
 	switch triggerRun.Status.State {
 	case v2pb.TRIGGER_RUN_STATE_INVALID:
@@ -177,48 +169,86 @@ StateMachine:
 			triggerRun.Status = v2pb.TriggerRunStatus{State: v2pb.TRIGGER_RUN_STATE_KILLED}
 			break StateMachine
 		}
-		status, err := runner.Run(ctx, triggerRun)
+
+		// Create scheduled workflow using unified scheduling
+		execution, err := r.WorkflowClient.StartScheduledWorkflow(ctx, clientInterface.ScheduledWorkflowOptions{
+			TriggerRun:   triggerRun,
+			WorkflowType: "trigger.CronTrigger",
+			TaskQueue:    "trigger_run",
+			Args:         []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}},
+		})
+
 		if err != nil {
 			log.Error(err, "failed to start scheduled workflow",
 				"operation", "start_workflow",
 				"namespace", triggerRun.Namespace,
-				"name", triggerRun.Name)
+				"name", triggerRun.Name,
+				"triggerType", fmt.Sprintf("%T", triggerRun.Spec.Trigger.TriggerType),
+				"provider", r.WorkflowClient.GetProvider(),
+				"supportsSchedules", r.WorkflowClient.SupportsSchedules())
 			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
-			triggerRun.Status.ErrorMessage = status.ErrorMessage
+			triggerRun.Status.ErrorMessage = err.Error()
 			break StateMachine
 		}
+
 		log.Info("scheduled workflow started",
 			"operation", "workflow_started",
 			"namespace", triggerRun.Namespace,
 			"name", triggerRun.Name,
-			"state", status.State,
-			"execution_workflow_id", status.ExecutionWorkflowId)
-		triggerRun.Status.State = status.State
-		triggerRun.Status.LogUrl = status.LogUrl
-		triggerRun.Status.ExecutionWorkflowId = status.ExecutionWorkflowId
+			"scheduleId", scheduleID,
+			"executionId", execution.ID)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+		triggerRun.Status.ExecutionWorkflowId = execution.ID
+		triggerRun.Status.LogUrl = r.getWorkflowURL(execution.ID)
 	case v2pb.TRIGGER_RUN_STATE_RUNNING:
 		log.Info("TRIGGER_RUN_STATE_RUNNING")
 		// disable the trigger
 		if triggerRun.Spec.Kill {
-			status, err := runner.Kill(ctx, triggerRun)
+			err := r.WorkflowClient.StopScheduledWorkflow(ctx, scheduleID)
 			if err != nil {
-				log.Error(err, "failed to kill scheduled workflow")
+				log.Error(err, "failed to stop scheduled workflow",
+					"operation", "stop_workflow",
+					"namespace", triggerRun.Namespace,
+					"name", triggerRun.Name,
+					"scheduleId", scheduleID)
 				triggerRun.Status.ErrorMessage = err.Error()
-				triggerRun.Status.State = status.State
+				triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
 				break StateMachine
 			}
-			log.Info("trigger run killed")
-			triggerRun.Status = status
+			log.Info("trigger run killed",
+				"operation", "workflow_killed",
+				"namespace", triggerRun.Namespace,
+				"name", triggerRun.Name,
+				"scheduleId", scheduleID)
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
 			break StateMachine
 		}
-		status, err := runner.GetStatus(ctx, triggerRun)
+
+		// Check schedule status
+		scheduleStatus, err := r.WorkflowClient.GetScheduleStatus(ctx, scheduleID)
 		if err != nil {
-			log.Error(err, "TriggerRun GetStatus failed")
+			log.Error(err, "failed to get schedule status",
+				"operation", "get_status",
+				"namespace", triggerRun.Namespace,
+				"name", triggerRun.Name,
+				"scheduleId", scheduleID)
 			triggerRun.Status.ErrorMessage = err.Error()
-			triggerRun.Status.State = status.State
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
 			break StateMachine
 		}
-		triggerRun.Status.State = status.State
+
+		// Map schedule status to trigger run state
+		switch scheduleStatus.State {
+		case "RUNNING":
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING
+		case "PAUSED":
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_RUNNING // Still considered running, just paused
+		case "KILLED":
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_KILLED
+		case "FAILED":
+			triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+			triggerRun.Status.ErrorMessage = scheduleStatus.ErrorMessage
+		}
 	}
 
 	if !reflect.DeepEqual(originalTriggerRun, triggerRun) {
@@ -256,21 +286,14 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// getRunner selects the appropriate Runner implementation based on the TriggerRun's trigger type.
-//
-// The selection is made using GetTriggerType which examines the TriggerRun spec to determine
-// whether it's a batch rerun, backfill, interval, or cron trigger. The default is CronTrigger
-// if the type cannot be determined.
-func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
-	triggerType := GetTriggerType(tr)
-	switch triggerType {
-	case TriggerTypeInterval:
-		return r.IntervalTrigger
-	case TriggerTypeBackfill:
-		return r.BackfillTrigger
-	case TriggerTypeBatchRerun:
-		return r.BatchRerunTrigger
-	default:
-		return r.CronTrigger
-	}
+// generateScheduleID creates a deterministic schedule ID from TriggerRun metadata.
+func (r *Reconciler) generateScheduleID(triggerRun *v2pb.TriggerRun) string {
+	return fmt.Sprintf("%s-%s-schedule", triggerRun.Namespace, triggerRun.Name)
+}
+
+// getWorkflowURL constructs a URL for viewing the workflow/schedule in the provider's UI.
+func (r *Reconciler) getWorkflowURL(workflowID string) string {
+	// This would need to be configured based on the deployment
+	// For now, return a placeholder that includes the workflow ID
+	return fmt.Sprintf("%s://workflow/%s", r.WorkflowClient.GetProvider(), workflowID)
 }

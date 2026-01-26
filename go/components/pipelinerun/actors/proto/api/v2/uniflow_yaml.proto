@@ -1,0 +1,299 @@
+syntax = "proto3";
+
+package michelangelo.api.v2;
+
+option go_package = "github.com/uber/michelangelo/proto/api/v2";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+
+// UniflowYamlPipeline represents the complete YAML configuration for a DAG Factory pipeline
+message UniflowYamlPipeline {
+  // Metadata about the pipeline specification
+  string spec_version = 1;
+
+  // Main pipeline configuration
+  PipelineSpec pipeline = 2;
+
+  // List of tasks in the pipeline
+  repeated TaskSpec tasks = 3;
+
+  // Optional task groups for organizing related tasks
+  repeated TaskGroupSpec task_groups = 4;
+
+  // Pipeline artifacts configuration
+  PipelineArtifacts pipeline_artifacts = 5;
+}
+
+// PipelineSpec defines the overall pipeline configuration
+message PipelineSpec {
+  // Pipeline execution type (SCHEDULED, MANUAL, etc.)
+  string type = 1;
+
+  // Unique pipeline name
+  string name = 2;
+
+  // Pipeline owner (email or team)
+  string owner = 3;
+
+  // Workspace configuration
+  string workspace = 4;
+
+  // Schedule configuration for scheduled pipelines
+  ScheduleSpec schedule = 5;
+
+  // Notification settings
+  NotificationSpec notifications = 6;
+
+  // Pipeline description
+  string description = 7;
+
+  // Metadata tags for categorization
+  repeated string metadata_tags = 8;
+
+  // Default arguments for all tasks
+  map<string, string> default_args = 9;
+
+  // Additional pipeline-level parameters
+  map<string, google.protobuf.Any> params = 10;
+}
+
+// ScheduleSpec defines when and how the pipeline runs
+message ScheduleSpec {
+  // Pipeline start date (YYYY-MM-DD format)
+  string start_date = 1;
+
+  // Pipeline end date (YYYY-MM-DD format)
+  string end_date = 2;
+
+  // Whether to catch up on missed runs
+  string catchup = 3;
+
+  // Cron expression for scheduling
+  string crontab = 4;
+
+  // Maximum number of concurrent pipeline runs
+  int32 max_concurrency = 5;
+
+  // Service Level Agreement (HH:MM:SS format)
+  string sla = 6;
+
+  // Pipeline timeout (HH:MM:SS format)
+  string timeout = 7;
+
+  // Alternative schedule parameter (modern syntax)
+  string schedule = 8;
+}
+
+// NotificationSpec defines alerting and notification settings
+message NotificationSpec {
+  // Slack notification configuration
+  SlackConfig slack_config = 1;
+
+  // Email notification recipients
+  string email = 2;
+
+  // Conditions that trigger alerts
+  AlertCondition alert_condition = 3;
+}
+
+// SlackConfig defines Slack notification settings
+message SlackConfig {
+  // Slack channel for notifications
+  string channel = 1;
+
+  // On-call user or group
+  string user_oncall = 2;
+
+  // Additional Slack webhook or settings
+  map<string, string> additional_config = 3;
+}
+
+// AlertCondition defines when to send notifications
+message AlertCondition {
+  // Alert on task retry
+  string on_retry = 1;
+
+  // Alert on SLA miss
+  string on_sla_miss = 2;
+
+  // Alert on task failure
+  string on_failure = 3;
+
+  // Alert on pipeline success
+  string on_success = 4;
+}
+
+// TaskSpec defines individual task configuration
+message TaskSpec {
+  // Unique task identifier
+  string task_id = 1;
+
+  // Task dependencies (list of task_ids)
+  repeated string dependencies = 2;
+
+  // Ray-specific task configuration (for Uniflow)
+  RayTaskSpec ray_task = 3;
+
+  // For-each task configuration for parallel execution
+  ForEachTaskSpec for_each_task = 4;
+
+  // Task group this task belongs to
+  string task_group_name = 5;
+
+  // Traditional Airflow operator configuration
+  OperatorSpec operator_spec = 6;
+
+  // Additional task-level parameters
+  map<string, google.protobuf.Any> additional_params = 7;
+}
+
+// RayTaskSpec defines Ray-specific task configuration for Uniflow
+message RayTaskSpec {
+  // Ray task parameters for resource allocation
+  RayTaskParameters task_parameters = 1;
+
+  // User-defined parameters passed to the task function
+  map<string, string> user_parameters = 2;
+}
+
+// RayTaskParameters defines resource allocation and execution settings
+message RayTaskParameters {
+  // Whether caching is enabled for this task
+  string cache_enabled = 1;
+
+  // Cache version for invalidation
+  string cache_version = 2;
+
+  // Python function to execute (e.g., "examples.bert_cola.data.load_data")
+  string function = 3;
+
+  // Head node CPU allocation
+  string head_cpu = 4;
+
+  // Head node memory allocation
+  string head_memory = 5;
+
+  // Worker node CPU allocation
+  string worker_cpu = 6;
+
+  // Worker node memory allocation
+  string worker_memory = 7;
+
+  // Number of worker instances
+  string worker_instances = 8;
+
+  // Additional Ray-specific configurations
+  map<string, string> additional_config = 9;
+}
+
+// ForEachTaskSpec defines parallel execution patterns
+message ForEachTaskSpec {
+  // Input configurations for parallel execution
+  repeated google.protobuf.Any inputs = 1;
+
+  // String representation of inputs for template references
+  string inputs_string = 2;
+
+  // Maximum number of parallel executions
+  int32 concurrency = 3;
+}
+
+// OperatorSpec defines traditional Airflow operator configuration
+message OperatorSpec {
+  // Operator type (e.g., "BashOperator", "PythonOperator")
+  string operator = 1;
+
+  // Bash command for BashOperator
+  string bash_command = 2;
+
+  // Python callable for PythonOperator
+  string python_callable_name = 3;
+
+  // File containing Python callable
+  string python_callable_file = 4;
+
+  // Additional operator-specific parameters
+  map<string, google.protobuf.Any> operator_params = 5;
+}
+
+// TaskGroupSpec defines task group configuration
+message TaskGroupSpec {
+  // Task group name/identifier
+  string group_name = 1;
+
+  // Task group tooltip/description
+  string tooltip = 2;
+
+  // Dependencies for the entire task group
+  repeated string dependencies = 3;
+
+  // Tasks belonging to this group
+  repeated TaskSpec tasks = 4;
+
+  // Additional task group parameters
+  map<string, google.protobuf.Any> additional_params = 5;
+}
+
+// PipelineArtifacts defines where pipeline outputs are stored
+message PipelineArtifacts {
+  // Storage location (e.g., S3 bucket, GCS bucket)
+  string location = 1;
+
+  // Additional artifact configuration
+  map<string, string> config = 2;
+}
+
+// ValidationResult represents the result of YAML validation
+message ValidationResult {
+  // Whether the YAML is valid
+  bool is_valid = 1;
+
+  // Validation error messages
+  repeated string errors = 2;
+
+  // Validation warnings
+  repeated string warnings = 3;
+
+  // Successfully parsed pipeline
+  UniflowYamlPipeline parsed_pipeline = 4;
+}
+
+// Enums for common values
+enum PipelineType {
+  PIPELINE_TYPE_UNSPECIFIED = 0;
+  PIPELINE_TYPE_SCHEDULED = 1;
+  PIPELINE_TYPE_MANUAL = 2;
+  PIPELINE_TYPE_TRIGGERED = 3;
+}
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_PENDING = 1;
+  TASK_STATUS_RUNNING = 2;
+  TASK_STATUS_SUCCESS = 3;
+  TASK_STATUS_FAILED = 4;
+  TASK_STATUS_SKIPPED = 5;
+  TASK_STATUS_RETRY = 6;
+}
+
+// ExecutionContext provides runtime information about task execution
+message ExecutionContext {
+  // Pipeline run ID
+  string pipeline_run_id = 1;
+
+  // Task instance ID
+  string task_instance_id = 2;
+
+  // Execution timestamp
+  google.protobuf.Timestamp execution_time = 3;
+
+  // Task status
+  TaskStatus status = 4;
+
+  // Task output data
+  google.protobuf.Any task_output = 5;
+
+  // Template variables resolved at runtime
+  map<string, string> template_vars = 6;
+}
