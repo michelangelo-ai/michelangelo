@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_2" data-name="Layer 2" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 204.38 129">
+  <defs>
+    <style>
+      .cls-1 {
+        filter: url(#drop-shadow-2);
+      }
+
+      .cls-1, .cls-2 {
+        fill: #8493a1;
+      }
+
+      .cls-3 {
+        filter: url(#drop-shadow-1);
+      }
+
+      .cls-3, .cls-4 {
+        fill: #fff;
+      }
+
+      .cls-4 {
+        filter: url(#drop-shadow-3);
+      }
+    </style>
+    <filter id="drop-shadow-1" x="0" y="0" width="126" height="129" filterUnits="userSpaceOnUse">
+      <feOffset dx="5.67" dy="7"/>
+      <feGaussianBlur result="blur" stdDeviation="5"/>
+      <feFlood flood-color="#000" flood-opacity=".5"/>
+      <feComposite in2="blur" operator="in"/>
+      <feComposite in="SourceGraphic"/>
+    </filter>
+    <filter id="drop-shadow-2" x="123" y="0" width="64" height="129" filterUnits="userSpaceOnUse">
+      <feOffset dx="5.67" dy="7"/>
+      <feGaussianBlur result="blur-2" stdDeviation="5"/>
+      <feFlood flood-color="#000" flood-opacity=".5"/>
+      <feComposite in2="blur-2" operator="in"/>
+      <feComposite in="SourceGraphic"/>
+    </filter>
+    <filter id="drop-shadow-3" x="62" y="0" width="125" height="129" filterUnits="userSpaceOnUse">
+      <feOffset dx="5.67" dy="7"/>
+      <feGaussianBlur result="blur-3" stdDeviation="5"/>
+      <feFlood flood-color="#000" flood-opacity=".5"/>
+      <feComposite in2="blur-3" operator="in"/>
+      <feComposite in="SourceGraphic"/>
+    </filter>
+  </defs>
+  <g id="Layer_2-2" data-name="Layer 2">
+    <g>
+      <rect class="cls-2" x="71.59" y="8.43" width="33.14" height="98.37"/>
+      <polygon class="cls-3" points="104.81 8.53 66.01 8.53 10.31 106.81 49.29 106.81 104.81 8.53"/>
+      <polyline class="cls-2" points="167.35 71.09 204.38 71.27 167.32 106.81"/>
+      <rect class="cls-1" x="132.99" y="8.43" width="33.14" height="98.37"/>
+      <polygon class="cls-4" points="166.1 8.53 127.29 8.53 71.59 106.81 110.58 106.81 166.1 8.53"/>
+    </g>
+  </g>
+</svg>
