@@ -13,5 +13,5 @@ var Module = fx.Options(
 
 // newEndpointRegistry creates a new EndpointRegistry using the Istio implementation.
 func newEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
-	return NewIstioEndpointRegistry(dynamicClient, kubeClient, logger)
+	return newSingleClusterRegistry()
 }
