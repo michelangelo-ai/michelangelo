@@ -2,6 +2,7 @@ package conversion
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/r3labs/diff/v3"
@@ -26,6 +27,7 @@ func TestConvert(t *testing.T) {
 	assert.Implements(t, (*conversion.Hub)(nil), v2obj)
 	v1obj := &v1pb.TestObject{}
 	assert.Implements(t, (*conversion.Convertible)(nil), v1obj)
+	v1pb.SetCustomTestObjectConvertor(&testConvertor{})
 	v1obj = &v1pb.TestObject{
 		Spec: v1pb.TestObjectSpec{
 			F1: 123,
@@ -55,6 +57,10 @@ func TestConvert(t *testing.T) {
 					},
 				},
 			},
+			IntList: []int32{
+				123,
+				321,
+			},
 		},
 		Status: v1pb.TestObjectStatus{
 			F1: v1pb.E1_2,
@@ -69,4 +75,24 @@ func TestConvert(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Empty(t, change)
 	assert.True(t, reflect.DeepEqual(v1obj, v1objres)) // reflect.DeepEqual() is more restricted than diff.Diff()
+}
+
+type testConvertor struct{}
+
+func (c *testConvertor) ConvertToHub(src *v1pb.TestObject, dst *v2pb.TestObject) error {
+	for _, i := range src.Spec.IntList {
+		dst.Spec.StringList = append(dst.Spec.StringList, strconv.Itoa(int(i)))
+	}
+	return nil
+}
+
+func (c *testConvertor) ConvertFromHub(src *v2pb.TestObject, dst *v1pb.TestObject) error {
+	for _, s := range src.Spec.StringList {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return err
+		}
+		dst.Spec.IntList = append(dst.Spec.IntList, int32(i))
+	}
+	return nil
 }

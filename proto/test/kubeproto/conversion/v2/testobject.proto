@@ -16,6 +16,7 @@ message TestObjectSpec {
   M1 f3 = 3;
   repeated M1 f4 = 4;
   map<string, M2> f5 = 5;
+  repeated string string_list = 6;
 }
 
 // Defines the status of a TestObject.

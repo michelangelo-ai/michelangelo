@@ -1,10 +1,12 @@
 package conversion
 
 import (
+	_ "embed"
 	"fmt"
 	"log"
 	"os"
 	"sort"
+	"text/template"
 
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -18,6 +20,9 @@ import (
 )
 
 var logger = log.New(os.Stderr, "", 0)
+
+//go:embed custom_convertor.tmpl
+var customConvertorTmplStr string
 
 // collectTargets collects all messages that needs conversion in the given package, including the CRD messages that are
 // marked with `resource.conversion` option and their dependencies.
@@ -477,6 +482,7 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 	// Deterministic order
 	sort.Strings(names)
 
+	customConvertorTmpl := template.Must(template.New("custom_convertor").Parse(customConvertorTmplStr))
 	for _, name := range names {
 		spokeMsg := targets[name]
 		hubName := name
@@ -495,6 +501,15 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 			continue
 		}
 		if opts.Bool("has_resource") { // is a CRD type
+			customConvertorTmpl.Execute(g, struct {
+				SpokeTypeName string
+				HubType       string
+				SpokeType     string
+			}{
+				SpokeTypeName: spokeMsg.GoIdent.GoName,
+				HubType:       g.QualifiedGoIdent(hubMsg.GoIdent),
+				SpokeType:     g.QualifiedGoIdent(spokeMsg.GoIdent),
+			})
 			hubTypeIndet := protogen.GoIdent{GoImportPath: "sigs.k8s.io/controller-runtime/pkg/conversion", GoName: "Hub"}
 			g.P("func (src *", g.QualifiedGoIdent(spokeMsg.GoIdent), ") ConvertTo(dstRaw ", hubTypeIndet, ") error {")
 			g.P("dst := dstRaw.(*", g.QualifiedGoIdent(hubMsg.GoIdent), ")")
@@ -505,6 +520,9 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 			g.P("}")
 			g.P("if err := Convert", spokeMsg.GoIdent.GoName, "StatusToHub(&src.Status, &dst.Status); err != nil {")
 			g.P("return err")
+			g.P("}")
+			g.P("if custom", spokeMsg.GoIdent.GoName, "Convertor != nil {")
+			g.P("return custom", spokeMsg.GoIdent.GoName, "Convertor.ConvertToHub(src, dst)")
 			g.P("}")
 			g.P("return nil")
 			g.P("}")
@@ -519,6 +537,9 @@ func generateFileSpoke(gen *protogen.Plugin, targets map[string]*protogen.Messag
 			g.P("}")
 			g.P("if err := Convert", spokeMsg.GoIdent.GoName, "StatusFromHub(&src.Status, &dst.Status); err != nil {")
 			g.P("return err")
+			g.P("}")
+			g.P("if custom", spokeMsg.GoIdent.GoName, "Convertor != nil {")
+			g.P("return custom", spokeMsg.GoIdent.GoName, "Convertor.ConvertFromHub(src, dst)")
 			g.P("}")
 			g.P("return nil")
 			g.P("}")

@@ -1,0 +1,15 @@
+type Custom{{.SpokeTypeName}}Convertor interface {
+	ConvertToHub(src *{{.SpokeType}}, dst *{{.HubType}}) error
+	ConvertFromHub(src *{{.HubType}}, dst *{{.SpokeType}}) error
+}
+
+func SetCustom{{.SpokeTypeName}}Convertor(convertor Custom{{.SpokeTypeName}}Convertor) {
+	if custom{{.SpokeTypeName}}Convertor == nil {
+		custom{{.SpokeTypeName}}Convertor = convertor
+	} else {
+		panic("Custom{{.SpokeTypeName}}Convertor has already been set")
+	}
+}
+
+var custom{{.SpokeTypeName}}Convertor Custom{{.SpokeTypeName}}Convertor = nil
+
