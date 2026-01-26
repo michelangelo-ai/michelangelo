@@ -43,7 +43,6 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 	a.logger.Info("Retrieving Triton cleanup condition")
 
 	// Check if inference server still exists
-	// todo: ghosharitra: update this so that it checks all the cluster targets
 	for _, clusterTarget := range resource.Spec.ClusterTargets {
 		status, err := a.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, clusterTarget)
 		if err != nil {
@@ -60,14 +59,8 @@ func (a *CleanupActor) Retrieve(ctx context.Context, resource *v2pb.InferenceSer
 func (a *CleanupActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton inference server cleanup with ConfigMap cleanup")
 
-	// Delete ConfigMaps first
-	a.logger.Info("Cleaning up ConfigMaps for inference server", zap.String("inferenceServer", resource.Name))
-
-	// todo: ghosharitra: delete configmaps here
-
 	// Delete inference server in all target clusters
 	a.logger.Info("Cleaning up inference server", zap.String("inferenceServer", resource.Name))
-	// todo: ghosharitra: parallelize this
 	for _, clusterTarget := range resource.Spec.ClusterTargets {
 		err := a.backend.DeleteServer(ctx, resource.Name, resource.Namespace, clusterTarget)
 		if err != nil {

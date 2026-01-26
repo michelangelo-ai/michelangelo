@@ -39,7 +39,6 @@ func (a *ClusterWorkloadsActor) GetType() string {
 func (a *ClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Retrieving Triton server condition")
 
-	// todo: ghosharitra: parallelize this
 	for _, targetCluster := range resource.Spec.ClusterTargets {
 		status, err := a.backend.GetServerStatus(ctx, resource.Name, resource.Namespace, targetCluster)
 		if err != nil {
@@ -61,9 +60,6 @@ func (a *ClusterWorkloadsActor) Retrieve(ctx context.Context, resource *v2pb.Inf
 func (a *ClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	a.logger.Info("Running Triton server infrastructure creation for all target clusters")
 
-	// todo: explicitly handle creation of configmaps here
-
-	// todo: ghosharitra: parallelize this
 	for _, targetCluster := range resource.Spec.ClusterTargets {
 		_, err := a.backend.CreateServer(ctx, resource.Name, resource.Namespace, backends.ResourceConstraints{
 			Cpu:      resource.Spec.InitSpec.ResourceSpec.Cpu,

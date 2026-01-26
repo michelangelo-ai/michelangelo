@@ -200,22 +200,22 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 	}
 	allHealthy := true
 	for _, clusterTarget := range deploymentTargetInfo.ClusterTargets {
-		healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, deployment.Spec.DesiredRevision.Name, serverName, deployment.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
+		healthy, err := p.gateway.CheckModelStatus(ctx, p.logger, currentRevision.Name, serverName, currentRevision.Namespace, clusterTarget, deploymentTargetInfo.BackendType)
 		if err != nil {
 			p.logger.Error("failed to check model status",
 				zap.Error(err),
 				zap.String("operation", "check_model_status"),
 				zap.String("namespace", deployment.Namespace),
 				zap.String("deployment", deployment.Name),
-				zap.String("model", deployment.Spec.DesiredRevision.Name))
+				zap.String("model", currentRevision.Name))
 			return deployment.Status, fmt.Errorf("check model status %s for deployment %s/%s: %w",
-				deployment.Spec.DesiredRevision.Name, deployment.Namespace, deployment.Name, err)
+				currentRevision.Name, currentRevision.Namespace, deployment.Name, err)
 		}
 		if !healthy {
 			allHealthy = false
 			p.logger.Warn("model is not healthy in cluster",
 				zap.String("cluster_id", clusterTarget.ClusterId),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("model", currentRevision.Name),
 				zap.String("inference_server", serverName),
 				zap.String("namespace", deployment.Namespace))
 		}
@@ -227,7 +227,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 			p.logger.Info("deployment status changed to healthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("model", currentRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_HEALTHY.String()))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_HEALTHY
@@ -237,7 +237,7 @@ func (p *Plugin) GetState(ctx context.Context, observability plugins.Observabili
 			p.logger.Info("deployment status changed to unhealthy",
 				zap.String("deployment", deployment.Name),
 				zap.String("namespace", deployment.Namespace),
-				zap.String("model", deployment.Spec.DesiredRevision.Name),
+				zap.String("model", currentRevision.Name),
 				zap.String("previous_state", deployment.Status.GetState().String()),
 				zap.String("new_state", v2pb.DEPLOYMENT_STATE_UNHEALTHY.String()))
 			deployment.Status.State = v2pb.DEPLOYMENT_STATE_UNHEALTHY

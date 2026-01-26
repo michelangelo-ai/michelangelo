@@ -31,8 +31,8 @@ const (
 	labelComponent       = "app.kubernetes.io/component"
 	labelManagedBy       = "app.kubernetes.io/managed-by"
 
-	// Label on the *target cluster* Service that represents the east-west gateway.
-	// Sandbox setup should own this Service and apply these labels.
+	// Label on the target cluster's Service that represents the east-west gateway.
+	// Sandbox setup should own this Service and apply these labels for discovery.
 	labelEastWestGateway = "michelangelo.ai/east-west-gateway"
 
 	// Control-plane object names
