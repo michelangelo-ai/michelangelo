@@ -76,7 +76,5 @@ func (a *ClusterWorkloadsActor) Run(ctx context.Context, resource *v2pb.Inferenc
 			return conditionsUtils.GenerateFalseCondition(condition, "ClusterCreationFailed", fmt.Sprintf("Failed to create server in cluster %s: %v", targetCluster.ClusterId, err)), nil
 		}
 	}
-
-	// todo: ghosharitra: revise this later
 	return conditionsUtils.GenerateUnknownCondition(condition, "ClusterCreationInitiated", "server creation initiated in all target clusters, waiting for resources to be ready"), nil
 }

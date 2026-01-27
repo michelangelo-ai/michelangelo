@@ -22,15 +22,4 @@ spec:
   owner:
     name: "user-example"
   clusterTargets:
-    - clusterId: "k3d-cluster-1"
-      kubernetes:
-        host: "k3d-cluster-1-server-0"
-        port: "6443"
-        tokenTag: "k3d-cluster-1-token"
-        caDataTag: "k3d-cluster-1-ca"
-    - clusterId: "k3d-cluster-2"
-      kubernetes:
-        host: "k3d-cluster-2-server-0"
-        port: "6443"
-        tokenTag: "k3d-cluster-2-token"
-        caDataTag: "k3d-cluster-2-ca"
+    - clusterId: "k3d-michelangelo-sandbox"

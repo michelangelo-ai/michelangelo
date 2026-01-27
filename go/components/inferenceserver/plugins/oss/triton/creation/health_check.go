@@ -57,7 +57,6 @@ func (a *HealthCheckActor) Retrieve(ctx context.Context, resource *v2pb.Inferenc
 	return conditionsUtils.GenerateTrueCondition(condition), nil
 }
 
-// todo: ghosharitra: revise this later
 func (a *HealthCheckActor) Run(ctx context.Context, resource *v2pb.InferenceServer, condition *apipb.Condition) (*apipb.Condition, error) {
 	return condition, nil
 }

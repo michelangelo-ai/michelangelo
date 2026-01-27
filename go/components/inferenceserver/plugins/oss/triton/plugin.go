@@ -34,9 +34,9 @@ type TritonPlugin struct {
 }
 
 // NewPlugin creates a Triton plugin with creation and deletion workflows.
-func NewPlugin(backend backends.Backend, endpointRegistry endpointregistry.EndpointRegistry, modelConfigMapProvider configmap.ModelConfigMapProvider, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
+func NewPlugin(backend backends.Backend, endpointRegistry endpointregistry.EndpointRegistry, modelConfigMapProvider configmap.ModelConfigMapProvider, controlPlaneClusterId string, recorder record.EventRecorder, logger *zap.Logger) plugins.InferenceServerPlugin {
 	return &TritonPlugin{
-		creationPlugin: creation.NewTritonCreationPlugin(backend, endpointRegistry, logger),
+		creationPlugin: creation.NewTritonCreationPlugin(backend, endpointRegistry, controlPlaneClusterId, logger),
 		deletionPlugin: deletion.NewTritonDeletionPlugin(backend, modelConfigMapProvider, logger),
 
 		backend:  backend,
