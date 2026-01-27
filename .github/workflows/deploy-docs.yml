@@ -1,4 +1,4 @@
-name: Deploy Docs (Bun)
+name: Deploy Docs
 
 on:
   push:

@@ -2,29 +2,18 @@
 
 This guide explains how to contribute to Michelangelo's documentation site.
 
-## Why We Built This
+## Quick Start
 
-GitHub wikis are convenient for quick notes, but they don't scale well for comprehensive platform documentation:
+```bash
+cd website
+bun install
+bun run start    # Dev server at http://localhost:3003/
+```
 
-- **No code review** - Wiki edits bypass PR review, making it easy for errors to slip in
-- **No local development** - Can't run docs on your machine or test in full context
-- **Limited search** - Finding information becomes harder as docs grow
-- **No versioning** - Can't maintain docs for different releases
-- **Siloed from code** - Docs live separately from the codebase they describe
-
-This Docusaurus site solves these problems by treating documentation as code:
-
-| Feature | Wiki | Docusaurus Site |
-|---------|------|-----------------|
-| Search | Basic | Full-text search with highlights |
-| Versioning | None | Git-based, can tag releases |
-| Local development | No | Yes (`bun run start`) |
-| CI/CD | No | Auto-deploy on merge to main |
-| Code review | No | Full PR workflow |
-| Broken link detection | No | Build fails on broken links |
-| Offline access | No | Static files, works offline |
-
-The site is built with **Docusaurus v3** and **Bun**, deployed automatically to GitHub Pages on every push to `main`.
+Create a new page:
+1. Add `docs/user-guides/my-guide.md` (lowercase-kebab-case)
+2. Start with `# Descriptive Title`
+3. Submit a PR
 
 ## Running Locally
 
@@ -43,65 +32,86 @@ bun install
 # Start dev server (hot reload)
 bun run start
 
-# Build for production
+# Build for production (catches broken links)
 bun run build
 
 # Preview production build
 bun run serve
 ```
 
-The dev server runs at `http://localhost:3003/michelangelo/`
-
-## Updating Documentation
-
-### File Structure
+## File Structure
 
 ```
 docs/
 ├── intro.md                    # Landing page (/)
+├── images/                     # Shared images
 ├── about/                      # Platform overview
-├── user-guides/                # End-user tutorials
-│   └── ml-pipelines/           # Nested section
-├── operator-guides/            # Platform operators
+├── contributing/               # Developer guides
+├── dev/                        # Development docs
+│   └── go/                     # Go development
+├── operator-guides/            # Platform operator docs
+│   ├── jobs/                   # Job system docs
+│   └── ui/                     # UI docs
+│       └── configuration/      # UI config reference
 ├── setup-guide/                # Installation guides
-└── contributing/               # Developer guides
+└── user-guides/                # End-user tutorials
+    └── ml-pipelines/           # ML pipeline guides
 ```
 
-### Adding a New Page
-
-1. Create a markdown file in the appropriate folder:
-   ```bash
-   docs/user-guides/my-new-guide.md
-   ```
-
-2. Add a title as the first heading:
-   ```markdown
-   # My New Guide
-
-   Content goes here...
-   ```
-
-3. The page is automatically added to the sidebar
+## Adding Content
 
 ### File Naming
 
-- Use **lowercase-kebab-case**: `my-new-guide.md`
-- This creates clean URLs: `/user-guides/my-new-guide`
+Use **lowercase-kebab-case** for all filenames:
+- `my-new-guide.md` (creates URL `/user-guides/my-new-guide`)
+- Never use spaces, underscores, or capital letters
 
-### Frontmatter (Optional)
+### Page Titles
 
-Control page behavior with YAML frontmatter:
+Every page must start with a descriptive `# Title`:
+
+```markdown
+# Deploying Models to Production
+
+Content starts here...
+```
+
+**Avoid generic titles:**
+- `# Introduction` - too vague
+- `# Overview` - too vague
+- `# 1. Introduction` - save numbers for sub-sections
+
+**Numbered sub-sections are fine** for tutorials:
+```markdown
+# Deploying Models
+
+Introduction paragraph...
+
+## 1. Prepare Your Model
+## 2. Configure the Pipeline
+## 3. Deploy and Monitor
+```
+
+### Frontmatter
+
+Control sidebar order and display with YAML frontmatter:
 
 ```markdown
 ---
 sidebar_position: 2
-title: Custom Sidebar Title
+sidebar_label: "Short Label"
 ---
 
-# My Page Title
+# Full Page Title
 
 Content...
 ```
+
+| Field | Purpose |
+|-------|---------|
+| `sidebar_position` | Order in sidebar (1, 2, 3...) |
+| `sidebar_label` | Shorter name for sidebar |
+| `slug` | Custom URL path |
 
 ### Adding a New Section
 
@@ -118,21 +128,19 @@ Content...
 
 ### Images
 
-Place images in `docs/images/` and reference them with relative paths:
+Place images in `docs/images/` and reference with relative paths:
 
 ```markdown
 ![Alt text](../images/my-image.png)
 ```
 
-For section-specific images, you can also co-locate them:
+For section-specific images, co-locate them:
 
 ```
-docs/
-├── images/                     # Shared images
-│   └── architecture.png
-├── user-guides/
-│   └── images/                 # Section-specific images
-│       └── workflow-diagram.png
+docs/user-guides/
+├── images/
+│   └── workflow-diagram.png
+└── my-guide.md
 ```
 
 Reference co-located images:
@@ -140,36 +148,81 @@ Reference co-located images:
 ![Workflow](./images/workflow-diagram.png)
 ```
 
-## Using AI to Update Docs
+### Links
 
-AI assistants like Claude can help maintain documentation:
+Use relative paths with `.md` extension for internal links:
 
-### What AI Can Help With
-
-- **Writing new docs** - Describe what you need, AI generates the content
-- **Fixing formatting** - Standardize headings, fix markdown issues
-- **Updating code examples** - Keep code snippets current
-- **Improving clarity** - Rewrite confusing sections
-- **Bulk operations** - Rename files, update links, restructure sections
-
-### Example Prompts
-
-```
-"Add a new guide for deploying models to production in docs/user-guides/"
-
-"Update all code examples in docs/setup-guide/ to use the new CLI syntax"
-
-"Review docs/operator-guides/ and fix any broken internal links"
-
-"Restructure docs/user-guides/ml-pipelines/ to have a clearer hierarchy"
+```markdown
+[See the CLI guide](./cli.md)
+[Back to setup](../setup-guide/installation.md)
 ```
 
-### Best Practices
+- Always include the `.md` extension (Docusaurus converts them)
+- Relative paths work in both GitHub and the built site
+- Avoid absolute paths like `/docs/page`
 
-1. **Review AI output** - Always verify generated content for accuracy
-2. **Test locally** - Run `bun run build` to catch broken links
-3. **Use PR workflow** - AI changes go through normal code review
-4. **Provide context** - Share existing docs so AI matches the style
+### Admonitions
+
+Use callout blocks to highlight important information:
+
+```markdown
+:::note
+Helpful background information.
+:::
+
+:::tip
+Suggestions to help the reader succeed.
+:::
+
+:::info
+Additional context or details.
+:::
+
+:::warning
+Potential issues or gotchas to watch out for.
+:::
+
+:::danger
+Critical warnings about destructive actions.
+:::
+```
+
+## Style Guidelines
+
+- Use **bold** for UI elements and emphasis
+- Use `backticks` for code, commands, filenames, and paths
+- Use tables for feature comparisons
+- Keep paragraphs short (3-5 sentences max)
+- Use bullet lists for features, numbered lists for sequential steps
+- Use admonitions for notes, tips, and warnings
+
+## Before Submitting
+
+Before opening a PR, verify your changes:
+
+```bash
+cd website && bun run build
+```
+
+This catches:
+- Broken internal links
+- Invalid markdown syntax
+- Missing referenced files
+
+**Checklist:**
+- [ ] File uses lowercase-kebab-case naming
+- [ ] Page has a descriptive `# Title` (not generic)
+- [ ] Internal links use relative paths with `.md` extension
+- [ ] Images are in `docs/images/` or co-located
+- [ ] `bun run build` passes without errors
+
+## Submitting Changes
+
+1. Fork the repository (external contributors) or create a branch (maintainers)
+2. Make your documentation changes
+3. Run `bun run build` to verify
+4. Open a pull request against `main`
+5. Documentation deploys automatically after merge
 
 ## Deployment
 
@@ -184,9 +237,9 @@ The GitHub Actions workflow (`.github/workflows/deploy-docs.yml`):
 
 ### Manual Deployment
 
-Trigger a deploy manually from GitHub Actions → "Deploy Docs (Bun)" → "Run workflow"
+Trigger a deploy manually: GitHub Actions → "Deploy Docs" → "Run workflow"
 
 ### Checking Status
 
 - **Build status**: Check the Actions tab in GitHub
-- **Live site**: https://michelangelo-ai.github.io/michelangelo/
+- **Live site**: https://michelangelo-ai.github.io/
