@@ -25,24 +25,38 @@ var Module = fx.Options(
 
 // register initializes and registers the TriggerRun controller with the manager.
 //
-// This function is invoked by Uber FX during application startup. It constructs
-// the reconciler with RunnerFactory for provider-aware runner selection and
-// registers the controller with the Kubernetes controller manager.
+// This function is invoked by Uber FX during application startup. It creates Runner
+// implementations for cron and backfill triggers, constructs the reconciler with these
+// runners, and registers the controller with the Kubernetes controller manager.
 //
-// The RunnerFactory automatically selects appropriate runners for each trigger type:
-//   - CronSchedule: Uses ScheduleTrigger (Temporal) or CronTrigger (Cadence)
-//   - TemporalSchedule: Uses ScheduleTrigger (requires Temporal)
-//   - BatchRerun: Uses BackfillTrigger (provider-agnostic)
-//   - IntervalSchedule: Not yet implemented
+// Currently supports:
+//   - CronTrigger: Recurring workflows based on cron expressions (with Temporal Schedule support)
+//   - BackfillTrigger: One-time workflows for historical data processing
+//
+// Additional trigger types (interval and batch rerun) are planned but not yet implemented.
+// See TODO(#548) for tracking remaining trigger type implementations.
 func register(
 	mgr manager.Manager,
 	apiHandlerFactory apiHandler.Factory,
 	workflowClient clientInterface.WorkflowClient,
 ) error {
+	cronTrigger := NewCronTrigger(
+		mgr.GetLogger().WithName("cron-trigger"),
+		workflowClient,
+	)
+	backfillTrigger := NewBackfillTrigger(
+		mgr.GetLogger().WithName("backfill-trigger"),
+		workflowClient,
+	)
 	reconciler := NewReconciler(Params{
 		Logger:            mgr.GetLogger().WithName("triggerrun"),
 		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
+		CronTrigger:       cronTrigger,
+		BackfillTrigger:   backfillTrigger,
+		// TODO(#548): Add other trigger types as needed
+		// IntervalTrigger: Not yet implemented
+		// BatchRerunTrigger: Not yet implemented
 	})
 	return reconciler.Register(mgr)
 }

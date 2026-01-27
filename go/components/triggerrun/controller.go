@@ -30,6 +30,7 @@ package triggerrun
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"time"
 
@@ -55,7 +56,7 @@ const (
 // Params contains the dependencies required to instantiate the TriggerRun Reconciler.
 //
 // This struct uses Uber FX dependency injection to wire controller dependencies.
-// The Runner implementations are tagged by name to inject the correct trigger type.
+// Only implemented Runner types are included; others are planned for future development.
 type Params struct {
 	fx.In
 
@@ -63,10 +64,12 @@ type Params struct {
 	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner `name:"cron-trigger"`        // Handles cron-based recurring workflows
-	IntervalTrigger   Runner `name:"interval-trigger"`    // Handles interval-based workflows
-	BackfillTrigger   Runner `name:"backfill-trigger"`    // Handles backfill workflows
-	BatchRerunTrigger Runner `name:"batch-rerun-trigger"` // Handles batch rerun workflows
+	CronTrigger     Runner // Handles cron-based recurring workflows (with Temporal Schedule support)
+	BackfillTrigger Runner // Handles backfill workflows
+
+	// TODO(#548): Add other trigger types when implemented
+	// IntervalTrigger   Runner // Handles interval-based workflows (not yet implemented)
+	// BatchRerunTrigger Runner // Handles batch rerun workflows (not yet implemented)
 }
 
 // Reconciler reconciles TriggerRun resources through a state machine.
@@ -89,23 +92,24 @@ type Reconciler struct {
 
 	apiHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner // Executes cron-scheduled workflows
-	IntervalTrigger   Runner // Executes interval-based workflows
-	BackfillTrigger   Runner // Executes backfill workflows
-	BatchRerunTrigger Runner // Executes batch rerun workflows
+	CronTrigger     Runner // Executes cron-scheduled workflows (with Temporal Schedule support)
+	BackfillTrigger Runner // Executes backfill workflows
+
+	// TODO(#548): Add other trigger types when implemented
+	// IntervalTrigger   Runner // Executes interval-based workflows (not yet implemented)
+	// BatchRerunTrigger Runner // Executes batch rerun workflows (not yet implemented)
 }
 
 // NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
 //
-// The reconciler is initialized with Runner implementations for each supported trigger type.
+// The reconciler is initialized with Runner implementations for supported trigger types.
+// Currently supports CronTrigger and BackfillTrigger; other types are planned for future development.
 // The API handler is configured during registration through the Register method.
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
 		CronTrigger:       p.CronTrigger,
-		IntervalTrigger:   p.IntervalTrigger,
 		BackfillTrigger:   p.BackfillTrigger,
-		BatchRerunTrigger: p.BatchRerunTrigger,
 	}
 }
 
@@ -172,6 +176,24 @@ func (r *Reconciler) reconcile(
 	originalTriggerRun := triggerRun.DeepCopy()
 
 	runner := r.getRunner(triggerRun)
+	if runner == nil {
+		triggerType := GetTriggerType(triggerRun)
+		log.Error(nil, "trigger type not implemented",
+			"triggerType", triggerType,
+			"namespace", triggerRun.Namespace,
+			"name", triggerRun.Name)
+		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
+		triggerRun.Status.ErrorMessage = fmt.Sprintf("trigger type %s is not yet implemented", triggerType)
+		if !reflect.DeepEqual(originalTriggerRun, triggerRun) {
+			err := r.UpdateStatus(ctx, triggerRun, &metav1.UpdateOptions{})
+			if err != nil {
+				log.Error(err, "Failed to update trigger run status")
+				return ctrl.Result{}, err
+			}
+		}
+		return ctrl.Result{}, nil
+	}
+
 StateMachine:
 	switch triggerRun.Status.State {
 	case v2pb.TRIGGER_RUN_STATE_INVALID:
@@ -268,18 +290,22 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 // getRunner selects the appropriate Runner implementation based on the TriggerRun's trigger type.
 //
 // The selection is made using GetTriggerType which examines the TriggerRun spec to determine
-// whether it's a batch rerun, backfill, interval, or cron trigger. The default is CronTrigger
-// if the type cannot be determined.
+// the trigger type. Currently supports cron and backfill triggers; other types return nil
+// to indicate they are not yet implemented.
+//
+// Returns nil for unimplemented trigger types (interval, batch rerun).
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
 	switch triggerType {
-	case TriggerTypeInterval:
-		return r.IntervalTrigger
 	case TriggerTypeBackfill:
 		return r.BackfillTrigger
-	case TriggerTypeBatchRerun:
-		return r.BatchRerunTrigger
-	default:
+	case TriggerTypeCron:
 		return r.CronTrigger
+	case TriggerTypeInterval:
+		return nil // TODO(#548): Implement IntervalTrigger
+	case TriggerTypeBatchRerun:
+		return nil // TODO(#548): Implement BatchRerunTrigger
+	default:
+		return r.CronTrigger // Default to cron for unknown types
 	}
 }
