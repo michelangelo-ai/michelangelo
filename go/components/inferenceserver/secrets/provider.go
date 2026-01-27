@@ -22,7 +22,7 @@ type ClientAuth struct {
 // SecretProvider retrieves cluster authentication credentials from a secret store.
 type SecretProvider interface {
 	// GetClientAuth retrieves the authentication credentials for a given connection spec.
-	GetClientAuth(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (ClientAuth, error)
+	GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarget) (ClientAuth, error)
 }
 
 // Provider implements SecretProvider using Kubernetes secrets.
@@ -36,17 +36,17 @@ func NewProvider(kubeClient client.Client) *Provider {
 }
 
 // GetClientAuth retrieves authentication credentials from Kubernetes secrets.
-func (s *Provider) GetClientAuth(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (ClientAuth, error) {
+func (s *Provider) GetClientAuth(ctx context.Context, cluster *v2pb.ClusterTarget) (ClientAuth, error) {
 	// Retrieve CA data from secret
 	caSecret := &corev1.Secret{}
-	if err := s.kubeClient.Get(ctx, types.NamespacedName{Name: connectionSpec.CaDataTag, Namespace: "default"}, caSecret); err != nil {
-		return ClientAuth{}, fmt.Errorf("failed to get CA secret %s: %w", connectionSpec.CaDataTag, err)
+	if err := s.kubeClient.Get(ctx, types.NamespacedName{Name: cluster.GetKubernetes().GetCaDataTag(), Namespace: "default"}, caSecret); err != nil {
+		return ClientAuth{}, fmt.Errorf("failed to get CA secret %s: %w", cluster.GetKubernetes().GetCaDataTag(), err)
 	}
 
 	// Retrieve token from secret
 	tokenSecret := &corev1.Secret{}
-	if err := s.kubeClient.Get(ctx, types.NamespacedName{Name: connectionSpec.TokenTag, Namespace: "default"}, tokenSecret); err != nil {
-		return ClientAuth{}, fmt.Errorf("failed to get token secret %s: %w", connectionSpec.TokenTag, err)
+	if err := s.kubeClient.Get(ctx, types.NamespacedName{Name: cluster.GetKubernetes().GetTokenTag(), Namespace: "default"}, tokenSecret); err != nil {
+		return ClientAuth{}, fmt.Errorf("failed to get token secret %s: %w", cluster.GetKubernetes().GetTokenTag(), err)
 	}
 
 	return ClientAuth{

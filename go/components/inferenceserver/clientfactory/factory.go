@@ -55,22 +55,23 @@ func NewClientFactory(
 	}
 }
 
-// GetClient returns a controller-runtime client for the given connection spec.
-func (f *defaultClientFactory) GetClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (client.Client, error) {
-	// If no connectionSpec provided, use the default in-cluster client
-	if connectionSpec == nil {
-		return f.defaultClient, nil
+// GetClient returns a controller-runtime client for the given cluster target.
+// Currently only Kubernetes cluster types are supported.
+func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error) {
+	// validate cluster type is supported
+	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
+		return nil, fmt.Errorf("unsupported cluster type for %s: %T", cluster.ClusterId, cluster.GetConfig())
 	}
 
 	// Create a cache key from the connection spec
-	key := f.getClientKey(connectionSpec)
+	key := f.getClientKey(cluster)
 
-	// Fast path: check if client already exists
+	// check if client already exists
 	if cachedClient, ok := f.clients.Load(key); ok {
 		return cachedClient.(client.Client), nil
 	}
 
-	// Slow path: create new client with mutex protection
+	// create new client with mutex protection
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -80,55 +81,52 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, connectionSpec *v2
 	}
 
 	// Get authentication credentials from secret provider
-	auth, err := f.secretProvider.GetClientAuth(ctx, connectionSpec)
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client auth for %s:%s: %w",
-			connectionSpec.Host, connectionSpec.Port, err)
+		return nil, fmt.Errorf("failed to get client auth for %s: %w",
+			cluster.ClusterId, err)
 	}
 
 	// Build REST config
-	server := fmt.Sprintf("https://%s:%s", connectionSpec.Host, connectionSpec.Port)
+	// Note: host field should already include the scheme (e.g., "https://host.docker.internal")
+	server := fmt.Sprintf("%s:%s", cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 	cfg, err := f.getKubeClientConfig(server, &auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create kube config for %s: %w", server, err)
 	}
 
-	// Create controller-runtime client
+	// Create a new controller-runtime client
 	newClient, err := client.New(cfg, client.Options{
 		Scheme: f.scheme,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create client for %s: %w", server, err)
 	}
-
-	// Cache and return
 	f.clients.Store(key, newClient)
-	f.logger.Info("Created new client for remote cluster",
-		zap.String("host", connectionSpec.Host),
-		zap.String("port", connectionSpec.Port))
 
 	return newClient, nil
 }
 
-// todo: ghosharitra: review this properly
-// GetHTTPClient returns an HTTP client configured with TLS for the given connection spec.
-func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (*http.Client, error) {
-	if connectionSpec == nil {
-		return nil, fmt.Errorf("connectionSpec is required for GetHTTPClient")
+// GetHTTPClient returns an HTTP client configured with TLS for the given cluster target.
+// Currently only Kubernetes cluster types are supported.
+func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
+	// Validate cluster type is supported
+	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
+		return nil, fmt.Errorf("unsupported cluster type for %s: %T", cluster.ClusterId, cluster.GetConfig())
 	}
 
 	// Get authentication credentials from secret provider
-	auth, err := f.secretProvider.GetClientAuth(ctx, connectionSpec)
+	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get client auth for %s:%s: %w",
-			connectionSpec.Host, connectionSpec.Port, err)
+		return nil, fmt.Errorf("failed to get client auth for %s: %w",
+			cluster.ClusterId, err)
 	}
 
 	// Create a certificate pool with the CA certificate
 	caCertPool := x509.NewCertPool()
 	if !caCertPool.AppendCertsFromPEM([]byte(auth.CertificateAuthorityData)) {
-		return nil, fmt.Errorf("failed to parse CA certificate for %s:%s",
-			connectionSpec.Host, connectionSpec.Port)
+		return nil, fmt.Errorf("failed to parse CA certificate for %s",
+			cluster.ClusterId)
 	}
 
 	// Create TLS config with the CA certificate
@@ -164,8 +162,8 @@ func (rt *bearerTokenRoundTripper) RoundTrip(req *http.Request) (*http.Response,
 }
 
 // getClientKey generates a unique key for caching clients based on connection spec.
-func (f *defaultClientFactory) getClientKey(connectionSpec *v2pb.ConnectionSpec) string {
-	return fmt.Sprintf("%s:%s", connectionSpec.Host, connectionSpec.Port)
+func (f *defaultClientFactory) getClientKey(cluster *v2pb.ClusterTarget) string {
+	return fmt.Sprintf("%s:%s:%s", cluster.ClusterId, cluster.GetKubernetes().GetHost(), cluster.GetKubernetes().GetPort())
 }
 
 // getKubeClientConfig builds a REST config from connection details and auth.

@@ -369,7 +369,7 @@ func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Con
 		return ClusterEndpoint{}, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
 
-	clusterClient, err := r.clientFactory.GetClient(ctx, targetCluster.GetKubernetes())
+	clusterClient, err := r.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return ClusterEndpoint{}, fmt.Errorf("failed to get client for cluster %s: %w", endpoint.ClusterID, err)
 	}

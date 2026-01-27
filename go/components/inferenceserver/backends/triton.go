@@ -60,7 +60,7 @@ func (b *tritonBackend) CreateServer(ctx context.Context, inferenceServerName, n
 	default:
 		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
-	clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	clusterClient, err = b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get cluster client",
 			zap.Error(err),
@@ -131,7 +131,7 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
 	}
 
-	clusterClient, err = b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	clusterClient, err = b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get cluster client",
 			zap.Error(err),
@@ -178,7 +178,7 @@ func (b *tritonBackend) GetServerStatus(ctx context.Context, inferenceServerName
 
 func (b *tritonBackend) DeleteServer(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) error {
 	b.logger.Info("Deleting Triton server", zap.String("server", inferenceServerName))
-	clusterClient, err := b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get cluster client",
 			zap.Error(err),
@@ -240,7 +240,7 @@ func (b *tritonBackend) DeleteServer(ctx context.Context, inferenceServerName, n
 func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
 	b.logger.Info("Checking Triton health via Kubernetes pod status", zap.String("server", inferenceServerName))
 
-	clusterClient, err := b.getClusterClientFromTargetCluster(ctx, targetCluster)
+	clusterClient, err := b.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get cluster client",
 			zap.Error(err),
@@ -302,20 +302,11 @@ func (b *tritonBackend) IsHealthy(ctx context.Context, inferenceServerName, name
 }
 
 // Triton Model Management
-// todo: ghosharitra: review this properly, I added a function to get a HTTP client with proper TLS configuration for the target cluster.
 func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, inferenceServerName string, namespace string, targetCluster *v2pb.ClusterTarget) (bool, error) {
 	b.logger.Info("Checking Triton model status", zap.String("model", modelName), zap.String("server", inferenceServerName))
 
-	var connectionSpec *v2pb.ConnectionSpec
-	switch targetCluster.GetConfig().(type) {
-	case *v2pb.ClusterTarget_Kubernetes:
-		connectionSpec = targetCluster.GetKubernetes()
-	default:
-		return false, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
-	}
-
 	// Get HTTP client with proper TLS configuration for the target cluster
-	httpClient, err := b.clientFactory.GetHTTPClient(ctx, connectionSpec)
+	httpClient, err := b.clientFactory.GetHTTPClient(ctx, targetCluster)
 	if err != nil {
 		b.logger.Error("failed to get HTTP client for target cluster",
 			zap.Error(err),
@@ -327,8 +318,9 @@ func (b *tritonBackend) CheckModelStatus(ctx context.Context, modelName string, 
 		return false, fmt.Errorf("failed to get HTTP client for cluster %s: %w", targetCluster.ClusterId, err)
 	}
 
+	k8sSpec := targetCluster.GetKubernetes()
 	modelReadyPath := fmt.Sprintf("/v2/models/%s/ready", modelName)
-	serviceEndpoint := b.buildServiceEndpoint(inferenceServerName, namespace, connectionSpec.Host, connectionSpec.Port)
+	serviceEndpoint := b.buildServiceEndpoint(inferenceServerName, namespace, k8sSpec.Host, k8sSpec.Port)
 	serviceURL := fmt.Sprintf("%s%s", serviceEndpoint, modelReadyPath)
 	req, err := http.NewRequestWithContext(ctx, "GET", serviceURL, nil)
 	if err != nil {
@@ -536,25 +528,12 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 }
 
 // buildServiceEndpoint constructs the Kubernetes API proxy URL for the service.
-// Format: https://{host}:{port}/api/v1/namespaces/{namespace}/services/{service}:http/proxy
+// Format: {host}:{port}/api/v1/namespaces/{namespace}/services/{service}:http/proxy
+// Note: host should already include the scheme (e.g., "https://host.docker.internal")
 func (b *tritonBackend) buildServiceEndpoint(inferenceServerName, namespace, host, port string) string {
 	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
-	return fmt.Sprintf("https://%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
+	return fmt.Sprintf("%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
 		host, port, namespace, serviceName)
-}
-
-func (b *tritonBackend) getClusterClientFromTargetCluster(ctx context.Context, targetCluster *v2pb.ClusterTarget) (client.Client, error) {
-	switch targetCluster.GetConfig().(type) {
-	case *v2pb.ClusterTarget_Kubernetes:
-		connectionSpec := targetCluster.GetKubernetes()
-		clusterClient, err := b.clientFactory.GetClient(ctx, connectionSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get client for cluster %s: %w", targetCluster.ClusterId, err)
-		}
-		return clusterClient, nil
-	default:
-		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
-	}
 }
 
 func buildResourceRequirements(constraints ResourceConstraints) corev1.ResourceRequirements {

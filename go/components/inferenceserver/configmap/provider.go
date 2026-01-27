@@ -46,7 +46,7 @@ func NewDefaultModelConfigMapProvider(kubeClient client.Client, logger *zap.Logg
 
 // CreateModelConfigMap creates a ModelConfigMap for model configuration
 func (p *defaultModelConfigMapProvider) CreateModelConfigMap(ctx context.Context, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, labels map[string]string, annotations map[string]string, targetCluster *v2pb.ClusterTarget) error {
-	clusterClient, err := getClusterClientFromTargetCluster(ctx, targetCluster, p.clientFactory)
+	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
 	}
@@ -122,7 +122,7 @@ func (p *defaultModelConfigMapProvider) GetModelsFromConfigMap(ctx context.Conte
 	configMapName := generateConfigMapName(inferenceServer)
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
-	clusterClient, err := getClusterClientFromTargetCluster(ctx, targetCluster, p.clientFactory)
+	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get cluster client: %w", err)
 	}
@@ -152,7 +152,7 @@ func (p *defaultModelConfigMapProvider) AddModelToConfigMap(ctx context.Context,
 	configMapName := generateConfigMapName(inferenceServer)
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
-	clusterClient, err := getClusterClientFromTargetCluster(ctx, targetCluster, p.clientFactory)
+	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
 	}
@@ -204,7 +204,7 @@ func (p *defaultModelConfigMapProvider) RemoveModelFromConfigMap(ctx context.Con
 	configMapName := generateConfigMapName(inferenceServer)
 	p.logger.Info("Getting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
-	clusterClient, err := getClusterClientFromTargetCluster(ctx, targetCluster, p.clientFactory)
+	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
 	}
@@ -246,7 +246,7 @@ func (p *defaultModelConfigMapProvider) DeleteModelConfigMap(ctx context.Context
 	configMapName := generateConfigMapName(inferenceServer)
 	p.logger.Info("Deleting model ConfigMap", zap.String("configMap", configMapName), zap.String("namespace", namespace))
 
-	clusterClient, err := getClusterClientFromTargetCluster(ctx, targetCluster, p.clientFactory)
+	clusterClient, err := p.clientFactory.GetClient(ctx, targetCluster)
 	if err != nil {
 		return fmt.Errorf("failed to get cluster client: %w", err)
 	}
@@ -329,22 +329,6 @@ func (p *defaultModelConfigMapProvider) parseModelConfigsFromConfigMap(ctx conte
 	}
 
 	return modelConfigs, nil
-}
-
-func getClusterClientFromTargetCluster(ctx context.Context, targetCluster *v2pb.ClusterTarget, clientFactory clientfactory.ClientFactory) (client.Client, error) {
-	var clusterClient client.Client
-	var err error
-	switch targetCluster.GetConfig().(type) {
-	case *v2pb.ClusterTarget_Kubernetes:
-		connectionSpec := targetCluster.GetKubernetes()
-		clusterClient, err = clientFactory.GetClient(ctx, connectionSpec)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get client for cluster %s: %w", targetCluster.ClusterId, err)
-		}
-	default:
-		return nil, fmt.Errorf("unsupported cluster type: %T", targetCluster.GetConfig())
-	}
-	return clusterClient, nil
 }
 
 func generateConfigMapName(inferenceServerName string) string {

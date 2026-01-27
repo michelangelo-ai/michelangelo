@@ -17,9 +17,9 @@ import (
 type ClientFactory interface {
 	// GetClient returns a controller-runtime client for the given connection spec.
 	// If connectionSpec is nil, returns the default in-cluster client.
-	GetClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (client.Client, error)
+	GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error)
 
 	// GetHTTPClient returns an HTTP client configured with TLS for the given connection spec.
 	// The client includes the CA certificate and bearer token for authentication.
-	GetHTTPClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (*http.Client, error)
+	GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error)
 }
