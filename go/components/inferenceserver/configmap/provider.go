@@ -15,7 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -34,12 +33,10 @@ type defaultModelConfigMapProvider struct {
 }
 
 // NewDefaultModelConfigMapProvider creates a new defaultModelConfigMapProvider instance
-func NewDefaultModelConfigMapProvider(kubeClient client.Client, logger *zap.Logger) *defaultModelConfigMapProvider {
-	sp := secrets.NewProvider(kubeClient)
-	cf := clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger)
+func NewDefaultModelConfigMapProvider(kubeClient client.Client, clientFactory clientfactory.ClientFactory, logger *zap.Logger) *defaultModelConfigMapProvider {
 	return &defaultModelConfigMapProvider{
 		kubeClient:    kubeClient,
-		clientFactory: cf,
+		clientFactory: clientFactory,
 		logger:        logger,
 	}
 }

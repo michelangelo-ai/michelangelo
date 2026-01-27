@@ -15,7 +15,6 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -32,10 +31,9 @@ type tritonBackend struct {
 	logger                 *zap.Logger
 }
 
-func NewTritonBackend(kubeClient client.Client, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) *tritonBackend {
-	sp := secrets.NewProvider(kubeClient)
+func NewTritonBackend(clientFactory clientfactory.ClientFactory, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) *tritonBackend {
 	return &tritonBackend{
-		clientFactory:          clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger),
+		clientFactory:          clientFactory,
 		modelConfigMapProvider: modelConfigMapProvider,
 		logger:                 logger,
 	}

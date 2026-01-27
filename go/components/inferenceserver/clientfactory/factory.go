@@ -23,7 +23,7 @@ import (
 
 const serviceName = "michelangelo-inferenceserver"
 
-var _ ClientFactory = &defaultClientFactory{} // ensure implementation satisfies interface
+var _ ClientFactory = &defaultClientFactory{}
 
 // defaultClientFactory implements the ClientFactory interface.
 type defaultClientFactory struct {
@@ -32,13 +32,16 @@ type defaultClientFactory struct {
 	scheme         *runtime.Scheme
 	logger         *zap.Logger
 
+	// controlPlaneClusterId is the cluster ID that represents the control plane cluster.
+	controlPlaneClusterId string
+
 	// Cache for remote cluster clients
 	clients sync.Map
 	mu      sync.Mutex
 }
 
 // NewClientFactory creates a new ClientFactory instance.
-// defaultClient is the in-cluster client to use when connectionSpec is nil.
+// defaultClient is the in-cluster client to use for the control plane cluster returned when cluster ID matches the control plane cluster ID.
 // secretProvider retrieves credentials for remote clusters.
 // scheme is the runtime scheme to use for the clients.
 func NewClientFactory(
@@ -46,23 +49,32 @@ func NewClientFactory(
 	secretProvider secrets.SecretProvider,
 	scheme *runtime.Scheme,
 	logger *zap.Logger,
+	controlPlaneClusterId string,
 ) ClientFactory {
 	return &defaultClientFactory{
-		defaultClient:  defaultClient,
-		secretProvider: secretProvider,
-		scheme:         scheme,
-		logger:         logger,
+		defaultClient:         defaultClient,
+		secretProvider:        secretProvider,
+		scheme:                scheme,
+		logger:                logger,
+		controlPlaneClusterId: controlPlaneClusterId,
 	}
 }
 
 // GetClient returns a controller-runtime client for the given cluster target.
-// Currently only Kubernetes cluster types are supported.
 func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.ClusterTarget) (client.Client, error) {
-	// validate cluster type is supported
-	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
-		return nil, fmt.Errorf("unsupported cluster type for %s: %T", cluster.ClusterId, cluster.GetConfig())
+	// If the cluster ID matches the control plane cluster ID, returns the default client.
+	if f.controlPlaneClusterId != "" && cluster.ClusterId == f.controlPlaneClusterId {
+		f.logger.Debug("Using in-cluster client for control plane cluster",
+			zap.String("clusterId", cluster.ClusterId))
+		return f.defaultClient, nil
 	}
 
+	// validate kubernetes config is provided for remote clusters
+	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
+		return nil, fmt.Errorf("unsupported cluster type for %s: %T (remote clusters require kubernetes config)", cluster.ClusterId, cluster.GetConfig())
+	}
+
+	// For remote clusters, creates a client using the provided connection configuration.
 	// Create a cache key from the connection spec
 	key := f.getClientKey(cluster)
 
@@ -107,14 +119,23 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clus
 	return newClient, nil
 }
 
-// GetHTTPClient returns an HTTP client configured with TLS for the given cluster target.
-// Currently only Kubernetes cluster types are supported.
+// GetHTTPClient returns an HTTP client configured for the given cluster target.
 func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.ClusterTarget) (*http.Client, error) {
-	// Validate cluster type is supported
-	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
-		return nil, fmt.Errorf("unsupported cluster type for %s: %T", cluster.ClusterId, cluster.GetConfig())
+	// If the cluster ID matches the configured control plane cluster ID, returns a simple HTTP client.
+	if f.controlPlaneClusterId != "" && cluster.ClusterId == f.controlPlaneClusterId {
+		f.logger.Debug("Using in-cluster HTTP client",
+			zap.String("clusterId", cluster.ClusterId))
+		return &http.Client{
+			Timeout: 10 * time.Second,
+		}, nil
 	}
 
+	// For remote clusters, validate kubernetes config is provided
+	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
+		return nil, fmt.Errorf("unsupported cluster type for %s: %T (remote clusters require kubernetes config)", cluster.ClusterId, cluster.GetConfig())
+	}
+
+	// For remote clusters, returns a client configured with TLS using credentials from the secret provider.
 	// Get authentication credentials from secret provider
 	auth, err := f.secretProvider.GetClientAuth(ctx, cluster)
 	if err != nil {

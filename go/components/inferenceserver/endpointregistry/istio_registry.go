@@ -14,7 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/secrets"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
@@ -64,13 +63,11 @@ type istioEndpointRegistry struct {
 	logger        *zap.Logger
 }
 
-func NewIstioEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, logger *zap.Logger) EndpointRegistry {
-	sp := secrets.NewProvider(kubeClient)
-	cf := clientfactory.NewClientFactory(kubeClient, sp, kubeClient.Scheme(), logger)
+func NewIstioEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client.Client, clientFactory clientfactory.ClientFactory, logger *zap.Logger) EndpointRegistry {
 	return &istioEndpointRegistry{
 		dynamicClient: dynamicClient,
 		kubeClient:    kubeClient,
-		clientFactory: cf,
+		clientFactory: clientFactory,
 		logger:        logger,
 	}
 }
@@ -392,7 +389,7 @@ func (r *istioEndpointRegistry) resolveEndpointFromTargetCluster(ctx context.Con
 	var addr string
 	var port uint32
 
-	// For NodePort services (common in k3d), we need the node address + NodePort.
+	// For NodePort services, we need the node address + NodePort.
 	// For LoadBalancer/ClusterIP, we use the service address + service port.
 	if svc.Spec.Type == corev1.ServiceTypeNodePort {
 		// Get a node address from the target cluster

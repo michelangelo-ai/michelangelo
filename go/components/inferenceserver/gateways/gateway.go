@@ -3,13 +3,12 @@ package gateways
 import (
 	"context"
 	"fmt"
-	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/endpointregistry"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -20,7 +19,6 @@ var _ Gateway = &gateway{}
 // gateway implements the Gateway interface
 type gateway struct {
 	endpointRegistry endpointregistry.EndpointRegistry
-	httpClient       *http.Client
 	kubeClient       client.Client
 
 	registry *registry
@@ -31,6 +29,7 @@ type gateway struct {
 type Params struct {
 	Logger                 *zap.Logger
 	KubeClient             client.Client
+	ClientFactory          clientfactory.ClientFactory
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 	EndpointRegistry       endpointregistry.EndpointRegistry
 }
@@ -39,17 +38,14 @@ type Params struct {
 func NewGatewayWithClients(p Params) Gateway {
 	gateway := &gateway{
 		endpointRegistry: p.EndpointRegistry,
-		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
-		},
-		kubeClient: p.KubeClient,
-		registry:   newRegistry(),
+		kubeClient:       p.KubeClient,
+		registry:         newRegistry(),
 
 		modelConfigMapProvider: p.ModelConfigMapProvider,
 	}
 
 	// Register Triton backend with its endpoint configuration
-	gateway.registry.registerBackend(v2pb.BACKEND_TYPE_TRITON, backends.NewTritonBackend(p.KubeClient, p.ModelConfigMapProvider, p.Logger))
+	gateway.registry.registerBackend(v2pb.BACKEND_TYPE_TRITON, backends.NewTritonBackend(p.ClientFactory, p.ModelConfigMapProvider, p.Logger))
 	return gateway
 }
 

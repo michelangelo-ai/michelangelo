@@ -15,6 +15,7 @@ go_library(
         "//go/api/utils:go_default_library",
         "//go/base/conditions/engine:go_default_library",
         "//go/base/conditions/interfaces:go_default_library",
+        "//go/components/inferenceserver/clientfactory:go_default_library",
         "//go/components/inferenceserver/configmap:go_default_library",
         "//go/components/inferenceserver/endpointregistry:go_default_library",
         "//go/components/inferenceserver/gateways:go_default_library",

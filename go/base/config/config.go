@@ -2,17 +2,18 @@ package config
 
 import (
 	"flag"
-
-	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"go.uber.org/config"
-
 	"os"
 	"strings"
 
-	"github.com/michelangelo-ai/michelangelo/go/storage"
+	"go.uber.org/config"
+
+	"github.com/michelangelo-ai/michelangelo/go/base/env"
+
 	"go.uber.org/fx"
 	"k8s.io/client-go/rest"
 	ctrl "sigs.k8s.io/controller-runtime"
+
+	"github.com/michelangelo-ai/michelangelo/go/storage"
 )
 
 const (
@@ -21,6 +22,7 @@ const (
 	_k8sConfigKey             = "k8s"
 	_metadataStorageConfigKey = "metadataStorage"
 	_workflowClientConfigKey  = "workflowClient"
+	_inferenceServerConfigKey = "inferenceServer"
 )
 
 // K8sConfig is the configuration for k8s REST client.
@@ -35,6 +37,12 @@ type WorkflowClientConfig struct {
 	Transport string `yaml:"transport"`
 	Domain    string `yaml:"domain"`
 	TaskList  string `yaml:"taskList"`
+}
+
+// InferenceServerConfig is the configuration for inference server.
+type InferenceServerConfig struct {
+	// ControlPlaneClusterId is the cluster ID that represents the control plane cluster.
+	ControlPlaneClusterId string `yaml:"controlPlaneClusterId"`
 }
 
 // Params defines the dependencies of the config fx module.
@@ -110,4 +118,11 @@ func GetWorkflowClientConfig(provider config.Provider) (WorkflowClientConfig, er
 	workflowClientConfig := WorkflowClientConfig{}
 	err := provider.Get(_workflowClientConfigKey).Populate(&workflowClientConfig)
 	return workflowClientConfig, err
+}
+
+// GetInferenceServerConfig parses the configuration file and returns the inference server configuration
+func GetInferenceServerConfig(provider config.Provider) (InferenceServerConfig, error) {
+	inferenceServerConfig := InferenceServerConfig{}
+	err := provider.Get(_inferenceServerConfigKey).Populate(&inferenceServerConfig)
+	return inferenceServerConfig, err
 }

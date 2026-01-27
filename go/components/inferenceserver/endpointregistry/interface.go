@@ -39,13 +39,10 @@ type ClusterEndpoint struct {
 type EndpointRegistry interface {
 	// EnsureRegisteredEndpoint upserts the control-plane endpoint registration for a single target cluster.
 	EnsureRegisteredEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint, targetCluster *v2pb.ClusterTarget) error
-
 	// DeleteRegisteredEndpoint removes the control-plane registration for a single target cluster endpoint.
 	DeleteRegisteredEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error
-
 	// ListRegisteredEndpoints retrieves all registered cluster endpoints for an inference server.
 	ListRegisteredEndpoints(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) ([]ClusterEndpoint, error)
-
 	// GetControlPlaneServiceName returns the name of the control plane service for an inference server.
 	GetControlPlaneServiceName(inferenceServerName string) string
 }
