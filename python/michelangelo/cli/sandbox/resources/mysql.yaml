@@ -7,10 +7,45 @@ metadata:
 spec:
   containers:
     - name: mysql
-      image: mysql:8
+      image: mysql:8.0
+      ports:
+        - containerPort: 3306
+          name: mysql
       env:
         - name: MYSQL_ROOT_PASSWORD
           value: root
+        - name: MYSQL_DATABASE
+          value: temporal
+      readinessProbe:
+        exec:
+          command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -proot
+        initialDelaySeconds: 30
+        periodSeconds: 10
+        timeoutSeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
+      livenessProbe:
+        exec:
+          command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+            - -u
+            - root
+            - -proot
+        initialDelaySeconds: 60
+        periodSeconds: 30
+        timeoutSeconds: 5
+        successThreshold: 1
+        failureThreshold: 3
 ---
 apiVersion: v1
 kind: Service
@@ -22,7 +57,8 @@ spec:
   type: NodePort
   ports:
     - port: 3306
+      targetPort: 3306
       nodePort: 30001
-      name: "3306"
+      name: mysql
   selector:
     app: mysql
