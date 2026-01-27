@@ -196,6 +196,26 @@ Critical warnings about destructive actions.
 - Use bullet lists for features, numbered lists for sequential steps
 - Use admonitions for notes, tips, and warnings
 
+## Using AI
+
+AI tools can help write and maintain documentation. If using [Claude Code](https://github.com/anthropics/claude-code), run `/update-docs` to load the project's documentation guidelines.
+
+### Example Prompts
+
+```
+"Add a new guide for model deployment in docs/user-guides/"
+
+"Fix any broken internal links in docs/operator-guides/"
+
+"Add frontmatter to pages missing sidebar_position"
+```
+
+### Tips
+
+- **Review output** - Verify generated content for technical accuracy
+- **Test locally** - Run `bun run build` before committing
+- **Use the PR workflow** - AI changes go through normal code review
+
 ## Before Submitting
 
 Before opening a PR, verify your changes:
