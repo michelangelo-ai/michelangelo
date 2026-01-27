@@ -9,6 +9,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/minio/minio-go/v7/pkg/tags"
 	"google.golang.org/protobuf/proto"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
@@ -152,7 +153,7 @@ func (m *minioBlobStorage) DeleteFromBlobStorage(ctx context.Context, object run
 }
 
 // UpdateTags updates the tags for the blob
-func (m *minioBlobStorage) UpdateTags(ctx context.Context, object runtime.Object, tags map[string]string) error {
+func (m *minioBlobStorage) UpdateTags(ctx context.Context, object runtime.Object, objectTags map[string]string) error {
 	if !m.IsObjectInteresting(object) {
 		return nil
 	}
@@ -160,13 +161,9 @@ func (m *minioBlobStorage) UpdateTags(ctx context.Context, object runtime.Object
 	objectKey := m.getObjectKey(object)
 
 	// Convert tags to MinIO format
-	minioTags, err := minio.NewTags()
+	minioTags, err := tags.NewTags(objectTags, false)
 	if err != nil {
 		return fmt.Errorf("failed to create tags: %w", err)
-	}
-
-	for key, value := range tags {
-		minioTags.Set(key, value)
 	}
 
 	err = m.client.PutObjectTagging(ctx, m.config.BucketName, objectKey, minioTags, minio.PutObjectTaggingOptions{})

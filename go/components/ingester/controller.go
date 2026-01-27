@@ -8,6 +8,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,7 +37,7 @@ type Reconciler struct {
 	client.Client
 	Log             logr.Logger
 	Scheme          *runtime.Scheme
-	TargetKind      runtime.Object
+	TargetKind      client.Object
 	MetadataStorage storage.MetadataStorage
 	BlobStorage     storage.BlobStorage
 	Config          Config
@@ -128,7 +129,7 @@ func (r *Reconciler) handleDeletion(ctx context.Context, log logr.Logger, object
 
 	// Delete from metadata storage
 	gvk := object.GetObjectKind().GroupVersionKind()
-	typeMeta := &runtime.TypeMeta{
+	typeMeta := &metav1.TypeMeta{
 		Kind:       gvk.Kind,
 		APIVersion: gvk.GroupVersion().String(),
 	}
@@ -163,7 +164,7 @@ func (r *Reconciler) handleDeletionAnnotation(ctx context.Context, log logr.Logg
 
 	// Delete from metadata storage first
 	gvk := object.GetObjectKind().GroupVersionKind()
-	typeMeta := &runtime.TypeMeta{
+	typeMeta := &metav1.TypeMeta{
 		Kind:       gvk.Kind,
 		APIVersion: gvk.GroupVersion().String(),
 	}

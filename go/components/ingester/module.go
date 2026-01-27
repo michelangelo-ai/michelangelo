@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // Module provides the ingester reconcilers
@@ -37,17 +38,23 @@ func register(p registerParams) error {
 	p.Logger.Info("Setting up ingester controllers")
 
 	// List of CRD objects to watch
-	crdObjects := v2.CrdObjects
+	crdObjects := v2.AllCRDObjects
 
 	for _, obj := range crdObjects {
 		gvk := obj.GetObjectKind().GroupVersionKind()
 		log := p.Logger.With(zap.String("kind", gvk.Kind))
 
+		// Cast runtime.Object to client.Object
+		clientObj, ok := obj.(client.Object)
+		if !ok {
+			return fmt.Errorf("object %s does not implement client.Object", gvk.Kind)
+		}
+
 		reconciler := &Reconciler{
 			Client:          p.Manager.GetClient(),
 			Log:             ctrl.Log.WithName("ingester").WithName(gvk.Kind),
 			Scheme:          p.Scheme,
-			TargetKind:      obj,
+			TargetKind:      clientObj,
 			MetadataStorage: p.MetadataStorage,
 			BlobStorage:     p.BlobStorage,
 			Config:          p.Config,
