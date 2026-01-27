@@ -1,7 +1,7 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "ingester",
+    name = "go_default_library",
     srcs = [
         "controller.go",
         "module.go",
@@ -9,16 +9,16 @@ go_library(
     importpath = "github.com/michelangelo-ai/michelangelo/go/components/ingester",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/api",
-        "//go/storage",
-        "//proto/api/v2",
-        "@com_github_go_logr_logr//:logr",
-        "@io_k8s_apimachinery//pkg/runtime",
-        "@io_k8s_sigs_controller_runtime//:controller-runtime",
-        "@io_k8s_sigs_controller_runtime//pkg/client",
-        "@io_k8s_sigs_controller_runtime//pkg/controller",
-        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil",
-        "@org_uber_go_fx//:fx",
-        "@org_uber_go_zap//:zap",
+        "//go/api:go_default_library",
+        "//go/storage:go_default_library",
+        "//proto/api/v2:go_default_library",
+        "@com_github_go_logr_logr//:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_sigs_controller_runtime//:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/client:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller:go_default_library",
+        "@io_k8s_sigs_controller_runtime//pkg/controller/controllerutil:go_default_library",
+        "@org_uber_go_fx//:go_default_library",
+        "@org_uber_go_zap//:go_default_library",
     ],
 )

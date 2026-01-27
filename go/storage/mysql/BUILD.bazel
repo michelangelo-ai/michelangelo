@@ -1,17 +1,17 @@
 load("@io_bazel_rules_go//go:def.bzl", "go_library")
 
 go_library(
-    name = "mysql",
+    name = "go_default_library",
     srcs = ["mysql.go"],
     importpath = "github.com/michelangelo-ai/michelangelo/go/storage/mysql",
     visibility = ["//visibility:public"],
     deps = [
-        "//go/storage",
-        "//proto/api",
-        "@com_github_go_sql_driver_mysql//:mysql",
-        "@io_k8s_apimachinery//pkg/apis/meta/v1:meta",
-        "@io_k8s_apimachinery//pkg/runtime",
-        "@io_k8s_apimachinery//pkg/runtime/schema",
+        "//go/storage:go_default_library",
+        "//proto/api:go_default_library",
+        "@com_github_go_sql_driver_mysql//:go_default_library",
+        "@io_k8s_apimachinery//pkg/apis/meta/v1:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+        "@io_k8s_apimachinery//pkg/runtime/schema:go_default_library",
         "@org_golang_google_protobuf//proto",
     ],
 )
