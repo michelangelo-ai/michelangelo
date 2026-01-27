@@ -28,3 +28,6 @@ minio:
   awsAccessKeyId: minioadmin
   awsSecretAccessKey: minioadmin
   awsEndpointUrl: minio:9091
+
+inferenceServer:
+  controlPlaneClusterId: "k3d-michelangelo-sandbox"
