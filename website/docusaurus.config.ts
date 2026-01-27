@@ -13,7 +13,7 @@ const config: Config = {
 
   // GitHub Pages deployment config
   url: 'https://michelangelo-ai.github.io',
-  baseUrl: '/michelangelo/',
+  baseUrl: '/',
   organizationName: 'michelangelo-ai',
   projectName: 'michelangelo',
 
