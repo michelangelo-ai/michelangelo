@@ -18,8 +18,9 @@ var _ Gateway = &gateway{}
 
 // gateway implements the Gateway interface
 type gateway struct {
-	endpointRegistry endpointregistry.EndpointRegistry
-	kubeClient       client.Client
+	endpointRegistry      endpointregistry.EndpointRegistry
+	kubeClient            client.Client
+	controlPlaneClusterId string
 
 	registry *registry
 
@@ -32,14 +33,16 @@ type Params struct {
 	ClientFactory          clientfactory.ClientFactory
 	ModelConfigMapProvider configmap.ModelConfigMapProvider
 	EndpointRegistry       endpointregistry.EndpointRegistry
+	ControlPlaneClusterId  string
 }
 
 // NewGatewayWithClients creates a new inference server gateway with Kubernetes clients
 func NewGatewayWithClients(p Params) Gateway {
 	gateway := &gateway{
-		endpointRegistry: p.EndpointRegistry,
-		kubeClient:       p.KubeClient,
-		registry:         newRegistry(),
+		endpointRegistry:      p.EndpointRegistry,
+		kubeClient:            p.KubeClient,
+		controlPlaneClusterId: p.ControlPlaneClusterId,
+		registry:              newRegistry(),
 
 		modelConfigMapProvider: p.ModelConfigMapProvider,
 	}
@@ -122,21 +125,37 @@ func (g *gateway) InferenceServerIsHealthy(ctx context.Context, logger *zap.Logg
 }
 
 func (g *gateway) GetDeploymentTargetInfo(ctx context.Context, logger *zap.Logger, inferenceServerName string, namespace string) (*DeploymentTargetInfo, error) {
-	// retrieve healthy endpoints for the inference server
+	// Get the inference server resource
+	inferenceServer, err := g.getInferenceServer(ctx, logger, inferenceServerName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get inference server resource: %w", err)
+	}
+
+	// Retrieve registered endpoints for multi-cluster discovery
 	endpoints, err := g.endpointRegistry.ListRegisteredEndpoints(ctx, logger, inferenceServerName, namespace)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list registered endpoints: %w", err)
 	}
 
+	if len(endpoints) == 0 {
+		// Validate this is a valid single-cluster setup
+		// There should be exactly one target and it should match the control plane cluster ID
+		if len(inferenceServer.Spec.ClusterTargets) == 1 &&
+			g.controlPlaneClusterId != "" &&
+			inferenceServer.Spec.ClusterTargets[0].ClusterId == g.controlPlaneClusterId {
+			return &DeploymentTargetInfo{
+				BackendType:    inferenceServer.Spec.BackendType,
+				ClusterTargets: inferenceServer.Spec.ClusterTargets,
+			}, nil
+		}
+		// Otherwise, no registered endpoints is an error for multi-cluster setup
+		return nil, fmt.Errorf("no registered endpoints found for inference server %s (expected for multi-cluster setup)", inferenceServerName)
+	}
+
+	// Filter to only include registered remote clusters
 	registeredClusters := make(map[string]*v2pb.ClusterTarget)
 	for _, endpoint := range endpoints {
 		registeredClusters[endpoint.ClusterID] = nil
-	}
-
-	// parse caDataTag and tokenTag from the inference server
-	inferenceServer, err := g.getInferenceServer(ctx, logger, inferenceServerName, namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get inference server resource: %w", err)
 	}
 
 	for _, clusterTarget := range inferenceServer.Spec.ClusterTargets {
@@ -145,8 +164,8 @@ func (g *gateway) GetDeploymentTargetInfo(ctx context.Context, logger *zap.Logge
 		}
 		registeredClusters[clusterTarget.ClusterId] = clusterTarget
 	}
+
 	registeredClustersList := make([]*v2pb.ClusterTarget, 0, len(registeredClusters))
-	// filter out clusters which have a nil value
 	for _, clusterTarget := range registeredClusters {
 		if clusterTarget == nil {
 			continue

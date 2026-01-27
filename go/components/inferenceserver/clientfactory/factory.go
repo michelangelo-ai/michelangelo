@@ -69,9 +69,10 @@ func (f *defaultClientFactory) GetClient(ctx context.Context, cluster *v2pb.Clus
 		return f.defaultClient, nil
 	}
 
-	// validate kubernetes config is provided for remote clusters
-	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
-		return nil, fmt.Errorf("unsupported cluster type for %s: %T (remote clusters require kubernetes config)", cluster.ClusterId, cluster.GetConfig())
+	// For remote clusters, validate kubernetes config with connection details is provided
+	k8sConfig := cluster.GetKubernetes()
+	if k8sConfig == nil || k8sConfig.Host == "" || k8sConfig.Port == "" {
+		return nil, fmt.Errorf("missing kubernetes connection details for cluster %s (host and port required)", cluster.ClusterId)
 	}
 
 	// For remote clusters, creates a client using the provided connection configuration.
@@ -130,9 +131,10 @@ func (f *defaultClientFactory) GetHTTPClient(ctx context.Context, cluster *v2pb.
 		}, nil
 	}
 
-	// For remote clusters, validate kubernetes config is provided
-	if _, ok := cluster.GetConfig().(*v2pb.ClusterTarget_Kubernetes); !ok {
-		return nil, fmt.Errorf("unsupported cluster type for %s: %T (remote clusters require kubernetes config)", cluster.ClusterId, cluster.GetConfig())
+	// For remote clusters, validate kubernetes config with connection details is provided
+	k8sConfig := cluster.GetKubernetes()
+	if k8sConfig == nil || k8sConfig.Host == "" || k8sConfig.Port == "" {
+		return nil, fmt.Errorf("missing kubernetes connection details for cluster %s (host and port required)", cluster.ClusterId)
 	}
 
 	// For remote clusters, returns a client configured with TLS using credentials from the secret provider.

@@ -502,8 +502,9 @@ func (b *tritonBackend) createTritonService(ctx context.Context, inferenceServer
 // For control plane cluster (no config), uses direct in-cluster service access.
 func (b *tritonBackend) getServiceEndpoint(inferenceServerName, namespace string, targetCluster *v2pb.ClusterTarget) string {
 	serviceName := fmt.Sprintf("%s-inference-service", inferenceServerName)
-	if k8sSpec := targetCluster.GetKubernetes(); k8sSpec != nil {
-		// For remote clusters (with kubernetes config), uses the Kubernetes API proxy.
+
+	// Check if this is a remote cluster with connection details
+	if k8sSpec := targetCluster.GetKubernetes(); k8sSpec != nil && k8sSpec.Host != "" && k8sSpec.Port != "" {
 		return fmt.Sprintf("%s:%s/api/v1/namespaces/%s/services/%s:http/proxy",
 			k8sSpec.Host, k8sSpec.Port, namespace, serviceName)
 	}
