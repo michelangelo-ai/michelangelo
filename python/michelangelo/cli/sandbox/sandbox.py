@@ -219,8 +219,7 @@ necessary, and this assertion will be removed.
 
     resources = [
         "boot.yaml",
-        "mysql.yaml",
-        "mysql-ingester.yaml",  # Ingester tables for metadata storage
+        "mysql.yaml",  # Includes ingester tables for metadata storage
         "michelangelo-config.yaml",
         "aws-credentials.yaml",
     ]

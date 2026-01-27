@@ -172,7 +172,7 @@ kubectl delete job mysql-ingester-init
 kubectl delete configmap mysql-ingester-schema
 
 # Recreate
-kubectl apply -f python/michelangelo/cli/sandbox/resources/mysql-ingester.yaml
+kubectl apply -f python/michelangelo/cli/sandbox/resources/mysql.yaml
 ```
 
 ### Verify Tables Directly
@@ -190,7 +190,7 @@ mysql> SELECT COUNT(*) FROM model;
 ## Adding More CRD Tables
 
 To add support for additional CRDs, edit:
-`python/michelangelo/cli/sandbox/resources/mysql-ingester.yaml`
+`python/michelangelo/cli/sandbox/resources/mysql.yaml`
 
 Add the SQL for your new CRD following the pattern:
 
@@ -255,7 +255,7 @@ if metadataStorageEnabled {
 
 ## File Locations
 
-- **Schema SQL**: `/python/michelangelo/cli/sandbox/resources/mysql-ingester.yaml`
+- **Schema SQL**: `/python/michelangelo/cli/sandbox/resources/mysql.yaml`
 - **Sandbox Script**: `/python/michelangelo/cli/sandbox/sandbox.py`
 - **Original standalone scripts** (deprecated):
   - `/scripts/setup_mysql_sandbox.sh` - No longer needed
