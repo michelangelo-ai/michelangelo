@@ -172,10 +172,12 @@ StateMachine:
 
 		// Create scheduled workflow using unified scheduling
 		execution, err := r.WorkflowClient.StartScheduledWorkflow(ctx, clientInterface.ScheduledWorkflowOptions{
-			TriggerRun:   triggerRun,
-			WorkflowType: "trigger.CronTrigger",
-			TaskQueue:    "trigger_run",
-			Args:         []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}},
+			TriggerRun:                      triggerRun,
+			WorkflowType:                    "trigger.CronTrigger",
+			TaskQueue:                       "trigger_run",
+			Args:                            []interface{}{CreateTriggerRequest{TriggerRun: triggerRun}},
+			ExecutionStartToCloseTimeout:    time.Hour,        // 1 hour for long-running workflows
+			DecisionTaskStartToCloseTimeout: 10 * time.Second, // 10 seconds for decision tasks
 		})
 
 		if err != nil {

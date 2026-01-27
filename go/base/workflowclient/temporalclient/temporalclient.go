@@ -8,6 +8,7 @@ import (
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	temporalEnumsV1 "go.temporal.io/api/enums/v1"
+	enumspb "go.temporal.io/api/enums/v1"
 	filterV1 "go.temporal.io/api/filter/v1"
 	workflowserviceV1 "go.temporal.io/api/workflowservice/v1"
 	temporalClient "go.temporal.io/sdk/client"
@@ -249,4 +250,126 @@ func (c *TemporalClient) ListOpenWorkflow(ctx context.Context, request clientInt
 
 func (c *TemporalClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason)
+}
+
+// StartScheduledWorkflow creates an actual Temporal Schedule using the cron expression from TriggerRun
+func (c *TemporalClient) StartScheduledWorkflow(ctx context.Context, options clientInterface.ScheduledWorkflowOptions) (*clientInterface.WorkflowExecution, error) {
+	scheduleID := fmt.Sprintf("%s-%s", options.TriggerRun.Namespace, options.TriggerRun.Name)
+
+	// Extract cron expression from TriggerRun
+	cronSchedule := options.TriggerRun.Spec.Trigger.GetCronSchedule()
+	if cronSchedule == nil {
+		// Fallback to regular workflow execution for non-cron triggers
+		workflowOptions := temporalClient.StartWorkflowOptions{
+			ID:                       scheduleID,
+			TaskQueue:                options.TaskQueue,
+			WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
+			WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
+		}
+
+		run, err := c.Client.ExecuteWorkflow(ctx, workflowOptions, options.WorkflowType, options.Args...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to start regular workflow: %w", err)
+		}
+
+		return &clientInterface.WorkflowExecution{
+			ID:    run.GetID(),
+			RunID: run.GetRunID(),
+		}, nil
+	}
+
+	cronExpression := cronSchedule.GetCron()
+	if cronExpression == "" {
+		return nil, fmt.Errorf("cron expression is empty")
+	}
+
+	// Create Temporal Schedule
+	scheduleClient := c.Client.ScheduleClient()
+
+	schedule := temporalClient.ScheduleSpec{
+		CronExpressions: []string{cronExpression},
+	}
+
+	action := &temporalClient.ScheduleWorkflowAction{
+		ID:                       scheduleID + "-workflow",
+		Workflow:                 options.WorkflowType,
+		Args:                     options.Args,
+		TaskQueue:                options.TaskQueue,
+		WorkflowExecutionTimeout: options.ExecutionStartToCloseTimeout,
+		WorkflowTaskTimeout:      options.DecisionTaskStartToCloseTimeout,
+	}
+
+	scheduleOptions := temporalClient.ScheduleOptions{
+		ID:      scheduleID,
+		Spec:    schedule,
+		Action:  action,
+		Overlap: enumspb.SCHEDULE_OVERLAP_POLICY_SKIP, // Prevent overlapping runs
+	}
+
+	scheduleHandle, err := scheduleClient.Create(ctx, scheduleOptions)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create temporal schedule: %w", err)
+	}
+
+	// Return a mock execution since schedules don't have a single workflow execution
+	return &clientInterface.WorkflowExecution{
+		ID:    scheduleHandle.GetID(),
+		RunID: "schedule-" + scheduleHandle.GetID(), // Fake RunID for schedule
+	}, nil
+}
+
+// SupportsSchedules returns true for Temporal client since it supports schedules natively
+func (c *TemporalClient) SupportsSchedules() bool {
+	return true
+}
+
+// StopScheduledWorkflow stops a Temporal Schedule by deleting it
+func (c *TemporalClient) StopScheduledWorkflow(ctx context.Context, scheduleID string) error {
+	scheduleClient := c.Client.ScheduleClient()
+	scheduleHandle := scheduleClient.GetHandle(ctx, scheduleID)
+
+	// Delete the schedule to stop it
+	err := scheduleHandle.Delete(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to delete temporal schedule: %w", err)
+	}
+
+	return nil
+}
+
+// GetScheduleStatus gets the status of a Temporal Schedule
+func (c *TemporalClient) GetScheduleStatus(ctx context.Context, scheduleID string) (*clientInterface.ScheduleStatus, error) {
+	scheduleClient := c.Client.ScheduleClient()
+	scheduleHandle := scheduleClient.GetHandle(ctx, scheduleID)
+
+	// Get schedule info
+	scheduleInfo, err := scheduleHandle.Describe(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get temporal schedule info: %w", err)
+	}
+
+	var state string
+	var errorMessage string
+
+	// Check if schedule is paused
+	if scheduleInfo.Schedule.State != nil && scheduleInfo.Schedule.State.Paused {
+		state = "PAUSED"
+	} else {
+		// Schedule is active
+		state = "RUNNING"
+	}
+
+	// Check for recent action results to see if there are failures
+	if len(scheduleInfo.Info.RecentActions) > 0 {
+		recentAction := scheduleInfo.Info.RecentActions[0]
+		if recentAction.StartWorkflowResult == nil {
+			state = "FAILED"
+			errorMessage = "Failed to start workflow"
+		}
+	}
+
+	return &clientInterface.ScheduleStatus{
+		State:        state,
+		ErrorMessage: errorMessage,
+	}, nil
 }

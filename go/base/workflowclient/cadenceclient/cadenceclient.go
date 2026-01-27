@@ -169,3 +169,66 @@ func (c *CadenceClient) ListOpenWorkflow(ctx context.Context, request clientInte
 func (c *CadenceClient) TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error {
 	return c.Client.TerminateWorkflow(ctx, workflowID, runID, reason, nil)
 }
+
+// StartScheduledWorkflow starts a workflow using Cadence (no native schedule support)
+func (c *CadenceClient) StartScheduledWorkflow(ctx context.Context, options clientInterface.ScheduledWorkflowOptions) (*clientInterface.WorkflowExecution, error) {
+	// Cadence doesn't have native schedule support, so we start a regular workflow
+	workflowOptions := cadenceClient.StartWorkflowOptions{
+		ID:                              fmt.Sprintf("%s-%s", options.TriggerRun.Namespace, options.TriggerRun.Name),
+		TaskList:                        options.TaskQueue,
+		ExecutionStartToCloseTimeout:    options.ExecutionStartToCloseTimeout,
+		DecisionTaskStartToCloseTimeout: options.DecisionTaskStartToCloseTimeout,
+		WorkflowIDReusePolicy:           cadenceClient.WorkflowIDReusePolicyAllowDuplicate,
+	}
+
+	run, err := c.Client.StartWorkflow(ctx, workflowOptions, options.WorkflowType, options.Args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to start scheduled workflow: %w", err)
+	}
+
+	return &clientInterface.WorkflowExecution{
+		ID:    run.ID,
+		RunID: run.RunID,
+	}, nil
+}
+
+// SupportsSchedules returns false for Cadence client since it doesn't support schedules natively
+func (c *CadenceClient) SupportsSchedules() bool {
+	return false
+}
+
+// StopScheduledWorkflow stops a workflow by canceling the execution (no native schedule support)
+func (c *CadenceClient) StopScheduledWorkflow(ctx context.Context, scheduleID string) error {
+	// Cadence doesn't have native schedule support, so we cancel the workflow execution
+	return c.Client.CancelWorkflow(ctx, scheduleID, "")
+}
+
+// GetScheduleStatus gets the status of a workflow execution (no native schedule support)
+func (c *CadenceClient) GetScheduleStatus(ctx context.Context, scheduleID string) (*clientInterface.ScheduleStatus, error) {
+	// Cadence doesn't have native schedule support, so we get workflow execution status
+	execInfo, err := c.GetWorkflowExecutionInfo(ctx, scheduleID, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to get schedule status: %w", err)
+	}
+
+	var state string
+	switch execInfo.Status {
+	case clientInterface.WorkflowExecutionStatusRunning:
+		state = "RUNNING"
+	case clientInterface.WorkflowExecutionStatusCompleted:
+		state = "RUNNING" // Completed workflows in schedule context might still be running
+	case clientInterface.WorkflowExecutionStatusFailed:
+		state = "FAILED"
+	case clientInterface.WorkflowExecutionStatusCanceled:
+		state = "KILLED"
+	case clientInterface.WorkflowExecutionStatusTerminated:
+		state = "KILLED"
+	default:
+		state = "UNKNOWN"
+	}
+
+	return &clientInterface.ScheduleStatus{
+		State:        state,
+		ErrorMessage: "", // TODO: Implement proper error message retrieval
+	}, nil
+}
