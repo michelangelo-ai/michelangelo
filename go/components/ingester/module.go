@@ -22,6 +22,7 @@ type registerParams struct {
 	Manager         ctrl.Manager
 	Scheme          *runtime.Scheme
 	MetadataStorage storage.MetadataStorage `optional:"true"`
+	BlobStorage     storage.BlobStorage     `optional:"true"`
 	Config          Config                  `optional:"true"`
 	Logger          *zap.Logger
 }
@@ -58,6 +59,7 @@ func register(p registerParams) error {
 			Scheme:          p.Scheme,
 			TargetKind:      clientObj,
 			MetadataStorage: p.MetadataStorage,
+			BlobStorage:     p.BlobStorage,
 			Config:          controllerConfig,
 		}
 
