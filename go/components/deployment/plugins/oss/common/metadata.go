@@ -18,7 +18,7 @@ const (
 	ClusterStateDeploymentInProgress = "DEPLOYMENT_IN_PROGRESS"
 	ClusterStateDeployed             = "DEPLOYED"
 
-	// Cleanup states (for model cleanup after rollout)
+	// Cleanup states
 	ClusterStateCleanupInProgress = "CLEANUP_IN_PROGRESS"
 	ClusterStateCleaned           = "CLEANED"
 

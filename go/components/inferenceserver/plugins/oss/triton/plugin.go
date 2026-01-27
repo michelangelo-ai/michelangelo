@@ -112,7 +112,6 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 	numReadyClusters := 0
 	numFailedClusters := 0
 
-	// todo: ghosharitra: revise this
 	if len(resource.Status.TargetClusterStatuses) == 0 {
 		resource.Status.TargetClusterStatuses = make([]*v2pb.TargetClusterStatus, len(resource.Spec.ClusterTargets))
 		for i := range resource.Status.TargetClusterStatuses {

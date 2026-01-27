@@ -104,7 +104,6 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 		backendType := v2pb.BackendType(v2pb.BackendType_value[metadata.BackendType])
 
 		modelReady, err := a.gateway.CheckModelStatus(ctx, a.logger, modelName, inferenceServerName, deployment.Namespace, clusterTarget, backendType)
-		// todo: ghosharitra: need to differentiate between error and model not ready cases
 		if err != nil {
 			a.logger.Warn("Failed to check model status, will retry",
 				zap.String("cluster_id", currentCluster.ClusterID),
@@ -127,13 +126,11 @@ func (a *RollingRolloutActor) Retrieve(ctx context.Context, deployment *v2pb.Dep
 				return nil, fmt.Errorf("failed to update metadata: %w", err)
 			}
 
-			// Check if more clusters remain
+			// If more clusters remain, return false to trigger next cluster deployment
 			if currentIdx+1 < len(metadata.Clusters) {
 				return conditionUtils.GenerateFalseCondition(condition, "NextClusterPending",
 					fmt.Sprintf("Cluster %s deployed, moving to next cluster", currentCluster.ClusterID)), nil
 			}
-
-			// All done
 			return conditionUtils.GenerateTrueCondition(condition), nil
 		}
 
@@ -215,8 +212,6 @@ func (a *RollingRolloutActor) Run(ctx context.Context, deployment *v2pb.Deployme
 	}
 
 	currentCluster := &metadata.Clusters[metadata.CurrentIndex]
-
-	// If IN_PROGRESS, just return UNKNOWN (Retrieve will check status)
 	if currentCluster.State == actorCommon.ClusterStateDeploymentInProgress {
 		a.logger.Info("Cluster deployment in progress, waiting for Retrieve to check status",
 			zap.String("cluster_id", currentCluster.ClusterID))

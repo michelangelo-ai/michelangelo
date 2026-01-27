@@ -64,3 +64,6 @@ data:
       host: cadence:7833
       transport: grpc
       domain: default
+
+    inferenceServer:
+      controlPlaneClusterId: "k3d-michelangelo-sandbox"
