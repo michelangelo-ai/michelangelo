@@ -104,7 +104,14 @@ def init_arguments(p: argparse.ArgumentParser):
         dest="demo_action", required=True, help="Demo type to create"
     )
     _ = demo_sp.add_parser("pipeline", help="Create pipeline demo resources")
-    _ = demo_sp.add_parser("inference", help="Create inference server demo resources")
+    _ = demo_sp.add_parser(
+        "inference-single-cluster",
+        help="Create inference server demo resources (single cluster setup)",
+    )
+    _ = demo_sp.add_parser(
+        "inference-multi-cluster",
+        help="Create inference server demo resources (multi-cluster setup)",
+    )
 
     delete_p = sp.add_parser("delete", help="Delete the cluster.")
     delete_p.add_argument(
@@ -554,7 +561,8 @@ def _create_cadence_domain(links):
 def _create_demo_crs(ns: argparse.Namespace):
     """Create demo Custom Resources (CRs) for the sandbox environment."""
     assert ns
-    if ns.demo_action != "pipeline" and ns.demo_action != "inference":
+    valid_actions = ["pipeline", "inference-single-cluster", "inference-multi-cluster"]
+    if ns.demo_action not in valid_actions:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
     # Check if cluster exists
@@ -603,8 +611,10 @@ def _create_demo_crs(ns: argparse.Namespace):
 
     if ns.demo_action == "pipeline":
         _create_pipeline_demo_crs()
-    elif ns.demo_action == "inference":
-        _create_inference_demo_crs()
+    elif ns.demo_action == "inference-single-cluster":
+        _create_inference_demo_single_cluster()
+    elif ns.demo_action == "inference-multi-cluster":
+        _create_inference_demo_multi_cluster()
     else:
         raise ValueError(f"Unsupported demo action: {ns.demo_action}")
 
@@ -1098,7 +1108,7 @@ def _create_compute_cluster_secrets(cluster_name: str):
     print(f"\nCreated secrets for cluster '{cluster_name}' in the sandbox cluster")
 
 
-def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
+def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str) -> dict:
     """Create Kubernetes secrets for inference server to access a target cluster.
 
     This creates:
@@ -1108,6 +1118,9 @@ def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
     Args:
         cluster_name: The k3d cluster name (e.g., "cluster-1")
         secret_prefix: Prefix for secret names (e.g., "k3d-cluster-1")
+
+    Returns:
+        dict with 'host' and 'port' extracted from the cluster's kubeconfig
     """
     print(
         f"🔐 Creating secrets for inference server access to cluster '{cluster_name}'"
@@ -1120,6 +1133,17 @@ def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
 
     # Parse the kubeconfig YAML
     kubeconfig_data = yaml.safe_load(kubeconfig)
+
+    # Extract server URL and parse host/port (same logic as compute cluster)
+    server_url = kubeconfig_data["clusters"][0]["cluster"]["server"]
+    import re
+
+    match = re.search(r"(https://[^:]+):(\d+)", server_url)
+    if not match:
+        raise ValueError(
+            f"Could not extract cluster host and port from server URL: {server_url}"
+        )
+    host, port = match.groups()
 
     # Extract certificate-authority-data from clusters[0].cluster
     ca_data = kubeconfig_data["clusters"][0]["cluster"].get(
@@ -1229,65 +1253,190 @@ def _create_inference_cluster_secrets(cluster_name: str, secret_prefix: str):
             f.name,
         )
 
-    # Extract and log the server URL for the user to update their CR if needed
-    server_url = kubeconfig_data["clusters"][0]["cluster"].get("server", "")
     print(f"✅ Created secrets '{secret_prefix}-ca' and '{secret_prefix}-token'")
     print(f"   Target cluster API server: {server_url}")
 
+    return {"host": host, "port": port}
 
-def _create_inference_demo_crs():
-    """Create an inference server for the sandbox cluster for demo purposes."""
-    print("🚀 Setting up Michelangelo AI Inference Demo...")
+
+def _create_inference_demo_single_cluster():
+    """Create an inference server for single-cluster deployment demo purposes.
+
+    This is the simpler setup where the inference server runs on the same cluster
+    as the control plane (michelangelo-sandbox). No multi-cluster secrets or
+    cross-cluster networking is needed.
+    """
+    print("🚀 Setting up Michelangelo AI Inference Demo (Single-Cluster)...")
+
+    # Setup Istio with Gateway API on the sandbox cluster
+    _setup_istio_with_gateway_api()
 
     inference_demo_dir = _dir / "demo" / "inference"
     # Create inference server CR
-    inference_server_path = inference_demo_dir / "inferenceserver.yaml"
+    inference_server_path = inference_demo_dir / "inferenceserver_single_cluster.yaml"
     if not inference_server_path.exists():
         _err_exit(
             f"❌ Inference server CR not found at {inference_server_path}, exiting..."
         )
 
-    # Parse the inference server YAML to extract target clusters
+    print("✅ Creating Triton Inference Server...")
+    _kube_apply(inference_server_path)
+
+    # Wait for inference server to reach SERVING state (image pull may take time)
     with open(inference_server_path) as f:
         inference_server_yaml = yaml.safe_load(f)
+    inference_server_name = inference_server_yaml["metadata"]["name"]
+    inference_server_namespace = inference_server_yaml["metadata"].get(
+        "namespace", "default"
+    )
 
-    # Extract target cluster info from clusterTargets
-    cluster_targets = inference_server_yaml.get("spec", {}).get("clusterTargets", [])
-    target_cluster_names = []
+    print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
+    print("   (This may take 5-10 minutes for first-time Triton image pull)")
 
-    for target in cluster_targets:
-        cluster_id = target.get("clusterId", "")
-        k8s_config = target.get("kubernetes", {})
-        token_tag = k8s_config.get("tokenTag", "")
-        ca_tag = k8s_config.get("caDataTag", "")
-
-        if cluster_id and token_tag and ca_tag:
-            # Derive k3d cluster name from clusterId
-            # e.g., "k3d-cluster-1" -> "cluster-1"
-            if cluster_id.startswith("k3d-"):
-                k3d_cluster_name = cluster_id.replace("k3d-", "")
-            else:
-                k3d_cluster_name = cluster_id
-            # Derive secret prefix from tokenTag
-            # e.g., "k3d-cluster-1-token" -> "k3d-cluster-1"
-            secret_prefix = token_tag.replace("-token", "")
-
-            # Create secrets for this target cluster
-            _create_inference_cluster_secrets(k3d_cluster_name, secret_prefix)
-            # Use the k3d cluster name (without k3d- prefix) for Istio setup
-            target_cluster_names.append(k3d_cluster_name)
-
-    # Setup Istio with Gateway API on target clusters
-    # This allows usage of HTTPRoutes to route traffic to the inference server.
-    if not target_cluster_names:
+    try:
+        _exec(
+            "kubectl",
+            "wait",
+            "--for=jsonpath=.status.state=INFERENCE_SERVER_STATE_SERVING",
+            f"inferenceservers.michelangelo.api/{inference_server_name}",
+            "-n",
+            inference_server_namespace,
+            "--timeout=720s",
+            raise_error=True,
+        )
+        print("✅ Inference server is ready!")
+    except subprocess.CalledProcessError:
         _err_exit(
-            "❌ No valid clusterTargets found in inferenceserver.yaml.\n"
-            "Please specify at least one clusterTarget with clusterId, "
-            "tokenTag, and caDataTag."
+            f"Inference server '{inference_server_name}' "
+            f"failed to become ready after 720s.\n"
+            f"Check status with:\n"
+            f"  kubectl get inferenceservers.michelangelo.api "
+            f"{inference_server_name} -n {inference_server_namespace} -o yaml\n"
+            f"Check logs with:\n"
+            f"  kubectl logs -l app=inference-server -n {inference_server_namespace}"
         )
 
+    # Deploy model-sync Deployment
+    model_sync_deployment_path = _dir / "resources" / "model-sync.yaml"
+    if not model_sync_deployment_path.exists():
+        _err_exit(
+            f"❌ Model-sync Deployment not found at {model_sync_deployment_path}, "
+            "exiting..."
+        )
+
+    print("✅ Deploying model-sync Deployment...")
+    _kube_apply(model_sync_deployment_path)
+
+    # Wait for Deployment to be ready
+    print("⏳ Waiting for model-sync Deployment to be ready...")
+    try:
+        _exec(
+            "kubectl",
+            "rollout",
+            "status",
+            "deployment/model-sync",
+            "-n",
+            "default",
+            "--timeout=60s",
+            raise_error=True,
+        )
+        print("✅ Model-sync Deployment is ready!")
+    except subprocess.CalledProcessError:
+        _err_exit(
+            "Model-sync Deployment failed to become ready after 60s.\n"
+            "Check status with:\n"
+            "  kubectl get deployments model-sync -n default -o yaml\n"
+            "Check logs with:\n"
+            "  kubectl logs deployment/model-sync -n default"
+        )
+    _port_forward_inference_server_in_control_plane()
+    _print_inference_demo_completion_message()
+
+
+def _create_inference_target_cluster(cluster_name: str):
+    """Create a target cluster for multi-cluster inference.
+
+    Args:
+        cluster_name: Name of the k3d cluster to create (e.g., "cluster-1")
+    """
+    # Check if the cluster already exists
+    try:
+        subprocess.check_output(
+            ["k3d", "cluster", "get", cluster_name], stderr=subprocess.DEVNULL
+        )
+        print(f"✅ Target cluster '{cluster_name}' already exists")
+        return
+    except subprocess.CalledProcessError:
+        pass
+
+    print(f"🔧 Creating target cluster '{cluster_name}'...")
+
+    args = [
+        "k3d",
+        "cluster",
+        "create",
+        cluster_name,
+        "--servers",
+        "1",
+        "--agents",
+        "1",
+        "--kubeconfig-switch-context=false",
+        "--network",
+        f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+        # Use the same network as the control plane
+    ]
+
+    _exec(*args)
+
+    # Create michelangelo-config ConfigMap pointing to control plane's MinIO
+    _create_config_in_compute_cluster(cluster_name)
+
+    # Create aws-credentials Secret (needed for model-sync to access S3)
+    _create_aws_credentials_in_cluster(cluster_name)
+
+    print(f"✅ Target cluster '{cluster_name}' created successfully")
+
+
+def _create_inference_demo_multi_cluster():
+    """Create an inference server for multi-cluster deployment demo purposes."""
+    print("🚀 Setting up Michelangelo AI Inference Demo (Multi-Cluster)...")
+
+    # Define target clusters for multi-cluster inference
+    target_cluster_configs = [
+        {"k3d_name": "cluster-1", "cluster_id": "k3d-cluster-1"},
+        {"k3d_name": "cluster-2", "cluster_id": "k3d-cluster-2"},
+    ]
+
+    # Create secrets and collect cluster connection info
+    cluster_targets = []
+    target_cluster_names = []
+
+    for config in target_cluster_configs:
+        k3d_name = config["k3d_name"]
+        cluster_id = config["cluster_id"]
+        secret_prefix = cluster_id  # e.g., "k3d-cluster-1"
+
+        # Create the cluster if it doesn't exist
+        _create_inference_target_cluster(k3d_name)
+
+        # Create secrets and get connection info
+        conn_info = _create_inference_cluster_secrets(k3d_name, secret_prefix)
+
+        cluster_targets.append(
+            {
+                "clusterId": cluster_id,
+                "kubernetes": {
+                    "host": conn_info["host"],  # e.g., "https://host.docker.internal"
+                    "port": conn_info["port"],  # e.g., "52910"
+                    "tokenTag": f"{secret_prefix}-token",
+                    "caDataTag": f"{secret_prefix}-ca",
+                },
+            }
+        )
+        target_cluster_names.append(k3d_name)
+
     print(
-        f"📋 Found {len(target_cluster_names)} target cluster(s): "
+        f"📋 Configured {len(target_cluster_names)} target cluster(s): "
         f"{target_cluster_names}"
     )
 
@@ -1296,14 +1445,38 @@ def _create_inference_demo_crs():
     all_clusters.extend(target_cluster_names)
     _setup_istio_on_clusters(all_clusters)
 
-    print("✅ Creating Triton Inference Server...")
-    _kube_apply(inference_server_path)
+    # Dynamically generate InferenceServer CR with correct host/port
+    inference_server_name = "inference-server-example"
+    inference_server_namespace = "default"
 
-    # Wait for inference server to reach SERVING state (image pull may take time)
-    inference_server_name = inference_server_yaml["metadata"]["name"]
-    inference_server_namespace = inference_server_yaml["metadata"].get(
-        "namespace", "default"
-    )
+    inference_server_cr = {
+        "apiVersion": "michelangelo.api/v2",
+        "kind": "InferenceServer",
+        "metadata": {
+            "name": inference_server_name,
+            "namespace": inference_server_namespace,
+            "labels": {"app": "inference-server"},
+        },
+        "spec": {
+            "tenancyType": "TENANCY_TYPE_DEDICATED",
+            "backendType": "BACKEND_TYPE_TRITON",
+            "ownerSpec": {"tier": 1},
+            "initSpec": {
+                "resourceSpec": {"cpu": 2, "memory": "4Gi"},
+                "servingSpec": {"version": "latest"},
+                "numInstances": 1,
+            },
+            "decomSpec": {"decommission": False},
+            "owner": {"name": "user-example"},
+            "clusterTargets": cluster_targets,
+        },
+    }
+
+    print("✅ Creating Triton Inference Server...")
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml") as f:
+        yaml.dump(inference_server_cr, f)
+        f.flush()
+        _kube_apply(Path(f.name))
 
     print(f"⏳ Waiting for inference server '{inference_server_name}' to be ready...")
     print("   (This may take 5-10 minutes for first-time Triton image pull)")
@@ -1375,45 +1548,7 @@ def _create_inference_demo_crs():
                 f"Check logs with:\n"
                 f"  kubectl --context {ctx} logs deployment/model-sync -n default"
             )
-
-    print("✅ Inference demo resources created successfully")
-
-    print("🎉 Inference demo deployment created successfully!")
-    print("📋 What was set up:")
-    print("  • Gateway API with Istio integration")
-    print("  • HTTPRoute for traffic routing")
-    print("  • Triton Inference Server")
-    print("  • Model-sync Deployment (handles S3 sync and model loading)")
-
-    print(
-        "🌐 Deployment-agnostic endpoint:\
-            Use the following URL to test the inference server"
-    )
-    print("  http://localhost:8080/inference-server-example")
-    print(
-        "  For example,\
-            to test inference of a model deployed to the above inference server:\n"
-    )
-    print(
-        "  curl -X POST http://localhost:8080/inference-server-example/<deployment-name>/infer \\"  # noqa: E501
-    )
-    print('  -H "Content-Type: application/json" \\')
-    print("  -d '{")
-    print('  "inputs": [')
-    print("    {")
-    print('      "name": "input_ids",')
-    print('      "shape": [1, 10],')
-    print('      "datatype": "INT64",')
-    print('      "data": [101, 7592, 999, 102, 0, 0, 0, 0, 0, 0]')
-    print("    },")
-    print("    {")
-    print('      "name": "attention_mask",')
-    print('      "shape": [1, 10],')
-    print('      "datatype": "INT64",')
-    print('      "data": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]')
-    print("    }")
-    print("  ]")
-    print("}'")
+    _print_inference_demo_completion_message()
 
 
 def _generate_shared_ca_certs(cluster_names: list[str]) -> Path:
@@ -1744,23 +1879,7 @@ def _setup_istio_on_clusters(target_clusters: list[str]):
     # Create a wildcard DestinationRule on the control plane to enable mTLS
     # for all traffic to ServiceEntry endpoints (east-west gateways)
     _create_inference_mtls_destination_rule()
-
-    # setup port-forwarding for the control plane
-    # kubectl --context k3d-michelangelo-sandbox port-forward svc/ma-gateway-istio 8080:80 -n default
-    subprocess.Popen(
-        [
-            "kubectl",
-            "--context",
-            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
-            "port-forward",
-            "svc/ma-gateway-istio",
-            "8080:80",
-            "-n",
-            "default",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    _port_forward_inference_server_in_control_plane()
 
     print(f"\n✅ Istio setup complete on all {len(target_clusters)} cluster(s)")
 
@@ -2037,6 +2156,61 @@ def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name:
     print("✅ East-west gateway installed with labels:")
     print("   michelangelo.ai/east-west-gateway=true")
     print(f"   michelangelo.ai/cluster-id={cluster_id}")
+
+def _port_forward_inference_server_in_control_plane():
+    # setup port-forwarding for the control plane
+    subprocess.Popen(
+        [
+            "kubectl",
+            "--context",
+            f"k3d-{_michelangelo_sandbox_kube_cluster_name}",
+            "port-forward",
+            "svc/ma-gateway-istio",
+            "8080:80",
+            "-n",
+            "default",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+def _print_inference_demo_completion_message(multi_cluster: bool = False):
+    print("✅ Inference demo resources created successfully")
+    print("🎉 Inference demo deployment created successfully!")
+    print("📋 What was set up:")
+    print("  • Gateway API with Istio integration")
+    print("  • Triton Inference Server")
+    print("  • Model-Sync Deployment (handles S3 sync and model loading)")
+
+    print(
+        "🌐 Deployment-agnostic endpoint:\
+            Use the following URL to test the inference server"
+    )
+    print("  http://localhost:8080/inference-server-example")
+    print(
+        "  For example,\
+            to test inference of a model deployed to the above inference server:\n"
+    )
+    print(
+        "  curl -X POST http://localhost:8080/inference-server-example/<deployment-name>/infer \\"  # noqa: E501
+    )
+    print('  -H "Content-Type: application/json" \\')
+    print("  -d '{")
+    print('  "inputs": [')
+    print("    {")
+    print('      "name": "input_ids",')
+    print('      "shape": [1, 10],')
+    print('      "datatype": "INT64",')
+    print('      "data": [101, 7592, 999, 102, 0, 0, 0, 0, 0, 0]')
+    print("    },")
+    print("    {")
+    print('      "name": "attention_mask",')
+    print('      "shape": [1, 10],')
+    print('      "datatype": "INT64",')
+    print('      "data": [1, 1, 1, 1, 0, 0, 0, 0, 0, 0]')
+    print("    }")
+    print("  ]")
+    print("}'")
 
 
 def _create_pipeline_demo_crs():
