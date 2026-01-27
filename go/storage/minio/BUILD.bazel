@@ -1,0 +1,16 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "minio",
+    srcs = ["minio.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/go/storage/minio",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//go/storage",
+        "@com_github_minio_minio_go_v7//:minio-go",
+        "@com_github_minio_minio_go_v7//pkg/credentials",
+        "@io_k8s_apimachinery//pkg/api/meta",
+        "@io_k8s_apimachinery//pkg/runtime",
+        "@org_golang_google_protobuf//proto",
+    ],
+)

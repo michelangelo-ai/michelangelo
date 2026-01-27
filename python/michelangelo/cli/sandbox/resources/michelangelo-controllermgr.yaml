@@ -58,7 +58,20 @@ data:
       awsAccessKeyId: minioadmin
       awsSecretAccessKey: minioadmin
       awsEndpointUrl: minio:9091
-    
+
+    # Reuse the Cadence MySQL service for ingester metadata storage in sandbox.
+    metadataStorage:
+      enableMetadataStorage: true
+      deletionDelay: 10s
+      enableResourceVersionCache: false
+
+    mysql:
+      host: mysql
+      port: 3306
+      user: root
+      password: root
+      database: michelangelo
+
     workflowClient:
       service: cadence-frontend
       host: cadence:7833

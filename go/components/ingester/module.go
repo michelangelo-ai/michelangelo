@@ -1,0 +1,64 @@
+package ingester
+
+import (
+	"fmt"
+
+	"github.com/michelangelo-ai/michelangelo/go/storage"
+	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"go.uber.org/fx"
+	"go.uber.org/zap"
+	"k8s.io/apimachinery/pkg/runtime"
+	ctrl "sigs.k8s.io/controller-runtime"
+)
+
+// Module provides the ingester reconcilers
+var Module = fx.Options(
+	fx.Invoke(register),
+)
+
+type registerParams struct {
+	fx.In
+	Manager         ctrl.Manager
+	Scheme          *runtime.Scheme
+	MetadataStorage storage.MetadataStorage `optional:"true"`
+	BlobStorage     storage.BlobStorage     `optional:"true"`
+	Config          Config                  `optional:"true"`
+	Logger          *zap.Logger
+}
+
+// register sets up ingester reconcilers for all configured CRD types
+func register(p registerParams) error {
+	// Only set up ingester if metadata storage is configured
+	if p.MetadataStorage == nil {
+		p.Logger.Info("Metadata storage not configured, skipping ingester controller setup")
+		return nil
+	}
+
+	p.Logger.Info("Setting up ingester controllers")
+
+	// List of CRD objects to watch
+	crdObjects := v2.CrdObjects
+
+	for _, obj := range crdObjects {
+		gvk := obj.GetObjectKind().GroupVersionKind()
+		log := p.Logger.With(zap.String("kind", gvk.Kind))
+
+		reconciler := &Reconciler{
+			Client:          p.Manager.GetClient(),
+			Log:             ctrl.Log.WithName("ingester").WithName(gvk.Kind),
+			Scheme:          p.Scheme,
+			TargetKind:      obj,
+			MetadataStorage: p.MetadataStorage,
+			BlobStorage:     p.BlobStorage,
+			Config:          p.Config,
+		}
+
+		if err := reconciler.SetupWithManager(p.Manager); err != nil {
+			return fmt.Errorf("failed to setup ingester for %s: %w", gvk.Kind, err)
+		}
+
+		log.Info("Ingester controller registered successfully")
+	}
+
+	return nil
+}

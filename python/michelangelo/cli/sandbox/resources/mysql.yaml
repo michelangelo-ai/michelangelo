@@ -15,7 +15,7 @@ spec:
         - name: MYSQL_ROOT_PASSWORD
           value: root
         - name: MYSQL_DATABASE
-          value: temporal
+          value: michelangelo
       readinessProbe:
         exec:
           command:
@@ -62,3 +62,260 @@ spec:
       name: mysql
   selector:
     app: mysql
+---
+# ConfigMap containing MySQL schema for ingester
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-ingester-schema
+data:
+  init-schema.sql: |
+    -- MySQL Schema for Michelangelo Ingester (Sandbox)
+    USE michelangelo;
+
+    -- ==============================================================================
+    -- MODEL TABLE
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `model` (
+        `uid`         VARCHAR(255) NOT NULL COMMENT 'Kubernetes UID',
+        `group_ver`   VARCHAR(255) NOT NULL COMMENT 'API group version',
+        `namespace`   VARCHAR(255) NOT NULL COMMENT 'Kubernetes namespace',
+        `name`        VARCHAR(255) NOT NULL COMMENT 'Object name',
+        `res_version` BIGINT UNSIGNED NOT NULL COMMENT 'Resource version',
+        `create_time` DATETIME     NOT NULL COMMENT 'Creation timestamp',
+        `update_time` DATETIME     COMMENT 'Last update timestamp',
+        `delete_time` DATETIME     COMMENT 'Deletion timestamp (soft delete)',
+        `proto`       MEDIUMBLOB   COMMENT 'Protobuf serialized object',
+        `json`        JSON         COMMENT 'JSON representation',
+        `algorithm`    VARCHAR(255) COMMENT 'Training algorithm',
+        `training_framework`    VARCHAR(255) COMMENT 'ML framework',
+        `owner`    VARCHAR(255) COMMENT 'Model owner email',
+        `source`    VARCHAR(255) COMMENT 'Model source',
+        `description`    VARCHAR(768) COMMENT 'Model description',
+        PRIMARY KEY   (`uid`),
+        KEY    `model_namespace_name` (`namespace`, `name`),
+        KEY    `model_create_time` (`create_time`),
+        KEY    `model_update_time` (`update_time`),
+        KEY    `model_delete_time` (`delete_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `model_labels` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `model_labels_uid` (`obj_uid`),
+        KEY    `model_labels_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `model_annotations` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `model_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- PIPELINE TABLE
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `pipeline` (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `pipeline_type`    VARCHAR(255) COMMENT 'Pipeline type',
+        `owner`    VARCHAR(255) COMMENT 'Pipeline owner',
+        PRIMARY KEY   (`uid`),
+        KEY    `pipeline_namespace_name` (`namespace`, `name`),
+        KEY    `pipeline_create_time` (`create_time`),
+        KEY    `pipeline_update_time` (`update_time`),
+        KEY    `pipeline_delete_time` (`delete_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `pipeline_labels` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_labels_uid` (`obj_uid`),
+        KEY    `pipeline_labels_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `pipeline_annotations` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- PIPELINE_RUN TABLE
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `pipeline_run` (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `pipeline_namespace`    VARCHAR(255) COMMENT 'Parent pipeline namespace',
+        `pipeline_name`    VARCHAR(255) COMMENT 'Parent pipeline name',
+        `status`    VARCHAR(255) COMMENT 'Run status',
+        `owner`    VARCHAR(255) COMMENT 'Run owner',
+        PRIMARY KEY   (`uid`),
+        KEY    `pipeline_run_namespace_name` (`namespace`, `name`),
+        KEY    `pipeline_run_create_time` (`create_time`),
+        KEY    `pipeline_run_update_time` (`update_time`),
+        KEY    `pipeline_run_delete_time` (`delete_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `pipeline_run_labels` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_run_labels_uid` (`obj_uid`),
+        KEY    `pipeline_run_labels_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `pipeline_run_annotations` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_run_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- DATASET TABLE
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `dataset` (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `dataset_type`    VARCHAR(255) COMMENT 'Dataset type',
+        `owner`    VARCHAR(255) COMMENT 'Dataset owner',
+        PRIMARY KEY   (`uid`),
+        KEY    `dataset_namespace_name` (`namespace`, `name`),
+        KEY    `dataset_create_time` (`create_time`),
+        KEY    `dataset_update_time` (`update_time`),
+        KEY    `dataset_delete_time` (`delete_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `dataset_labels` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `dataset_labels_uid` (`obj_uid`),
+        KEY    `dataset_labels_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `dataset_annotations` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `dataset_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    -- ==============================================================================
+    -- DEPLOYMENT TABLE
+    -- ==============================================================================
+    CREATE TABLE IF NOT EXISTS `deployment` (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `deployment_type`    VARCHAR(255) COMMENT 'Deployment type',
+        `owner`    VARCHAR(255) COMMENT 'Deployment owner',
+        `status`    VARCHAR(255) COMMENT 'Deployment status',
+        PRIMARY KEY   (`uid`),
+        KEY    `deployment_namespace_name` (`namespace`, `name`),
+        KEY    `deployment_create_time` (`create_time`),
+        KEY    `deployment_update_time` (`update_time`),
+        KEY    `deployment_delete_time` (`delete_time`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `deployment_labels` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `deployment_labels_uid` (`obj_uid`),
+        KEY    `deployment_labels_value` (`key`, `value`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE IF NOT EXISTS `deployment_annotations` (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `deployment_annotations_uid` (`obj_uid`)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+---
+# Job to initialize MySQL schema for ingester
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql-ingester-init
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mysql-init
+          image: mysql:8
+          command:
+            - /bin/bash
+            - -c
+            - |
+              echo "Waiting for MySQL to be ready..."
+              until mysql -h mysql -u root -proot -e "SELECT 1" &>/dev/null; do
+                sleep 2
+              done
+              echo "MySQL is ready. Initializing ingester schema..."
+              mysql -h mysql -u root -proot < /scripts/init-schema.sql
+              echo "Schema initialization complete!"
+          volumeMounts:
+            - name: schema-scripts
+              mountPath: /scripts
+      volumes:
+        - name: schema-scripts
+          configMap:
+            name: mysql-ingester-schema

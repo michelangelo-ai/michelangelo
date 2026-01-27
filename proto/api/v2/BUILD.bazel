@@ -87,6 +87,10 @@ go_library(
     embed = [":v2_go_proto"],
     importpath = "github.com/michelangelo-ai/michelangelo/proto-go/api/v2",
     visibility = ["//visibility:public"],
+    srcs = ["crd_objects.go"],
+    deps = [
+        "@io_k8s_apimachinery//pkg/runtime:go_default_library",
+    ],
 )
 
 kube_proto_yaml(
