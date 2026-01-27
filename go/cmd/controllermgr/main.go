@@ -18,6 +18,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
 	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/route"
+	"github.com/michelangelo-ai/michelangelo/go/components/ingester"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/modelconfig"
