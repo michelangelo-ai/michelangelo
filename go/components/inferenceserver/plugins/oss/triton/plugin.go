@@ -165,7 +165,6 @@ func (p *TritonPlugin) UpdateDetails(ctx context.Context, resource *v2pb.Inferen
 		}
 	}
 
-	// todo: ghosharitra: revise this
 	// infer server state based on the number of ready and failed target cluster deployments
 	if numReadyClusters == len(resource.Spec.ClusterTargets) {
 		resource.Status.State = v2pb.INFERENCE_SERVER_STATE_SERVING

@@ -21,6 +21,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 		namespace           string
 		inferenceServerName string
 		modelName           string
+		backendServiceName  string
 		httpRoute           *unstructured.Unstructured
 		expectError         bool
 		validateFunc        func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error)
@@ -31,6 +32,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 			namespace:           "default",
 			inferenceServerName: "test-server",
 			modelName:           "new-model",
+			backendServiceName:  "test-server-svc",
 			httpRoute:           nil,
 			expectError:         false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
@@ -58,11 +60,11 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
 				assert.Equal(t, "/v2/models/new-model", replacePrefixMatch)
 
-				// Verify backend ref points to inference server service
+				// Verify backend ref points to the backend service
 				backendRefs, _, _ := unstructured.NestedSlice(firstRule, "backendRefs")
 				require.Len(t, backendRefs, 1)
 				backendMap := backendRefs[0].(map[string]interface{})
-				assert.Equal(t, "test-server-inference-service", backendMap["name"])
+				assert.Equal(t, "test-server-svc", backendMap["name"])
 			},
 		},
 		{
@@ -71,7 +73,8 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 			namespace:           "default",
 			inferenceServerName: "test-server",
 			modelName:           "updated-model",
-			httpRoute:           createHTTPRouteWithProductionRoute("existing-deployment-httproute", "default", "/test-server/existing-deployment", "/v2/models/old-model"),
+			backendServiceName:  "test-server-svc",
+			httpRoute:           createHTTPRouteWithBackendRef("existing-deployment-httproute", "default", "/test-server/existing-deployment", "/v2/models/old-model", "old-server-svc"),
 			expectError:         false,
 			validateFunc: func(t *testing.T, fakeClient *fake.FakeDynamicClient, err error) {
 				require.NoError(t, err)
@@ -98,6 +101,12 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 				filterMap := filters[0].(map[string]interface{})
 				replacePrefixMatch, _, _ := unstructured.NestedString(filterMap, "urlRewrite", "path", "replacePrefixMatch")
 				assert.Equal(t, "/v2/models/updated-model", replacePrefixMatch)
+
+				// Check backend service was updated
+				backendRefs, _, _ := unstructured.NestedSlice(ruleMap, "backendRefs")
+				require.Len(t, backendRefs, 1)
+				backendMap := backendRefs[0].(map[string]interface{})
+				assert.Equal(t, "test-server-svc", backendMap["name"])
 			},
 		},
 	}
@@ -113,7 +122,7 @@ func TestEnsureDeploymentRoute(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			err := manager.EnsureDeploymentRoute(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
+			err := manager.EnsureDeploymentRoute(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName, tt.backendServiceName)
 
 			// Validate
 			if tt.expectError {
@@ -136,6 +145,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 		namespace           string
 		inferenceServerName string
 		modelName           string
+		backendServiceName  string
 		httpRoute           *unstructured.Unstructured
 		expectResult        bool
 		expectError         bool
@@ -146,7 +156,8 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 			namespace:           "default",
 			inferenceServerName: "test-server",
 			modelName:           "test-model",
-			httpRoute:           createHTTPRouteWithProductionRoute("test-deployment-httproute", "default", "/test-server/test-deployment", "/v2/models/test-model"),
+			backendServiceName:  "test-server-svc",
+			httpRoute:           createHTTPRouteWithBackendRef("test-deployment-httproute", "default", "/test-server/test-deployment", "/v2/models/test-model", "test-server-svc"),
 			expectResult:        true,
 			expectError:         false,
 		},
@@ -156,6 +167,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 			namespace:           "default",
 			inferenceServerName: "test-server",
 			modelName:           "test-model",
+			backendServiceName:  "test-server-svc",
 			httpRoute:           nil,
 			expectResult:        false,
 			expectError:         true,
@@ -166,6 +178,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 			namespace:           "default",
 			inferenceServerName: "test-server",
 			modelName:           "test-model",
+			backendServiceName:  "test-server-svc",
 			httpRoute:           createEmptyHTTPRoute("empty-deployment-httproute", "default"),
 			expectResult:        false,
 			expectError:         true,
@@ -183,7 +196,7 @@ func TestCheckDeploymentRouteStatus(t *testing.T) {
 			manager := NewHTTPRouteManager(fakeClient, zap.NewNop())
 
 			// Execute
-			result, err := manager.CheckDeploymentRouteStatus(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName)
+			result, err := manager.CheckDeploymentRouteStatus(context.Background(), zap.NewNop(), tt.deploymentName, tt.namespace, tt.inferenceServerName, tt.modelName, tt.backendServiceName)
 
 			// Validate
 			if tt.expectError {
@@ -311,8 +324,8 @@ func TestDeleteDeploymentRoute(t *testing.T) {
 	}
 }
 
-// Helper function to create HTTPRoute with production route
-func createHTTPRouteWithProductionRoute(name, namespace, pathValue, modelPath string) *unstructured.Unstructured {
+// Helper function to create HTTPRoute with backend ref
+func createHTTPRouteWithBackendRef(name, namespace, pathValue, modelPath, backendServiceName string) *unstructured.Unstructured {
 	return &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "gateway.networking.k8s.io/v1",
@@ -330,6 +343,14 @@ func createHTTPRouteWithProductionRoute(name, namespace, pathValue, modelPath st
 									"type":  "PathPrefix",
 									"value": pathValue,
 								},
+							},
+						},
+						"backendRefs": []interface{}{
+							map[string]interface{}{
+								"group": "",
+								"kind":  "Service",
+								"name":  backendServiceName,
+								"port":  int64(80),
 							},
 						},
 						"filters": []interface{}{

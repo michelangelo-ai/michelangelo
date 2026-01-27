@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -14,17 +15,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/clientfactory/clientfactorymocks"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// mockClientFactory is a test mock that always returns the provided client
-type mockClientFactory struct {
-	client client.Client
-}
-
-func (m *mockClientFactory) GetClient(ctx context.Context, connectionSpec *v2pb.ConnectionSpec) (client.Client, error) {
-	return m.client, nil
-}
+var testCluster = &v2pb.ClusterTarget{ClusterId: "test-cluster"}
 
 func TestCreateModelConfigMap(t *testing.T) {
 	tests := []struct {
@@ -54,7 +49,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 			},
 			existingConfigMaps: []runtime.Object{},
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -110,7 +105,7 @@ func TestCreateModelConfigMap(t *testing.T) {
 				},
 			},
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string, modelConfigs []ModelConfigEntry, annotations map[string]string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -137,6 +132,9 @@ func TestCreateModelConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create fake client with existing objects
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
@@ -145,11 +143,13 @@ func TestCreateModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			mockFactory := &mockClientFactory{client: fakeClient}
+			mockFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetClient(gomock.Any(), testCluster).Return(fakeClient, nil)
+
 			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
-			// Execute - passing nil for connectionSpec uses the default client
-			err := provider.CreateModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, nil, tt.modelConfigs, tt.labels, tt.annotations)
+			// Execute
+			err := provider.CreateModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.labels, tt.annotations, testCluster)
 
 			assert.NoError(t, err)
 			tt.validateFunc(t, fakeClient, tt.inferenceServer, tt.namespace, tt.modelConfigs, tt.annotations)
@@ -262,6 +262,9 @@ func TestGetModelConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create fake client with existing objects
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
@@ -270,11 +273,13 @@ func TestGetModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			mockFactory := &mockClientFactory{client: fakeClient}
+			mockFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetClient(gomock.Any(), testCluster).Return(fakeClient, nil)
+
 			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
-			actualResponse, err := provider.GetModelsFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace)
+			actualResponse, err := provider.GetModelsFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace, testCluster)
 
 			// Assert
 			if tt.expectError {
@@ -320,7 +325,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -361,7 +366,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -401,7 +406,7 @@ func TestAddModelToConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -436,6 +441,9 @@ func TestAddModelToConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create fake client with existing objects
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
@@ -444,11 +452,13 @@ func TestAddModelToConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			mockFactory := &mockClientFactory{client: fakeClient}
+			mockFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetClient(gomock.Any(), testCluster).Return(fakeClient, nil)
+
 			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
-			err := provider.AddModelToConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfig)
+			err := provider.AddModelToConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelConfig, testCluster)
 
 			// Assert
 			if tt.expectError {
@@ -500,7 +510,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -537,7 +547,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -574,7 +584,7 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				require.NoError(t, err)
@@ -603,6 +613,9 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create fake client with existing objects
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
@@ -611,11 +624,13 @@ func TestRemoveModelFromConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			mockFactory := &mockClientFactory{client: fakeClient}
+			mockFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetClient(gomock.Any(), testCluster).Return(fakeClient, nil)
+
 			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
-			err := provider.RemoveModelFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelName)
+			err := provider.RemoveModelFromConfigMap(context.Background(), tt.inferenceServer, tt.namespace, tt.modelName, testCluster)
 
 			// Assert
 			if tt.expectError {
@@ -656,7 +671,7 @@ func TestDeleteModelConfigMap(t *testing.T) {
 			},
 			expectError: false,
 			validateFunc: func(t *testing.T, c client.Client, inferenceServer string, namespace string) {
-				configMapName := addSuffixToString(inferenceServer, modelConfigSuffix)
+				configMapName := generateConfigMapName(inferenceServer)
 				cm := &corev1.ConfigMap{}
 				err := c.Get(context.Background(), client.ObjectKey{Name: configMapName, Namespace: namespace}, cm)
 				// ConfigMap should not exist after deletion
@@ -676,6 +691,9 @@ func TestDeleteModelConfigMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
 			// Create fake client with existing objects
 			scheme := runtime.NewScheme()
 			_ = corev1.AddToScheme(scheme)
@@ -684,11 +702,13 @@ func TestDeleteModelConfigMap(t *testing.T) {
 				WithRuntimeObjects(tt.existingConfigMaps...).
 				Build()
 
-			mockFactory := &mockClientFactory{client: fakeClient}
+			mockFactory := clientfactorymocks.NewMockClientFactory(ctrl)
+			mockFactory.EXPECT().GetClient(gomock.Any(), testCluster).Return(fakeClient, nil)
+
 			provider := NewDefaultModelConfigMapProvider(fakeClient, mockFactory, zap.NewNop())
 
 			// Execute
-			err := provider.DeleteModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace)
+			err := provider.DeleteModelConfigMap(context.Background(), tt.inferenceServer, tt.namespace, testCluster)
 
 			// Assert
 			if tt.expectError {

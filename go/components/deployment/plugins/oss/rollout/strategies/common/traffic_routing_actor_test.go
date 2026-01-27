@@ -11,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment/proxy/proxymocks"
+	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
@@ -19,7 +20,7 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*proxymocks.MockProxyProvider)
+		setupMocks              func(*proxymocks.MockProxyProvider, *gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -34,11 +35,31 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(true, nil)
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("test-server-svc")
+				pp.EXPECT().CheckDeploymentRouteStatus(
+					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
+				).Return(true, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
+		},
+		{
+			name: "control plane service not found",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+			},
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("")
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "control plane service not found for inference server test-server",
 		},
 		{
 			name: "deployment route not configured",
@@ -51,8 +72,11 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, nil)
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("test-server-svc")
+				pp.EXPECT().CheckDeploymentRouteStatus(
+					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
+				).Return(false, nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Deployment route is not configured",
@@ -68,8 +92,11 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().CheckDeploymentRouteStatus(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(false, errors.New("api error"))
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("test-server-svc")
+				pp.EXPECT().CheckDeploymentRouteStatus(
+					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
+				).Return(false, errors.New("api error"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to check deployment route status: api error",
@@ -82,10 +109,12 @@ func TestTrafficRoutingRetrieve(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
-			tt.setupMocks(mockProxy)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockProxy, mockGateway)
 
 			actor := &TrafficRoutingActor{
 				ProxyProvider: mockProxy,
+				Gateway:       mockGateway,
 				Logger:        zap.NewNop(),
 			}
 
@@ -103,7 +132,7 @@ func TestTrafficRoutingRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		setupMocks              func(*proxymocks.MockProxyProvider)
+		setupMocks              func(*proxymocks.MockProxyProvider, *gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedConditionReason string
 	}{
@@ -118,8 +147,11 @@ func TestTrafficRoutingRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(nil)
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("test-server-svc")
+				pp.EXPECT().EnsureDeploymentRoute(
+					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
+				).Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -133,11 +165,26 @@ func TestTrafficRoutingRun(t *testing.T) {
 					Target:          nil,
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				// No mock setup needed - early return
-			},
+			setupMocks:              func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "inference server not specified for deployment test-deployment",
+		},
+		{
+			name: "control plane service not found",
+			deployment: &v2pb.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-deployment", Namespace: "default"},
+				Spec: v2pb.DeploymentSpec{
+					DesiredRevision: &api.ResourceIdentifier{Name: "model-v1"},
+					Target: &v2pb.DeploymentSpec_InferenceServer{
+						InferenceServer: &api.ResourceIdentifier{Name: "test-server"},
+					},
+				},
+			},
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("")
+			},
+			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
+			expectedConditionReason: "control plane service not found for inference server test-server",
 		},
 		{
 			name: "add deployment route fails",
@@ -150,8 +197,11 @@ func TestTrafficRoutingRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1").Return(errors.New("route creation failed"))
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("test-server").Return("test-server-svc")
+				pp.EXPECT().EnsureDeploymentRoute(
+					gomock.Any(), gomock.Any(), "test-deployment", "default", "test-server", "model-v1", "test-server-svc",
+				).Return(errors.New("route creation failed"))
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_FALSE,
 			expectedConditionReason: "Failed to add deployment route: route creation failed",
@@ -173,8 +223,11 @@ func TestTrafficRoutingRun(t *testing.T) {
 					},
 				},
 			},
-			setupMocks: func(pp *proxymocks.MockProxyProvider) {
-				pp.EXPECT().EnsureDeploymentRoute(gomock.Any(), gomock.Any(), "complex-deployment", "production", "triton-server", "bert_cola").Return(nil)
+			setupMocks: func(pp *proxymocks.MockProxyProvider, gw *gatewaysmocks.MockGateway) {
+				gw.EXPECT().GetControlPlaneServiceName("triton-server").Return("triton-server-svc")
+				pp.EXPECT().EnsureDeploymentRoute(
+					gomock.Any(), gomock.Any(), "complex-deployment", "production", "triton-server", "bert_cola", "triton-server-svc",
+				).Return(nil)
 			},
 			expectedConditionStatus: api.CONDITION_STATUS_TRUE,
 			expectedConditionReason: "",
@@ -187,10 +240,12 @@ func TestTrafficRoutingRun(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockProxy := proxymocks.NewMockProxyProvider(ctrl)
-			tt.setupMocks(mockProxy)
+			mockGateway := gatewaysmocks.NewMockGateway(ctrl)
+			tt.setupMocks(mockProxy, mockGateway)
 
 			actor := &TrafficRoutingActor{
 				ProxyProvider: mockProxy,
+				Gateway:       mockGateway,
 				Logger:        zap.NewNop(),
 			}
 

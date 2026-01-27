@@ -35,6 +35,7 @@ go_test(
     deps = [
         "//go/components/deployment/plugins:go_default_library",
         "//go/components/deployment/plugins/oss/common:go_default_library",
+        "//go/components/inferenceserver/gateways:go_default_library",
         "//go/components/inferenceserver/gateways/gatewaysmocks:go_default_library",
         "//proto/api:go_default_library",
         "//proto/api/v2:go_default_library",

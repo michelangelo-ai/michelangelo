@@ -8,7 +8,6 @@ import (
 
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsutil "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -18,15 +17,13 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &ValidationAct
 
 // ValidationActor validates that inference server configuration meets Triton requirements.
 type ValidationActor struct {
-	backend               backends.Backend
 	controlPlaneClusterId string
 	logger                *zap.Logger
 }
 
 // NewValidationActor creates a condition actor for Triton configuration validation.
-func NewValidationActor(backend backends.Backend, controlPlaneClusterId string, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewValidationActor(controlPlaneClusterId string, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &ValidationActor{
-		backend:               backend,
 		controlPlaneClusterId: controlPlaneClusterId,
 		logger:                logger,
 	}

@@ -1,3 +1,5 @@
+//go:generate mockgen -source=provider.go -destination=secretsmocks/mocks.go -package=secretsmocks
+
 package secrets
 
 import (
@@ -26,6 +28,8 @@ type SecretProvider interface {
 }
 
 // Provider implements SecretProvider using Kubernetes secrets.
+// NOTE: This implementation is only for testing purposes and stores secrets in the MA control plane K8s Cluster.
+// For Production usecases external secret management systems should be used (e.g., HashiCorp Vault, AWS Secrets Manager) or explore utilities
 type Provider struct {
 	kubeClient client.Client
 }

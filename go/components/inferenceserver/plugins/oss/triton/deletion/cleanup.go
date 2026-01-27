@@ -9,7 +9,6 @@ import (
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
 	conditionsUtils "github.com/michelangelo-ai/michelangelo/go/base/conditions/utils"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/configmap"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/plugins/oss/common"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
@@ -19,17 +18,15 @@ var _ conditionInterfaces.ConditionActor[*v2pb.InferenceServer] = &CleanupActor{
 
 // CleanupActor removes all Kubernetes resources associated with a Triton inference server.
 type CleanupActor struct {
-	backend                backends.Backend
-	modelConfigMapProvider configmap.ModelConfigMapProvider
-	logger                 *zap.Logger
+	backend backends.Backend
+	logger  *zap.Logger
 }
 
 // NewCleanupActor creates a condition actor for inference server cleanup during deletion.
-func NewCleanupActor(backend backends.Backend, modelConfigMapProvider configmap.ModelConfigMapProvider, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
+func NewCleanupActor(backend backends.Backend, logger *zap.Logger) conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return &CleanupActor{
-		backend:                backend,
-		modelConfigMapProvider: modelConfigMapProvider,
-		logger:                 logger,
+		backend: backend,
+		logger:  logger,
 	}
 }
 

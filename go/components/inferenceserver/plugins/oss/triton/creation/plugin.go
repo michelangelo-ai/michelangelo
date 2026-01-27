@@ -31,7 +31,7 @@ func NewTritonCreationPlugin(backend backends.Backend, endpointRegistry endpoint
 // GetActors returns the ordered list of condition actors for creation workflow.
 func (p *TritonCreationPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewValidationActor(p.backend, p.controlPlaneClusterId, p.logger),
+		NewValidationActor(p.controlPlaneClusterId, p.logger),
 		NewClusterWorkloadsActor(p.backend, p.logger),
 		NewControlPlaneDiscoveryActor(p.endpointRegistry, p.logger),
 		NewHealthCheckActor(p.backend, p.logger),

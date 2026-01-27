@@ -1,4 +1,4 @@
-package deletion
+package creation
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
+	backendsmocks "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends/backendsmocks"
 	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-func TestCleanupActor_Retrieve(t *testing.T) {
+func TestClusterWorkloadsActor_Retrieve(t *testing.T) {
 	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
 
 	tests := []struct {
@@ -30,7 +30,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 		expectedErr            bool
 	}{
 		{
-			name: "server still exists",
+			name: "all clusters ready",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -48,13 +48,13 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 						ClusterState: v2pb.CLUSTER_STATE_READY,
 					}, nil)
 			},
-			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
-			expectedMessage:        "ServerNotDeleted",
-			expectedReasonContains: "is not deleted",
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
 			expectedErr:            false,
 		},
 		{
-			name: "server deleted successfully",
+			name: "cluster not ready",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -69,12 +69,12 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 				mockBackend.EXPECT().
 					GetServerStatus(gomock.Any(), "test-server", "test-namespace", testCluster).
 					Return(&backends.ServerStatus{
-						ClusterState: v2pb.CLUSTER_STATE_INVALID,
+						ClusterState: v2pb.CLUSTER_STATE_CREATING,
 					}, nil)
 			},
-			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
-			expectedMessage:        "",
-			expectedReasonContains: "",
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterNotReady",
+			expectedReasonContains: "is in state",
 			expectedErr:            false,
 		},
 		{
@@ -95,8 +95,26 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 					Return(nil, errors.New("API error"))
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
-			expectedMessage:        "CannotCheckServerStatus",
-			expectedReasonContains: "Failed to check server status",
+			expectedMessage:        "ClusterCheckFailed",
+			expectedReasonContains: "Failed to check cluster status",
+			expectedErr:            false,
+		},
+		{
+			name: "no cluster targets returns true",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType:    v2pb.BACKEND_TYPE_TRITON,
+					ClusterTargets: []*v2pb.ClusterTarget{},
+				},
+			},
+			setupMocks:             func(mockBackend *backendsmocks.MockBackend) {},
+			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
+			expectedMessage:        "",
+			expectedReasonContains: "",
 			expectedErr:            false,
 		},
 	}
@@ -109,10 +127,10 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			tt.setupMocks(mockBackend)
 
-			actor := NewCleanupActor(mockBackend, zap.NewNop())
+			actor := NewClusterWorkloadsActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
-				Type: "TritonCleanup",
+				Type: "TritonClusterWorkloads",
 			}
 
 			result, err := actor.Retrieve(context.Background(), tt.resource, condition)
@@ -133,7 +151,7 @@ func TestCleanupActor_Retrieve(t *testing.T) {
 	}
 }
 
-func TestCleanupActor_Run(t *testing.T) {
+func TestClusterWorkloadsActor_Run(t *testing.T) {
 	testCluster := &v2pb.ClusterTarget{ClusterId: "test-cluster"}
 
 	tests := []struct {
@@ -146,7 +164,7 @@ func TestCleanupActor_Run(t *testing.T) {
 		expectedErr            bool
 	}{
 		{
-			name: "successful cleanup",
+			name: "server creation succeeds",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -155,20 +173,48 @@ func TestCleanupActor_Run(t *testing.T) {
 				Spec: v2pb.InferenceServerSpec{
 					BackendType:    v2pb.BACKEND_TYPE_TRITON,
 					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					InitSpec: &v2pb.InitSpec{
+						ResourceSpec: &v2pb.ResourceSpec{
+							Cpu:    4,
+							Memory: "8Gi",
+							Gpu:    2,
+						},
+						NumInstances: 1,
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), "test-server", "test-namespace", testCluster).
-					Return(nil)
+					CreateServer(
+						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						testCluster,
+					).
+					DoAndReturn(func(ctx context.Context, name, namespace string, constraints backends.ResourceConstraints, cluster *v2pb.ClusterTarget) (*backends.ServerStatus, error) {
+						assert.Equal(t, "test-server", name)
+						assert.Equal(t, "test-namespace", namespace)
+						assert.Equal(t, int32(4), constraints.Cpu)
+						assert.Equal(t, "8Gi", constraints.Memory)
+						assert.Equal(t, int32(2), constraints.Gpu)
+						assert.Equal(t, int32(1), constraints.Replicas)
+						assert.Equal(t, testCluster, cluster)
+						return nil, nil
+					})
 			},
-			expectedStatus:         apipb.CONDITION_STATUS_TRUE,
-			expectedMessage:        "",
-			expectedReasonContains: "",
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterCreationInitiated",
+			expectedReasonContains: "server creation initiated",
 			expectedErr:            false,
 		},
 		{
-			name: "deletion fails",
+			name: "server creation fails",
 			resource: &v2pb.InferenceServer{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-server",
@@ -177,16 +223,61 @@ func TestCleanupActor_Run(t *testing.T) {
 				Spec: v2pb.InferenceServerSpec{
 					BackendType:    v2pb.BACKEND_TYPE_TRITON,
 					ClusterTargets: []*v2pb.ClusterTarget{testCluster},
+					InitSpec: &v2pb.InitSpec{
+						ResourceSpec: &v2pb.ResourceSpec{
+							Cpu:    4,
+							Memory: "8Gi",
+							Gpu:    2,
+						},
+						NumInstances: 1,
+					},
 				},
 			},
 			setupMocks: func(mockBackend *backendsmocks.MockBackend) {
 				mockBackend.EXPECT().
-					DeleteServer(gomock.Any(), "test-server", "test-namespace", testCluster).
-					Return(errors.New("failed to delete deployment"))
+					CreateServer(
+						gomock.Any(),
+						"test-server",
+						"test-namespace",
+						backends.ResourceConstraints{
+							Cpu:      4,
+							Memory:   "8Gi",
+							Gpu:      2,
+							Replicas: 1,
+						},
+						testCluster,
+					).
+					Return(nil, errors.New("insufficient resources"))
 			},
 			expectedStatus:         apipb.CONDITION_STATUS_FALSE,
-			expectedMessage:        "ServerCleanupFailed",
-			expectedReasonContains: "failed to cleanup inference server",
+			expectedMessage:        "ClusterCreationFailed",
+			expectedReasonContains: "Failed to create server",
+			expectedErr:            false,
+		},
+		{
+			name: "no cluster targets returns unknown",
+			resource: &v2pb.InferenceServer{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-server",
+					Namespace: "test-namespace",
+				},
+				Spec: v2pb.InferenceServerSpec{
+					BackendType:    v2pb.BACKEND_TYPE_TRITON,
+					ClusterTargets: []*v2pb.ClusterTarget{},
+					InitSpec: &v2pb.InitSpec{
+						ResourceSpec: &v2pb.ResourceSpec{
+							Cpu:    4,
+							Memory: "8Gi",
+							Gpu:    2,
+						},
+						NumInstances: 1,
+					},
+				},
+			},
+			setupMocks:             func(mockBackend *backendsmocks.MockBackend) {},
+			expectedStatus:         apipb.CONDITION_STATUS_UNKNOWN,
+			expectedMessage:        "ClusterCreationInitiated",
+			expectedReasonContains: "server creation initiated",
 			expectedErr:            false,
 		},
 	}
@@ -199,10 +290,10 @@ func TestCleanupActor_Run(t *testing.T) {
 			mockBackend := backendsmocks.NewMockBackend(ctrl)
 			tt.setupMocks(mockBackend)
 
-			actor := NewCleanupActor(mockBackend, zap.NewNop())
+			actor := NewClusterWorkloadsActor(mockBackend, zap.NewNop())
 
 			condition := &apipb.Condition{
-				Type: "TritonCleanup",
+				Type: "TritonClusterWorkloads",
 			}
 
 			result, err := actor.Run(context.Background(), tt.resource, condition)
@@ -213,9 +304,7 @@ func TestCleanupActor_Run(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, result)
 				assert.Equal(t, tt.expectedStatus, result.Status)
-				if tt.expectedMessage != "" {
-					assert.Equal(t, tt.expectedMessage, result.Message)
-				}
+				assert.Equal(t, tt.expectedMessage, result.Message)
 				if tt.expectedReasonContains != "" {
 					assert.Contains(t, result.Reason, tt.expectedReasonContains)
 				}

@@ -2,17 +2,16 @@ package strategies
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
-	"github.com/gogo/protobuf/types"
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss/common"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways"
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/gateways/gatewaysmocks"
 	"github.com/michelangelo-ai/michelangelo/proto/api"
@@ -23,7 +22,7 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		metadata                *ClusterMetadata
+		metadata                *common.ClusterMetadata
 		setupMocks              func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedReasonContains  string
@@ -39,12 +38,12 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "all clusters deployed returns TRUE",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", State: ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: ClusterStateDeployed},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterID: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -54,11 +53,11 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "cluster pending returns FALSE to trigger Run",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: ClusterStatePending},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -68,11 +67,11 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "cluster in progress and model ready marks as deployed",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: ClusterStateInProgress},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -87,11 +86,11 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "cluster in progress and model not ready returns UNKNOWN",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: ClusterStateInProgress},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -106,11 +105,11 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "cluster in progress with status check error returns UNKNOWN",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: ClusterStateInProgress},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -125,12 +124,12 @@ func TestRollingRolloutRetrieve(t *testing.T) {
 		{
 			name:       "first cluster deployed moves to second cluster",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", State: ClusterStateDeployed},
-					{ClusterID: "cluster-2", Host: "5.6.7.8", Port: "6443", State: ClusterStatePending},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterID: "cluster-2", Host: "5.6.7.8", Port: "6443", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -169,7 +168,7 @@ func TestRollingRolloutRun(t *testing.T) {
 	tests := []struct {
 		name                    string
 		deployment              *v2pb.Deployment
-		metadata                *ClusterMetadata
+		metadata                *common.ClusterMetadata
 		setupMocks              func(*gatewaysmocks.MockGateway)
 		expectedConditionStatus api.ConditionStatus
 		expectedReasonContains  string
@@ -222,11 +221,11 @@ func TestRollingRolloutRun(t *testing.T) {
 		{
 			name:       "pending cluster deploys model and returns UNKNOWN",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: ClusterStatePending},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -241,11 +240,11 @@ func TestRollingRolloutRun(t *testing.T) {
 		{
 			name:       "in progress cluster returns UNKNOWN without deploying",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: ClusterStateInProgress},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", State: common.ClusterStateDeploymentInProgress},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -255,11 +254,11 @@ func TestRollingRolloutRun(t *testing.T) {
 		{
 			name:       "model loading fails returns FALSE",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 0,
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: ClusterStatePending},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token", CaDataTag: "ca", State: common.ClusterStatePending},
 				},
 			},
 			setupMocks: func(gw *gatewaysmocks.MockGateway) {
@@ -290,12 +289,12 @@ func TestRollingRolloutRun(t *testing.T) {
 		{
 			name:       "all clusters deployed returns TRUE",
 			deployment: createDeployment("test-deployment", "default", "model-v1", "test-server"),
-			metadata: &ClusterMetadata{
+			metadata: &common.ClusterMetadata{
 				BackendType:  "BACKEND_TYPE_TRITON",
 				CurrentIndex: 2, // Past the last index
-				Clusters: []ClusterEntry{
-					{ClusterID: "cluster-1", State: ClusterStateDeployed},
-					{ClusterID: "cluster-2", State: ClusterStateDeployed},
+				Clusters: []common.ClusterEntry{
+					{ClusterID: "cluster-1", State: common.ClusterStateDeployed},
+					{ClusterID: "cluster-2", State: common.ClusterStateDeployed},
 				},
 			},
 			setupMocks:              func(gw *gatewaysmocks.MockGateway) {},
@@ -330,48 +329,14 @@ func TestRollingRolloutRun(t *testing.T) {
 	}
 }
 
-func TestClusterMetadataRoundTrip(t *testing.T) {
-	// Test that metadata can be serialized and deserialized correctly
-	original := &ClusterMetadata{
-		BackendType:  "BACKEND_TYPE_TRITON",
-		CurrentIndex: 1,
-		Clusters: []ClusterEntry{
-			{ClusterID: "cluster-1", Host: "1.2.3.4", Port: "6443", TokenTag: "token1", CaDataTag: "ca1", State: ClusterStateDeployed},
-			{ClusterID: "cluster-2", Host: "5.6.7.8", Port: "6443", TokenTag: "token2", CaDataTag: "ca2", State: ClusterStateInProgress},
-		},
-	}
-
-	condition := createConditionWithMetadata(t, original)
-
-	retrieved := GetClusterMetadata(condition)
-
-	require.NotNil(t, retrieved)
-	assert.Equal(t, original.BackendType, retrieved.BackendType)
-	assert.Equal(t, original.CurrentIndex, retrieved.CurrentIndex)
-	assert.Len(t, retrieved.Clusters, 2)
-	assert.Equal(t, original.Clusters[0].ClusterID, retrieved.Clusters[0].ClusterID)
-	assert.Equal(t, original.Clusters[0].State, retrieved.Clusters[0].State)
-	assert.Equal(t, original.Clusters[1].ClusterID, retrieved.Clusters[1].ClusterID)
-	assert.Equal(t, original.Clusters[1].State, retrieved.Clusters[1].State)
-}
-
 // Helper to create a condition with ClusterMetadata
-func createConditionWithMetadata(t *testing.T, metadata *ClusterMetadata) *api.Condition {
-	if metadata == nil {
-		return &api.Condition{}
+func createConditionWithMetadata(t *testing.T, metadata *common.ClusterMetadata) *api.Condition {
+	cond := &api.Condition{}
+	if metadata != nil {
+		err := common.SetClusterMetadata(cond, metadata)
+		require.NoError(t, err)
 	}
-
-	jsonBytes, err := json.Marshal(metadata)
-	require.NoError(t, err)
-
-	var rawMap map[string]interface{}
-	require.NoError(t, json.Unmarshal(jsonBytes, &rawMap))
-
-	structVal := convertMapToStruct(rawMap)
-	anyVal, err := types.MarshalAny(structVal)
-	require.NoError(t, err)
-
-	return &api.Condition{Metadata: anyVal}
+	return cond
 }
 
 // Helper to create a basic deployment

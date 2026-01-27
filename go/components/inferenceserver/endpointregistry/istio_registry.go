@@ -17,7 +17,6 @@ import (
 	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
-// todo: ghosharitra: name the externalname service and serviceentries w.r.t. inference server name
 const (
 	// Istio ServiceEntry constants
 	istioNetworkingGroup   = "networking.istio.io"
@@ -72,7 +71,10 @@ func NewIstioEndpointRegistry(dynamicClient dynamic.Interface, kubeClient client
 	}
 }
 
-// todo: ghosharitra: add comments here
+// EnsureRegisteredEndpoint registers a remote cluster's inference server endpoint in the control plane.
+// It creates/updates two resources:
+// 1. A global ServiceEntry that maps the inference server hostname to the cluster's east-west gateway
+// 2. An ExternalName Service that bridges HTTPRoute traffic to the ServiceEntry host
 func (r *istioEndpointRegistry) EnsureRegisteredEndpoint(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint, targetCluster *v2pb.ClusterTarget) error {
 	resolved, err := r.resolveEndpointFromTargetCluster(ctx, endpoint, targetCluster)
 	if err != nil {
@@ -87,7 +89,9 @@ func (r *istioEndpointRegistry) EnsureRegisteredEndpoint(ctx context.Context, lo
 	return r.ensureBridgeService(ctx, logger, resolved.InferenceServerName, resolved.Namespace)
 }
 
-// todo: ghosharitra: add comments here
+// DeleteRegisteredEndpoint removes a cluster's endpoint from the global ServiceEntry.
+// It removes the endpoint entry for the given clusterID and cleans up the host if no
+// other clusters are serving that inference server.
 func (r *istioEndpointRegistry) DeleteRegisteredEndpoint(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace, clusterID string) error {
 	se, err := r.getGlobalServiceEntry(ctx, namespace)
 	if err != nil {
@@ -184,11 +188,13 @@ func (r *istioEndpointRegistry) GetControlPlaneServiceName(inferenceServerName s
 	return generateControlPlaneServiceName(inferenceServerName)
 }
 
-// todo: ghosharitra: add comments here
-// HTTPRoute references this bridge service; it forwards to the ServiceEntry host.
+// ensureBridgeService creates an ExternalName Service that acts as a bridge between
+// Gateway API HTTPRoutes and Istio's ServiceEntry. HTTPRoutes require a Kubernetes Service
+// as a backend target, but ServiceEntry hosts are not directly referenceable. This bridge
+// Service resolves to the inference server's ServiceEntry hostname, allowing Istio to
+// route traffic to the appropriate remote cluster via the east-west gateway.
 func (r *istioEndpointRegistry) ensureBridgeService(ctx context.Context, logger *zap.Logger, inferenceServerName, namespace string) error {
 	serviceName := generateControlPlaneServiceName(inferenceServerName)
-	// ExternalName = the real service FQDN (matches ServiceEntry host and target-cluster Service).
 	externalName := generateInferenceServerHost(inferenceServerName, namespace)
 
 	existing := &corev1.Service{}
@@ -232,7 +238,11 @@ func (r *istioEndpointRegistry) ensureBridgeService(ctx context.Context, logger 
 	return nil
 }
 
-// todo: ghosharitra: add comments here
+// ensureGlobalServiceEntry creates or updates the shared ServiceEntry that aggregates all
+// inference server endpoints across clusters. The ServiceEntry maps logical hostnames
+// (e.g., inference-server.default.mesh.internal) to physical endpoints (east-west gateway
+// addresses). Each cluster's endpoint is identified by its clusterID label, enabling
+// Istio to route mesh traffic to the correct remote cluster.
 func (r *istioEndpointRegistry) ensureGlobalServiceEntry(ctx context.Context, logger *zap.Logger, endpoint ClusterEndpoint) error {
 	se, err := r.getGlobalServiceEntry(ctx, endpoint.Namespace)
 	if err != nil {

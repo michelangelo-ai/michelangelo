@@ -29,7 +29,7 @@ func NewTritonDeletionPlugin(backend backends.Backend, modelConfigMapProvider co
 // GetActors returns the condition actors for deletion workflow.
 func (p *TritonDeletionPlugin) GetActors() []conditionInterfaces.ConditionActor[*v2pb.InferenceServer] {
 	return []conditionInterfaces.ConditionActor[*v2pb.InferenceServer]{
-		NewCleanupActor(p.backend, p.modelConfigMapProvider, p.logger),
+		NewCleanupActor(p.backend, p.logger),
 	}
 }
 
