@@ -7,7 +7,7 @@ metadata:
 spec:
   containers:
     - name: michelangelo-apiserver
-      image: ghcr.io/michelangelo-ai/apiserver:ghosharitra-multi-cluster-model-deployment-support
+      image: ghcr.io/michelangelo-ai/apiserver:main
       ports:
         - containerPort: 14566
       volumeMounts:

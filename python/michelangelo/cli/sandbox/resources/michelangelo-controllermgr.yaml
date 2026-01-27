@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
     - name: app
-      image: ghcr.io/michelangelo-ai/controllermgr:ghosharitra-multi-cluster-model-deployment-support
+      image: ghcr.io/michelangelo-ai/controllermgr:main
       volumeMounts:
         - name: config-volume
           mountPath: /config

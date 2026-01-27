@@ -2157,6 +2157,7 @@ def _install_east_west_gateway(kube_context: str, cluster_id: str, network_name:
     print("   michelangelo.ai/east-west-gateway=true")
     print(f"   michelangelo.ai/cluster-id={cluster_id}")
 
+
 def _port_forward_inference_server_in_control_plane():
     # setup port-forwarding for the control plane
     subprocess.Popen(
@@ -2173,6 +2174,7 @@ def _port_forward_inference_server_in_control_plane():
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
+
 
 def _print_inference_demo_completion_message(multi_cluster: bool = False):
     print("✅ Inference demo resources created successfully")
