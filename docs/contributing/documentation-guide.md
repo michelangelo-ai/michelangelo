@@ -128,19 +128,21 @@ Content...
 
 ### Images
 
-Place images in `docs/images/` and reference with relative paths:
+Place images in `docs/images/` and reference them with relative paths:
 
 ```markdown
 ![Alt text](../images/my-image.png)
 ```
 
-For section-specific images, co-locate them:
+For section-specific images, you can also co-locate them:
 
 ```
-docs/user-guides/
-├── images/
-│   └── workflow-diagram.png
-└── my-guide.md
+docs/
+├── images/                     # Shared images
+│   └── architecture.png
+├── user-guides/
+│   └── images/                 # Section-specific images
+│       └── workflow-diagram.png
 ```
 
 Reference co-located images:
