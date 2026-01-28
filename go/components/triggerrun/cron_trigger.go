@@ -18,7 +18,7 @@ import (
 // child workflow executions at each scheduled interval.
 //
 // The cron schedule is read from TriggerRun.Spec.Trigger.CronSchedule.Cron and passed
-// to the workflow engine's StartWorkflow method with CronSchedule option.
+// to the workflow engine's CronSchedule option.
 type cronTrigger struct {
 	Log            logr.Logger                    // Structured logger for trigger operations
 	WorkflowClient clientInterface.WorkflowClient // Workflow engine client (Cadence/Temporal)
@@ -38,19 +38,28 @@ func NewCronTrigger(log logr.Logger, workflowClient clientInterface.WorkflowClie
 
 // Run starts a recurring cron-scheduled workflow.
 //
-// This method uses the WorkflowClient.StartWorkflow method with CronSchedule option.
-// The client implementation will automatically decide whether to use native schedules
-// (Temporal) or traditional cron workflows (Cadence) based on provider capabilities.
+// This method performs the following operations:
+//  1. Generate deterministic workflow ID from namespace and name
+//  2. Check if workflow is already running (idempotent start)
+//  3. Configure workflow options with cron schedule
+//  4. Start workflow execution with "trigger.CronTrigger" workflow type
+//  5. Return status with workflow URL for monitoring
 //
-// Returns State=RUNNING if workflow/schedule starts successfully,
-// State=FAILED if start fails.
+// The workflow uses:
+//   - ID: <namespace>.<name> (deterministic for idempotency)
+//   - TaskList: "trigger_run"
+//   - ExecutionStartToCloseTimeout: 1 year (effectively no timeout)
+//   - DecisionTaskStartToCloseTimeout: 30 seconds
+//   - CronSchedule: From TriggerRun spec
+//
+// Returns State=RUNNING if workflow starts successfully or is already running,
+// State=FAILED if workflow start fails.
 func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2pb.TriggerRunStatus, error) {
 	log := r.Log.WithValues("triggerRun", k8stypes.NamespacedName{
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
 	wid := generateWorkflowID(triggerRun)
-
 	opt := clientInterface.StartWorkflowOptions{
 		ID:                              wid,
 		TaskList:                        "trigger_run",
@@ -111,9 +120,9 @@ func (r *cronTrigger) Run(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2p
 
 // Kill terminates a running cron-scheduled workflow.
 //
-// Uses the WorkflowClient to terminate workflows. The client implementation
-// will automatically handle whether to delete schedules (Temporal) or
-// terminate traditional workflows (Cadence).
+// This method stops the recurring workflow execution, preventing future scheduled
+// runs from being spawned. The workflow termination is handled by the shared
+// killWorkflow utility function.
 //
 // Returns State=KILLED on success. If no workflow is running, returns KILLED
 // without error (idempotent termination).
@@ -122,16 +131,21 @@ func (r *cronTrigger) Kill(ctx context.Context, triggerRun *v2pb.TriggerRun) (v2
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-
 	domain := r.WorkflowClient.GetDomain()
 	return killWorkflow(ctx, triggerRun, log, r.WorkflowClient, domain)
 }
 
 // GetStatus retrieves the execution status of a cron-scheduled workflow.
 //
-// Uses the WorkflowClient to get workflow status. The client implementation
-// will automatically handle whether to check schedule status (Temporal) or
-// traditional workflow status (Cadence).
+// This method checks for open workflow executions and maps workflow states to
+// TriggerRun states. For cron triggers, the workflow should remain running until
+// explicitly killed, so an active execution indicates RUNNING state.
+//
+// The status check is delegated to getRecurringRunWorkflowStatus which handles
+// state mapping for recurring workflows:
+//   - Open execution exists → RUNNING
+//   - Terminated/Canceled → KILLED
+//   - Failed/TimedOut → FAILED
 //
 // Returns the current TriggerRunStatus with state and error information if applicable.
 func (r *cronTrigger) GetStatus(
@@ -141,7 +155,6 @@ func (r *cronTrigger) GetStatus(
 		Namespace: triggerRun.Namespace,
 		Name:      triggerRun.Name,
 	})
-
 	domain := r.WorkflowClient.GetDomain()
 	return getRecurringRunWorkflowStatus(ctx, triggerRun, log, r.WorkflowClient, domain)
 }

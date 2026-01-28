@@ -53,9 +53,8 @@ func register(
 		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
-		IntervalTrigger:   nil, // TODO(#548): Not yet implemented
 		BackfillTrigger:   backfillTrigger,
-		BatchRerunTrigger: nil, // TODO(#548): Not yet implemented
+		// TODO(#548): Add other trigger types as needed
 	})
 	return reconciler.Register(mgr)
 }

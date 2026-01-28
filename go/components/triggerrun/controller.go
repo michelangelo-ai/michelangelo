@@ -64,10 +64,10 @@ type Params struct {
 	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
 
-	CronTrigger       Runner // Handles cron-based recurring workflows
-	IntervalTrigger   Runner // Handles interval-based workflows
-	BackfillTrigger   Runner // Handles backfill workflows
-	BatchRerunTrigger Runner // Handles batch rerun workflows
+	CronTrigger       Runner `name:"cron-trigger"`        // Handles cron-based recurring workflows
+	IntervalTrigger   Runner `name:"interval-trigger"`    // Handles interval-based workflows
+	BackfillTrigger   Runner `name:"backfill-trigger"`    // Handles backfill workflows
+	BatchRerunTrigger Runner `name:"batch-rerun-trigger"` // Handles batch rerun workflows
 }
 
 // Reconciler reconciles TriggerRun resources through a state machine.
@@ -124,21 +124,15 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 	if err := r.Get(ctx, req.NamespacedName.Namespace, req.NamespacedName.Name, &metav1.GetOptions{},
 		triggerRun); err != nil {
 		if apiutils.IsNotFoundError(err) {
-			log.Info("TriggerRun not found, likely deleted")
+			log.Info("trigger_run resource has been deleted")
 			return ctrl.Result{}, nil
 		}
-		log.Error(err, "Failed to get TriggerRun")
 		return ctrl.Result{}, err
 	}
-
 	return r.reconcile(ctx, log, triggerRun)
 }
 
-// reconcile implements the core state machine logic for managing TriggerRun lifecycle.
-//
-// This method performs state transitions based on the current TriggerRun status and handles
-// workflow execution through the appropriate Runner implementation. The state machine logic
-// is designed to be idempotent and handles concurrent access through deep copying.
+// reconcile processes a TriggerRun through its state machine.
 //
 // State Machine Logic:
 //
@@ -159,38 +153,22 @@ func (r *Reconciler) reconcile(
 	ctx context.Context, log logr.Logger, triggerRun *v2pb.TriggerRun,
 ) (ctrl.Result, error) {
 	if isTerminateState(triggerRun) {
-		err := r.markImmutable(ctx, triggerRun)
-		if err != nil {
-			log.Error(err, "Failed to mark TriggerRun as immutable")
-			return ctrl.Result{}, err
+		if !apiutils.IsImmutable(triggerRun) {
+			apiutils.MarkImmutable(triggerRun)
+			err := r.Update(ctx, triggerRun, &metav1.UpdateOptions{})
+			if err != nil {
+				log.Error(err, "Fail to update trigger run status")
+				return ctrl.Result{}, err
+			}
+			log.Info("trigger_run resource marked as immutable")
 		}
-		log.Info("TriggerRun marked immutable")
+		log.Info(fmt.Sprintf("reached terminal state: %s", triggerRun.Status.State.String()))
+		// do not requeue
 		return ctrl.Result{}, nil
 	}
-
-	// Requeue after 60 seconds for monitoring workflow status
-	requeueAfter := time.Minute
 	originalTriggerRun := triggerRun.DeepCopy()
 
 	runner := r.getRunner(triggerRun)
-	if runner == nil {
-		triggerType := GetTriggerType(triggerRun)
-		log.Error(nil, "trigger type not implemented",
-			"triggerType", triggerType,
-			"namespace", triggerRun.Namespace,
-			"name", triggerRun.Name)
-		triggerRun.Status.State = v2pb.TRIGGER_RUN_STATE_FAILED
-		triggerRun.Status.ErrorMessage = fmt.Sprintf("trigger type %s is not yet implemented", triggerType)
-		if !reflect.DeepEqual(originalTriggerRun, triggerRun) {
-			err := r.UpdateStatus(ctx, triggerRun, &metav1.UpdateOptions{})
-			if err != nil {
-				log.Error(err, "Failed to update trigger run status")
-				return ctrl.Result{}, err
-			}
-		}
-		return ctrl.Result{}, nil
-	}
-
 StateMachine:
 	switch triggerRun.Status.State {
 	case v2pb.TRIGGER_RUN_STATE_INVALID:
@@ -250,24 +228,18 @@ StateMachine:
 			return ctrl.Result{}, err
 		}
 	}
-
-	return ctrl.Result{RequeueAfter: requeueAfter}, nil
+	return ctrl.Result{RequeueAfter: 60 * time.Second}, nil
 }
 
-// markImmutable marks a TriggerRun resource as immutable when it reaches a terminal state.
+// Register registers the TriggerRun controller with the controller manager.
 //
-// This prevents further modifications to the resource once workflow execution completes.
-// The method updates the resource finalizers to indicate the immutable status.
-func (r *Reconciler) markImmutable(ctx context.Context, triggerRun *v2pb.TriggerRun) error {
-	triggerRun.ObjectMeta.Finalizers = []string{"immutable"}
-	return r.Update(ctx, triggerRun, &metav1.UpdateOptions{})
-}
-
-// Register configures the TriggerRun controller with the controller manager.
+// This method configures the controller with:
+//   - API handler for Kubernetes operations
+//   - Structured logger with "triggerRun" prefix
+//   - TriggerRun resource watch
+//   - Maximum concurrent reconciles setting
 //
-// This method sets up the controller to watch TriggerRun resources and configures
-// the maximum number of concurrent reconciliation workers. The API handler is also
-// registered during this phase to enable REST API access to TriggerRun resources.
+// Returns an error if API handler creation or controller registration fails.
 func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	r.Scheme = mgr.GetScheme()
 	handler, err := r.apiHandlerFactory.GetAPIHandler(mgr.GetClient())
