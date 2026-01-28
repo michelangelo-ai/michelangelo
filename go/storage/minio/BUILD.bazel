@@ -7,11 +7,11 @@ go_library(
     visibility = ["//visibility:public"],
     deps = [
         "//go/storage:go_default_library",
+        "@com_github_gogo_protobuf//proto:go_default_library",
         "@com_github_minio_minio_go_v7//:go_default_library",
         "@com_github_minio_minio_go_v7//pkg/credentials:go_default_library",
         "@com_github_minio_minio_go_v7//pkg/tags:go_default_library",
         "@io_k8s_apimachinery//pkg/api/meta:go_default_library",
         "@io_k8s_apimachinery//pkg/runtime:go_default_library",
-        "@org_golang_google_protobuf//proto",
     ],
 )
