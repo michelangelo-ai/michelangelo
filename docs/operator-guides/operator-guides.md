@@ -33,7 +33,7 @@ The following diagram shows the relationship between each of the services in Mic
 
 ### Key Fields
 
-```
+```yaml
 apiserver:
   yarpc:
     host: 0.0.0.0
@@ -62,7 +62,7 @@ apiserver:
 
 ### Key Fields
 
-```
+```yaml
 controllermgr:
   metricsBindAddress: 8091
   healthProbeBindAddress: 8081
@@ -102,7 +102,7 @@ workflowClient:
 
 ### Key Fields
 
-```
+```yaml
 worker:
   address: michelangelo-apiserver.your-domain.com:443
   maApiServiceName: ma-apiserver
@@ -139,7 +139,7 @@ workflow-engine:
 
 **ConfigMap:**
 
-```
+```yaml
 static_resources:
   listeners:
     - address:
@@ -161,11 +161,10 @@ static_resources:
 
 **ConfigMap:**
 
-```
-config.json: |
-  {
-    "apiBaseUrl": "https://michelangelo-envoy.<your-domain>"
-  }
+```json
+{
+  "apiBaseUrl": "https://michelangelo-envoy.<your-domain>"
+}
 ```
 
 ## Environment Overrides / Domain Settings
@@ -188,7 +187,7 @@ Object storage (MinIO / S3) is used by Michelangelo for artifacts and metadata.
 
 These live in the controller manager ConfigMap:
 
-```
+```yaml
 minio:
   awsRegion: ap-southeast-1   # AWS region for S3
   awsEndpointUrl: s3.ap-southeast-1.amazonaws.com
@@ -215,7 +214,7 @@ Michelangelo uses a workflow engine (Temporal or Cadence) for orchestrating work
 
 From `controllermgr-configmap.yaml`:
 
-```
+```yaml
 workflowClient:
   service: temporal-frontend    # Temporal service name
   host: temporal.your-domain.com:7233  # Temporal endpoint
@@ -234,7 +233,7 @@ workflowClient:
 
 From `worker-configmap.yaml`:
 
-```
+```yaml
 workflow-engine:
   host: temporal(/cadence).your-domain.com:7233
   transport: grpc

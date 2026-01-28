@@ -23,7 +23,7 @@ Remember to click the green Bazel logo at the right top corner of GoLand to sync
 If bazel command fails on your mac with C++ build errors, you may have to set CC and CXX environment variables for bazel.
 
 Add following lines in your .zshrc file:
-```
+```bash
 export CC=clang
 export CXX=clang++
 ```
@@ -31,10 +31,10 @@ export CXX=clang++
 ## Use commands in tools directory
  
 GoLand doesn't run .envrc. To make it use the command line tools in tools directory, we have to create a bazel wrapper script:
-```
+```bash
 #!/usr/bin/env bash
 
-# GoLand always call bazel in project root directory. 
+# GoLand always call bazel in project root directory.
 export PATH=${PWD}/tools:${PATH}
 
 bazel "$@"
