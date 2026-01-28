@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"io"
 
+	proto "github.com/gogo/protobuf/proto"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/minio/minio-go/v7/pkg/tags"
-	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Config holds MinIO configuration
