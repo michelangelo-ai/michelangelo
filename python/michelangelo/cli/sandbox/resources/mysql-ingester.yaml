@@ -1,0 +1,684 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-ingester-schema
+  namespace: default
+data:
+  schema.sql: |
+    -- Auto-generated MySQL schema from protobuf definitions
+    -- Generated using: bazel build //proto/api/v2:v2_kube_proto_sql
+    -- DO NOT HAND-EDIT - regenerate from proto files instead
+
+    CREATE DATABASE IF NOT EXISTS michelangelo;
+    USE michelangelo;
+
+    -- Model and related tables
+    CREATE TABLE IF NOT EXISTS `model`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `src_pipeline_run_namespace`    VARCHAR(255),
+        `src_pipeline_run_name`    VARCHAR(255),
+        `algorithm`    VARCHAR(255),
+        `training_framework`    VARCHAR(255),
+        `source`    VARCHAR(255),
+        `performance_eval_report_namespace`    VARCHAR(255),
+        `performance_eval_report_name`    VARCHAR(255),
+        `feature_eval_report_namespace`    VARCHAR(255),
+        `feature_eval_report_name`    VARCHAR(255),
+        `revision_id`    INT,
+        `owner`    VARCHAR(255),
+        `feature_quality_report_namespace`    VARCHAR(255),
+        `feature_quality_report_name`    VARCHAR(255),
+        `model_family_namespace`    VARCHAR(255),
+        `model_family_name`    VARCHAR(255),
+        `package_type`    VARCHAR(255),
+        `explainability_report_namespace`    VARCHAR(255),
+        `explainability_report_name`    VARCHAR(255),
+        `description`    VARCHAR(768),
+        `model_kind`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `model_namespace_name` (`namespace`, `name`),
+        KEY    `model_create_time` (`create_time`),
+        KEY    `model_update_time` (`update_time`),
+        KEY    `model_delete_time` (`delete_time`),
+        KEY    `model_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `model_src_pipeline_run` (`src_pipeline_run_namespace`, `src_pipeline_run_name`),
+        KEY    `model_algorithm` (`algorithm`),
+        KEY    `model_training_framework` (`training_framework`),
+        KEY    `model_source` (`source`),
+        KEY    `model_performance_eval_report` (`performance_eval_report_namespace`, `performance_eval_report_name`),
+        KEY    `model_feature_eval_report` (`feature_eval_report_namespace`, `feature_eval_report_name`),
+        KEY    `model_revision_id` (`revision_id`),
+        KEY    `model_owner` (`owner`),
+        KEY    `model_feature_quality_report` (`feature_quality_report_namespace`, `feature_quality_report_name`),
+        KEY    `model_model_family` (`model_family_namespace`, `model_family_name`),
+        KEY    `model_package_type` (`package_type`),
+        KEY    `model_explainability_report` (`explainability_report_namespace`, `explainability_report_name`),
+        KEY    `model_description` (`description`),
+        KEY    `model_model_kind` (`model_kind`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `model_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `model_labels_uid` (`obj_uid`),
+        KEY    `model_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `model_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `model_annotations_uid` (`obj_uid`)
+    );
+
+    -- ModelFamily and related tables
+    CREATE TABLE IF NOT EXISTS `model_family`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `model_family_name`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `model_family_namespace_name` (`namespace`, `name`),
+        KEY    `model_family_create_time` (`create_time`),
+        KEY    `model_family_update_time` (`update_time`),
+        KEY    `model_family_delete_time` (`delete_time`),
+        KEY    `model_family_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `model_family_model_family_name` (`model_family_name`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `model_family_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `model_family_labels_uid` (`obj_uid`),
+        KEY    `model_family_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `model_family_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `model_family_annotations_uid` (`obj_uid`)
+    );
+
+    -- Pipeline and related tables
+    CREATE TABLE IF NOT EXISTS `pipeline`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `pipeline_type`    VARCHAR(255),
+        `owner`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `pipeline_namespace_name` (`namespace`, `name`),
+        KEY    `pipeline_create_time` (`create_time`),
+        KEY    `pipeline_update_time` (`update_time`),
+        KEY    `pipeline_delete_time` (`delete_time`),
+        KEY    `pipeline_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `pipeline_pipeline_type` (`pipeline_type`),
+        KEY    `pipeline_owner` (`owner`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `pipeline_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_labels_uid` (`obj_uid`),
+        KEY    `pipeline_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `pipeline_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_annotations_uid` (`obj_uid`)
+    );
+
+    -- PipelineRun and related tables
+    CREATE TABLE IF NOT EXISTS `pipeline_run`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `pipeline_namespace`    VARCHAR(255),
+        `pipeline_name`    VARCHAR(255),
+        `revision_namespace`    VARCHAR(255),
+        `revision_name`    VARCHAR(255),
+        `state`    VARCHAR(255),
+        `end_time`    DATETIME,
+        `actor`    VARCHAR(255),
+        `exception_type`    VARCHAR(255),
+        `resume_pipeline_run_namespace`    VARCHAR(255),
+        `resume_pipeline_run_name`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `pipeline_run_namespace_name` (`namespace`, `name`),
+        KEY    `pipeline_run_create_time` (`create_time`),
+        KEY    `pipeline_run_update_time` (`update_time`),
+        KEY    `pipeline_run_delete_time` (`delete_time`),
+        KEY    `pipeline_run_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `pipeline_run_pipeline` (`pipeline_namespace`, `pipeline_name`),
+        KEY    `pipeline_run_revision` (`revision_namespace`, `revision_name`),
+        KEY    `pipeline_run_state` (`state`),
+        KEY    `pipeline_run_end_time` (`end_time`),
+        KEY    `pipeline_run_actor` (`actor`),
+        KEY    `pipeline_run_exception_type` (`exception_type`),
+        KEY    `pipeline_run_resume_pipeline_run` (`resume_pipeline_run_namespace`, `resume_pipeline_run_name`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `pipeline_run_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_run_labels_uid` (`obj_uid`),
+        KEY    `pipeline_run_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `pipeline_run_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `pipeline_run_annotations_uid` (`obj_uid`)
+    );
+
+    -- Deployment and related tables
+    CREATE TABLE IF NOT EXISTS `deployment`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `current_revision_namespace`    VARCHAR(255),
+        `current_revision_name`    VARCHAR(255),
+        `state`    VARCHAR(255),
+        `deletion_requested_timestamp`    DATETIME,
+        `target_definition_type`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `deployment_namespace_name` (`namespace`, `name`),
+        KEY    `deployment_create_time` (`create_time`),
+        KEY    `deployment_update_time` (`update_time`),
+        KEY    `deployment_delete_time` (`delete_time`),
+        KEY    `deployment_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `deployment_current_revision` (`current_revision_namespace`, `current_revision_name`),
+        KEY    `deployment_state` (`state`),
+        KEY    `deployment_deletion_requested_timestamp` (`deletion_requested_timestamp`),
+        KEY    `deployment_target_definition_type` (`target_definition_type`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `deployment_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `deployment_labels_uid` (`obj_uid`),
+        KEY    `deployment_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `deployment_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `deployment_annotations_uid` (`obj_uid`)
+    );
+
+    -- InferenceServer and related tables
+    CREATE TABLE IF NOT EXISTS `inference_server`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `state`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `inference_server_namespace_name` (`namespace`, `name`),
+        KEY    `inference_server_create_time` (`create_time`),
+        KEY    `inference_server_update_time` (`update_time`),
+        KEY    `inference_server_delete_time` (`delete_time`),
+        KEY    `inference_server_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `inference_server_state` (`state`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `inference_server_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `inference_server_labels_uid` (`obj_uid`),
+        KEY    `inference_server_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `inference_server_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `inference_server_annotations_uid` (`obj_uid`)
+    );
+
+    -- Project and related tables
+    CREATE TABLE IF NOT EXISTS `project`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `tier`    INT,
+        PRIMARY KEY   (`uid`),
+        KEY    `project_namespace_name` (`namespace`, `name`),
+        KEY    `project_create_time` (`create_time`),
+        KEY    `project_update_time` (`update_time`),
+        KEY    `project_delete_time` (`delete_time`),
+        KEY    `project_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `project_tier` (`tier`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `project_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `project_labels_uid` (`obj_uid`),
+        KEY    `project_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `project_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `project_annotations_uid` (`obj_uid`)
+    );
+
+    -- Revision and related tables
+    CREATE TABLE IF NOT EXISTS `revision`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `base_resource_namespace`    VARCHAR(255),
+        `base_resource_name`    VARCHAR(255),
+        `base_type`    VARCHAR(255),
+        `owner`    VARCHAR(255),
+        `commit_branch`    VARCHAR(255),
+        `git_ref`    VARCHAR(255),
+        PRIMARY KEY   (`uid`),
+        KEY    `revision_namespace_name` (`namespace`, `name`),
+        KEY    `revision_create_time` (`create_time`),
+        KEY    `revision_update_time` (`update_time`),
+        KEY    `revision_delete_time` (`delete_time`),
+        KEY    `revision_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `revision_base_resource` (`base_resource_namespace`, `base_resource_name`),
+        KEY    `revision_base_type` (`base_type`),
+        KEY    `revision_owner` (`owner`),
+        KEY    `revision_commit_branch` (`commit_branch`),
+        KEY    `revision_git_ref` (`git_ref`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `revision_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `revision_labels_uid` (`obj_uid`),
+        KEY    `revision_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `revision_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `revision_annotations_uid` (`obj_uid`)
+    );
+
+    -- Cluster and related tables
+    CREATE TABLE IF NOT EXISTS `cluster`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        PRIMARY KEY   (`uid`),
+        KEY    `cluster_namespace_name` (`namespace`, `name`),
+        KEY    `cluster_create_time` (`create_time`),
+        KEY    `cluster_update_time` (`update_time`),
+        KEY    `cluster_delete_time` (`delete_time`),
+        KEY    `cluster_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `cluster_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `cluster_labels_uid` (`obj_uid`),
+        KEY    `cluster_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `cluster_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `cluster_annotations_uid` (`obj_uid`)
+    );
+
+    -- RayCluster and related tables
+    CREATE TABLE IF NOT EXISTS `ray_cluster`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        PRIMARY KEY   (`uid`),
+        KEY    `ray_cluster_namespace_name` (`namespace`, `name`),
+        KEY    `ray_cluster_create_time` (`create_time`),
+        KEY    `ray_cluster_update_time` (`update_time`),
+        KEY    `ray_cluster_delete_time` (`delete_time`),
+        KEY    `ray_cluster_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `ray_cluster_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `ray_cluster_labels_uid` (`obj_uid`),
+        KEY    `ray_cluster_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `ray_cluster_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `ray_cluster_annotations_uid` (`obj_uid`)
+    );
+
+    -- RayJob and related tables
+    CREATE TABLE IF NOT EXISTS `ray_job`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        PRIMARY KEY   (`uid`),
+        KEY    `ray_job_namespace_name` (`namespace`, `name`),
+        KEY    `ray_job_create_time` (`create_time`),
+        KEY    `ray_job_update_time` (`update_time`),
+        KEY    `ray_job_delete_time` (`delete_time`),
+        KEY    `ray_job_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `ray_job_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `ray_job_labels_uid` (`obj_uid`),
+        KEY    `ray_job_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `ray_job_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `ray_job_annotations_uid` (`obj_uid`)
+    );
+
+    -- SparkJob and related tables
+    CREATE TABLE IF NOT EXISTS `spark_job`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        PRIMARY KEY   (`uid`),
+        KEY    `spark_job_namespace_name` (`namespace`, `name`),
+        KEY    `spark_job_create_time` (`create_time`),
+        KEY    `spark_job_update_time` (`update_time`),
+        KEY    `spark_job_delete_time` (`delete_time`),
+        KEY    `spark_job_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `spark_job_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `spark_job_labels_uid` (`obj_uid`),
+        KEY    `spark_job_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `spark_job_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `spark_job_annotations_uid` (`obj_uid`)
+    );
+
+    -- TriggerRun and related tables
+    CREATE TABLE IF NOT EXISTS `trigger_run`
+    (
+        `uid`         VARCHAR(255) NOT NULL,
+        `group_ver`   VARCHAR(255) NOT NULL,
+        `namespace`   VARCHAR(255) NOT NULL,
+        `name`        VARCHAR(255) NOT NULL,
+        `res_version` BIGINT UNSIGNED NOT NULL,
+        `create_time` DATETIME     NOT NULL,
+        `update_time` DATETIME,
+        `delete_time` DATETIME,
+        `proto`       MEDIUMBLOB,
+        `json`        JSON,
+        `pipeline_namespace`    VARCHAR(255),
+        `pipeline_name`    VARCHAR(255),
+        `revision_namespace`    VARCHAR(255),
+        `revision_name`    VARCHAR(255),
+        `state`    VARCHAR(255),
+        `auto_flip`    BOOLEAN,
+        PRIMARY KEY   (`uid`),
+        KEY    `trigger_run_namespace_name` (`namespace`, `name`),
+        KEY    `trigger_run_create_time` (`create_time`),
+        KEY    `trigger_run_update_time` (`update_time`),
+        KEY    `trigger_run_delete_time` (`delete_time`),
+        KEY    `trigger_run_namespace_timestamp` (`namespace`, `delete_time`, `create_time`, `update_time`),
+        KEY    `trigger_run_pipeline` (`pipeline_namespace`, `pipeline_name`),
+        KEY    `trigger_run_revision` (`revision_namespace`, `revision_name`),
+        KEY    `trigger_run_state` (`state`),
+        KEY    `trigger_run_auto_flip` (`auto_flip`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `trigger_run_labels`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   VARCHAR(63),
+        PRIMARY KEY (`id`),
+        KEY    `trigger_run_labels_uid` (`obj_uid`),
+        KEY    `trigger_run_labels_value` (`key`, `value`)
+    );
+
+    CREATE TABLE IF NOT EXISTS `trigger_run_annotations`
+    (
+        `id`      BIGINT       NOT NULL AUTO_INCREMENT,
+        `obj_uid` VARCHAR(255) NOT NULL,
+        `key`     VARCHAR(255) NOT NULL,
+        `value`   TEXT,
+        PRIMARY KEY (`id`),
+        KEY    `trigger_run_annotations_uid` (`obj_uid`)
+    );
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql-ingester-schema-init
+  namespace: default
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: schema-init
+        image: mysql:8.0
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for MySQL to be ready..."
+          until mysql -h mysql -u root -proot -e "SELECT 1" > /dev/null 2>&1; do
+            echo "MySQL not ready yet, waiting..."
+            sleep 2
+          done
+          echo "MySQL is ready! Applying schema..."
+          mysql -h mysql -u root -proot < /schema/schema.sql
+          echo "Schema applied successfully!"
+        volumeMounts:
+        - name: schema
+          mountPath: /schema
+      volumes:
+      - name: schema
+        configMap:
+          name: mysql-ingester-schema
