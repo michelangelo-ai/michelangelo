@@ -22,9 +22,16 @@ var (
 	//       // other modules...
 	//   )
 	Module = fx.Options(
+		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
 )
+
+// registerMetrics registers pipeline metrics with Prometheus
+// This is invoked once during application initialization
+func registerMetrics() {
+	RegisterPipelineMetrics()
+}
 
 // register initializes and registers the Pipeline controller with the manager.
 //

@@ -15,6 +15,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"time"
 
 	"go.uber.org/zap"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -104,6 +105,7 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
 		returnErr = fmt.Errorf("run engine for pipeline run %q: %w", req.NamespacedName, err)
+		IncPipelineRunReconcileError(req.Namespace, req.Name)
 	} else {
 		if conditionResult.IsKilled {
 			pipelineRun.Status.State = v2pb.PIPELINE_RUN_STATE_KILLED
@@ -124,6 +126,13 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 		// Don't fail reconciliation due to notification errors
 	}
 
+	// Check if state changed to terminal state and emit metrics
+	originalIsTerminal := isTerminalState(originalPipelineRun.Status.State)
+	currentIsTerminal := isTerminalState(pipelineRun.Status.State)
+	if !originalIsTerminal && currentIsTerminal {
+		r.emitPipelineRunMetrics(pipelineRun)
+	}
+
 	if err = r.updatePipelineRunStatus(ctx, pipelineRun, originalPipelineRun); err != nil {
 		if returnErr != nil {
 			logger.Error("Failed to update pipeline run status", zap.Error(err))
@@ -135,7 +144,12 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 			zap.String("namespace", req.Namespace),
 			zap.String("name", req.Name))
 		returnErr = fmt.Errorf("update pipeline run status for %q: %w", req.NamespacedName, err)
+		IncPipelineRunReconcileError(req.Namespace, req.Name)
+	} else if currentIsTerminal {
+		// Only count as successful reconciliation when reaching terminal state
+		IncPipelineRunReconcileSuccess(req.Namespace, req.Name)
 	}
+
 	return result, returnErr
 }
 
@@ -171,4 +185,173 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&v2pb.PipelineRun{}).
 		Complete(r)
+}
+
+// isTerminalState checks if a pipeline run state is terminal
+func isTerminalState(state v2pb.PipelineRunState) bool {
+	return state == v2pb.PIPELINE_RUN_STATE_SUCCEEDED ||
+		state == v2pb.PIPELINE_RUN_STATE_FAILED ||
+		state == v2pb.PIPELINE_RUN_STATE_KILLED
+}
+
+// emitPipelineRunMetrics emits metrics for completed pipeline runs
+func (r *Reconciler) emitPipelineRunMetrics(pipelineRun *v2pb.PipelineRun) {
+	labels := extractMetricLabels(pipelineRun)
+
+	// Calculate duration if we have creation timestamp
+	objMeta := pipelineRun.GetObjectMeta()
+	if objMeta != nil && !objMeta.GetCreationTimestamp().Time.IsZero() {
+		duration := time.Since(objMeta.GetCreationTimestamp().Time)
+		ObservePipelineRunDuration(labels, duration)
+	}
+
+	// Emit result counter with state
+	IncPipelineRunResult(labels)
+
+	// Emit specific success/failure counters and gauge
+	switch pipelineRun.Status.State {
+	case v2pb.PIPELINE_RUN_STATE_SUCCEEDED:
+		IncPipelineRunResultSuccess(labels)
+		SetPipelineRunFailed(labels, false)
+	case v2pb.PIPELINE_RUN_STATE_FAILED:
+		IncPipelineRunResultFailure(labels)
+		SetPipelineRunFailed(labels, true)
+	case v2pb.PIPELINE_RUN_STATE_KILLED:
+		SetPipelineRunFailed(labels, true)
+	}
+
+	// Emit step-level success metrics
+	emitStepSuccessMetrics(pipelineRun, labels.PipelineType)
+}
+
+// emitStepSuccessMetrics recursively emits metrics for successful pipeline steps
+func emitStepSuccessMetrics(pipelineRun *v2pb.PipelineRun, pipelineType string) {
+	if len(pipelineRun.Status.Steps) == 0 {
+		return
+	}
+
+	// Helper function to recursively process steps and sub-steps
+	var processSteps func(steps []*v2pb.PipelineRunStepInfo)
+	processSteps = func(steps []*v2pb.PipelineRunStepInfo) {
+		for _, step := range steps {
+			if step.State == v2pb.PIPELINE_RUN_STEP_STATE_SUCCEEDED {
+				IncPipelineRunStepSuccess(
+					pipelineRun.Namespace,
+					pipelineRun.Name,
+					step.Name,
+					pipelineType,
+				)
+			}
+			// Recursively process sub-steps
+			if len(step.SubSteps) > 0 {
+				processSteps(step.SubSteps)
+			}
+		}
+	}
+
+	processSteps(pipelineRun.Status.Steps)
+}
+
+// extractMetricLabels extracts all metric labels from a pipeline run
+func extractMetricLabels(pipelineRun *v2pb.PipelineRun) PipelineRunMetricLabels {
+	labels := PipelineRunMetricLabels{
+		Namespace:     pipelineRun.Namespace,
+		PipelineRun:   pipelineRun.Name,
+		State:         pipelineRun.Status.State.String(),
+		PipelineType:  getPipelineType(pipelineRun),
+		Environment:   getEnvironment(pipelineRun),
+		Tier:          getTier(pipelineRun),
+		Region:        getRegion(pipelineRun),
+		Zone:          getZone(pipelineRun),
+		FailureReason: getFailureReason(pipelineRun),
+	}
+	return labels
+}
+
+// getPipelineType extracts the pipeline type from the pipeline run
+// Returns "unknown" if the type cannot be determined
+func getPipelineType(pipelineRun *v2pb.PipelineRun) string {
+	// The pipeline type would need to be extracted from the source pipeline
+	// or from labels/annotations. For now, return unknown.
+	// In a full implementation, you would fetch the Pipeline resource
+	// and extract the type from pipeline.Spec.Type
+	if pipelineRun.Labels != nil {
+		if pipelineType, ok := pipelineRun.Labels["pipelinerun.michelangelo/pipeline-type"]; ok {
+			return pipelineType
+		}
+	}
+	return "unknown"
+}
+
+// getEnvironment extracts the environment from pipeline run labels
+// Returns "unknown" if not set
+func getEnvironment(pipelineRun *v2pb.PipelineRun) string {
+	if pipelineRun.Labels != nil {
+		if env, ok := pipelineRun.Labels["pipelinerun.michelangelo/environment"]; ok {
+			return env
+		}
+	}
+	return "unknown"
+}
+
+// getTier extracts the project tier
+// Returns "unknown" if not available
+func getTier(pipelineRun *v2pb.PipelineRun) string {
+	// Note: In a full implementation, you would fetch the Project resource
+	// and extract the tier from project.Spec.Tier
+	// For now, return unknown to avoid additional API calls
+	return "unknown"
+}
+
+// getRegion extracts the region from annotations or labels
+// Returns "unknown" if not set
+func getRegion(pipelineRun *v2pb.PipelineRun) string {
+	// Check annotations first
+	if pipelineRun.Annotations != nil {
+		if region, ok := pipelineRun.Annotations["pipelinerun.michelangelo/region"]; ok {
+			return region
+		}
+	}
+	// Check labels
+	if pipelineRun.Labels != nil {
+		if region, ok := pipelineRun.Labels["pipelinerun.michelangelo/region"]; ok {
+			return region
+		}
+	}
+	return "unknown"
+}
+
+// getZone extracts the zone from annotations or labels
+// Returns "unknown" if not set
+func getZone(pipelineRun *v2pb.PipelineRun) string {
+	// Check annotations first
+	if pipelineRun.Annotations != nil {
+		if zone, ok := pipelineRun.Annotations["pipelinerun.michelangelo/zone"]; ok {
+			return zone
+		}
+	}
+	// Check labels
+	if pipelineRun.Labels != nil {
+		if zone, ok := pipelineRun.Labels["pipelinerun.michelangelo/zone"]; ok {
+			return zone
+		}
+	}
+	return "unknown"
+}
+
+// getFailureReason extracts the failure reason from the pipeline run
+// Returns "none" if not failed or reason not available
+func getFailureReason(pipelineRun *v2pb.PipelineRun) string {
+	if pipelineRun.Status.State == v2pb.PIPELINE_RUN_STATE_FAILED {
+		if pipelineRun.Status.ErrorMessage != "" {
+			// Truncate and sanitize error message for use as a metric label
+			reason := pipelineRun.Status.ErrorMessage
+			if len(reason) > 50 {
+				reason = reason[:50]
+			}
+			return reason
+		}
+		return "unknown_failure"
+	}
+	return "none"
 }

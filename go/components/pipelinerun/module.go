@@ -27,9 +27,16 @@ var (
 	Module = fx.Options(
 		plugin.Module,
 		notification.Module, // PipelineRun notification dependency
+		fx.Invoke(registerMetrics),
 		fx.Invoke(register),
 	)
 )
+
+// registerMetrics registers pipelinerun metrics with Prometheus
+// This is invoked once during application initialization
+func registerMetrics() {
+	RegisterPipelineRunMetrics()
+}
 
 // register initializes and registers the PipelineRun controller with the manager.
 //
