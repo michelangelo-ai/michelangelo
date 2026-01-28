@@ -154,3 +154,61 @@ func (mr *MockWorkflowClientMockRecorder) TerminateWorkflow(ctx, workflowID, run
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TerminateWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).TerminateWorkflow), ctx, workflowID, runID, reason)
 }
+
+// StartScheduledWorkflow mocks base method.
+func (m *MockWorkflowClient) StartScheduledWorkflow(ctx context.Context, options interface0.ScheduledWorkflowOptions) (*interface0.WorkflowExecution, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StartScheduledWorkflow", ctx, options)
+	ret0, _ := ret[0].(*interface0.WorkflowExecution)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// StartScheduledWorkflow indicates an expected call of StartScheduledWorkflow.
+func (mr *MockWorkflowClientMockRecorder) StartScheduledWorkflow(ctx, options interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartScheduledWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).StartScheduledWorkflow), ctx, options)
+}
+
+// SupportsSchedules mocks base method.
+func (m *MockWorkflowClient) SupportsSchedules() bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SupportsSchedules")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// SupportsSchedules indicates an expected call of SupportsSchedules.
+func (mr *MockWorkflowClientMockRecorder) SupportsSchedules() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SupportsSchedules", reflect.TypeOf((*MockWorkflowClient)(nil).SupportsSchedules))
+}
+
+// StopScheduledWorkflow mocks base method.
+func (m *MockWorkflowClient) StopScheduledWorkflow(ctx context.Context, scheduleID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StopScheduledWorkflow", ctx, scheduleID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StopScheduledWorkflow indicates an expected call of StopScheduledWorkflow.
+func (mr *MockWorkflowClientMockRecorder) StopScheduledWorkflow(ctx, scheduleID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StopScheduledWorkflow", reflect.TypeOf((*MockWorkflowClient)(nil).StopScheduledWorkflow), ctx, scheduleID)
+}
+
+// GetScheduleStatus mocks base method.
+func (m *MockWorkflowClient) GetScheduleStatus(ctx context.Context, scheduleID string) (*interface0.ScheduleStatus, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetScheduleStatus", ctx, scheduleID)
+	ret0, _ := ret[0].(*interface0.ScheduleStatus)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetScheduleStatus indicates an expected call of GetScheduleStatus.
+func (mr *MockWorkflowClientMockRecorder) GetScheduleStatus(ctx, scheduleID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetScheduleStatus", reflect.TypeOf((*MockWorkflowClient)(nil).GetScheduleStatus), ctx, scheduleID)
+}
