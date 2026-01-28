@@ -56,7 +56,7 @@ const (
 // Params contains the dependencies required to instantiate the TriggerRun Reconciler.
 //
 // This struct uses Uber FX dependency injection to wire controller dependencies.
-// Only implemented Runner types are included; others are planned for future development.
+// The Runner implementations are tagged by name to inject the correct trigger type.
 type Params struct {
 	fx.In
 
@@ -64,12 +64,10 @@ type Params struct {
 	WorkflowClient    clientInterface.WorkflowClient
 	APIHandlerFactory apiHandler.Factory
 
-	CronTrigger     Runner // Handles cron-based recurring workflows (with Temporal Schedule support)
-	BackfillTrigger Runner // Handles backfill workflows
-
-	// TODO(#548): Add other trigger types when implemented
-	// IntervalTrigger   Runner // Handles interval-based workflows (not yet implemented)
-	// BatchRerunTrigger Runner // Handles batch rerun workflows (not yet implemented)
+	CronTrigger       Runner // Handles cron-based recurring workflows
+	IntervalTrigger   Runner // Handles interval-based workflows
+	BackfillTrigger   Runner // Handles backfill workflows
+	BatchRerunTrigger Runner // Handles batch rerun workflows
 }
 
 // Reconciler reconciles TriggerRun resources through a state machine.
@@ -92,24 +90,23 @@ type Reconciler struct {
 
 	apiHandlerFactory apiHandler.Factory
 
-	CronTrigger     Runner // Executes cron-scheduled workflows (with Temporal Schedule support)
-	BackfillTrigger Runner // Executes backfill workflows
-
-	// TODO(#548): Add other trigger types when implemented
-	// IntervalTrigger   Runner // Executes interval-based workflows (not yet implemented)
-	// BatchRerunTrigger Runner // Executes batch rerun workflows (not yet implemented)
+	CronTrigger       Runner // Executes cron-scheduled workflows
+	IntervalTrigger   Runner // Executes interval-based workflows
+	BackfillTrigger   Runner // Executes backfill workflows
+	BatchRerunTrigger Runner // Executes batch rerun workflows
 }
 
 // NewReconciler creates a new TriggerRun Reconciler with the provided dependencies.
 //
-// The reconciler is initialized with Runner implementations for supported trigger types.
-// Currently supports CronTrigger and BackfillTrigger; other types are planned for future development.
+// The reconciler is initialized with Runner implementations for each supported trigger type.
 // The API handler is configured during registration through the Register method.
 func NewReconciler(p Params) *Reconciler {
 	return &Reconciler{
 		apiHandlerFactory: p.APIHandlerFactory,
 		CronTrigger:       p.CronTrigger,
+		IntervalTrigger:   p.IntervalTrigger,
 		BackfillTrigger:   p.BackfillTrigger,
+		BatchRerunTrigger: p.BatchRerunTrigger,
 	}
 }
 
@@ -290,22 +287,18 @@ func (r *Reconciler) Register(mgr ctrl.Manager) error {
 // getRunner selects the appropriate Runner implementation based on the TriggerRun's trigger type.
 //
 // The selection is made using GetTriggerType which examines the TriggerRun spec to determine
-// the trigger type. Currently supports cron and backfill triggers; other types return nil
-// to indicate they are not yet implemented.
-//
-// Returns nil for unimplemented trigger types (interval, batch rerun).
+// whether it's a batch rerun, backfill, interval, or cron trigger. The default is CronTrigger
+// if the type cannot be determined.
 func (r *Reconciler) getRunner(tr *v2pb.TriggerRun) Runner {
 	triggerType := GetTriggerType(tr)
 	switch triggerType {
+	case TriggerTypeInterval:
+		return r.IntervalTrigger
 	case TriggerTypeBackfill:
 		return r.BackfillTrigger
-	case TriggerTypeCron:
-		return r.CronTrigger
-	case TriggerTypeInterval:
-		return nil // TODO(#548): Implement IntervalTrigger
 	case TriggerTypeBatchRerun:
-		return nil // TODO(#548): Implement BatchRerunTrigger
+		return r.BatchRerunTrigger
 	default:
-		return r.CronTrigger // Default to cron for unknown types
+		return r.CronTrigger
 	}
 }

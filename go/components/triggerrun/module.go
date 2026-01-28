@@ -30,7 +30,7 @@ var Module = fx.Options(
 // runners, and registers the controller with the Kubernetes controller manager.
 //
 // Currently supports:
-//   - CronTrigger: Recurring workflows based on cron expressions (with Temporal Schedule support)
+//   - CronTrigger: Recurring workflows based on cron expressions
 //   - BackfillTrigger: One-time workflows for historical data processing
 //
 // Additional trigger types (interval and batch rerun) are planned but not yet implemented.
@@ -53,10 +53,9 @@ func register(
 		WorkflowClient:    workflowClient,
 		APIHandlerFactory: apiHandlerFactory,
 		CronTrigger:       cronTrigger,
+		IntervalTrigger:   nil, // TODO(#548): Not yet implemented
 		BackfillTrigger:   backfillTrigger,
-		// TODO(#548): Add other trigger types as needed
-		// IntervalTrigger: Not yet implemented
-		// BatchRerunTrigger: Not yet implemented
+		BatchRerunTrigger: nil, // TODO(#548): Not yet implemented
 	})
 	return reconciler.Register(mgr)
 }
