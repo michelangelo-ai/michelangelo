@@ -705,15 +705,26 @@ def _setup_temporal(links, helm_existing_repos):
         "--timeout=600s",
     )
 
-    # Wait a moment for admin tools to be fully ready for exec commands
+    # Wait for admin tools to be fully ready and get specific pod name
     print("Waiting for admin tools to be ready for commands...")
-    time.sleep(5)
+    time.sleep(10)  # Increased wait time
 
-    # Register the default namespace in Temporal
+    # Get the specific admin tools pod name for more reliable exec
+    admin_pod_result = subprocess.check_output([
+        "kubectl",
+        "get",
+        "pod",
+        "-l",
+        "app.kubernetes.io/component=admintools,app.kubernetes.io/instance=temporaltest",
+        "-o",
+        "jsonpath={.items[0].metadata.name}"
+    ], text=True).strip()
+
+    # Register the default namespace in Temporal using specific pod name
     _exec(
         "kubectl",
         "exec",
-        "deploy/temporaltest-admintools",
+        admin_pod_result,
         "-c",
         "admin-tools",
         "--",
