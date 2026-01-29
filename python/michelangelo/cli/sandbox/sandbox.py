@@ -524,8 +524,7 @@ def _setup_temporal(links, helm_existing_repos):
         "wait",
         "--for=condition=available",
         "deployment",
-        "--selector=!job-name",
-        "--all",
+        "-l", "app",
         "--timeout=600s",
     )
 
@@ -702,8 +701,7 @@ def _setup_temporal(links, helm_existing_repos):
         "wait",
         "--for=condition=available",
         "deployment",
-        "--selector=!job-name",
-        "--all",
+        "-l", "app",
         "--timeout=600s",
     )
 
