@@ -5,7 +5,7 @@ import (
 	"time"
 
 	pbtypes "github.com/gogo/protobuf/types"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

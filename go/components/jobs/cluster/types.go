@@ -5,8 +5,8 @@ import (
 	"sync"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // FilterType is the Filter for clusters

@@ -107,3 +107,8 @@ jobs:
         run: |
           tools/goimports -w go
           git diff --exit-code || (echo "Go files are not formatted. Please run goimports before commit." && exit 1)
+
+      - name: Check proto-go is up to date
+        run: |
+          tools/gen-proto-go.sh
+          git diff --exit-code || (echo "proto-go is out of date. Please run tools/gen-proto-go.sh before commit." && exit 1)

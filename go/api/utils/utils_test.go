@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/yarpc/api/encoding"
 	"go.uber.org/yarpc/api/transport"

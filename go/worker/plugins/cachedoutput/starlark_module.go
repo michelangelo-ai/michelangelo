@@ -13,8 +13,8 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.starlark.net/starlark"
 )
 

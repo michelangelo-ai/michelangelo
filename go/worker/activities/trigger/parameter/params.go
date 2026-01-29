@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/triggerrun"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Object alias for map[string]interface{}

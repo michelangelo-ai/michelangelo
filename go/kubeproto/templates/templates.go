@@ -117,7 +117,7 @@ import (
 
 	"go.uber.org/fx"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	authapi "github.com/michelangelo-ai/michelangelo/go/auth"
 	"github.com/michelangelo-ai/michelangelo/go/logging"

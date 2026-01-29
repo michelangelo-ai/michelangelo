@@ -9,8 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"sigs.k8s.io/controller-runtime/pkg/conversion"
 
-	v1pb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v2"
+	v1pb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v1"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v2"
 )
 
 func TestGen(t *testing.T) {

@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	zap "go.uber.org/zap"
 )
 

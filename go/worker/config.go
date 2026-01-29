@@ -13,7 +13,7 @@ import (
 	"go.uber.org/yarpc/transport/grpc"
 	"google.golang.org/grpc/credentials"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const configKey = "worker"

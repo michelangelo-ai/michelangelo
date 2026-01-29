@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	conditionInterfaces "github.com/michelangelo-ai/michelangelo/go/base/conditions/interfaces"
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 

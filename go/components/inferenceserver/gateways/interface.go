@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Gateway provides a unified interface for inteacting with inference servers across different backend types.

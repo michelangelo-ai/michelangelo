@@ -10,7 +10,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/workflow"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
 	"github.com/michelangelo-ai/michelangelo/go/worker/plugins/utils"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.starlark.net/starlark"
 )
 

@@ -1,0 +1,8 @@
+load("@io_bazel_rules_go//go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["indexing_errors.pb.record.go"],
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/indexing_errors",
+    visibility = ["//visibility:public"],
+)

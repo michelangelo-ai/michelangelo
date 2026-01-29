@@ -5,7 +5,7 @@ import (
 	"context"
 	"time"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"

@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	backends "github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	zap "go.uber.org/zap"
 )
 

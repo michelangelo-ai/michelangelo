@@ -26,7 +26,7 @@ go_proto_library(
         "//bazel/rules/proto:go_kubeproto_unittest",
         "//bazel/rules/proto:go_kubeconversion",
     ],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v1",
     proto = ":v1_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -40,6 +40,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":v1_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/conversion/v1",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/conversion/v1",
     visibility = ["//visibility:public"],
 )

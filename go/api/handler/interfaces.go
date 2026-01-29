@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrlRTClient "sigs.k8s.io/controller-runtime/pkg/client"
 )

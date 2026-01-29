@@ -12,7 +12,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/api"
 	"github.com/michelangelo-ai/michelangelo/go/api/utils"
 	"github.com/michelangelo-ai/michelangelo/go/storage"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 	"github.com/uber-go/tally"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"

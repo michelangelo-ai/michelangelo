@@ -3,7 +3,7 @@ package common
 import (
 	"strconv"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Actor type constants following Uber patterns

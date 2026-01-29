@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
@@ -12,7 +12,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/spark"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 type SparkModuleTestSuite struct {

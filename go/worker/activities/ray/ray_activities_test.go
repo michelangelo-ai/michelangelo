@@ -10,9 +10,9 @@ import (
 	"github.com/golang/mock/gomock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
+	"mock/github.com/michelangelo-ai/michelangelo/proto-go/api/v2/v2mock"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 )
 

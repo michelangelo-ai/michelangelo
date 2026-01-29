@@ -24,8 +24,8 @@ import (
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	workflowclientMock "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface/interface_mock"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 func TestExecuteWorkflowActor(t *testing.T) {

@@ -228,7 +228,7 @@ package mystrategy
 import (
     "context"
     "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework"
-    v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+    v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 type ResourceAwareStrategy struct {

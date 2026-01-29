@@ -1,7 +1,7 @@
 package model
 
 import (
-	"mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
+	"mock/github.com/michelangelo-ai/michelangelo/proto-go/api/v2/v2mock"
 	"net/http/httptest"
 	"testing"
 
@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/michelangelo-ai/michelangelo/proto/api"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	"github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 type Suite struct {

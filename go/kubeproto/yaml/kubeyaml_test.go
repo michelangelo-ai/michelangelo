@@ -15,7 +15,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/groupinfo"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
 )
 
 func readInput(t *testing.T) (*protogen.Plugin, *protoregistry.Types) {

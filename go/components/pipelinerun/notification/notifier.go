@@ -9,7 +9,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/notification/types"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/michelangelo-ai/michelangelo/go/worker/workflows/notification"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 )
 

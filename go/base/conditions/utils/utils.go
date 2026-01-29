@@ -3,7 +3,7 @@ package conditionUtils
 import (
 	"time"
 
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 // GetCondition provides a utility method for retrieving a particular condition from a condition list.

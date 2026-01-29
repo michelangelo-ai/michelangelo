@@ -6,7 +6,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	api "github.com/michelangelo-ai/michelangelo/proto/api"
+	api "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 // Engine refers to the implementation that executes the conditional checks via the Retrieve method and runs the actions

@@ -16,7 +16,7 @@ require (
 	github.com/google/go-cmp v0.6.0
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
-	github.com/michelangelo-ai/michelangelo/proto v0.0.0-00010101000000-000000000000
+	github.com/michelangelo-ai/michelangelo/proto-go v0.0.0-00010101000000-000000000000
 	github.com/minio/minio-go/v7 v7.0.86
 	github.com/prometheus/client_golang v1.16.0
 	github.com/r3labs/diff/v3 v3.0.1
@@ -137,4 +137,4 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
 
-replace github.com/michelangelo-ai/michelangelo/proto => ../proto
+replace github.com/michelangelo-ai/michelangelo/proto-go => ../proto-go

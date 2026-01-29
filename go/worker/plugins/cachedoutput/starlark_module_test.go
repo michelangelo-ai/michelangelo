@@ -12,7 +12,7 @@ import (
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/michelangelo-ai/michelangelo/go/worker/activities/cachedoutput"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 type CachedOutputModuleTestSuite struct {
