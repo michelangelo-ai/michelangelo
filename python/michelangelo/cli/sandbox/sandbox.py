@@ -720,9 +720,10 @@ def _setup_temporal(links, helm_existing_repos):
             "-l",
             "app.kubernetes.io/component=admintools,app.kubernetes.io/instance=temporaltest",
             "-o",
-            "jsonpath={.items[0].metadata.name}"
+            "jsonpath={.items[0].metadata.name}",
         ],
-        text=True).strip()
+        text=True
+    ).strip()
 
     # Register the default namespace in Temporal using specific pod name
     _exec(
@@ -876,7 +877,7 @@ def _kube_apply(path: Path):
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
     if pods:
-        # Wait for all non-job pods to be ready (exclude job pods by using app label selector)
+        # Wait for all non-job pods to be ready
         _exec(
             "kubectl",
             "wait",
