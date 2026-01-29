@@ -1,9 +1,19 @@
+# Global environment variables for all containers including schema jobs
+env:
+  - name: MYSQL_HOST
+    value: mysql
+  - name: MYSQL_PORT
+    value: "3306"
+  - name: MYSQL_USER
+    value: root
+  - name: MYSQL_PWD
+    value: root
+
 server:
   config:
     persistence:
       default:
         driver: "sql"
-
         sql:
           driver: "mysql8"
           host: mysql
@@ -14,10 +24,8 @@ server:
           maxConns: 20
           maxIdleConns: 20
           maxConnLifetime: "1h"
-
       visibility:
         driver: "sql"
-
         sql:
           driver: "mysql8"
           host: mysql
@@ -38,10 +46,12 @@ mysql:
 postgresql:
   enabled: false
 
+# Disable automatic schema setup due to Helm chart env var bugs
+# Schema will be created via admin tools container in sandbox.py
 schema:
   createDatabase:
-    enabled: true
+    enabled: false
   setup:
-    enabled: true
+    enabled: false
   update:
-    enabled: true
+    enabled: false
