@@ -542,8 +542,20 @@ def _setup_temporal(links, helm_existing_repos):
 
     print("Creating database schemas via Temporal admin tools...")
 
-    # First, create the temporal_visibility database
-    print("Creating temporal_visibility database...")
+    # Create both temporal databases explicitly
+    print("Creating temporal and temporal_visibility databases...")
+    _exec(
+        "kubectl",
+        "exec",
+        "mysql",
+        "--",
+        "mysql",
+        "-u",
+        "root",
+        "-proot",
+        "-e",
+        "CREATE DATABASE IF NOT EXISTS temporal;",
+    )
     _exec(
         "kubectl",
         "exec",
@@ -557,17 +569,13 @@ def _setup_temporal(links, helm_existing_repos):
         "CREATE DATABASE IF NOT EXISTS temporal_visibility;",
     )
 
-    # Setup temporal database schema (single step to latest version)
+    # Setup temporal database schema
+    print("Setting up temporal database schema...")
     _exec(
         "kubectl",
         "exec",
         "deployment/temporaltest-admintools",
         "--",
-        "env",
-        "MYSQL_HOST=mysql",
-        "MYSQL_PORT=3306",
-        "MYSQL_USER=root",
-        "MYSQL_PWD=root",
         "temporal-sql-tool",
         "--endpoint",
         "mysql",
@@ -580,24 +588,37 @@ def _setup_temporal(links, helm_existing_repos):
         "--database",
         "temporal",
         "setup-schema",
-        "--schema-name",
-        "mysql/v8/temporal",
-        "--version",
-        "1.18",
-        "--overwrite",
+        "-v",
+        "0.0",
     )
-
-    # Setup temporal visibility database schema
     _exec(
         "kubectl",
         "exec",
         "deployment/temporaltest-admintools",
         "--",
-        "env",
-        "MYSQL_HOST=mysql",
-        "MYSQL_PORT=3306",
-        "MYSQL_USER=root",
-        "MYSQL_PWD=root",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal",
+        "update-schema",
+        "-d",
+        "/etc/temporal/schema/mysql/v8/temporal/versioned",
+    )
+
+    # Setup temporal visibility database schema
+    print("Setting up temporal_visibility database schema...")
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
         "temporal-sql-tool",
         "--endpoint",
         "mysql",
@@ -610,11 +631,28 @@ def _setup_temporal(links, helm_existing_repos):
         "--database",
         "temporal_visibility",
         "setup-schema",
-        "--schema-name",
-        "mysql/v8/visibility",
-        "--version",
-        "1.9",
-        "--overwrite",
+        "-v",
+        "0.0",
+    )
+    _exec(
+        "kubectl",
+        "exec",
+        "deployment/temporaltest-admintools",
+        "--",
+        "temporal-sql-tool",
+        "--endpoint",
+        "mysql",
+        "--port",
+        "3306",
+        "--user",
+        "root",
+        "--password",
+        "root",
+        "--database",
+        "temporal_visibility",
+        "update-schema",
+        "-d",
+        "/etc/temporal/schema/mysql/v8/visibility/versioned",
     )
 
     print("Database schemas created. Restarting Temporal...")
