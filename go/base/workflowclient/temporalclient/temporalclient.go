@@ -91,7 +91,7 @@ func (c *TemporalClient) createScheduleForCron(ctx context.Context, options clie
 
 	// Schedule should always fire when cron time is met
 	// The trigger workflow itself will handle maxConcurrency logic for pipeline runs
-	overlapPolicy := temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_ALLOW_ALL
+	overlapPolicy := temporalEnumsV1.SCHEDULE_OVERLAP_POLICY_SKIP
 
 	// Log the configuration for debugging
 	fmt.Printf("[TemporalClient] Creating schedule %s with overlapPolicy=%v (trigger workflow handles maxConcurrency)\n",
