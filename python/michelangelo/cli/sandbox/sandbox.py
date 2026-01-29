@@ -705,11 +705,17 @@ def _setup_temporal(links, helm_existing_repos):
         "--timeout=600s",
     )
 
+    # Wait a moment for admin tools to be fully ready for exec commands
+    print("Waiting for admin tools to be ready for commands...")
+    time.sleep(5)
+
     # Register the default namespace in Temporal
     _exec(
         "kubectl",
         "exec",
         "deploy/temporaltest-admintools",
+        "-c",
+        "admin-tools",
         "--",
         "tctl",
         "--address",
