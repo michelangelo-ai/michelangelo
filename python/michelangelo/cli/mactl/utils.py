@@ -6,7 +6,7 @@ import subprocess
 import sys
 from logging import getLogger
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 _logger = getLogger(__name__)
 
@@ -16,17 +16,11 @@ def get_user_name() -> str:
 
     Returns:
         str: User name from environment variables with fallback chain:
-            1. UBER_LDAP_UID (Uber internal)
-            2. USER (Unix/Linux)
-            3. USERNAME (Windows)
-            4. "mactl-user" (default)
+            1. USER (Unix/Linux)
+            2. USERNAME (Windows)
+            3. "mactl-user" (default)
     """
-    return (
-        os.getenv("UBER_LDAP_UID")
-        or os.getenv("USER")
-        or os.getenv("USERNAME")
-        or "mactl-user"
-    )
+    return os.getenv("USER") or os.getenv("USERNAME") or "mactl-user"
 
 
 def detect_user_python_interpreter() -> str:
@@ -243,13 +237,15 @@ def run_subprocess_registration(
 
         return result
 
-    except subprocess.TimeoutExpired as e:
-        raise RuntimeError(f"Registration subprocess timed out after 5 minutes: {e}")
-    except subprocess.SubprocessError as e:
-        raise RuntimeError(f"Failed to execute registration subprocess: {e}")
+    except subprocess.TimeoutExpired as e:  # pragma: no cover
+        raise RuntimeError(
+            f"Registration subprocess timed out after 5 minutes: {e}"
+        ) from e
+    except subprocess.SubprocessError as e:  # pragma: no cover
+        raise RuntimeError(f"Failed to execute registration subprocess: {e}") from e
 
 
-def read_subprocess_outputs(output_dir: str) -> Tuple[bool, str, Optional[str]]:
+def read_subprocess_outputs(output_dir: str) -> tuple[bool, str, Optional[str]]:
     """Read outputs from subprocess registration.
 
     Args:
