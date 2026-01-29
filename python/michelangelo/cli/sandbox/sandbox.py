@@ -554,7 +554,7 @@ def _setup_temporal(links, helm_existing_repos):
         "root",
         "-proot",
         "-e",
-        "CREATE DATABASE IF NOT EXISTS temporal_visibility;"
+        "CREATE DATABASE IF NOT EXISTS temporal_visibility;",
     )
 
     # Setup temporal database schema (single step to latest version)
