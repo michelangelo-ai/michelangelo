@@ -722,7 +722,7 @@ def _setup_temporal(links, helm_existing_repos):
             "-o",
             "jsonpath={.items[0].metadata.name}",
         ],
-        text=True
+        text=True,
     ).strip()
 
     # Register the default namespace in Temporal using specific pod name
