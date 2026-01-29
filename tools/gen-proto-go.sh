@@ -30,11 +30,12 @@ while IFS= read -r file; do
 done < <(find "${WORKSPACE_ROOT}/bazel-bin/proto" -type f -name "*.go" | grep "/${IMPORT_PREFIX}/")
 
 echo "Syncing proto-go dependency versions with go/go.mod..."
-python3 - <<'PY'
+WORKSPACE_ROOT="${WORKSPACE_ROOT}" python3 - <<'PY'
+import os
 import pathlib
 import re
 
-root = pathlib.Path("/Users/yingz/git/michelangelo")
+root = pathlib.Path(os.environ["WORKSPACE_ROOT"])
 go_mod = root / "go" / "go.mod"
 proto_mod = root / "proto-go" / "go.mod"
 
