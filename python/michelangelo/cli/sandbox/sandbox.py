@@ -857,13 +857,13 @@ def _kube_apply(path: Path):
 
 def _kube_wait(pods: bool = True, jobs: bool = True):
     if pods:
+        # Wait for all non-job pods to be ready (exclude job pods by using app label selector)
         _exec(
             "kubectl",
             "wait",
-            "--all",
-            "pods",
             "--for=condition=ready",
-            "--selector=!job-name",
+            "pod",
+            "-l", "app",
             "--timeout=600s",
         )
     if jobs:
