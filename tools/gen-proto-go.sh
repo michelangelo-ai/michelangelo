@@ -62,7 +62,7 @@ for line in proto_text.splitlines():
         line = f"{indent}{mod} {versions[mod]}{trailing}"
     out_lines.append(line)
 
-proto_mod.write_text("\\n".join(out_lines) + "\\n")
+proto_mod.write_text("\n".join(out_lines) + "\n")
 PY
 
 echo "Running go mod tidy in ${OUT_DIR}..."
