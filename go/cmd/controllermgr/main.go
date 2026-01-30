@@ -13,7 +13,7 @@ import (
 	apiHandler "github.com/michelangelo-ai/michelangelo/go/api/handler"
 	baseconfig "github.com/michelangelo-ai/michelangelo/go/base/config"
 	"github.com/michelangelo-ai/michelangelo/go/base/env"
-	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/temporalclient"
+	"github.com/michelangelo-ai/michelangelo/go/base/workflowclient/cadenceclient"
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	"github.com/michelangelo-ai/michelangelo/go/components/deployment"
 	deploymentOSSPlugin "github.com/michelangelo-ai/michelangelo/go/components/deployment/plugins/oss"
@@ -88,7 +88,7 @@ func options() fx.Option {
 		spark.Module,
 		ray.Module,
 		triggerrun.Module,
-		temporalclient.Module,
+		cadenceclient.Module,
 		pipeline.Module,
 		pipelinerun.Module,
 		controllermgr.Module,
