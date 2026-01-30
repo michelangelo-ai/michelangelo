@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	clientInterface "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	"github.com/stretchr/testify/mock"
@@ -388,6 +389,167 @@ func TestTerminateWorkflow(t *testing.T) {
 				require.Contains(t, err.Error(), testCase.errMsg)
 			} else {
 				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestCreateScheduleForCron(t *testing.T) {
+	testCases := []struct {
+		name              string
+		options           clientInterface.StartWorkflowOptions
+		workflowName      string
+		args              []interface{}
+		mockFunc          func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		expectedID        string
+		expectedRunID     string
+		errMsg            string
+	}{
+		{
+			name: "success - schedule created",
+			options: clientInterface.StartWorkflowOptions{
+				ID:                              "test-workflow",
+				TaskList:                        "test-task-list",
+				ExecutionStartToCloseTimeout:    time.Hour,
+				DecisionTaskStartToCloseTimeout: 30 * time.Second,
+				CronSchedule:                    "0 0 * * *",
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1", "arg2"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				// Mock ScheduleClient() method
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+
+				// Mock GetHandle - schedule doesn't exist yet
+				mockScheduleClient.On("GetHandle", mock.Anything, "test-workflow-schedule").Return(mockScheduleHandle)
+
+				// Mock Describe - schedule doesn't exist (returns error)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+
+				// Mock Create - successfully creates schedule
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					return options.ID == "test-workflow-schedule" &&
+						len(options.Spec.CronExpressions) == 1 &&
+						options.Spec.CronExpressions[0] == "0 0 * * *" &&
+						options.Action != nil
+				})).Return(mockScheduleHandle, nil)
+			},
+			expectedID:    "test-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "success - schedule already exists",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "existing-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 0 * * *",
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				// Mock ScheduleClient() method
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+
+				// Mock GetHandle - schedule exists
+				mockScheduleClient.On("GetHandle", mock.Anything, "existing-workflow-schedule").Return(mockScheduleHandle)
+
+				// Mock Describe - schedule exists (returns successfully)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(&temporalClient.ScheduleDescription{}, nil)
+
+				// Create should not be called in this case
+			},
+			expectedID:    "existing-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+		{
+			name: "error - create schedule fails",
+			options: clientInterface.StartWorkflowOptions{
+				ID:           "test-workflow",
+				TaskList:     "test-task-list",
+				CronSchedule: "0 0 * * *",
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				// Mock ScheduleClient() method
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+
+				// Mock GetHandle - schedule doesn't exist
+				mockScheduleClient.On("GetHandle", mock.Anything, "test-workflow-schedule").Return(mockScheduleHandle)
+
+				// Mock Describe - schedule doesn't exist (returns error)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("schedule not found"))
+
+				// Mock Create - fails to create schedule
+				mockScheduleClient.On("Create", mock.Anything, mock.Anything).Return(nil, fmt.Errorf("failed to create schedule"))
+			},
+			expectedID:    "",
+			expectedRunID: "",
+			errMsg:        "failed to create Temporal schedule",
+		},
+		{
+			name: "success - describe fails but create succeeds",
+			options: clientInterface.StartWorkflowOptions{
+				ID:                           "test-workflow",
+				TaskList:                     "test-task-list",
+				CronSchedule:                 "0 0 * * *",
+				ExecutionStartToCloseTimeout: 2 * time.Hour,
+			},
+			workflowName: "test-workflow-name",
+			args:         []interface{}{"arg1"},
+			mockFunc: func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle) {
+				// Mock ScheduleClient() method
+				mockClient.On("ScheduleClient").Return(mockScheduleClient)
+
+				// Mock GetHandle - returns handle but describe will fail
+				mockScheduleClient.On("GetHandle", mock.Anything, "test-workflow-schedule").Return(mockScheduleHandle)
+
+				// Mock Describe - fails (maybe schedule was deleted)
+				mockScheduleHandle.On("Describe", mock.Anything).Return(nil, fmt.Errorf("describe failed"))
+
+				// Mock Create - successfully creates schedule with timeout set
+				mockScheduleClient.On("Create", mock.Anything, mock.MatchedBy(func(options temporalClient.ScheduleOptions) bool {
+					action, ok := options.Action.(*temporalClient.ScheduleWorkflowAction)
+					return ok && action.WorkflowExecutionTimeout == 2*time.Hour
+				})).Return(mockScheduleHandle, nil)
+			},
+			expectedID:    "test-workflow-schedule",
+			expectedRunID: "",
+			errMsg:        "",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			mockClient := temporalMocks.NewClient(t)
+			mockScheduleClient := temporalMocks.NewScheduleClient(t)
+			mockScheduleHandle := temporalMocks.NewScheduleHandle(t)
+
+			client := &TemporalClient{
+				Client:   mockClient,
+				Provider: "temporal",
+				Domain:   "default",
+			}
+
+			testCase.mockFunc(mockClient, mockScheduleClient, mockScheduleHandle)
+
+			result, err := client.createScheduleForCron(
+				context.Background(),
+				testCase.options,
+				testCase.workflowName,
+				testCase.args...,
+			)
+
+			if testCase.errMsg != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), testCase.errMsg)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+				require.Equal(t, testCase.expectedID, result.ID)
+				require.Equal(t, testCase.expectedRunID, result.RunID)
 			}
 		})
 	}
