@@ -66,6 +66,6 @@ proto_mod.write_text("\\n".join(out_lines) + "\\n")
 PY
 
 echo "Running go mod tidy in ${OUT_DIR}..."
-(cd "${OUT_DIR}" && PATH="${WORKSPACE_ROOT}/tools:${PATH}" GOMOD="${OUT_DIR}/go.mod" GOWORK=off "${WORKSPACE_ROOT}/tools/go" mod tidy)
+(cd "${OUT_DIR}" && PATH="${WORKSPACE_ROOT}/tools:${PATH}" GOWORK=off "${WORKSPACE_ROOT}/tools/go" mod tidy -modfile="${OUT_DIR}/go.mod")
 
 echo "Generated Go protobuf files are available under ${OUT_DIR}."
