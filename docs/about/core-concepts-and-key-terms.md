@@ -1,6 +1,6 @@
 # Core Concepts and Key Terms
 
-## overview
+## Overview
 
 Michelangelo utilizes a combination of standard industry terms and product-specific naming conventions. This page provides high-level definitions for the platform's most essential and commonly used concepts. It is recommended you familiarize yourself with these concepts as you will encounter them on your ML development journey.
 
