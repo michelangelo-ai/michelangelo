@@ -3,8 +3,6 @@ package clientinterface
 import (
 	"context"
 	"time"
-
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
 )
 
 type StartWorkflowOptions struct {
@@ -62,22 +60,6 @@ type ListOpenWorkflowExecutionsResponse struct {
 	NextPageToken []byte
 }
 
-// ScheduledWorkflowOptions defines options for starting a scheduled workflow
-type ScheduledWorkflowOptions struct {
-	TriggerRun                      *v2pb.TriggerRun
-	WorkflowType                    string
-	TaskQueue                       string
-	Args                            []interface{}
-	ExecutionStartToCloseTimeout    time.Duration
-	DecisionTaskStartToCloseTimeout time.Duration
-}
-
-// ScheduleStatus represents the status of a scheduled workflow
-type ScheduleStatus struct {
-	State        string
-	ErrorMessage string
-}
-
 type WorkflowClient interface {
 	// StartWorkflow starts a new workflow
 	StartWorkflow(ctx context.Context, options StartWorkflowOptions, workflowName string, args ...interface{}) (*WorkflowExecution, error)
@@ -95,14 +77,4 @@ type WorkflowClient interface {
 	ListOpenWorkflow(ctx context.Context, request ListOpenWorkflowExecutionsRequest) (*ListOpenWorkflowExecutionsResponse, error)
 	// TerminateWorkflow terminates a workflow
 	TerminateWorkflow(ctx context.Context, workflowID string, runID string, reason string) error
-
-	// Scheduling methods
-	// StartScheduledWorkflow starts a scheduled workflow
-	StartScheduledWorkflow(ctx context.Context, options ScheduledWorkflowOptions) (*WorkflowExecution, error)
-	// SupportsSchedules returns true if this client supports scheduled workflows
-	SupportsSchedules() bool
-	// StopScheduledWorkflow stops a scheduled workflow by schedule ID
-	StopScheduledWorkflow(ctx context.Context, scheduleID string) error
-	// GetScheduleStatus gets the status of a scheduled workflow
-	GetScheduleStatus(ctx context.Context, scheduleID string) (*ScheduleStatus, error)
 }
