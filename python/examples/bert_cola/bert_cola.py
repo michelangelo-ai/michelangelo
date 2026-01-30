@@ -12,7 +12,7 @@ from michelangelo.uniflow.plugins.ray import UF_PLUGIN_RAY_USE_FSSPEC
 
 
 @uniflow.workflow()
-def train_workflow(path="nyu-mll/glue", name="cola", tokenizer_max_length=128):
+def train_workflow(path="glue", name="cola", tokenizer_max_length=128):
     """Training workflow for BERT model on GLUE datasets."""
     print("[train_workflow] Starting with config:")
     print("  - Dataset: " + path + "/" + name)
@@ -57,4 +57,4 @@ if __name__ == "__main__":
     # ctx.run(train_workflow)
 
     # Example 2: Run with custom configuration (SST-2 dataset)
-    ctx.run(train_workflow, path="nyu-mll/glue", name="sst2", tokenizer_max_length=256)
+    ctx.run(train_workflow, path="glue", name="sst2", tokenizer_max_length=256)
