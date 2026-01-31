@@ -5,7 +5,7 @@ import (
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/compiler/protogen"
 	"google.golang.org/protobuf/proto"

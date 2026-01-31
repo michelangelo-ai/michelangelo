@@ -26,7 +26,7 @@ import (
 	defaultEngine "github.com/michelangelo-ai/michelangelo/go/base/conditions/engine"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/notification"
 	"github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/plugin"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // Reconciler implements the controller-runtime Reconciler interface for PipelineRun resources.

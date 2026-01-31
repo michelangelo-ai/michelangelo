@@ -9,7 +9,7 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/zapfx"
 	projectapihook "github.com/michelangelo-ai/michelangelo/go/components/project/apihook"
 	"github.com/michelangelo-ai/michelangelo/go/logging"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/uber-go/tally"
 	uberconfig "go.uber.org/config"
 	"go.uber.org/fx"

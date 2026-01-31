@@ -3,8 +3,8 @@ package util_test
 import (
 	"testing"
 
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
-	testerrpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/indexing_errors"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
+	testerrpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/indexing_errors"
 
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/pboptions"
 	"github.com/michelangelo-ai/michelangelo/go/kubeproto/util"

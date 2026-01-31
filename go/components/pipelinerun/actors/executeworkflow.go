@@ -20,8 +20,8 @@ import (
 	"github.com/michelangelo-ai/michelangelo/go/base/config"
 	clientInterfaces "github.com/michelangelo-ai/michelangelo/go/base/workflowclient/interface"
 	pipelinerunutils "github.com/michelangelo-ai/michelangelo/go/components/pipelinerun/actors/utils"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const (

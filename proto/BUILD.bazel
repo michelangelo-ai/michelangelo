@@ -1,4 +1,4 @@
-# gazelle:prefix github.com/michelangelo-ai/michelangelo/proto
+# gazelle:prefix github.com/michelangelo-ai/michelangelo/proto-go
 # gazelle:proto_strip_import_prefix /proto
 # gazelle:proto_import_prefix michelangelo
 # gazelle:proto default

@@ -17,7 +17,7 @@ proto_library(
 go_proto_library(
     name = "extpackage_go_proto",
     compilers = ["@io_bazel_rules_go//proto:gogoslick_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/extpackage",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/extpackage",
     proto = ":extpackage_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -29,6 +29,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":extpackage_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/extpackage",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/extpackage",
     visibility = ["//visibility:public"],
 )

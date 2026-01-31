@@ -5,7 +5,7 @@ import (
 
 	"go.uber.org/yarpc/encoding/protobuf/reflection"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/fx/fxtest"
 	"go.uber.org/yarpc/api/transport"

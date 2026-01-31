@@ -5,7 +5,7 @@ import (
 
 	protoTypes "github.com/gogo/protobuf/types"
 	"github.com/michelangelo-ai/michelangelo/go/components/jobs/common/constants"
-	apipb "github.com/michelangelo-ai/michelangelo/proto/api"
+	apipb "github.com/michelangelo-ai/michelangelo/proto-go/api"
 )
 
 // GetCondition retrieves a condition of the supplied

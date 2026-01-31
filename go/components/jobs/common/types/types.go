@@ -3,7 +3,7 @@ package types
 import (
 	"errors"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // ErrJobAlreadyExists indicates that the job is already present in the scheduler queue

@@ -20,7 +20,7 @@ proto_library(
 go_proto_library(
     name = "kubeproto_go_proto",
     compilers = ["//bazel/rules/proto:go_kubeproto_unittest"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/indexing_errors",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/indexing_errors",
     proto = ":kubeproto_proto",
     visibility = ["//visibility:public"],
     deps = [
@@ -33,6 +33,6 @@ go_proto_library(
 go_library(
     name = "go_default_library",
     embed = [":kubeproto_go_proto"],
-    importpath = "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto/indexing_errors",
+    importpath = "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto/indexing_errors",
     visibility = ["//visibility:public"],
 )

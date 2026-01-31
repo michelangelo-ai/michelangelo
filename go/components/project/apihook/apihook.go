@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/michelangelo-ai/michelangelo/go/api"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

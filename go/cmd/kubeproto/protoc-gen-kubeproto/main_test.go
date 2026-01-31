@@ -15,7 +15,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/resource"
 
-	testpb "github.com/michelangelo-ai/michelangelo/proto/test/kubeproto"
+	testpb "github.com/michelangelo-ai/michelangelo/proto-go/test/kubeproto"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"

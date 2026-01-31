@@ -1,14 +1,14 @@
 package spark
 
 import (
-	"mock/github.com/michelangelo-ai/michelangelo/proto/api/v2/v2mock"
+	"mock/github.com/michelangelo-ai/michelangelo/proto-go/api/v2/v2mock"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/cadence-workflow/starlark-worker/service"
 	"github.com/cadence-workflow/starlark-worker/test/types"
 	"github.com/golang/mock/gomock"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 	"github.com/stretchr/testify/suite"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )

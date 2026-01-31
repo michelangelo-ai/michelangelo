@@ -7,7 +7,7 @@ import (
 
 	"go.uber.org/zap"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // ServerStatus represents the current state and health of inference server.

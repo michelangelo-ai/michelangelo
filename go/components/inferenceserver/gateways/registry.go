@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/michelangelo-ai/michelangelo/go/components/inferenceserver/backends"
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 type registry struct {

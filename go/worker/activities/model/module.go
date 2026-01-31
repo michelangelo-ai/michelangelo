@@ -4,7 +4,7 @@ import (
 	"github.com/cadence-workflow/starlark-worker/worker"
 	"go.uber.org/fx"
 
-	v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 const serverName = "ma-apiserver" // The name of the API server providing YARPC services for Model operations.

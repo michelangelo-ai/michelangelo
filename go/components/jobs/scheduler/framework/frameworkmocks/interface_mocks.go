@@ -10,7 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	framework "github.com/michelangelo-ai/michelangelo/go/components/jobs/scheduler/framework"
-	v2 "github.com/michelangelo-ai/michelangelo/proto/api/v2"
+	v2 "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
 )
 
 // MockAssignmentEngine is a mock of AssignmentEngine interface.

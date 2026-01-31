@@ -3,6 +3,7 @@
 # gazelle:exclude python/
 # gazelle:exclude build/
 # gazelle:exclude tools/
+# gazelle:exclude proto-go/
 # gazelle:exclude javascript/node_modules/
 # gazelle:proto default
 # gazelle:go_naming_convention go_default_library

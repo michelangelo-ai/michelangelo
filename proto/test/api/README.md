@@ -33,8 +33,8 @@ Add the import:
 ```go
 import (
     // ... existing imports ...
-    v2pb "github.com/michelangelo-ai/michelangelo/proto/api/v2"
-    v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto/test/api/v2alpha1"  // Add this
+    v2pb "github.com/michelangelo-ai/michelangelo/proto-go/api/v2"
+    v2alpha1pb "github.com/michelangelo-ai/michelangelo/proto-go/test/api/v2alpha1"  // Add this
 )
 ```
 
