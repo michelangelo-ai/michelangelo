@@ -1,21 +1,20 @@
-"""
-Databricks DBUtils compatibility layer for Michelangelo notebook execution.
+"""Databricks DBUtils compatibility layer for Michelangelo notebook execution.
 
 Provides essential data input/output functionality for Databricks notebook migration.
 """
 
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 
 class WidgetsAPI:
     """Databricks widgets API for input parameters."""
 
-    def __init__(self, input_params: Optional[Dict[str, Any]] = None):
-        self._params: Dict[str, Any] = input_params or {}
+    def __init__(self, input_params: Optional[dict[str, Any]] = None):
+        """Initialize with input parameters."""
+        self._params: dict[str, Any] = input_params or {}
 
     def get(self, key: str, default_value: Optional[str] = None) -> str:
-        """
-        Get parameter value from widget.
+        """Get parameter value from widget.
 
         Args:
             key: Parameter name
@@ -35,8 +34,7 @@ class WidgetsAPI:
             raise KeyError(f"Widget parameter '{key}' not found and no default provided")
 
     def text(self, name: str, default_value: str = "", label: str = "") -> None:
-        """
-        Create a text widget.
+        """Create a text widget.
 
         Args:
             name: Widget name
@@ -46,19 +44,30 @@ class WidgetsAPI:
         if name not in self._params:
             self._params[name] = default_value
 
-    def dropdown(self, name: str, default_value: str, choices: List[str], label: str = "") -> None:
+    def dropdown(
+        self,
+        name: str,
+        default_value: str,
+        choices: list[str],
+        label: str = "",
+    ) -> None:
         """Create a dropdown widget."""
         if name not in self._params:
             self._params[name] = default_value
 
-    def multiselect(self, name: str, default_value: Union[str, List[str]], choices: List[str], label: str = "") -> None:
+    def multiselect(
+        self,
+        name: str,
+        default_value: Union[str, list[str]],
+        choices: list[str],
+        label: str = "",
+    ) -> None:
         """Create a multiselect widget."""
         if name not in self._params:
             self._params[name] = default_value
 
-    def getAll(self) -> Dict[str, str]:
-        """
-        Get all widget parameters as string dictionary.
+    def get_all(self) -> dict[str, str]:
+        """Get all widget parameters as string dictionary.
 
         Returns:
             Dictionary of all parameters converted to strings
@@ -69,12 +78,12 @@ class WidgetsAPI:
 class TaskValuesAPI:
     """Databricks task values API for inter-task communication."""
 
-    def __init__(self, dbutils_instance: 'DBUtils'):
+    def __init__(self, dbutils_instance: "DBUtils"):
+        """Initialize with DBUtils instance."""
         self._dbutils = dbutils_instance
 
     def set(self, key: str, value: Any) -> None:
-        """
-        Set a task value.
+        """Set a task value.
 
         Args:
             key: Value key
@@ -88,11 +97,11 @@ class TaskValuesAPI:
         """Convert value to JSON-serializable format."""
         import numpy as np
 
-        if hasattr(value, 'dtype'):  # numpy types
+        if hasattr(value, "dtype"):  # numpy types
             return value.item()
         elif isinstance(value, (np.bool_, np.integer, np.floating)):
             return value.item()
-        elif hasattr(value, 'to_dict'):  # pandas objects
+        elif hasattr(value, "to_dict"):  # pandas objects
             return value.to_dict()
         elif isinstance(value, dict):
             return {k: self._convert_to_serializable(v) for k, v in value.items()}
@@ -102,8 +111,7 @@ class TaskValuesAPI:
             return value
 
     def get(self, task_name: str, key: str, default_value: Any = None) -> Any:
-        """
-        Get a task value from upstream task.
+        """Get a task value from upstream task.
 
         Args:
             task_name: Name of the upstream task
@@ -119,19 +127,20 @@ class TaskValuesAPI:
 class JobsAPI:
     """Databricks jobs API."""
 
-    def __init__(self, dbutils_instance: 'DBUtils'):
+    def __init__(self, dbutils_instance: "DBUtils"):
+        """Initialize with DBUtils instance."""
         self.taskValues = TaskValuesAPI(dbutils_instance)
 
 
 class NotebookAPI:
     """Databricks notebook API for output handling."""
 
-    def __init__(self, dbutils_instance: 'DBUtils'):
+    def __init__(self, dbutils_instance: "DBUtils"):
+        """Initialize with DBUtils instance."""
         self._dbutils = dbutils_instance
 
     def exit(self, value: Any) -> None:
-        """
-        Exit notebook with return value.
+        """Exit notebook with return value.
 
         Args:
             value: Value to return from notebook execution
@@ -142,8 +151,7 @@ class NotebookAPI:
 
 
 class DBUtils:
-    """
-    Databricks DBUtils compatibility for Michelangelo.
+    """Databricks DBUtils compatibility for Michelangelo.
 
     Supports essential data input/output patterns:
     - Widget-based parameterization (input)
@@ -158,15 +166,14 @@ class DBUtils:
         dbutils.notebook.exit({"status": "success"})
     """
 
-    def __init__(self, input_params: Optional[Dict[str, Any]] = None):
-        """
-        Initialize DBUtils with input parameters.
+    def __init__(self, input_params: Optional[dict[str, Any]] = None):
+        """Initialize DBUtils with input parameters.
 
         Args:
             input_params: Parameters passed to notebook execution
         """
         self._input_params = input_params or {}
-        self._task_values: Dict[str, Any] = {}
+        self._task_values: dict[str, Any] = {}
         self._exit_value: Optional[Any] = None
 
         # Initialize core APIs for data input/output
@@ -178,14 +185,17 @@ class DBUtils:
         """Get the value passed to notebook.exit()."""
         return self._exit_value
 
-    def get_task_values(self) -> Dict[str, Any]:
+    def get_task_values(self) -> dict[str, Any]:
         """Get all task values set during execution."""
         return self._task_values.copy()
 
-    def get_all_parameters(self) -> Dict[str, Any]:
+    def get_all_parameters(self) -> dict[str, Any]:
         """Get all input parameters."""
         return self._input_params.copy()
 
     def __repr__(self) -> str:
         """String representation of DBUtils instance."""
-        return f"DBUtils(params={len(self._input_params)}, task_values={len(self._task_values)})"
+        return (
+            f"DBUtils(params={len(self._input_params)}, "
+            f"task_values={len(self._task_values)})"
+        )

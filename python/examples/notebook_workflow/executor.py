@@ -1,14 +1,13 @@
 """Working notebook executor implementation."""
 
-import os
 import json
-import tempfile
-from typing import Any, Dict, Optional
+import os
+from typing import Any, Optional
 
-import nbformat
-from nbconvert.preprocessors import ExecutePreprocessor
 import michelangelo.uniflow.core as uniflow
+import nbformat
 from michelangelo.uniflow.plugins.ray import RayTask
+
 from .dbutils import DBUtils
 
 
@@ -23,8 +22,8 @@ from .dbutils import DBUtils
 )
 def notebook_executor(
     notebook_path: str,
-    parameters: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+    parameters: Optional[dict[str, Any]] = None,
+) -> tuple[Any, dict[str, Any]]:
     """Execute a Jupyter notebook with optional input parameters.
 
     Args:
@@ -32,7 +31,7 @@ def notebook_executor(
         parameters: Optional dictionary of parameters to pass to the notebook.
 
     Returns:
-        Dictionary containing execution results.
+        Tuple of (exit_value, task_values) from notebook execution.
     """
     # Resolve the full path to the notebook
     if not os.path.isabs(notebook_path):
@@ -43,7 +42,7 @@ def notebook_executor(
         full_notebook_path = notebook_path
 
     # Load the notebook
-    with open(full_notebook_path, 'r') as f:
+    with open(full_notebook_path) as f:
         nb = nbformat.read(f, as_version=4)
 
     # Convert dict parameters to JSON strings for Databricks widget compatibility
@@ -61,19 +60,19 @@ def notebook_executor(
     # Execute notebook cells directly
     # Add common imports and Databricks compatibility to execution environment
     globals_dict = {
-        '__builtins__': __builtins__,
-        'pd': __import__('pandas'),
-        'np': __import__('numpy'),
-        'plt': __import__('matplotlib.pyplot'),
-        'json': __import__('json'),
+        "__builtins__": __builtins__,
+        "pd": __import__("pandas"),
+        "np": __import__("numpy"),
+        "plt": __import__("matplotlib.pyplot"),
+        "json": __import__("json"),
         # Databricks compatibility - only way to get input/output
-        'dbutils': dbutils_instance,
+        "dbutils": dbutils_instance,
     }
     locals_dict = {}
 
     # Execute each code cell and track variables
     for cell in nb.cells:
-        if cell.cell_type == 'code':
+        if cell.cell_type == "code":
             exec(cell.source, globals_dict, locals_dict)
 
     # Extract both exit_value and task_values and ensure JSON serializable
@@ -93,11 +92,11 @@ def _convert_to_serializable(value):
 
     if value is None:
         return None
-    elif hasattr(value, 'dtype'):  # numpy types
+    elif hasattr(value, "dtype"):  # numpy types
         return value.item()
     elif isinstance(value, (np.bool_, np.integer, np.floating)):
         return value.item()
-    elif hasattr(value, 'to_dict'):  # pandas objects
+    elif hasattr(value, "to_dict"):  # pandas objects
         return value.to_dict()
     elif isinstance(value, dict):
         return {k: _convert_to_serializable(v) for k, v in value.items()}
@@ -105,4 +104,3 @@ def _convert_to_serializable(value):
         return [_convert_to_serializable(v) for v in value]
     else:
         return value
-
