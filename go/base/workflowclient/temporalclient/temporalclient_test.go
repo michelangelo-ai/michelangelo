@@ -396,14 +396,14 @@ func TestTerminateWorkflow(t *testing.T) {
 
 func TestCreateScheduleForCron(t *testing.T) {
 	testCases := []struct {
-		name              string
-		options           clientInterface.StartWorkflowOptions
-		workflowName      string
-		args              []interface{}
-		mockFunc          func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
-		expectedID        string
-		expectedRunID     string
-		errMsg            string
+		name          string
+		options       clientInterface.StartWorkflowOptions
+		workflowName  string
+		args          []interface{}
+		mockFunc      func(mockClient *temporalMocks.Client, mockScheduleClient *temporalMocks.ScheduleClient, mockScheduleHandle *temporalMocks.ScheduleHandle)
+		expectedID    string
+		expectedRunID string
+		errMsg        string
 	}{
 		{
 			name: "success - schedule created",
