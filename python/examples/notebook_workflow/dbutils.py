@@ -19,12 +19,20 @@ class WidgetsAPI:
 
         Args:
             key: Parameter name
-            default_value: Default value if parameter not found
+            default_value: Default value if parameter not found. If None, raises KeyError.
 
         Returns:
             Parameter value as string
+
+        Raises:
+            KeyError: If key not found and no default_value provided
         """
-        return str(self._params.get(key, default_value or ""))
+        if key in self._params:
+            return str(self._params[key])
+        elif default_value is not None:
+            return default_value
+        else:
+            raise KeyError(f"Widget parameter '{key}' not found and no default provided")
 
     def text(self, name: str, default_value: str = "", label: str = "") -> None:
         """
@@ -73,14 +81,25 @@ class TaskValuesAPI:
             value: Value to store (must be JSON serializable)
         """
         # Convert to JSON-serializable format
-        if hasattr(value, 'dtype'):  # numpy types
-            serializable_value = value.item()
-        elif hasattr(value, 'to_dict'):  # pandas objects
-            serializable_value = value.to_dict()
-        else:
-            serializable_value = value
-
+        serializable_value = self._convert_to_serializable(value)
         self._dbutils._task_values[key] = serializable_value
+
+    def _convert_to_serializable(self, value: Any) -> Any:
+        """Convert value to JSON-serializable format."""
+        import numpy as np
+
+        if hasattr(value, 'dtype'):  # numpy types
+            return value.item()
+        elif isinstance(value, (np.bool_, np.integer, np.floating)):
+            return value.item()
+        elif hasattr(value, 'to_dict'):  # pandas objects
+            return value.to_dict()
+        elif isinstance(value, dict):
+            return {k: self._convert_to_serializable(v) for k, v in value.items()}
+        elif isinstance(value, (list, tuple)):
+            return [self._convert_to_serializable(v) for v in value]
+        else:
+            return value
 
     def get(self, task_name: str, key: str, default_value: Any = None) -> Any:
         """
@@ -117,19 +136,8 @@ class NotebookAPI:
         Args:
             value: Value to return from notebook execution
         """
-        # Convert to JSON-serializable format
-        if hasattr(value, 'dtype'):  # numpy types
-            exit_value = value.item()
-        elif hasattr(value, 'to_dict'):  # pandas objects
-            exit_value = value.to_dict()
-        elif hasattr(value, 'items'):  # dict with potential numpy values
-            exit_value = {
-                k: (v.item() if hasattr(v, 'dtype') else v)
-                for k, v in value.items()
-            }
-        else:
-            exit_value = value
-
+        # Convert to JSON-serializable format using the same method as task values
+        exit_value = self._dbutils.jobs.taskValues._convert_to_serializable(value)
         self._dbutils._exit_value = exit_value
 
 

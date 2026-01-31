@@ -15,7 +15,9 @@ from .dbutils import DBUtils
 @uniflow.task(
     config=RayTask(
         head_cpu=1,
-        head_memory="2Gi",
+        head_memory="4Gi",
+        worker_cpu=1,
+        worker_memory="4Gi",
         worker_instances=1,
     )
 )
@@ -74,6 +76,33 @@ def notebook_executor(
         if cell.cell_type == 'code':
             exec(cell.source, globals_dict, locals_dict)
 
-    # Extract both exit_value and task_values (for different purposes)
-    return dbutils_instance.get_exit_value(),  dbutils_instance.get_task_values()
+    # Extract both exit_value and task_values and ensure JSON serializable
+    exit_value = dbutils_instance.get_exit_value()
+    task_values = dbutils_instance.get_task_values()
+
+    # Convert to JSON-serializable format to avoid uniflow codec errors
+    exit_value = _convert_to_serializable(exit_value)
+    task_values = _convert_to_serializable(task_values)
+
+    return exit_value, task_values
+
+
+def _convert_to_serializable(value):
+    """Convert value to JSON-serializable format."""
+    import numpy as np
+
+    if value is None:
+        return None
+    elif hasattr(value, 'dtype'):  # numpy types
+        return value.item()
+    elif isinstance(value, (np.bool_, np.integer, np.floating)):
+        return value.item()
+    elif hasattr(value, 'to_dict'):  # pandas objects
+        return value.to_dict()
+    elif isinstance(value, dict):
+        return {k: _convert_to_serializable(v) for k, v in value.items()}
+    elif isinstance(value, (list, tuple)):
+        return [_convert_to_serializable(v) for v in value]
+    else:
+        return value
 
